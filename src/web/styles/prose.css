@@ -263,6 +263,23 @@ td.text.kind-heading:has(> .fold-toggle) {
 .matter-stub > button:hover,
 .matter-stub > button:focus-visible,
 .matter-stub-info.on { opacity: 1; color: var(--highlight-text); }
+/* **Under a finger both halves are 40px, 8px apart** (plan 261021g § Stage 2,
+   Sol's R5): the label was 21px tall and the ⓘ 21px square, 2.4px from it.
+   The label stays a block, so a wrapped one keeps its lines together; its
+   padding puts one line in the middle of a 40px box (1.4em is its line), and
+   the ⓘ, aligned to the stub's end, then sits on that line's centre too. The
+   `>` is for specificity: `.matter-stub > button` sets the padding above. */
+@media (any-pointer: coarse) {
+  .matter-stub { gap: 8px; }
+  .matter-stub > .matter-stub-open {
+    min-height: 40px;
+    padding-block: max(0.1rem, calc((40px - 1.4em) / 2));
+  }
+  .matter-stub-info {
+    width: 40px;
+    height: 40px;
+  }
+}
 /* **A stub's row is one quiet line**: one pad above and below on a heading's
    row as on any other (not a heading's doubled space), and no row floor —
    gutter.css floors every row at one gutter slot, and a stub row has no

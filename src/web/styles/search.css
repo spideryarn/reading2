@@ -325,6 +325,11 @@
   cursor: pointer;
 }
 .srch-icon:hover { background: var(--surface-raised); color: var(--ink); }
+/* A saved search's icons were 29 wide at a 31px pitch under a finger; the
+   row is already 47 tall (plan 261021g). */
+@media (any-pointer: coarse) {
+  .srch-icon { min-width: 40px; }
+}
 .srch-icon.danger:hover { color: var(--destructive); }
 /* The warning sign on a search that failed in a way running it again cannot fix.
    It carries the same glyph as the retry button next to it, so without this it
@@ -632,7 +637,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.5rem;
+    min-height: max(40px, 2.5rem);
   }
 }
 

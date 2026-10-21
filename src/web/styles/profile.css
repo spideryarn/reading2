@@ -450,6 +450,19 @@
    double press (DictationStrip.tsx § `again`): live, and not lit. */
 .prof-mic:hover:not(:disabled):not(.busy) { color: var(--highlight-ink); border-color: var(--highlight); }
 .prof-mic:disabled { opacity: 0.4; cursor: default; }
+/* **40 × 40 under a finger** (plan 261021g § Stage 2; controls.md § The
+   numbers): 1.65rem is 24 × 26 on a phone, and this is what /profile's boxes
+   and Quiz's answer are dictated with. The chat composer's microphone is
+   already 40 by its own rule (mode-band.css § the composer), so all of them
+   now agree. */
+@media (any-pointer: coarse) {
+  .prof-mic {
+    /* `flex: none`: /profile's label row squeezed it to 34 wide. */
+    flex: none;
+    width: 40px;
+    height: 40px;
+  }
+}
 /* Armed, but the microphone is not open yet: the permission prompt, the
    microphone lock, getUserMedia. Since plan 261019m the tape starts the moment
    the track is ours, so this no longer includes Chrome's 1.1 seconds before

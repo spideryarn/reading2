@@ -850,8 +850,17 @@
     /* 52px. Note that § a small device no longer shrinks this to 2.2rem, and
        that these two queries overlap on every phone — this one wins because it
        is declared later, which is exactly the kind of dependence on source
-       order worth saying out loud. */
-    --dock-h: 3.25rem;
+       order worth saying out loud.
+
+       **And never so short that a mode button in its frame is under 40px**
+       (plan 261021g § Stage 2, Sol's R8). That button is the bar less its top
+       hairline, its frame's two 1px edges and `.dock-modes`' 0.3rem margins
+       (dock-fit.css § the mode switch), so `3.25rem` alone left it 39.4px at a
+       16px root and 37.7 at a phone's 15.36. The `calc` is those parts with a
+       40px button inside; it wins by under a pixel at 16px and by about two at
+       15.36, and the loose buttons, which take the whole bar, only gain.
+       tests/touch-targets-261021g.test.tsx does the sum. */
+    --dock-h: max(3.25rem, calc(43px + 0.6rem));
   }
 
   /* **Grow to share the bar, never shrink below the floor.** The `0` in the
@@ -934,24 +943,39 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.5rem;
+    min-height: max(40px, 2.5rem);
   }
 
   /* The profile icon is a button, not a decorative mark. Its 13px icon plus
      desktop padding makes an ~18px target, so it shares the row's existing
      finger floor on both axes. */
   .prof-badge.icon-only {
-    min-width: 2.5rem;
-    min-height: 2.5rem;
+    min-width: max(40px, 2.5rem);
+    min-height: max(40px, 2.5rem);
     justify-content: center;
   }
+}
 
-  /* **The band's corner, for a finger: 32px, both buttons alike.** Not the
-     2.5rem floor above — that is what made the corner's badge a 40px ring
-     beside a 24px (i) (spya-hf4svm). 32px clears WCAG 2.5.8's 24, and a corner
-     has no neighbour to be hit by mistake. mode-band.css § the band's (i)
-     sizes both from this and resets the floor for the corner's badge. */
-  .mode-band.has-about { --band-corner-btn: 2rem; }
+/* **The band's corner, for a finger: 40px, both buttons alike.** It was 32px
+   (2rem) from 2026-10-02, on the reasoning that a corner has no neighbour to
+   hit by mistake; but the (i) and the owner's badge are each other's
+   neighbour, 3px apart, and the house floor is 40 (controls.md § The numbers;
+   plan 261021g § Stage 2, Sol's R2). Not the ringed 2.5rem floor above, which
+   is what made the badge a 40px circle beside a 24px (i) (spya-hf4svm): both
+   still take their box from this one token, and mode-band.css § the band's (i)
+   resets the floor for the corner's badge. `--band-about-room` derives from
+   both values, so every top row keeps clear of the bigger corner.
+
+   **`any-pointer`, unlike the block above**, because this is a target and not
+   bulk chrome: an iPad with a keyboard reports `pointer: fine` while its reader
+   taps the glass (261021c). `max(40px, 2.5rem)` so a phone's 15.36px root
+   does not make it 38.4 (261021c § C2). The gap opens from 0.2rem to 0.5rem, so
+   two 40px boxes are not drawn touching. */
+@media (any-pointer: coarse) {
+  .mode-band.has-about {
+    --band-corner-btn: max(40px, 2.5rem);
+    --band-corner-gap: 0.5rem;
+  }
 }
 
 /* ------------------------------------------------- § a field iOS zooms into ----

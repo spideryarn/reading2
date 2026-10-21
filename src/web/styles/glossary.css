@@ -396,6 +396,17 @@ div > p.notice-failed { display: block; color: var(--danger); font-size: 0.85rem
 .gloss-hide:hover { background: var(--surface-raised); color: var(--ink); }
 .gloss-hide:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
 .gloss-hide:disabled { opacity: 0.45; cursor: default; }
+/* **40 × 40 under a finger**, from 1.8rem (plan 261021g § Stage 2, Sol's R8;
+   controls.md § The numbers). It is beside the row's button, not on it (the
+   grid above), so it can grow without covering the term. No top margin, so
+   its glyph stays on the term's line and the row grows by about 4px, not 10. */
+@media (any-pointer: coarse) {
+  .gloss-hide {
+    width: 40px;
+    height: 40px;
+    margin-top: 0;
+  }
+}
 
 /* *Hidden (n)* at the foot of the list — collapsed, quiet, names only. */
 .gloss-hidden {

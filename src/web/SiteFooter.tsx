@@ -288,9 +288,14 @@ const LINKS: readonly {
  * `/contact` and every cross-reference in the privacy policy all say
  * `tw:no-underline` themselves. Do not drop it on the theory that a footer link
  * "should" be underlined; nothing else here is.
+ *
+ * **A 40px box under a finger** (plan 261021g § Stage 2, Sol's R8): the links
+ * were 20px of text. Inline-flex and centred, so the words stay where they
+ * were in a taller box; the nav drops its row gap under the same query, since
+ * the box's own 10px above and below is now the space between wrapped rows.
  */
 const LINK_CLASS =
-  "tw:text-sm tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:text-foreground";
+  "tw:text-sm tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:text-foreground tw:any-pointer-coarse:inline-flex tw:any-pointer-coarse:items-center tw:any-pointer-coarse:min-h-[40px]";
 
 /**
  * **One measure, and it used to be two.**
@@ -465,7 +470,7 @@ export function SiteFooter({
             grey mark competing with the words. */}
         <nav
           aria-label="Site"
-          className="tw:flex tw:flex-wrap tw:gap-x-5 tw:gap-y-2"
+          className="tw:flex tw:flex-wrap tw:gap-x-5 tw:gap-y-2 tw:any-pointer-coarse:gap-y-0"
         >
           {/* **One entry carries a mark, and it is why this is not a bare
               `{l.label}`.** Greg asked for the open-source link *"using GitHub

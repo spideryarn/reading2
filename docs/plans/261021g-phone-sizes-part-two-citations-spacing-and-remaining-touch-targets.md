@@ -170,3 +170,44 @@ findings. These supersede the Stage 2 table above where they disagree:
   the `IconButton` class are tested directly. The browser pass reads computed sizes and is the
   real check. A cascade-folding test helper is passed over: the suite has no browser, and the
   computed pass is what 261021c's C2 needed.
+
+## What landed
+
+**Stage 1** is as planned, with Sol's R1 (titles keep 1.5). Its code review (round 1, below) found
+that the coarse *Bring into this chat* rule came before the base `padding` shorthand at equal
+specificity, so its inline padding had been reset since 261021c. Sol moved the rule. At 390 every
+source's button sits under its own title. One-line rows are 99.4px apart title to title and
+two-line rows 113.5. Desktop's rows are unchanged. Pushed to `dev` ahead of Stage 2, because it
+is the part Greg is waiting on.
+
+**Stage 2**, built by an Opus subagent from the table as § Plan review amended it:
+
+- **`40px`, never `2.5rem`.** Tailwind's `size-10` and `min-h-10` are 2.5rem, which is 38.4px at
+  the measured iPhone's 15.36px root (261021c's C2). Every new size is `40px` or
+  `max(40px, 2.5rem)`. Building the stage found seven older finger floors written as a bare
+  2.5rem: Search's sort, Reception's *dig* and Investigate's *more*, `origin-chat`, the badge,
+  Glossary's sort and the live arrow. They are fixed, and the shelf card's action row and its "⋯"
+  now say `size-[40px]`. A test fails on any bare 2.5rem inside a coarse-pointer block.
+- **The band corner moved to `any-pointer: coarse`** with the 40px, since it is a target. The
+  (i) and the badge are 8px apart.
+- **The masthead's pitch is 48, not 40.** Its 8px gap is the row's own, which it shares with the
+  Metadata page. Three icons take 36px more of the row, and about 145px was free.
+- **The facts row's dotted rules became text underlines** on the 40px boxes. A border would hang
+  10px under the word.
+- **The shelf's Tag and date take the halo, not a drawn box.** A drawn 40px Tag would make every
+  card 16px taller.
+- **The dock's 39.4** came from the bar's height less its hairline, frame and margins. `--dock-h`
+  now does that sum against 40.
+- **`gloss-hide` was built after all** (Sol's R8).
+
+**The browser pass at 390** found the list's items at 40, bar a few hand-rolled controls that do
+not use `Button`. All are now fixed: Quiz's *Answer* (36, beside a 40px microphone), /profile's
+*Sign out* (31) and its *Dictate* (squeezed to 34), the Metadata page's *Archive*, *Share…* and
+*Contents* (34–36), and Search's saved-search icons (29 wide). It found no clipping, no overflow
+(`scrollWidth` 390 throughout) and no new wrapping, and desktop sizes are unchanged.
+
+**Still under 40, and not built** (controls.md lists them): the gutter bar and its marks (R6, for
+Greg), the shelf's sort and topic chips, `.skim-where`, `.fold-toggle`, `.zoom-btn` (28, not
+built after all), footnote-card links, Structure's rows, and the threshold slider. Also small
+labels the pass noticed but that the plan never listed: `.gloss-gate-label`, `.quiz-disclose`
+and `.srch-thorough`, each about 20px tall.

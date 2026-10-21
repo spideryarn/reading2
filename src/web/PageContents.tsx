@@ -603,7 +603,7 @@ export function PageContents({
           onClick={() => setOpen((was) => !was)}
           aria-expanded={open}
           aria-controls={listId}
-          className="tw:flex tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:px-0 tw:py-2 tw:text-left tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text tw:lg:hidden"
+          className="tw:flex tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:any-pointer-coarse:min-h-[40px] tw:border-0 tw:bg-transparent tw:px-0 tw:py-2 tw:text-left tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text tw:lg:hidden"
         >
           Contents
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}

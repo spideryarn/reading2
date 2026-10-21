@@ -1754,7 +1754,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
    table), drawn rather than an invisible `::after`: the arrow's only
    neighbour is Live, and a target overlapping it would steal Live's taps.
    Height is the composer's `--control-h` below. */
-@media (any-pointer: coarse) { .chat-live-arrow { width: 2.5rem; } }
+@media (any-pointer: coarse) { .chat-live-arrow { width: max(40px, 2.5rem); } }
 /* Lit with the call, so the split reads as one control rather than an orange
    button with a grey stub beside it. Still disabled: the engine is pinned, but
    disabled does not dim this half of one active control. */

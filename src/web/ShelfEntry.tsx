@@ -405,11 +405,17 @@ export function ShelfCard({
               2026-10-07 the outline was off and a Tab changed only the ink of
               one short date, which is not a mark anybody finds. The card's own
               `focus-within` border says focus is somewhere in this card; this
-              says where (plan 261007a § K3). */}
+              says where (plan 261007a § K3).
+
+              **`tap-target` under a finger**: an 18px line of text, so a 40px
+              halo round it rather than a 40px box, which would move the row
+              (plan 261021g § Stage 2). It is 98px wide, so the halo reaches
+              only up and down, 11px each way, and the measuring pass at 390
+              found nothing else to press within 55px. */}
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
+            className="tap-target tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
           >
             {note}
           </button>
@@ -1010,7 +1016,7 @@ export function Actions({
         fingerRow
           ? /* The card: a finger gets this row, finger-sized, where the card
                is 28rem or wider, and the "⋯" below that — `fingerRow`. */
-            "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:gap-1 tw:any-pointer-coarse:opacity-100 tw:any-pointer-coarse:[&_:is(a,button)]:size-10 tw:any-pointer-coarse:[&_svg]:size-[18px] tw:any-pointer-coarse:@max-[28rem]:hidden"
+            "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:gap-1 tw:any-pointer-coarse:opacity-100 tw:any-pointer-coarse:[&_:is(a,button)]:size-[40px] tw:any-pointer-coarse:[&_svg]:size-[18px] tw:any-pointer-coarse:@max-[28rem]:hidden"
           : "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
       }
       onPointerDownCapture={(e) => {
@@ -1281,7 +1287,7 @@ function ShelfActionsMenu({
              visible. It's very small."* A 22px glyph in the foreground colour
              inside the strong rule, where it was an 18px muted one with no
              edge. Still 40px. Plan 261002i. */
-          className="tw:relative tw:inline-flex tw:size-10 tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-rule-strong tw:text-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:border-highlight/60 tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:border-highlight/60"
+          className="tw:relative tw:inline-flex tw:size-10 tw:any-pointer-coarse:size-[40px] tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-rule-strong tw:text-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:border-highlight/60 tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:border-highlight/60"
         >
           <Ellipsis size={22} aria-hidden="true" />
         </DropdownMenu.Trigger>

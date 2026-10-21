@@ -294,7 +294,7 @@
 .rcp-own-label { color: var(--ink-faint); font-family: var(--font-ui); font-size: max(var(--text-min), 0.78rem); }
 @media (pointer: coarse) {
   .rcp-check-send,
-  .rcp-dig { min-height: 2.5rem; }
+  .rcp-dig { min-height: max(40px, 2.5rem); }
 }
 
 /* **Sources › Investigate** (InvestigatePanel.tsx, plan 261020n Stage 2): the owner's box at
@@ -396,7 +396,7 @@
   .investigate-send,
   .investigate-q,
   .investigate-yours-line,
-  .investigate-yours-more { min-height: 2.5rem; }
+  .investigate-yours-more { min-height: max(40px, 2.5rem); }
 }
 
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no

@@ -476,9 +476,11 @@ touched, and it paints nearly the same box as the pressed state, so an unpressed
 there looking like the one in force — and **`:active` arrived**, because a finger got no feedback at
 all and a tap that landed looked exactly like one that missed.
 
-**The rest of the band is still pointer-sized**: the threshold slider is 16px tall, and half a dozen
-buttons are between 19 and 28. Nothing generalises the size rule; each control gets it when somebody
-notices.
+**Since 2026-10-21 the size rule is general**: under a finger nothing to press is under 40 × 40px
+([controls.md § The numbers](controls.md#the-numbers), plans
+[261021c](../plans/261021c-minimum-text-and-touch-target-sizes-on-a-phone.md) and
+[261021g](../plans/261021g-phone-sizes-part-two-citations-spacing-and-remaining-touch-targets.md)),
+and controls.md lists the few left under it.
 
 ### A bigger target, drawn the same size
 

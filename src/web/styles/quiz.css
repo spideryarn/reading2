@@ -152,6 +152,11 @@
   color: var(--primary-foreground);
 }
 .chat-send.quiz-go:not([aria-disabled="true"]):hover { filter: brightness(1.1); }
+/* **40 under a finger**, as chat's own Send is (mode-band.css § the composer,
+   plan 261021c): Answer sat at 36 beside a 40px microphone (plan 261021g). */
+@media (any-pointer: coarse) {
+  .chat-send.quiz-go { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
+}
 
 .quiz-actions {
   display: flex;
@@ -429,4 +434,18 @@ td.text .quiz-in-prose-icon {
   align-items: center;
   gap: 0.5rem;
   white-space: nowrap;
+}
+/* **Under a finger, the tick-box's label and the pie are 40px** (plan 261021g
+   § Stage 2; controls.md § The numbers): the label was 22px tall and the pie
+   24px, pulled 5px into its gap by the margin above. The pie drops that margin
+   so 8px stays between the two boxes, and the row grows instead. The label is
+   the target, not the 13px box inside it, so it is the label that grows. */
+@media (any-pointer: coarse) {
+  .quiz-only-read label { min-height: 40px; }
+  .share-pie {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+  }
+  .quiz-only-read-what { gap: 8px; }
 }

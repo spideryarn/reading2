@@ -2863,8 +2863,9 @@ function TechnicalDetails({
 }
 
 /** The quiet inline button this page uses for an act with a sentence beside it. */
+/* `min-h-[40px]` under a finger: these came out 34 tall on a phone (plan 261021g). */
 const QUIET_BUTTON =
-  "tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
+  "tw:inline-flex tw:items-center tw:gap-2 tw:any-pointer-coarse:min-h-[40px] tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
 
 /**
  * **Archive and Share…, under the title.** Greg, 2026-09-30

@@ -469,6 +469,37 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 .facts > .counts-toggle:hover,
 .facts > .counts-toggle:focus-visible { color: var(--highlight-text); }
 
+/* **Under a finger, the origin line's link and the facts line's three
+   controls are 40px tall boxes** (plan 261021g § Stage 2): they were 18–21px,
+   under the house floor (controls.md § The numbers). Drawn, not haloed with
+   `.tap-target`: the facts line wraps, so a halo on one line would reach over
+   the line above or below (Sol's R4). An inline-flex box is an atomic inline
+   the line grows round, so a wrapped line keeps its room, and its baseline is
+   its text's, so the line still reads as one line of type. The dotted rule
+   moves from the box's border to the text's underline, or it would hang 10px
+   under the word. */
+@media (any-pointer: coarse) {
+  .origin-link,
+  .facts > .fold-all,
+  .facts > .counts-toggle,
+  .read-time-trigger {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  .facts > .fold-all,
+  .facts > .counts-toggle {
+    border-bottom: 0;
+    text-decoration: underline dotted currentColor;
+    text-underline-offset: 3px;
+  }
+  .read-time-trigger {
+    border-bottom: 0;
+    text-decoration: underline dotted var(--rule-strong);
+    text-underline-offset: 3px;
+  }
+}
+
 /* One author in the masthead or on the Metadata page: a name first, a link
    second, so it keeps the line's colour until you point at it. AuthorNames.tsx. */
 .author-name {

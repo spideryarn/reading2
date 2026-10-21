@@ -1343,7 +1343,13 @@ export function QuizPanel({
                 {/* Under the mark and above the reference answer since
                     2026-10-03: where the reader looks when they have finished
                     reading what the mark says. */}
-                <div className="quiz-step">
+                {/* **40 × 40 under a finger**, from 28, keeping the 8px gap
+                    between them (plan 261021g § Stage 2, Sol's R7): four
+                    controls and their gaps come to 184px. On the row and not on
+                    each button because `IconButton` takes no class, and a
+                    utility because quiz.css cannot outrank its 28px utility. Next
+                    as the filled box is 36px elsewhere and 40 here, like the rest. */}
+                <div className="quiz-step tw:any-pointer-coarse:[&>button]:size-[40px]">
                   {/* One step back along the path — the question before this
                       one in the array, wherever the reader came from. After a
                       jump from the list that is the step the jump skipped to,

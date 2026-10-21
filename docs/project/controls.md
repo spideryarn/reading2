@@ -205,6 +205,27 @@ is pressed, not its row: a 40px `<li>` round a 20px link is still a 20px link. *
 exception is a passage id**: ids sit 3px apart in a chip row, so their halo is bounded to their
 own width and 1.3rem tall (`tap-target.css`), and they get the text floor instead. The rows below
 are the mouse sizes.
+
+Three things learned making the rest of the app meet it (plan
+[261021g](../plans/261021g-phone-sizes-part-two-citations-spacing-and-remaining-touch-targets.md)):
+
+- **Write 40px, never a bare `2.5rem`** (nor Tailwind's `size-10`/`min-h-10`, which are 2.5rem).
+  The iPhone measured has a 15.36px root, so 2.5rem is 38.4px there. Write `max(40px, 2.5rem)`
+  or `tw:any-pointer-coarse:size-[40px]`. `tests/touch-targets-261021g.test.tsx` fails on a bare
+  2.5rem inside a coarse-pointer block.
+- **shadcn `Button` is 40px under a finger at every size.** That is one line in `button.tsx`, so
+  the 24, 32 and 36px rows below apply to a mouse only. A call site's `h-7` cannot undercut it,
+  because it is a `min-height`.
+- **A list of things to press needs a shape, not only 40px boxes.** In Chat's "From the web",
+  big targets alone left each *Bring into this chat* nearer the next title than its own. So each
+  source is now one block: its button always under its own title, and a hairline between
+  sources. Greg: *"as much about sort of line spacing or paragraph spacing being quite close as
+  font size"* (2026-10-21).
+
+**Still under 40, on purpose or awaiting a decision:** the gutter bar and its at-rest marks
+(touch.md § The gutter), the shelf's sort and topic chips, Skim's place button, the fold toggle, a figure's zoom button,
+links inside a footnote card, Structure's rows in the prose, and the threshold slider in touch.md § How big (16px tall when last measured, and older than these plans). 261021g says why for the rest.
+
 Text has its own floor:
 [typography.md § The smallest text](typography.md#the-smallest-text).
 
