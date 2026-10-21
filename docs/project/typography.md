@@ -76,7 +76,7 @@ and `kind-caption`, which had never been styled at all.
 ## A face per voice
 
 For every reader, on every page, since 2026-10-02: the author, the model and the reader each get
-their own face — a serif, IBM Plex Mono and Arial — and Geist stays the chrome. The rule,
+their own face — a serif, iA Writer Quattro and Arial — and Geist stays the chrome. The rule,
 the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
 ## Text roles in a band
@@ -111,7 +111,7 @@ Search's results are Quotes' case. Face is a separate decision, [fonts.md](fonts
 foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and block-id fallback stay
 0.88rem. They occupy similar places without doing one of the six jobs. Skim's question before a
 quote (`.skim-cue`) does a body line's job but stays 0.78rem: Greg asked that it be smaller than the
-quote, and in monospace a body-sized line reads larger than the serif quote beside it (plan
+quote, and in the model's typed face, wider than the serif, a body-sized line reads larger than the quote beside it (plan
 [261009j](../plans/261009j-skim-question-optional-and-the-border.md)). The open Skim stop's section heading
 (`.skim-row.current .skim-place`) is 0.82rem rather than `--type-item`, so the quote under it is
 read first; the other rows keep the role (plan [261009m](../plans/261009m-skim-quieter-open-stop.md)).

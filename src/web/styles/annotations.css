@@ -1212,6 +1212,15 @@ td.text.has-hit[data-hues="8"] {
   resize: vertical;
 }
 .cmt-note::placeholder { color: var(--ink-faint); }
+/* The note and its microphone, side by side; the box keeps its own vertical
+   spacing on the row (plan 261021e). */
+.cmt-note-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.55rem 0 0.6rem;
+}
+.cmt-note-row .cmt-note { flex: 1; min-width: 0; margin: 0; }
 .cmt-note:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .cmt-open-thread {

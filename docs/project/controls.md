@@ -21,6 +21,13 @@ the reason turned out to be one line of CSS rather than taste.
 >
 > — Greg, 2026-10-07
 
+> Yes, but keep it a minimal update. And just to be clear, we obviously don't want the URL to, for
+> when importing an article from the homepage to have a voice button, because that wouldn't make
+> sense. And not so we need a voice button for, like, the search bar on the homepage. So use your
+> judgment a little bit.
+>
+> — Greg, 2026-10-20 (`q-ccv9qq`, on a microphone for every prose box)
+
 **The aim:** a control that does the same job looks the same in every mode, so reuse the shared
 piece rather than drawing a new one. **Orange marks the mode; a part within it is marked
 neutrally.** Look at `/design` § Controls across modes before drawing one; it shows each piece
@@ -38,6 +45,7 @@ below, live. The families came from plan
 | is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
 | floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, or a shape of its own with its alpha times `--shadow-strength`, [`tokens.css`](../../src/web/styles/tokens.css) | [`elevation-shadows-soften-in-light`](../../tests/elevation-shadows-soften-in-light.test.ts) |
 | sends what you wrote, or leaves without sending | `.tone-positive` (green) and `.tone-negative` (red), [`button-tone.css`](../../src/web/button-tone.css) | [`feedback-dialog-styles`](../../tests/feedback-dialog-styles.test.ts) |
+| takes more than a few words of the reader's writing (not a URL, a search or a title) | a microphone: `DictationButton` and `DictationStrip`, through `useDictationField` ([dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box)) | [`prose-boxes-have-a-microphone`](../../tests/prose-boxes-have-a-microphone.test.ts) (every textarea, or its component listed with why) |
 
 The pair that ends a form is coloured by what it does: the button that sends what you wrote is
 green, the one that leaves without sending is red. Red is a direction, not a warning: a button

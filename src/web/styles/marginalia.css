@@ -413,9 +413,11 @@ p.marg-shut {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   /* Four, not three, since 261002g: the arc is now at most 20 words, which in
-     the AI face (a monospace, about a third wider than Geist) is four lines at
-     288px for 32 of 35 measured sentences, and three for 3
-     (evals/arc-length/run.ts). Three cut nearly every one mid-sentence. */
+     the AI face as it was then (IBM Plex Mono, a monospace about a third wider
+     than Geist) is four lines at 288px for 32 of 35 measured sentences, and
+     three for 3 (evals/arc-length/run.ts). Three cut nearly every one
+     mid-sentence. iA Writer Quattro (261021f) averages about 8% narrower than
+     Plex, so four lines now cut fewer, not more. */
   -webkit-line-clamp: 4;
   line-clamp: 4;
   overflow: hidden;

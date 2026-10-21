@@ -1,10 +1,11 @@
 ---
 id: q-s0suam
 report: spya-jxwfah
-status: open
+status: answered
+acted: spya-tpq6t9
 asked: 2026-10-20
 title: Should readers be able to choose the face the article is read in?
-refs: SPIDERYARN-READING2-MJ · qi-84z94bhp · docs/plans/261020v-reader-chosen-reading-fonts.md · docs/user-feedback/261019_2133-reader-chosen-reading-fonts.md
+refs: SPIDERYARN-READING2-MJ · qi-84z94bhp · qi-38kzx6pz · docs/plans/261020v-reader-chosen-reading-fonts.md · docs/plans/261021f-nicer-ai-face-and-no-reader-font-setting.md · docs/user-feedback/261019_2133-reader-chosen-reading-fonts.md
 ---
 A reader asked, on 19 October, to choose their own fonts for reading, "not just eg times new roman". Should the article's face be a reader's setting?
 
@@ -15,6 +16,25 @@ B. A choice for each of the voices: author, model, reader, and the app's own. Mo
 C. Let the reader type the name of any font on their device. Most freedom, but a misspelt or missing font fails silently and we cannot test faces we have never seen.
 
 D. No. One face per voice for everyone, as you set it on 2 October. Costs nothing; a reader who finds the serif hard going has no way round it.
+
+Greg, 2026-10-20 21:49 UTC (reply `spya-tpq6t9`):
+
+> Can you make a minimal update that when presenting me with choices, it's helpful to have a bit
+> more of a sense of trade-offs. So, for example, I can't tell how complicated this would be. If
+> it's trivial, I'd be at least open to it.
+>
+> That said, I don't think this is the right move. I think really what he's saying, if we read
+> beneath the lines, he didn't like the monospace font we're using. So why don't we try finding a
+> nicer one, and don't give the user the ability to switch it? Because my hunch is that does add
+> complexity that we don't need.
+
+Built as
+[261021f](../../plans/261021f-nicer-ai-face-and-no-reader-font-setting.md), on dev: no reader
+setting. The model's words are now in iA Writer Quattro, IBM Plex Mono's letters on four widths
+instead of one, so they still look typed but read as prose; code in a model's answer stays on one
+width, in iA Writer Mono. Chosen from four faces compared side by side in Skim and Summary. And
+[ask-me-questions.md](../../reusable/ask-me-questions.md) now asks each option to say roughly how
+big it is to build.
 
 Details
 

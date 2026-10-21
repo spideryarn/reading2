@@ -1,6 +1,6 @@
 # 261020v — Let a reader choose the face the article is read in
 
-**Status: awaiting Greg. Nothing built.** Question
+**Status: declined by Greg, 2026-10-20 (`spya-tpq6t9`); nothing built. What was built instead, a nicer face for the model's words: [261021f](261021f-nicer-ai-face-and-no-reader-font-setting.md).** Question
 [q-s0suam](../user-feedback/questions/q-s0suam.md); note
 [261019_2133](../user-feedback/261019_2133-reader-chosen-reading-fonts.md).
 

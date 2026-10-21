@@ -293,9 +293,13 @@
        `--font-author`; their visible children set their own face. Greg, 2026-10-01:
        Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
        becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
-       "Courier is really ugly" — still monospaced, so still machine-made. docs/project/fonts.md. */
+       "Courier is really ugly" — and Plex became iA Writer Quattro on 2026-10-21, after a
+       reader found the monospace hard going: Plex's letters on four widths rather than one,
+       so it still looks typed but reads as prose. Code in a model's answer keeps one width,
+       in iA Writer Mono (voices.css). docs/project/fonts.md. */
     --font-author: 'Source Serif 4 Variable', 'Times New Roman', Times, serif;
-    --font-ai: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+    --font-ai: 'iA Writer Quattro', 'Courier New', Courier, monospace;
+    --font-ai-code: 'iA Writer Mono', 'Courier New', Courier, monospace;
     --font-reader: Arial, Helvetica, 'Liberation Sans', sans-serif;
 
     /* ---- reading measure --------------------------------------------- */

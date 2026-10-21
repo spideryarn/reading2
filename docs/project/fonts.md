@@ -38,27 +38,42 @@ view and every page outside it (the shelf, Metadata, /profile, /add, the public 
 | Token | Voice | Face | Why |
 |---|---|---|---|
 | `--font-author` | the article, and verbatim quotes of it | Source Serif 4, variable | a screen serif; variable, so dark mode's 450 weight still works |
-| `--font-ai` | prose a model generated | IBM Plex Mono, static 400/700 | monospaced, so it reads as machine-made; not Courier, which Greg found "really ugly" |
+| `--font-ai` | prose a model generated | iA Writer Quattro, static 400/700 upright and italic | still looks typed, so it reads as machine-made, but reads as prose; not Courier, which Greg found "really ugly", nor strict monospace, which a reader found hard going |
+| `--font-ai-code` | code inside a model's answer | iA Writer Mono, static 400/700 upright and italic | the same letters on one width, so columns of code line up |
 | `--font-reader` | anything the reader typed | Arial, from the system | Greg's word, no download |
 | `--font-ui` | the chrome, and every fixed sentence we wrote | Geist | the fourth voice, by being left alone |
 
-The tokens are in [`styles/tokens.css`](../../styles/tokens.css). The three downloaded faces are
+The tokens are in [`styles/tokens.css`](../../styles/tokens.css). The four downloaded faces are
 self-hosted through `@fontsource` packages imported in
 [`tailwind.css`](../../src/web/tailwind.css); Arial is the system face. **A new downloaded face must
 be self-hosted too**: a font CDN would be a new outside party seeing every reader's page loads
 ([privacy.md](privacy.md)).
 
 How the faces were chosen: Courier Prime and the serif in
-[261001d](../plans/261001d-typeface-per-voice.md); Plex Mono over Courier, with seven candidates
-side by side, in [261002b](../plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md). Its
-runner-up, iA Writer Quattro, is easier to read as paragraphs but barely looks monospaced; swapping
-to it means changing the token and its import.
+[261001d](../plans/261001d-typeface-per-voice.md); IBM Plex Mono over Courier, with seven
+candidates side by side, in [261002b](../plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md);
+iA Writer Quattro over Plex in
+[261021f](../plans/261021f-nicer-ai-face-and-no-reader-font-setting.md), after a reader asked to
+choose their own fonts and Greg read it as the monospace being hard going:
+
+> So why don't we try finding a nicer one, and don't give the user the ability to switch it?
+> Because my hunch is that does add complexity that we don't need.
+>
+> — Greg, 2026-10-20
+
+Quattro is Plex's letters on four widths instead of one, so it keeps the slab `i l r` and the typed
+rhythm and loses the gaps a strict monospace leaves in a paragraph. What it gives up: at small sizes
+it is closer to Geist than Plex was, so the model's words are told from the chrome by their letters
+rather than by their spacing. iA Writer Duo, which widens only `m` and `w`, was the runner-up and
+looked almost the same as Plex. **There is no reader setting for any face**: Greg declined one
+(q-s0suam).
 
 ## Whose voice is it? The rule
 
 - **Prose a model generated → `--font-ai`.** Summaries, gists, glossary entries and term names,
-  idea names, quiz questions, chat replies (code blocks too), Tweets' posts, Sketch's and
-  Illustrated's titles and captions, a "why this one" tooltip. If a model chose the words, it is AI.
+  idea names, quiz questions, chat replies (code too, in `--font-ai-code`), Tweets' posts, Sketch's
+  and Illustrated's titles and captions, a "why this one" tooltip. If a model chose the words, it is
+  AI.
 - **Text a model only copied or transcribed keeps its writer's voice.** A heading-leaf's label is
   the author's heading, copied verbatim, so it is the author's. A citation's title is the cited
   work's. A quote the pipeline checked as verbatim is the author's.
@@ -123,9 +138,9 @@ Then:
 3. **A `tw:font-*` utility on the same element wins** (Tailwind's layer comes after ours). Wrap the
    words in a classed `<span>` rather than fighting it; that is how Tweets' posts are voiced.
 4. **Model text drawn in SVG is not voiced.** Sketch wraps and measures its labels in TypeScript
-   assuming Geist's width (`CHAR_W` in `src/sketch-scene.ts`), and a monospace is about 13% wider.
-   Voicing it means passing a per-voice width into `paintScene`. Illustrated's captions are painted
-   into the image.
+   assuming Geist's width (`CHAR_W` in `src/sketch-scene.ts`); changing the face without changing
+   that measurement can spill a label out of its shape. Voicing it means passing a per-voice width
+   into `paintScene`. Illustrated's captions are painted into the image.
 
 [`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) catches the silent failures: a class
 renamed in a component (so the rule matches nothing), a compound selector whose parts never meet, a

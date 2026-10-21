@@ -211,7 +211,7 @@ const EXCEPTIONS: Exception[] = [
     value: "max(var(--text-min), 0.78rem)",
     reason:
       "The model's optional question before a quote, which matters less than the quote it " +
-      "introduces (Greg, spya-qpgvq9). Its monospace face reads larger than the quote's serif " +
+      "introduces (Greg, spya-qpgvq9). Its typed face, wider than the quote's serif, reads larger " +
       "at the same size, so it sits a clear step below --type-quote rather than at --type-body.",
   },
   {
