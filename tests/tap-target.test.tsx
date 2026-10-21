@@ -87,6 +87,16 @@ function declsFor(css: string, selector: string): string | undefined {
   return undefined;
 }
 
+/** Each exact-selector rule, in source order. Equal specificity means the last wins. */
+function allDeclsFor(css: string, selector: string): string[] {
+  const out: string[] = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const list = (m[1] ?? "").split(",").map((s) => s.trim());
+    if (list.includes(selector)) out.push(m[2] ?? "");
+  }
+  return out;
+}
+
 /** Every top-level rule — outside any `@media` — as `selector { decls }`. */
 function topLevel(css: string): string {
   let out = "";
@@ -217,12 +227,28 @@ describe("the class", () => {
     }
     expect(declsFor(coarse, ".chat-thread-source")).toMatch(/min-width:\s*40px/);
     expect(declsFor(coarse, ".chat-from-btn")).toMatch(/min-width:\s*40px/);
-    expect(declsFor(coarse, ".chat-sources li > a")).toMatch(/min-height:\s*40px/);
     /* Plan 261021g: each source one shape under a finger — a top-aligned title
        block, its button always under it, a hairline between sources. */
-    expect(declsFor(coarse, ".chat-sources li > a")).toMatch(/display:\s*block/);
-    expect(declsFor(coarse, ".chat-sources li")).toMatch(/display:\s*block/);
-    expect(declsFor(coarse, ".chat-sources li + li")).toMatch(/border-top:/);
+    const source = declsFor(coarse, ".chat-sources li");
+    expect(source).toMatch(/display:\s*block/);
+    expect(source).toMatch(/padding:\s*0\.5rem\s+0/);
+    const divider = declsFor(coarse, ".chat-sources li + li");
+    expect(divider).toMatch(/border-top:\s*1px\s+solid\s+var\(--rule\)/);
+    const title = declsFor(coarse, ".chat-sources li > a");
+    expect(title).toMatch(/display:\s*block/);
+    expect(title).toMatch(/box-sizing:\s*border-box/);
+    expect(title).toMatch(/min-height:\s*40px/);
+    expect(title).toMatch(/padding-block:\s*0\.5rem/);
+    const bring = declsFor(coarse, ".chat-sources li > .bring-in");
+    expect(bring).toMatch(/display:\s*flex/);
+    expect(bring).toMatch(/margin-top:\s*0\.15rem/);
+
+    /* The base button rule uses the `padding` shorthand. At equal specificity
+       it must precede the coarse override, or it silently resets 0.75rem to
+       0.5rem even though the media-only assertion above stays green. */
+    const finalBringButton = allDeclsFor(css, ".bring-in-button").at(-1);
+    expect(finalBringButton, "the coarse Bring button rule loses in the full cascade").toMatch(/min-height:\s*40px/);
+    expect(finalBringButton, "the base padding shorthand resets the coarse inline padding").toMatch(/padding-inline:\s*0\.75rem/);
   });
 });
 
