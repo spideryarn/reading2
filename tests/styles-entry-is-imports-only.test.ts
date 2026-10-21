@@ -238,6 +238,10 @@ const MANIFEST = [
      root size is the baseline for all rem type, and a top-layer dialog needs
      its dimming rule after the dialog's own appearance. Plan 261019g. */
   "reading-comfort.css",
+  /* The bar a view-as tab draws, and the `--safe-top` it adds. Its own
+     selectors (`.view-as-bar`, `:root[data-view-as]`) are named nowhere
+     else, so its place in this list is free. Plan 261019n § Part 3. */
+  "view-as.css",
 ];
 
 /**

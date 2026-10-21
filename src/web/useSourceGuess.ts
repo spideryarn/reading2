@@ -43,6 +43,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Article, SourceGuess } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { cameOffADisk, savedFromSource, webSource } from "./SourceLink.js";
 
 /** A settled answer — the only kind worth layering over the payload. */
@@ -88,7 +89,9 @@ function settledOf(body: unknown): SettledGuess | null {
  * none — in which case the payload's own `sourceGuess` stands.
  */
 export function useSourceGuess(slug: string, article: Article): SettledGuess | null {
-  const wanted = wantsSourceGuess(article);
+  /* A POST that may spend, on arrival: never while viewing as another reader
+     (plan 261019n § Part 3, Client 3). */
+  const wanted = viewAsNonce() === null && wantsSourceGuess(article);
   const [answer, setAnswer] = useState<{ slug: string; guess: SettledGuess } | null>(null);
   const asked = useRef<string | null>(null);
 

@@ -683,7 +683,8 @@ export function PrivacyPage() {
           And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
-          written in order to fix a bug or make the thing better. We won’t sell it, publish it, or
+          written, including by viewing the app as you, read-only, in order to fix a bug or make the
+          thing better. We won’t sell it, publish it, or
           feed it to a model’s training. An administrator may also look up account details (your
           email address, when you joined and were last active, and how much you have used
           Spideryarn, but not what you read or wrote) by asking an AI assistant of their choosing,

@@ -9338,3 +9338,38 @@ export interface PublicShelfTopicsStatus {
 export interface PublicCopyFound {
   publicCopy: { slug: string; title: string };
 }
+
+/**
+ * **The header a view-as tab sends with every API request**: the nonce of the
+ * administrator's live view-as session. Lower-case, because Node lower-cases
+ * incoming header names. Read by `serveViewingAs` in src/routes.ts and the three
+ * `/api/admin/view-as` routes; sent by the client's view-as tab.
+ * docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md § Part 3.
+ */
+export const VIEW_AS_HEADER = "x-spideryarn-view-as";
+
+/** The control routes a view-as tab may call besides the allowlisted GETs. */
+export const VIEW_AS_START_PATH = "/api/admin/view-as";
+export const VIEW_AS_CURRENT_PATH = "/api/admin/view-as/current";
+export const VIEW_AS_END_PATH = "/api/admin/view-as/end";
+
+/** `POST /api/admin/view-as`'s answer. `expiresAt` is ISO 8601. */
+export interface ViewAsStarted {
+  nonce: string;
+  subjectId: string;
+  /** Asked of the Auth service before the session starts; no answer, no session. */
+  subjectEmail: string;
+  expiresAt: string;
+}
+
+/** `GET /api/admin/view-as/current`'s answer for a live session. */
+export interface ViewAsCurrent {
+  subjectId: string;
+  /** Null when the Auth service could not be asked just now; the session is still live. */
+  subjectEmail: string | null;
+  expiresAt: string;
+}
+
+/** The sentence every refused view-as request carries, and the panel shows. */
+export const VIEW_AS_READ_ONLY_MESSAGE =
+  "Hidden while viewing as another reader: this would change something or cost something. [view-as-read-only]";

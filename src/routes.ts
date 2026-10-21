@@ -299,7 +299,7 @@ import {
 import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
 import { costCategoryOf } from "./cost-categories.js";
 import { type AdminCosts, costWindowLabel, parseCostWindow } from "./cost-cube.js";
-import { authAdminEndpoint, confirmedAccountEmail, gotruePages, listAccounts } from "./store/admin-accounts.js";
+import { accountEmail, authAdminEndpoint, confirmedAccountEmail, gotruePages, listAccounts } from "./store/admin-accounts.js";
 import {
   silentLiveSessionsForArticle,
   SpendCubeTooLarge,
@@ -408,7 +408,7 @@ import {
 } from "./billing/admission.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { parseShareKey, SHARE_KEY_PARAM, withoutShareKey } from "./share-key.js";
-import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
+import { currentOwnerId, type OwnerId, runAsOwner, runInRequest, setRequestOwner } from "./owner.js";
 import {
   collectSpend,
   currentSpend,
@@ -441,7 +441,7 @@ import { readingSoFarLine } from "./reading-so-far.js";
 import { gistOf, type ChatGistGateway } from "./chat-gist.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
-import { captureFailure, setMonitoringUser } from "./monitoring.js";
+import { captureFailure, setMonitoringUser, setMonitoringViewAs } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { currentStepName, previousClientStepName } from "./step-order.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
@@ -600,6 +600,17 @@ import { inputFingerprint as sourcesClaimsFingerprint } from "./sources-claims.j
 import { LEARN_STANCES, NONE_YET_AS_NULL_HEADER } from "./types.js";
 import type { Article, CommentAnchor, HighlightColour, PublicCopyFound, ResetResponse } from "./types.js";
 import type { ChatThreadView } from "./types.js";
+import {
+  VIEW_AS_CURRENT_PATH,
+  VIEW_AS_END_PATH,
+  VIEW_AS_HEADER,
+  VIEW_AS_READ_ONLY_MESSAGE,
+  VIEW_AS_START_PATH,
+  type ViewAsCurrent,
+  type ViewAsStarted,
+} from "./types.js";
+import { isNonceShaped, pgViewAsStore, VIEW_AS_REASON_MAX } from "./store/pg-view-as.js";
+import { runViewingAs, viewingAs } from "./view-as-scope.js";
 import { MENTIONS_MAX_PER_QUESTION, MENTIONS_QUESTION_FULL } from "./chat-mention-limits.js";
 import { admitMentions, mentionView, resolveMentions, resolveThreadMentions } from "./chat-mentions.js";
 
@@ -1410,6 +1421,10 @@ function liveComments(slug: string): Set<string> {
  * comments carry their window on the row instead of taking it from here.
  */
 function sweepOrphaned(slug: string): Promise<Comment[]> {
+  /* **Not while viewing as a reader**: the sweep is a write, and the
+     administrator is only looking. The same rows, unswept. Plan 261019n
+     § Part 3; the four sweeps below do the same. */
+  if (viewingAs()) return commentStore.load(slug);
   return commentStore.sweepPending(slug, liveComments(slug));
 }
 
@@ -3093,6 +3108,8 @@ function liveMessages(slug: string): Set<string> {
  * in src/store/contracts.ts for why neither half is sufficient alone.
  */
 function sweepChat(slug: string): Promise<ChatThread[]> {
+  /* Read, never swept, while viewing as — `sweepOrphaned` says why. */
+  if (viewingAs()) return chatStore.load(slug);
   return chatStore.sweepPending(slug, {
     keep: liveMessages(slug),
     graceMs: CHAT_ORPHAN_GRACE_MS,
@@ -5531,6 +5548,8 @@ export function liveRuns(slug: string): Set<string> {
  * another process's row may stay silent.
  */
 function sweepSearches(slug: string): Promise<SearchRun[]> {
+  /* Read, never swept, while viewing as — `sweepOrphaned` says why. */
+  if (viewingAs()) return searchStore.load(slug);
   return searchStore.sweepPending(slug, {
     keep: liveRuns(slug),
     graceMs: SEARCH_ORPHAN_GRACE_MS,
@@ -5800,6 +5819,8 @@ if (CRITERION_ORPHAN_GRACE_MS <= LITERATURE_TIMEOUT_MS) {
 
 /** Turn abandoned `pending` criteria into `error`, so they can be run again. */
 function sweepCriteria(slug: string): Promise<SavedCriterion[]> {
+  /* Read, never swept, while viewing as — `sweepOrphaned` says why. */
+  if (viewingAs()) return refereeCriteriaStore.load(slug);
   return refereeCriteriaStore.sweepPending(slug, {
     keep: liveCriteria(slug),
     graceMs: CRITERION_ORPHAN_GRACE_MS,
@@ -9368,6 +9389,8 @@ function logRequest(
   started: number,
   err?: unknown,
   failureStatus?: number,
+  /** Ids only, when the request carried the view-as header — `serveViewingAs`. */
+  viewAs?: ViewAsLogFields,
 ): void {
   /* **A stack only where a stack tells you something.**
    *
@@ -9409,6 +9432,7 @@ function logRequest(
      `serveApi`'s own `finally` — inside the scope, before it closes. An ordinary
      request that called no model gets no extra fields at all. */
   Object.assign(fields, spendFields(currentSpend() ?? emptySpend()));
+  if (viewAs) Object.assign(fields, { viewAs });
   // Headers may already carry 200 when the handler fails. Keep that wire
   // status in the fields, but keep the failure visible at its severity.
   const severityStatus = failureStatus ?? status;
@@ -9624,6 +9648,18 @@ async function serveApi(
        `requireUser` can produce (src/auth.ts). Before the split, "an
        authenticated route reached without authentication" was prevented by this
        line being above the route table and by nothing else. GPT Sol's answer 2. */
+    /* **View as, and only with its header.** Without `x-spideryarn-view-as`
+       this `if` is false and the request takes exactly the path it always
+       took. With it, anywhere but the three control routes, it goes to the
+       view-as gate instead and never reaches `serveAuthenticatedApi`, whose
+       own path — the owner box, the admin gate, `noteArrival` — is the
+       caller's own and must not run for somebody else's data. Here rather than
+       inside `serveAuthenticatedApi` so that function stays the ordinary path
+       its route contract reads statement by statement. Plan 261019n § Part 3. */
+    if (req.headers[VIEW_AS_HEADER] !== undefined && !isViewAsControlPath(path)) {
+      await serveViewingAs(user, { req, res, rawUrl: url, path, query });
+      return true;
+    }
     await serveAuthenticatedApi(user, { req, res, rawUrl: url, path, query });
     return true;
   } catch (err) {
@@ -9737,7 +9773,7 @@ async function serveApi(
     send(res, status, { error: said, ...declaredFields(err) });
     return true;
   } finally {
-    logRequest(method, path, res.statusCode, started, failure, failureStatus);
+    logRequest(method, path, res.statusCode, started, failure, failureStatus, viewAsLogged.get(res));
   }
 }
 
@@ -9809,15 +9845,50 @@ interface AuthRouteContext {
   request: ApiRequest;
 }
 
+/**
+ * **What a handler on the view-as allowlist is given: the request, and no
+ * `user`.** docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+ * § Part 3, GPT Sol's F6.
+ *
+ * While the administrator views the app as a reader, the owner box holds the
+ * reader and `user` is still the administrator — the gate never mints a
+ * `VerifiedUser` for anybody. So a handler that read `user` would answer with
+ * the administrator's data under the reader's name. Typing the allowlisted
+ * handler without it makes that a compile error when the row is put on the
+ * list, rather than a review finding afterwards.
+ */
+interface ViewAsRouteContext {
+  request: ApiRequest;
+}
+
+/**
+ * **The allowlist is a field of the row, and a type decides who may carry it.**
+ *
+ * `viewAs: "read"` says the row may answer while the administrator is viewing
+ * as a reader (`serveViewingAs`, below the table). Only a GET row can carry it,
+ * and its handler then takes `ViewAsRouteContext`. A row without it is refused
+ * in a view-as request, so a new route fails closed. Which rows carry it is
+ * pinned by tests/view-as-gate.test.ts.
+ */
+type ViewAsSide<Captures extends unknown[]> =
+  | {
+      method: AuthRouteMethod;
+      viewAs?: undefined;
+      handler: (context: AuthRouteContext, ...captures: Captures) => Promise<void>;
+    }
+  | {
+      method: "GET";
+      viewAs: "read";
+      handler: (context: ViewAsRouteContext, ...captures: Captures) => Promise<void>;
+    };
+
 /** An entry matched by string equality — the shape of `/api/jobs` and billing. */
-interface ExactAuthRoute {
+type ExactAuthRoute = {
   kind: "exact";
-  method: AuthRouteMethod;
   path: string;
   /** An exact path has no capture, so its article, if any, is the handler's to say. */
   article: Exclude<ArticleAttribution, "first-capture">;
-  handler: (context: AuthRouteContext) => Promise<void>;
-}
+} & ViewAsSide<[]>;
 
 /**
  * An entry matched by a regex.
@@ -9842,13 +9913,11 @@ interface ExactAuthRoute {
  * them. `part` and `slugPart` go on doing the decoding and the validation they
  * already do, at the point in the handler where they were already called.
  */
-interface PatternAuthRoute {
+type PatternAuthRoute = {
   kind: "pattern";
-  method: AuthRouteMethod;
   pattern: RegExp;
   article: ArticleAttribution;
-  handler: (context: AuthRouteContext, captures: RegExpExecArray) => Promise<void>;
-}
+} & ViewAsSide<[captures: RegExpExecArray]>;
 
 /**
  * **Which article a row's model spend belongs to**, answered on every row so
@@ -9876,7 +9945,7 @@ type ArticleAttribution = "first-capture" | "handler" | "none";
  * — an exact route's handler has no `captures` parameter to be given, and a
  * pattern route's handler cannot be attached to a `path`.
  */
-type AuthRoute = ExactAuthRoute | PatternAuthRoute;
+export type AuthRoute = ExactAuthRoute | PatternAuthRoute;
 
 /**
  * **The matchers two rows each share**, named once so there is one place that
@@ -10481,6 +10550,85 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **View as: start, read, stop** — plan 261019n § Part 3. Behind the
+     namespace gate, run as the administrator and never switched: a request
+     carrying the view-as header to one of these three paths takes the ordinary
+     route (`serveApi`, `isViewAsControlPath`), and they read the header
+     themselves. Literal paths because the contract test reads this table as
+     text; they are `VIEW_AS_START_PATH` and its two siblings in src/types.ts. */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/admin/view-as",
+    article: "none",
+    handler: async ({ user, request: { req, res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const { subject, reason } = viewAsStartRequest(await readBody(req));
+      /* Two checks of one fact, on purpose: `isAdmin` here, and the table's
+         `actor_id <> subject_id` check underneath it. */
+      if (isAdmin(subject)) {
+        throw httpError(403, "An administrator's account cannot be viewed as. [view-as-subject-admin]");
+      }
+      const account = await accountEmail(subject);
+      if (account.kind === "unavailable") {
+        /* "Answered 404" is the one unavailability that means absence; the
+           rest are the service not answering, which is not the admin's fault. */
+        if (account.reason === "the Auth service answered 404") throw httpError(404, "There is no such account.");
+        throw httpError(503, "The sign-in service could not be asked about that account, so nothing was started. Try again.");
+      }
+      const started = await pgViewAsStore.start(user.id, subject, reason);
+      /* Ids only — never the reason, which is the administrator's own words
+         about a reader, and never an address. logging.md. */
+      log("auth").info(
+        { viewAs: { actor: user.id, subject, session: started.sessionId } },
+        "view-as session started",
+      );
+      send(res, 200, {
+        nonce: started.nonce,
+        subjectId: subject,
+        subjectEmail: account.email,
+        expiresAt: started.expiresAt.toISOString(),
+      } satisfies ViewAsStarted);
+    },
+  },
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/view-as/current",
+    article: "none",
+    handler: async ({ user, request: { req, res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const nonce = viewAsNonceOf(req);
+      const live = nonce === undefined ? null : await pgViewAsStore.live(nonce, user.id);
+      if (!live) throw viewAsEnded();
+      /* The subject can become an administrator after this session started.
+         `/current` is the minute-by-minute authority too, not merely the
+         subject-data gate, so make that revocation terminal for the tab. */
+      if (isAdmin(live.subjectId)) throw viewAsEnded();
+      const account = await accountEmail(live.subjectId);
+      send(res, 200, {
+        subjectId: live.subjectId,
+        subjectEmail: account.kind === "found" ? account.email : null,
+        expiresAt: live.expiresAt.toISOString(),
+      } satisfies ViewAsCurrent);
+    },
+  },
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/admin/view-as/end",
+    article: "none",
+    handler: async ({ user, request: { req, res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const nonce = viewAsNonceOf(req);
+      /* Idempotent: no header, a stranger's nonce, one already ended — all 204.
+         Stop must always be able to say it stopped. */
+      if (nonce !== undefined) await pgViewAsStore.end(nonce, user.id);
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+
   /* The second admin route, and the only one that returns a reader's own
      sentences. Exact on `path` for the same reason as the one above.
      docs/plans/260902l-admin-feedback-page.md. */
@@ -11003,6 +11151,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     path: "/api/library",
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res, query } }) => {
       /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
          meaning "no", and a loose check would hand them the archive. */
@@ -11025,6 +11174,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     path: "/api/library/search",
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res, query } }) => {
       send(res, 200, await searchTheLibrary(query));
     },
@@ -11074,6 +11224,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     path: "/api/library/tags",
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res } }) => {
       const tags: LibraryTagsResponse = { tags: await tagStore.readerTags() };
       /* The reader's own words: never a shared cache's, as the terms route. */
@@ -11157,6 +11308,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     path: "/api/models",
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res } }) => {
       send(res, 200, modelsInUse());
     },
@@ -11278,6 +11430,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     path: FEEDBACK_PATH,
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res, query } }) => {
       res.setHeader("Cache-Control", "private, no-store");
       const show = query.get("show") ?? "all";
@@ -11323,6 +11476,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     path: READER_PATH,
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res, query } }) => {
       /* **`?slug=` answers a different question, and the panels need that one.**
          Without it this says only whether the *global* box is written, and a
@@ -11451,6 +11605,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/article\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await loadArticle(slugPart(captures, 1)));
     },
@@ -11711,6 +11866,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/source\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       await sendSource(res, slugPart(captures, 1));
     },
@@ -11737,6 +11893,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/asset\/([\w.%-]+)\/([0-9a-f]{64})\.(png|jpeg|gif)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       await sendArticleAsset(res, slugPart(captures, 1), part(captures, 2), part(captures, 3));
     },
@@ -11787,6 +11944,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/metadata\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, await articleMetadata(slugPart(captures, 1)));
     },
@@ -11804,6 +11962,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/tweets\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       {
         /* No thread yet is `200 null` to a client that asks —
@@ -11823,6 +11982,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: GLOSSARY_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       {
         /* No glossary yet is `200 null` to a client that asks —
@@ -11940,6 +12100,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/ideas\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       {
         /* No ideas yet is `200 null` to a client that asks —
@@ -11962,6 +12123,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/quotes\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       {
         /* No quotes yet is `200 null` to a client that asks —
@@ -11994,6 +12156,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/timeline\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, unlike its five neighbours, and that is
          the decision rather than an omission: this artefact was never written
@@ -12025,6 +12188,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/quiz\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       /* **`withProfileChanged` since 2026-10-02**, for the badge and its
          Regenerate (plan 261002f). It labels; nothing re-runs on it — the
@@ -12073,6 +12237,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/faq\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**: this artefact is not written for a
          profile. `FaqResponse` in src/types.ts has two fields.
@@ -12098,6 +12263,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/sources-claims\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadSourcesClaims(slugPart(captures, 1)));
       if (!found) return;
@@ -12134,9 +12300,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: SOURCES_CLAIM_CHECKS_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
-      const checks = await sourcesClaimChecksStore.sweep(slug, (id) => checkingClaims.has(`${slug}/${id}`));
+      /* Listed, not swept, while viewing as — `sweepOrphaned` says why. */
+      const checks = viewingAs()
+        ? await sourcesClaimChecksStore.list(slug)
+        : await sourcesClaimChecksStore.sweep(slug, (id) => checkingClaims.has(`${slug}/${id}`));
       send(res, 200, { checks });
     },
   },
@@ -12191,6 +12361,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/relations\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadRelations(slugPart(captures, 1)));
       if (!found) return;
@@ -12210,6 +12381,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/crossrefs\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       /* No `withProfileChanged`: not written for a profile. No links yet is
          `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
@@ -12231,6 +12403,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/simple\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       /* `withProfileChanged` since 2026-10-01: the paragraphs are written for
          the owner's profile and goal (plan 261001b). `stale` and `outdated`
@@ -12257,6 +12430,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/skim\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       const at = slugPart(captures, 1);
       /* **Not `withProfileChanged`**, whose rule does not count a cleared
@@ -12370,6 +12544,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/reception\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
          is reading does not change what the web said, so there is no third
@@ -12480,6 +12655,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: RELATED_WORK_PATTERN,
     /* No model is called; the capture is named because the path names an article. */
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const answer: RelatedWorkResult = relatedWorkAnswer(await loadRelatedWork(slugPart(captures, 1)));
       send(res, 200, answer);
@@ -12523,6 +12699,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/bibliography\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       const slug = slugPart(captures, 1);
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadBibliography(slug));
@@ -12636,6 +12813,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: READING_TIME_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       send(res, 200, { seconds: await readingTimeStore.read(slugPart(captures, 1)) });
     },
@@ -12680,6 +12858,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: STALE_NOTICES_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const body: StaleNoticesResponse = { dismissed: await staleNoticeStore.list(slugPart(captures, 1)) };
       send(res, 200, body);
@@ -12752,6 +12931,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/sketch\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -12796,6 +12976,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/illustrated\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       {
         const at = slugPart(captures, 1);
@@ -12826,6 +13007,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.(jpeg|png)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       /* `slugPart` on the slug for the reason the `source` route gives — the
          pattern allows `%` and `.` — and `part` is not used at all on the hash,
@@ -12859,6 +13041,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/arc\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       /* No arc yet is `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadArc(slugPart(captures, 1)));
@@ -12964,6 +13147,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: COMMENTS_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res, query } }, captures) => {
       const slug = slugPart(captures, 1);
       const comments = await sweepOrphaned(slug);
@@ -13155,6 +13339,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: CHAT_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res, query } }, captures) => {
       const slug = slugPart(captures, 1);
       const threads = await sweepChat(slug);
@@ -13432,6 +13617,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: SEARCHES_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       send(res, 200, { runs: await sweepSearches(slug) });
@@ -13509,6 +13695,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: CRITERIA_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       /* Both halves in one response, and read close together, for the reason
@@ -13578,6 +13765,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: REFEREE_PROMISES_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       /* Both halves in one response, and read close together, for the reason
@@ -13589,7 +13777,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          running is one an earlier process died in the middle of, and leaving it
          would be a spinner nothing can ever clear. */
       send(res, 200, {
-        run: await refereePromisesStore.sweep(slug, pullingPromises.has(slug)),
+        /* Loaded, not swept, while viewing as — `sweepOrphaned` says why. */
+        run: viewingAs()
+          ? await refereePromisesStore.load(slug)
+          : await refereePromisesStore.sweep(slug, pullingPromises.has(slug)),
         sourceHash: await refereePromisesStore.sourceHash(slug),
       });
     },
@@ -13628,6 +13819,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/referee\/scan\/([\w.%-]+)$/,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       /* **Ask whose article this is before reading a byte of it**, exactly as
@@ -13686,6 +13878,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: REFEREE_HIDDEN_CHECK_PATTERN,
     article: "first-capture",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
       await shelfStore.read(slug);
@@ -13710,6 +13903,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     path: JOBS_PATH,
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res } }) => {
       send(res, 200, { jobs: (await listJobs()).map(jobForPreviousClient) });
     },
@@ -13758,6 +13952,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: UPLOAD_PATTERN,
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const id = part(captures, 1);
       const found = await readUpload(id, currentOwnerId());
@@ -13934,6 +14129,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: JOB_PATTERN,
     article: "none",
+    viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
       const found = await getJob(part(captures, 1));
       if (!found) throw httpError(404, "No such job");
@@ -14240,29 +14436,53 @@ export async function dispatchAuthRoute(
   routes: readonly AuthRoute[],
   context: AuthRouteContext,
 ): Promise<boolean> {
-  const { req, path } = context.request;
-  for (const route of routes) {
-    if (route.method !== req.method) continue;
-    if (route.kind === "exact") {
-      if (route.path !== path) continue;
-      await route.handler(context);
-      return true;
-    }
-    const captures = route.pattern.exec(path);
-    if (captures === null) continue;
-    const slug = route.article === "first-capture" ? attributableSlug(captures) : null;
-    if (slug === null) await route.handler(context, captures);
-    else {
-      /* The handler call awaited inside the wrapper, not returned from it: the
-         route contract (`assertHandlersAwaited`) reads this function's syntax
-         and refuses any handler call that is not the operand of an `await`. */
-      await withSpendAttribution({ articleSlug: slug }, async () => {
-        await route.handler(context, captures);
-      });
-    }
+  const found = findAuthRoute(routes, context.request.req.method, context.request.path);
+  if (found === null) return false;
+  if (found.kind === "exact") {
+    await found.route.handler(context);
     return true;
   }
-  return false;
+  const { route, captures } = found;
+  const slug = route.article === "first-capture" ? attributableSlug(captures) : null;
+  if (slug === null) await route.handler(context, captures);
+  else {
+    /* The handler call awaited inside the wrapper, not returned from it: the
+       route contract (`assertHandlersAwaited`) reads this function's syntax
+       and refuses any handler call that is not the operand of an `await`. */
+    await withSpendAttribution({ articleSlug: slug }, async () => {
+      await route.handler(context, captures);
+    });
+  }
+  return true;
+}
+
+/** Which row a request reaches, and its captures — without running anything. */
+type FoundAuthRoute =
+  | { kind: "exact"; route: ExactAuthRoute }
+  | { kind: "pattern"; route: PatternAuthRoute; captures: RegExpExecArray };
+
+/**
+ * **The first row that takes this method and path — the lookup, and nothing
+ * else.** `dispatchAuthRoute` runs what this finds, so the two cannot disagree
+ * about which row a request reaches; the view-as gate (`serveViewingAs`) asks
+ * it first and decides from the row whether to run it at all. Pure: no handler,
+ * no store, no decode.
+ */
+export function findAuthRoute(
+  routes: readonly AuthRoute[],
+  method: string | undefined,
+  path: string,
+): FoundAuthRoute | null {
+  for (const route of routes) {
+    if (route.method !== method) continue;
+    if (route.kind === "exact") {
+      if (route.path === path) return { kind: "exact", route };
+      continue;
+    }
+    const captures = route.pattern.exec(path);
+    if (captures !== null) return { kind: "pattern", route, captures };
+  }
+  return null;
 }
 
 /**
@@ -14407,7 +14627,13 @@ export async function serveAuthenticatedApi(
          response. Here, in the half only a `VerifiedUser` reaches; a request
          whose route threw does not arrive, and its next one does.
          src/arrivals.ts, src/after-response.ts, docs/plans/260930i. */
-      await afterResponse("recording an account arrival", () => noteArrival(user.id, user.email));
+      /* The three view-as control routes deliberately run outside the subject
+         marker so they can start/read/end the session row. They must not pick
+         up this ordinary-request epilogue: it can write reader_arrivals and
+         send signup mail as the administrator from the view-as tab. */
+      if (req.headers[VIEW_AS_HEADER] === undefined) {
+        await afterResponse("recording an account arrival", () => noteArrival(user.id, user.email));
+      }
       return;
     }
 
@@ -14429,4 +14655,186 @@ export async function serveAuthenticatedApi(
      */
     send(res, 404, { error: `No API route for ${req.method} ${rawUrl}` });
     return;
+}
+
+/* ------------------------------------------------------------ view as -- */
+
+/**
+ * **The administrator viewing the app as another reader, read-only.**
+ * docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+ * § Part 3, as amended by GPT Sol's two plan reviews.
+ *
+ * Reached from `serveApi` only when the request carries `VIEW_AS_HEADER` and
+ * is not one of the three control routes. Four checks, in order, each a refusal
+ * that runs nothing:
+ *
+ * 1. the verified caller is an administrator — 403 `[view-as-not-admin]`;
+ * 2. the nonce names a live session **of this caller's** — 410 `[view-as-ended]`
+ *    (another administrator's nonce is answered as an ended one);
+ * 3. the session's reader is still not an administrator — 403;
+ * 4. the request reaches a GET row carrying `viewAs: "read"` — 403
+ *    `[view-as-read-only]`. An unknown route, a write, an admin route and an
+ *    unlisted GET are all this one refusal: the tab has no use for telling them
+ *    apart, and a new route fails closed.
+ *
+ * Then, and only then, the row's handler runs **as the reader for the owner
+ * box only**: `runViewingAs(marker, () => runAsOwner(subject, …))`. The outer
+ * owner box stays the administrator, and the handler is handed the
+ * administrator's own `VerifiedUser` — no `VerifiedUser` is ever made for the
+ * reader (Sol's F6); the allowlisted handlers are typed not to see `user`.
+ *
+ * What is not done here, on purpose: `noteArrival` (the reader did not arrive),
+ * and `setRequestOwner(subject)` (the box `handleApi` opened is the caller's).
+ */
+async function serveViewingAs(user: VerifiedUser, request: ApiRequest): Promise<void> {
+  assertVerifiedUser(user);
+  setRequestOwner(user.id);
+  setMonitoringUser(user);
+  const { req, res, path } = request;
+  /* Before any refusal, so a 403 or 410 is not cached either (Sol's F2). */
+  pinViewAsHeaders(res);
+  viewAsLogged.set(res, { actor: user.id });
+
+  if (!isAdmin(user.id)) {
+    throw httpError(403, "Viewing as another reader is for the site's administrator. [view-as-not-admin]");
+  }
+  const nonce = viewAsNonceOf(req);
+  const live = nonce === undefined ? null : await pgViewAsStore.live(nonce, user.id);
+  if (!live) throw viewAsEnded();
+  viewAsLogged.set(res, { actor: user.id, subject: live.subjectId });
+  setMonitoringViewAs(live.subjectId);
+  /* Again now, not only at start: the list in src/admin.ts is code, and a
+     deploy can make a reader an administrator mid-session. */
+  if (isAdmin(live.subjectId)) {
+    throw httpError(403, "An administrator's account cannot be viewed as. [view-as-subject-admin]");
+  }
+
+  const found = findAuthRoute(AUTH_ROUTES, req.method, path);
+  if (found === null || found.route.method !== "GET" || found.route.viewAs !== "read") {
+    throw httpError(403, VIEW_AS_READ_ONLY_MESSAGE);
+  }
+
+  /* The same row, through the one function that runs rows — so the spend
+     attribution a `first-capture` row gets is the dispatcher's, exactly as on
+     the ordinary path. A one-row table matches the same way the whole table
+     did: the row's own method and path test, asked again. */
+  const marker = { actorId: user.id, subjectId: live.subjectId, sessionId: live.sessionId };
+  const ran = await runViewingAs(marker, () =>
+    runAsOwner(live.subjectId, () => dispatchAuthRoute([found.route], { user, request })),
+  );
+  if (!ran) throw new Error("serveViewingAs: the row findAuthRoute chose did not take the request. See src/routes.ts.");
+}
+
+/** Ids for the request's log line, never addresses — `logRequest`. */
+interface ViewAsLogFields {
+  actor: string;
+  subject?: string;
+}
+
+/**
+ * The view-as ids of a response, for the log line `serveApi` writes in its
+ * `finally`. Keyed by the response so it needs no second scope and is gone
+ * with it; module-level, which src/log.ts's rule 4 allows for a `WeakMap`
+ * keyed by the request's own object.
+ */
+const viewAsLogged = new WeakMap<ServerResponse, ViewAsLogFields>();
+
+const VIEW_AS_CACHE_CONTROL = "private, no-store";
+const VIEW_AS_VARY = "X-Spideryarn-View-As";
+const PINNED = new Set(["cache-control", "vary"]);
+
+/**
+ * **`private, no-store` and `Vary: X-Spideryarn-View-As` on every view-as
+ * response, whatever the handler says** (Sol's F2). Assets and plates are sent
+ * `max-age=31536000, immutable`; under view-as that would let a reader's bytes
+ * outlive Stop in the administrator's HTTP cache.
+ *
+ * Set once, and then `setHeader`, `appendHeader`, `removeHeader` and
+ * `writeHead` are wrapped **on this response object only** so that neither
+ * header can be changed afterwards — including by a binary sender that passes
+ * its headers to `writeHead` directly.
+ */
+/** Exported for tests/view-as-gate.test.ts, which drives it with a real `ServerResponse`. */
+export function pinViewAsHeaders(res: ServerResponse): void {
+  const setHeader = res.setHeader.bind(res);
+  setHeader("Cache-Control", VIEW_AS_CACHE_CONTROL);
+  setHeader("Vary", VIEW_AS_VARY);
+  const pinned = (name: unknown): boolean => typeof name === "string" && PINNED.has(name.toLowerCase());
+
+  res.setHeader = ((name: string, value: number | string | readonly string[]) =>
+    pinned(name) ? res : setHeader(name, value)) as ServerResponse["setHeader"];
+  if (typeof res.appendHeader === "function") {
+    const appendHeader = res.appendHeader.bind(res);
+    res.appendHeader = ((name: string, value: string | readonly string[]) =>
+      pinned(name) ? res : appendHeader(name, value)) as ServerResponse["appendHeader"];
+  }
+  if (typeof res.removeHeader === "function") {
+    const removeHeader = res.removeHeader.bind(res);
+    res.removeHeader = ((name: string) => {
+      if (!pinned(name)) removeHeader(name);
+    }) as ServerResponse["removeHeader"];
+  }
+  if (typeof res.writeHead === "function") {
+    const writeHead = res.writeHead.bind(res) as (...args: unknown[]) => ServerResponse;
+    res.writeHead = ((...args: unknown[]) =>
+      writeHead(...args.map((arg) => withoutPinned(arg, pinned)))) as ServerResponse["writeHead"];
+  }
+}
+
+/** A `writeHead` headers argument with the pinned names taken out; anything else unchanged. */
+function withoutPinned(arg: unknown, pinned: (name: unknown) => boolean): unknown {
+  if (Array.isArray(arg)) {
+    /* Node takes either `[[k, v], …]` or a flat `[k, v, k, v]`. */
+    if (arg.every((entry) => Array.isArray(entry))) return arg.filter((entry) => !pinned((entry as unknown[])[0]));
+    const kept: unknown[] = [];
+    for (let i = 0; i + 1 < arg.length; i += 2) {
+      if (!pinned(arg[i])) kept.push(arg[i], arg[i + 1]);
+    }
+    return kept;
+  }
+  if (arg !== null && typeof arg === "object") {
+    return Object.fromEntries(Object.entries(arg).filter(([name]) => !pinned(name)));
+  }
+  return arg;
+}
+
+/** The three control routes, which a view-as tab calls with its header and which run as the administrator. */
+function isViewAsControlPath(path: string): boolean {
+  return path === VIEW_AS_START_PATH || path === VIEW_AS_CURRENT_PATH || path === VIEW_AS_END_PATH;
+}
+
+/** The nonce from the header, or `undefined` for a missing, repeated or ill-shaped one. */
+function viewAsNonceOf(req: IncomingMessage): string | undefined {
+  const value = req.headers[VIEW_AS_HEADER];
+  return typeof value === "string" && isNonceShaped(value) ? value : undefined;
+}
+
+function viewAsEnded(): Error {
+  return httpError(410, "This view-as session has ended. [view-as-ended]");
+}
+
+/** `{ subject, reason }`, checked, or a 400 saying which. */
+function viewAsStartRequest(body: unknown): { subject: OwnerId; reason: string } {
+  const { subject, reason } = objectBody(body);
+  if (typeof subject !== "string" || !isUuid(subject)) throw httpError(400, "subject must be an account id");
+  if (typeof reason !== "string") throw httpError(400, "reason must be a sentence");
+  const trimmed = reason.trim();
+  /* Code points, as the table's `char_length` counts them. */
+  const length = [...trimmed].length;
+  if (length < 1 || length > VIEW_AS_REASON_MAX) {
+    throw httpError(400, `reason must be between 1 and ${VIEW_AS_REASON_MAX} characters`);
+  }
+  return { subject: subject.toLowerCase() as OwnerId, reason: trimmed };
+}
+
+/**
+ * **Every row's method, matcher and whether it is on the view-as list**, for
+ * tests/view-as-gate.test.ts, which pins the list row by row.
+ */
+export function viewAsRouteInventory(): { method: string; match: string; viewAs: boolean }[] {
+  return AUTH_ROUTES.map((route) => ({
+    method: route.method,
+    match: route.kind === "exact" ? route.path : route.pattern.source,
+    viewAs: route.viewAs === "read",
+  }));
 }

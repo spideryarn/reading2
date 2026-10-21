@@ -55,8 +55,9 @@
  * `pdf-read.ts`'s choice of hash input one question over: hash what went in, not
  * the name of the thing it came from.
  *
- * It is cached **in memory, for the life of the process**, and that is a
- * decision rather than a stage on the way to a table:
+ * It is cached **in memory, for the life of the process**, except while a
+ * view-as marker is set: that read neither uses nor fills mutable process
+ * state. The ordinary cache is a decision rather than a stage on the way to a table:
  *
  * - **The scan costs no money and is deterministic.** A cache miss is CPU, not
  *   a paid call and not a different answer. That is the opposite of every other
@@ -91,6 +92,7 @@ import { scanRawSource } from "./injection-scan.js";
 import type { SourceScan } from "./injection-scan-types.js";
 import type { RawSource } from "./store/contracts.js";
 import { loadSource } from "./store/index.js";
+import { viewingAs } from "./view-as-scope.js";
 
 /** How the raw document is fetched. See the parameters on `scanArticleSource`. */
 export type ReadRawSource = (slug: string) => Promise<RawSource | null>;
@@ -205,7 +207,10 @@ export async function scanArticleSource(
   if (!source) return { scan: null, ms: null };
 
   const key = createHash("sha256").update(source.bytes).digest("hex");
-  const cached = cache.get(key);
+  /* A view-as read may use no mutable cache: even a deterministic, process-local
+     entry outlives the request and violates that tab's no-write boundary. */
+  const mayCache = viewingAs() === null;
+  const cached = mayCache ? cache.get(key) : undefined;
   if (cached) return { scan: await cached, ms: null };
 
   const started = Date.now();
@@ -216,14 +221,14 @@ export async function scanArticleSource(
     const text = source.kind === "html" ? storedHtmlText(source.bytes) : undefined;
     return scan({ kind: source.kind, ...(text !== undefined ? { text } : {}) });
   })();
-  remember(key, running);
+  if (mayCache) remember(key, running);
 
   try {
     return { scan: await running, ms: Date.now() - started };
   } catch (err) {
     /* Never remember a failure. The next request should try again rather than
        be told for the life of the process that this paper cannot be checked. */
-    if (cache.get(key) === running) cache.delete(key);
+    if (mayCache && cache.get(key) === running) cache.delete(key);
     throw err;
   }
 }

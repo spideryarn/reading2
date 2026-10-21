@@ -54,6 +54,7 @@ import { AdminPublicTopics } from "./AdminPublicTopics.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
+import { ViewAsStart } from "./ViewAsStart.js";
 import { type HiddenColumnKeys, useHiddenColumns } from "./shelf-hidden-columns.js";
 
 /** Kept out of the render so the table is not rebuilt from a fresh `[]`. */
@@ -318,7 +319,9 @@ export function AdminUsersPage() {
      with everyone else (plan 261019k). The name `/admin/costs` uses for it. */
   const [pointedAt, setPointedAt] = useQueryState("user", parseAsString);
 
-  const columns = useMemo(() => adminColumns(now), [now]);
+  /* The account *View as* was pressed on (ViewAsStart.tsx). */
+  const [viewing, setViewing] = useState<AdminUser | null>(null);
+  const columns = useMemo(() => adminColumns(now, setViewing), [now]);
   const natural = useMemo(() => naturalDirections(columns), [columns]);
   /* `rawDir` straight in, `null` and all — absent means "each key goes whichever
      way it naturally goes", which `sortingFromUrl` fills in per column. Do not
@@ -392,6 +395,14 @@ export function AdminUsersPage() {
 
   return (
     <Shell title="Users" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
+      {viewing && (
+        <ViewAsStart
+          key={viewing.id}
+          subjectId={viewing.id}
+          label={viewing.email}
+          onCancel={() => setViewing(null)}
+        />
+      )}
       {error && (
         <p className="tw:mb-4 tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">
           {/* **Which numbers you are looking at, when there are still numbers.**

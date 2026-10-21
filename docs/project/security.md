@@ -18,6 +18,7 @@ Up: [security-map.md](security-map.md)
 - [§ The bibliographic registries](#registries) — Crossref, DataCite, OpenAlex strings on the page
 - [§ Whoever signs in](#the-gate) — the gate's two properties that belong to the system
 - [§ The database connection](#database-tls) — verified TLS or refusal
+- [§ Viewing the app as a reader](#view-as) — the administrator's read-only view of one reader's app: the gate, the allowlist, the backstops, and what is not covered
 - [§ Known gaps](#known-gaps) — where to look if you want work
 - [§ If you are changing any of this](#if-you-are-changing-any-of-this) — what to read and run first
 
@@ -1269,6 +1270,125 @@ and the reason is in the logs and on `/api/health` as `ssl.error` and a warning,
 `ConnectionParameters` rather than our reading of it;
 [tests/db-tls.test.ts](../../tests/db-tls.test.ts) guards the certificate file;
 [261001j](../plans/261001j-refuse-unverified-tls-to-the-remote-database.md) has the paths.
+
+## Viewing the app as a reader: the widest read we allow <a id="view-as"></a>
+
+Since 2026-10-20 the administrator can open one reader's app, read-only, for thirty minutes, after
+giving a reason ([admin.md § Viewing the app as a reader](admin.md#viewing-the-app-as-a-reader-read-only)
+is what it is for and who chose it; plan
+[261019n § Part 3](../plans/261019n-admin-sees-other-users-articles-and-views-as-them.md#part-3-built-view-as-greg-chose-a-2026-10-20)).
+The party it guards against is not a stranger. It is **our own code doing something on the
+reader's account while the administrator only meant to look**: a GET that sweeps rows, a panel
+that spends on a model, a job that requeues itself later, a tab that files her shelf in the
+administrator's offline cache. Read-only is enforced on the server, and ordinary application
+persistence in the browser is made passive as well, so neither half is trusted to cover for the
+other. The administrator's shared Supabase authentication key is the declared browser exception;
+it can be refreshed in real `localStorage` so refresh-token rotation does not fork between tabs.
+
+### The gate
+
+`serveApi` sends a request carrying `X-Spideryarn-View-As` to `serveViewingAs`
+([`src/routes.ts`](../../src/routes.ts)) instead of `serveAuthenticatedApi`, except for the three
+control routes under `/api/admin/view-as`, which run as the administrator behind the ordinary admin
+gate. Their dispatch skips the ordinary account-arrival and signup-email epilogue when the header
+is present. A request without the header takes exactly the path it always did. `serveViewingAs` refuses
+unless, on this request:
+
+1. the verified caller is an administrator (403 `[view-as-not-admin]`);
+2. the nonce's hash matches a session in `view_as_sessions` issued to this caller, not ended and not
+   expired (410 `[view-as-ended]`); the store is [`src/store/pg-view-as.ts`](../../src/store/pg-view-as.ts);
+3. the reader is still not an administrator (403 `[view-as-subject-admin]`);
+4. the first row of `AUTH_ROUTES` that matches, found by the same pure `findAuthRoute` that
+   dispatch uses, is a GET row marked `viewAs: "read"` (403 `[view-as-read-only]`, whose sentence
+   the refused panel shows).
+
+Then the handler runs as `runViewingAs(marker, () => runAsOwner(subject, …))`. The request's own
+owner box stays the administrator, so nothing after the handler (deferred work included) is the
+reader's. The handler is handed the administrator's real `VerifiedUser`: no second way to make one
+exists, so that type still means "came out of `requireUser`". A `viewAs` row's handler is typed to
+receive `{ request }` only, so a handler that reads `user` cannot be put on the list without a
+compile error. The response is pinned to `Cache-Control: private, no-store` and
+`Vary: X-Spideryarn-View-As` whatever the handler sets, because assets and plates are otherwise
+cacheable for a year and could outlive Stop in the browser's HTTP cache.
+
+### The allowlist
+
+**42 GET rows**: the shelf, its search and tags, the reader's profile and feedback, the article,
+its source, images and metadata, each mode's stored output, comments, chats, searches, the referee
+reads, and the job list. Seven of those (comments, chat, search, referee criteria and promises, the
+claim checks, the job list) normally sweep stale rows or settle a dead job on a GET; while viewing
+as they read what is there instead. **Not on it**: every `/api/admin/` row; `/api/library/terms`
+(it writes cache rows, claims, and spends after answering); `/api/link-preview` and
+`/api/citers/:slug` (they fetch outside pages); `/api/link-summary` (it spends);
+`/api/article/:slug/share-link` (a credential); both exports; `/api/billing/usage` (it claims
+vouchers as the *caller* and can send email); the old alias routes. The source, assets, plates,
+upload status and referee scan read Supabase Storage, which is an outbound read but not a write.
+The referee scan neither reads nor fills its process cache while the marker is set.
+`tests/view-as-gate.test.ts` pins the list row by row, so adding a route never adds it here.
+
+### The backstops, for when the list is wrong
+
+Each is a throw while the marker is set, with a test in which an allowlisted handler reaches it:
+
+- `beginSpend` ([`src/ai-spend.ts`](../../src/ai-spend.ts)), which every paid model call passes;
+- `sendEmail` ([`src/email.ts`](../../src/email.ts));
+- `afterResponse` ([`src/after-response.ts`](../../src/after-response.ts)) and the job enqueue in
+  [`src/jobs.ts`](../../src/jobs.ts), so no work is left to run later on the reader's account;
+- Supabase Storage's writes and upload grants ([`src/store/blobs-supabase.ts`](../../src/store/blobs-supabase.ts)).
+
+**And the database, enforced by Postgres** ([`src/db/client.ts`](../../src/db/client.ts)). While
+the marker is set, every query is sent over the extended protocol (one statement, never several),
+each ordinary query runs alone in its own `begin transaction read only … commit`, and a store's own
+transaction has its `begin` made read-only and followed at once by `select 1`, after which Postgres
+will not switch it to read-write. Persistent writes to non-temporary tables and sequences —
+including `nextval`, writable CTEs and functions that attempt those writes — are refused by
+Postgres. The wrapper additionally refuses two-phase transactions and the known SQL forms for
+notifications, session settings, session advisory locks and external `COPY`, because a normal
+read-only transaction does not forbid those. Transaction-control recognition treats PostgreSQL
+comments as whitespace, including nested block comments. On any failure the client is rolled back
+and released, and destroyed if the rollback or transaction cleanup fails; drizzle-orm 0.45 sends
+`begin` outside the `try` that releases its client, so the wrapper releases that one itself. This is
+not a claim that SQL text can enumerate every side effect an extension function could have.
+
+### What is not covered
+
+- **A SELECT-only database role** would be stronger than the read-only transaction: a role cannot
+  be talked out of its grants. It needs a new role and a new secret, so it is proposed, not built
+  (GPT Sol, round 2, R2-2).
+- **Writes to an existing temporary table** are allowed in a read-only transaction. Nothing of ours
+  makes one, and one would vanish with the connection. PostgreSQL's read-only mode is likewise not
+  a general side-effect sandbox: the wrapper refuses the known session, notification, advisory-lock
+  and external-copy forms, but a privileged or extension function could have another external
+  effect. No allowlisted handler calls one.
+- **No generic outbound-fetch backstop**: the server's own `fetch` also reads Storage and Supabase's
+  signing keys. Outside fetches are kept off by the allowlist alone.
+- **Detached work is forbidden.** The marker follows an async resource created inside its callback,
+  even if a timer fires after the request returns; work handed to a shared queue can instead be
+  drained in the queue's context and lose it
+  ([`src/owner.ts`](../../src/owner.ts) § `runAsOwner` explains the hazard). Nothing on the list
+  detaches or enqueues work, and `afterResponse` and job enqueue refuse while it is set.
+
+### The browser half
+
+The tab is opened with `noopener` at `/#view-as=<nonce>`. An inline script in
+[`index.html`](../../index.html), run before every other script, takes the nonce out of the address
+and replaces `localStorage` and `sessionStorage` with empty in-memory stores, so nothing the
+administrator's own tabs saved is read and nothing the reader's pages write lands where those tabs
+will find it. The one exception is Supabase's session key, which passes through to the real
+storage, so the tab is signed in as the administrator exactly as any other tab, and a token refresh
+cannot fork the rotating refresh token. The nonce lives only in memory: **a reload ends the view.**
+[`src/web/lib/api.ts`](../../src/web/lib/api.ts) adds the header and `cache: "no-store"`, keeps
+nothing in the offline cache, and refuses any non-GET before it is sent, except Stop. Only the
+shelf, an article and its metadata page are drawn; every other page says it is not available, so
+the account, sign-out, password and OAuth pages, which call Supabase directly, cannot be reached.
+Background senders (job engine, reading time, preloads, hover cards, billing, topic pills,
+dictation) do not start. The subject's pages do not mount until `/current` has supplied an id and
+expiry; a missing address is shown as the id rather than losing that expiry. At expiry, on Stop, on
+an ended response, or when either account ceases to be eligible, the subject page is hidden at
+once and the tab closes or navigates away. A `pageshow` guard sends a Back-restored bfcache copy
+away again. Auth broadcasts do not maintain the administrator's offline-cache records in this tab.
+A sign-out or switch to another authenticated account ends the view, so already-rendered subject
+data cannot remain under the next account's session.
 
 ## Known gaps
 

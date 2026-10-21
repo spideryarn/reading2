@@ -27,6 +27,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { chosenTopics, topicMembers } from "./shelf-narrow.js";
 
 /** How long to wait before asking again while articles are still being read. */
@@ -143,6 +144,11 @@ export function useShelfTerms({
   /** From `shelfKeyOf`; `null` holds the request back. */
   shelfKey: string | null;
 }): ShelfTermsState {
+  /* **Never asked while viewing as another reader**: the route writes phrase
+     runs and may spend, so the server refuses it there (plan 261019n § The
+     allowlist). Held back as if there were no shelf yet, which draws no row
+     and no spinner; Library.tsx says why in the row's place. */
+  if (viewAsNonce() !== null) shelfKey = null;
   const [answer, setAnswer] = useState<{
     data: LibraryTermsResponse | null;
     archived: boolean;

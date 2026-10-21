@@ -30,7 +30,7 @@ import {
   type TransferDone,
   type TransferPreview,
 } from "../admin-articles.js";
-import { formatSpendNanos } from "../admin.js";
+import { formatSpendNanos, isAdmin } from "../admin.js";
 import { readableDate } from "../billing-plan.js";
 import { amountWithFloor } from "./admin-costs-view.js";
 import { Shell } from "./AdminPage.js";
@@ -43,6 +43,7 @@ import { exactly } from "./relative-time.js";
 import { ADMIN_HREF, readHref } from "./router.js";
 import { type AccountChoice, useAdminArticles } from "./useAdminArticles.js";
 import { voiceClass } from "./voice.js";
+import { ViewAsStart } from "./ViewAsStart.js";
 
 /** The two orders the table offers: as it was, and Greg's "what I care about most" (261006j). */
 type Order = "newest" | "cost";
@@ -308,6 +309,8 @@ export function AdminArticlesPage() {
   const [filter, setFilter] = useState("");
   const [order, setOrder] = useState<Order>("newest");
   const [open, setOpen] = useState<AdminArticle | null>(null);
+  /* The row whose owner *View as owner* was pressed for (ViewAsStart.tsx). */
+  const [viewing, setViewing] = useState<AdminArticle | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const caption = CAPTIONS[order];
 
@@ -328,6 +331,15 @@ export function AdminArticlesPage() {
         <p role="status" className="tw:mb-4 tw:text-sm">
           {done}
         </p>
+      )}
+
+      {viewing && (
+        <ViewAsStart
+          key={viewing.id}
+          subjectId={viewing.ownerId}
+          label={ownerLabel(viewing)}
+          onCancel={() => setViewing(null)}
+        />
       )}
 
       {open && (
@@ -441,17 +453,27 @@ export function AdminArticlesPage() {
                     <span aria-hidden="true">{costText(a)}</span>
                     <span className="tw:sr-only">{costTip(a)}</span>
                   </td>
-                  <td className={CELL}>
-                    <button
-                      type="button"
-                      className={BUTTON}
-                      onClick={() => {
-                        setDone(null);
-                        setOpen(a);
-                      }}
-                    >
-                      Transfer…
-                    </button>
+                  <td className={`${CELL} tw:whitespace-nowrap`}>
+                    <span className="tw:inline-flex tw:gap-2">
+                      <button
+                        type="button"
+                        className={BUTTON}
+                        onClick={() => {
+                          setDone(null);
+                          setOpen(a);
+                        }}
+                      >
+                        Transfer…
+                      </button>
+                      {/* Not on your own rows, and not on another
+                          administrator's, which the server refuses (plan
+                          261019n § Part 3: an admin is never a subject). */}
+                      {!a.mine && !isAdmin(a.ownerId) && (
+                        <button type="button" className={BUTTON} onClick={() => setViewing(a)}>
+                          View as owner
+                        </button>
+                      )}
+                    </span>
                   </td>
                 </tr>
               ))}

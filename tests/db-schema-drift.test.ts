@@ -320,6 +320,7 @@ describe("declaredTables", () => {
       "stale_notice_dismissals",
       "upload_source_guesses",
       "uploads",
+      "view_as_sessions",
     ]);
 
     const revisions = declared.find((d) => d.table === "article_revisions");
@@ -420,8 +421,9 @@ describe("against a real database", () => {
          `citation_web_notes`, 2026-10-19 (plan 261018o stage 2); sixty-three
          since `article_open_times`, 2026-10-20 (plan 261020y); sixty-five
          since `private_link_openers` and `private_link_signed_out_opens`,
-         2026-10-21 (plan 261021d). */
-      expect(report.declaredTables).toBe(65);
+         2026-10-21 (plan 261021d); sixty-six since `view_as_sessions`,
+         2026-10-21 (plan 261019n). */
+      expect(report.declaredTables).toBe(66);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

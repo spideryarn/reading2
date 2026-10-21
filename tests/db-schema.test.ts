@@ -1022,7 +1022,8 @@ describe("the schema keeps the promises the plan makes", () => {
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
                             'shelf_topic_scores_owner_fk','reader_arrivals_owner_fk',
-                            'shelf_topic_sets_owner_fk','private_link_openers_reader_fk')
+                            'shelf_topic_sets_owner_fk','private_link_openers_reader_fk',
+                            'view_as_sessions_actor_fk','view_as_sessions_subject_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -1094,6 +1095,10 @@ describe("the schema keeps the promises the plan makes", () => {
            CASCADE, for the same reason: the model's topic set is a cache. */
         "shelf_topic_sets_owner_fk",
         "uploads_owner_fk",
+        /* drizzle/20261021154507, appended by hand. CASCADE on both, for
+           `reader_arrivals`' reason: bookkeeping about two accounts. */
+        "view_as_sessions_actor_fk",
+        "view_as_sessions_subject_fk",
       ]);
     });
   });

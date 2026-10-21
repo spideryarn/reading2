@@ -12,6 +12,8 @@ import { startAppearance } from "./appearance.js";
 import { startReadingComfort } from "./reading-comfort.js";
 import { watchForDeploy } from "./stale-shell.js";
 import { OfflineStrip } from "./OfflineStrip.js";
+import { ViewAsBar } from "./ViewAsBar.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { TipCard } from "./TipCard.js";
 import { AppBoundary } from "./AppBoundary.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
@@ -216,7 +218,10 @@ watchUncaughtErrors();
  * every dictation box already holds the module in the entry chunk.
  * docs/plans/260929h-dictation-that-survives-a-closed-tab.md.
  */
-setTimeout(() => void sweepDictations(), 5000);
+/* Not in a tab viewing as another reader: the store is the administrator's
+   own, on this device, and that tab touches none of it (plan 261019n § round 2,
+   R2-5). */
+if (viewAsNonce() === null) setTimeout(() => void sweepDictations(), 5000);
 
 /**
  * Keep `<html data-theme>` right after the inline script in index.html set it:
@@ -253,6 +258,12 @@ createRoot(document.getElementById("root")!).render(
             the reading view does, and a reader who cannot reach the server is
             precisely the reader most likely to be looking at one of them. */}
         <OfflineStrip />
+        {/* **Whose account a view-as tab is showing**, and Stop. Outside `App`
+            and its boundary for the strip's reason and a stronger one: a page
+            that broke must still say whose it is, and still offer the way out.
+            Nothing at all in an ordinary tab. ViewAsBar.tsx; plan 261019n
+            § Part 3. */}
+        <ViewAsBar />
         {/* Outside `App` for the same reason: every page's `data-tip`s, the
             landing page's and admin's included (TipCard.tsx). */}
         <TipCard />

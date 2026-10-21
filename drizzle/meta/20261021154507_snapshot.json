@@ -1,5 +1,5 @@
 {
-  "id": "294af19d-00f1-450c-94cc-4c111cad91ce",
+  "id": "f1798534-5b3e-4310-9765-0cd43eafe39f",
   "prevId": "d8c23c7b-cc4d-41e7-aced-bfff4778691b",
   "version": "7",
   "dialect": "postgresql",
@@ -5526,112 +5526,6 @@
       },
       "isRLSEnabled": false
     },
-    "spideryarn.feedback_questions": {
-      "name": "feedback_questions",
-      "schema": "spideryarn",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report": {
-          "name": "report",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "repeats": {
-          "name": "repeats",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "asked": {
-          "name": "asked",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "acted": {
-          "name": "acted",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "feedback_questions_id_format": {
-          "name": "feedback_questions_id_format",
-          "value": "\"spideryarn\".\"feedback_questions\".\"id\" ~ '^q-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
-        },
-        "feedback_questions_report_format": {
-          "name": "feedback_questions_report_format",
-          "value": "\"spideryarn\".\"feedback_questions\".\"report\" is null or \"spideryarn\".\"feedback_questions\".\"report\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
-        },
-        "feedback_questions_repeats_need_report": {
-          "name": "feedback_questions_repeats_need_report",
-          "value": "\"spideryarn\".\"feedback_questions\".\"report\" is not null or cardinality(\"spideryarn\".\"feedback_questions\".\"repeats\") = 0"
-        },
-        "feedback_questions_title_shape": {
-          "name": "feedback_questions_title_shape",
-          "value": "length(btrim(\"spideryarn\".\"feedback_questions\".\"title\")) > 0 and length(\"spideryarn\".\"feedback_questions\".\"title\") <= 120"
-        },
-        "feedback_questions_body_shape": {
-          "name": "feedback_questions_body_shape",
-          "value": "length(btrim(\"spideryarn\".\"feedback_questions\".\"body\")) > 0 and length(\"spideryarn\".\"feedback_questions\".\"body\") <= 6000"
-        },
-        "feedback_questions_asked_format": {
-          "name": "feedback_questions_asked_format",
-          "value": "\"spideryarn\".\"feedback_questions\".\"asked\" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'"
-        },
-        "feedback_questions_status": {
-          "name": "feedback_questions_status",
-          "value": "\"spideryarn\".\"feedback_questions\".\"status\" in ('open', 'answered')"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "spideryarn.feedback_shipped_emails": {
       "name": "feedback_shipped_emails",
       "schema": "spideryarn",
@@ -9653,6 +9547,86 @@
         "uploads_rejected_has_reason": {
           "name": "uploads_rejected_has_reason",
           "value": "\"spideryarn\".\"uploads\".\"status\" <> 'rejected' or \"spideryarn\".\"uploads\".\"reason\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.view_as_sessions": {
+      "name": "view_as_sessions",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "nonce_hash": {
+          "name": "nonce_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "view_as_sessions_nonce_hash_unique": {
+          "name": "view_as_sessions_nonce_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "nonce_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "view_as_sessions_reason": {
+          "name": "view_as_sessions_reason",
+          "value": "char_length(\"spideryarn\".\"view_as_sessions\".\"reason\") between 1 and 300"
+        },
+        "view_as_sessions_not_self": {
+          "name": "view_as_sessions_not_self",
+          "value": "\"spideryarn\".\"view_as_sessions\".\"actor_id\" <> \"spideryarn\".\"view_as_sessions\".\"subject_id\""
         }
       },
       "isRLSEnabled": false

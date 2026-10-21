@@ -296,6 +296,8 @@ import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { useViewAsSubject } from "./view-as-session.js";
 import { AdminLinkOpens, Ownership } from "./Ownership.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
@@ -543,6 +545,7 @@ export function Metadata({
      courtesy only: the data comes from `/api/admin`, which refuses everyone
      else. ArticleCost.tsx. */
   const { user } = useSession();
+  const viewAsSubject = useViewAsSubject();
 
   /**
    * Which stages have run, and how many questions have been asked. Not in the
@@ -1343,8 +1346,22 @@ export function Metadata({
           /* A second session subscriber can hear an account change before the
              owner branch above has been replaced. Never put B's address beside
              an ownership result fetched for A. */
-          ownerEmail={readerId != null && user?.id === readerId ? (user.email ?? null) : null}
-          ownerId={readerId != null && user?.id === readerId ? readerId : null}
+          ownerEmail={
+            /* The subject's address in a tab viewing as them: the session's
+               user there is the administrator (plan 261019n § round 1, F1). */
+            viewAsNonce() !== null
+              ? (viewAsSubject?.subjectEmail ?? null)
+              : readerId != null && user?.id === readerId
+                ? (user.email ?? null)
+                : null
+          }
+          ownerId={
+            viewAsNonce() !== null
+              ? (viewAsSubject?.subjectId ?? null)
+              : readerId != null && user?.id === readerId
+                ? readerId
+                : null
+          }
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
              false for ever if it fails — so a failed metadata check removed the
              whole section rather than showing its "we could not check" state.
@@ -1409,7 +1426,8 @@ export function Metadata({
             for admin users, can you include a section that shows cost
             estimates"*. Beside the technical details it is one of, and above
             the controls. docs/plans/260930f-article-cost-on-the-metadata-page.md. */}
-        {isAdmin(user?.id) && <CostSection slug={slug} />}
+        {/* Not while viewing as a reader: it is the administrator's, and its route is refused there. */}
+        {isAdmin(user?.id) && viewAsNonce() === null && <CostSection slug={slug} />}
 
         {/* -------------------------------------------------- 9⅓. export it --
             Under the machinery since 2026-10-01 — Greg (SPIDERYARN-READING2-7H):

@@ -1,0 +1,32 @@
+/* **The bar a view-as tab draws, and the room it is given.**
+   docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md § Part 3.
+
+   `data-view-as` is set on `<html>` by index.html's `view-as-boot` script,
+   before the first paint, and only in a tab an administrator opened with
+   *View as*. It moves the page down by adding the bar's height to
+   `--safe-top`: every piece of fixed or sticky chrome, and every page's top
+   padding, already adds that token (tokens.css § the four edges), so the one
+   change pushes all of it below the bar and nothing is drawn underneath it. The
+   bar itself starts at the real top and pads its own inset. */
+:root[data-view-as] {
+  --view-as-h: 2rem;
+  --safe-top: calc(env(safe-area-inset-top, 0px) + var(--view-as-h));
+}
+
+.view-as-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  height: calc(env(safe-area-inset-top, 0px) + var(--view-as-h, 2rem));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: calc(var(--safe-left) + 0.75rem);
+  padding-right: calc(var(--safe-right) + 0.75rem);
+  /* Above everything the app draws — the dock (96), the offline strip (97),
+     dialogs and tooltips: whose account you are reading is the one fact that
+     must never be covered. */
+  z-index: 200;
+  background: var(--highlight);
+  color: var(--highlight-foreground);
+}

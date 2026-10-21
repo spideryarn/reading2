@@ -104,6 +104,9 @@ import { usePublicShelf } from "./PublicLibraryPage.js";
 import { type ArchivedTally, ShelfSearchAlso } from "./ShelfSearchAlso.js";
 import { useNow } from "./useNow.js";
 import { useSession } from "./useSession.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { useViewAsSubject } from "./view-as-session.js";
+import { HiddenWhileViewingAs } from "./ViewAsBar.js";
 import { useShelf } from "./useShelf.js";
 import { usePreloadRecent } from "./usePreloadRecent.js";
 import { useSlow } from "./useSlow.js";
@@ -134,6 +137,11 @@ export function Library({
      (App.tsx), and a second subscription is one listener rather than a second
      source of truth — the SDK is the source, and both read it. */
   const { user } = useSession();
+  /* **Whose address the Profile card names**: the subject's in a tab viewing
+     as another reader, once the server has said whose (plan 261019n § round
+     1, F1) — the session's own user is still the administrator there. */
+  const subject = useViewAsSubject();
+  const signedInAs = viewAsNonce() === null ? user?.email : subject?.subjectEmail;
   const shelf = useShelf(readerId);
   const { articles, error, reload } = shelf;
   /* The five opened most recently, fetched now so that reopening one does not
@@ -616,13 +624,13 @@ export function Library({
                         simply absent until the session arrives — a card saying
                         "Signed in as undefined" is worse than one that does not
                         mention it. */}
-                    {user?.email && (
+                    {signedInAs && (
                       <span className="tw:mt-1 tw:block tw:text-ink-faint">
                         {/* `break-all` on the address alone: `.tooltip` caps at
                             22rem and sets no `overflow-wrap`, so a long address
                             with nothing to break on would run out of the panel
                             rather than wrap. GPT Sol, 2026-08-28. */}
-                        Signed in as <span className="tw:break-all">{user.email}</span>
+                        Signed in as <span className="tw:break-all">{signedInAs}</span>
                       </span>
                     )}
                   </Tip>
@@ -805,6 +813,9 @@ export function Library({
         />
       )}
       {total > 0 && !terms.data && terms.loading && <ShelfTermsLoading articleCount={total} />}
+      {/* Topics are not asked for while viewing as another reader
+          (useShelfTerms.ts), so the row would simply be missing. */}
+      {total > 0 && viewAsNonce() !== null && <HiddenWhileViewingAs what="Topics" />}
       {total > 0 && terms.data && (
         <ShelfTerms
           data={terms.data}

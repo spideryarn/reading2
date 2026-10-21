@@ -6264,6 +6264,49 @@ export const articleOpenTimes = spideryarn.table(
   (t) => [primaryKey({ columns: [t.ownerId, t.slot] })],
 );
 
+/**
+ * **One row per time the administrator viewed the app as another reader**,
+ * read-only — docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+ * § Part 3. Written only by the three `/api/admin/view-as` routes
+ * (src/store/pg-view-as.ts) and never deleted by the app, so it is the audit:
+ * who looked, at whom, when, for how long and why.
+ *
+ * - **`nonce_hash`, never the nonce.** The nonce is a bearer half-credential
+ *   (useless without the admin's own token, but still one); a sha256 of it is
+ *   all a lookup needs, and a leaked table then names nobody's live session.
+ * - **`expires_at` is absolute**, `started_at + 30 min`, and nothing extends it.
+ * - **Both ids reference `auth.users`, ON DELETE CASCADE**, by hand in the
+ *   migration (the header says why Drizzle must not learn about `auth.users`).
+ *   CASCADE as `reader_arrivals` and `rate_limit_events` are: this is
+ *   bookkeeping about an account, and a RESTRICT would stop a reader who was
+ *   once viewed from ever erasing their account.
+ */
+export const viewAsSessions = spideryarn.table(
+  "view_as_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** sha256 of the nonce, lower-case hex. */
+    nonceHash: text("nonce_hash").notNull().unique(),
+    /** The administrator. `auth.users(id)`, FK in the migration by hand. */
+    actorId: uuid("actor_id").notNull(),
+    /** The reader whose app was viewed. `auth.users(id)`, FK in the migration by hand. */
+    subjectId: uuid("subject_id").notNull(),
+    /** Why, in the administrator's words, asked for before the session starts. */
+    reason: text("reason").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Stop pressed. Null while live or after it simply expired. */
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("view_as_sessions_reason", sql`char_length(${t.reason}) between 1 and 300`),
+    /* Viewing yourself as yourself is not a session; it would also make the
+       gate's "the subject is not an admin" check the only thing between the
+       admin and a self-session, and one check is not enough. */
+    check("view_as_sessions_not_self", sql`${t.actorId} <> ${t.subjectId}`),
+  ],
+);
+
 /* -------------------------------------------------------------- feedback -- */
 
 /**

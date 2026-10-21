@@ -59,6 +59,7 @@
  */
 import { publishedYearOf, type LibraryEntry } from "../../types.js";
 import { forgetUser, lastKnownUser, readCached } from "./offline-store.js";
+import { viewAsNonce } from "./view-as.js";
 
 /**
  * **Whose drawer this is, asked now** — for a caller that is about to do
@@ -134,7 +135,10 @@ const SHELF_URL = "/api/library";
  * window), and the validation below turns anything surprising into `null`.
  */
 export async function readCachedShelf(readerId: string | null): Promise<LibraryEntry[] | null> {
-  if (!readerId) return null;
+  /* `readerId` is the administrator in a tab viewing as another reader, and
+     their saved shelf must not be drawn as the subject's for a frame (plan
+     261019n § Part 3, Client 3). */
+  if (!readerId || viewAsNonce() !== null) return null;
   try {
     const saved = await readCached(SHELF_URL, readerId);
     if (!saved) return null;

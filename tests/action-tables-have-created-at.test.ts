@@ -71,6 +71,8 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
      time that stays put, which this check cannot see — it reads names and
      types. The table has a real `created_at` now. */
   uploads: { column: "minted_at" },
+  /* A view-as session starts when it is written (plan 261019n). */
+  view_as_sessions: { column: "started_at" },
 };
 
 function isTimestamp(sqlType: string): boolean {

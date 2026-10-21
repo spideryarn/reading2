@@ -491,7 +491,15 @@ function AdminMarker({ id }: { id: string }) {
  * `now` is passed in rather than read here, so that every relative date on one
  * render agrees with every other and nothing in this file reads the clock.
  */
-export function adminColumns(now: number): SortableColumn<AdminUser>[] {
+export function adminColumns(
+  now: number,
+  /**
+   * *View as*, pressed on an account (ViewAsStart.tsx; plan 261019n § Part 3,
+   * Client 5). Absent, no button is drawn — the tests that only want the
+   * columns pass nothing.
+   */
+  onViewAs?: (user: AdminUser) => void,
+): SortableColumn<AdminUser>[] {
   /** Every count column is the same six lines but the words. */
   const counted = (
     id: string,
@@ -572,6 +580,17 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
                 <AdminMarker id={row.original.id} />
                 {under.length > 0 && <span className="tw:truncate">{under.join(" · ")}</span>}
               </div>
+            )}
+            {/* Never for an administrator's account, which the server refuses
+                as a subject — `marked` is the same `isAdmin` it asks. */}
+            {onViewAs && !marked && (
+              <button
+                type="button"
+                onClick={() => onViewAs(row.original)}
+                className="tw:mt-1 tw:inline-flex tw:h-6 tw:items-center tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-2.5 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground"
+              >
+                View as
+              </button>
             )}
           </div>
         );
