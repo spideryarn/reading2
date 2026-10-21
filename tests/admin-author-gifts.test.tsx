@@ -119,6 +119,7 @@ let ensureAnswer: Answer;
 let patchAnswer: Answer;
 let sendAnswer: Answer;
 let lookupAnswer: Answer;
+let highPowerAnswer: Answer;
 let heldWrite: Promise<Response> | null;
 
 beforeEach(() => {
@@ -128,6 +129,7 @@ beforeEach(() => {
   patchAnswer = { status: 200, body: { ok: true } };
   sendAnswer = { status: 201, body: { voucherId: "v", email: "queued" } };
   lookupAnswer = { status: 202, body: { lookupId: LOOKUP } };
+  highPowerAnswer = { status: 200, body: { highPower: true, queued: 0 } };
   heldWrite = null;
   /* A tab click writes `?tab=` into the address, which would outlive the test. */
   history.replaceState(null, "", "/admin/vouchers");
@@ -143,6 +145,7 @@ beforeEach(() => {
     if (method === "POST" && url === "/api/admin/author-gifts") return json(ensureAnswer);
     if (method === "POST" && url.endsWith("/lookups")) return json(lookupAnswer);
     if (method === "POST" && url.endsWith("/send")) return json(sendAnswer);
+    if (method === "POST" && url.endsWith("/high-power")) return json(highPowerAnswer);
     if (method === "PATCH") return json(patchAnswer);
     if (url.startsWith("/api/library")) return json({ status: 200, body: { articles: SHELF } });
     return json({ status: 200, body: { vouchers: [] } });
@@ -744,6 +747,63 @@ describe("Author gifts", () => {
     ]);
   });
 
+  /* Plan 261021j § D4: the draft card's High-powered AI line. */
+  describe("High-powered AI on the card", () => {
+    const line = (id: string) => card(id)?.querySelector("[data-high-power]");
+
+    it("says on or off on a draft, with Switch on only when off, and nothing on a finished gift", async () => {
+      giftsAnswer = () => [
+        gift({ id: "off", highPower: false }),
+        gift({ id: "on", highPower: true }),
+        gift({ id: "sent", status: "sent", email: "x@example.test", voucherId: "v1", highPower: false }),
+        gift({ id: "gone", status: "discarded", discardedAt: "2026-10-09T12:00:00Z" }),
+      ];
+      await mount();
+      expect(line("off")?.textContent).toContain("High-powered AI: off");
+      expect(button(card("off"), "Switch on")).toBeDefined();
+      expect(line("on")?.textContent).toContain("High-powered AI: on");
+      expect(button(card("on"), "Switch on")).toBeUndefined();
+      expect(line("sent")).toBeNull();
+      expect(line("gone")).toBeNull();
+    });
+
+    it("posts Switch on to the gift's high-power route, then reads the list again", async () => {
+      let on = false;
+      giftsAnswer = () => [gift({ highPower: on })];
+      highPowerAnswer = { status: 200, body: { highPower: true, queued: 8 } };
+      await mount();
+      const reads = () => calls.filter((c) => c.method === "GET" && c.url === "/api/admin/author-gifts").length;
+      const before = reads();
+      on = true;
+      await act(async () => button(card(DRAFT), "Switch on")?.click());
+      await settle();
+      expect(writes()).toEqual([{ method: "POST", url: `/api/admin/author-gifts/${DRAFT}/high-power`, body: undefined }]);
+      expect(reads()).toBeGreaterThan(before);
+      expect(line(DRAFT)?.textContent).toContain("High-powered AI: on");
+      expect(card(DRAFT)?.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it("says Switching on… while it is in flight, with the card's actions held", async () => {
+      giftsAnswer = () => [gift()];
+      await mount();
+      heldWrite = new Promise<Response>(() => {});
+      act(() => button(card(DRAFT), "Switch on")?.click());
+      expect(button(card(DRAFT), "Switching on…")?.disabled).toBe(true);
+      expect(button(card(DRAFT), "Discard")?.disabled).toBe(true);
+    });
+
+    it("shows a refused Switch on in the server's words", async () => {
+      giftsAnswer = () => [gift()];
+      highPowerAnswer = { status: 409, body: { error: "That gift has been sent or discarded, so its article is no longer switched from here." } };
+      await mount();
+      await act(async () => button(card(DRAFT), "Switch on")?.click());
+      await settle();
+      expect(card(DRAFT)?.querySelector('[role="alert"]')?.textContent).toBe(
+        "That gift has been sent or discarded, so its article is no longer switched from here.",
+      );
+    });
+  });
+
   it("discards a draft, and restores a discarded one", async () => {
     giftsAnswer = () => [gift(), gift({ id: SENT, status: "discarded", discardedAt: "2026-10-09T12:00:00Z" })];
     await mount();
@@ -868,7 +928,7 @@ describe("Author gifts", () => {
       await act(async () => form().requestSubmit());
       await settle();
       expect(writes()).toEqual([
-        { method: "POST", url: "/api/admin/author-gifts", body: { slug: "some-paper", rightsConfirmed: true } },
+        { method: "POST", url: "/api/admin/author-gifts", body: { slug: "some-paper", rightsConfirmed: true, highPower: true } },
       ]);
       expect(tabNamed("Drafts")?.getAttribute("aria-selected")).toBe("true");
       expect(panelOf("Drafts")?.hidden).toBe(false);
@@ -908,6 +968,36 @@ describe("Author gifts", () => {
       } finally {
         delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
       }
+    });
+
+    /* Plan 261021j § D4. */
+    const highPower = () => form().querySelector("#author-gift-new-high-power") as HTMLInputElement | null;
+
+    it("offers High-powered AI, ticked, once an article is chosen, and says what it does", async () => {
+      await mount({ tab: null });
+      await shelfIn();
+      await tick();
+      expect(highPower()).toBeNull();
+      await choose(picker(), "some-paper");
+      expect(highPower()?.checked).toBe(true);
+      expect(visibleText(form())).toContain(
+        "Uses Opus for what is made from now on. What is already made, Structure included, stays as it is — to have it all on Opus, tick High-powered AI when you import it.",
+      );
+      expect(visibleText(form())).toContain("queues the article's main modes");
+    });
+
+    it("sends highPower false when it is unticked, and is ticked again after drafting", async () => {
+      await mount({ tab: null });
+      await fill();
+      await act(async () => highPower()?.click());
+      await act(async () => form().requestSubmit());
+      await settle();
+      expect(writes()).toEqual([
+        { method: "POST", url: "/api/admin/author-gifts", body: { slug: "some-paper", rightsConfirmed: true, highPower: false } },
+      ]);
+      await act(async () => tabNamed("Give")?.click());
+      await choose(picker(), "some-paper");
+      expect(highPower()?.checked).toBe(true);
     });
 
     it("keeps a refusal on the form, on Give", async () => {

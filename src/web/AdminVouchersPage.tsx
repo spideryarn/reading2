@@ -420,12 +420,19 @@ function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
   const [recipientNote, setRecipientNote] = useState("");
   const [recipientName, setRecipientName] = useState("");
   const [starterSlug, setStarterSlug] = useState("");
+  /* *High-powered AI* for the chosen article, ticked by default (plan
+     261021j § D4). One value across the tick, like the article. */
+  const [highPower, setHighPower] = useState(true);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   /* The draft as it stands now, read when a create answers: the fields stay
      editable while it is in flight, and a draft typed meanwhile is not the
-     one that was sent, so it is not cleared (Sol's F13 on 261007j). */
+     one that was sent, so it is not cleared (Sol's F13 on 261007j).
+     **High-powered AI is not in it**, as it is not in the create's identity
+     (useAdminVouchers.ts § `createKey`, plan 261021j § D4): the box toggled
+     while a create is in flight still clears the form, and a retry of an
+     unchanged voucher is the same create whatever the box says. */
   const draft = JSON.stringify([email, articles, note, recipientNote, recipientName, starterSlug]);
   const draftNow = useRef(draft);
   draftNow.current = draft;
@@ -441,6 +448,8 @@ function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
     recipientNote: recipientNote.trim() === "" ? null : recipientNote,
     recipientName: cleanRecipientName(recipientName),
     starterSlug: starterSlug === "" ? null : starterSlug,
+    /* Meaningless without a starter, so not sent without one. */
+    ...(starterSlug === "" ? {} : { highPower }),
   };
   /* The server answers an unchanged replay before checking today's article.
      A lost answer must remain recoverable after its link is off or it is gone. */
@@ -451,7 +460,7 @@ function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
     /* The button is disabled too; this is Enter in a field. */
     if (starterSlug === "" || !rights || busy) return;
     setBusy(true);
-    const answer = await drafts.ensure(starterSlug);
+    const answer = await drafts.ensure(starterSlug, { highPower });
     setBusy(false);
     if (answer.kind === "refused") {
       setRefusal(answer.message);
@@ -460,6 +469,7 @@ function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
     setRefusal(null);
     setStarterSlug("");
     setRights(false);
+    setHighPower(true);
     onDrafted(answer);
   }
 
@@ -495,6 +505,7 @@ function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
       setRecipientNote("");
       setRecipientName("");
       setStarterSlug("");
+      setHighPower(true);
     }
   }
 
@@ -529,7 +540,17 @@ function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
         </p>
       )}
       {forAuthor && (
-        <DraftFields shelf={shelf} choices={choices} slug={starterSlug} onChoose={setStarterSlug} rights={rights} onRights={setRights} busy={busy} />
+        <DraftFields
+          shelf={shelf}
+          choices={choices}
+          slug={starterSlug}
+          onChoose={setStarterSlug}
+          rights={rights}
+          onRights={setRights}
+          highPower={highPower}
+          onHighPower={setHighPower}
+          busy={busy}
+        />
       )}
       {/* The voucher's own fields, hidden rather than unmounted while ticked,
           so unticking finds them as they were — the import box's draft too. */}
@@ -639,6 +660,9 @@ function CreateForm({ create, canReplay, vouchers, shelf, drafts, onDrafted }: {
           reload={shelf.reload}
           replay={replay}
         />
+        {starterSlug !== "" && (
+          <HighPowerBox id="voucher-new-high-power" checked={highPower} onChange={setHighPower} disabled={busy} />
+        )}
         {/* The submit is the form's last control and its one filled button —
             *"Make the 'Create voucher' button more visible"*, the same report.
             It was a quiet outline pill in the middle of the first row. */}
@@ -682,6 +706,8 @@ function DraftFields({
   onChoose,
   rights,
   onRights,
+  highPower,
+  onHighPower,
   busy,
 }: {
   shelf: StarterShelf;
@@ -690,6 +716,8 @@ function DraftFields({
   onChoose: (slug: string) => void;
   rights: boolean;
   onRights: (rights: boolean) => void;
+  highPower: boolean;
+  onHighPower: (on: boolean) => void;
   busy: boolean;
 }) {
   return (
@@ -709,16 +737,56 @@ function DraftFields({
         <input id="voucher-new-rights" type="checkbox" checked={rights} disabled={busy} onChange={(e) => onRights(e.target.checked)} />
         <span>{SHARING_RIGHTS_CONFIRM}</span>
       </label>
+      {slug !== "" && <HighPowerBox id="author-gift-new-high-power" checked={highPower} onChange={onHighPower} disabled={busy} />}
       <p className="tw:m-0">
-        Drafting makes the article's private link if it has none, saves a draft, and runs a web lookup for the author
-        and an address, using up to three searches. Nothing is emailed: the draft appears under Drafts, where you
-        review it and press Send.
+        Drafting makes the article's private link if it has none, saves a draft, queues the article's main modes, and
+        runs a web lookup for the author and an address, using up to three searches. Nothing is emailed: the draft
+        appears under Drafts, where you review it and press Send.
       </p>
       <div className="tw:mt-2">
         <Button type="submit" disabled={busy || slug === "" || !rights}>
           {busy ? "Drafting…" : "Draft a gift"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * ***High-powered AI* for the chosen article** — plan 261021j § D3 and D4.
+ * Ticked by default. It switches the article to Opus as the gift is made, so
+ * what is made from then on (the main modes the gift queues among it) is made
+ * on Opus; what is already made stays as it was, and the line says so.
+ */
+function HighPowerBox({
+  id,
+  checked,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (on: boolean) => void;
+  disabled: boolean;
+}) {
+  const hint = `${id}-hint`;
+  return (
+    <div className="tw:mt-3 tw:flex tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+      <label className="tw:flex tw:items-start tw:gap-2 tw:text-sm tw:text-foreground">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          aria-describedby={hint}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span>High-powered AI</span>
+      </label>
+      <p id={hint} className="tw:m-0 tw:text-ink-faint">
+        Uses Opus for what is made from now on. What is already made, Structure included, stays as it is — to have it
+        all on Opus, tick High-powered AI when you import it.
+      </p>
     </div>
   );
 }
@@ -1501,8 +1569,10 @@ export function AdminVouchersPage() {
             to it, so they have something to read straight away. Receiving or reading it uses none of their
             allowance. When they sign in, the starter moves to their account, unless something makes that unsafe (it is
             public, another gift names it, or it has your notes on it); then they go on reading your copy by its
-            link. Later, High-powered AI on one they own, or
-            importing their own copy of one that stayed, uses their allowance as usual.
+            link. Giving one queues the article's main modes, made while you have Spideryarn open, and, with
+            High-powered AI ticked, switches it to Opus at no cost to them. After that, what they do themselves —
+            High-powered AI on one they own that you left off, or importing their own copy of one that stayed — uses
+            their allowance as usual.
           </p>
           <p className="tw:m-0">
             An <span className="tw:font-medium tw:text-foreground">author gift</span> is a shortcut for drafting a
