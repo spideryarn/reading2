@@ -94,12 +94,13 @@ export function mintFeedbackQuestionId(random?: () => number): string {
 }
 
 /**
- * **One open question as the server holds it**, compiled from its file. `refs`
- * is for agents and is not here: nothing compiled reaches a browser that the
- * file's author did not write for Greg to read. `acted` is compiled beside it,
- * for the server alone (`FEEDBACK_QUESTION_ACTED`), which sends the browser
- * only the state it works out from it and which list each reply goes in
- * (plan 261008i, decision 1; 261010h).
+ * **One open question as the server holds it**, read from its file and
+ * published to the table. `refs` is for agents and is not here: nothing
+ * published reaches a browser that the file's author did not write for Greg to
+ * read. `acted` is held beside it, for the server alone
+ * (`PublishedFeedbackQuestion`), which sends the browser only the state it
+ * works out from it and which list each reply goes in (plan 261008i, decision
+ * 1; 261010h; 261021h).
  */
 export interface CompiledFeedbackQuestion {
   id: string;
