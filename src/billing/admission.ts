@@ -100,7 +100,7 @@ import {
   runUnderBillingLock,
   switchOnHighPower,
 } from "../store/pg-billing.js";
-import type { InLock, MinimalRefused, Refused, Stale } from "../store/pg-billing.js";
+import type { InLock, MinimalRefused, PdfPricing, Refused, Stale } from "../store/pg-billing.js";
 import { ingestProvenanceOf } from "../store/pg-jobs.js";
 import { syncSubscriptionFromStripe } from "./sync.js";
 
@@ -255,9 +255,15 @@ async function admitIngest(
   ownerId: string,
   slug: string | undefined,
   deps: AdmissionDeps,
+  slots = 1,
 ): Promise<string | null> {
   if (isAdmin(ownerId)) return null;
-  const admission = await admitOrResync(ownerId, () => reserveIngest(ownerId, slug), deps, "an ingest");
+  const admission = await admitOrResync(
+    ownerId,
+    () => reserveIngest(ownerId, slug, undefined, slots),
+    deps,
+    "an ingest",
+  );
   if (admission.kind === "refused") throw quotaRefusal(ownerId, admission);
   return admission.reservationId;
 }
@@ -301,11 +307,12 @@ async function holding<T>(
  * diagnostic only.
  */
 export async function withIngestSlot<T>(
-  intent: { ownerId: OwnerId; slug?: string },
+  /** `slots`: what the reservation weighs — 1 unless a retry carries a long PDF's weight. */
+  intent: { ownerId: OwnerId; slug?: string; slots?: number },
   body: (slot: IngestSlot) => Promise<T>,
   deps: AdmissionDeps = {},
 ): Promise<T> {
-  const reservationId = await admitIngest(intent.ownerId, intent.slug, deps);
+  const reservationId = await admitIngest(intent.ownerId, intent.slug, deps, intent.slots ?? 1);
   return await holding(intent.ownerId, reservationId, body);
 }
 
@@ -449,6 +456,10 @@ export async function withRetrySlot<T>(
     case "upgrade":
       return await withUpgradeSlot({ ownerId, articleId: shape.articleId }, body, deps);
     case "ingest":
+      /* **At the old row's weight**: stage 1 repriced it to the document's page
+         count, and a retry of a job that failed after fetch never fetches
+         again (plan 261020b, path 1). */
+      return await withIngestSlot({ ownerId, ...named, slots: shape.slots }, body, deps);
     case undefined:
       /* Undefined is a job naming a reservation this owner's ledger does not
          have — unreachable (`jobs.ingest_event_id`'s foreign key is composite on
@@ -459,6 +470,38 @@ export async function withRetrySlot<T>(
       throw new Error(`unhandled reservation shape ${JSON.stringify(never)}`);
     }
   }
+}
+
+/** What stage 1's reprice came to, once a stale entitlement has been resynced. */
+export type StagePricing = Exclude<PdfPricing, Stale> | { readonly kind: "unavailable" };
+
+/**
+ * **Stage 1's reprice of a long PDF, resyncing once if the entitlement is
+ * stale** — `admitOrResync`'s shape for a caller that is a pipeline step rather
+ * than a route, so a second `stale` comes back as `unavailable` for the step to
+ * fail with `BILLING_NOT_AVAILABLE`'s sentence rather than as an HTTP error.
+ * Never a guess in either direction. `price` is `priceFetchedPdf`, bound to the
+ * claim by src/jobs.ts; the resync happens after its transaction has committed.
+ */
+export async function priceWithResync(
+  ownerId: string,
+  price: () => Promise<PdfPricing>,
+  deps: AdmissionDeps = {},
+): Promise<StagePricing> {
+  let answer = await price();
+  if (isStale(answer)) {
+    answer =
+      (await resyncAndRetry(ownerId, answer.customerId, deps.sync ?? syncSubscriptionFromStripe, price)) ??
+      answer;
+  }
+  if (isStale(answer)) {
+    logger.error(
+      { ownerId, subscriptionId: answer.subscriptionId },
+      "refusing to price a long PDF: the stored subscription period does not contain now, after a resync",
+    );
+    return { kind: "unavailable" };
+  }
+  return answer as Exclude<PdfPricing, Stale>;
 }
 
 /**
@@ -519,6 +562,11 @@ export async function chargeAndSwitchOnHighPower(
       return { highPowerSince: answer.highPowerSince.toISOString() };
     case "not-found":
       throw httpError(404, `No article artefacts for "${slug}".`);
+    case "pending":
+      throw httpError(
+        409,
+        "This article is still being fetched, so its High-powered AI charge is not ready yet.",
+      );
     case "no-room":
       logger.info(
         { ownerId, slug, publicNow: answer.publicNow },

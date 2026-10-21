@@ -421,6 +421,16 @@ export interface AdminUser {
   /** How many of `highPower` are public now, and so count half. */
   highPowerShared: number;
   /**
+   * **The same four counts as sums of slots** — a long PDF is one row and one
+   * slot per 50 pages (plan 261020b), so the counts say how many and these say
+   * what they cost. The cell prices these and prints the counts. Absent means
+   * equal to the count, which is every row before 2026-10-20.
+   */
+  ingestSlots?: number;
+  ingestsSharedSlots?: number;
+  highPowerSlots?: number;
+  highPowerSharedSlots?: number;
+  /**
    * **Minimal papers** over `ingestWindow` — added with only their metadata
    * read, at a hundredth of an article each, charged and not yet superseded by
    * *Read this*, plus those in flight. A count, never a fraction: the cell adds

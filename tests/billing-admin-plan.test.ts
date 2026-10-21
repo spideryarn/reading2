@@ -142,6 +142,18 @@ function merged(options: {
         minimalLifetime: 0,
         minimalInPeriod: 0,
         minimalInFlight: 0,
+        /* One slot a row: no long document here. */
+        slots: {
+          lifetime: options.lifetime ?? 0,
+          inPeriod: options.inPeriod ?? 0,
+          inFlight: options.inFlight ?? 0,
+          lifetimeShared: options.lifetimeShared ?? 0,
+          inPeriodShared: options.inPeriodShared ?? 0,
+          highPowerLifetime: 0,
+          highPowerInPeriod: 0,
+          highPowerLifetimeShared: 0,
+          highPowerInPeriodShared: 0,
+        },
       },
     ],
     accounts: options.account ? new Map([[OWNER, options.account]]) : new Map(),

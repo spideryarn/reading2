@@ -21,8 +21,15 @@ Easy to miss:
   your allowance; making it private again uses that half back up. An older charged article still
   counts in full, while one from before billing began already costs nothing.
 - **High-powered AI**, a stronger model for one article — a tick box while it is being added, or a
-  switch on its Metadata page — counts as one more article (half if the article is shared).
+  switch on its Metadata page — counts that article against the allowance again, at the same
+  number of slots (half as much if the article is shared).
   Switching it off does not refund it, and switching it back on costs nothing more.
+- **A long PDF counts by its length.** Every {{pages-per-article}} pages, or part of them, counts as
+  one article, so a 120-page PDF counts as three. PDFs can be up to {{max-pdf-pages}} pages. While
+  one comes in, it tells you how many it is using. If you do not have that many left, it stops
+  within seconds of starting, before any reading has been paid for, and costs nothing. Switching a
+  long PDF to High-powered AI counts the same number again. Rebuilding it is free, unless the PDF
+  at that address has grown longer than it was; then add it as a new article.
 - **Papers added several at once**, with only the title, authors and abstract read, count as a
   hundredth of an article each. **Read this** reads the whole paper, and then it costs the same as
   one article in all.

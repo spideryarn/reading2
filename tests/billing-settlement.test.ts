@@ -151,8 +151,8 @@ import { runAsOwner } from "../src/owner.js";
 import { STEPS } from "../src/pipeline.js";
 import type { ConvertedProduct, PipelineStep, StepContext } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
-import { mintAttempt } from "../src/store/jobs.js";
-import { reserveIngest } from "../src/store/pg-billing.js";
+import { mintAttempt, StaleAttemptError } from "../src/store/jobs.js";
+import { priceFetchedPdf, reserveIngest } from "../src/store/pg-billing.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
@@ -1377,4 +1377,51 @@ describe("a job's ending settles its quota slot", () => {
     const rows = await db().select().from(ingestEvents).where(eq(ingestEvents.ownerId, OWNER));
     expect(rows, "a job with no reservation wrote to the ingest ledger").toEqual([]);
   });
+
+  /* ------------------------------------- a long PDF's reprice, raced -- */
+
+  /**
+   * **Stage 1's reprice against the settlement that ends the job** — plan
+   * 261020b, R2-F5. The reprice takes the billing row, then the job row, then
+   * the ingest row; settlement takes the article, then the job row, then the
+   * ingest row. Both are held behind the job row here and let go together;
+   * whichever wins, the job ends once, nothing deadlocks, and the ledger
+   * charges (or releases) the reservation at a weight the winner explains: 3
+   * slots if the reprice landed first, 1 if settlement did and the reprice was
+   * fenced out.
+   */
+  for (const status of ["done", "error"] as const) {
+    mine(`a reprice racing a ${status === "done" ? "successful" : "failed"} settlement ends it once`, async () => {
+      const slug = `${SLUG_PREFIX}reprice-${status}`;
+      await publishArticle(slug);
+      const reservation = await reserveSlot(slug);
+      const claimed = await claimWithSession(slug, ["arc"], reservation);
+
+      const [repriced, settled] = await racedOnJobRow(
+        claimed.jobId,
+        () => priceFetchedPdf(claimed.jobId, claimed.attempt, 150, null, NO_TIERS),
+        () =>
+          claimed.session.settleJob({
+            kind: "end",
+            jobId: claimed.jobId,
+            attempt: claimed.attempt,
+            ending:
+              status === "done"
+                ? { status: "done", steps: claimed.steps }
+                : { status: "error", steps: claimed.steps, error: "a test ending" },
+          }),
+      );
+
+      expect(answerOf(settled, "settlement").kind).toBe("ended");
+      expect(await ledger(reservation)).toEqual(status === "done" ? CHARGED : RELEASED);
+      const [row] = await db().select().from(ingestEvents).where(eq(ingestEvents.id, reservation));
+      if ("err" in repriced) {
+        expect(repriced.err, "the reprice failed some other way").toBeInstanceOf(StaleAttemptError);
+        expect(row?.slots).toBe(1);
+      } else {
+        expect(repriced.ok).toMatchObject({ kind: "priced", slots: 3 });
+        expect(row?.slots).toBe(3);
+      }
+    });
+  }
 });

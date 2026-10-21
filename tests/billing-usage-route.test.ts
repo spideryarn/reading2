@@ -771,6 +771,18 @@ describe("the admin page's ingest aggregate", () => {
       minimalLifetime: 0,
       minimalInPeriod: 0,
       minimalInFlight: 0,
+      /* One slot a row (plan 261020b): the sums equal the counts. */
+      slots: {
+        lifetime: 3,
+        inPeriod: 2,
+        inFlight: 1,
+        lifetimeShared: 0,
+        inPeriodShared: 0,
+        highPowerLifetime: 0,
+        highPowerInPeriod: 0,
+        highPowerLifetimeShared: 0,
+        highPowerInPeriodShared: 0,
+      },
     });
   });
 
@@ -794,6 +806,17 @@ describe("the admin page's ingest aggregate", () => {
       minimalLifetime: 0,
       minimalInPeriod: 0,
       minimalInFlight: 0,
+      slots: {
+        lifetime: 2,
+        inPeriod: 0,
+        inFlight: 0,
+        lifetimeShared: 0,
+        inPeriodShared: 0,
+        highPowerLifetime: 0,
+        highPowerInPeriod: 0,
+        highPowerLifetimeShared: 0,
+        highPowerInPeriodShared: 0,
+      },
     });
   });
 });

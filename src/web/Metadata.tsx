@@ -1787,7 +1787,7 @@ function RerunSection({
         </p>
       )}
       {/* **High-powered AI**, for the owner of the article — switching it on counts
-          as one more article against their allowance (plan 260930k). First in
+          the article's slots against their allowance again (plan 261020b). First in
           the section, above the rows it changes the model for (all but
           Summary's Brief and Fuller):
           switching it re-runs nothing, and the rows below are how you ask. */}

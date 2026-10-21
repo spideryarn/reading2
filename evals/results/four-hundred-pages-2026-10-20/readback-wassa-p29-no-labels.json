@@ -1,0 +1,33 @@
+{
+ "slug": "l400b-wassa-p29-spya-t7mx34",
+ "loadMs": 11982,
+ "blocks": 3911,
+ "kinds": {
+  "media": 362,
+  "text": 2669,
+  "heading": 869,
+  "code": 6,
+  "quote": 4,
+  "caption": 1
+ },
+ "treeNodes": 4169,
+ "leavesWithNavLabel": 0,
+ "navLabelStatus": "pending",
+ "responseBytes": 3708958,
+ "responseMB": 3.709,
+ "gzipBytes": 676334,
+ "fractionOfVercel4_5MB": 0.824,
+ "topLevelKeyBytes": {
+  "meta": 15768,
+  "titleOverridden": 5,
+  "blocks": 3115773,
+  "tree": 552761,
+  "assets": 24483,
+  "navLabelStatus": 9,
+  "visibility": 9,
+  "privateLinkOn": 5,
+  "archivedAt": 4,
+  "sourceGuess": 0,
+  "highPowerSince": 4
+ }
+}
