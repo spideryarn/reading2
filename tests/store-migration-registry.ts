@@ -540,6 +540,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "chat-help-route's harness: seeds through `scratchArticleInPg`; what it still reaches is the " +
       "seeder's copy step and the ledger row the stubbed model call records.",
   },
+  "tests/chat-reading-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "READING SO FAR at the route (plan 261020ac): what a send, retry, edit, Learn and Candidates " +
+      "turn is told. chat-help-route's harness: seeds through `scratchArticleInPg`; what it still " +
+      "reaches is the seeder's copy step and the ledger row the stubbed model call records.",
+  },
   "tests/chat-help-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2990,6 +2999,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  /* Plan 261020ac. chat-help-route's harness and its lane: it reads the first
+     thread back with `chatStore.load`, and adds reading time to its own
+     scratch article. */
+  "tests/chat-reading-route.test.ts": "private-postgres",
   /* Plan 261011z. chat-help-route's harness and its lane: it reads the first
      thread back with `chatStore.load` after every post. */
   "tests/chat-modality-route.test.ts": "private-postgres",

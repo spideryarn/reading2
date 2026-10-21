@@ -2174,6 +2174,13 @@ export interface ConverseRequest {
    */
   experience?: GuideExperience | null;
   /**
+   * **How much of the piece the reader has read**, already rendered —
+   * `readingSoFarLine` in src/reading-so-far.ts, built by the route from the
+   * owner's reading time on every turn. In the final user message, like
+   * `profile`; every kind but `candidates`. Plan 261020ac.
+   */
+  reading?: string | null;
+  /**
    * The article's High-powered AI setting (plan 260930f). Required, so a route
    * cannot forget to ask. It picks Candidates' model and is what the chat tools
    * that call a model run at; the `chat` job itself is on the high-power model
@@ -2503,6 +2510,13 @@ export function buildConverseMessages(opts: {
    */
   experience?: GuideExperience | null;
   /**
+   * **How much of the piece they have read** — `ConverseRequest.reading`. In
+   * the final user message, beside the profile, and never above the
+   * breakpoint: it changes as they read. Dropped for `candidates`, whose
+   * reader is an editor finding reviewers and whose turns send no profile.
+   */
+  reading?: string | null;
+  /**
    * **Other articles the reader brought into this conversation** with an
    * @-mention, from the stored thread (`resolveMentions`, src/chat-mentions.ts).
    * A second part of the first user message, after the open article and with
@@ -2523,6 +2537,7 @@ export function buildConverseMessages(opts: {
   /* After the profile: the reader is who they say, then how much of the app
      they have seen. The guide's only. */
   const used = kind === "guide" ? experienceLine(opts.experience) : "";
+  const read = kind === "candidates" ? "" : (opts.reading ?? "");
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
   /* After the anchor: the reader is told *which* passage first, then how to
      explain it. Both are below the breakpoint, so the order is about how the
@@ -2571,7 +2586,7 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
          reading it, and a question buried above three lines of framing is a
          question the model answers less well. */
       role: "user",
-      content: [position, who, used, about, teach, own, others, marked, brief, opts.question]
+      content: [position, who, used, read, about, teach, own, others, marked, brief, opts.question]
         .filter(Boolean)
         .join("\n\n"),
     },
@@ -2880,6 +2895,7 @@ export async function* converse({
   notes = null,
   others = null,
   experience = null,
+  reading = null,
   useTools = true,
   kind = "chat",
   anchor = null,
@@ -2931,6 +2947,8 @@ export async function* converse({
     others,
     /* Only a guide turn carries it; `buildConverseMessages` drops it for any other. */
     experience,
+    /* Every kind but `candidates`, which `buildConverseMessages` drops it for. */
+    reading,
     kind,
     /* Unconditional, and `null` rather than absent when there is none: the
        option's type admits null and `anchorSection` returns "" for it, so an

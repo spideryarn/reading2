@@ -222,6 +222,20 @@ describe("the privacy page", () => {
     expect(prose).toContain("We keep the totals, not a history of which passages you read when");
   });
 
+  it("says a chat is told roughly how much of the article you have read, and not which parts", () => {
+    /* Plan 261020ac, Greg's answer to q-rwkq2e: src/reading-so-far.ts sends
+       one coarse phrase per chat turn, so both places that list what a model
+       is shown have to say so. Plain "when you chat", not the four kinds:
+       the page's comment above the bullet says why. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When you chat about one of your articles, the AI model is told roughly how much of it you have read — “about a quarter”, say — and nothing about which parts.",
+    );
+    expect(prose).toContain(
+      "chat and search (a chat about one of your articles is also told roughly how much of it you have read)",
+    );
+  });
+
   it("says what the notes on cited works send, and that an upload's are looked up by identifier only", () => {
     /* Plan 261017h stage 3b, the design review's G6: a Crossref title search
        for a cited work only for an article fetched from a public address

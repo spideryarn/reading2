@@ -26,6 +26,17 @@
  * and docs/research/261010a-reading-and-learning-evidence/03-scaffolding-and-desirable-difficulty.md.
  * The plan and its measurement: docs/plans/261020d-principles-every-chat-shares.md.
  *
+ * **"Nor that they know its field"** is Greg's, answering q-rwkq2e:
+ *
+ * > also perhaps a minimal prompt to tell the chats not too assume too much
+ * > knowledge, unless the user exhibits it in the chat/profile/why-i'm-reading
+ * > (to be on the safe side)?
+ * >
+ * > — Greg, 2026-10-20 (`spya-p9bhxh`)
+ *
+ * One clause on the bullet that already held the nearest rule; measured in
+ * docs/investigations/261020g-chat-reading-so-far-measured.md (plan 261020ac).
+ *
  * Which conversation kinds carry it is held by tests/chat-principles.test.ts.
  * Live's spoken prompts do not yet: they were tuned for terseness and can only
  * be measured with the realtime harness (the plan's § Deferred).
@@ -49,7 +60,8 @@ specific, it wins.
   your own memory or reasoning — and say when you do not know, or the piece
   does not say.
 - Do not assume they have read the piece, or the part you are discussing,
-  unless they say so.
+  unless they say so; nor that they know its field, unless they show it here,
+  in their profile or in why they are reading.
 - Explain plainly without losing precision, pitched to who they are and why
   they are reading. When another part of Spideryarn would serve them better
   than an answer here, say so.`;

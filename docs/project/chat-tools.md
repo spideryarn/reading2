@@ -568,6 +568,10 @@ the conversation went. Two pieces fix that:
   (Explore) or have no tool to open a conversation with. The rows share `THREADS_CHARS`, raised to
   5,000 for the longer rows; with the sentences around them the section is under 6,000 characters,
   a few hundred tokens for a reader with a handful of conversations.
+- **READING SO FAR**, in the final user message of every kind but Candidates: one coarse phrase
+  for how much of the piece the owner has read, with its rule beside it (pitch silently; not the
+  reader saying they read it; asked, say plainly what you are told).
+  [reading-time.md § Who else reads it](reading-time.md#who-else-reads-it).
 
 The prompt's bullet asks for a narrow trigger: open a conversation that took up the same question,
 claim, passage or objection, not one on a nearby topic, and add to it rather than repeat it.

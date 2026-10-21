@@ -1,7 +1,7 @@
 ---
 reports: spya-yyc7te, spya-u3yw2a
 ending: shipped
-comment: Every typed chat about an article now starts from one short set of shared principles. Still waiting on you: should chat also be told roughly how much of the article you have read?
+comment: Every typed Chat, Learn, Explore and guide turn starts from shared principles and, when the totals can be read, is told roughly how much of the article you have read.
 ---
 # The principles every chat shares
 
@@ -49,8 +49,18 @@ progress and Live conversation remain separate decisions below. The
   for the shipped wording, 12–12 for a first one, against a 13–10 control); pushed back on with no
   reason, the old prompts opened by giving way 8 of 8 times, the new ones by rechecking and saying
   what still held 8 of 8.
-- **Waiting on Greg: chat told how much of the article you have read.** Sending reading-time data
-  to the model is a new disclosure that the privacy page has to cover first, so it is asked, not
-  built: question `q-rwkq2e`, queue item `qi-bkdxh4kb`.
+- **Shipped, after Greg's answer: chat told how much of the article you have read.** Asked as
+  question `q-rwkq2e` (queue item `qi-bkdxh4kb`), because it is a new disclosure:
+
+  > I'm leaning towards A. But also perhaps a minimal prompt to tell the chats not too assume too
+  > much knowledge, unless the user exhibits it in the chat/profile/why-i'm-reading (to be on the
+  > safe side)?
+  >
+  > — Greg, 2026-10-20 (`spya-p9bhxh`)
+
+  `/privacy` changed first; then one rough phrase per turn (`READING SO FAR`,
+  [src/reading-so-far.ts](../../src/reading-so-far.ts)) and one clause in the principles. Plan
+  [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md), investigation
+  [261020g](../investigations/261020g-chat-reading-so-far-measured.md).
 - **Not yet: Live conversation.** Its prompts were tuned for terseness and can be measured only
   with the realtime harness, so it is its own queue item, `qi-mawppdbe`, not part of this ending.
