@@ -564,7 +564,10 @@ Every few hours, as a tmux loop like the feedback sweep's:
    you judge them really necessary. Greg, 2026-10-10: *"Re the Sources rename - I'd rather just
    break things briefly and keep things simple"*, and *"in future just do the migration decision
    yourself, whether that's allow for a brief breakage or if you think it's really necessary we can
-   do the multi-step or careful way, but don't stop to ask me"*.
+   do the multi-step or careful way, but don't stop to ask me"*. Since 2026-10-21 this widens to
+   every migration, the destructive kind included, unless you see a real risk, uncertainty or
+   trade-off; take those to Greg. Greg, 2026-10-21: *"you have permission to make all future
+   database migrations unless there's significant risk/uncertainty/tradeoffs/concerns"*.
 3. **Write the release notes first**: `npm run changelog:prepare` under `scripts/tmux-job.ts`, then
    pull. Greg, 2026-10-01: *"make sure that the latest release notes are included in the deploy
    itself"*. It commits and pushes the notes for what is about to ship
