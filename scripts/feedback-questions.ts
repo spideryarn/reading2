@@ -339,7 +339,7 @@ export async function runAnswers(
     out(`Target: ${target}`);
     out(
       [
-        `${verdict.total} ${verdict.total === 1 ? "reply" : "replies"} in production`,
+        `${verdict.total} ${verdict.total === 1 ? "reply" : "replies"} in ${target === "production" ? "production" : "the local database"}`,
         `${verdict.acted} already acted on`,
         ...(verdict.strangers > 0
           ? [`${verdict.strangers} from an account that is not an administrator's, left out`]
