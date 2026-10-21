@@ -225,7 +225,7 @@ import {
   isFeedbackShipped,
   shippedFeedbackIds,
 } from "./feedback-ending.js";
-import { feedbackQuestionActed, feedbackQuestionStatus, isReportAsked, openFeedbackQuestions } from "./feedback-question.js";
+import { type FeedbackQuestions, readFeedbackQuestions } from "./feedback-question.js";
 import { isFeedbackQuestionId, questionState } from "./feedback-question-values.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
@@ -9107,16 +9107,17 @@ async function fileFeedback(
 /** At most this many replies in either of a thread's lists, the newest (F12, 261010h). */
 const THREAD_ANSWERS = 5;
 
-async function questionsForAdmin(shape: 4): Promise<AdminFeedbackQuestion[]>;
-async function questionsForAdmin(shape: 3): Promise<AdminFeedbackQuestionV3[]>;
-async function questionsForAdmin(shape: 2): Promise<AdminFeedbackQuestionV2[]>;
-async function questionsForAdmin(shape: 1): Promise<AdminFeedbackQuestionV1[]>;
+async function questionsForAdmin(shape: 4, questions: FeedbackQuestions): Promise<AdminFeedbackQuestion[]>;
+async function questionsForAdmin(shape: 3, questions: FeedbackQuestions): Promise<AdminFeedbackQuestionV3[]>;
+async function questionsForAdmin(shape: 2, questions: FeedbackQuestions): Promise<AdminFeedbackQuestionV2[]>;
+async function questionsForAdmin(shape: 1, questions: FeedbackQuestions): Promise<AdminFeedbackQuestionV1[]>;
 async function questionsForAdmin(
   shape: 1 | 2 | 3 | 4,
+  questions: FeedbackQuestions,
 ): Promise<
   AdminFeedbackQuestion[] | AdminFeedbackQuestionV3[] | AdminFeedbackQuestionV2[] | AdminFeedbackQuestionV1[]
 > {
-  const open = openFeedbackQuestions();
+  const { open } = questions;
   if (open.length === 0) return [];
   const ids = open.map((question) => question.id);
   const named = [...new Set(open.flatMap((question) => (question.report === null ? [] : [question.report])))];
@@ -9168,7 +9169,7 @@ async function questionsForAdmin(
   }
   return open.map(({ id, title, body, asked, report }) => {
     const linked = report === null ? undefined : reports.find((one) => one.id === report);
-    const acted = feedbackQuestionActed(id);
+    const acted = questions.acted(id);
     const replies = answers
       .filter((one) => one.questionId === id)
       .map((one) => ({ ...one, acted: acted.includes(one.id) }));
@@ -9213,10 +9214,10 @@ const FEEDBACK_DEFERRAL_FIELDS = ["question", "deferred"] as const;
 /**
  * **A deferral, built field by field**, by `parseFeedbackAnswer`'s rules: an
  * unknown key is refused in fixed prose, nothing sent reaches a message, and
- * the environment is this process's own (F6). The question must be one this
- * build has a file for; whether it is still open is the route's 409.
+ * the environment is this process's own (F6). The question must be one that
+ * has been published; whether it is still open is the route's 409.
  */
-function parseFeedbackDeferral(raw: unknown): NewFeedbackDeferral {
+function parseFeedbackDeferral(raw: unknown, questions: FeedbackQuestions): NewFeedbackDeferral {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw httpError(400, "Expected a JSON object [fd-type]");
   }
@@ -9228,7 +9229,7 @@ function parseFeedbackDeferral(raw: unknown): NewFeedbackDeferral {
   }
   const question = sent.question;
   if (!isFeedbackQuestionId(question)) throw httpError(400, "question must be a question id [fd-question]");
-  if (feedbackQuestionStatus(question) === null) throw httpError(400, "There is no such question. [fd-unknown]");
+  if (questions.status(question) === null) throw httpError(400, "There is no such question. [fd-unknown]");
   if (typeof sent.deferred !== "boolean") throw httpError(400, "deferred must be true or false [fd-deferred]");
   return { questionId: question, deferred: sent.deferred, environment: feedbackEnvironment() };
 }
@@ -9250,11 +9251,11 @@ const MAX_FEEDBACK_ANSWER_BODY_BYTES = MAX_FEEDBACK_ANSWER_CHARS * 6 + 1024;
  * thrown message, and **the environment is this process's own**, so a caller
  * cannot claim a reply was written in production (plan 261007d, F13).
  *
- * The question must be one this build has a file for, **open or answered**: a
+ * The question must be one that has been published, **open or answered**: a
  * reply typed in a tab loaded before the question was marked answered is still
  * Greg's words, and is kept (F14).
  */
-function parseFeedbackAnswer(raw: unknown): NewFeedbackAnswer {
+function parseFeedbackAnswer(raw: unknown, questions: FeedbackQuestions): NewFeedbackAnswer {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw httpError(400, "Expected a JSON object [fa-type]");
   }
@@ -9272,7 +9273,7 @@ function parseFeedbackAnswer(raw: unknown): NewFeedbackAnswer {
   if (!isFeedbackQuestionId(question)) {
     throw httpError(400, "question must be a question id [fa-question]");
   }
-  if (feedbackQuestionStatus(question) === null) {
+  if (questions.status(question) === null) {
     throw httpError(400, "There is no such question. [fa-unknown]");
   }
   const body = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
@@ -10738,7 +10739,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (show === undefined) {
         throw httpError(400, `show must be one of ${ADMIN_EARLIER_FEEDBACK_SHOWS.join(", ")}`);
       }
-      const page = await feedbackStore.listMineByStatus(EARLIER_FEEDBACK_LIMIT, feedbackIdsByEnding(), show);
+      const [page, questions] = await Promise.all([
+        feedbackStore.listMineByStatus(EARLIER_FEEDBACK_LIMIT, feedbackIdsByEnding(), show),
+        readFeedbackQuestions(),
+      ]);
       const { open, waiting, aside, shipped } = page.counts;
       const reports = page.reports.map(
         ({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt, addenda }) => ({
@@ -10754,7 +10758,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           /* An open question names it, or names it in `repeats:` (plan
              261016a): not "waiting, no question written yet". Rows and
              counts are left alone; the client checks one against the other. */
-          asked: isReportAsked(id),
+          asked: questions.isReportAsked(id),
           ignoredAt,
           addenda: addenda.map(({ id: addendumId, body: words, createdAt: added }) => ({
             id: addendumId,
@@ -10786,12 +10790,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         | AdminEarlierFeedbackPageV2
         | AdminEarlierFeedbackPageV1 =
         shape === "4"
-          ? { ...envelope, questions: await questionsForAdmin(4) }
+          ? { ...envelope, questions: await questionsForAdmin(4, questions) }
           : shape === "3"
-            ? { ...envelope, questions: await questionsForAdmin(3) }
+            ? { ...envelope, questions: await questionsForAdmin(3, questions) }
             : shape === "2"
-              ? { ...envelope, questions: await questionsForAdmin(2) }
-              : { ...envelope, questions: await questionsForAdmin(1) };
+              ? { ...envelope, questions: await questionsForAdmin(2, questions) }
+              : { ...envelope, questions: await questionsForAdmin(1, questions) };
       send(res, 200, answer);
     },
   },
@@ -10814,7 +10818,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "none",
     handler: async ({ request: { req, res } }) => {
       res.setHeader("Cache-Control", "private, no-store");
-      const reply = parseFeedbackAnswer(await readBody(req, MAX_FEEDBACK_ANSWER_BODY_BYTES));
+      const raw = await readBody(req, MAX_FEEDBACK_ANSWER_BODY_BYTES);
+      const reply = parseFeedbackAnswer(raw, await readFeedbackQuestions());
       const stored = await feedbackStore.submitAnswer(reply);
       /* Ids and a length, never the words: docs/project/logging.md. */
       log("http").info(
@@ -10907,8 +10912,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "none",
     handler: async ({ request: { req, res } }) => {
       res.setHeader("Cache-Control", "private, no-store");
-      const asked = parseFeedbackDeferral(await readBody(req));
-      if (feedbackQuestionStatus(asked.questionId) !== "open") {
+      const raw = await readBody(req);
+      const questions = await readFeedbackQuestions();
+      const asked = parseFeedbackDeferral(raw, questions);
+      if (questions.status(asked.questionId) !== "open") {
         throw httpError(409, "That question has been settled since this page was loaded. [fd-settled]");
       }
       const now = await feedbackStore.setDeferred(asked);

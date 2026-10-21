@@ -57,9 +57,10 @@ SETS = [
         "hint": "WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts",  # docs/project/help-page.md
     },
     {
-        "name": "the feedback endings and questions",
+        "name": "the feedback endings",
         "sources": ["docs/user-feedback/", "scripts/feedback-endings.ts", "src/feedback-ending-values.ts", "src/feedback-question-values.ts", "src/ids.ts", "src/is-main.ts"],
-        "outputs": ["src/feedback-endings.generated.ts", "src/feedback-questions.generated.ts"],
+        # The questions are published to a table, not compiled, since plan 261021h.
+        "outputs": ["src/feedback-endings.generated.ts"],
         "command": lambda root: ["node", "--import", os.path.join(root, "node_modules/tsx/dist/loader.mjs"), os.path.join(root, "scripts/feedback-endings.ts")],
         "env": {},
         "hint": "npx tsx scripts/feedback-endings.ts",  # docs/project/feedback-reports.md

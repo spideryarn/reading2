@@ -546,6 +546,12 @@ export interface EarlierFeedback {
   liveQuestions: ThreadQuestion[] | null;
   /** How many of the server's threads wait on a decision, without a remembered no-longer-open question: the pill's and the shortcut's number. */
   waitingQuestionCount: number | null;
+  /**
+   * An admin's opening read of Needs a decision is still in the air, so the
+   * shortcut is drawn with a spinner where its number goes (spya-yf6vmy).
+   * False once it lands, and false when it failed: then there is no shortcut.
+   */
+  questionsLoading: boolean;
   replies: QuestionReplies;
   /** The admin's addenda to their own reports, in progress and just sent (FeedbackAddendum.tsx). */
   addenda: ReportAddenda;
@@ -1039,6 +1045,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
     questions,
     liveQuestions: currentQuestions,
     waitingQuestionCount: currentQuestions === null ? null : waitingThreads(currentQuestions),
+    questionsLoading: open && detail === "admin" && currentQuestions === null && waitingRead.kind !== "failed",
     replies,
     addenda,
   };

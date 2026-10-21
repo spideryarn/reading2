@@ -25,20 +25,18 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChartColumn, FileText, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
-import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import { functionalUpdate } from "@tanstack/react-table";
-import { parseAsString, throttle, useQueryState } from "nuqs";
+import { parseAsString, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
 import { FEEDBACK_FROM, type AdminFeedbackReport, type FeedbackFrom } from "../types.js";
 import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
-import { ColumnsMenu, DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
-import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
+import { ColumnsMenu, DataTable, SortChips } from "./lib/DataTable.js";
+import { useUrlSortedTable } from "./lib/useUrlSortedTable.js";
 import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
+import { adminByParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import {
   ADMIN_ARTICLES_HREF,
@@ -55,10 +53,7 @@ import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
 import { ViewAsStart } from "./ViewAsStart.js";
-import { type HiddenColumnKeys, useHiddenColumns } from "./shelf-hidden-columns.js";
-
-/** Kept out of the render so the table is not rebuilt from a fresh `[]`. */
-const EMPTY: AdminUser[] = [];
+import type { HiddenColumnKeys } from "./shelf-hidden-columns.js";
 
 /**
  * Where `/admin/users` remembers which columns are hidden, in this browser —
@@ -312,8 +307,6 @@ export function AdminUsersPage() {
   const { users, error, loading, reload } = useAdminUsers();
   const now = useNow();
 
-  const [by, setBy] = useQueryState("by", adminByParam);
-  const [rawDir, setDir] = useQueryState("dir", sortDirParam);
   /* `?user=<id>`: the account a link from /admin/vouchers pointed at, marked
      in the whole table rather than filtered to, so it can still be compared
      with everyone else (plan 261019k). The name `/admin/costs` uses for it. */
@@ -322,58 +315,16 @@ export function AdminUsersPage() {
   /* The account *View as* was pressed on (ViewAsStart.tsx). */
   const [viewing, setViewing] = useState<AdminUser | null>(null);
   const columns = useMemo(() => adminColumns(now, setViewing), [now]);
-  const natural = useMemo(() => naturalDirections(columns), [columns]);
-  /* `rawDir` straight in, `null` and all — absent means "each key goes whichever
-     way it naturally goes", which `sortingFromUrl` fills in per column. Do not
-     write `rawDir ?? []` here: a fresh array per render is what froze the shelf
-     (docs/postmortems/260827e-shelf-render-loop.md). */
-  const sorting = useMemo(
-    () => sortingFromUrl(by, rawDir, natural, ADMIN_DEFAULT_BY),
-    [by, rawDir, natural],
-  );
-
-  const onSortingChange = useCallback<OnChangeFn<SortingState>>(
-    (updater) => {
-      /* Applied to the very array TanStack was handed as its state, so what it
-         computed the update against and what we apply it to cannot be two
-         different things. */
-      const next = functionalUpdate(updater, sorting);
-      /* `enableSortingRemoval: false` should make this impossible; an empty
-         sort would fall back to whatever order the server sent, which is a
-         state the reader cannot name or ask for. */
-      if (next.length === 0) return;
-      const url = sortingToUrl(next);
-      void setBy(url.by, { limitUrlUpdates: throttle(0) });
-      /* Left out when it says nothing the columns would not have said
-         themselves — and an absent `dir` is what makes the per-column fallback
-         run at all. */
-      void setDir(isAllNatural(next, natural) ? null : url.dir);
-    },
-    [sorting, natural, setBy, setDir],
-  );
-
-  const [columnVisibility, onColumnVisibilityChange] = useHiddenColumns(columns, ADMIN_USERS_COLUMN_KEYS);
-
-  const table = useSortedTable({
-    data: users ?? EMPTY,
+  /* `sorted` is the list the table is drawn from, missing primary keys sunk —
+     lib/useUrlSortedTable.ts, whose identity contract `columns` above and
+     `idOf` keep. */
+  const { table, rows: sorted } = useUrlSortedTable({
+    data: users,
     columns,
-    sorting,
-    onSortingChange,
     rowId: idOf,
-    columnVisibility,
-    onColumnVisibilityChange,
+    byParam: adminByParam,
+    hiddenColumnKeys: ADMIN_USERS_COLUMN_KEYS,
   });
-
-  const rows = table.getRowModel().rows;
-  const primary = sorting[0]?.id;
-  /* Missing values last, whichever way the arrow points — the same rule the
-     shelf follows, and the same reason: sorting by "last sign-in" ascending
-     must not fill the top of the page with everyone who has never signed in.
-     `sortUndefined` is deliberately off; lib/table-sort.ts has the measurement. */
-  const sorted = useMemo(
-    () => (primary ? sinkLast(rows, (r) => r.getValue(primary) === undefined) : rows),
-    [rows, primary],
-  );
   const pointedUser = pointedAt === null || users === null ? undefined : users.find((u) => u.id === pointedAt);
 
   /* Scrolled to once per id, when the list that holds it arrives, so a

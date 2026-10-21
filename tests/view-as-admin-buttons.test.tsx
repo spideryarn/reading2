@@ -13,6 +13,7 @@
  */
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { NuqsAdapter } from "nuqs/adapters/react";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -59,6 +60,7 @@ let startAnswer: { status: number; body: unknown };
 const open = vi.fn();
 
 beforeEach(() => {
+  history.replaceState(null, "", "/admin/articles");
   calls = [];
   startAnswer = {
     status: 200,
@@ -96,7 +98,9 @@ async function mount(node: ReactNode) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(node));
+  /* `/admin/articles` keeps its sort in the address through nuqs (plan 261021i),
+     which needs its adapter above it, as main.tsx gives the app. */
+  await act(async () => root.render(<NuqsAdapter>{node}</NuqsAdapter>));
   await settle();
 }
 
@@ -110,6 +114,10 @@ const buttons = (el: Element | null | undefined, label: string) =>
   [...(el?.querySelectorAll("button") ?? [])].filter((b) => b.textContent?.trim() === label) as HTMLButtonElement[];
 const rows = () => [...host.querySelectorAll("tbody tr")];
 const asking = () => host.querySelector('section[aria-label="View as this reader"]');
+const headerButton = (name: string) =>
+  [...host.querySelectorAll<HTMLButtonElement>("thead button")].find((b) =>
+    b.getAttribute("aria-label")?.startsWith(name),
+  );
 
 async function click(el: HTMLElement | undefined) {
   if (!el) throw new Error("nothing to click");
@@ -151,6 +159,23 @@ describe("/admin/articles: View as owner", () => {
     /* And a link to the same address, for a browser that blocked the window. */
     expect(asking()?.querySelector("a")?.getAttribute("href")).toBe(`/#view-as=${NONCE}`);
     expect(asking()?.querySelector("a")?.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("keeps View as owner attached to its reader after a re-sort moves the row", async () => {
+    await mount(<AdminArticlesPage />);
+    expect(rows()[0]?.textContent).toContain("alice@example.test");
+
+    /* Alice's untitled row starts first, then moves below the titled row. */
+    await click(headerButton("Article"));
+    const alice = rows().find((row) => row.textContent?.includes("alice@example.test"));
+    expect(alice).toBe(rows()[1]);
+    await click(buttons(alice, "View as owner")[0]);
+    await type("checking the moved row");
+    await click(buttons(asking(), "View as")[0]);
+
+    expect(calls.filter((c) => c.method === "POST")).toEqual([
+      { method: "POST", url: "/api/admin/view-as", body: { subject: ALICE, reason: "checking the moved row" } },
+    ]);
   });
 
   it("shows a refusal in the server's words and opens nothing", async () => {

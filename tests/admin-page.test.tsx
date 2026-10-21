@@ -720,6 +720,29 @@ describe("the users page, pointed at one account", () => {
     ]);
   });
 
+  it("keeps the pointed-at account marked, in the URL, and does not scroll again after sorting", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    expect(rows(el)[0]?.[0]).toContain("bob@example.test");
+    expect(scrolled).toHaveLength(1);
+
+    const articles = [...el.querySelectorAll("button")].find((b) =>
+      b.getAttribute("aria-label")?.startsWith("Articles"),
+    );
+    await act(async () => articles?.click());
+    await settle();
+    await waitFor("the pointed-at account moved to the first row", () =>
+      rows(el)[0]?.[0]?.includes("alice@example.test") === true,
+    );
+
+    expect(new URLSearchParams(location.search).get("user")).toBe(ALICE.id);
+    expect(new URLSearchParams(location.search).get("by")).toBe("articles");
+    expect(marked(el)).toHaveLength(1);
+    expect(marked(el)[0]?.textContent).toContain("alice@example.test");
+    expect(scrolled).toHaveLength(1);
+  });
+
   it("clears the mark when Clear is pressed", async () => {
     history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
     vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));

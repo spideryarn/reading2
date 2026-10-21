@@ -1091,7 +1091,7 @@ below. [261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-mode
 > — Greg, 2026-10-11 (`spya-wqvxjv`)
 
 **The second page here that writes across owners**, after the voucher claim's account binding: it
-changes whose an article is. Every article, newest first, with its owner's address, the short id
+changes whose an article is. Every article, newest first unless sorted otherwise, with its owner's address, the short id
 (the article id for one made before short ids), the date, visibility and processing — and **a title
 only for the administrator's own articles and public ones**, never another reader's slug, which
 carries the title's words. A row per article does show how many each reader has and when, which
@@ -1103,9 +1103,17 @@ and a one-line change in `listArticlesAcrossOwners`.
 whole life and whoever made it (`spendByArticle` in
 [`ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts)): `/admin/costs`' rule and
 formatting, a `+` when it is a floor, and only the spend and call counts that `/admin/costs` already
-shows by opaque article id. The table can be ordered highest total cost first. Greg, 2026-10-19
+shows by opaque article id. Greg, 2026-10-19
 (`spya-vjyev3`): *"Also show Total Cost per article"* —
 [261020s](../plans/261020s-total-cost-column-on-admin-articles.md).
+
+**The table is `/admin/users`' [`DataTable`](../../src/web/lib/DataTable.tsx)** since 2026-10-21:
+every column but Actions sorts from its header or a chip, the sort in `?by=&dir=`; any but Article
+and Actions can be hidden from the Columns menu, remembered in this browser; Article is held while
+the rest scroll. A dash in Total cost (no call priced) sorts last either way; equal costs read
+newest first, highest first (the tiebreak turns round with the arrow). The filter narrows the list before the table sees it. Greg, 2026-10-21
+(`spya-k8mka5`): *"the /users one, I think perhaps it was more functional?"* —
+[261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md).
 
 | Route | Does |
 |---|---|

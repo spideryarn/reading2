@@ -1,6 +1,13 @@
 /**
  * Sorting controls and a dense table, over any list of rows.
  *
+ * **We are on TanStack Table v8 (`^8.21.3`), and v9's docs will not match.**
+ * v9 shipped in August 2026, a bare `npm i @tanstack/react-table` now installs
+ * it, and tanstack.com's current guides show v9's API — so read this file and
+ * its callers, not the library's site, before writing table code here. The
+ * move to v9 is its own piece of work, deliberately not done yet:
+ * docs/research/261021a-table-library-for-sortable-hideable-columns.md.
+ *
  * Greg, 2026-08-26, on why this is a shared thing rather than part of the shelf:
  *
  * > Switch over to Tanstack … because I think we'll also want this kind of
@@ -273,7 +280,8 @@ export function useSortedTable<T>({
   columnVisibility,
   onColumnVisibilityChange,
 }: {
-  data: T[];
+  /* Read-only: it is copied before it is sorted, below. */
+  data: readonly T[];
   columns: SortableColumn<T>[];
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
