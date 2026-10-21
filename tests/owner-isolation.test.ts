@@ -635,8 +635,8 @@ describe("the one query that lists articles for nobody in particular", () => {
     source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
   /**
-   * **The two queries in the whole public surface that may name `articles`**,
-   * and what makes each one safe.
+   * **The queries in the whole public surface that may name `articles`**, and
+   * what makes each one safe.
    *
    * - `public-reader.ts` → `publicCurrentRevisionQuery`, whose `where` is
    *   `publicSlug(slug)` — slug **and** visibility, section 2's second
@@ -644,9 +644,9 @@ describe("the one query that lists articles for nobody in particular", () => {
    * - `public-library.ts` → `publicLibraryQuery`, the listing, whose `where` is
    *   visibility **and** the readability bar, and whose SQL is read below.
    *
-   * A third entry here is a decision about what a stranger may enumerate, which
-   * is why it is a list in a test rather than a comment in whichever file grew
-   * the query.
+   * Another entry here is a decision about what a stranger may read or write,
+   * which is why this is a list in a test rather than a comment in whichever
+   * file grew the query.
    */
   const LISTING = { file: "src/store/public-library.ts", fn: "publicLibraryQuery" };
   /**

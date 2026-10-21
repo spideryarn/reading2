@@ -83,9 +83,6 @@ export interface ArticleAccessRow {
   signedOut: { opens: number; firstOpenedAt: Date; lastOpenedAt: Date } | null;
 }
 
-/** The most openers one answer lists, most recent first. */
-export const OPENERS_LISTED = 100;
-
 /**
  * The article the administrator can already read by this slug and key, with
  * who opened its private link. `null` when there is none — the same answer
@@ -114,8 +111,7 @@ export async function articleAccessForAdmin(slug: string, key: ShareKey | null):
       })
       .from(privateLinkOpeners)
       .where(eq(privateLinkOpeners.articleId, article.id))
-      .orderBy(desc(privateLinkOpeners.lastOpenedAt), privateLinkOpeners.readerId)
-      .limit(OPENERS_LISTED),
+      .orderBy(desc(privateLinkOpeners.lastOpenedAt), privateLinkOpeners.readerId),
     db
       .select({
         opens: privateLinkSignedOutOpens.opens,

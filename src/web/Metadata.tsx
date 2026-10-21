@@ -1645,7 +1645,7 @@ function SharingCard({
           <Ownership whose="yours" email={ownerEmail} />
           {/* The administrator's own article: who opened its private link
               (plan 261021d § 5). Draws and asks nothing for anybody else. */}
-          <AdminLinkOpens slug={slug} readerId={ownerId} />
+          <AdminLinkOpens slug={slug} readerId={ownerId} privateLink={linkOn} />
         </div>
         <PrivateLink
           slug={slug}

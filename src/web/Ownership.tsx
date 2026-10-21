@@ -141,19 +141,33 @@ export function AdminOwnerLine({
  * should see who opened their link is a decision nobody has made (plan
  * 261021d § 5), so for anybody else this draws nothing and asks nothing.
  */
-export function AdminLinkOpens({ slug, readerId }: { slug: string; readerId: string | null }) {
+export function AdminLinkOpens({
+  slug,
+  readerId,
+  privateLink,
+}: {
+  slug: string;
+  readerId: string | null;
+  /** The private-link control's live answer; null while it cannot say. */
+  privateLink: boolean | null;
+}) {
   const read = useAdminArticleAccess(slug, readerId, null);
   if (!isAdmin(readerId) || read.kind !== "found") return null;
-  return <LinkOpens access={read.access} />;
+  return <LinkOpens access={read.access} privateLink={privateLink} />;
 }
 
 /**
  * The openers line. Drawn when a link is on now or any open is recorded, so a
  * public article that never had a link says nothing about links.
  */
-function LinkOpens({ access }: { access: AdminArticleAccess }) {
+function LinkOpens({ access, privateLink = null }: { access: AdminArticleAccess; privateLink?: boolean | null }) {
   const { openers, signedOut } = access;
-  if (!access.privateLink && openers.length === 0 && signedOut === null) return null;
+  /* The admin read and the link control start together. Once the control has a
+     live answer, it wins: otherwise making or turning off a link left this line
+     in the state the route returned when the page first mounted. While the
+     control cannot say, the route's last known answer remains useful. */
+  const linkOn = privateLink ?? access.privateLink;
+  if (!linkOn && openers.length === 0 && signedOut === null) return null;
   if (openers.length === 0 && signedOut === null)
     return (
       <p data-admin-link-opens="none" className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-ink-faint">

@@ -675,7 +675,8 @@ export function PrivacyPage() {
           the link can read the article without signing in, and can pass it on. An article shared
           only this way is not listed anywhere, and they get the same things a public reader gets, your comments and searches
           included. We do not tell you who has read it. We do record it: when somebody signed in
-          opens the link, their account and when; when somebody signed out does, only a rough count.
+          opens the link, their account and when; when somebody signed out does, a rough count and
+          the first and last time a signed-out open was recorded.
           Only the administrator can see that. The link’s key is part of its address, so
           it stays in the browser history of whoever opens it. Turning the link off refuses the
           next request made with it; it cannot take back what somebody has already read or copied.

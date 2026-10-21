@@ -446,7 +446,9 @@ describe("the privacy page", () => {
       expect(prose).toMatch(/An article shared only this way is not listed anywhere/);
       expect(prose).toContain("We do not tell you who has read it.");
       expect(prose).toContain("when somebody signed in opens the link, their account and when");
-      expect(prose).toContain("when somebody signed out does, only a rough count");
+      expect(prose).toContain(
+        "when somebody signed out does, a rough count and the first and last time a signed-out open was recorded",
+      );
       expect(prose).toContain("Only the administrator can see that.");
       expect(prose).toContain("When you open somebody’s private link while signed in");
       expect(read("src/store/public-library.ts")).not.toMatch(/from "\.\/public-access\.js"/);

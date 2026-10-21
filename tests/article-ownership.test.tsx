@@ -24,6 +24,7 @@ import {
   OWNERSHIP_ADMIN_OWNER,
   OWNERSHIP_NOT_YOURS,
   OWNERSHIP_YOURS,
+  SHARING_RIGHTS_CONFIRM,
 } from "../src/messages.js";
 import { ADMIN_USER_ID_PROD } from "../src/admin.js";
 
@@ -280,6 +281,79 @@ describe("the owner's details page", () => {
         expect(opens).toBeFalsy();
       }
     }
+  });
+
+  it("follows the private-link switch after the admin access answer has landed", async () => {
+    adminAccess = access({ ownerId: ADMIN, mine: true, privateLink: false });
+    sessionId = ADMIN;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/metadata/")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              slug: SLUG,
+              dir: "data/a-piece",
+              stages: [],
+              comments: 0,
+              profile: null,
+              purpose: null,
+              archivedAt: null,
+              sharing: { visibility: "private", publicAt: null, personalised: [], available: NONE },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      }
+      if (String(input).endsWith("/share-link") && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ on: true, key: KEY, since: "2026-10-21T12:00:00Z" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (String(input).endsWith("/share-link") && init?.method === "DELETE") {
+        return Promise.resolve(
+          new Response('{"on":false}', { status: 200, headers: { "content-type": "application/json" } }),
+        );
+      }
+      return originalFetch(input, init);
+    });
+
+    await act(async () => {
+      root.render(
+        createElement(
+          NuqsAdapter,
+          null,
+          createElement(Metadata, {
+            slug: SLUG,
+            article: ARTICLE,
+            readerId: ADMIN,
+            onRenamed: () => {},
+            onVisibility: () => {},
+          }),
+        ),
+      );
+    });
+    await settle();
+    expect(host.querySelector("[data-admin-link-opens]")).toBeNull();
+
+    const press = async (text: string) => {
+      await act(async () => [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === text)?.click());
+      await settle();
+    };
+    await press("Create a link");
+    const rights = [...host.querySelectorAll("label")]
+      .find((label) => label.textContent?.includes(SHARING_RIGHTS_CONFIRM))
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(rights, "the private-link confirmation has no rights checkbox").toBeTruthy();
+    await act(async () => rights?.click());
+    await press("Create the link");
+    expect(host.querySelector("[data-admin-link-opens]")?.textContent).toBe(LINK_OPENS_NONE);
+
+    await press("Turn off");
+    expect(host.querySelector("[data-admin-link-opens]")).toBeNull();
   });
 
   it("does not put a new session's address beside the old reader's ownership answer", async () => {
