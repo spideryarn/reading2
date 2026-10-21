@@ -177,3 +177,15 @@ code, but it is exactly the "different from /users" Greg reported, kept, with a 
   own row; every column but Article now single-line `text-xs`, as on `/admin/users`;
   `tests/view-as-admin-buttons.test.tsx` mounts this page and needed a `NuqsAdapter`. New tests were
   shown red by mutation (no sink, no tiebreak, the F1 rule wrong). Full suite green.
+- 2026-10-21: Stage 1 browser pass (Sonnet, own dev server from this worktree, 1280 and 390): all
+  eight checks pass — sort by header writes `?by=`, hide survives reload, Article held at 390, no
+  page-level sideways scroll, Transfer after a re-sort names the right article, `/admin/users`
+  unchanged, no console errors. Only the header's label is the sort button, not the whole cell —
+  the same as `/admin/users`, since both are the one `HeaderCell`.
+- 2026-10-21: Stage 1 GPT Sol code review —
+  [stage1-code-review-sol.md](261021i-admin-tables-share-one-sortable-hideable-table-stage1-code-review-sol.md),
+  `APPROVE WITH CHANGES`, no P0/P1. It added three tests (C1 Transfer and View as reach the right
+  row after a re-sort; C2 `?user=` marking survives a re-sort; C3 the filter and the count on the
+  drawn page). C4, reported not fixed and wider than this job: tests/eager-client-graph.test.ts
+  names only `AdminPage.tsx` and `DesignPage.tsx` as lazy admin roots, so a newer admin page's
+  private import could reach the eager graph unnoticed. Not taken here; queued in the debrief.

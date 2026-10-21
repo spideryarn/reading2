@@ -331,6 +331,23 @@ describe("/admin/articles", () => {
     expect(order()).toEqual([MINE, "spya-k3m9qt", "spya-13aaaa"]);
   });
 
+  it("keeps Transfer attached to its article after a re-sort moves the row", async () => {
+    await mount();
+    expect(order()).toEqual(["spya-k3m9qt", MINE]);
+
+    /* Title puts the administrator's titled article first and moves Alice's
+       private, untitled row from first to last. The press must follow the
+       article rather than the row's old position. */
+    await click(headerButton("Article"));
+    expect(order()).toEqual([MINE, "spya-k3m9qt"]);
+    await openFor("alice@example.test");
+
+    expect(calls.filter((c) => c.method === "GET" && c.url.endsWith("/transfer"))).toEqual([
+      { method: "GET", url: `/api/admin/articles/${THEIRS}/transfer`, body: undefined },
+    ]);
+    expect(confirmation()?.textContent).toContain("belongs to alice@example.test");
+  });
+
   /* Sol F1: the dash is "no call was priced" — no calls, or every call
      unpriced — and sinks; a priced call that recorded $0.00 is a real zero. */
   it("sinks every dash under either arrow, and sorts a priced zero and a floor as amounts", async () => {
@@ -395,6 +412,20 @@ describe("/admin/articles", () => {
     expect(matchesFilter(theirs!, "000005")).toBe(false);
     expect(matchesFilter(mine!, "alice")).toBe(false);
     expect(matchesFilter(mine!, "  ")).toBe(true);
+  });
+
+  it("filters the drawn rows and counts the filtered table", async () => {
+    await mount();
+    const input = host.querySelector<HTMLInputElement>('[aria-label="Filter by owner address or article id"]');
+    if (!input) throw new Error("no article filter");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "alice@");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+
+    expect(order()).toEqual(["spya-k3m9qt"]);
+    expect(host.textContent).toContain("1 of 2");
   });
 
   /* Plan 261019o, spya-zzewu7: "keep the first column frozen (article name)". */
