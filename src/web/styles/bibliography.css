@@ -31,7 +31,7 @@
   margin: 0.15rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
 }
 .cite-here a {
@@ -45,7 +45,7 @@
 .cite-by {
   margin: 0.1rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
 }
 /* A by-line with more behind it — the full authors, the reference entry
    (BibliographyPanel.tsx § `ByLine`). `help`, as `mark.cite` is: the card is the
@@ -62,7 +62,7 @@
 .cite-by-from { color: var(--ink-faint); }
 /* The entry in the tooltip, and in the prose card: the article's own words. */
 .cite-entry {
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.4;
 }
 /* The citing words that name *first cited* (plan 260930i) — quoted prose, so
@@ -95,7 +95,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   cursor: help;
   text-decoration: underline dotted;
   text-decoration-color: color-mix(in oklab, var(--ink-faint) 60%, transparent);
@@ -103,7 +103,7 @@
 }
 /* The abstract's own words on the card: a stranger's text, left in the UI
    face (fonts.md § Whose voice is it), marked as quoted by the `<q>`. */
-.cite-blurb-quote { margin: 0.25rem 0 0; font-size: 0.8rem; line-height: 1.4; }
+.cite-blurb-quote { margin: 0.25rem 0 0; font-size: max(var(--text-min), 0.8rem); line-height: 1.4; }
 .prose-card-body > .cite-blurb { margin: -0.1rem 0 0.45rem; }
 
 .cite-why {
@@ -117,7 +117,7 @@
 .cite-why-label {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
 }
 
 /* What differs from the list-wide default about what we have read: a page
@@ -127,7 +127,7 @@
   margin: 0.15rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   line-height: 1.35;
 }
 
@@ -167,13 +167,13 @@
 .cite-search:hover { color: var(--ink); }
 /* *Find it* — the glossary's `.gloss-btn`, sized down to the quiet line it
    sits on. */
-.cite-find { font-size: 0.74rem; }
+.cite-find { font-size: max(var(--text-min), 0.74rem); }
 /* What a *Find it* that kept nothing said, under its own row: a result in the
    line's faint ink, a failure in the error colour the band already uses. */
 .cite-find-note {
   margin: 0.2rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   line-height: 1.35;
 }
 .cite-find-note.failed { color: var(--highlight-ink); }
@@ -203,7 +203,7 @@
 .cite-lookup-label {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
 }
 .cite-quote { margin: 0.25rem 0 0; }
 .cite-quote blockquote {
@@ -219,7 +219,7 @@
   margin: 0.1rem 0 0 0.55rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
 }
 
 /* ---- a kept *Dig deeper* (was *Investigate*) answer ------------------------
@@ -231,7 +231,7 @@
    thing wraps anywhere: a source's title or host at 288px must not push the
    band wide. */
 /* *Ask in chat*, where Dig deeper was (OriginChat.tsx; plans 261006d, 261009k). */
-.cite-ask-chat { font-size: 0.74rem; }
+.cite-ask-chat { font-size: max(var(--text-min), 0.74rem); }
 
 .cite-inv { margin: 0.3rem 0 0; }
 .cite-inv-prov,
@@ -240,7 +240,7 @@
   margin: 0.2rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   line-height: 1.35;
 }
 .cite-inv-text {
@@ -256,7 +256,7 @@
   margin: 0.15rem 0 0;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   font-weight: 600;
 }
 /* Folded: the first part's paragraph, three lines, then an ellipsis. The text
@@ -282,7 +282,7 @@
   color: var(--ink-soft);
   font: inherit;
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   text-decoration: underline dotted;
   text-underline-offset: 2px;
   cursor: pointer;
@@ -296,7 +296,7 @@
   padding: 0;
   list-style: none;
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   line-height: 1.35;
   overflow-wrap: anywhere;
 }

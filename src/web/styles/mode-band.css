@@ -232,7 +232,7 @@
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   cursor: pointer;
 }
 .summ-view-btn + .summ-view-btn { border-left: 1px solid var(--rule); }
@@ -460,7 +460,7 @@ svg.band-waiting-ghost { flex: none; }
   background: transparent;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   text-align: left;
   cursor: pointer;
 }
@@ -688,7 +688,7 @@ svg.band-waiting-ghost { flex: none; }
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   padding: 0.15rem 0.5rem;
   cursor: pointer;
 }
@@ -696,6 +696,30 @@ svg.band-waiting-ghost { flex: none; }
 .chat-from-btn.on {
   background: var(--rule);
   color: var(--ink);
+}
+/* **A finger gets 40px in Chat** (plan 261021c; Greg on an iPhone,
+   2026-10-20: "in the chat thread, or chat list of threads, the icons are too
+   small"). Measured at 390: every `.chat-icon` was 22 × 22 with a 12–14px
+   glyph, the row's source mark 20 × 25, the filter chips 27 tall. Drawn
+   bigger, not haloed: Rename and Delete sit 1.6px apart, so a `.tap-target`
+   halo on each would hand one's taps to the other. The glyph grows with the
+   box; CSS outranks the `size` attribute lucide writes. `any-pointer`, as the
+   steppers beside them (chat-actions.css) and close.css have it.
+   docs/project/controls.md § The numbers. */
+@media (any-pointer: coarse) {
+  .chat-icon { width: 40px; height: 40px; }
+  .chat-icon > svg { width: 18px; height: 18px; }
+  .chat-thread-lead { width: 40px; }
+  .chat-thread-source {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+  }
+  .chat-thread-source > svg { width: 18px; height: 18px; }
+  .chat-from { gap: 0.4rem; }
+  .chat-from-btn { min-width: 40px; min-height: 40px; }
 }
 /* In the card: the item's own words, on a line of their own under ours. */
 .chat-thread-source-quote { display: block; margin-top: 0.2rem; }
@@ -752,7 +776,7 @@ svg.band-waiting-ghost { flex: none; }
   background: var(--surface-raised);
 }
 .guide-offer p { margin: 0 0 0.4rem; }
-.guide-offer-heading { font-size: 0.8rem; color: var(--ink-faint); }
+.guide-offer-heading { font-size: max(var(--text-min), 0.8rem); color: var(--ink-faint); }
 .guide-offer-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.88rem; line-height: 1.45; }
 .guide-offer .guide-offer-status,
 .guide-offer-actions { margin-bottom: 0; }
@@ -1040,7 +1064,7 @@ svg.band-waiting-ghost { flex: none; }
   border: 1px solid var(--rule-strong);
   border-radius: 0.4rem;
   background: var(--surface-raised);
-  font-size: 0.72em;
+  font-size: max(var(--text-min), 0.72em);
 }
 .cite-chips .block-ref:hover {
   border-color: var(--highlight);
@@ -1075,7 +1099,7 @@ svg.band-waiting-ghost { flex: none; }
   margin-left: 0.25em;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78em;
+  font-size: max(var(--text-min), 0.78em);
   overflow-wrap: break-word;
 }
 
@@ -1145,7 +1169,7 @@ svg.band-waiting-ghost { flex: none; }
   padding: 0;
   list-style: none;
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -1229,6 +1253,16 @@ svg.band-waiting-ghost { flex: none; }
   column-gap: 0.6rem;
 }
 .chat-sources li > a { min-width: 0; overflow-wrap: anywhere; }
+/* **A finger gets a 40px row per source** (plan 261021c): at 390 they were
+   20px tall and 0–1px apart, and *Bring into this chat* 23px tall touching
+   the link above it — "too close together for an iPhone" (Greg, 2026-10-20).
+   The link itself is the 40px box, not only its row (GPT Sol, plan review
+   R1); a wrapped row keeps room between its link and its button. */
+@media (any-pointer: coarse) {
+  .chat-sources li { row-gap: 0.35rem; }
+  .chat-sources li > a { display: inline-flex; align-items: center; min-height: 40px; }
+  .bring-in-button { min-height: 40px; padding-inline: 0.75rem; }
+}
 
 /* ---- *Bring into this chat* (BringIntoChat.tsx, plan 261017e) ---- */
 .bring-in {
@@ -1237,7 +1271,7 @@ svg.band-waiting-ghost { flex: none; }
   align-items: center;
   gap: 0.3rem;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   color: var(--ink-faint);
   min-width: 0;
   max-width: 100%;
@@ -1308,7 +1342,7 @@ svg.band-waiting-ghost { flex: none; }
   align-items: center;
   gap: 0.3rem;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
 }
 .mention-chips-label { color: var(--ink-faint); }
 .mention-chip {
@@ -1366,7 +1400,7 @@ svg.band-waiting-ghost { flex: none; }
 .mention-picker-status {
   margin: 0;
   padding: 0.35rem 0.5rem;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   color: var(--ink-soft);
 }
 .mention-picker-row {
@@ -1388,7 +1422,7 @@ svg.band-waiting-ghost { flex: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mention-picker-meta { font-size: 0.75rem; color: var(--ink-faint); }
+.mention-picker-meta { font-size: max(var(--text-min), 0.75rem); color: var(--ink-faint); }
 
 /* "Also reading", above the first question. Quiet, like `.chat-sources`. */
 .chat-also-reading {
@@ -1423,7 +1457,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
   border: 1px solid var(--rule);
   border-radius: 999px;
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
   line-height: 1.4;
   color: var(--ink-soft);
   text-decoration: none;
@@ -1736,7 +1770,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   font-weight: 600;
 }
 .chat-live-status:is(.is-connecting, .is-thinking, .is-speaking, .is-saving) .chat-live-state {
@@ -1764,7 +1798,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
   padding: 0;
   list-style: none;
   color: var(--ink-faint);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
 }
 .chat-live-steps li + li::before { content: "›"; margin-right: 0.5rem; color: var(--ink-faint); }
 .chat-live-steps li.now { color: var(--ink); font-weight: 600; }
@@ -1802,7 +1836,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 .chat-live-arriving {
   margin: -0.55rem 0 0.85rem;
   color: var(--ink-faint);
-  font: 0.75rem/1.3 var(--font-ui);
+  font: max(var(--text-min), 0.75rem)/1.3 var(--font-ui);
 }
 
 .chat-live-status {

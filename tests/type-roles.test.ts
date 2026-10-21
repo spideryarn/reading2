@@ -41,12 +41,12 @@ import { describe, expect, it } from "vitest";
 import { readerSheets, stripComments } from "./helpers/stylesheets.js";
 
 const ROLES = {
-  item: "0.92rem",
-  quote: "0.88rem",
-  body: "0.85rem",
-  meta: "0.78rem",
-  count: "0.83rem",
-  label: "0.77rem",
+  item: "max(var(--text-min), 0.92rem)",
+  quote: "max(var(--text-min), 0.88rem)",
+  body: "max(var(--text-min), 0.85rem)",
+  meta: "max(var(--text-min), 0.78rem)",
+  count: "max(var(--text-min), 0.83rem)",
+  label: "max(var(--text-min), 0.77rem)",
 } as const;
 type Role = keyof typeof ROLES;
 
@@ -424,10 +424,11 @@ describe("the text-role tokens", () => {
     const defined = Object.fromEntries(
       Object.keys(ROLES).map((role) => [
         role,
-        roots.map((r) => r.style.getPropertyValue(`--type-${role}`).trim()).find((v) => v) ?? "",
+        // The CSSOM drops the space after a comma inside `max()`.
+        (roots.map((r) => r.style.getPropertyValue(`--type-${role}`).trim()).find((v) => v) ?? "").replace(/\s+/g, ""),
       ]),
     );
-    expect(defined).toEqual(ROLES);
+    expect(defined).toEqual(Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k, v.replace(/\s+/g, "")])));
   });
 });
 

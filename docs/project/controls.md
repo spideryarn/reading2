@@ -185,6 +185,21 @@ instead.
 
 ## The numbers
 
+**Under a finger, nothing to press is smaller than 40 × 40px** (Greg on an iPhone, 2026-10-20:
+*"the icons are too small"*; plan
+[261021c](../plans/261021c-minimum-text-and-touch-target-sizes-on-a-phone.md)). Either draw it
+that size under `@media (any-pointer: coarse)` (as Chat's icons and steppers, Summary's view
+buttons and the close cross are; the bottom dock keeps `pointer: coarse` for the reason in
+[touch.md](touch.md#how-big-a-thing-has-to-be-to-press-it)), or give it `.tap-target`'s invisible
+40px halo. Use the halo only where the neighbours leave room. Where two halos would overlap, as
+with Chat's Rename and Delete, draw the controls bigger or let the row grow. Size the thing that
+is pressed, not its row: a 40px `<li>` round a 20px link is still a 20px link. **The one
+exception is a passage id**: ids sit 3px apart in a chip row, so their halo is bounded to their
+own width and 1.3rem tall (`tap-target.css`), and they get the text floor instead. The rows below
+are the mouse sizes.
+Text has its own floor:
+[typography.md § The smallest text](typography.md#the-smallest-text).
+
 Not a scale — the page has no spacing scale and this does not invent one — but the controls on a
 list page now agree, and agreeing is the whole of it:
 

@@ -232,7 +232,7 @@ body {
   padding: 3rem;
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 0.8125rem; /* 13px */
+  font-size: max(var(--text-min), 0.8125rem); /* 13px */
   white-space: pre-wrap;
 }
 
@@ -352,7 +352,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   max-width: 48rem;
   margin: 0.3rem 0 0;
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
 }
 .origin-link,
 .origin-said {
@@ -416,7 +416,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 .facts {
   margin: 0.25rem 0 0;
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   color: var(--ink-faint);
 }
 /* `>`: only the line's own items. The author list inside the first one is
@@ -509,7 +509,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin: 0.35rem 0 0;
   max-width: 48rem;
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   color: var(--ink-faint);
 }
 
@@ -871,7 +871,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    visitor's footing is the one fact in this bar that outranks the controls.
    Nothing to do with `.mode-band`, which is the middle column. */
 .mode {
-  font-size: 0.68rem;
+  font-size: max(var(--text-min), 0.68rem);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);

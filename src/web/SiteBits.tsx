@@ -238,7 +238,7 @@ export function SiteNav({
               on the landing page and just before Home everywhere else. Still
               `sm:` only — below it the bar has no room, which is the budget the
               comment above measures. */}
-          <span className="tw:hidden tw:rounded-full tw:border tw:border-highlight/50 tw:px-2 tw:py-px tw:text-[0.6rem] tw:font-semibold tw:uppercase tw:tracking-widest tw:text-highlight-text tw:sm:inline">
+          <span className="tw:hidden tw:rounded-full tw:border tw:border-highlight/50 tw:px-2 tw:py-px tw:text-[length:max(var(--text-min),0.6rem)] tw:font-semibold tw:uppercase tw:tracking-widest tw:text-highlight-text tw:sm:inline">
             Beta
           </span>
           {/* **The one always-on link**, and it is whichever of Home/Features

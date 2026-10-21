@@ -578,7 +578,7 @@ export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
           <Columns3 size={12} aria-hidden="true" />
           Columns
           {hidden > 0 && (
-            <span className="tw:rounded-full tw:bg-highlight/20 tw:px-1.5 tw:text-[10px] tw:leading-4 tw:tabular-nums">
+            <span className="tw:rounded-full tw:bg-highlight/20 tw:px-1.5 tw:text-[length:max(var(--text-min),10px)] tw:leading-4 tw:tabular-nums">
               {hidden}
             </span>
           )}

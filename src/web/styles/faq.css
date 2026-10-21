@@ -64,7 +64,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 0.4rem;
   background: var(--surface-raised);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
 }
 .faq-jump:hover { border-color: var(--highlight); color: var(--highlight-ink); }
 

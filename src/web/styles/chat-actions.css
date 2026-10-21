@@ -63,7 +63,7 @@
   margin: 0 auto;
   padding: 0;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: max(var(--text-min), 0.75rem);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -117,7 +117,7 @@
   /* The section's title — words, so the UI face; it used to be the block id,
      in `--font-id`, which the id's own link already shows. */
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   font-weight: 600;
   color: var(--ink-faint);
   margin-bottom: 0.3rem;
@@ -180,7 +180,7 @@
   margin-left: 0.4rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   font-style: italic;
 }
 
@@ -228,7 +228,7 @@
   margin: 0.35rem 0 0;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
 }
 
 /* Outlined, never filled: Stop is not the primary action, and the transparent
@@ -268,6 +268,8 @@
 @media (any-pointer: coarse) {
   .chat-steps { gap: 0.25rem; margin: 0.15rem auto; }
   .chat-step { width: 2.5rem; height: 2.5rem; }
+  /* "Latest" was 26px tall beside them (plan 261021c). */
+  .chat-to-bottom { min-height: 40px; }
 }
 .chat-to-bottom {
   flex: none;

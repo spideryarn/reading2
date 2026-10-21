@@ -184,7 +184,7 @@ export function Section({
           (Greg, 2026-10-07; plan 261007h § F5a). */}
       <h2
         tabIndex={-1}
-        className={`tw:m-0 tw:mb-3 ${collapsible ? "tw:any-pointer-coarse:mb-[max(1rem,14px)] " : ""}tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint`}>
+        className={`tw:m-0 tw:mb-3 ${collapsible ? "tw:any-pointer-coarse:mb-[max(1rem,14px)] " : ""}tw:flex tw:items-center tw:gap-2 tw:text-[length:max(var(--text-min),0.68rem)] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint`}>
         {collapsible ? (
           /* The heading itself is the control, so the target is the whole line
              rather than a 12px chevron. `aria-expanded` on the button and

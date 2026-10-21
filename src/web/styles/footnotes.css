@@ -33,6 +33,25 @@
   /* The finger's target is bigger than the ink, without moving any line. */
   box-decoration-break: clone;
 }
+/* **Under a finger it was still 9 × 24** (plan 261021c, measured at 390), so a
+   finger gets `.tap-target`'s invisible halo, written out here because the
+   marker is the author's `<a>`, not one of our components. 40px tall like the
+   house floor; 28px wide rather than 40, because two markers can sit side by
+   side (`¹²`) and the wider halo would hand one's taps to the other. A marker
+   is one to three characters and never wraps, so its `::after` cannot span
+   lines (tap-target.css § what a caller owes it). */
+@media (any-pointer: coarse) {
+  .prose a[data-spya-note-ref] { position: relative; }
+  .prose a[data-spya-note-ref]::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 28px);
+    height: 40px;
+    translate: -50% -50%;
+  }
+}
 .prose a[data-spya-note-ref]:hover,
 .prose a[data-spya-note-ref]:focus-visible,
 /* Written by the hover card onto the words a finger has opened it against —
@@ -138,7 +157,7 @@ td.text.note-open {
   top: var(--block-pad);
   inset-inline-start: var(--text-pad-l);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -153,7 +172,7 @@ td.text.note-open {
   inset-inline-start: var(--text-pad-l);
   width: 2rem;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   font-weight: 600;
   line-height: 1.55;
   color: var(--ink-faint);
@@ -209,7 +228,7 @@ td.text.note-open {
 }
 .prose a[data-spya-note-back][data-came-from]::after {
   content: " back to your place";
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   margin-inline-start: 0.3em;
 }
 /* A finger has no hover and cannot aim at a glyph. 44px is Apple's number and
@@ -289,7 +308,7 @@ td.text.note-open {
   border: 1px solid var(--rule-strong);
   border-radius: 0.4rem;
   background: var(--surface-raised);
-  font-size: 0.72em;
+  font-size: max(var(--text-min), 0.72em);
 }
 .gloss-where .block-ref:hover { border-color: var(--highlight); color: var(--highlight-ink); }
 
@@ -313,7 +332,7 @@ td.text.note-open {
   margin: 0.35rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.35;
 }
 /* The (i) beside *Write a new list*: Referee's `.ref-rules` without a word. */

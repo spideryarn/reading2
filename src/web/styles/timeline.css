@@ -42,7 +42,7 @@
   margin: 0;
   padding: 0.3rem 0.7rem 0.45rem;
   color: var(--ink-faint);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   line-height: 1.4;
 }
 .tl-thin { border-bottom: 1px solid var(--rule); }
@@ -80,7 +80,7 @@
 .tl-blurb {
   margin: 0.15rem 0 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   line-height: 1.35;
 }
 

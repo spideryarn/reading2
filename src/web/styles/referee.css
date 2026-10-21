@@ -125,7 +125,7 @@
   gap: 0.3rem;
   margin: 0 0 0.35rem;
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -163,7 +163,7 @@
 .ref-scan-warn { color: var(--ink); }
 /* The cap notice and the forgeability sentence: true, and not the thing being
    read first. */
-.ref-scan-note, .ref-scan-blind { margin-top: 0.4rem; color: var(--ink-faint); font-size: 0.83rem; }
+.ref-scan-note, .ref-scan-blind { margin-top: 0.4rem; color: var(--ink-faint); font-size: max(var(--text-min), 0.83rem); }
 
 .ref-scan-list {
   margin: 0.45rem 0 0;
@@ -179,7 +179,7 @@
   gap: 0.1rem;
   padding: 0.35rem 0;
   border-top: 1px solid var(--rule);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   line-height: 1.45;
 }
 /* **Dimmed, never hidden.** The `ordinary` label is read off class names and is
@@ -197,7 +197,7 @@
    code points in mono so they can be searched for in the source. */
 .ref-scan-source {
   color: var(--ink-faint);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   overflow-wrap: anywhere;
 }
 .ref-scan-where, .ref-scan-detail { font-family: var(--font-mono); }
@@ -286,7 +286,7 @@
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   cursor: pointer;
 }
 .ref-notices-btn:hover { color: var(--ink); border-color: var(--rule); }
@@ -356,7 +356,7 @@
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   white-space: nowrap;
   vertical-align: baseline;
   cursor: pointer;
@@ -385,7 +385,7 @@
 .crit { padding: 0 0.35rem 0.5rem; }
 
 .crit-new { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.35rem 0; }
-.crit-label { font-size: 0.83rem; color: var(--ink-faint); }
+.crit-label { font-size: max(var(--text-min), 0.83rem); color: var(--ink-faint); }
 /* The poles' two inputs and the criterion box. There was a scale `<select>` in
    here until 2026-09-02, when the ramp became a property of the mode
    (`?refscale=`) rather than of a criterion — CriteriaPanel.tsx says why. */
@@ -405,21 +405,21 @@
    as hooks. `flex-start`, or the column it sits in would stretch the bar's
    outline to the band's width. */
 .crit-kinds { align-self: flex-start; }
-.crit-kind-note { margin: 0; font-size: 0.83rem; color: var(--ink-faint); }
+.crit-kind-note { margin: 0; font-size: max(var(--text-min), 0.83rem); color: var(--ink-faint); }
 
 /* The starters: two labelled groups, shown only once the referee has a
    criterion of their own (CriteriaPanel.tsx § `STARTER_GROUPS`); the wait line
    stands in their place until then. */
 .crit-starters { display: flex; flex-direction: column; gap: 0.35rem; }
 .crit-starter-group { min-width: 0; margin: 0; padding: 0; border: 0; }
-.crit-starter-heading { margin: 0 0 0.15rem; font-size: 0.81rem; color: var(--ink); }
+.crit-starter-heading { margin: 0 0 0.15rem; font-size: max(var(--text-min), 0.81rem); color: var(--ink); }
 .crit-starter-note,
-.crit-starters-wait { font-size: 0.81rem; color: var(--ink-faint); }
+.crit-starters-wait { font-size: max(var(--text-min), 0.81rem); color: var(--ink-faint); }
 .crit-starters-wait { margin: 0; }
 .crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }
 .crit-preset {
   font: inherit;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   color: var(--ink-faint);
   background: none;
   border: 1px dashed var(--rule);
@@ -440,7 +440,7 @@
 .crit-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--danger); }
 .crit-retry {
   font: inherit;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   background: none;
   border: none;
   color: var(--highlight-text);
@@ -459,7 +459,7 @@
   flex-wrap: wrap;
   gap: 0.15rem 0.5rem;
   margin: 0.25rem 0;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   color: var(--ink-faint);
 }
 .crit-key-lead { color: var(--ink-faint); }
@@ -506,7 +506,7 @@
 .crit-swatch.current { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .crit-swatch-auto {
   font: inherit;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   background: none;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -568,7 +568,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
   flex-wrap: wrap;
   gap: 0.3rem;
   margin: 0.15rem 0 0 1.45rem;
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   color: var(--ink-faint);
 }
 .crit-valence-swatch {
@@ -592,11 +592,11 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
    refuses, drawn instead of printed. */
 .crit-gap {
   margin: 0.15rem 0 0 1.45rem;
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.crit-disagree { margin: 0.1rem 0 0 1.45rem; font-size: 0.83rem; color: var(--ink-faint); }
+.crit-disagree { margin: 0.1rem 0 0 1.45rem; font-size: max(var(--text-min), 0.83rem); color: var(--ink-faint); }
 
 /* Two sub-lists and not one, with two class names rather than a shared name and
    a modifier — `Yours` in CriteriaPanel.tsx says why. They look identical on
@@ -607,12 +607,12 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 .crit-misses-head,
 .crit-unpaired-head {
   margin: 0 0 0.15rem;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   color: var(--ink-faint);
   border-top: 1px solid var(--rule);
   padding-top: 0.25rem;
 }
-.crit-unpaired-why { margin: 0 0 0.15rem; font-size: 0.79rem; color: var(--ink-faint); }
+.crit-unpaired-why { margin: 0 0 0.15rem; font-size: max(var(--text-min), 0.79rem); color: var(--ink-faint); }
 .crit-miss-list,
 .crit-unpaired-list { margin: 0; padding: 0; list-style: none; }
 .crit-miss,
@@ -621,13 +621,13 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
    the two lists read as one column rather than as two shapes. */
 .crit-yours {
   margin: 0.1rem 0 0 1.45rem;
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 .crit-why { margin: 0.1rem 0 0 1.45rem; font-size: var(--type-body); color: var(--ink-faint); }
-.crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.83rem; }
+.crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: max(var(--text-min), 0.83rem); }
 
 /* --- Promises, the second sub-mode (Claims until 2026-10-11). src/web/PromisesPanel.tsx.
 
@@ -649,7 +649,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 /* The panel's quiet notes about its own list: what was withheld, what the cap
    cut, the other text in quotes. (Linkage-never-adequacy wore this class above
    the button until 2026-10-03; it is behind `.ref-rules` now.) */
-.prm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.prm-what { margin: 0; font-size: max(var(--text-min), 0.84rem); line-height: 1.45; color: var(--ink-faint); }
 
 /* *Pull the paper's promises*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
    the class is a hook, and only where it sits is here. */
@@ -662,14 +662,14 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
   background: none;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   text-decoration: underline;
   cursor: pointer;
 }
 
 /* Both of these are quiet lines rather than warnings: one says the paper has
    moved since the run, the other says what the order means. Neither is a fault. */
-.prm-stale, .prm-order { margin: 0; font-size: 0.81rem; color: var(--ink-faint); }
+.prm-stale, .prm-order { margin: 0; font-size: max(var(--text-min), 0.81rem); color: var(--ink-faint); }
 /* The stale line is StaleNotice.tsx's markup since plan 261010a — ⚠, the
    words, and the × at the end of the line — and stays a quiet line. */
 .prm-stale p { display: flex; align-items: center; gap: 0.35rem; margin: 0; }
@@ -703,13 +703,13 @@ a.prm-jump:hover .prm-quote { text-decoration: underline; }
 a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .prm-quote { font-size: var(--type-quote); color: var(--ink); }
 
-.prm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }
+.prm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: max(var(--text-min), 0.81rem); color: var(--ink-faint); cursor: pointer; }
 .prm-tick input { accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
 
 /* **Not an error colour and not an error shape.** A claim the model found no
    passage for is an ordinary answer about the run, and dressing it as a warning
    is how it comes to be read as a finding about the paper. */
-.prm-none { margin: 0.2rem 0 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.prm-none { margin: 0.2rem 0 0; font-size: max(var(--text-min), 0.84rem); line-height: 1.45; color: var(--ink-faint); }
 
 .prm-passages { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
 .prm-passage { padding-left: 0.5rem; border-left: 2px solid var(--rule); }
@@ -752,12 +752,12 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
   gap: 0.35rem;
   margin: 0 0 0.2rem;
 }
-.mir-kind { font-size: 0.84rem; font-weight: 600; color: var(--ink); }
+.mir-kind { font-size: max(var(--text-min), 0.84rem); font-weight: 600; color: var(--ink); }
 .mir-evidence {
   padding: 0.05rem 0.3rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  font-size: 0.77rem;
+  font-size: max(var(--text-min), 0.77rem);
   color: var(--ink-faint);
   white-space: nowrap;
 }
@@ -796,11 +796,11 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
   margin: 0.15rem 0 0;
   padding-left: 0.5rem;
   border-left: 2px solid var(--rule);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   color: var(--ink-faint);
 }
 
-.mir-placement { margin: 0.15rem 0 0; font-size: 0.84rem; color: var(--ink-faint); }
+.mir-placement { margin: 0.15rem 0 0; font-size: max(var(--text-min), 0.84rem); color: var(--ink-faint); }
 .mir-placement-number { font-variant-numeric: tabular-nums; color: var(--ink); }
 
 .mir-note { margin: 0.25rem 0 0; font-size: 0.88rem; line-height: 1.45; color: var(--ink); }
@@ -809,7 +809,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
   margin: 0;
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -836,8 +836,8 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 
 /* What the sub-mode is, and whose question it answers — the thing an editor is
    likeliest to misread, since every other sub-mode is the referee's. */
-.cnd-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
-.cnd-quiet { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-what { margin: 0; font-size: max(var(--text-min), 0.84rem); line-height: 1.45; color: var(--ink-faint); }
+.cnd-quiet { margin: 0; font-size: max(var(--text-min), 0.84rem); line-height: 1.45; color: var(--ink-faint); }
 .cnd-error { margin: 0; font-size: 0.86rem; color: var(--danger); }
 
 /* **The one press that spends money**, and the line under it that says so.
@@ -848,7 +848,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
    the class is a hook, and only where it sits is here. */
 .cnd-start { display: flex; flex-direction: column; gap: 0.25rem; }
 .cnd-start-btn { width: 100%; }
-.cnd-start-note { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-start-note { margin: 0; font-size: max(var(--text-min), 0.81rem); line-height: 1.45; color: var(--ink-faint); }
 
 .cnd-list-box {
   display: flex;
@@ -865,7 +865,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
   justify-content: space-between;
   gap: 0.5rem;
   margin: 0;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   font-weight: 600;
   color: var(--ink);
 }
@@ -878,11 +878,11 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 .cnd-row { border-top: 1px solid var(--rule); padding: 0.4rem 0 0; }
 .cnd-name { margin: 0; font-size: var(--type-item); font-weight: 600; color: var(--ink); }
 /* The affiliation is the model's claim and reads as one. */
-.cnd-affil { font-weight: 400; font-size: 0.84rem; color: var(--ink-faint); }
+.cnd-affil { font-weight: 400; font-size: max(var(--text-min), 0.84rem); color: var(--ink-faint); }
 .cnd-requirement { margin: 0.15rem 0 0; font-size: 0.86rem; line-height: 1.45; color: var(--ink); }
 .cnd-why { margin: 0.1rem 0 0; font-size: var(--type-body); line-height: 1.45; color: var(--ink-faint); }
 .cnd-sources { margin: 0.2rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.1rem; }
-.cnd-sources li { font-size: 0.83rem; }
+.cnd-sources li { font-size: max(var(--text-min), 0.83rem); }
 .cnd-sources a { color: var(--ink); }
 /* The real host beside the model's label, exactly as chat's citation chips do
    it — the label is a search result's words, and this is where they lead. */
@@ -891,7 +891,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 /* What the rules threw away. Quiet, but never absent when there is something to
    say: a shortlist that silently shrank is the failure this whole panel is
    built against. */
-.cnd-dropped { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-dropped { margin: 0; font-size: max(var(--text-min), 0.81rem); line-height: 1.45; color: var(--ink-faint); }
 
 /* The three sentences that are printed whatever the model said — what was not
    checked, and what the list is skewed towards. Separated by a rule so they
@@ -900,7 +900,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
   margin: 0;
   padding-top: 0.3rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -919,7 +919,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
   border-radius: var(--radius);
   background: var(--surface-raised);
   color: var(--ink-faint);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   cursor: pointer;
 }
 .cnd-stop:hover { color: var(--ink); }
@@ -942,7 +942,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 
 .ref-notes { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.45rem 0.35rem 0.6rem; }
 .ref-notes-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.ref-notes-said { font-size: 0.84rem; color: var(--ink-faint); }
+.ref-notes-said { font-size: max(var(--text-min), 0.84rem); color: var(--ink-faint); }
 .ref-notes-note { margin: 0; font-size: 0.88rem; color: var(--ink-faint); }
 
 .ref-notes-heading { margin: 0; font-size: var(--type-label); font-weight: 600; color: var(--ink); }
@@ -966,7 +966,7 @@ a.prm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 .ref-notes-jump:hover .ref-notes-passage { text-decoration: underline; }
 .ref-notes-jump:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .ref-notes-passage { font-size: var(--type-quote); color: var(--ink-faint); overflow-wrap: anywhere; }
-.ref-notes-gone { margin: 0; font-size: 0.84rem; font-style: italic; color: var(--ink-faint); }
+.ref-notes-gone { margin: 0; font-size: max(var(--text-min), 0.84rem); font-style: italic; color: var(--ink-faint); }
 
 /* The reviewer's own words: the thing this panel is for, so at full ink. */
 .ref-notes-words { margin: 0.2rem 0 0; font-size: var(--type-item); line-height: 1.45; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -146,7 +146,7 @@
 .outln-num {
   grid-column: 1;
   color: var(--ink-faint);
-  font-size: 0.82em;
+  font-size: max(var(--text-min), 0.82em);
   font-variant-numeric: tabular-nums;
   /* The ceiling the `auto` track does not have. A number past this wraps and
      makes its own row taller — which the hidden copies measure too, so the fit

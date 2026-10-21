@@ -397,7 +397,7 @@ const WORDS_CLASS =
 
 /** The small tag beside an experimental mode's name. */
 const TAG_CLASS =
-  "tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[0.6875rem] tw:font-medium tw:text-ink-faint tw:no-underline";
+  "tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[length:max(var(--text-min),0.6875rem)] tw:font-medium tw:text-ink-faint tw:no-underline";
 
 /**
  * **The way back to the contents**, and which part of Help this page is in:

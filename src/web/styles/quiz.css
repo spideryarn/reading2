@@ -181,7 +181,7 @@
   gap: 0.3rem;
 }
 .quiz-mic-label {
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   color: var(--ink-faint);
 }
 
@@ -194,7 +194,7 @@
   background: transparent;
   padding: 0;
   font: inherit;
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   color: var(--ink-faint);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -230,7 +230,7 @@
   margin: 0.45rem 0 0;
 }
 .quiz-evidence-label {
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   color: var(--ink-faint);
 }
 
@@ -251,7 +251,7 @@
 }
 .quiz-look-again-head {
   margin: 0 0 0.3rem;
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   color: var(--ink-faint);
 }
 .quiz-look-again ul {
@@ -324,7 +324,7 @@
   white-space: normal;
   vertical-align: baseline;
 }
-.quiz-reply .cite-chips .block-ref { font-size: 0.74rem; }
+.quiz-reply .cite-chips .block-ref { font-size: max(var(--text-min), 0.74rem); }
 
 /* Status-only since plan 260929b: progress, Stop and failures stay pinned even
    though the idle redo button moved to Metadata. */
@@ -371,7 +371,7 @@ td.text .quiz-in-prose-q {
   border: 0;
   background: transparent;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   font-style: italic;
   font-weight: 400;
   line-height: 1.4;

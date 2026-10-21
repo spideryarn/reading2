@@ -412,7 +412,7 @@ function Band({
           band this narrow, and the detail is progress text rather than
           something the reader acts on, so it is the one that gives way. */}
       {current?.detail && (
-        <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
+        <span className="tw:w-full tw:font-mono tw:text-[length:max(var(--text-min),0.7rem)] tw:text-ink-faint">
           {current.detail}
         </span>
       )}

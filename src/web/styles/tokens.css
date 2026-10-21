@@ -458,13 +458,28 @@
      line does in its row, not by whose words it holds. A band line doing one of
      these jobs uses its token; anything else picks its own size.
      docs/project/typography.md § Text roles in a band says which is which;
-     tests/type-roles.test.ts holds the lines that use them. */
-  --type-item: 0.92rem;  /* a row's main line, the thing you scan down */
-  --type-quote: 0.88rem; /* verbatim source words under a row */
-  --type-body: 0.85rem;  /* a sentence under the row that explains it */
-  --type-meta: 0.78rem;  /* a small line: where, when, from whom */
-  --type-count: 0.83rem; /* a number standing for how many */
-  --type-label: 0.77rem; /* a group's small uppercase heading */
+     tests/type-roles.test.ts holds the lines that use them. Each is floored at
+     `--text-min` below, so on a touch screen none comes out under 13px. */
+  --type-item: max(var(--text-min), 0.92rem);  /* a row's main line, the thing you scan down */
+  --type-quote: max(var(--text-min), 0.88rem); /* verbatim source words under a row */
+  --type-body: max(var(--text-min), 0.85rem);  /* a sentence under the row that explains it */
+  --type-meta: max(var(--text-min), 0.78rem);  /* a small line: where, when, from whom */
+  --type-count: max(var(--text-min), 0.83rem); /* a number standing for how many */
+  --type-label: max(var(--text-min), 0.77rem); /* a group's small uppercase heading */
+
+  /* **The smallest text a touch screen gets** (plan 261021c; Greg on an iPhone,
+     2026-10-20: the investigate chat's sources were "too small … for an
+     iPhone"). Read as `font-size: max(var(--text-min), <the size>)`, so a size
+     already bigger is untouched, a reader's larger text size still wins, and
+     with a mouse it is 0px and nothing changes. Under `any-pointer: coarse`,
+     just below, it is 13px at the browser's own root and grows with a reader's
+     larger text size (0.8125rem), so a 0.58rem id grows too rather than sitting
+     at 13px through every setting (GPT Sol, plan review R2). The px half holds
+     at the supported 12px root. docs/project/typography.md § The smallest text. */
+  --text-min: 0px;
+}
+@media (any-pointer: coarse) {
+  :root { --text-min: max(13px, 0.8125rem); }
 }
 
 * { box-sizing: border-box; }
