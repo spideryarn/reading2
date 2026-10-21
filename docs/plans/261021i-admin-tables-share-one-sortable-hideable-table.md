@@ -214,3 +214,6 @@ code, but it is exactly the "different from /users" Greg reported, kept, with a 
   (P1) the unsortable usage header had lost the old muted colour (the browser pass saw it too); D3
   (P2) tests for refresh and tab identity, refusal ownership, cross-cell forms, `?gift=`, Created
   order, usage unsortable, and the default row's dress. Gates green after.
+- 2026-10-21: **Done.** Both stages on `dev`. Follow-ups queued as proposals for Greg: `qi-xznd63pe`
+  (TanStack Table v8 → v9) and `qi-pgy5fdce` (Sol C4, the eager-graph guard's list of lazy admin
+  roots). Note: [261021_1553](../user-feedback/261021_1553-admin-tables-sort-and-hide-columns-on-one-shared-table.md).
