@@ -4,9 +4,9 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 ## In this doc
 
-Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.tsx`](../../src/web/reader/Reader.tsx)), [`key-chord.ts`](../../src/web/key-chord.ts) (the ⌘ chords), [`TermJump.tsx`](../../src/web/TermJump.tsx) (G), [`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx) (`/`); tests [`keynav.test.ts`](../../tests/keynav.test.ts), [`keynav-horizontal.test.ts`](../../tests/keynav-horizontal.test.ts).
+Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.tsx`](../../src/web/reader/Reader.tsx)), [`key-chord.ts`](../../src/web/key-chord.ts) (the ⌘ chords, and `isPlainKey`, the guard the one-key shortcuts share), [`TermJump.tsx`](../../src/web/TermJump.tsx) (G), [`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx) (`/`), [`ReturnChip.tsx`](../../src/web/ReturnChip.tsx) (Backspace); tests [`keynav.test.ts`](../../tests/keynav.test.ts), [`keynav-horizontal.test.ts`](../../tests/keynav-horizontal.test.ts).
 
-**Which sections are live.** Live: ← / → in Skim, Quiz, Quotes, Search and Structure; the five rules; the chords (⌘-K, ⌘-Enter, ⌘⌥T); G; `/`; Tab. History (the gist columns went on 2026-09-29): the pointer's stride and aim, `L1 / L2`.
+**Which sections are live.** Live: ← / → in Skim, Quiz, Quotes, Search and Structure; the five rules; the chords (⌘-K, ⌘-Enter, ⌘⌥T); G; `/`; Backspace on the way-back chip; Tab. History (the gist columns went on 2026-09-29): the pointer's stride and aim, `L1 / L2`.
 
 - [§ Why the pointer, and not a mode](#why-the-pointer-and-not-a-mode) — the stride-by-pointer design (history)
 - [§ What each zone means](#what-each-zone-means) — pointer zones (history)
@@ -21,6 +21,7 @@ Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.t
 - [§ The one chord that is not an arrow](#the-one-chord-that-is-not-an-arrow) — ⌘-K, ⌘-Enter (Metadata), ⌘⌥T (fold all), Enter in a text box
 - [§ G, the one letter](#g-the-one-letter) — jump to a term in the paragraph
 - [§ Quick search: the slash key](#quick-search-the-slash-key) — `/`
+- [§ Backspace: the way back](#backspace-the-way-back) — presses the *back to ⟨section⟩* chip while it shows
 - [§ What we gave up](#what-we-gave-up) — what the arrows cost the browser
 - [§ This constrains which components we may use](#this-constrains-which-components-we-may-use) — keys a widget must not swallow
 - [§ Tab, and the surfaces it walks through](#tab-and-the-surfaces-it-walks-through) — "not trapped", three ways
@@ -774,6 +775,51 @@ over an open `<dialog>`, nothing once another handler has `preventDefault`ed, no
 but **Shift is allowed**, because some keyboard layouts need it to type `/` at all. It
 `preventDefault`s, so the `/` is not typed into the box it focuses. It exists only on an owner's
 reading view, where the box does. *`tests/dock-quick-search.test.tsx`.*
+
+## Backspace: the way back
+
+**Backspace presses the *↩ back to ⟨section⟩* chip, while the chip is on screen** — the same press
+as a click: the position goes back, the modes stay. A reader asked for it (spya-yjnpjg) and Greg
+chose it on 2026-10-20:
+
+> A. And use your judgement
+>
+> — Greg, 2026-10-20 (spya-dzfvs2, answering q-f8yb5s)
+
+The code is `isWayBackKey` in [`ReturnChip.tsx`](../../src/web/ReturnChip.tsx), listening only in
+the chip's visible half, so with no chip there is no listener and the key is the browser's. The
+chip shows a faint ⌫ (not on a coarse pointer) and carries `aria-keyshortcuts="Backspace"`. The
+plan, the browser survey and Sol's reviews are
+[261020u](../plans/261020u-backspace-takes-the-way-back.md); *`tests/return-chip.test.tsx` §
+Backspace presses the chip.*
+
+**The guards are G's** (`isPlainKey`): no modifier, Shift included; no auto-repeat; no IME
+composition; nothing while typing; nothing once another handler has `preventDefault`ed; nothing over
+an open `<dialog>`. **Then two of its own, one looser than G's and one stricter:**
+
+- **A focused plain control does not stop it.** G refuses focus on anything but its own controls,
+  because a control may give a letter a meaning. Backspace means nothing to a button, a link or a
+  tree, and Enter on a section in Structure leaves focus on Structure's `role="tree"` — where the
+  reporter was (a click leaves it on the page, measured in Chrome). Focus on the chip's × still
+  presses the return, never the ×. It does yield to a focused listbox, combobox, menu, menubar,
+  grid, slider, spinbutton, textbox or searchbox, which may use the key itself.
+- **Dialog markup inside the article does not count.** A sanitised article can carry
+  `<dialog open>` or `role="dialog"`, so both checks ask only about the app's own surfaces
+  (`isAppSurfaceOpen` in key-chord.ts) — and G and `/` ask the same way since this change.
+- **Nothing while any `role="dialog"` is on the page** — Chat, a comment, Annotate, the Dock's
+  drawer, a popover, a prose hover card — whether focus is in it or has fallen back behind it.
+
+**Only the section chip.** On a phone, after the first press the *back to ⟨mode⟩* pill
+(`BandBackChip`) takes the chip's place, and Backspace does not press that: a hardware keyboard on
+a phone is rare, and one key keeps one meaning.
+
+**What it costs.** A reader who thinks they are typing, after focus has quietly left the box, moves
+the article instead of deleting a letter; the browser's Back undoes it. Chrome (since 52) and
+Firefox (since 87) give Backspace no default outside a text box. **Safari on a Mac is unmeasured**:
+Safari 12 turned Backspace-as-Back off by default, though WebKit's engine default is still on.
+While the chip shows it does not matter, because the handler `preventDefault`s; once it has gone,
+the key is whatever Safari makes it. JAWS takes Backspace as "back a page" before the page hears it,
+which is harmless here.
 
 ## What we gave up
 

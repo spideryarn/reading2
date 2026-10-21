@@ -82,6 +82,7 @@ carrying R8. A qualification beside an id wins over those words.
 | [R28](#r28) | An uploaded file can say it was saved from any address, and a shared article then shows "Saved from" that site | Low | accepted | none | — |
 | [R29](#r29) | A hostile article can have the guide write what it holds, About you included, into a web address it then opens | Medium | accepted | none | — |
 | [R30](#r30) | A hostile article can have the guide start one mode's generation, without a press, once a conversation | Low | accepted | none | — |
+| [R31](#r31) | Anybody holding a private link can inflate its signed-out open count, and make one cheap write per request | Low | proposed | throttled in SQL; no request limit | a Vercel firewall rule: ~15 min of Greg's |
 
 ## Accepted
 
@@ -458,6 +459,23 @@ scratchpad and up for two days. It was reachable from the tailnet; from the inte
 cloud firewall were wrong. This review did not re-contact the box, so it does not claim the listener
 is still present. **Fix:** stop it if still present, and have the box's tidy-up report or reap
 listeners started from a scratchpad. Five minutes.
+
+### R31
+
+**Anybody holding a private link can inflate its signed-out open count.** Since 2026-10-21
+(Greg's 2C, reply `spya-xug3kf` to [q-agbc89](../user-feedback/questions/q-agbc89.md); plan
+[261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md) § 4) the public
+namespace has one write, `POST /api/public/private-link-opened/:slug?key=`, so that a signed-out
+open can be counted at all. Anybody with the link can call it in a loop. Low: it needs the key; it
+writes one integer and a time on one row per article, and returns nothing; the upsert adds at most
+one per article per two seconds and saturates at `integer`'s ceiling rather than failing
+(`src/store/private-link-signed-out-opens.ts`), so the number can be pushed up by at most ~43,000 a
+day; and only the administrator ever sees it, labelled *roughly*. What it does not bound: each
+request is still one indexed write, comparable to the reads every public route already lets a
+key-holder repeat, and there is no per-address request limit in this app to reuse. GPT Sol's F2
+on the plan asked for one. **Fix, if wanted:** a Vercel firewall rate-limit rule on that one path,
+which is infrastructure an agent here may not change. About fifteen minutes of Greg's. Decision:
+**proposed**, not yet seen by Greg.
 
 ## From security.md's known gaps
 

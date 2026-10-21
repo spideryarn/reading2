@@ -50,6 +50,9 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
   citation_index_lookups: { column: "fetched_at" },
   ingest_events: { column: "reserved_at" },
   link_previews: { column: "fetched_at" },
+  /* Plan 261021d: one row per article (and account), first and last open. */
+  private_link_openers: { column: "first_opened_at" },
+  private_link_signed_out_opens: { column: "first_opened_at" },
   queue_state: { column: "updated_at" },
   rate_limit_events: { column: "started_at" },
   reader_arrivals: { column: "first_seen_at" },

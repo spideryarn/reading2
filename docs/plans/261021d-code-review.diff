@@ -1,0 +1,2830 @@
+diff --git a/docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md
+index 4e8a83a80..d44f7e9b2 100644
+--- a/docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md
++++ b/docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md
+@@ -65,7 +65,7 @@ and the section below it is the draft as reviewed, kept for the reasoning.
+ Built: `src/web/Ownership.tsx` (`Ownership`, `AdminOwnerLine`), its first line in the owner's
+ *Access & sharing* card (`Metadata.tsx`), an *Access* section on `PublicMetadataPage`, the strings
+ in `src/messages.ts` § Sharing a document, a line in the Help's sharing page, and
+-[admin.md § Whose article it is](../project/admin.md#whose-article-it-is-on-a-visitors-details-page).
++[admin.md § Whose article it is](../project/admin.md#whose-article-it-is-on-its-details-page).
+ Tests: `tests/article-ownership.test.tsx`.
+ 
+ ## The draft as reviewed (simplest version)
+diff --git a/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-prompt.md b/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-prompt.md
+new file mode 100644
+index 000000000..145a965b4
+--- /dev/null
++++ b/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-prompt.md
+@@ -0,0 +1,19 @@
++# Plan review: 261021d
++
++You are reviewing a plan before it is built, read-only. The repo is Spideryarn (TypeScript, Postgres via Drizzle). Read:
++
++1. docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md — the plan under review.
++2. docs/user-feedback/questions/q-agbc89.md — the question Greg answered; his reply is quoted at the top of the plan. His reply is the authority for exactly options 1B and 2C and nothing wider.
++3. docs/project/security-map.md (the defences table, § "a second way in, which is a key", the public namespace), docs/project/admin.md (§ What it deliberately does not show, § Whose article it is), docs/project/privacy.md § A private link.
++4. The code: src/public/routes.ts, src/public/route-names.ts, src/store/public-access.ts, src/store/link-shared-slug.ts, src/store/public-slug.ts, src/store/owned-slug.ts, src/web/Ownership.tsx, src/web/PublicPages.tsx (PublicMetadataPage), src/web/article/ArticlePage.tsx (OwnedArticle's record-open, VisitorArticle), src/web/public-api.ts, src/web/lib/api.ts (apiFetch), the `/api/admin/articles` handler in src/routes.ts, tests/owner-isolation.test.ts, tests/public-imports.test.ts, tests/public-dispatch.test.ts, tests/visitor-gaps.test.ts.
++
++Look hardest at:
++- Whether anything here loosens publicSlug, linkSharedSlug, publicAccessWhere or the public DTO for a non-admin, or lets a non-admin learn anything new (an oracle on slug/key, an owner, a count).
++- The admin route's `ownedSlug OR publicAccessWhere(slug, accessFor(key))` lookup: is it exactly "articles the administrator can already read"? Any way to reach someone else's private article without its key?
++- The new POST in the public namespace (§ 4): is option B the right call over A, or is there a better third way that gets "a count of signed-out opens" without a stranger-reachable write? Is the handler shape (no req, 204, one counter) safe? Abuse bounds.
++- The signed-in POST carrying ?key= through apiFetch: does that break the rule that the key never travels in an owner's request, or put the key somewhere it should not be (logs, Sentry, offline store)?
++- The client trigger: once per slug per mount, signed-in vs signed-out vs unconfirmed — any case that records the wrong account (session switching mid-flight), or records the owner?
++- Privacy page wording, and whether anything else in the repo claims nobody records opens.
++- Simpler designs I missed.
++
++Write findings as a numbered list, each with severity (P0 blocks, P1 should change, P2 nice), the file/section, the concrete failure, and the fix. End with a one-line verdict. Do not edit any file.
+diff --git a/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-sol.md b/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-sol.md
+new file mode 100644
+index 000000000..8c6314820
+--- /dev/null
++++ b/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-sol.md
+@@ -0,0 +1,17 @@
++1. **P1 — `docs/plans/261021d…` §4 / `src/store/private-link-opens.ts`: the anonymous import graph would gain authority to write account identities.** The plan puts both the signed-out counter and the signed-in `(article_id, reader_id)` writer in the file imported by `src/public/routes.ts`. Thus the public graph reaches a function accepting an arbitrary reader id and the `private_link_openers` table, despite the current handler not calling that function. This weakens the structural defence in `tests/public-imports.test.ts`. Split it into an anonymous leaf that imports only `articles` and `private_link_signed_out_opens`, and a separate authenticated writer outside the public graph. Give the signed-out table a per-file `ALLOWED_IN` exception; never allow `private_link_openers` in the public graph.
++
++2. **P1 — §4 “Abuse”: one row is not a meaningful abuse bound.** Option B is preferable to A—there is no honest signed-out count without some anonymous write, and counting in GET would count fetches rather than page opens. But every POST still takes a write lock on one hot row, produces WAL, and increments an `integer`; a link holder or cross-origin form can loop it indefinitely. The database work, count corruption, and eventual integer overflow are unbounded even though row cardinality is one. Add a deployment-layer request ceiling for this exact route, use a non-overflowing/saturating counter, and label the result as an unverified approximate count. If no rate bound is accepted, record that explicitly as a security risk rather than calling it bounded. The no-`req`, no-body, uniform-204 handler is otherwise the right privacy shape.
++
++3. **P1 — §6–7 omit the reader-facing Help claim and its generated copy.** [`src/web/help/pages/sharing.md`](/var/tmp/spideryarn-worktrees/fbcf30ac-private-link-owner-opens/src/web/help/pages/sharing.md:24) says, “We cannot tell you who has opened it.” After this change Spideryarn can identify signed-in openers, although ordinary owners still cannot see them. Rewrite this plainly—e.g. that signed-in accounts are recorded for the administrator, signed-out opens are counted, and owners cannot see either—and regenerate [`src/help-corpus.generated.json`](/var/tmp/spideryarn-worktrees/fbcf30ac-private-link-owner-opens/src/help-corpus.generated.json). Otherwise Help and its chatbot preserve the old privacy promise.
++
++4. **P2 — §5 / admin response DTO: the client cannot implement “is or has been link-shared.”** The proposed response contains owner and opens but no indication that a private link currently exists or existed. Empty opener rows cannot distinguish “never had a link,” “active link with no opens,” and “old link with no opens”; this especially affects a public article, whose `sharedBy` remains `"public"`. Either return a safe `hasPrivateLinkHistory` boolean derived from `article_share_link_events`—never the token—or simplify the UI to show a neutral “No private-link opens have been recorded” line on every administrator-only article view.
++
++5. **P2 — §3 / [`src/web/public-api.ts`](/var/tmp/spideryarn-worktrees/fbcf30ac-private-link-owner-opens/src/web/public-api.ts): preserve the fixed-method client boundary.** `publicFetch` deliberately accepts only a path and signal so callers cannot add methods, credentials, or headers. Do not widen it to `RequestInit` to support this POST. Add a dedicated helper whose implementation hardcodes `POST`, `credentials: "omit"`, no body, and no headers. Preserve the existing network test proving an owner opening their own `?key=` address sends no request containing the key. The authenticated visitor POST through `apiFetch` is otherwise safe: its POST is not offline-cached, browser diagnostics strip queries, server logs use the query-free path, Sentry drops request URLs, and `madeFor: readerId` prevents account-switch misattribution.
++
++6. **P2 — §2 store predicate: use the exact private-link predicate for writes.** `publicAccessWhere(link) AND visibility = 'private'` is currently equivalent to “this private link key matches,” but it expresses the broader “public or key” policy and then cancels its public arm. After rejecting a missing key, use `linkSharedSlug(slug, key)` plus `visibility = 'private'` directly. This makes the write remain exactly about private-link access if `publicAccessWhere` later gains another ownerless access mode.
++
++7. **P2 — §7 / `src/store/pg-admin.ts` `activitySources`: state the deliberate exclusion.** That function currently documents itself as every timestamp showing account activity. The new signed-in opener table creates such timestamps, but adding them to Active days would be a further use beyond Greg’s exact 2C authorization. Record that private-link opener rows are deliberately excluded from Active days and narrow the “every timestamp” claim; treat counting them there as a separate decision.
++
++No route or DTO in the proposed core design lets a non-admin read an owner, opener, or count, and `ownedSlug OR publicAccessWhere(slug, accessFor(key))` admits exactly the administrator’s own, public, or correctly keyed article.
++
++**Verdict: Not ready—fix the public capability split, anonymous-write abuse bound, and stale Help privacy claim before building.**
+\ No newline at end of file
+diff --git a/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md b/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md
+new file mode 100644
+index 000000000..fc3695ab1
+--- /dev/null
++++ b/docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md
+@@ -0,0 +1,281 @@
++# The administrator sees a private link's owner, and who opened it
++
++The deferred half of report `spya-cf30ac` (#622, `SPIDERYARN-READING2-KF`), from Greg (admin).
++Question [q-agbc89](../user-feedback/questions/q-agbc89.md), queue item `qi-pf9h5nps`. The built
++half is [261020j](261020j-say-who-owns-an-article-on-its-details-page.md), which this extends.
++
++Greg's reply `spya-xug3kf`, 2026-10-20 21:41 UTC:
++
++> As an admin, I want to be able to see anything. Because after all, I've got access to the
++> database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
++> which users open which articles.
++
++So he chose **1B** (on an article read through a private link, the administrator sees whose it
++is) and **2C** (record the signed-in accounts that open a private link, plus a count of signed-out
++opens). His reply is the authority for exactly those two, and nothing wider: no key-less lookup of
++somebody else's private article, no owner (non-admin) view of who opened, no record of public
++reads.
++
++## After GPT Sol's plan review
++
++[The review](261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-sol.md)
++found no way for a non-admin to read an owner, an opener or a count, and confirmed the admin
++lookup admits exactly the administrator's own, public, or correctly keyed article. All seven
++findings taken; the design below is the draft as reviewed, and these override it:
++
++- **F1 (P1): two writers, not one file.** The public graph gets a leaf that can write only the
++  signed-out count: `src/store/private-link-signed-out-opens.ts`, importing the schema and
++  `public-access.ts`. The signed-in writer, which takes a reader id, is
++  `src/store/pg-private-link-openers.ts`, outside the public graph, beside the admin read.
++  `tests/public-imports.test.ts` allows the one table and forbids `private_link_openers`.
++- **F2 (P1): the anonymous write is bounded, and called approximate.** The increment saturates
++  (`least(opens + 1, 2147483647)`) and is throttled in the upsert itself: at most one per article
++  per two seconds (`on conflict … do update … where last_opened_at < now() - interval '2
++  seconds'`), so a loop can raise it by at most ~43,000 a day and two genuine signed-out opens in
++  the same two seconds count once. Each request is still one indexed write, comparable to the
++  reads every public route already lets a key-holder repeat; there is no per-IP limiter in this
++  app to reuse, and a Vercel firewall rule is infra this session may not touch. Entered as
++  [R31](../project/security-risks.md#r31), *known*, for Greg to accept or ask for the rule. The
++  admin line says *about N signed-out opens*.
++- **F3 (P1): the Help page.** `src/web/help/pages/sharing.md` says *"We cannot tell you who has
++  opened it"*; rewritten (owners still cannot; the administrator can), and the Help corpus
++  regenerated.
++- **F4: the client cannot know "has been link-shared".** The route returns `privateLink` (a link
++  is on now: `share_token_at is not null`, the boolean `/api/admin/articles` already carries), and
++  the openers line is drawn when a link is on or any open is recorded.
++- **F5: a dedicated client helper.** `publicFetch` stays path-and-signal only; a new
++  `notePrivateLinkOpened(slug, key)` in `public-api.ts` hardcodes `POST`, `credentials: "omit"`,
++  no body, no headers, after the same namespace guard.
++- **F6: the exact predicate.** `public-access.ts` gains `privateLinkWhere(slug, key)` —
++  `linkSharedSlug(slug, key) and visibility = 'private'` — rather than `publicAccessWhere` with
++  its public arm cancelled. In that file because it is the one file allowed to import
++  `link-shared-slug.ts` (`tests/owner-isolation.test.ts`), and it is still not imported by the
++  listing.
++- **F7: Active days.** `activitySources` (`src/store/pg-admin.ts`) does not count opener rows;
++  its comment says so. Counting them is a separate decision.
++
++## What there is today
++
++- A visitor's details page (`PublicPages.tsx` § `PublicMetadataPage`) has an *Access* section.
++  For the administrator, `AdminOwnerLine` (`src/web/Ownership.tsx`) reads `GET /api/admin/articles`
++  and matches by slug; that list carries a slug only for the administrator's own and public
++  articles, so a private-link article cannot match, and the line says its owner is not shown.
++- Nothing records an open of a private link. The visitor's article is read through
++  `/api/public/…?key=`, which carries no credentials by design, and the public namespace refuses
++  every method but GET and HEAD (`src/public/routes.ts` § `requireReadMethod`).
++- The privacy page says *"We cannot tell you who has read it"*, and privacy.md § A private link
++  says *"We record nothing about who opens one."*
++
++## The design
++
++### 1. One admin route for both questions
++
++```
++GET /api/admin/articles/:slug/access[?key=<key>]
++  → 200 { ownerId, ownerEmail: string | null, emailsAvailable: boolean,
++          opens: { accounts: [{ readerId, email | null, opens, firstOpenedAt, lastOpenedAt }],
++                   signedOut: { opens, firstOpenedAt, lastOpenedAt } | null } }
++  → 404 for anything else
++```
++
++Under `/api/admin/`, so the namespace gate (`src/routes.ts`, one account id) refuses everybody
++else before it runs. **It answers only for an article the administrator can already read**:
++
++```
++where ownedSlug(slug)  OR  publicAccessWhere(slug, accessFor(parseShareKey(key)))
++```
++
++— their own (for the owner's card, below), or one a visitor holding this request's key could
++read: public, or private with the right key. A private article named without its key is the
++ordinary 404, so the route cannot be used to learn whose a slug is without the link. That is 1B
++as asked: *on an article you are reading through somebody's private link*. Both predicates are the
++existing exported ones; no new `eq(articles.slug, …)`, no change to `publicSlug`,
++`linkSharedSlug`, `publicAccessWhere` or the public DTO. `share_token` is never selected.
++
++The owner's address comes from the Auth service by the same `listAccounts` call
++`/api/admin/articles` makes, and the openers' addresses from the same listing, joined in memory;
++a failed listing costs the addresses, not the answer (`emailsAvailable: false`), as there.
++`Cache-Control: private, no-store`.
++
++**`AdminOwnerLine` moves to this route**, for public articles as well as private links, and stops
++reading the whole list. One way to ask whose an article is, not two.
++
++### 2. Recording who opens a private link
++
++Two tables, each saying one thing:
++
++| `private_link_openers` | |
++|---|---|
++| `article_id` | `uuid not null` → `articles(id)` on delete cascade |
++| `reader_id` | `uuid not null` → `auth.users(id)` on delete cascade (by hand, as every owner key) |
++| `opens` | `integer not null default 1` |
++| `first_opened_at`, `last_opened_at` | `timestamptz not null default now()` |
++| PK | `(article_id, reader_id)` |
++
++| `private_link_signed_out_opens` | |
++|---|---|
++| `article_id` | `uuid` PK → `articles(id)` on delete cascade |
++| `opens` | `integer not null default 1` |
++| `first_opened_at`, `last_opened_at` | `timestamptz not null default now()` |
++
++Both written by one upsert (`insert … select id from articles where … on conflict do update set
++opens = opens + 1, last_opened_at = now()`), so there is no read-then-write and two tabs at once
++make two increments on one row. The `where` is **`publicAccessWhere(slug, {kind:"link", key})
++and visibility = 'private'`** — exactly *private, and this key matches*. A public article read
++with a key is a public read and is not recorded; a wrong key, an unknown slug and a link turned
++off write nothing. The signed-in arm also requires `owner_id <> reader` (an owner is never shown
++the visitor page, but the server does not rely on that).
++
++*Why not one table with a nullable `reader_id`?* A primary key cannot hold a null, so it would
++need `UNIQUE NULLS NOT DISTINCT` and a reader of the table would have to know that a null means
++"everybody signed out". Two tables say it in their names.
++
++*Why a counter, not a row per open?* Greg asked which users open which articles, and when
++(CLAUDE.md: store when it happened). First and last open per account answers that; a row per
++open grows with every reload, and for the signed-out arm it would be a table anybody with the
++link can grow without bound. The counter is bounded at one row per article.
++
++**Not reset when the owner makes a new key** — the record is about the article, and it cascades
++with it. **Not retroactive** — it starts empty on the day it ships.
++
++### 3. Who writes it: one call per visitor page, from the page
++
++Following `recordOpen` (`ArticlePage.tsx` § `OwnedArticle`): **from the page, once per slug per
++mount** (a ref, because StrictMode runs effects twice), not from inside a GET — a GET that writes
++is one a prefetch, retry or unfurler's HEAD inflates. It lives in `VisitorArticle`, so it runs on
++both views and only for a visitor, and only when `sharedBy === "link"` and the address has a key:
++
++- **Signed in, session confirmed** (`readerId` set, not `sessionUnconfirmed`):
++  `POST /api/private-link-opens/:slug?key=` through `apiFetch(…, readerId)`, behind `requireUser`.
++  Records the account.
++- **Signed out** (`readerId === null`): `POST /api/public/private-link-opened/:slug?key=`,
++  through the same credential-less `fetch` the visitor's other public requests use
++  (`src/web/public-api.ts`). Bumps the count.
++- **Session unconfirmed**: nothing. It may be the owner's own session.
++
++Both answer **204 whatever happened**, so neither tells a caller more than the article GET it has
++just made already did.
++
++### 4. The one change to the closed room: a single POST in `/api/public/`
++
++The signed-out count is the part of 2C that cannot be built without a write a stranger can reach:
++the public namespace cannot see who is asking, and an authenticated route cannot be called by
++somebody signed out. Two ways to do it:
++
++- **A. Count inside the public article GET.** Keeps *public routes are GET and HEAD*, breaks
++  *every GET is a pure read*. It would count every payload fetch — signed-in visitors' too, since
++  that request carries no credentials — plus HEADs, retries and re-reads after a session event. It
++  is option 2B (loads, not opens) wearing 2C's name.
++- **B. One POST route, its own branch** — **chosen.** `servePublicApi` gets one write route
++  matched before the read loop, with its own method check (POST only; `Allow: POST`), that reads
++  no body and no header (the handler still has no `req`), writes one counter, and answers 204 with
++  no body. `requireReadMethod` keeps guarding every read route; *"every public route refuses every
++  non-read method"* becomes *"every read route; and one write route, which reads nothing back"*,
++  and `tests/public-dispatch.test.ts` sweeps both.
++
++The write's code lives in its own store file, `src/store/private-link-opens.ts`, importing only
++the schema and `public-access.ts`, so the public import graph gains one leaf with no owner in it
++(`tests/public-imports.test.ts`). The signed-in write lives in the same file with the reader id
++as an argument (never `currentOwnerId()`); the admin read, which needs `ownedSlug`, is in
++`src/store/pg-private-link-opens-admin.ts`, outside the public graph.
++
++Abuse: anybody holding a link can inflate its signed-out count by calling the POST in a loop. It
++grows one integer on a row that already exists; nothing is returned; only the administrator ever
++sees the number. Accepted, and said where the number is shown ("signed-out opens, counted per page
++load").
++
++The invariant *"a signed-out browser issues no POST whatever"* (`tests/visitor-gaps.test.ts`,
++`useArc.ts`) becomes *"…except this one, on a private link"*, and those tests stay as they are:
++they read public articles, where nothing is sent.
++
++### 5. Where the administrator sees it
++
++- **A visitor's details page, *Access* section** (`AdminOwnerLine`): *Admin: it belongs to
++  &lt;address&gt;.* — now for a private link too. Then, when the article is or has been
++  link-shared, the openers: *Opened through its private link by a@…, 3 times, last 21 Oct; b@…,
++  once, 20 Oct. 4 signed-out opens, last 21 Oct.* or *Nobody has opened it through its private
++  link since we started recording on 21 October 2026.*
++- **The owner's *Access & sharing* card**, only when the reader is the administrator: the same
++  openers line, under the private-link switch. That is Greg's own case (his starter articles sent
++  by voucher). A non-admin owner sees nothing new: whether owners should see who opened their link
++  is a separate product and privacy call nobody has made.
++
++Both through one component (`PrivateLinkOpens` in `Ownership.tsx`) reading the route once.
++
++### 6. Privacy
++
++The page (`src/web/PrivacyPage.tsx`, `LAST_UPDATED` → 21 October 2026):
++
++- *Who can see your shelf*, the private-link sentences: *"We cannot tell you who has read it"*
++  becomes: when somebody signed in opens it, we record their account and when (first and last
++  open, and how many times); when somebody signed out opens it, we count it. Only the
++  administrator can see that — not you, and not other readers. It goes when the article does, or
++  when the opener's account does.
++- *What we keep*: a bullet, **When you open somebody's private link while signed in** — the
++  account, the article, when, and how many times; seen only by the administrator; goes with your
++  account or the article.
++- The admin paragraph already says an administrator may read anything to fix a bug; this adds the
++  owner's address next to a private-link article, which privacy.md records.
++
++docs/project/privacy.md § A private link gains the two tables and drops *"We record nothing about
++who opens one"*.
++
++### 7. Docs that move with it
++
++- **admin.md § Whose article it is**: rewritten for the route; § What it deliberately does not
++  show gains the exception, with Greg's words, for an article the administrator can already read.
++- **security-map.md**: the defences table's `src/public/routes.ts` row (*read-methods only* → plus
++  one write route); the key's travel paragraph (two more requests carry it: the signed-in POST,
++  through `apiFetch`, and the signed-out one); the new store file as the one public writer.
++- **public-readable-sharing.md** if it claims nobody records opens.
++
++## Defence files touched (security-map's table), for the reviews
++
++| File | Change |
++|---|---|
++| `src/public/routes.ts` | **one POST route** before the read loop, its own method check; nothing else in the dispatcher changes |
++| `src/public/route-names.ts` | the route's name and pattern |
++| `src/routes.ts` | two authenticated routes: the signed-in POST, and the admin GET under the namespace gate. No change to the gate itself |
++| `src/web/lib/api.ts` | none expected; the signed-in POST goes through `apiFetch` bound to `readerId` |
++| `src/store/public-access.ts`, `link-shared-slug.ts`, `public-slug.ts`, `owned-slug.ts` | **unchanged**; called from two new files |
++| `src/public/dto.ts` | **unchanged**. Nothing is added to any public payload |
++| `src/share-key.ts` | unchanged; both new routes run `?key=` through `parseShareKey` |
++
++New: `src/store/private-link-opens.ts` (public-reachable writer), `src/store/pg-private-link-opens-admin.ts`
++(admin read), the migration.
++
++## Simpler options passed over
++
++- **Count inside the GET** (§ 4 A) — fewer parts, wrong number.
++- **Show the owner via the existing list** by adding private-link slugs to `/api/admin/articles` —
++  that would list every private article's slug and title to the administrator, key or none:
++  wider than 1B.
++- **Key-less admin lookup by slug** — Greg's *"I want to be able to see anything"* would allow it,
++  but q-agbc89 asked about articles read through a link, and the brief holds him to what he chose.
++- **A row per open** — § 2.
++
++## Tests (each watched red first)
++
++- Store (Postgres): signed-in open writes one row; a second open bumps `opens` and
++  `last_opened_at`; concurrent opens make one row and N increments; wrong key, no key, public
++  article, link turned off, owner's own id → nothing written; signed-out arm likewise.
++- Public dispatch: the POST answers 204 with no body; GET/HEAD on it 405; POST on every read route
++  still 405; the handler receives no `req`.
++- Admin route: non-admin 403; admin + own private article (no key) → 200; admin + someone else's
++  private article without key / wrong key → 404; with key → owner + openers; public → owner; the
++  answer has no `title`, `slug`, `shareToken` key.
++- Client: `VisitorArticle` on a link with a key sends exactly one POST (signed-in → authed path,
++  signed-out → public path, unconfirmed → none); a public article sends none; StrictMode once.
++- Guards: `public-imports` (the new leaf), `owner-isolation` (no new sanctioned lookup; the
++  ownerless enumeration counts the new write if it inventories writes),
++  `action-tables-have-created-at`, `store-export-covers-tables` (not exported: the opener's
++  identity is not the owner's to take away), `article-transfer` (`history`: kept with the article),
++  `db-schema`/drift, privacy-page.
++
++## Stages
++
++1. Schema, migration, `private-link-opens.ts`, both write routes, the client call; store and
++   dispatch tests.
++2. The admin route, `AdminOwnerLine` and `PrivateLinkOpens`, the owner's card line; route and
++   component tests.
++3. Privacy page and docs; GPT Sol code review; gates; push to `dev`; bookkeeping.
+diff --git a/docs/project/admin.md b/docs/project/admin.md
+index 2c585b888..35162d556 100644
+--- a/docs/project/admin.md
++++ b/docs/project/admin.md
+@@ -28,7 +28,7 @@ Built the same day. The plan, the options weighed and the review are in
+ - [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
+ - [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
+ - [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
+-- [§ Whose article it is](#whose-article-it-is-on-a-visitors-details-page) — the owner's address, for a public article only
++- [§ Whose article it is](#whose-article-it-is-on-its-details-page) — the owner's address and who opened its private link, for an article the admin can already read
+ - [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
+ - [§ The page itself](#the-page-itself) — the `/admin` index and its layout
+   - [Engagement](#engagement-active-days-reading-time-failed-imports) — active days, reading time, failed imports, and the columns that start hidden
+@@ -303,6 +303,24 @@ kind of rule that gets eroded a column at a time by people who never saw it.
+ Email addresses are shown, because a list of accounts that cannot name them is not a list of
+ accounts.
+ 
++### The third clause, added 2026-10-21: an article the administrator can already read
++
++On the details page of an article the administrator can already open — their own, a public one,
++or a private one whose link they hold — they are told **whose it is** and **who opened its private
++link**. Greg chose both when asked (question q-agbc89, options 1B and 2C):
++
++> As an admin, I want to be able to see anything. Because after all, I've got access to the
++> database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
++> which users open which articles.
++>
++> — Greg, 2026-10-20 (reply `spya-xug3kf`)
++
++His reply is the authority for exactly that, and nothing wider. The identifier is still not
++followed into an article: the route takes a slug and, for somebody else's private article, the
++link's key, and without the key it answers the same 404 as no article, so it cannot be used to
++learn whose a slug is. It returns addresses, counts and dates, never a title, slug or key.
++§ [Whose article it is](#whose-article-it-is-on-its-details-page) is the route.
++
+ ## The accounts come from the Auth service, not from a query
+ 
+ **This is the one part of the page that does not touch our database**, and the reason is worth
+@@ -636,17 +654,43 @@ that on 2026-10-04 for `/admin/costs`, which shows other accounts' articles by o
+ ([admin-costs.md](admin-costs.md)); this route, which takes a slug, still answers only for the
+ administrator's own ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
+ 
+-## Whose article it is, on a visitor's details page
+-
+-Since 2026-10-20 (`spya-cf30ac`), the administrator reading somebody else's **public** article sees
+-a line under *Access* on its details page: whose it is, by address. It is not a new route: the page
+-reads `GET /api/admin/articles` and finds the row by slug, and that list carries a slug only for the
+-administrator's own and public articles. So a **private-link** article cannot be matched, and the
+-line says its owner is not shown. Holding the key lets you read it; it does not tell you whose it
+-is, and changing that is a widening of § What it deliberately does not show, put to Greg as
+-question `q-agbc89`. Every reader also gets *You own this article* or *You don't own this
+-article* there, which needs nothing from these pages
+-([261020j](../plans/261020j-say-who-owns-an-article-on-its-details-page.md)).
++## Whose article it is, on its details page
++
++Since 2026-10-20 (`spya-cf30ac`, [261020j](../plans/261020j-say-who-owns-an-article-on-its-details-page.md))
++every reader gets *You own this article* or *You don't own this article* on the details page, which
++needs nothing from these pages. Since 2026-10-21
++([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)) the
++administrator also gets, from one route:
++
++```
++GET /api/admin/articles/:slug/access[?key=<the private link's key>]
++  → { ownerId, ownerEmail, emailsAvailable, mine, privateLink,
++      openers: [{ readerId, email, opens, firstOpenedAt, lastOpenedAt }],
++      signedOut: { opens, firstOpenedAt, lastOpenedAt } | null }
++```
++
++- **On a visitor's page** (somebody else's article): *Admin: it belongs to &lt;address&gt;*, for a
++  public article and, since this route, for one read through its private link, asked with the
++  address's key. Then who opened its private link, when a link is on or any open is recorded.
++- **On the owner's card**, when the owner is the administrator: who opened its private link. A
++  non-admin owner is not shown who opened their link; that is a separate decision nobody has made.
++
++**It answers only for an article the administrator can already read**: `ownedSlug` *or*
++`publicAccessWhere(slug, accessFor(key))`, the same predicate a visitor's read uses
++(`articleAccessForAdmin` in
++[`src/store/pg-private-link-openers.ts`](../../src/store/pg-private-link-openers.ts)). Somebody
++else's private article without its key, with a wrong one, or after its link is turned off, is the
++404 an unknown slug gets. Under the namespace gate, so every other account is a 403 with or
++without a key. `share_token` is never selected; `privateLink` is `share_token_at is not null`.
++Addresses come from the same Auth listing `/api/admin/articles` uses, and a failed listing costs
++the addresses, not the answer.
++
++Who opened it is recorded by the visitor's page: a signed-in visitor's account in
++`private_link_openers`, a signed-out visitor only as a count in `private_link_signed_out_opens`
++([privacy.md § Who opens one](privacy.md#who-opens-one-since-2026-10-21)). The signed-out count is
++approximate ([security-risks.md § R31](security-risks.md#r31)) and the page says *roughly*.
++Neither is counted in Active days. Tests: `tests/private-link-opens-pg.test.ts` (the route and both
++writes, against Postgres) and `tests/article-ownership.test.tsx` (the lines).
+ 
+ ## The plan and ingest columns
+ 
+diff --git a/docs/project/privacy.md b/docs/project/privacy.md
+index 041bd54f4..b92137ac6 100644
+--- a/docs/project/privacy.md
++++ b/docs/project/privacy.md
+@@ -29,7 +29,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
+ - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
+ - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
+ - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
+-- [§ A private link](#a-private-link) — the four places the page names it
++- [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
+ - [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
+ - [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
+ - [§ Where it lives](#where-it-lives-and-why-it-is-not-markdown) — why JSX, not markdown
+@@ -896,8 +896,9 @@ way somebody else reads a reader's article, so the page names it in four places:
+ 
+ - **Who can see your shelf** counts three exceptions where it counted two. It says anyone who has
+   the link can read the article without signing in and can pass it on, that it is not listed, that
+-  they get what a public reader gets, that we cannot tell who has read it, that the key is part of
+-  the address and so stays in a browser's history, and what turning it off can and cannot do.
++  they get what a public reader gets, that we do not tell the owner who has read it but do record
++  it for the administrator (since 2026-10-21, below), that the key is part of the address and so
++  stays in a browser's history, and what turning it off can and cannot do.
+ - **If you send us a bug report** says a report from such a page records the address without the
+   key.
+ - **Deleting things** says archiving leaves a private link working, as it leaves a public one, and
+@@ -908,7 +909,36 @@ way somebody else reads a reader's article, so the page names it in four places:
+ 
+ What we hold: the key itself, in `articles.share_token`, in the clear so the owner can copy the
+ link again; and `article_share_link_events`, who made or turned off a link and when, without the
+-key. We record nothing about who opens one.
++key.
++
++### Who opens one, since 2026-10-21
++
++Until 2026-10-21 we recorded nothing about who opens a private link. Greg chose to, when asked
++(question q-agbc89, option C):
++
++> As an admin, I want to be able to see anything. Because after all, I've got access to the
++> database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
++> which users open which articles.
++>
++> — Greg, 2026-10-20 (reply `spya-xug3kf`)
++
++So two tables
++([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)):
++
++- **`private_link_openers`** — one row per article and signed-in account that opened it through
++  its link: how many times, and the first and last time. Written by the visitor's page, once per
++  page, only when the key opens a private article that is not the reader's own. Cascades with the
++  account and with the article. Not in the article's export, and kept with the article on a
++  transfer.
++- **`private_link_signed_out_opens`** — one row per article: a count of signed-out opens and the
++  first and last time. Nobody is identified. Approximate, since anybody holding the link can add to
++  it (throttled to one per two seconds; [security-risks.md § R31](security-risks.md#r31)).
++
++**Only the administrator sees either**, on the article's details page; the owner is not shown who
++opened their link, and nothing else reads them (they are deliberately not in Active days). The
++page says so in *Who can see your shelf* and in *What we keep*, and Help's sharing page says the
++same. Nothing was backfilled. The administrator also sees whose an article read through a private
++link is, which is admin.md's business rather than this page's: it adds no stored data.
+ 
+ ## An administrator's AI assistant can look up accounts
+ 
+diff --git a/docs/project/security-map.md b/docs/project/security-map.md
+index c14f2ebe5..908bf2517 100644
+--- a/docs/project/security-map.md
++++ b/docs/project/security-map.md
+@@ -128,11 +128,12 @@ An agent about to edit one of these is editing a defence, not a helper.
+ | [`src/link-summary.ts`](../../src/link-summary.ts) | **the one place a stranger's page reaches a model.** Same scope as the row above — own the article, and the URL must be in it — plus the fencing: explicit untrusted-content markers, a system rule that the page is data and never a request, a reminder on the far side of it, every run of `===` rewritten so a page cannot close its own fence, and **no tools on the call**, so there is nothing for an injected instruction to reach. Its own limiter bucket, with a day and a global fuse, because this one spends money. [links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands) |
+ | [`src/injection-scan.ts`](../../src/injection-scan.ts) | hidden text in the raw source, found before the model reads it. It reports and decides nothing, and it does not read PDFs |
+ | [`src/referee-hidden-check.ts`](../../src/referee-hidden-check.ts) + [`src/scan-groups.ts`](../../src/scan-groups.ts) | **the one place the hidden fragments reach a model**, on the referee's press: capped and fenced where the prompt is built, the answer validated and bound to the rows sent, and drawn as a line under a row that nothing ordering, counting or marking the rows can read. Kept since 2026-10-09, owner-only, and redrawn on reload through the same validator and renderer. [security.md § the manuscript](security.md#hidden-instructions) |
+-| [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
++| [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only on every read route, no owner ever set. **One write route since 2026-10-21**, matched before the reads with its own POST-only check: `POST /api/public/private-link-opened/:slug?key=`, a signed-out open of a private link counted, 204 whatever happened (Greg's 2C, [261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md); risk [R31](security-risks.md#r31)). See below |
+ | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
+ | [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
+ | [`src/store/link-shared-slug.ts`](../../src/store/link-shared-slug.ts) | `linkSharedSlug()` — slug **and** `share_token = ?`, the lookup for somebody holding a private link's key. Its own leaf, never OR-ed into `publicSlug`. See below |
+-| [`src/store/public-access.ts`](../../src/store/public-access.ts) | `publicAccessWhere()` — the one place the two ownerless lookups meet: public, or *public or this key*. Every read in `public-reader.ts` takes it; the listing does not import it |
++| [`src/store/public-access.ts`](../../src/store/public-access.ts) | `publicAccessWhere()` — the one place the two ownerless lookups meet: public, or *public or this key*. Every read in `public-reader.ts` takes it; the listing does not import it. Since 2026-10-21 also `privateLinkWhere()`, *private and this key*, for recording an open, never for a read |
++| [`src/store/private-link-signed-out-opens.ts`](../../src/store/private-link-signed-out-opens.ts) | **the one table the public namespace writes**: a count of signed-out opens, by `privateLinkWhere`, throttled and saturating in the statement, nothing returned. The signed-in half, which records who, is [`pg-private-link-openers.ts`](../../src/store/pg-private-link-openers.ts) and is forbidden in the public graph (`tests/public-imports.test.ts`) |
+ | [`src/share-key.ts`](../../src/share-key.ts) | `parseShareKey()` — what counts as a key (22 base64url characters), so nothing else reaches a query or a request; `withoutShareKey()` — the key taken off an address before it is stored or sent |
+ | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
+ | [`src/store/public-topic-tree.ts`](../../src/store/public-topic-tree.ts) + [`src/public-library-topics.ts`](../../src/public-library-topics.ts) | the public shelf's topic pills: one row read by a fixed key, the site account's, and **withheld whole** while any article it names is no longer listed. Since 2026-10-09. See below |
+@@ -373,6 +374,14 @@ both still without a token or cookies. The owner's requests never carry it
+ `GET /api/article/:slug/share-link`, which answers `no-store` and is the one path under
+ `/api/article/` the browser's offline store never keeps (`lib/api.ts` § `NEVER_KEPT`).
+ 
++**And since 2026-10-21, in two requests that say the link was opened**
++([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)): a signed-out
++visitor's `POST /api/public/private-link-opened/:slug?key=`, credential-less like the reads, and a
++signed-in visitor's `POST /api/private-link-opens/:slug?key=`, through `apiFetch` bound to the
++account the page was resolved for. And the administrator's `GET /api/admin/articles/:slug/access?key=`,
++which answers for somebody else's private article only when named with its key. All three in the
++query string, for the reasons the reads are; none is an owner's request.
++
+ It is not in our request log, which drops the query string, nor in a Sentry event. It is not in a
+ feedback report: the browser takes it off the address and the server takes it off again
+ (`withoutShareKey`). It is not in the remembered-view store, which writes an allowlist of
+diff --git a/docs/project/security-risks.md b/docs/project/security-risks.md
+index 166c280aa..f169b75cb 100644
+--- a/docs/project/security-risks.md
++++ b/docs/project/security-risks.md
+@@ -82,6 +82,7 @@ carrying R8. A qualification beside an id wins over those words.
+ | [R28](#r28) | An uploaded file can say it was saved from any address, and a shared article then shows "Saved from" that site | Low | accepted | none | — |
+ | [R29](#r29) | A hostile article can have the guide write what it holds, About you included, into a web address it then opens | Medium | accepted | none | — |
+ | [R30](#r30) | A hostile article can have the guide start one mode's generation, without a press, once a conversation | Low | accepted | none | — |
++| [R31](#r31) | Anybody holding a private link can inflate its signed-out open count, and make one cheap write per request | Low | proposed | throttled in SQL; no request limit | a Vercel firewall rule: ~15 min of Greg's |
+ 
+ ## Accepted
+ 
+@@ -459,6 +460,23 @@ cloud firewall were wrong. This review did not re-contact the box, so it does no
+ is still present. **Fix:** stop it if still present, and have the box's tidy-up report or reap
+ listeners started from a scratchpad. Five minutes.
+ 
++### R31
++
++**Anybody holding a private link can inflate its signed-out open count.** Since 2026-10-21
++(Greg's 2C, reply `spya-xug3kf` to [q-agbc89](../user-feedback/questions/q-agbc89.md); plan
++[261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md) § 4) the public
++namespace has one write, `POST /api/public/private-link-opened/:slug?key=`, so that a signed-out
++open can be counted at all. Anybody with the link can call it in a loop. Low: it needs the key; it
++writes one integer and a time on one row per article, and returns nothing; the upsert adds at most
++one per article per two seconds and saturates at `integer`'s ceiling rather than failing
++(`src/store/private-link-signed-out-opens.ts`), so the number can be pushed up by at most ~43,000 a
++day; and only the administrator ever sees it, labelled *roughly*. What it does not bound: each
++request is still one indexed write, comparable to the reads every public route already lets a
++key-holder repeat, and there is no per-address request limit in this app to reuse. GPT Sol's F2
++on the plan asked for one. **Fix, if wanted:** a Vercel firewall rate-limit rule on that one path,
++which is infrastructure an agent here may not change. About fifteen minutes of Greg's. Decision:
++**proposed**, not yet seen by Greg.
++
+ ## From security.md's known gaps
+ 
+ Each is described in [security.md § Known gaps](security.md#known-gaps); these lines only give a
+diff --git a/drizzle/20261021013453_private_link_opens.sql b/drizzle/20261021013453_private_link_opens.sql
+new file mode 100644
+index 000000000..5b16d348e
+--- /dev/null
++++ b/drizzle/20261021013453_private_link_opens.sql
+@@ -0,0 +1,30 @@
++CREATE TABLE "spideryarn"."private_link_openers" (
++	"article_id" uuid NOT NULL,
++	"reader_id" uuid NOT NULL,
++	"opens" integer DEFAULT 1 NOT NULL,
++	"first_opened_at" timestamp with time zone DEFAULT now() NOT NULL,
++	"last_opened_at" timestamp with time zone DEFAULT now() NOT NULL,
++	CONSTRAINT "private_link_openers_article_id_reader_id_pk" PRIMARY KEY("article_id","reader_id"),
++	CONSTRAINT "private_link_openers_opens" CHECK ("spideryarn"."private_link_openers"."opens" >= 1)
++);
++--> statement-breakpoint
++CREATE TABLE "spideryarn"."private_link_signed_out_opens" (
++	"article_id" uuid PRIMARY KEY NOT NULL,
++	"opens" integer DEFAULT 1 NOT NULL,
++	"first_opened_at" timestamp with time zone DEFAULT now() NOT NULL,
++	"last_opened_at" timestamp with time zone DEFAULT now() NOT NULL,
++	CONSTRAINT "private_link_signed_out_opens_opens" CHECK ("spideryarn"."private_link_signed_out_opens"."opens" >= 1)
++);
++--> statement-breakpoint
++ALTER TABLE "spideryarn"."private_link_openers" ADD CONSTRAINT "private_link_openers_article_id_articles_id_fk" FOREIGN KEY ("article_id") REFERENCES "spideryarn"."articles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
++ALTER TABLE "spideryarn"."private_link_signed_out_opens" ADD CONSTRAINT "private_link_signed_out_opens_article_id_articles_id_fk" FOREIGN KEY ("article_id") REFERENCES "spideryarn"."articles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
++
++-- The reader key, hand-added rather than declared in src/db/schema.ts for the
++-- reason that file's header gives (Drizzle must not learn about `auth.users`).
++-- ON DELETE CASCADE, like `article_open_times`: a record that an account opened
++-- a private link is worth nothing once the account is gone, and a RESTRICT
++-- would stop the account being deleted at all. Not backfilled: nothing was
++-- recorded before. docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md.
++ALTER TABLE "spideryarn"."private_link_openers"
++  ADD CONSTRAINT "private_link_openers_reader_fk"
++  FOREIGN KEY ("reader_id") REFERENCES "auth"."users" ("id") ON DELETE CASCADE;
+diff --git a/src/admin-articles.ts b/src/admin-articles.ts
+index 07d70b96b..826ff6545 100644
+--- a/src/admin-articles.ts
++++ b/src/admin-articles.ts
+@@ -162,3 +162,34 @@ export interface TransferDone {
+   /** It was public, or had a private link, and is now neither. */
+   readonly madePrivate: boolean;
+ }
++
++/**
++ * **`GET /api/admin/articles/:slug/access[?key=]`** — whose an article is, and
++ * who opened its private link, for the administrator on its details page.
++ * Only for an article the administrator can already read: their own, a public
++ * one, or a private one named with its link's key; anything else is a 404.
++ * No title, slug or key. Greg's reply `spya-xug3kf` to q-agbc89; plan 261021d.
++ */
++export interface AdminArticleAccess {
++  readonly ownerId: string;
++  /** Null when the Auth service does not know the account, or the listing failed. */
++  readonly ownerEmail: string | null;
++  /** False when the account listing failed, so every address here is null for that reason. */
++  readonly emailsAvailable: boolean;
++  /** True when the owner is the administrator asking. */
++  readonly mine: boolean;
++  /** A private link is on now. */
++  readonly privateLink: boolean;
++  /** Signed-in accounts that opened it through its private link, most recent first. */
++  readonly openers: readonly AdminLinkOpener[];
++  /** Signed-out opens, counted, approximate (security-risks.md § R31). Null: none recorded. */
++  readonly signedOut: { readonly opens: number; readonly firstOpenedAt: string; readonly lastOpenedAt: string } | null;
++}
++
++export interface AdminLinkOpener {
++  readonly readerId: string;
++  readonly email: string | null;
++  readonly opens: number;
++  readonly firstOpenedAt: string;
++  readonly lastOpenedAt: string;
++}
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 8ef53ba46..7a9e8631b 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -604,6 +604,67 @@ export const articleShareLinkEvents = spideryarn.table(
+   ],
+ );
+ 
++/**
++ * **Who opened a private link, among the signed-in** — one row per article
++ * and account, with how many times and when first and last. Greg, 2026-10-20
++ * (reply `spya-xug3kf` to q-agbc89): *"I'm interested to know and store which
++ * users open which articles."* Seen only by the administrator
++ * (`GET /api/admin/articles/:slug/access`); the owner is not shown it.
++ *
++ * Written by `POST /api/private-link-opens/:slug?key=`, from the visitor's
++ * page, only when the key matches and the article is private
++ * (src/store/pg-private-link-openers.ts). Never reachable from the public
++ * namespace: tests/public-imports.test.ts forbids this table there.
++ *
++ * Both keys cascade: a record of an open is worth nothing once the article or
++ * the account is gone. `reader_id`'s key to `auth.users` is by hand in the
++ * migration, as every owner key. Not exported with the article — the openers
++ * are not the owner's to take away — and kept with the article on a transfer.
++ * docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md.
++ */
++export const privateLinkOpeners = spideryarn.table(
++  "private_link_openers",
++  {
++    articleId: uuid("article_id")
++      .notNull()
++      .references(() => articles.id, { onDelete: "cascade" }),
++    /** `auth.users(id)`, ON DELETE CASCADE, by hand in the migration. */
++    readerId: uuid("reader_id").notNull(),
++    opens: integer("opens").notNull().default(1),
++    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }).notNull().defaultNow(),
++    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }).notNull().defaultNow(),
++  },
++  (t) => [
++    primaryKey({ columns: [t.articleId, t.readerId] }),
++    check("private_link_openers_opens", sql`${t.opens} >= 1`),
++  ],
++);
++
++/**
++ * **How often a private link was opened by somebody signed out** — one row per
++ * article, a count and when first and last. The other half of Greg's 2C: the
++ * signed-out cannot be told apart, so they are counted, not recorded.
++ *
++ * The one table the public namespace may write
++ * (`POST /api/public/private-link-opened/:slug?key=`,
++ * src/store/private-link-signed-out-opens.ts). Anybody holding the link can
++ * call that, so the count is **approximate and inflatable**: the upsert adds
++ * at most one per article per two seconds and saturates rather than
++ * overflowing. docs/project/security-risks.md § R31.
++ */
++export const privateLinkSignedOutOpens = spideryarn.table(
++  "private_link_signed_out_opens",
++  {
++    articleId: uuid("article_id")
++      .primaryKey()
++      .references(() => articles.id, { onDelete: "cascade" }),
++    opens: integer("opens").notNull().default(1),
++    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }).notNull().defaultNow(),
++    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }).notNull().defaultNow(),
++  },
++  (t) => [check("private_link_signed_out_opens_opens", sql`${t.opens} >= 1`)],
++);
++
+ /**
+  * **The reader's own tags on an article** — one row per (article, tag).
+  *
+diff --git a/src/messages.ts b/src/messages.ts
+index cddcfc0ed..867197703 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -4216,15 +4216,18 @@ export const OWNERSHIP_ADMIN_OWNER = "Admin: it belongs to";
+ export const OWNERSHIP_ADMIN_CHECKING = "Admin: looking up its owner…";
+ /** The address could not be read from the sign-in service; the rest of the row could. */
+ export const OWNERSHIP_ADMIN_NO_EMAIL = "Admin: the owner's address could not be read just now.";
+-/** Not in the admin list under this address (renamed since, or the list is stale). */
+-export const OWNERSHIP_ADMIN_NOT_LISTED = "Admin: it is not in the articles list under this address.";
+-/**
+- * **A private-link article's owner is not shown, even to the administrator**
+- * — admin.md § What it deliberately does not show: the key lets you read it,
+- * not learn whose it is. Plan 261020j, question q-agbc89.
+- */
+-export const OWNERSHIP_ADMIN_LINK =
+-  "Admin: the owner of an article shared by private link is not shown, not even to an admin.";
++/** The route found no article it may answer for under this address and key (renamed since, say). */
++export const OWNERSHIP_ADMIN_NOT_FOUND = "Admin: no article under this address could be looked up.";
++/**
++ * **Who opened its private link**, for the administrator — Greg's 2C (reply
++ * `spya-xug3kf` to q-agbc89, plan 261021d). Recorded from the day it shipped.
++ */
++export const LINK_OPENS_HEADING = "Admin: opened through its private link by";
++export const LINK_OPENS_NONE = "Admin: nobody has opened it through its private link since we started recording, on 21 October 2026.";
++/** Before the count of signed-out opens: approximate, since anybody with the link can add to it (security-risks.md § R31). */
++export const LINK_OPENS_SIGNED_OUT = "Signed-out opens, roughly:";
++/** An opener whose address the sign-in service did not give. */
++export const LINK_OPENS_UNKNOWN_ACCOUNT = "an account with no address on record";
+ /** Then the reason from `describeFetchFailure`. */
+ export const OWNERSHIP_ADMIN_FAILED = "Admin: could not look up its owner.";
+ 
+diff --git a/src/public/route-names.ts b/src/public/route-names.ts
+index b454c583d..be2997938 100644
+--- a/src/public/route-names.ts
++++ b/src/public/route-names.ts
+@@ -236,3 +236,22 @@ export const PUBLIC_ROUTE_NAMES: readonly PublicRouteName[] = [
+    */
+   publicAsset("asset"),
+ ];
++
++/**
++ * **The one write in the closed room**: a signed-out visitor opened a private
++ * link. `POST /api/public/private-link-opened/<slug>?key=<key>`, answered 204
++ * with no body whatever happened. Greg, 2026-10-20 (reply `spya-xug3kf` to
++ * q-agbc89, option C: *a count of signed-out opens*).
++ * docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md § 4.
++ *
++ * **Not in `PUBLIC_ROUTE_NAMES`**, and that is the point: that list is the read
++ * routes, every one of which refuses every method but GET and HEAD, and the
++ * sweeps drive off it. This route is the opposite — POST only — so it has its
++ * own name, its own branch in `servePublicApi` and its own method check, and
++ * no sweep can mistake it for a read.
++ */
++export const PRIVATE_LINK_OPENED = {
++  name: "private-link-opened",
++  pattern: new RegExp(`^/api/public/private-link-opened/(${SLUG_CHARS})$`),
++  path: (slug: string) => `/api/public/private-link-opened/${slug}`,
++} as const;
+diff --git a/src/public/routes.ts b/src/public/routes.ts
+index 576d6650d..8008bde4c 100644
+--- a/src/public/routes.ts
++++ b/src/public/routes.ts
+@@ -44,6 +44,7 @@ import type { ServerResponse } from "node:http";
+ import { sendBinary, sendBinaryHead } from "../binary-response.js";
+ import { isSlug } from "../ingest.js";
+ import {
++  PRIVATE_LINK_OPENED,
+   PUBLIC_ROUTE_NAMES,
+   type PublicAssetRouteName,
+   type PublicCollectionRouteName,
+@@ -51,6 +52,7 @@ import {
+ } from "./route-names.js";
+ import { parseShareKey } from "../share-key.js";
+ import { type PublicAccess, accessFor } from "../store/public-access.js";
++import { countSignedOutOpen } from "../store/private-link-signed-out-opens.js";
+ import { pgPublicLibraryReader } from "../store/public-library.js";
+ import { type PublicAsset, pgPublicReader } from "../store/public-reader.js";
+ 
+@@ -401,6 +403,23 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
+      malformed key for anybody to tell from a wrong one. */
+   const access = accessFor(parseShareKey(request.key));
+ 
++  /* **The one write, matched before the reads and answered on its own.**
++     A signed-out visitor opened a private link, so its count goes up (plan
++     261021d § 4; Greg's 2C). POST only, by its own check; it reads no body and
++     no header — there is still no `req` here — and answers 204 with no body
++     whatever happened, so it tells a caller nothing the article GET they have
++     just made did not. Without a usable key it writes nothing.
++     `countSignedOutOpen` is bounded and throttled (security-risks.md § R31). */
++  const opened = PRIVATE_LINK_OPENED.pattern.exec(path);
++  if (opened) {
++    requireMethod(res, method, "POST");
++    const slug = slugFrom(opened);
++    if (access.kind === "link") await countSignedOutOpen(slug, access.key);
++    res.statusCode = 204;
++    res.end();
++    return;
++  }
++
+   /* **Method, then slug, then the read**, and the order is the content of
+      these lines. The slug is validated before the store is consulted, so a
+      malformed request is a 400 and never reaches a read. (There was a fourth
+@@ -519,3 +538,14 @@ function requireReadMethod(res: ServerResponse, method: string): void {
+   res.setHeader("Allow", "GET, HEAD");
+   throw httpError(405, `Public routes are read-only, not ${method}`);
+ }
++
++/**
++ * **The write route's own check: exactly one method, and not a read.** The
++ * mirror of `requireReadMethod`, for `PRIVATE_LINK_OPENED` alone — a GET or
++ * HEAD there would be a write a prefetch or an unfurler could make.
++ */
++function requireMethod(res: ServerResponse, method: string, only: "POST"): void {
++  if (method === only) return;
++  res.setHeader("Allow", only);
++  throw httpError(405, `This public route takes ${only} only, not ${method}`);
++}
+diff --git a/src/routes.ts b/src/routes.ts
+index e31441b99..cef4f2a0b 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -307,6 +307,7 @@ import {
+   spendForArticle,
+ } from "./store/ai-calls-spend-pg.js";
+ import { ownedArticleIdentity } from "./store/pg.js";
++import { articleAccessForAdmin, recordOpener } from "./store/pg-private-link-openers.js";
+ import type {
+   ClaimCheckFinish,
+   PromisesFinish,
+@@ -388,7 +389,7 @@ import {
+   type AuthorLookupStarted,
+ } from "./admin-author-gifts.js";
+ import { startAuthorLookup } from "./author-lookup-start.js";
+-import type { AdminArticle, AdminArticles, TransferDone, TransferPreview } from "./admin-articles.js";
++import type { AdminArticle, AdminArticleAccess, AdminArticles, TransferDone, TransferPreview } from "./admin-articles.js";
+ import { parseTransferRequest, pgArticleTransferStore } from "./store/pg-article-transfer.js";
+ import {
+   parseAuthorGiftPatch,
+@@ -406,7 +407,7 @@ import {
+   type IngestSlot,
+ } from "./billing/admission.js";
+ import { isPublicNamespace, servePublicApi } from "./public/routes.js";
+-import { SHARE_KEY_PARAM, withoutShareKey } from "./share-key.js";
++import { parseShareKey, SHARE_KEY_PARAM, withoutShareKey } from "./share-key.js";
+ import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
+ import {
+   collectSpend,
+@@ -10822,6 +10823,60 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     },
+   },
+ 
++  /* **Whose article it is, and who opened its private link**, for the
++     administrator on its details page — Greg, 2026-10-20 (reply `spya-xug3kf`
++     to q-agbc89): "As an admin, I want to be able to see anything." Behind the
++     namespace gate like its siblings. Plan 261021d.
++
++     **Only for an article the administrator can already read** — their own,
++     a public one, or a private one named with its link's key
++     (`articleAccessForAdmin`). A private article without its key is the same
++     404 as no article, so this does not let a slug be looked up without the
++     link. No title, slug or key in the answer: admin.md § Whose article it is. */
++  {
++    kind: "pattern",
++    method: "GET",
++    pattern: /^\/api\/admin\/articles\/([\w.%-]+)\/access$/,
++    article: "none",
++    handler: async ({ user, request: { res, query } }, captures) => {
++      const slug = slugPart(captures, 1);
++      const found = await articleAccessForAdmin(slug, parseShareKey(query.get(SHARE_KEY_PARAM)));
++      if (!found) throw httpError(404, "There is no such article.");
++      res.setHeader("Cache-Control", "private, no-store");
++      /* A failed listing costs the addresses, not the answer, as on
++         /api/admin/articles. Only the error's class is logged. */
++      const { url, key } = authAdminEndpoint();
++      const accounts = await listAccounts(gotruePages(url, key)).catch((err: unknown) => {
++        log("http").warn(
++          { errorClass: err instanceof Error ? err.constructor.name : typeof err },
++          "admin article access: the account listing failed, so the answer carries no addresses",
++        );
++        return null;
++      });
++      const emails = new Map((accounts ?? []).map((a) => [a.id, a.email]));
++      const access: AdminArticleAccess = {
++        ownerId: found.ownerId,
++        ownerEmail: emails.get(found.ownerId) ?? null,
++        emailsAvailable: accounts !== null,
++        mine: found.ownerId === user.id,
++        privateLink: found.privateLink,
++        openers: found.openers.map((o) => ({
++          readerId: o.readerId,
++          email: emails.get(o.readerId) ?? null,
++          opens: o.opens,
++          firstOpenedAt: o.firstOpenedAt.toISOString(),
++          lastOpenedAt: o.lastOpenedAt.toISOString(),
++        })),
++        signedOut: found.signedOut && {
++          opens: found.signedOut.opens,
++          firstOpenedAt: found.signedOut.firstOpenedAt.toISOString(),
++          lastOpenedAt: found.signedOut.lastOpenedAt.toISOString(),
++        },
++      };
++      send(res, 200, access);
++    },
++  },
++
+   /* **What one article has cost**, for the metadata page's admin section —
+      Greg, 2026-09-30 (SPIDERYARN-READING2-68). Behind the namespace gate like
+      its siblings; this row adds no check of its own, because the gate is the
+@@ -11370,6 +11425,27 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     },
+   },
+ 
++  /* **A signed-in visitor opened somebody's private link** — Greg's 2C
++     (reply `spya-xug3kf` to q-agbc89; plan 261021d § 3). From the visitor's
++     page, once per mount, as the owner's record-open above is. The reader is
++     the verified session's id; the key comes from `?key=` and is bounded by
++     `parseShareKey` before it reaches a query. Writes only when the key opens
++     a private article that is not the reader's own (pg-private-link-openers.ts),
++     and answers 204 whatever happened. Read by the administrator alone. */
++  {
++    kind: "pattern",
++    method: "POST",
++    pattern: /^\/api\/private-link-opens\/([\w.%-]+)$/,
++    article: "none",
++    handler: async ({ user, request: { res, query } }, captures) => {
++      const slug = slugPart(captures, 1);
++      const key = parseShareKey(query.get(SHARE_KEY_PARAM));
++      if (key !== null) await recordOpener(slug, key, user.id);
++      res.statusCode = 204;
++      res.end();
++    },
++  },
++
+   {
+     kind: "pattern",
+     method: "GET",
+diff --git a/src/store/article-rows.ts b/src/store/article-rows.ts
+index 3f33698cb..80886d5d3 100644
+--- a/src/store/article-rows.ts
++++ b/src/store/article-rows.ts
+@@ -503,6 +503,36 @@ export const ARTICLE_TABLE_COVERAGE = {
+         "because a zip gets forwarded and the key opens the article.",
+     },
+   },
++  private_link_openers: {
++    rollback: {
++      exported: false,
++      why:
++        "Which signed-in accounts opened the article's private link, and when " +
++        "(plan 261021d). The filesystem store has no sharing of any kind, so a " +
++        "rollback to data/ has nothing that could read it.",
++    },
++    bundle: {
++      exported: false,
++      why:
++        "Other readers' account ids, recorded for the administrator alone; the " +
++        "owner is not shown who opened their link, so their export does not " +
++        "carry it either (plan 261021d § 5).",
++    },
++  },
++  private_link_signed_out_opens: {
++    rollback: {
++      exported: false,
++      why:
++        "A count of signed-out opens of the private link (plan 261021d). The " +
++        "filesystem store has no sharing of any kind.",
++    },
++    bundle: {
++      exported: false,
++      why:
++        "An approximate count kept for the administrator alone, which the owner " +
++        "is not shown; their export does not carry it either (plan 261021d § 5).",
++    },
++  },
+   article_visibility_changes: {
+     rollback: {
+       exported: false,
+diff --git a/src/store/pg-admin.ts b/src/store/pg-admin.ts
+index bd159439d..88c2e31e0 100644
+--- a/src/store/pg-admin.ts
++++ b/src/store/pg-admin.ts
+@@ -862,6 +862,12 @@ export function adminQueries(db: Db) {
+  *   account rather than the article, so a deleted or transferred article keeps
+  *   its days for whoever opened it, and no shelf predicate applies.
+  *
++ * **Not `private_link_openers`**, though its rows are timestamps an account
++ * caused: opening somebody else's private link. Greg chose to record those for
++ * *which users open which articles* (reply `spya-xug3kf` to q-agbc89, plan
++ * 261021d), not for Active days; counting them here is a separate decision.
++ * GPT Sol's F7 on that plan.
++ *
+  * **Not `reader_arrivals`**, which looks like the sign-up day and is not: its
+  * migration backfilled every account in the shared Auth project with its
+  * creation date, including accounts that never used this app (Sol, finding 1).
+diff --git a/src/store/pg-article-transfer.ts b/src/store/pg-article-transfer.ts
+index c28388fe3..5fcb7eea8 100644
+--- a/src/store/pg-article-transfer.ts
++++ b/src/store/pg-article-transfer.ts
+@@ -178,6 +178,9 @@ export const ARTICLE_TABLES = {
+   /** Takedown evidence; a transfer that unshares writes a row of its own (step 3). */
+   article_visibility_changes: "history",
+   article_share_link_events: "history",
++  /** Who opened the old private link, and how often signed out: the administrator's record (plan 261021d). */
++  private_link_openers: "history",
++  private_link_signed_out_opens: "history",
+   /** Live-conversation sessions, with the ledger. */
+   realtime_sessions: "history",
+   /** `starter_article_id`: the voucher that named it, whoever owns it now. */
+diff --git a/src/store/pg-private-link-openers.ts b/src/store/pg-private-link-openers.ts
+new file mode 100644
+index 000000000..efcbab4f8
+--- /dev/null
++++ b/src/store/pg-private-link-openers.ts
+@@ -0,0 +1,134 @@
++/**
++ * **Who opened a private link, and whose article it is — for the
++ * administrator.** Greg, 2026-10-20 (reply `spya-xug3kf` to q-agbc89):
++ *
++ * > As an admin, I want to be able to see anything. Because after all, I've got
++ * > access to the database anyway. And it may be useful for debugging. And yes,
++ * > I'm interested to know and store which users open which articles.
++ *
++ * He chose 1B (the owner of an article read through a private link) and 2C
++ * (the signed-in accounts that open a private link, plus a count of signed-out
++ * opens), and nothing wider.
++ * docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md.
++ *
++ * Two things here, both outside the public graph
++ * (tests/public-imports.test.ts forbids `private_link_openers` there):
++ *
++ * - `recordOpener` — the signed-in visitor's write, behind `requireUser`. The
++ *   reader is an argument, the verified session's id, never `currentOwnerId()`.
++ * - `articleAccessForAdmin` — the read behind `GET /api/admin/articles/:slug/
++ *   access`, under the admin namespace gate. **Only for an article the
++ *   administrator can already read**: their own, or one a visitor holding this
++ *   request's key could read (public, or private with the right key). A private
++ *   article named without its key is not found, so this cannot be used to learn
++ *   whose a slug is without the link. `share_token` is never selected; whether
++ *   a link is on is `share_token_at is not null`.
++ *
++ * The signed-out count is [private-link-signed-out-opens.ts](private-link-signed-out-opens.ts).
++ */
++
++import { and, desc, eq, ne, or, sql } from "drizzle-orm";
++
++import { getDb } from "../db/client.js";
++import { articles, privateLinkOpeners, privateLinkSignedOutOpens } from "../db/schema.js";
++import type { ShareKey } from "../share-key.js";
++import { ownedSlug } from "./owned-slug.js";
++import { accessFor, privateLinkWhere, publicAccessWhere } from "./public-access.js";
++
++/**
++ * Record that `readerId`, signed in, opened `slug` through its private link —
++ * if `key` opens it, the article is private, and the reader is not its owner.
++ * Anything else writes nothing, and the caller is not told which. One
++ * statement: a second open bumps `opens` and `last_opened_at`, and two tabs at
++ * once make two increments on one row.
++ */
++export async function recordOpener(slug: string, key: ShareKey, readerId: string): Promise<void> {
++  const t = privateLinkOpeners;
++  await getDb()
++    .insert(t)
++    .select(
++      getDb()
++        .select({
++          articleId: articles.id,
++          readerId: sql<string>`${readerId}::uuid`.as("reader_id"),
++          opens: sql<number>`1`.as("opens"),
++          firstOpenedAt: sql<Date>`now()`.as("first_opened_at"),
++          lastOpenedAt: sql<Date>`now()`.as("last_opened_at"),
++        })
++        .from(articles)
++        .where(and(privateLinkWhere(slug, key), ne(articles.ownerId, readerId))),
++    )
++    .onConflictDoUpdate({
++      target: [t.articleId, t.readerId],
++      /* Saturating, as the signed-out count is; a signed-in reader is not
++         throttled, since each row is theirs alone. */
++      set: { opens: sql`least(${t.opens}::bigint + 1, 2147483647)::integer`, lastOpenedAt: sql`now()` },
++    });
++}
++
++/** One signed-in account that opened the link. */
++export interface OpenerRow {
++  readerId: string;
++  opens: number;
++  firstOpenedAt: Date;
++  lastOpenedAt: Date;
++}
++
++/** What the administrator is told about one article. No title, slug or key. */
++export interface ArticleAccessRow {
++  ownerId: string;
++  /** A private link is on now. */
++  privateLink: boolean;
++  openers: OpenerRow[];
++  signedOut: { opens: number; firstOpenedAt: Date; lastOpenedAt: Date } | null;
++}
++
++/** The most openers one answer lists, most recent first. */
++export const OPENERS_LISTED = 100;
++
++/**
++ * The article the administrator can already read by this slug and key, with
++ * who opened its private link. `null` when there is none — the same answer
++ * for an unknown slug and for somebody else's private article without its key.
++ */
++export async function articleAccessForAdmin(slug: string, key: ShareKey | null): Promise<ArticleAccessRow | null> {
++  const db = getDb();
++  const [article] = await db
++    .select({
++      id: articles.id,
++      ownerId: articles.ownerId,
++      privateLink: sql<boolean>`${articles.shareTokenAt} is not null`,
++    })
++    .from(articles)
++    .where(or(ownedSlug(slug), publicAccessWhere(slug, accessFor(key))))
++    .limit(1);
++  if (!article) return null;
++
++  const [openers, signedOut] = await Promise.all([
++    db
++      .select({
++        readerId: privateLinkOpeners.readerId,
++        opens: privateLinkOpeners.opens,
++        firstOpenedAt: privateLinkOpeners.firstOpenedAt,
++        lastOpenedAt: privateLinkOpeners.lastOpenedAt,
++      })
++      .from(privateLinkOpeners)
++      .where(eq(privateLinkOpeners.articleId, article.id))
++      .orderBy(desc(privateLinkOpeners.lastOpenedAt), privateLinkOpeners.readerId)
++      .limit(OPENERS_LISTED),
++    db
++      .select({
++        opens: privateLinkSignedOutOpens.opens,
++        firstOpenedAt: privateLinkSignedOutOpens.firstOpenedAt,
++        lastOpenedAt: privateLinkSignedOutOpens.lastOpenedAt,
++      })
++      .from(privateLinkSignedOutOpens)
++      .where(eq(privateLinkSignedOutOpens.articleId, article.id)),
++  ]);
++  return {
++    ownerId: article.ownerId,
++    privateLink: Boolean(article.privateLink),
++    openers,
++    signedOut: signedOut[0] ?? null,
++  };
++}
+diff --git a/src/store/private-link-signed-out-opens.ts b/src/store/private-link-signed-out-opens.ts
+new file mode 100644
+index 000000000..f4fd3a6c2
+--- /dev/null
++++ b/src/store/private-link-signed-out-opens.ts
+@@ -0,0 +1,69 @@
++/**
++ * **The one write the public namespace makes**: a signed-out visitor opened a
++ * private link, so its count goes up. Greg, 2026-10-20 (reply `spya-xug3kf` to
++ * q-agbc89, option C): the signed-in accounts that open a private link, *plus
++ * a count of signed-out opens*. The signed-in half is
++ * [pg-private-link-openers.ts](pg-private-link-openers.ts), which is outside
++ * the public graph; this file can write nothing but the count.
++ * docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md.
++ *
++ * ## What it may touch
++ *
++ * `articles`, only through `privateLinkWhere` in its `where`, and
++ * `private_link_signed_out_opens`. No owner, no reader id, nothing selected
++ * back: the route answers 204 whatever happened
++ * (tests/public-imports.test.ts § `ALLOWED_IN` records the permission).
++ *
++ * ## Why the count is approximate, and bounded
++ *
++ * Anybody holding the link can call the route in a loop. So one statement,
++ * no read first, and two bounds in the upsert itself (GPT Sol's F2 on the
++ * plan): **at most one increment per article per two seconds**, and the
++ * counter **saturates** rather than overflowing. Two genuine signed-out opens
++ * in the same two seconds count once; nobody can push it past ~43,000 a day.
++ * docs/project/security-risks.md § R31.
++ */
++
++import { sql } from "drizzle-orm";
++
++import { getDb } from "../db/client.js";
++import { articles, privateLinkSignedOutOpens } from "../db/schema.js";
++import type { ShareKey } from "../share-key.js";
++import { privateLinkWhere } from "./public-access.js";
++
++/** The throttle, in seconds: at most one increment per article in this long. */
++export const SIGNED_OUT_OPEN_THROTTLE_SECONDS = 2;
++
++/** `integer`'s ceiling; the count stops there rather than failing the write. */
++const COUNT_CEILING = 2147483647;
++
++/**
++ * Count one signed-out open of `slug`'s private link, if `key` opens it and
++ * the article is private. Anything else — a wrong key, a link turned off, a
++ * public article, an unknown slug — writes nothing, and the caller is not told
++ * which.
++ */
++export async function countSignedOutOpen(slug: string, key: ShareKey): Promise<void> {
++  const t = privateLinkSignedOutOpens;
++  await getDb()
++    .insert(t)
++    .select(
++      getDb()
++        .select({
++          articleId: articles.id,
++          opens: sql<number>`1`.as("opens"),
++          firstOpenedAt: sql<Date>`now()`.as("first_opened_at"),
++          lastOpenedAt: sql<Date>`now()`.as("last_opened_at"),
++        })
++        .from(articles)
++        .where(privateLinkWhere(slug, key)),
++    )
++    .onConflictDoUpdate({
++      target: t.articleId,
++      set: {
++        opens: sql`least(${t.opens}::bigint + 1, ${COUNT_CEILING})::integer`,
++        lastOpenedAt: sql`now()`,
++      },
++      where: sql`${t.lastOpenedAt} < now() - make_interval(secs => ${SIGNED_OUT_OPEN_THROTTLE_SECONDS})`,
++    });
++}
+diff --git a/src/store/public-access.ts b/src/store/public-access.ts
+index f8462df22..d700627b8 100644
+--- a/src/store/public-access.ts
++++ b/src/store/public-access.ts
+@@ -31,8 +31,9 @@
+  * tests/public-imports.test.ts holds that.
+  */
+ 
+-import { or } from "drizzle-orm";
++import { and, eq, or } from "drizzle-orm";
+ 
++import { articles } from "../db/schema.js";
+ import type { ShareKey } from "../share-key.js";
+ import { linkSharedSlug } from "./link-shared-slug.js";
+ import { publicSlug } from "./public-slug.js";
+@@ -52,6 +53,21 @@ export function accessFor(key: ShareKey | null): PublicAccess {
+   return key === null ? PUBLIC_ONLY : { kind: "link", key };
+ }
+ 
++/**
++ * **Private, and this key opens it** — the one predicate for *a private link
++ * was used*, not *a visitor may read this*. For recording an open of a private
++ * link (src/store/private-link-signed-out-opens.ts, pg-private-link-openers.ts;
++ * plan 261021d). A public article read with a key is a public read, so it
++ * matches nothing here, which `publicAccessWhere`'s *public or this key* would
++ * not say.
++ *
++ * In this file because this is the one file that may import the link leaf
++ * (tests/owner-isolation.test.ts), and it writes nothing: the callers do.
++ */
++export function privateLinkWhere(slug: string, key: ShareKey) {
++  return and(linkSharedSlug(slug, key), eq(articles.visibility, "private"));
++}
++
+ export function publicAccessWhere(slug: string, access: PublicAccess) {
+   switch (access.kind) {
+     case "public":
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index 827c3b4bb..f2fe4210e 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -296,7 +296,7 @@ import { isAdmin } from "../admin.js";
+ import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
+ import { CARD } from "./card.js";
+ import { useSession } from "./useSession.js";
+-import { Ownership } from "./Ownership.js";
++import { AdminLinkOpens, Ownership } from "./Ownership.js";
+ import { ProfileBox } from "./ProfileBox.js";
+ import { useAutosavedText } from "./useAutosavedText.js";
+ import { GuessedSourceLink } from "./Masthead.js";
+@@ -1344,6 +1344,7 @@ export function Metadata({
+              owner branch above has been replaced. Never put B's address beside
+              an ownership result fetched for A. */
+           ownerEmail={readerId != null && user?.id === readerId ? (user.email ?? null) : null}
++          ownerId={readerId != null && user?.id === readerId ? readerId : null}
+           /* **Not `hasShelfRow`**, which is false while the fetch is out and
+              false for ever if it fails — so a failed metadata check removed the
+              whole section rather than showing its "we could not check" state.
+@@ -1543,6 +1544,7 @@ function SharingSection({
+   slug,
+   title,
+   ownerEmail,
++  ownerId,
+   offer,
+   sharing,
+   checking,
+@@ -1552,6 +1554,8 @@ function SharingSection({
+   slug: string;
+   title: string;
+   ownerEmail: string | null;
++  /** The signed-in owner's id, under the same guard as `ownerEmail`; for the administrator's openers line. */
++  ownerId: string | null;
+   /** Straight through to the card — see `Metadata`'s prop of the same name. */
+   onVisibility: (slug: string, visibility: Visibility | null) => void;
+   onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
+@@ -1568,7 +1572,7 @@ function SharingSection({
+   checking: boolean;
+ }) {
+   if (!offer) return null;
+-  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
++  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} ownerId={ownerId} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
+ }
+ 
+ /**
+@@ -1585,6 +1589,7 @@ function SharingCard({
+   slug,
+   title,
+   ownerEmail,
++  ownerId,
+   sharing,
+   checking,
+   onVisibility,
+@@ -1593,6 +1598,7 @@ function SharingCard({
+   slug: string;
+   title: string;
+   ownerEmail: string | null;
++  ownerId: string | null;
+   sharing: ArticleSharing | undefined;
+   checking: boolean;
+   onVisibility: (slug: string, visibility: Visibility | null) => void;
+@@ -1637,6 +1643,9 @@ function SharingCard({
+             (Ownership.tsx). Greg, spya-cf30ac. */}
+         <div className="tw:mb-4 tw:border-b tw:border-rule tw:pb-4">
+           <Ownership whose="yours" email={ownerEmail} />
++          {/* The administrator's own article: who opened its private link
++              (plan 261021d § 5). Draws and asks nothing for anybody else. */}
++          <AdminLinkOpens slug={slug} readerId={ownerId} />
+         </div>
+         <PrivateLink
+           slug={slug}
+diff --git a/src/web/Ownership.tsx b/src/web/Ownership.tsx
+index 381b38768..0b3dde086 100644
+--- a/src/web/Ownership.tsx
++++ b/src/web/Ownership.tsx
+@@ -14,24 +14,32 @@
+  * is signed in *and* the server agreed it is somebody's — an unconfirmed session
+  * may be the owner's own (SharedNotice says so), and a signed-out reader is not
+  * told anything about ownership at all.
++ *
++ * **And, for the administrator, whose it is and who opened its private link**
++ * (since plan 261021d; Greg's reply `spya-xug3kf` to q-agbc89: *"As an admin, I
++ * want to be able to see anything."*).
+  */
+ import { useEffect, useState } from "react";
+ 
+-import type { AdminArticle, AdminArticles } from "../admin-articles.js";
++import type { AdminArticleAccess, AdminLinkOpener } from "../admin-articles.js";
+ import { isAdmin } from "../admin.js";
++import { readableDate } from "../billing-plan.js";
+ import {
++  LINK_OPENS_HEADING,
++  LINK_OPENS_NONE,
++  LINK_OPENS_SIGNED_OUT,
++  LINK_OPENS_UNKNOWN_ACCOUNT,
+   OWNERSHIP_ADMIN_CHECKING,
+   OWNERSHIP_ADMIN_FAILED,
+-  OWNERSHIP_ADMIN_LINK,
+   OWNERSHIP_ADMIN_NO_EMAIL,
+-  OWNERSHIP_ADMIN_NOT_LISTED,
++  OWNERSHIP_ADMIN_NOT_FOUND,
+   OWNERSHIP_ADMIN_OWNER,
+   OWNERSHIP_NOT_YOURS,
+   OWNERSHIP_SIGNED_IN_AS,
+   OWNERSHIP_YOURS,
+ } from "../messages.js";
+-import type { PublicSharedBy } from "../public-types.js";
+-import { apiFetch, readJson } from "./lib/api.js";
++import { type ShareKey, withShareKey } from "../share-key.js";
++import { apiFetch, HttpError, readJson } from "./lib/api.js";
+ import { describeFetchFailure } from "./lib/describe-failure.js";
+ 
+ export function Ownership({
+@@ -55,87 +63,147 @@ export function Ownership({
+   );
+ }
+ 
+-/** What the administrator's line has to say, keyed on the request it answers. */
++/** What the administrator's lines have to say, keyed on the request it answers. */
+ type AdminRead =
+   | { kind: "checking" }
+-  | { kind: "found"; row: AdminArticle; emailsAvailable: boolean }
+-  | { kind: "not-listed" }
++  | { kind: "found"; access: AdminArticleAccess }
++  | { kind: "not-found" }
+   | { kind: "failed"; message: string };
+ 
+ /**
+- * **The administrator's extra line on a visitor's details page**: whose the
+- * article is. Greg, `spya-cf30ac`: *"I'm an admin, so I want all of the details
+- * that we have"*.
+- *
+- * **Public articles only, and the server is what makes it so.** It reads the
+- * `/admin/articles` list (`GET /api/admin/articles`) and finds this article by
+- * slug — and that list carries a slug only for the administrator's own and
+- * public articles (pg-article-transfer.ts § `listArticlesAcrossOwners`). A
+- * private-link article has no slug there, so it cannot be matched however this
+- * component is called: holding the key lets you read it, not learn whose it is
+- * (admin.md § What it deliberately does not show). Whether that should change
+- * is question q-agbc89. So a private link gets a sentence saying so and makes
+- * no request.
++ * **One request for both admin lines**: `GET /api/admin/articles/:slug/access`,
++ * with the address's key when there is one. The server answers only for an
++ * article the administrator can already read — their own, a public one, or a
++ * private one named with its key — so what this component is handed cannot
++ * widen that; a private article without its key is a 404 like no article.
+  *
+- * Mounted only for a confirmed session whose id `isAdmin` accepts; the
+- * namespace gate on `/api/admin` is the real check. The answer is kept only
+- * for the slug and reader it was asked for.
++ * Asked only when `isAdmin(readerId)`; the namespace gate on `/api/admin` is
++ * the real check. Bound by `apiFetch` to the account the page was resolved
++ * for, so a session that moves mid-flight is refused before it is sent as
++ * somebody else. The key travels in the query string, which our request log
++ * drops (security-map.md § Where the key may travel).
+  */
+-export function AdminOwnerLine({
+-  slug,
+-  readerId,
+-  sharedBy,
+-}: {
+-  slug: string;
+-  readerId: string | null;
+-  sharedBy: PublicSharedBy;
+-}) {
+-  const asks = isAdmin(readerId) && sharedBy === "public";
++function useAdminArticleAccess(slug: string, readerId: string | null, shareKey: ShareKey | null): AdminRead {
++  const asks = isAdmin(readerId);
+   const [read, setRead] = useState<AdminRead>({ kind: "checking" });
+   useEffect(() => {
+     if (!asks || readerId === null) return;
+     let live = true;
+     setRead({ kind: "checking" });
+-    /* Bind the request to the same account whose confirmed access result
+-       mounted this line. If the session moves while the token is being read,
+-       apiFetch refuses before sending rather than asking /api/admin as B. */
+-    apiFetch("/api/admin/articles", {}, readerId)
+-      .then((r) => readJson<AdminArticles>(r))
+-      .then((body) => {
+-        if (!live) return;
+-        const row = body.articles.find((a) => a.slug === slug);
+-        setRead(row ? { kind: "found", row, emailsAvailable: body.emailsAvailable } : { kind: "not-listed" });
++    apiFetch(withShareKey(`/api/admin/articles/${encodeURIComponent(slug)}/access`, shareKey), {}, readerId)
++      .then((r) => readJson<AdminArticleAccess>(r))
++      .then((access) => {
++        if (live) setRead({ kind: "found", access });
+       })
+       .catch((e: Error) => {
+-        if (live) setRead({ kind: "failed", message: describeFetchFailure(e) });
++        if (!live) return;
++        setRead(e instanceof HttpError && e.status === 404 ? { kind: "not-found" } : { kind: "failed", message: describeFetchFailure(e) });
+       });
+     return () => {
+       live = false;
+     };
+-  }, [asks, slug, readerId]);
++  }, [asks, slug, readerId, shareKey]);
++  return read;
++}
+ 
++/**
++ * **The administrator's extra lines on a visitor's details page**: whose the
++ * article is, and who opened its private link. Greg, `spya-cf30ac`: *"I'm an
++ * admin, so I want all of the details that we have"*; for a private link, his
++ * reply `spya-xug3kf` to q-agbc89. Mounted only for a confirmed session; draws
++ * nothing for anybody `isAdmin` refuses.
++ */
++export function AdminOwnerLine({
++  slug,
++  readerId,
++  shareKey,
++}: {
++  slug: string;
++  readerId: string | null;
++  /** The address's private-link key, or null. */
++  shareKey: ShareKey | null;
++}) {
++  const read = useAdminArticleAccess(slug, readerId, shareKey);
+   if (!isAdmin(readerId)) return null;
+   return (
+-    <p data-admin-owner className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-ink-faint">
+-      {adminSentence(sharedBy, read)}
+-    </p>
++    <>
++      <p data-admin-owner className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-ink-faint">
++        {ownerSentence(read)}
++      </p>
++      {read.kind === "found" && <LinkOpens access={read.access} />}
++    </>
++  );
++}
++
++/**
++ * **Who opened the administrator's own article's private link**, on the
++ * owner's *Access & sharing* card. Only for the administrator: whether owners
++ * should see who opened their link is a decision nobody has made (plan
++ * 261021d § 5), so for anybody else this draws nothing and asks nothing.
++ */
++export function AdminLinkOpens({ slug, readerId }: { slug: string; readerId: string | null }) {
++  const read = useAdminArticleAccess(slug, readerId, null);
++  if (!isAdmin(readerId) || read.kind !== "found") return null;
++  return <LinkOpens access={read.access} />;
++}
++
++/**
++ * The openers line. Drawn when a link is on now or any open is recorded, so a
++ * public article that never had a link says nothing about links.
++ */
++function LinkOpens({ access }: { access: AdminArticleAccess }) {
++  const { openers, signedOut } = access;
++  if (!access.privateLink && openers.length === 0 && signedOut === null) return null;
++  if (openers.length === 0 && signedOut === null)
++    return (
++      <p data-admin-link-opens="none" className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-ink-faint">
++        {LINK_OPENS_NONE}
++      </p>
++    );
++  return (
++    <div data-admin-link-opens className="tw:mt-2 tw:text-sm tw:text-ink-faint">
++      {openers.length > 0 && (
++        <>
++          <p className="tw:m-0">{LINK_OPENS_HEADING}</p>
++          <ul className="tw:m-0 tw:pl-5">
++            {openers.map((o) => (
++              <li key={o.readerId}>{openerLine(o, access.emailsAvailable)}</li>
++            ))}
++          </ul>
++        </>
++      )}
++      {signedOut && (
++        <p className="tw:m-0">
++          {LINK_OPENS_SIGNED_OUT} {signedOut.opens.toLocaleString()}
++          {readableDate(signedOut.lastOpenedAt) ? `, last ${readableDate(signedOut.lastOpenedAt)}.` : "."}
++        </p>
++      )}
++    </div>
+   );
+ }
+ 
+-function adminSentence(sharedBy: PublicSharedBy, read: AdminRead): string {
+-  if (sharedBy === "link") return OWNERSHIP_ADMIN_LINK;
++function openerLine(o: AdminLinkOpener, emailsAvailable: boolean): string {
++  const who = o.email ?? (emailsAvailable ? LINK_OPENS_UNKNOWN_ACCOUNT : `account ${o.readerId}`);
++  const times = o.opens === 1 ? "once" : `${o.opens.toLocaleString()} times`;
++  const last = readableDate(o.lastOpenedAt);
++  return last ? `${who} — ${times}, last ${last}` : `${who} — ${times}`;
++}
++
++function ownerSentence(read: AdminRead): string {
+   switch (read.kind) {
+     case "checking":
+       return OWNERSHIP_ADMIN_CHECKING;
+-    case "not-listed":
+-      return OWNERSHIP_ADMIN_NOT_LISTED;
++    case "not-found":
++      return OWNERSHIP_ADMIN_NOT_FOUND;
+     case "failed":
+       return `${OWNERSHIP_ADMIN_FAILED} ${read.message}`;
+-    case "found":
++    case "found": {
++      const { access } = read;
+       /* `ownerEmail` is null both when the whole listing failed and when the
+          Auth service does not know the account; only the first is "just now". */
+-      if (read.row.ownerEmail) return `${OWNERSHIP_ADMIN_OWNER} ${read.row.ownerEmail}.`;
+-      return read.emailsAvailable ? `${OWNERSHIP_ADMIN_OWNER} account ${read.row.ownerId}.` : OWNERSHIP_ADMIN_NO_EMAIL;
++      if (access.ownerEmail) return `${OWNERSHIP_ADMIN_OWNER} ${access.ownerEmail}.`;
++      return access.emailsAvailable ? `${OWNERSHIP_ADMIN_OWNER} account ${access.ownerId}.` : OWNERSHIP_ADMIN_NO_EMAIL;
++    }
+     default: {
+       const unreachable: never = read;
+       return unreachable;
+diff --git a/src/web/PrivacyPage.tsx b/src/web/PrivacyPage.tsx
+index 56bc626b4..4f185c663 100644
+--- a/src/web/PrivacyPage.tsx
++++ b/src/web/PrivacyPage.tsx
+@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
+  * can honestly promise: there is no changelog, no diff view and nobody to email
+  * about a wording change during a beta. Bump it when you change the words.
+  */
+-const LAST_UPDATED = "20 October 2026";
++const LAST_UPDATED = "21 October 2026";
+ 
+ /**
+  * A heading and its paragraphs. Eight of them; nothing else on the page.
+@@ -263,6 +263,18 @@ export function PrivacyPage() {
+             we can work out afterwards what went wrong. It goes when you delete the article; one that
+             never became an article stays until your account is deleted.
+           </li>
++          {/* **Since 2026-10-21**: `private_link_openers`, Greg's 2C (reply
++              spya-xug3kf to q-agbc89). One row per article and account, a
++              count and the first and last time. Read only by the
++              administrator; the owner is not shown it. Cascades with the
++              account and with the article. docs/project/privacy.md § A
++              private link; plan 261021d. */}
++          <li className="tw:mb-2">
++            <strong className="tw:text-foreground">When you open somebody’s private link while
++            signed in</strong> — which article, the first and last time, and how many times. Only
++            the administrator can see it, not the article’s owner. It goes when your account does,
++            or when the article does.
++          </li>
+           <li className="tw:mb-2">
+             <strong className="tw:text-foreground">What the models make for you</strong> — we keep
+             reusable results such as summaries, outlines, glossaries, quotes, timelines, quiz
+@@ -662,7 +674,9 @@ export function PrivacyPage() {
+           <strong className="tw:text-foreground">private link</strong> to an article, anyone who has
+           the link can read the article without signing in, and can pass it on. An article shared
+           only this way is not listed anywhere, and they get the same things a public reader gets, your comments and searches
+-          included. We cannot tell you who has read it. The link’s key is part of its address, so
++          included. We do not tell you who has read it. We do record it: when somebody signed in
++          opens the link, their account and when; when somebody signed out does, only a rough count.
++          Only the administrator can see that. The link’s key is part of its address, so
+           it stays in the browser history of whoever opens it. Turning the link off refuses the
+           next request made with it; it cannot take back what somebody has already read or copied.
+           And{" "}
+diff --git a/src/web/PublicPages.tsx b/src/web/PublicPages.tsx
+index 29def2507..4d327a06d 100644
+--- a/src/web/PublicPages.tsx
++++ b/src/web/PublicPages.tsx
+@@ -37,6 +37,7 @@ import { articleStats } from "./stats.js";
+ import { pageTitle, useDocumentTitle } from "./page-title.js";
+ import { SharedNotice } from "./PublicChrome.js";
+ import { AdminOwnerLine, Ownership } from "./Ownership.js";
++import type { ShareKey } from "../share-key.js";
+ import { useSession } from "./useSession.js";
+ import { GuessedSourceLink } from "./Masthead.js";
+ import { markedModes, NOUN } from "./visitor.js";
+@@ -139,6 +140,7 @@ export function PublicMetadataPage({
+   readerId = null,
+   sessionUnconfirmed,
+   sharedBy,
++  shareKey = null,
+ }: {
+   slug: string;
+   article: Article;
+@@ -155,6 +157,12 @@ export function PublicMetadataPage({
+   sessionUnconfirmed: boolean;
+   /** For the notice below only — reader-capability.ts § sharedBy. */
+   sharedBy: PublicSharedBy;
++  /**
++   * The address's private-link key, for the administrator's line only: the
++   * admin route answers for a private article only when named with its key
++   * (Ownership.tsx, plan 261021d). Optional for tests that mount this page alone.
++   */
++  shareKey?: ShareKey | null;
+ }) {
+   const { meta } = article;
+   const stats = articleStats(article);
+@@ -232,7 +240,7 @@ export function PublicMetadataPage({
+           <section data-access className="tw:mt-8">
+             <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">Access</h2>
+             <Ownership whose="not-yours" email={user.email ?? null} />
+-            <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} sharedBy={sharedBy} />
++            <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} shareKey={shareKey} />
+           </section>
+         )}
+ 
+diff --git a/src/web/article/ArticlePage.tsx b/src/web/article/ArticlePage.tsx
+index cff52cd8a..682dc2166 100644
+--- a/src/web/article/ArticlePage.tsx
++++ b/src/web/article/ArticlePage.tsx
+@@ -55,6 +55,8 @@ import {
+   STRUCTURE_BUILDING,
+   type StructureArrival,
+ } from "../modes/structure/StructureArriving.js";
++import type { ShareKey } from "../../share-key.js";
++import { usePrivateLinkOpen } from "../usePrivateLinkOpen.js";
+ import { useShareKey } from "../useShareKey.js";
+ import { UnreadPaperPage } from "./UnreadPaperPage.js";
+ import { OwnerNotShared } from "./StillBeingAdded.js";
+@@ -281,6 +283,7 @@ export function ArticlePage({
+           readerId={readerId}
+           sessionUnconfirmed={access.sessionUnconfirmed}
+           sharedBy={access.sharedBy}
++          shareKey={shareKey}
+           view={view}
+         />
+       )}
+@@ -461,7 +464,9 @@ function OwnedArticle({
+    * **And not from a visitor at all**, which is why it is in this component
+    * rather than in `ArticlePage`. There is no shelf row to count against, the
+    * POST would be refused, and the acceptance test for public reading is that a
+-   * signed-out browser issues no POST whatever.
++   * signed-out browser issues no POST whatever. (A private link is the one
++   * exception, since plan 261021d: its visitor's page sends one POST saying the
++   * link was opened — `usePrivateLinkOpen` in `VisitorArticle`.)
+    *
+    * **The ref is not belt-and-braces; without it the number is simply wrong.**
+    * `<StrictMode>` is on (main.tsx), and in development React deliberately runs
+@@ -746,12 +751,15 @@ function VisitorArticle({
+   readerId,
+   sessionUnconfirmed,
+   sharedBy,
++  shareKey,
+   view,
+ }: {
+   slug: string;
+   article: Article;
+   /** Public, or by a private link. For the notice, on both views. */
+   sharedBy: PublicSharedBy;
++  /** The address's private-link key: for recording the open, and for the details page's admin line. */
++  shareKey: ShareKey | null;
+   /** The artefacts the payload carried. reader-capability.ts § artefacts. */
+   artefacts: PublicArtefactSet;
+   available: PublicArtefacts;
+@@ -783,9 +791,11 @@ function VisitorArticle({
+   useEffect(() => {
+     settleFirstOpen(slug, null, "unknown");
+   }, [slug]);
++  usePrivateLinkOpen(slug, sharedBy, shareKey, readerId, sessionUnconfirmed);
+   if (view === "metadata")
+     return (
+       <PublicMetadataPage
++        shareKey={shareKey}
+         slug={slug}
+         article={article}
+         available={available}
+diff --git a/src/web/help/pages/sharing.md b/src/web/help/pages/sharing.md
+index 67ea33054..a02b12122 100644
+--- a/src/web/help/pages/sharing.md
++++ b/src/web/help/pages/sharing.md
+@@ -22,7 +22,8 @@ that you have the right to share the text, and press **Create the link**. Then c
+ send it however you like.
+ 
+ - **Anyone who has the link can read the article without an account**, and can pass the link on. We
+-  cannot tell you who has opened it.
++  don't show you who has opened it. We do record it — the accounts of people signed in, and a rough
++  count of people who are not — and only the administrator can see that.
+ - **An article shared only this way is not listed anywhere**, and the page tells whoever opens it
+   that it is a private link. They get what a visitor to a public article gets, and like any visitor
+   they cannot write anything or start any AI work.
+diff --git a/src/web/public-api.ts b/src/web/public-api.ts
+index d5da70786..2f54b6650 100644
+--- a/src/web/public-api.ts
++++ b/src/web/public-api.ts
+@@ -94,6 +94,15 @@ export async function publicFetch(path: string, signal?: AbortSignal): Promise<R
+    * path stays inside the closed room and fails its route patterns there.
+    * Rejecting it would refuse a slug that legitimately carries one.
+    */
++  requirePublicPath(path);
++  /* Spread rather than `signal` straight in: `exactOptionalPropertyTypes` is on
++     (docs/project/typechecking.md), so an explicit `signal: undefined` is not
++     the same thing as no signal at all. */
++  return fetch(path, { credentials: "omit", ...(signal ? { signal } : {}) });
++}
++
++/** `publicFetch`'s guard, shared with the one public write below. */
++function requirePublicPath(path: string): void {
+   const url = new URL(path, SAME_ORIGIN);
+   if (url.origin !== SAME_ORIGIN || !url.pathname.startsWith("/api/public/")) {
+     /* Without its query string: on a private link that is where the key is,
+@@ -102,10 +111,25 @@ export async function publicFetch(path: string, signal?: AbortSignal): Promise<R
+       `publicFetch is for the public namespace only, and this is not: ${path.split("?")[0]}`,
+     );
+   }
+-  /* Spread rather than `signal` straight in: `exactOptionalPropertyTypes` is on
+-     (docs/project/typechecking.md), so an explicit `signal: undefined` is not
+-     the same thing as no signal at all. */
+-  return fetch(path, { credentials: "omit", ...(signal ? { signal } : {}) });
++}
++
++/**
++ * **`POST /api/public/private-link-opened/:slug?key=`** — a signed-out visitor
++ * opened a private link, so its count goes up (Greg's 2C; plan 261021d § 3).
++ *
++ * Its own function rather than a `method` on `publicFetch`, which takes a path
++ * and a signal and nothing else so that no caller can add a method, a header
++ * or credentials to an anonymous request (GPT Sol's F5 on the plan). Here all
++ * of it is fixed: `POST`, `credentials: "omit"`, no body, no headers. The
++ * answer is 204 whatever happened, and is not read.
++ */
++export async function notePrivateLinkOpened(slug: string, key: ShareKey): Promise<void> {
++  /* Spelled here, not imported: the client may not import src/public/
++     (tests/client-imports.test.ts). tests/public-client-fetch.test.ts ties it
++     to `PRIVATE_LINK_OPENED`, so a rename on either side is a red test. */
++  const path = withShareKey(`/api/public/private-link-opened/${encodeURIComponent(slug)}`, key);
++  requirePublicPath(path);
++  await fetch(path, { method: "POST", credentials: "omit" });
+ }
+ 
+ /**
+diff --git a/src/web/usePrivateLinkOpen.ts b/src/web/usePrivateLinkOpen.ts
+new file mode 100644
+index 000000000..1e034ca54
+--- /dev/null
++++ b/src/web/usePrivateLinkOpen.ts
+@@ -0,0 +1,51 @@
++/**
++ * **A visitor opened a private link: say so, once.** Greg, 2026-10-20 (reply
++ * `spya-xug3kf` to q-agbc89, option C): the signed-in accounts that open a
++ * private link, plus a count of signed-out opens, seen by the administrator
++ * alone. docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md § 3.
++ *
++ * From the page, as the owner's record-open is (`OwnedArticle` in
++ * ArticlePage.tsx), and for its reasons: not from inside a GET, which a
++ * prefetch, retry or unfurler would inflate; and **once per slug per mount**,
++ * by a ref, because StrictMode runs every effect twice in development.
++ *
++ * Only on a private link — `sharedBy === "link"` and a key in the address. A
++ * public article sends nothing, so the visitor tests' *a signed-out browser
++ * issues no POST* still holds there. Three cases:
++ *
++ * - **signed in, session confirmed** — the authenticated route, bound by
++ *   `apiFetch` to the account access was resolved for, so a session that
++ *   changes mid-flight is refused rather than recorded as somebody else;
++ * - **signed out** — the one public write, credential-less
++ *   (`notePrivateLinkOpened`);
++ * - **session unconfirmed** — nothing: it may be the owner's own.
++ *
++ * Failures are swallowed: the reader is reading, and a missed count is not
++ * theirs to hear about.
++ */
++import { useEffect, useRef } from "react";
++
++import type { PublicSharedBy } from "../public-types.js";
++import { type ShareKey, withShareKey } from "../share-key.js";
++import { apiFetch } from "./lib/api.js";
++import { notePrivateLinkOpened } from "./public-api.js";
++
++export function usePrivateLinkOpen(
++  slug: string,
++  sharedBy: PublicSharedBy,
++  shareKey: ShareKey | null,
++  readerId: string | null,
++  sessionUnconfirmed: boolean,
++): void {
++  const noted = useRef<string | null>(null);
++  useEffect(() => {
++    if (sharedBy !== "link" || shareKey === null || sessionUnconfirmed) return;
++    if (noted.current === slug) return;
++    noted.current = slug;
++    const sent =
++      readerId === null
++        ? notePrivateLinkOpened(slug, shareKey)
++        : apiFetch(withShareKey(`/api/private-link-opens/${encodeURIComponent(slug)}`, shareKey), { method: "POST" }, readerId);
++    void sent.catch(() => {});
++  }, [slug, sharedBy, shareKey, readerId, sessionUnconfirmed]);
++}
+diff --git a/tests/action-tables-have-created-at.test.ts b/tests/action-tables-have-created-at.test.ts
+index 502f90439..f9d29af4b 100644
+--- a/tests/action-tables-have-created-at.test.ts
++++ b/tests/action-tables-have-created-at.test.ts
+@@ -50,6 +50,9 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
+   citation_index_lookups: { column: "fetched_at" },
+   ingest_events: { column: "reserved_at" },
+   link_previews: { column: "fetched_at" },
++  /* Plan 261021d: one row per article (and account), first and last open. */
++  private_link_openers: { column: "first_opened_at" },
++  private_link_signed_out_opens: { column: "first_opened_at" },
+   queue_state: { column: "updated_at" },
+   rate_limit_events: { column: "started_at" },
+   reader_arrivals: { column: "first_seen_at" },
+diff --git a/tests/article-ownership.test.tsx b/tests/article-ownership.test.tsx
+index 66c5014a1..85a751605 100644
+--- a/tests/article-ownership.test.tsx
++++ b/tests/article-ownership.test.tsx
+@@ -16,8 +16,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import type { Article } from "../src/types.js";
+ import type { PublicArtefacts } from "../src/public-types.js";
+ import {
+-  OWNERSHIP_ADMIN_LINK,
++  LINK_OPENS_HEADING,
++  LINK_OPENS_NONE,
++  LINK_OPENS_SIGNED_OUT,
+   OWNERSHIP_ADMIN_NO_EMAIL,
++  OWNERSHIP_ADMIN_NOT_FOUND,
+   OWNERSHIP_ADMIN_OWNER,
+   OWNERSHIP_NOT_YOURS,
+   OWNERSHIP_YOURS,
+@@ -31,11 +34,27 @@ const READER = "00000000-0000-4000-8000-0000000ce1f0";
+ const ADMIN = ADMIN_USER_ID_PROD;
+ /** Which account the mocked session holds; the session's id is what `user.id === readerId` compares. */
+ let sessionId = READER;
+-/** What `GET /api/admin/articles` answers, and how often it was asked. */
+-let adminList: unknown = { articles: [], emailsAvailable: true };
++/** What `GET /api/admin/articles/:slug/access` answers (`null`: 404), and every address it was asked at. */
++let adminAccess: unknown = null;
+ /** Queued answers for tests which hold one request while the page moves on. */
+ let adminReplies: Promise<unknown>[] = [];
+ let adminCalls = 0;
++const adminUrls: string[] = [];
++const KEY = "abcdefghijklmnopqrstuv";
++
++/** An access answer, with the fields a test does not care about filled in. */
++function access(over: Record<string, unknown> = {}): Record<string, unknown> {
++  return {
++    ownerId: READER,
++    ownerEmail: "owner@example.com",
++    emailsAvailable: true,
++    mine: false,
++    privateLink: false,
++    openers: [],
++    signedOut: null,
++    ...over,
++  };
++}
+ 
+ vi.mock("../src/web/lib/supabase.js", () => ({
+   supabase: {
+@@ -129,18 +148,28 @@ let root: Root;
+ beforeEach(() => {
+   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+   sessionId = READER;
+-  adminList = { articles: [], emailsAvailable: true };
++  adminAccess = null;
+   adminReplies = [];
+   adminCalls = 0;
++  adminUrls.length = 0;
+   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+     const url = String(input);
+-    if (url === "/api/admin/articles") {
++    if (url.startsWith("/api/admin/") && !url.split("?")[0]!.endsWith("/access")) {
++      /* The owner's page also asks for the administrator's cost section; not this test's business. */
++      return new Response(JSON.stringify({ error: "not here" }), { status: 404, headers: { "content-type": "application/json" } });
++    }
++    if (url.startsWith("/api/admin/")) {
+       adminCalls++;
++      adminUrls.push(url);
+       const queued = adminReplies.shift();
+-      return new Response(JSON.stringify(queued ? await queued : adminList), {
+-        status: 200,
+-        headers: { "content-type": "application/json" },
+-      });
++      const body = queued ? await queued : adminAccess;
++      if (body === null) {
++        return new Response(JSON.stringify({ error: "There is no such article." }), {
++          status: 404,
++          headers: { "content-type": "application/json" },
++        });
++      }
++      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+     }
+     if (url.startsWith("/api/metadata/")) {
+       return new Response(
+@@ -227,6 +256,32 @@ describe("the owner's details page", () => {
+     expect(host.textContent).not.toContain(OWNERSHIP_NOT_YOURS);
+   });
+ 
++  it("shows the administrator who opened their own article's private link, and asks nothing for anybody else", async () => {
++    adminAccess = access({ ownerId: ADMIN, mine: true, privateLink: true, signedOut: { opens: 2, firstOpenedAt: "2026-10-21T08:00:00Z", lastOpenedAt: "2026-10-21T08:00:00Z" } });
++    for (const who of [READER, ADMIN]) {
++      sessionId = who;
++      adminUrls.length = 0;
++      await act(async () => {
++        root.render(
++          createElement(
++            NuqsAdapter,
++            null,
++            createElement(Metadata, { slug: SLUG, article: ARTICLE, readerId: who, onRenamed: () => {}, onVisibility: () => {} }),
++          ),
++        );
++      });
++      await settle();
++      const opens = section("Access & sharing")?.querySelector("[data-admin-link-opens]");
++      if (who === ADMIN) {
++        expect(adminUrls).toEqual([`/api/admin/articles/${SLUG}/access`]);
++        expect(opens?.textContent).toContain(`${LINK_OPENS_SIGNED_OUT} 2`);
++      } else {
++        expect(adminUrls).toEqual([]);
++        expect(opens).toBeFalsy();
++      }
++    }
++  });
++
+   it("does not put a new session's address beside the old reader's ownership answer", async () => {
+     sessionId = "00000000-0000-4000-8000-000000000002";
+     await act(async () => {
+@@ -257,7 +312,8 @@ describe("a visitor's details page", () => {
+       readerId = signedIn ? READER : null,
+       sharedBy = "link",
+       slug = SLUG,
+-    }: { readerId?: string | null; sharedBy?: "public" | "link"; slug?: string } = {},
++      shareKey = null,
++    }: { readerId?: string | null; sharedBy?: "public" | "link"; slug?: string; shareKey?: string | null } = {},
+   ): Promise<void> {
+     history.replaceState(null, "", `/read/${slug}/metadata`);
+     await act(async () => {
+@@ -270,6 +326,7 @@ describe("a visitor's details page", () => {
+           readerId,
+           sessionUnconfirmed,
+           sharedBy,
++          shareKey: shareKey as never,
+         }),
+       );
+     });
+@@ -315,61 +372,65 @@ describe("a visitor's details page", () => {
+     expect(host.querySelector("[data-admin-owner]")).toBeNull();
+   });
+ 
+-  it("tells the administrator whose public article it is, matched by slug", async () => {
++  it("tells the administrator whose public article it is, from the access route", async () => {
+     sessionId = ADMIN;
+-    adminList = {
+-      emailsAvailable: true,
+-      articles: [
+-        { id: "x", shortId: null, ownerId: READER, ownerEmail: "other@example.com", mine: false, createdAt: "", visibility: "public", processing: "full", title: "Another", slug: "another", published: true },
+-        { id: "y", shortId: null, ownerId: READER, ownerEmail: "owner@example.com", mine: false, createdAt: "", visibility: "public", processing: "full", title: "A piece", slug: SLUG, published: true },
+-      ],
+-    };
++    adminAccess = access();
+     await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
+-    expect(adminCalls).toBe(1);
++    expect(adminUrls).toEqual([`/api/admin/articles/${SLUG}/access`]);
+     expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(`${OWNERSHIP_ADMIN_OWNER} owner@example.com.`);
++    /* A public article that has never had a link says nothing about links. */
++    expect(host.querySelector("[data-admin-link-opens]")).toBeNull();
+   });
+ 
+   it("says the address could not be read when the Auth service listing failed", async () => {
+     sessionId = ADMIN;
+-    adminList = {
+-      emailsAvailable: false,
+-      articles: [{ id: "y", shortId: null, ownerId: READER, ownerEmail: null, mine: false, createdAt: "", visibility: "public", processing: "full", title: "A piece", slug: SLUG, published: true }],
+-    };
++    adminAccess = access({ ownerEmail: null, emailsAvailable: false });
+     await visitor(true, false, { readerId: ADMIN, sharedBy: "public" });
+     expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_NO_EMAIL);
+   });
+ 
+-  it("does not look up a private-link article's owner, and says why", async () => {
++  /* Greg's 1B (reply spya-xug3kf to q-agbc89): on a private link, the owner too
++     — asked with the address's key, which is what the server answers for. */
++  it("tells the administrator whose private-link article it is, asking with the key", async () => {
+     sessionId = ADMIN;
+-    await visitor(true, false, { readerId: ADMIN, sharedBy: "link" });
+-    expect(adminCalls).toBe(0);
+-    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_LINK);
++    adminAccess = access({ privateLink: true });
++    await visitor(true, false, { readerId: ADMIN, sharedBy: "link", shareKey: KEY });
++    expect(adminUrls).toEqual([`/api/admin/articles/${SLUG}/access?key=${KEY}`]);
++    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(`${OWNERSHIP_ADMIN_OWNER} owner@example.com.`);
++    expect(host.querySelector("[data-admin-link-opens]")?.textContent).toBe(LINK_OPENS_NONE);
++  });
++
++  /* Greg's 2C: who opened it, among the signed-in, and roughly how often signed out. */
++  it("lists who opened the private link, and the signed-out count", async () => {
++    sessionId = ADMIN;
++    adminAccess = access({
++      privateLink: true,
++      openers: [
++        { readerId: "r1", email: "a@example.com", opens: 3, firstOpenedAt: "2026-10-20T09:00:00Z", lastOpenedAt: "2026-10-21T09:00:00Z" },
++        { readerId: "r2", email: null, opens: 1, firstOpenedAt: "2026-10-20T10:00:00Z", lastOpenedAt: "2026-10-20T10:00:00Z" },
++      ],
++      signedOut: { opens: 4, firstOpenedAt: "2026-10-20T08:00:00Z", lastOpenedAt: "2026-10-21T08:00:00Z" },
++    });
++    await visitor(true, false, { readerId: ADMIN, sharedBy: "link", shareKey: KEY });
++    const opens = host.querySelector("[data-admin-link-opens]")?.textContent ?? "";
++    expect(opens).toContain(LINK_OPENS_HEADING);
++    expect(opens).toContain("a@example.com — 3 times, last 21 October 2026");
++    expect(opens).toContain("once, last 20 October 2026");
++    expect(opens).toContain(`${LINK_OPENS_SIGNED_OUT} 4, last 21 October 2026.`);
++  });
++
++  it("says it could not look the article up when the route answers 404", async () => {
++    sessionId = ADMIN;
++    adminAccess = null;
++    await visitor(true, false, { readerId: ADMIN, sharedBy: "link", shareKey: KEY });
++    expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(OWNERSHIP_ADMIN_NOT_FOUND);
++    expect(host.querySelector("[data-admin-link-opens]")).toBeNull();
+   });
+ 
+   it("does not let an earlier slug's late owner answer overwrite the current one", async () => {
+     sessionId = ADMIN;
+     const old = deferred<unknown>();
+-    adminReplies = [
+-      old.promise,
+-      Promise.resolve({
+-        emailsAvailable: true,
+-        articles: [
+-          {
+-            id: "new",
+-            shortId: null,
+-            ownerId: READER,
+-            ownerEmail: "current@example.com",
+-            mine: false,
+-            createdAt: "",
+-            visibility: "public",
+-            processing: "full",
+-            title: "A piece",
+-            slug: SLUG,
+-            published: true,
+-          },
+-        ],
+-      }),
+-    ];
++    adminReplies = [old.promise, Promise.resolve(access({ ownerEmail: "current@example.com" }))];
+ 
+     await visitor(true, false, { readerId: ADMIN, sharedBy: "public", slug: "old-piece" });
+     expect(adminCalls).toBe(1);
+@@ -378,24 +439,7 @@ describe("a visitor's details page", () => {
+       `${OWNERSHIP_ADMIN_OWNER} current@example.com.`,
+     );
+ 
+-    old.resolve({
+-      emailsAvailable: true,
+-      articles: [
+-        {
+-          id: "old",
+-          shortId: null,
+-          ownerId: READER,
+-          ownerEmail: "stale@example.com",
+-          mine: false,
+-          createdAt: "",
+-          visibility: "public",
+-          processing: "full",
+-          title: "Old piece",
+-          slug: "old-piece",
+-          published: true,
+-        },
+-      ],
+-    });
++    old.resolve(access({ ownerEmail: "stale@example.com" }));
+     await settle();
+     expect(host.querySelector("[data-admin-owner]")?.textContent).toBe(
+       `${OWNERSHIP_ADMIN_OWNER} current@example.com.`,
+diff --git a/tests/db-schema.test.ts b/tests/db-schema.test.ts
+index 6f49a3267..2a8928cd8 100644
+--- a/tests/db-schema.test.ts
++++ b/tests/db-schema.test.ts
+@@ -1022,7 +1022,7 @@ describe("the schema keeps the promises the plan makes", () => {
+                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
+                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
+                             'shelf_topic_scores_owner_fk','reader_arrivals_owner_fk',
+-                            'shelf_topic_sets_owner_fk')
++                            'shelf_topic_sets_owner_fk','private_link_openers_reader_fk')
+           order by conname`,
+       );
+       expect(rows.map((r) => r.conname)).toEqual([
+@@ -1066,6 +1066,10 @@ describe("the schema keeps the promises the plan makes", () => {
+            a delete on it would mean an account could not be removed until its
+            last hover expired. */
+         "link_summaries_owner_fk",
++        /* drizzle/20261021013453, appended by hand. CASCADE, as
++           `article_open_times_owner_fk`: that an account opened somebody's
++           private link is worth nothing once the account is gone. */
++        "private_link_openers_reader_fk",
+         /* drizzle/20260905172650, and the first CASCADE. Bookkeeping: one row
+            per outbound fetch a pointer caused, deleted by the limiter itself as
+            soon as it falls out of the rolling window. It arrived with stage 2 of
+diff --git a/tests/owner-isolation.test.ts b/tests/owner-isolation.test.ts
+index 043440c73..4a8aba72a 100644
+--- a/tests/owner-isolation.test.ts
++++ b/tests/owner-isolation.test.ts
+@@ -699,6 +699,14 @@ describe("the one query that lists articles for nobody in particular", () => {
+       ],
+     },
+     { file: LISTING.file, fns: [LISTING.fn] },
++    /* **Added 2026-10-21: the one public write.** A signed-out visitor opened
++       a private link, so its count goes up (Greg's reply `spya-xug3kf` to
++       q-agbc89, option C). It names `articles` only as the source of an
++       `insert … select`, by `privateLinkWhere` — slug, key and private — in
++       its own `where`; it selects the article's id into the count's row and
++       returns nothing to the caller. No owner is bound or selected.
++       docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md § 4. */
++    { file: "src/store/private-link-signed-out-opens.ts", fns: ["countSignedOutOpen"] },
+   ];
+ 
+   /**
+@@ -784,7 +792,7 @@ describe("the one query that lists articles for nobody in particular", () => {
+    * too, naming both the alias and the table it aliases; the regex this replaced
+    * was green on exactly that.
+    */
+-  it("names the articles table in exactly two places, each inside its own function", async () => {
++  it("names the articles table in exactly the permitted files, each inside its own functions", async () => {
+     const offenders: string[] = [];
+     const permittedFiles = PERMITTED.map((one) => one.file);
+ 
+@@ -793,7 +801,7 @@ describe("the one query that lists articles for nobody in particular", () => {
+       if (uses.length === 0) continue;
+       if (!permittedFiles.includes(file)) {
+         offenders.push(
+-          `${file} names the articles table and is not one of the two permitted: ` +
++          `${file} names the articles table and is not one of the permitted files: ` +
+             uses.map((u) => `line ${u.line} (${u.how}) ${u.text}`).join("; "),
+         );
+       }
+diff --git a/tests/privacy-page.test.ts b/tests/privacy-page.test.ts
+index 201ca61ce..816a2e699 100644
+--- a/tests/privacy-page.test.ts
++++ b/tests/privacy-page.test.ts
+@@ -208,7 +208,7 @@ describe("the privacy page", () => {
+   });
+ 
+   it("dates the privacy notice to the latest disclosure change", () => {
+-    expect(PAGE).toContain('const LAST_UPDATED = "20 October 2026"');
++    expect(PAGE).toContain('const LAST_UPDATED = "21 October 2026"');
+   });
+ 
+   it("distinguishes the article-free open record from the request log", () => {
+@@ -437,12 +437,22 @@ describe("the privacy page", () => {
+       expect(read("src/store/link-shared-slug.ts")).toMatch(/eq\(articles\.shareToken, key\)/);
+     });
+ 
+-    it("says it is not listed, and that we cannot tell who read it", () => {
++    /* Until 2026-10-21 the page said "We cannot tell you who has read it", and
++       this case pinned that nothing recorded a visit. Greg's 2C (reply
++       spya-xug3kf to q-agbc89, plan 261021d) changed the fact, so the page and
++       this case changed with it: signed-in openers are recorded, signed-out
++       opens counted, and only the administrator sees either. */
++    it("says it is not listed, and who records which opens and who sees them", () => {
+       expect(prose).toMatch(/An article shared only this way is not listed anywhere/);
+-      expect(prose).toMatch(/cannot tell (you )?who (has )?(read|opened)/);
++      expect(prose).toContain("We do not tell you who has read it.");
++      expect(prose).toContain("when somebody signed in opens the link, their account and when");
++      expect(prose).toContain("when somebody signed out does, only a rough count");
++      expect(prose).toContain("Only the administrator can see that.");
++      expect(prose).toContain("When you open somebody’s private link while signed in");
+       expect(read("src/store/public-library.ts")).not.toMatch(/from "\.\/public-access\.js"/);
+-      /* Nothing records a visit: the public routes write nothing. */
+-      expect(read("src/db/schema.ts")).not.toMatch(/share_link_(reads|visits|opens)/);
++      /* The two tables the sentences describe, and no third. */
++      const tables = [...read("src/db/schema.ts").matchAll(/spideryarn\.table\(\s*"(private_link_\w+|share_link_\w+)"/g)].map((m) => m[1]);
++      expect(tables.sort()).toEqual(["private_link_openers", "private_link_signed_out_opens"]);
+     });
+ 
+     it("says they get what a public reader gets", () => {
+diff --git a/tests/private-link-open-hook.test.tsx b/tests/private-link-open-hook.test.tsx
+new file mode 100644
+index 000000000..baf2b9689
+--- /dev/null
++++ b/tests/private-link-open-hook.test.tsx
+@@ -0,0 +1,108 @@
++// @vitest-environment jsdom
++/**
++ * **A visitor's page says a private link was opened, once, and only then** —
++ * `usePrivateLinkOpen`, plan 261021d § 3 (Greg's 2C, reply `spya-xug3kf` to
++ * q-agbc89).
++ *
++ * - signed in and confirmed: one POST to the authenticated route, with the key;
++ * - signed out: one credential-less POST to the public write;
++ * - session unconfirmed, a public article, or no key: nothing at all — so the
++ *   visitor tests' *a signed-out browser issues no POST* still holds on a
++ *   public article;
++ * - StrictMode's double effect, and a re-render: still one.
++ */
++import { act, createElement, StrictMode } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++vi.mock("../src/web/lib/supabase.js", () => ({
++  supabase: {
++    auth: {
++      getSession: async () => ({ data: { session: { access_token: "t" } } }),
++      refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
++      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
++    },
++  },
++  googleSignInAvailable: false,
++}));
++
++const { usePrivateLinkOpen } = await import("../src/web/usePrivateLinkOpen.js");
++const { parseShareKey } = await import("../src/share-key.js");
++
++const SLUG = "a-piece-spya-k3m9qt";
++const KEY = parseShareKey("abcdefghijklmnopqrstuv");
++const READER = "00000000-0000-4000-8000-0000000ce1f1";
++
++const calls: { url: string; init: RequestInit | undefined }[] = [];
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  calls.length = 0;
++  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
++    calls.push({ url: String(input), init });
++    return new Response(null, { status: 204 });
++  });
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  host.remove();
++  vi.unstubAllGlobals();
++});
++
++function Probe(props: {
++  sharedBy: "public" | "link";
++  shareKey: typeof KEY;
++  readerId: string | null;
++  sessionUnconfirmed: boolean;
++  tick?: number;
++}) {
++  usePrivateLinkOpen(SLUG, props.sharedBy, props.shareKey, props.readerId, props.sessionUnconfirmed);
++  return null;
++}
++
++async function mount(props: Parameters<typeof Probe>[0]): Promise<void> {
++  await act(async () => {
++    root.render(createElement(StrictMode, null, createElement(Probe, props)));
++  });
++  for (let i = 0; i < 3; i++) await act(async () => new Promise((go) => setTimeout(go, 0)));
++}
++
++describe("usePrivateLinkOpen", () => {
++  it("sends one credential-less POST to the public write for a signed-out visitor", async () => {
++    await mount({ sharedBy: "link", shareKey: KEY, readerId: null, sessionUnconfirmed: false });
++    expect(calls).toHaveLength(1);
++    expect(calls[0]?.url).toBe(`/api/public/private-link-opened/${SLUG}?key=${KEY}`);
++    expect(calls[0]?.init?.method).toBe("POST");
++    expect(calls[0]?.init?.credentials).toBe("omit");
++  });
++
++  it("sends one authenticated POST, with the key, for a confirmed signed-in visitor", async () => {
++    await mount({ sharedBy: "link", shareKey: KEY, readerId: READER, sessionUnconfirmed: false });
++    expect(calls).toHaveLength(1);
++    expect(calls[0]?.url).toBe(`/api/private-link-opens/${SLUG}?key=${KEY}`);
++    expect(calls[0]?.init?.method).toBe("POST");
++    expect(new Headers(calls[0]?.init?.headers).get("Authorization")).toBe("Bearer t");
++  });
++
++  it.each([
++    ["a public article", { sharedBy: "public" as const, shareKey: KEY, readerId: null, sessionUnconfirmed: false }],
++    ["a public article, signed in", { sharedBy: "public" as const, shareKey: KEY, readerId: READER, sessionUnconfirmed: false }],
++    ["no key in the address", { sharedBy: "link" as const, shareKey: null, readerId: null, sessionUnconfirmed: false }],
++    ["an unconfirmed session", { sharedBy: "link" as const, shareKey: KEY, readerId: READER, sessionUnconfirmed: true }],
++  ])("sends nothing for %s", async (_label, props) => {
++    await mount(props);
++    expect(calls).toEqual([]);
++  });
++
++  it("still sends once when the page re-renders", async () => {
++    await mount({ sharedBy: "link", shareKey: KEY, readerId: null, sessionUnconfirmed: false, tick: 1 });
++    await mount({ sharedBy: "link", shareKey: KEY, readerId: null, sessionUnconfirmed: false, tick: 2 });
++    expect(calls).toHaveLength(1);
++  });
++});
+diff --git a/tests/private-link-opened-dispatch.test.ts b/tests/private-link-opened-dispatch.test.ts
+new file mode 100644
+index 000000000..de88377b4
+--- /dev/null
++++ b/tests/private-link-opened-dispatch.test.ts
+@@ -0,0 +1,104 @@
++/**
++ * **The one write in the closed room, as dispatch sees it** — plan 261021d § 4.
++ *
++ * `POST /api/public/private-link-opened/:slug?key=` counts a signed-out open of
++ * a private link. What has to hold, and what each case is the witness for:
++ *
++ * - POST reaches `countSignedOutOpen` with the slug and the **parsed** key, and
++ *   answers 204 with no body;
++ * - without a usable key it answers the same 204 and writes nothing;
++ * - GET and HEAD are refused 405 with `Allow: POST` — a write a prefetch or an
++ *   unfurler could make is the thing the read-only rule exists to prevent;
++ * - it is answered inside the public namespace, `no-store`, for an anonymous
++ *   request, and never reaches the authenticated table (a 401 would say so).
++ *
++ * The store is mocked: the spy is the witness that the route matched, as
++ * `readerRan` is in tests/public-dispatch.test.ts. The write itself is
++ * tested against Postgres in tests/private-link-opens-pg.test.ts.
++ */
++import type { IncomingMessage, ServerResponse } from "node:http";
++
++import { beforeEach, describe, expect, it, vi } from "vitest";
++
++const countSignedOutOpen = vi.fn(async (_slug: string, _key: string) => {});
++vi.mock("../src/store/private-link-signed-out-opens.js", () => ({
++  countSignedOutOpen: (slug: string, key: string) => countSignedOutOpen(slug, key),
++  SIGNED_OUT_OPEN_THROTTLE_SECONDS: 2,
++}));
++
++const { handleApi } = await import("../src/routes.js");
++const { PRIVATE_LINK_OPENED, PUBLIC_ROUTE_NAMES } = await import("../src/public/route-names.js");
++const { acceptAny } = await import("./helpers/authed.js");
++
++const KEY = "abcdefghijklmnopqrstuv";
++
++async function call(method: string, url: string) {
++  const req = Object.assign((async function* () {})(), { method, url, headers: {} }) as unknown as IncomingMessage;
++  let status = 0;
++  let text: string | undefined;
++  const sent: Record<string, string> = {};
++  const res = {
++    set statusCode(v: number) {
++      status = v;
++    },
++    get statusCode() {
++      return status;
++    },
++    setHeader(name: string, value: string) {
++      sent[name] = value;
++    },
++    end(chunk?: string) {
++      text = chunk;
++    },
++  } as unknown as ServerResponse;
++  const handled = await handleApi(req, res, acceptAny);
++  return { handled, status, headers: sent, text };
++}
++
++beforeEach(() => countSignedOutOpen.mockClear());
++
++describe("POST /api/public/private-link-opened/:slug", () => {
++  it("counts with the slug and the parsed key, and answers 204 with no body", async () => {
++    const r = await call("POST", `${PRIVATE_LINK_OPENED.path("a-piece-spya-k3m9qt")}?key=${KEY}`);
++    expect(r.status).toBe(204);
++    expect(r.text).toBeUndefined();
++    expect(r.headers["Cache-Control"]).toBe("no-store");
++    expect(countSignedOutOpen).toHaveBeenCalledTimes(1);
++    expect(countSignedOutOpen).toHaveBeenCalledWith("a-piece-spya-k3m9qt", KEY);
++  });
++
++  it("writes nothing without a usable key, and says the same 204", async () => {
++    for (const url of [
++      PRIVATE_LINK_OPENED.path("a-piece"),
++      `${PRIVATE_LINK_OPENED.path("a-piece")}?key=short`,
++      `${PRIVATE_LINK_OPENED.path("a-piece")}?key=${"!".repeat(22)}`,
++    ]) {
++      const r = await call("POST", url);
++      expect(r.status, url).toBe(204);
++    }
++    expect(countSignedOutOpen).not.toHaveBeenCalled();
++  });
++
++  it("refuses every other method with 405 and Allow: POST, and writes nothing", async () => {
++    for (const method of ["GET", "HEAD", "PUT", "PATCH", "DELETE"]) {
++      const r = await call(method, `${PRIVATE_LINK_OPENED.path("a-piece")}?key=${KEY}`);
++      expect(r.status, method).toBe(405);
++      expect(r.headers.Allow, method).toBe("POST");
++    }
++    expect(countSignedOutOpen).not.toHaveBeenCalled();
++  });
++
++  it("refuses a malformed slug before anything is written", async () => {
++    const r = await call("POST", `${PRIVATE_LINK_OPENED.path("%E0%A4%A")}?key=${KEY}`);
++    expect(r.status).toBe(400);
++    expect(countSignedOutOpen).not.toHaveBeenCalled();
++  });
++
++  /** It is not a read route, so no sweep driven off the read inventory treats it as one. */
++  it("is not in the read inventory, and every read route still refuses POST", async () => {
++    expect(PUBLIC_ROUTE_NAMES.some((r) => r.name === PRIVATE_LINK_OPENED.name)).toBe(false);
++    const r = await call("POST", `/api/public/article/a-piece?key=${KEY}`);
++    expect(r.status).toBe(405);
++    expect(countSignedOutOpen).not.toHaveBeenCalled();
++  });
++});
+diff --git a/tests/private-link-opens-pg.test.ts b/tests/private-link-opens-pg.test.ts
+new file mode 100644
+index 000000000..79545dd45
+--- /dev/null
++++ b/tests/private-link-opens-pg.test.ts
+@@ -0,0 +1,281 @@
++/**
++ * **Who opened a private link, end to end, against a real Postgres** — plan
++ * 261021d (Greg's reply `spya-xug3kf` to q-agbc89: 1B and 2C).
++ *
++ * The two writes and the administrator's read, through `handleApi`:
++ *
++ * | | private, right key | wrong key / no key | public article | link off | owner's own id |
++ * |---|---|---|---|---|---|
++ * | signed-in POST | a row, then +1 | nothing | nothing | nothing | nothing |
++ * | signed-out POST | a count, throttled, saturating | nothing | nothing | nothing | — |
++ *
++ * and `GET /api/admin/articles/:slug/access`: the administrator's own article
++ * with no key; somebody else's private article only with its key (a 404
++ * without it, the same 404 as no article); a public one; a non-admin is 403.
++ * Nothing in the answer is a title, slug or key.
++ *
++ * Every case reads the tables after the request, so a 204 that wrote nothing
++ * cannot pass for one that wrote.
++ */
++import { randomUUID } from "node:crypto";
++import type { IncomingMessage, ServerResponse } from "node:http";
++
++import { eq, inArray, sql } from "drizzle-orm";
++import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
++
++import type { AdminArticleAccess } from "../src/admin-articles.js";
++import type { Verifier } from "../src/auth.js";
++import { getDb } from "../src/db/client.js";
++import { articles, privateLinkOpeners, privateLinkSignedOutOpens } from "../src/db/schema.js";
++import { loadEnvLocal } from "../src/env.js";
++import { mintId } from "../src/ids.js";
++import { handleApi } from "../src/routes.js";
++import { parseShareKey, type ShareKey } from "../src/share-key.js";
++import { recordOpener } from "../src/store/pg-private-link-openers.js";
++import { countSignedOutOpen } from "../src/store/private-link-signed-out-opens.js";
++import { AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
++import { pgReady } from "./helpers/pg-ready.js";
++import { seedAuthUser } from "./helpers/seed-auth-user.js";
++
++loadEnvLocal();
++
++await pgReady({
++  suite: "tests/private-link-opens-pg.test.ts",
++  tables: ["spideryarn.private_link_openers", "spideryarn.private_link_signed_out_opens"],
++});
++
++const RUN = randomUUID().slice(0, 8);
++/** The administrator, on a local stack: `acceptAny`'s account. */
++const ADMIN = TEST_SUB;
++/** Somebody else, who owns the private articles. */
++const OWNER = randomUUID();
++/** A third account, who opens them. */
++const VISITOR = randomUUID();
++
++function keyOf(seed: string): ShareKey {
++  const key = parseShareKey(`${seed}${"k".repeat(22)}`.slice(0, 22));
++  if (key === null) throw new Error(`not a key: ${seed}`);
++  return key;
++}
++
++const KEY = keyOf(`a${RUN}`);
++const OTHER_KEY = keyOf(`b${RUN}`);
++const ADMIN_KEY = keyOf(`c${RUN}`);
++const LINKED = `plo-linked-${RUN}`;
++const PUBLIC = `plo-public-${RUN}`;
++const UNLINKED = `plo-unlinked-${RUN}`;
++const ADMINS = `plo-admins-${RUN}`;
++const SLUGS = [LINKED, PUBLIC, UNLINKED, ADMINS];
++
++const as = (sub: string): Verifier => async () => ({
++  ok: true,
++  claims: { sub, email: `${sub}@example.test`, role: "authenticated", is_anonymous: false },
++});
++
++async function call(method: string, url: string, verify: Verifier | null) {
++  const req = Object.assign((async function* () {})(), {
++    method,
++    url,
++    headers: verify ? AUTHED_HEADERS : {},
++  }) as unknown as IncomingMessage;
++  let status = 0;
++  let text = "";
++  const res = {
++    get statusCode() {
++      return status;
++    },
++    set statusCode(v: number) {
++      status = v;
++    },
++    setHeader() {},
++    end(chunk?: string) {
++      if (chunk) text = chunk;
++    },
++  } as unknown as ServerResponse;
++  await handleApi(req, res, verify ?? as(ADMIN));
++  return { status, body: text ? (JSON.parse(text) as unknown) : undefined };
++}
++
++const idOf = new Map<string, string>();
++
++async function openers(slug: string) {
++  return getDb()
++    .select()
++    .from(privateLinkOpeners)
++    .where(eq(privateLinkOpeners.articleId, idOf.get(slug)!));
++}
++
++async function signedOut(slug: string) {
++  return getDb()
++    .select()
++    .from(privateLinkSignedOutOpens)
++    .where(eq(privateLinkSignedOutOpens.articleId, idOf.get(slug)!));
++}
++
++beforeAll(async () => {
++  const db = getDb();
++  await seedAuthUser(db, { id: OWNER, email: `plo-owner-${RUN}@example.invalid` });
++  await seedAuthUser(db, { id: VISITOR, email: `plo-visitor-${RUN}@example.invalid` });
++  const rows: { slug: string; ownerId: string; visibility: "public" | "private"; key: ShareKey | null }[] = [
++    { slug: LINKED, ownerId: OWNER, visibility: "private", key: KEY },
++    { slug: PUBLIC, ownerId: OWNER, visibility: "public", key: OTHER_KEY },
++    { slug: UNLINKED, ownerId: OWNER, visibility: "private", key: null },
++    { slug: ADMINS, ownerId: ADMIN, visibility: "private", key: ADMIN_KEY },
++  ];
++  for (const r of rows) {
++    const id = randomUUID();
++    idOf.set(r.slug, id);
++    await db.insert(articles).values({
++      id,
++      ownerId: r.ownerId,
++      slug: r.slug,
++      shortId: mintId(),
++      visibility: r.visibility,
++      publicAt: r.visibility === "public" ? new Date() : null,
++      shareToken: r.key,
++      shareTokenAt: r.key ? new Date() : null,
++    });
++  }
++});
++
++afterAll(async () => {
++  const db = getDb();
++  await db.delete(articles).where(inArray(articles.slug, SLUGS));
++  await db.execute(sql`delete from auth.users where id in (${OWNER}::uuid, ${VISITOR}::uuid)`);
++});
++
++beforeEach(async () => {
++  const ids = [...idOf.values()];
++  await getDb().delete(privateLinkOpeners).where(inArray(privateLinkOpeners.articleId, ids));
++  await getDb().delete(privateLinkSignedOutOpens).where(inArray(privateLinkSignedOutOpens.articleId, ids));
++});
++
++describe("a signed-in visitor opens a private link", () => {
++  it("records the account once, then counts each further open", async () => {
++    expect((await call("POST", `/api/private-link-opens/${LINKED}?key=${KEY}`, as(VISITOR))).status).toBe(204);
++    let [row] = await openers(LINKED);
++    expect(row?.readerId).toBe(VISITOR);
++    expect(row?.opens).toBe(1);
++    const first = row!.firstOpenedAt;
++
++    await call("POST", `/api/private-link-opens/${LINKED}?key=${KEY}`, as(VISITOR));
++    [row] = await openers(LINKED);
++    expect(row?.opens).toBe(2);
++    expect(row?.firstOpenedAt.getTime()).toBe(first.getTime());
++    expect(row!.lastOpenedAt.getTime()).toBeGreaterThanOrEqual(first.getTime());
++  });
++
++  it("makes one row and N increments when opened N times at once", async () => {
++    await Promise.all(Array.from({ length: 6 }, () => recordOpener(LINKED, KEY, VISITOR)));
++    const rows = await openers(LINKED);
++    expect(rows).toHaveLength(1);
++    expect(rows[0]?.opens).toBe(6);
++  });
++
++  it.each([
++    ["a wrong key", LINKED, `?key=${OTHER_KEY}`],
++    ["no key", LINKED, ""],
++    ["a malformed key", LINKED, "?key=nope"],
++    ["a public article, with its key", PUBLIC, `?key=${OTHER_KEY}`],
++    ["an article with no link", UNLINKED, `?key=${KEY}`],
++  ])("writes nothing for %s, and answers the same 204", async (_label, slug, query) => {
++    expect((await call("POST", `/api/private-link-opens/${slug}${query}`, as(VISITOR))).status).toBe(204);
++    expect(await openers(slug)).toEqual([]);
++  });
++
++  it("does not record the owner opening their own link", async () => {
++    await call("POST", `/api/private-link-opens/${LINKED}?key=${KEY}`, as(OWNER));
++    expect(await openers(LINKED)).toEqual([]);
++  });
++
++  it("is refused to somebody signed out", async () => {
++    const r = await call("POST", `/api/private-link-opens/${LINKED}?key=${KEY}`, null);
++    expect(r.status).toBe(401);
++    expect(await openers(LINKED)).toEqual([]);
++  });
++});
++
++describe("a signed-out visitor opens a private link", () => {
++  it("counts it, through the public write", async () => {
++    expect((await call("POST", `/api/public/private-link-opened/${LINKED}?key=${KEY}`, null)).status).toBe(204);
++    const [row] = await signedOut(LINKED);
++    expect(row?.opens).toBe(1);
++  });
++
++  it.each([
++    ["a wrong key", LINKED, OTHER_KEY],
++    ["a public article, with its key", PUBLIC, OTHER_KEY],
++    ["an article with no link", UNLINKED, KEY],
++  ])("writes nothing for %s", async (_label, slug, key) => {
++    await countSignedOutOpen(slug, key);
++    expect(await signedOut(slug)).toEqual([]);
++  });
++
++  it("adds at most one per two seconds, and saturates rather than overflowing", async () => {
++    await countSignedOutOpen(LINKED, KEY);
++    await countSignedOutOpen(LINKED, KEY);
++    await countSignedOutOpen(LINKED, KEY);
++    expect((await signedOut(LINKED))[0]?.opens).toBe(1);
++
++    const back = sql`now() - interval '3 seconds'`;
++    await getDb()
++      .update(privateLinkSignedOutOpens)
++      .set({ lastOpenedAt: back })
++      .where(eq(privateLinkSignedOutOpens.articleId, idOf.get(LINKED)!));
++    await countSignedOutOpen(LINKED, KEY);
++    expect((await signedOut(LINKED))[0]?.opens).toBe(2);
++
++    await getDb()
++      .update(privateLinkSignedOutOpens)
++      .set({ opens: 2147483647, lastOpenedAt: back })
++      .where(eq(privateLinkSignedOutOpens.articleId, idOf.get(LINKED)!));
++    await countSignedOutOpen(LINKED, KEY);
++    expect((await signedOut(LINKED))[0]?.opens).toBe(2147483647);
++  });
++});
++
++describe("GET /api/admin/articles/:slug/access", () => {
++  const url = (slug: string, key?: ShareKey) => `/api/admin/articles/${slug}/access${key ? `?key=${key}` : ""}`;
++
++  it("answers for somebody else's private article only with its key", async () => {
++    await recordOpener(LINKED, KEY, VISITOR);
++    await countSignedOutOpen(LINKED, KEY);
++
++    const noKey = await call("GET", url(LINKED), as(ADMIN));
++    const wrong = await call("GET", url(LINKED, OTHER_KEY), as(ADMIN));
++    const nobody = await call("GET", url(`plo-nobody-${RUN}`), as(ADMIN));
++    expect(noKey.status).toBe(404);
++    expect(wrong).toEqual(noKey);
++    expect(nobody).toEqual(noKey);
++
++    const right = await call("GET", url(LINKED, KEY), as(ADMIN));
++    expect(right.status).toBe(200);
++    const body = right.body as AdminArticleAccess;
++    expect(body.ownerId).toBe(OWNER);
++    expect(body.mine).toBe(false);
++    expect(body.privateLink).toBe(true);
++    expect(body.openers.map((o) => [o.readerId, o.opens])).toEqual([[VISITOR, 1]]);
++    expect(body.signedOut?.opens).toBe(1);
++    /* No title, slug or key, under any name. */
++    const text = JSON.stringify(body);
++    expect(text).not.toContain(KEY);
++    expect(text).not.toContain(LINKED);
++    expect(Object.keys(body).sort()).toEqual(
++      ["emailsAvailable", "mine", "openers", "ownerEmail", "ownerId", "privateLink", "signedOut"].sort(),
++    );
++  });
++
++  it("answers for the administrator's own private article with no key, and for a public one", async () => {
++    const own = await call("GET", url(ADMINS), as(ADMIN));
++    expect(own.status).toBe(200);
++    expect((own.body as AdminArticleAccess).mine).toBe(true);
++    const pub = await call("GET", url(PUBLIC), as(ADMIN));
++    expect(pub.status).toBe(200);
++    expect((pub.body as AdminArticleAccess).ownerId).toBe(OWNER);
++  });
++
++  it("is refused to anybody else, with the key or without", async () => {
++    expect((await call("GET", url(LINKED, KEY), as(VISITOR))).status).toBe(403);
++    expect((await call("GET", url(LINKED, KEY), as(OWNER))).status).toBe(403);
++  });
++});
+diff --git a/tests/public-client-fetch.test.ts b/tests/public-client-fetch.test.ts
+index 66daedfb6..730f156ee 100644
+--- a/tests/public-client-fetch.test.ts
++++ b/tests/public-client-fetch.test.ts
+@@ -16,10 +16,10 @@
+  */
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import type { PublicArticle } from "../src/public-types.js";
+-import { pathOf, PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
++import { pathOf, PRIVATE_LINK_OPENED, PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
+ import type { PublicLibrary } from "../src/public-library-types.js";
+ import { parseShareKey, type ShareKey } from "../src/share-key.js";
+-import { loadPublicArticle, loadPublicLibrary, publicFetch } from "../src/web/public-api.js";
++import { loadPublicArticle, loadPublicLibrary, notePrivateLinkOpened, publicFetch } from "../src/web/public-api.js";
+ 
+ /** Every request this file's calls made, exactly as `fetch` saw it. */
+ const calls: { url: string; init: RequestInit | undefined }[] = [];
+@@ -337,3 +337,24 @@ describe("the client and the server agree about the paths", () => {
+     expect(PUBLIC_ROUTE_NAMES.some((r) => r.kind === "collection")).toBe(true);
+   });
+ });
++
++/**
++ * **The one public write, from the client** — plan 261021d § 3 and GPT Sol's
++ * F5: a fixed shape nobody can add to. POST, no credentials, no body, no
++ * headers, and the path the server's own name spells.
++ */
++describe("notePrivateLinkOpened", () => {
++  it("POSTs to the server's write route with the key, and nothing else", async () => {
++    const key = parseShareKey("abcdefghijklmnopqrstuv") as ShareKey;
++    await notePrivateLinkOpened("a piece/x", key);
++
++    expect(calls).toHaveLength(1);
++    const [call] = calls;
++    expect(call?.url).toBe(`${PRIVATE_LINK_OPENED.path(encodeURIComponent("a piece/x"))}?key=${key}`);
++    expect(PRIVATE_LINK_OPENED.pattern.test(call?.url.split("?")[0] ?? "")).toBe(true);
++    expect(call?.init?.method).toBe("POST");
++    expect(call?.init?.credentials).toBe("omit");
++    expect(call?.init?.body).toBeUndefined();
++    expect(call?.init?.headers).toBeUndefined();
++  });
++});
+diff --git a/tests/public-imports.test.ts b/tests/public-imports.test.ts
+index 34c6e355c..53364572b 100644
+--- a/tests/public-imports.test.ts
++++ b/tests/public-imports.test.ts
+@@ -255,6 +255,14 @@ describe("the public API's import graph", () => {
+     expect(listing).not.toContain("src/store/public-access.ts");
+     expect(listing).not.toContain("src/store/link-shared-slug.ts");
+     expect(listing).not.toContain("src/share-key.ts");
++    /* **Nor the writer that records who opened a private link** (plan
++       261021d, GPT Sol's F1): it takes a reader id, so a public door that
++       reached it could be made to say somebody opened something. The public
++       write is the signed-out count's own leaf, which the routes do reach. */
++    for (const entry of PUBLIC_ENTRIES) {
++      expect(graphFrom(entry), entry).not.toContain("src/store/pg-private-link-openers.ts");
++    }
++    expect(PUBLIC_ENTRIES.some((e) => graphFrom(e).includes("src/store/private-link-signed-out-opens.ts"))).toBe(true);
+     /* The control: the article reader does reach all three. */
+     const reader = graphFrom("src/store/public-reader.ts");
+     expect(reader).toContain("src/store/public-access.ts");
+@@ -476,6 +484,17 @@ describe("the public API's tables", () => {
+        writer is the authenticated coordinator (src/public-shelf-topics.ts),
+        which stays forbidden above with every model and gateway module. */
+     "src/store/public-topic-tree.ts": ["shelfTopicSets"],
++    /* **The one public write**, Greg's option C in reply `spya-xug3kf` to
++       q-agbc89 (2026-10-20), plan 261021d § 4. Its three sentences: the write
++       is `countSignedOutOpen`, an `insert … select` from `articles` by
++       `privateLinkWhere` (slug, key and private) with nothing returned, so it
++       reads nothing back to the caller; the row it writes is a count and two
++       times, keyed by the article, with no reader in it, bounded and
++       throttled in the statement (security-risks.md § R31); and the signed-in
++       half, which records who, is `private_link_openers` in
++       src/store/pg-private-link-openers.ts — not here, and still forbidden in
++       every public file, this one included. */
++    "src/store/private-link-signed-out-opens.ts": ["privateLinkSignedOutOpens"],
+   };
+ 
+   /**

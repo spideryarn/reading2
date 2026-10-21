@@ -1,10 +1,11 @@
 ---
 id: q-f8yb5s
 report: spya-yjnpjg
-status: open
+status: answered
 asked: 2026-10-20
 title: Should Backspace press the "back to ⟨section⟩" chip, as a reader asked?
-refs: SPIDERYARN-READING2-MM · qi-77s6w6mb · docs/plans/261020u-backspace-takes-the-way-back.md · docs/plans/261020u-plan-review-sol.md · docs/user-feedback/261019_2146-backspace-takes-the-way-back.md
+refs: SPIDERYARN-READING2-MM · qi-77s6w6mb · qi-6a56cdns · docs/plans/261020u-backspace-takes-the-way-back.md · docs/plans/261020u-plan-review-sol.md · docs/user-feedback/261019_2146-backspace-takes-the-way-back.md
+acted: spya-dzfvs2
 ---
 A reader asked for a keyboard shortcut for the "↩ back to ⟨section⟩" chip, and asked for Backspace. Should we add it?
 
@@ -22,3 +23,7 @@ Is Backspace safe? Nothing in the app uses it outside a text box (only the tag e
 Why not a letter, such as B for back? GPT Sol pointed out that B already means "next button" in all three common screen readers (JAWS, NVDA, VoiceOver), so it is worse than Backspace, not safer.
 
 Opus recommended A, built straight away. I have not built it: it is a new key in the reading view with a real, if small, downside, and your 2026-10-19 rule says a reader's suggestion in doubt comes to you first.
+
+Your reply, 2026-10-20 21:46 UTC (spya-dzfvs2): "A. And use your judgement"
+
+Built as A, for the section chip only: the phone's "back to ⟨mode⟩" pill does not take Backspace. One judgement call went beyond the question. Unlike G, the key also works when focus is on an ordinary button or on Structure's list. A press on a section in Structure can leave the focus there, and that is where the reader asked from. It still does nothing in any text box, in a picker, or while a dialog is open. Safari on a Mac was not tested, because this was built on the Linux box. That only matters once the chip has gone: while it shows, our handler takes the key, so Safari's own Back cannot run.

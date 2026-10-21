@@ -1,7 +1,7 @@
 ---
 title: Keyboard shortcuts
 summary: The command bar and what you can type or say into it, and the keys for moving around an article.
-keywords: keys hotkeys arrow up down left right command k ctrl enter escape tab skip to modes g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list
+keywords: keys hotkeys backspace way back arrow up down left right command k ctrl enter escape tab skip to modes g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list
 related: touch, jumping-around
 ---
 
@@ -52,6 +52,9 @@ related: touch, jumping-around
   open mode lives under **More**.
 - <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for the next
   term. <kbd>Esc</kbd> takes you back.
+- After a jump — a glossary term, a cross-reference, a section in Structure — a **↩ back to …**
+  chip appears. While it is there, <kbd>⌫ Backspace</kbd> presses it: you go back to where you
+  were, and the modes you have open stay as they are.
 - <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page, and on it takes you
   back to the article, as pressing **Metadata** again does. In a box you are typing in — a comment,
   feedback, a quiz answer — it saves or sends instead, and plain <kbd>Enter</kbd> starts a new line.
