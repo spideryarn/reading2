@@ -288,6 +288,7 @@ describe("declaredTables", () => {
       "feedback_addenda",
       "feedback_question_answers",
       "feedback_question_deferrals",
+      "feedback_questions",
       "feedback_shipped_emails",
       "glossary_hidden_entries",
       "glossary_lookups",
@@ -422,8 +423,9 @@ describe("against a real database", () => {
          since `article_open_times`, 2026-10-20 (plan 261020y); sixty-five
          since `private_link_openers` and `private_link_signed_out_opens`,
          2026-10-21 (plan 261021d); sixty-six since `view_as_sessions`,
-         2026-10-21 (plan 261019n). */
-      expect(report.declaredTables).toBe(66);
+         2026-10-21 (plan 261019n); sixty-seven since `feedback_questions`
+         the same day (plan 261021h). */
+      expect(report.declaredTables).toBe(67);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

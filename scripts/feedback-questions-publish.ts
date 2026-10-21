@@ -30,7 +30,7 @@
  */
 import pg from "pg";
 
-import { isLocalDatabaseUrl } from "../src/db/ssl.js";
+import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { PublishedFeedbackQuestion } from "../src/feedback-question-values.js";
 import { compileQuestions, type NoteFile, publishedRow } from "./feedback-endings.js";
@@ -51,7 +51,7 @@ export function questionsClient(target: QuestionsTarget): { client: pg.Client; t
   /* The URL itself is never printed: it carries a password. */
   if (!isLocalDatabaseUrl(url)) throw new CannotTell("--local, but DATABASE_URL is not a local database");
   const host = new URL(url);
-  return { client: new pg.Client({ connectionString: url }), target: `.env.local → ${host.hostname}:${host.port} (local)` };
+  return { client: new pg.Client({ connectionString: url, ssl: sslDecisionFor(url).ssl }), target: `.env.local → ${host.hostname}:${host.port} (local)` };
 }
 
 /** Whether the table is there yet. The name is a literal, not a parameter. */

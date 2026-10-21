@@ -322,7 +322,7 @@ export async function runAnswers(
       out(ANSWERS_NOT_DEPLOYED);
       return 0;
     }
-    const { target, rows: stored } = await read<StoredAnswer>(answersSql(), []);
+    const { target: reached, rows: stored } = await read<StoredAnswer>(answersSql(), []);
     const answerRows = stored.map((row) => ({
       id: row.id,
       ownerId: row.owner_id,
@@ -336,7 +336,7 @@ export async function runAnswers(
       out(`cannot tell: ${verdict.why}`);
       return 2;
     }
-    out(`Target: ${target}`);
+    out(`Target: ${reached}`);
     out(
       [
         `${verdict.total} ${verdict.total === 1 ? "reply" : "replies"} in ${target === "production" ? "production" : "the local database"}`,
