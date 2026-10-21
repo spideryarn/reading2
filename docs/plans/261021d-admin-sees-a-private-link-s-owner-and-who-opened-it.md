@@ -16,6 +16,29 @@ opens). His reply is the authority for exactly those two, and nothing wider: no 
 somebody else's private article, no owner (non-admin) view of who opened, no record of public
 reads.
 
+## What was built
+
+The design below with the plan review's changes taken. Store: `src/store/private-link-signed-out-opens.ts`
+(the public write), `src/store/pg-private-link-openers.ts` (the signed-in write and the admin read),
+`privateLinkWhere` in `public-access.ts`, migration `20261021013453_private_link_opens`. Routes:
+the public `POST /api/public/private-link-opened/:slug` (its own POST-only branch in
+`servePublicApi`), `POST /api/private-link-opens/:slug`, `GET /api/admin/articles/:slug/access`.
+Client: `usePrivateLinkOpen`, `notePrivateLinkOpened`, `AdminOwnerLine` and `AdminLinkOpens` in
+`Ownership.tsx`. Privacy page, Help, privacy.md, admin.md, security-map.md, R31.
+
+[GPT Sol's code review](261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-code-review-sol.md)
+found no non-admin disclosure or oracle and fixed five things in place: the privacy page now names
+the signed-out first and last times; the opener list is not capped at 100 (a silent cap under a
+"who opened it" heading); the owner card's line follows the live link switch; Help says *opens*,
+not *people*; a stale comment in `owner-isolation.test.ts`. R31's request limit is left to Greg.
+
+Tests: `tests/private-link-opens-pg.test.ts` (both writes and the admin route, against Postgres),
+`tests/private-link-opened-dispatch.test.ts`, `tests/private-link-open-hook.test.tsx`,
+`tests/article-ownership.test.tsx`, and the guards (`public-imports`, `owner-isolation`,
+`public-client-fetch`, `privacy-page`, `store-export-covers-tables`,
+`action-tables-have-created-at`, `db-schema`). The dispatch, hook and import guards were each
+watched red against a deliberately broken version.
+
 ## After GPT Sol's plan review
 
 [The review](261021d-admin-sees-a-private-link-s-owner-and-who-opened-it-plan-review-sol.md)
