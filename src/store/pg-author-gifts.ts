@@ -48,6 +48,7 @@ import { spendByRun } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
+import { type GiftPrep, giftPrepLogFields, lockGiftArticleIn, prepareGiftArticleIn } from "./pg-gift-prep.js";
 import { ensureShareLinkForArticle } from "./pg-share-link.js";
 import { latestVoucherEmails } from "./pg-voucher-emails.js";
 import {
@@ -140,6 +141,13 @@ export interface EnsureOptions {
   readonly makeLink: boolean;
   readonly lookup: boolean;
   readonly draft: AuthorGiftDraft;
+  /**
+   * Switch the article to Opus as the gift is made, so what is still to be
+   * made is made on Opus (plan 261021j § D3). Used only by the insert that
+   * makes the gift, like the rest of these: an existing gift changes nothing,
+   * and its card's *Switch on* is the way to it then.
+   */
+  readonly highPower: boolean;
 }
 
 /** The fields a new gift may be made with: typed by whoever asked, so with no lookup provenance. */
@@ -151,7 +159,7 @@ export interface AuthorGiftDraft {
   readonly notes?: string | null;
 }
 
-const NO_OPTIONS: EnsureOptions = { makeLink: true, lookup: true, draft: {} };
+const NO_OPTIONS: EnsureOptions = { makeLink: true, lookup: true, draft: {}, highPower: false };
 
 /** Seams for tests; each defaults to the real thing. */
 export interface EnsureDeps {
@@ -172,10 +180,12 @@ export interface EnsureDeps {
  *    one made, with `keepExisting` under the share-link store's lock, so a link
  *    somebody made a moment ago is never replaced. A public article needs no
  *    link and gets none.
- * 4. One transaction: the gift (`on conflict (article_id) do nothing`) and, if
- *    this call inserted it, its first pending lookup. A concurrent ensure that
- *    lost the insert answers `existing`; the link either made is the same
- *    link, by `keepExisting`.
+ * 4. One transaction: the article's row lock, the gift (`on conflict
+ *    (article_id) do nothing`) and, if this call inserted it, its first
+ *    pending lookup and the article's preparation — the main-mode jobs, and
+ *    Opus if asked (`prepareGiftArticleIn`, plan 261021j § D2). A concurrent
+ *    ensure that lost the insert answers `existing` and prepares nothing; the
+ *    link either made is the same link, by `keepExisting`.
  *
  * Not one transaction overall: the link is the share-link store's own write,
  * under its own lock, and is wanted whether or not this call wins the insert.
@@ -213,6 +223,10 @@ export async function ensureAuthorGift(
 
   const made = await db.transaction(async (tx) => {
     const { draft } = options;
+    /* The article before the gift: the lock order src/store/pg-gift-prep.ts
+       explains. Taken whether or not the insert wins, because only the insert
+       can say. */
+    await lockGiftArticleIn(tx, article.id);
     const [gift] = await tx
       .insert(authorGifts)
       .values({
@@ -230,17 +244,21 @@ export async function ensureAuthorGift(
       .onConflictDoNothing({ target: authorGifts.articleId })
       .returning({ id: authorGifts.id });
     if (!gift) return null;
-    if (!options.lookup) return { id: gift.id, lookupId: null };
+    const prep = await prepareGiftArticleIn(tx, article.id, { highPower: options.highPower });
+    if (!options.lookup) return { id: gift.id, lookupId: null, prep };
     const [lookup] = await tx
       .insert(authorLookups)
       .values({ authorGiftId: gift.id })
       .returning({ id: authorLookups.id });
     if (!lookup) throw new Error("inserting an author lookup returned no row");
-    return { id: gift.id, lookupId: lookup.id };
+    return { id: gift.id, lookupId: lookup.id, prep };
   }, READ_COMMITTED);
   if (made) {
-    logger.info({ giftId: made.id, lookupId: made.lookupId }, "author gift made");
-    return { kind: "created", ...made };
+    logger.info(
+      { giftId: made.id, lookupId: made.lookupId, articleId: article.id, ...giftPrepLogFields(made.prep) },
+      "author gift made",
+    );
+    return { kind: "created", id: made.id, lookupId: made.lookupId };
   }
   const winner = await giftOfArticle(article.id);
   if (!winner) throw new Error("an author gift lost its insert and then could not be found");
@@ -282,8 +300,9 @@ async function giftOfArticle(articleId: string): Promise<{ id: string; status: A
 
 /**
  * **What `POST /api/admin/author-gifts` may carry**: `{ slug, rightsConfirmed:
- * true }`, and optionally `lookup` (default true) and `draft`, the fields a
- * new gift starts with (261010i). The tick is the private link's rights
+ * true }`, and optionally `lookup` (default true), `draft`, the fields a
+ * new gift starts with (261010i), and `highPower` (default false: switch the
+ * article to Opus as the gift is made, 261021j). The tick is the private link's rights
  * tick-box, which the share-link route asks for too; an unknown key is a 400,
  * so a misspelt field is not silently a default.
  */
@@ -291,7 +310,9 @@ export function parseEnsureAuthorGift(
   body: unknown,
 ): Parsed<{ readonly slug: string; readonly options: EnsureOptions }> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
-  const unknown = Object.keys(body).filter((key) => !["slug", "rightsConfirmed", "makeLink", "lookup", "draft"].includes(key));
+  const unknown = Object.keys(body).filter(
+    (key) => !["slug", "rightsConfirmed", "makeLink", "lookup", "draft", "highPower"].includes(key),
+  );
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
   /* Exactly one of the two: the person's tick, which lets a link be made, or
      `makeLink: false`, which never makes one (an agent's draft, 261010i F2). */
@@ -304,11 +325,17 @@ export function parseEnsureAuthorGift(
   }
   if (!isSlug(body.slug)) return { ok: false, message: "slug must be an article's slug." };
   if ("lookup" in body && typeof body.lookup !== "boolean") return { ok: false, message: "lookup must be true or false." };
+  if ("highPower" in body && typeof body.highPower !== "boolean") {
+    return { ok: false, message: "highPower must be true or false." };
+  }
   const draft = "draft" in body ? parseDraftFields(body.draft) : ({ ok: true, value: {} } as const);
   if (!draft.ok) return draft;
   return {
     ok: true,
-    value: { slug: body.slug, options: { makeLink: !noLink, lookup: body.lookup !== false, draft: draft.value } },
+    value: {
+      slug: body.slug,
+      options: { makeLink: !noLink, lookup: body.lookup !== false, draft: draft.value, highPower: body.highPower === true },
+    },
   };
 }
 
@@ -645,6 +672,8 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
          administrator's shelf: an article the claim moved is no longer on it,
          and its title still shows here — it was theirs, and they gave it. */
       articleOwner: articles.ownerId,
+      /* High-powered AI, for the draft card (plan 261021j § D4). */
+      highPowerSince: articles.highPowerSince,
       voucherCreatedBy: billingVouchers.createdBy,
       voucherClaimedBy: billingVouchers.claimedBy,
     })
@@ -689,7 +718,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
     byGift.set(l.authorGiftId, [...(byGift.get(l.authorGiftId) ?? []), wire]);
   }
 
-  return gifts.map(({ gift, title, articleThere, linkable, voucherExists, articleOwner, voucherCreatedBy, voucherClaimedBy }) => {
+  return gifts.map(({ gift, title, articleThere, linkable, voucherExists, articleOwner, highPowerSince, voucherCreatedBy, voucherClaimedBy }) => {
     const status = statusOf({ ...gift, voucherExists });
     const owner =
       status === "sent" && voucherCreatedBy !== null
@@ -721,6 +750,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
       sendStartedAt: gift.sendStartedAt?.toISOString() ?? null,
       discardedAt: gift.discardedAt?.toISOString() ?? null,
       voucherId: status === "sent" ? gift.voucherId : null,
+      highPower: highPowerSince !== null,
       lookups: byGift.get(gift.id) ?? [],
     };
   });
@@ -953,6 +983,71 @@ export async function patchAuthorGift(id: string, patch: AuthorGiftPatch): Promi
     if (!row) throw new Error(`author gift ${id} was locked and then not updated`);
     return { kind: "updated", notesUpdatedAt: row.notesUpdatedAt?.toISOString() ?? null };
   }, READ_COMMITTED);
+}
+
+/* ------------------------------------------------------------ high power -- */
+
+export type HighPowerAnswer =
+  | { readonly kind: "not-found" }
+  /** Sent, being sent, or discarded: the card shows the button on drafts only (plan 261021j § D4). */
+  | { readonly kind: "not-draft" }
+  /** The article is no longer the administrator's own, or has nothing to read. Nothing was written. */
+  | { readonly kind: "article-skipped" }
+  /** On, now or already, with the main modes queued; `queued` counts the rows this call inserted. */
+  | { readonly kind: "on"; readonly queued: number };
+
+/**
+ * **Switch a draft gift's article to Opus** — the card's *Switch on*, for a
+ * gift drafted without it (an agent's, or one made before 261021j). The same
+ * preparation a new gift gets, `highPower: true`: the switch, then the main
+ * modes, unforced (§ D2–D4).
+ *
+ * One transaction in the house lock order: **the article, then the gift**
+ * (src/store/pg-gift-prep.ts § Lock order). The gift's article id is read
+ * first, unlocked, to know which article to lock; the gift row is then locked
+ * and its status decided again under both locks, so a *Send* that froze it
+ * meanwhile is seen. *Send*'s freezing `UPDATE` waits on the gift lock, so it
+ * cannot interleave.
+ */
+export async function switchGiftOnHighPower(id: string): Promise<HighPowerAnswer> {
+  const db = getDb();
+  const [found] = await db
+    .select({ articleId: authorGifts.articleId, createdBy: authorGifts.createdBy })
+    .from(authorGifts)
+    .where(eq(authorGifts.id, id))
+    .limit(1);
+  if (!found) return { kind: "not-found" };
+  type Done = { readonly answer: HighPowerAnswer; readonly prep: GiftPrep | null };
+  const run = () => db.transaction(async (tx): Promise<Done> => {
+    await lockGiftArticleIn(tx, found.articleId);
+    const [gift] = await tx
+      .select({
+        articleId: authorGifts.articleId,
+        sendStartedAt: authorGifts.sendStartedAt,
+        discardedAt: authorGifts.discardedAt,
+        voucherExists: VOUCHER_EXISTS,
+      })
+      .from(authorGifts)
+      .where(eq(authorGifts.id, id))
+      .for("update")
+      .limit(1);
+    /* Gone since the first read: gifts go with their article (cascade). */
+    if (!gift || gift.articleId !== found.articleId) return { answer: { kind: "not-found" }, prep: null };
+    if (statusOf(gift) !== "draft") return { answer: { kind: "not-draft" }, prep: null };
+    const prep = await prepareGiftArticleIn(tx, gift.articleId, { highPower: true });
+    if (prep.kind === "skipped") return { answer: { kind: "article-skipped" }, prep };
+    return { answer: { kind: "on", queued: prep.modes.filter((m) => m.kind === "queued").length }, prep };
+  }, READ_COMMITTED);
+  /* As the gift's creator, as *Send* runs: the article is checked against
+     the owner it was the gift of, not whichever administrator pressed. */
+  const answer = await runAsOwner(found.createdBy as OwnerId, run);
+  if (answer.prep !== null) {
+    logger.info(
+      { giftId: id, articleId: found.articleId, ...giftPrepLogFields(answer.prep) },
+      "author gift switched to high power",
+    );
+  }
+  return answer.answer;
 }
 
 /* ------------------------------------------------------------------ send -- */
@@ -1189,6 +1284,10 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
     recipientNote: gift.recipientNote,
     recipientName: gift.recipientName,
     starterSlug: gift.starterSlug,
+    /* The voucher's create queues the main modes again — harmless: a current
+       mode skips and a waiting job collapses — but never switches Opus on.
+       That was the gift's own create, or its card's button (plan 261021j § D2). */
+    highPower: false,
   };
   const create = deps.createVoucher ?? createVoucher;
   const createdBy = gift.createdBy;
@@ -1276,6 +1375,7 @@ export const pgAuthorGiftStore = guardDbStore("author-gifts", {
   listAuthorGifts,
   patchAuthorGift,
   sendAuthorGift,
+  switchGiftOnHighPower,
   beginLookup,
   lookupSubject,
   claimLookup,

@@ -85,6 +85,7 @@ function gift(over: Partial<AdminAuthorGift> = {}): AdminAuthorGift {
     sendStartedAt: null,
     discardedAt: null,
     voucherId: null,
+    highPower: false,
     lookups: [],
     ...over,
   };

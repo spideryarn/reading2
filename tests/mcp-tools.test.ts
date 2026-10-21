@@ -413,6 +413,8 @@ describe("each tool calls the route it claims", () => {
             articles: 10,
             notes: "Her address is on her homepage.",
           },
+          /* Off unless asked (plan 261021j § D4): an agent's draft is a proposal. */
+          highPower: false,
         },
       }),
     ]);
@@ -429,8 +431,17 @@ describe("each tool calls the route it claims", () => {
     });
     const result = await h.call("draft_author_gift", { slug: "on-tools", look_up_author: true });
     expect(result.isError, result.text).toBe(false);
-    expect(h.seen[0]?.body).toEqual({ slug: "on-tools", makeLink: false, lookup: true, draft: {} });
+    expect(h.seen[0]?.body).toEqual({ slug: "on-tools", makeLink: false, lookup: true, draft: {}, highPower: false });
     expect(result.json()).toMatchObject({ created: true, lookup: true });
+  });
+
+  it("draft_author_gift with high_power asks the route to switch the article to Opus", async () => {
+    const h = await harness({
+      "POST /api/admin/author-gifts": { status: 201, body: { id: VOUCHER, status: "draft", created: true, lookupId: null } },
+    });
+    const result = await h.call("draft_author_gift", { slug: "on-tools", high_power: true });
+    expect(result.isError, result.text).toBe(false);
+    expect(h.seen[0]?.body).toEqual({ slug: "on-tools", makeLink: false, lookup: false, draft: {}, highPower: true });
   });
 
   it("draft_author_gift on an article that already has a gift says nothing was changed", async () => {

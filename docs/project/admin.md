@@ -1066,6 +1066,19 @@ stranger's article; that residual risk is accepted and written up in the plan's 
 
 The add page's half is [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
 
+**A gift's article gets its main modes, and Opus if asked** (since 2026-10-21, Greg, `spya-s902kr`:
+*"by default, any articles that we share as part of this should automatically get their main modes
+generated as well"*). A new gift, and a new voucher with a starter, queue the article's main-mode
+jobs — the import's own list, `AUTO_MODE_STEPS` — in the transaction that makes it, whatever the
+administrator's own *Generate the main modes* setting says. Unforced, so a mode already made is a
+skipped step at no cost. The Give form's *High-powered AI* box (on by default) and the draft card's
+*Switch on* (`POST /api/admin/author-gifts/:id/high-power`) switch the article to Opus first, in the
+same transaction: **Opus for what is made from now on; nothing already made is redone**, Structure
+included. Whether it should remake the Sonnet-made modes is asked of Greg in `q-trk64h`. One cost of
+queuing: the claim moves a starter to its recipient only when nothing is queued or running on it, so
+a send-now voucher claimed within the minutes the modes take stays the administrator's, to move
+below. [261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md).
+
 ## `/admin/articles` — moving an article to another account
 
 > And more generally, we want a /admin/articles page, which includes a way for me to transfer

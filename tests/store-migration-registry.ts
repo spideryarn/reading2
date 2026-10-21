@@ -2952,6 +2952,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      its own articles minted per run, the Auth lookup replaced, every send to
      an injected fetch, and the after-response lookup replaced by a recorder. */
   "tests/author-gifts.test.ts": "private-postgres",
+  /* 261021j: a gift's article prepared — the main-mode jobs queued and High-
+     powered AI switched on. The author gifts' shape: its own stem, owner and
+     articles minted per run, the Auth lookup replaced, no email sent, and the
+     queued jobs swept by its slug prefix after every case. */
+  "tests/gift-prep.test.ts": "private-postgres",
   /* Plan 261010c, stage 2: its own scratch article, a gift and lookups on it,
      and the ledger rows a fake call writes under the lookup's run id. */
   "tests/author-lookup-start.test.ts": "private-postgres",
