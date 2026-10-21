@@ -3880,6 +3880,43 @@ describe("the Earlier tab", () => {
         expect(found?.getAttribute("aria-pressed")).toBe("false");
       });
 
+      /* Greg, spya-yf6vmy: the shortcut "seems to appear a few seconds after
+         the dialog opens … can we add a loading spinner there". It is drawn at
+         once with no number, a spinner takes the number's place after 600ms
+         (loading-spinner.md), and the number replaces it when the read lands. */
+      it("draws the shortcut at once while its count loads, with a spinner after 600ms", async () => {
+        asAdmin = true;
+        const all = [Q1, Q2, Q3, Q4];
+        const gate: { release?: () => void } = {};
+        listAnswer = (input) =>
+          input === WAITING_URL
+            ? new Promise((resolve) => {
+                gate.release = () =>
+                  resolve(new Response(JSON.stringify({ ...WAITING, questions: all }), { status: 200 }));
+              })
+            : answerBy({ all: { ...ADMIN_REPORTS, questions: all } })(input);
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        try {
+          mount();
+          await act(async () => {});
+          const text = () => shortcut()?.textContent?.replace(/\s+/g, " ").trim();
+          expect(shortcut()).not.toBeNull();
+          expect(text()).toBe("Needs a decision");
+          expect(shortcut()?.querySelector(".cmt-spinner"), "not before 600ms").toBeNull();
+          await act(async () => {
+            vi.advanceTimersByTime(600);
+          });
+          expect(shortcut()?.querySelector(".cmt-spinner")).not.toBeNull();
+          expect(shortcut()?.getAttribute("data-tip")).toBe("Looking for questions waiting on you…");
+          await act(async () => gate.release?.());
+          await settle();
+          expect(shortcut()?.querySelector(".cmt-spinner")).toBeNull();
+          expect(text()).toBe("Needs a decision 2");
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
       it("does not restore the shortcut from a retained draft before the next opening read lands", async () => {
         await openThread();
         typeReply("a decision in progress");
@@ -3895,7 +3932,8 @@ describe("the Earlier tab", () => {
         show(true);
 
         expect(gate.release).toBeTypeOf("function");
-        expect(shortcut()).toBeNull();
+        /* Drawn, loading, but with no number: not the retained draft's. */
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision");
         await act(async () => gate.release?.());
         await settle();
         expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");

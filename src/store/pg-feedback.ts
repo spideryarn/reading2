@@ -53,10 +53,12 @@ import {
   feedbackAddenda as addendaTable,
   feedbackQuestionAnswers as answersTable,
   feedbackQuestionDeferrals as deferralsTable,
+  feedbackQuestions as questionsTable,
 } from "../db/schema.js";
 import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
+import type { FeedbackQuestionStatus, PublishedFeedbackQuestion } from "../feedback-question-values.js";
 import {
   ADDENDUM_STATUSES,
   EARLIER_FEEDBACK_STATUSES,
@@ -723,6 +725,25 @@ const rawPgFeedbackStore: FeedbackStore = {
       .where(and(eq(answersTable.ownerId, currentOwnerId()), inArray(answersTable.questionId, [...questionIds])))
       .orderBy(asc(answersTable.createdAt), asc(answersTable.id));
     return rows.map(toAnswer);
+  },
+
+  async publishedQuestions(): Promise<PublishedFeedbackQuestion[]> {
+    const rows = await getDb()
+      .select({
+        id: questionsTable.id,
+        title: questionsTable.title,
+        report: questionsTable.report,
+        repeats: questionsTable.repeats,
+        asked: questionsTable.asked,
+        body: questionsTable.body,
+        status: questionsTable.status,
+        acted: questionsTable.acted,
+      })
+      .from(questionsTable)
+      .orderBy(asc(questionsTable.id));
+    /* The status is checked by the caller with every other rule (F7); the
+       cast only names what the check constraint already holds it to. */
+    return rows.map((row) => ({ ...row, status: row.status as FeedbackQuestionStatus }));
   },
 
   async deferrals(questionIds: readonly string[]): Promise<StoredFeedbackDeferral[]> {

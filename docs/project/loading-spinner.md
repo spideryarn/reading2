@@ -17,6 +17,18 @@ The app has two, and which one a wait gets depends on what else is on the screen
 > — Greg, 2026-10-01 ([the note](../user-feedback/261001_1725-logo-loading-spinner.md),
 > [the plan](../plans/261001q-logo-loading-spinner.md))
 
+## Anything still happening gets one
+
+> anytime something is happening in the background that hasn't finished yet there should be a
+> loading spinner (perhaps with tooltip).
+>
+> — Greg, 2026-10-21 ([`spya-yf6vmy`](../user-feedback/261021_1548-a-spinner-while-needs-a-decision-loads.md))
+
+A count, a badge or a list that fills in after the rest is drawn shows `LoaderCircle` where it will
+go, under the rules below, and a tooltip (`data-tip`) naming what it waits for when there is no
+room for the sentence. The Feedback dialog's *Needs a decision* shortcut is the example: drawn at
+once, its number replaced by the spinner until the read lands.
+
 ## Two rules both share
 
 - **Nothing before 600ms.** A spinner that flashes and vanishes reads as breakage. Gate it on

@@ -209,6 +209,8 @@
    at the far end, and pressed rather than selected, because it is a shortcut
    into the Earlier panel and not a panel of its own. */
 .fb-tab-shortcut { margin-left: auto; display: inline-flex; align-items: baseline; gap: 0.3rem; }
+/* Where the number goes while it loads (spya-yf6vmy); an icon has no baseline. */
+.fb-tab-spinner { align-self: center; }
 .fb-tab-shortcut[aria-pressed="true"] {
   color: var(--ink);
   font-weight: 600;

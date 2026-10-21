@@ -1,0 +1,172 @@
+# The Sources rename, the contract half (qi-mzfxw3q2)
+
+Plan [261009w](261009w-peer-review-becomes-sources-all-the-way-down.md) renamed Bibliography's,
+Reception's and Claims' stored names by **expand and contract**: the expand migrations
+(`20261010030345_bibliography_expand`, `…044614_stale_notice_bibliography`, `…063350_reception_expand`)
+went live on 2026-10-10 19:31Z as 9d4caa91, so the code before and after the rename both worked.
+This is the contract: drop the compatibility, rewrite the rows still spelled the old way, and remove
+the code that served the old spellings for one deploy. The full list is the queue item,
+[261009w-contract-queue-item.md](261009w-contract-queue-item.md).
+
+Authorised: Greg, 2026-10-11, *"qi-mzfxw3q2 use your judgment"*. The Overseer judged go, once the
+expand deploy had been live about 24 hours.
+
+## Two deploys, not one: a statement the 2026-10-10 sweep missed
+
+The contract migration is applied before Vercel goes live, so for those minutes **the code deployed
+now runs against the contracted database**. The queue item asked for a re-check that no statement in
+that code names a dropped column. One does:
+
+```
+beginDraftIn → tx.insert(articleRevisions).values({ id, articleId, status: "draft" })
+  renders as: insert into article_revisions ("id", "article_id", …, "citations", "debate",
+              "debate_claims", …) values ($1, $2, $3, default, default, …)
+```
+
+drizzle's insert lists **every declared column** and writes `default` into the ones left out, and the
+`legacy…` columns are declared (on purpose, so `drizzle-kit generate` would not drop them early). So
+every brand-new article's first draft would fail with `42703 column "citations" does not exist` for
+the minutes of the deploy. Checked by rendering the statement with `drizzle.mock()`. Every other
+statement on `article_revisions` names its columns: the reads select `ACTIVE_REVISION_COLUMNS`,
+`REVISION_PROJECTIONS` or named fields; the joins select named fields; the draft copy uses
+`carriedColumns()` (policy `mirror` excluded); the updates `set` only what they write; there is no
+bare `.returning()` on this table and no relational `query.articleRevisions`.
+
+So the work ships as two deploys:
+
+- **Deploy A (Stage 1): the first-draft insert names its three columns** (`firstDraftInsert` in
+  `src/store/pg-revisions.ts`, raw SQL), with a red-first test (`tests/first-draft-insert.test.ts`)
+  that renders it and checks the column list. Code only, safe on its own, pushed to `dev` at once.
+- **Deploy B (Stage 2): the contract migration and the code.** Not pushed to `dev` until Deploy A
+  is live in production, because `npm run deploy` ships whatever `dev` holds, and a deploy carrying
+  both would still have the old insert serving during the migration window. Held on the worktree's
+  branch, pushed when `git merge-base --is-ancestor <A> <deployed commit>` says A is live.
+
+**Passed over:** accepting the window (CLAUDE.md allows minutes of breakage in prod). Rejected
+because the brief is explicit ("fix in a deploy BEFORE the contract") and the cost of the fix is a
+handful of lines; a reader pasting a URL mid-deploy would otherwise get a failed ingest.
+
+Every other write the deployed code makes was checked against what the contract narrows: it writes
+new step names only (job ingress canonicalises with `currentStepName`), new chat-origin words
+(`parseOrigin` → `currentOriginMode`), new stale-notice words (`dismiss` takes a `StaleNoticeMode`),
+the new rate bucket, and the claim-check table by its new name (the store accepts either index
+name). Its read of step runs with `withRetiredSpellings` is a read, and harmless when the old rows
+are gone.
+
+## What production holds (read-only, 2026-10-11 ~19:30Z, `begin read only`)
+
+| | rows |
+|---|---|
+| `article_revisions` pairs that differ (`citations`/`bibliography`, `debate`/`reception`, `debate_claims`/`sources_claims`) | **0, 0, 0** of 633 revisions |
+| non-null old columns dropped (each equal to its new twin) | 143 `citations`, 86 `debate`, 6 `debate_claims` |
+| `revision_step_runs` old-named rows to delete | 143 `citations`, 86 `debate`, 6 `debate-claims` = **235**; every one has a new-named twin, field-for-field equal; no new-named row lacks an old twin |
+| `jobs.steps` naming an old step / `jobs.reset.regenerate` | **3** / 0; none names both spellings; none unfinished |
+| `chat_threads` origins to rewrite | 3 `citations` (item shape) → `bibliography`; 1 `debate` with a lens → `reception`; 0 `debate` with a block |
+| `sources_claim_checks` rows | 0 (the `debate_claim_checks` view exists) |
+| `rate_limit_events` with `debate-check` | 0 |
+| `stale_notice_dismissals` with an old mode | 0 |
+| objects depending on the three old columns | none |
+
+The local database (the shared dev one) has the same shape with 86/34/4 step runs, two
+`debate-check` rows, 4 `citations` and 2 `debate` origins (one of each shape).
+
+## The migration (Stage 2)
+
+One file, generated by `drizzle-kit` from the `schema.ts` change, then the data movement written by
+hand between the generated `DROP CONSTRAINT` and `ADD CONSTRAINT` lines (Postgres validates a re-added
+CHECK against existing rows, so narrowing before the rewrite fails only where there is history — the
+`_skim.sql` lesson). In order:
+
+1. **`article_revisions`.** `LOCK TABLE … IN ACCESS EXCLUSIVE MODE` first (nothing can make a pair
+   unequal between the check and the drop; taken up front rather than upgraded from a weaker lock,
+   since `DROP COLUMN` needs it anyway and an upgrade can deadlock with a reader that then writes),
+   then a `DO` block that **raises** if any
+   pair differs, then drop the trigger `article_revisions_mirror_renamed` and its function, then drop
+   the three columns.
+2. **`revision_step_runs`.** Lock it the same way, for the same reason; **raise** if any old-named row lacks its new-named
+   twin (it would be a run record lost, not a duplicate dropped); drop the trigger
+   `revision_step_runs_mirror_renamed` and its function **before** deleting, because with the
+   trigger in place the delete would remove the twins too; drop `step_name_partner`; delete the
+   `citations` / `debate` / `debate-claims` rows; the generated narrowed `revision_step_runs_step`.
+3. **`jobs`.** Raise if a row names both spellings of a step in `steps` or in `reset.regenerate`
+   (as `_skim.sql` does); rewrite both, order kept (`WITH ORDINALITY`); a postcondition that no
+   row still names an old step.
+4. **`chat_threads`.** Rewrite `citations` → `bibliography`, `debate` with a lens → `reception`,
+   `debate` with a block → `sources-claims`; drop `chat_threads_origin_debate`; the narrowed
+   `chat_threads_origin_mode` and `_item`; `chat_threads_origin_lens_debate_only` becomes
+   `chat_threads_origin_lens_reception_only`, `origin_lens is null or origin_mode = 'reception'`.
+5. **`sources_claim_checks`.** Drop the `debate_claim_checks` view; rename the four CHECKs, the
+   primary key (its index goes with it), the article FK, the hand-written owner FK and the
+   one-pending index from `debate_claim_checks_*` to `sources_claim_checks_*` with `RENAME
+   CONSTRAINT` / `ALTER INDEX … RENAME` (not drizzle-kit's drop and re-add, which would rebuild an
+   index and re-validate the table for nothing), as `_referee_promises.sql` did.
+6. **`rate_limit_events`.** Rewrite `debate-check` rows to `sources-claim-check` (rather than delete:
+   they are still inside their counting windows in principle, and the limiter counted both), then
+   the narrowed bucket CHECK.
+7. **`stale_notice_dismissals`.** Where an article has a row under both words, delete the one the
+   read would not have kept (it orders by `dismissed_at, mode` and keeps the last), then rewrite the
+   old words; the narrowed mode CHECK still admits `claims` — Referee Promises' own expand
+   (261011g) has its own contract.
+8. **A postcondition** over all of the above: no old column, trigger, function or view left, and
+   no old spelling in any rewritten column.
+
+drizzle applies every pending migration in one transaction, so a raise anywhere rolls back the
+whole deploy's migrations and `npm run deploy` stops before Vercel.
+
+## The code (Stage 2)
+
+- `src/db/schema.ts`: drop `legacyCitations`, `legacyDebate`, `legacyDebateClaims`; narrow the
+  four CHECKs; drop `chat_threads_origin_debate`; rename the lens check; rename the claim-check
+  literals; `STALE_NOTICE_TABLE.retiredModes` → `["claims"]`; comments that say "until the
+  contract" corrected.
+- `src/store/revision-columns.ts`: `LEGACY_REVISION_COLUMNS` empty (the file stays, for the next
+  rename, as its header says); `src/store/pg-revisions.ts` and `src/store/pg.ts`: the `mirror`
+  entries and the empty projection entries go (the `mirror` policy value stays only if the type
+  needs it; otherwise it goes too).
+- `src/store/pg-sources-claim-checks.ts`: `ONE_PENDING` is the new name only.
+- `src/store/contracts.ts` / `pg-rate-limit.ts`: `RETIRED_RATE_BUCKETS` and the "count both"
+  go.
+- The one-deploy aliases: the old routes `/api/citations/…`, `/api/debate/…`,
+  `/api/debate-claims/…` and `/checks`; the public payload's `citations` / `debate` /
+  `debateClaims` keys (`src/public/dto.ts`, `src/public-types.ts`); `jobForPreviousClient` in
+  `GET /api/jobs`, `previousClientStepName`, and the browser's `currentClientJob`.
+- **Kept, as the queue item allows:** `RETIRED_STEPS` (job ingress and `ai_calls`),
+  `RETIRED_JOBS`, `RETIRED_ORIGIN_MODES`/`currentOriginMode`, `RETIRED_STALE_NOTICE_MODES`,
+  `currentLedgerName`, `withRetiredSpellings`.
+- Tests: `ADMITTED_DURING_EXPAND` empty; the expand tests (`bibliography-expand-pg`,
+  `reception-expand-pg`) lose their old-code-through-the-trigger/view halves and keep or move what
+  still holds; the old-names route tests and `job-step-wire-compat` go; the route-contract and
+  public-payload tests lose the old keys and paths. A new private-lane test asserts the contracted
+  state: the old columns, triggers, functions and view are gone, the constraints carry their new
+  names, and each narrowed CHECK refuses an old spelling.
+
+## Testing the migration itself
+
+The private test database is built from every migration, so it only ever sees the contract applied
+to an empty expand state. The data movement is rehearsed on the **shared local database** instead,
+which is in the expand state with real-shaped rows: before `npm run db:migrate`, seed one scratch
+article with what local lacks (a job naming old steps in `steps` and `reset`, stale-notice pairs in
+both orders, a `debate` claim origin), then migrate and check each rewrite; and, in a rolled-back
+transaction before that, make one pair unequal and run the precondition to see it raise. The
+results go in § Log.
+
+## Stages
+
+1. Deploy A: the first-draft insert. Red test, fix, gates, Sol review (with this plan), push.
+   Message the Overseer to deploy it.
+2. The contract: schema, migration, code, tests; Sol SQL review of the migration on its own;
+   Sol code review; rehearsal on local; gates.
+3. Once A is live: push B to `dev`, message the Overseer with the file name and the counts above.
+
+## Log
+
+- 2026-10-11: production read-only checks (above). The first-draft insert found and fixed, red then
+  green (`tests/first-draft-insert.test.ts`).
+- 2026-10-21: Deploy A's commit (42a8d876) was stranded in the stuck session's tree; merged onto
+  `dev` with Greg's yes (q-b80y0k) and reviewed again by Sol against current `dev`: no defect, and no
+  writer added since 2026-10-11 enumerates a retired column. Before stage 2, two things from that
+  review: the production counts above are a 2026-10-11 snapshot, so re-run the read-only checks and
+  the rehearsal; and generate the migration after the current tip (`20261021154507_view_as_sessions`)
+  from the current schema, whose CHECKs have gained members since (`matter`, `citation-blurbs`,
+  `related-work-search`, `citation-web-note`), never from a hand-copied constraint. Stage 2 is still
+  gated on Greg.
