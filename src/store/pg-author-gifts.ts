@@ -48,7 +48,13 @@ import { spendByRun } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
-import { type GiftPrep, giftPrepLogFields, lockGiftArticleIn, prepareGiftArticleIn } from "./pg-gift-prep.js";
+import {
+  type GiftPrep,
+  checkGiftArticle,
+  giftPrepLogFields,
+  lockGiftArticleIn,
+  prepareLockedGiftArticleIn,
+} from "./pg-gift-prep.js";
 import { ensureShareLinkForArticle } from "./pg-share-link.js";
 import { latestVoucherEmails } from "./pg-voucher-emails.js";
 import {
@@ -180,12 +186,15 @@ export interface EnsureDeps {
  *    one made, with `keepExisting` under the share-link store's lock, so a link
  *    somebody made a moment ago is never replaced. A public article needs no
  *    link and gets none.
- * 4. One transaction: the article's row lock, the gift (`on conflict
- *    (article_id) do nothing`) and, if this call inserted it, its first
- *    pending lookup and the article's preparation — the main-mode jobs, and
- *    Opus if asked (`prepareGiftArticleIn`, plan 261021j § D2). A concurrent
- *    ensure that lost the insert answers `existing` and prepares nothing; the
- *    link either made is the same link, by `keepExisting`.
+ * 4. One transaction: the article's row lock and locked re-check, the gift
+ *    (`on conflict (article_id) do nothing`) and, if this call inserted it,
+ *    its first pending lookup and the article's preparation — the main-mode
+ *    jobs, and Opus if asked (`prepareLockedGiftArticleIn`, plan 261021j §
+ *    D2). A concurrent ensure that lost the insert answers `existing` and
+ *    prepares nothing; the link either made is the same link, by
+ *    `keepExisting`. If the article changed between its unlocked resolution
+ *    and this lock, nothing is made and the route refuses instead of claiming
+ *    the promised preparation happened.
  *
  * Not one transaction overall: the link is the share-link store's own write,
  * under its own lock, and is wanted whether or not this call wins the insert.
@@ -226,7 +235,13 @@ export async function ensureAuthorGift(
     /* The article before the gift: the lock order src/store/pg-gift-prep.ts
        explains. Taken whether or not the insert wins, because only the insert
        can say. */
-    await lockGiftArticleIn(tx, article.id);
+    const checked = checkGiftArticle(await lockGiftArticleIn(tx, article.id));
+    if (!checked.ok) {
+      return {
+        kind: "refused" as const,
+        reason: checked.reason === "unpublished" ? ("unpublished" as const) : ("absent" as const),
+      };
+    }
     const [gift] = await tx
       .insert(authorGifts)
       .values({
@@ -243,17 +258,18 @@ export async function ensureAuthorGift(
       })
       .onConflictDoNothing({ target: authorGifts.articleId })
       .returning({ id: authorGifts.id });
-    if (!gift) return null;
-    const prep = await prepareGiftArticleIn(tx, article.id, { highPower: options.highPower });
-    if (!options.lookup) return { id: gift.id, lookupId: null, prep };
+    if (!gift) return { kind: "lost" as const };
+    const prep = await prepareLockedGiftArticleIn(tx, checked.article, { highPower: options.highPower });
+    if (!options.lookup) return { kind: "made" as const, id: gift.id, lookupId: null, prep };
     const [lookup] = await tx
       .insert(authorLookups)
       .values({ authorGiftId: gift.id })
       .returning({ id: authorLookups.id });
     if (!lookup) throw new Error("inserting an author lookup returned no row");
-    return { id: gift.id, lookupId: lookup.id, prep };
+    return { kind: "made" as const, id: gift.id, lookupId: lookup.id, prep };
   }, READ_COMMITTED);
-  if (made) {
+  if (made.kind === "refused") return made;
+  if (made.kind === "made") {
     logger.info(
       { giftId: made.id, lookupId: made.lookupId, articleId: article.id, ...giftPrepLogFields(made.prep) },
       "author gift made",
@@ -1019,7 +1035,7 @@ export async function switchGiftOnHighPower(id: string): Promise<HighPowerAnswer
   if (!found) return { kind: "not-found" };
   type Done = { readonly answer: HighPowerAnswer; readonly prep: GiftPrep | null };
   const run = () => db.transaction(async (tx): Promise<Done> => {
-    await lockGiftArticleIn(tx, found.articleId);
+    const locked = await lockGiftArticleIn(tx, found.articleId);
     const [gift] = await tx
       .select({
         articleId: authorGifts.articleId,
@@ -1034,8 +1050,11 @@ export async function switchGiftOnHighPower(id: string): Promise<HighPowerAnswer
     /* Gone since the first read: gifts go with their article (cascade). */
     if (!gift || gift.articleId !== found.articleId) return { answer: { kind: "not-found" }, prep: null };
     if (statusOf(gift) !== "draft") return { answer: { kind: "not-draft" }, prep: null };
-    const prep = await prepareGiftArticleIn(tx, gift.articleId, { highPower: true });
-    if (prep.kind === "skipped") return { answer: { kind: "article-skipped" }, prep };
+    const checked = checkGiftArticle(locked);
+    if (!checked.ok) {
+      return { answer: { kind: "article-skipped" }, prep: { kind: "skipped", reason: checked.reason } };
+    }
+    const prep = await prepareLockedGiftArticleIn(tx, checked.article, { highPower: true });
     return { answer: { kind: "on", queued: prep.modes.filter((m) => m.kind === "queued").length }, prep };
   }, READ_COMMITTED);
   /* As the gift's creator, as *Send* runs: the article is checked against

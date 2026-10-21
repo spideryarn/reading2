@@ -248,6 +248,55 @@ describe("a new author gift", () => {
     expect((await powerOf(mine.id)).since).toBeNull();
   });
 
+  it("refuses instead of claiming preparation succeeded when the article changed owner before its lock", async () => {
+    const mine = await seed("moved-before-gift-lock");
+    const resolveStarter = async (slug: string) => {
+      const resolved = await realResolveStarter(slug);
+      await pool.query("update spideryarn.articles set owner_id = $2 where id = $1", [mine.id, OPTED_OUT]);
+      return resolved;
+    };
+    const made = await runAsOwner(ADMIN, () =>
+      ensureAuthorGift(mine.slug, ADMIN, draft(true), { resolveStarter }),
+    );
+    expect(made).toEqual({ kind: "refused", reason: "absent" });
+    const gifts = await pool.query("select id from spideryarn.author_gifts where article_id = $1", [mine.id]);
+    expect(gifts.rows).toEqual([]);
+    expect(await jobsOf(mine.slug)).toEqual([]);
+    expect((await powerOf(mine.id)).since).toBeNull();
+  });
+
+  it("queues a scoped replacement when an identical mode job already owns an older draft", async () => {
+    const mine = await seed("older-mode-draft", OPTED_OUT);
+    const { rows } = await pool.query("select current_revision_id from spideryarn.articles where id = $1", [mine.id]);
+    const older = String((rows[0] as { current_revision_id: string }).current_revision_id);
+    const draftRevision = randomUUID();
+    const currentRevision = randomUUID();
+    await pool.query(
+      `insert into spideryarn.article_revisions (id, article_id, status, based_on_revision_id, title)
+       values ($1, $2, 'draft', $3, 'Old mode draft'), ($4, $2, 'published', $3, 'New current revision')`,
+      [draftRevision, mine.id, older, currentRevision],
+    );
+    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [mine.id, currentRevision]);
+    const profile = renderProfile({ profile: ABOUT, purpose: PURPOSE });
+    const holder = mintId();
+    const plainKey = workKeyFor(["tweets"], new Set(), profile ?? undefined);
+    await pool.query(
+      `insert into spideryarn.jobs
+         (id, owner_id, slug, steps, status, work_key, reserves_name, url_key, ingest_event_id, profile, draft_revision_id)
+       values ($1, $2, $3, $4::jsonb, 'queued', $5, false, null, null, $6, $7)`,
+      [holder, OPTED_OUT, mine.slug, JSON.stringify([{ name: "tweets", label: "Tweets", status: "pending" }]), plainKey, profile, draftRevision],
+    );
+
+    expect((await runAsOwner(OPTED_OUT, () => ensureAuthorGift(mine.slug, OPTED_OUT, draft(false)))).kind).toBe(
+      "created",
+    );
+    const jobs = await jobsOf(mine.slug);
+    expect(jobs).toHaveLength(EXPECTED.length + 1);
+    const tweets = jobs.filter((job) => job.steps.map((step) => step.name).join(",") === "tweets");
+    expect(tweets).toHaveLength(2);
+    expect(tweets.some((job) => job.work_key !== plainKey), "no scoped replacement was queued").toBe(true);
+  });
+
   it("switches the article on with highPower, and keeps the first `since` of one already on", async () => {
     const off = await seed("switch-on");
     await runAsOwner(ADMIN, () => ensureAuthorGift(off.slug, ADMIN, draft(true)));
@@ -289,6 +338,22 @@ describe("a voucher with a starter", () => {
     );
     expect((await powerOf(mine.id)).since).not.toBeNull();
     expect(await jobsOf(mine.slug)).toHaveLength(EXPECTED.length);
+  });
+
+  it("refuses instead of sending when the starter changed owner before its lock", async () => {
+    const mine = await seed("voucher-moved");
+    const input = voucherFor(mine, "moved", true);
+    const resolveStarter = async (slug: string) => {
+      const resolved = await realResolveStarter(slug);
+      await pool.query("update spideryarn.articles set owner_id = $2 where id = $1", [mine.id, OPTED_OUT]);
+      return resolved;
+    };
+    const made = await runAsOwner(ADMIN, () => createVoucher(input, ADMIN, { ...INVITE, resolveStarter }));
+    expect(made).toEqual({ kind: "starter-refused", reason: "absent" });
+    const vouchers = await pool.query("select id from spideryarn.billing_vouchers where id = $1", [input.id]);
+    expect(vouchers.rows).toEqual([]);
+    expect(await jobsOf(mine.slug)).toEqual([]);
+    expect((await powerOf(mine.id)).since).toBeNull();
   });
 });
 

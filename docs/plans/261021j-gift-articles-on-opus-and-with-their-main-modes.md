@@ -66,10 +66,11 @@ called **inside** the transaction that makes the gift row (`ensureAuthorGift`, o
 wins) or a voucher with a starter (`createVoucher`, only on a new row — never on a replay). It:
 
 1. **locks the article row `FOR UPDATE` first** and re-checks it is still this owner's, still has a
-   current revision and is `full`; otherwise it does nothing (the gift is still made — preparing it
-   is a bonus, not a precondition). Article before voucher and job rows is the repository's lock
-   order, and the lock is what keeps a concurrent transfer (`src/store/pg-article-transfer.ts`) from
-   moving the article between the check and the inserts;
+   current revision and is `full`; otherwise it refuses the create, with no gift, voucher or email
+   written. The form says the article's modes are queued and, when ticked, Opus is switched on, so a
+   successful create that silently skipped both would be false. Article before voucher and job rows
+   is the repository's lock order, and the locked re-check catches a concurrent transfer after the
+   starter's unlocked resolution;
 2. with `highPower`, switches the article on through a **transaction-local** admin write: the
    conditional update and `updated_at` stamp `switchOnForAdmin` does, factored so both share it
    (`switchOnForAdmin` itself calls `getDb()` and cannot be used inside another transaction). Never
@@ -78,7 +79,9 @@ wins) or a voucher with a starter (`createVoucher`, only on a new row — never 
    factored out of `queueMainModesIn` so the two cannot drift — but without reading
    `auto_modes_off_at`: Greg's "by default" is about gifts, his import switch about his own reading.
    A mode already current is a skipped step and costs nothing; a job identical to one already waiting
-   (the add page's case, whose import has just queued them) collapses onto it.
+   (the add page's case, whose import has just queued them) collapses onto it. If that holder already
+   owns a draft, it may be tied to an older revision and unable to publish; the gift queues one
+   revision-scoped replacement, as the cited-work notes successor already does.
 
 The *Send* of an author gift goes through `createVoucher` with its starter, so it queues them again —
 harmless, for the same two reasons — without `highPower`.
@@ -162,7 +165,9 @@ check of which model made each. Question file in `docs/user-feedback/questions/`
    main-mode jobs with the owner's switch off; an existing gift queues nothing; a voucher with a
    starter queues them, a replay does not, whatever its `highPower`; `highPower` switches on in the
    same transaction (a throw after it rolls the switch back); an article already on is left as is;
-   a non-admin cannot reach the new route (namespace gate).
+   a starter moved before the transaction lock is refused rather than silently skipped; a mode job
+   bound to an older draft gets a scoped replacement; a non-admin cannot reach the new route
+   (namespace gate).
 2. **Client**: the tick box, the card line and button. Browser check in a Sonnet subagent.
 3. **Docs**: admin.md § Author gifts, high-powered-ai.md, marketing-author-gifts.md, mcp.md.
 
@@ -184,3 +189,35 @@ GPT Sol reviews the code before the push.
 - the minimal branch is unreachable (D2).
 
 Its simpler design (unforced, switched on in the transaction) is revision 2.
+
+**Code review, GPT Sol, 2026-10-21 — approve, with four fixes it applied:**
+
+- a starter that changed between its unlocked resolution and the lock is now refused, not silently
+  unprepared (D2 step 1 reworded);
+- an identical mode job bound to an older draft gets a revision-scoped replacement;
+- `switchOnHighPowerIn` refuses an undefined predicate, which Drizzle would have dropped,
+  switching every article on;
+- `POST /api/admin/vouchers` refuses `highPower: true` without a starter.
+
+After it, the three `as` casts on the checked row became `checkGiftArticle`, a union that hands back
+the narrowed row. Its sandbox could not reach the database; the database tests were run here
+afterwards, all green. Its replacement test was watched red by removing the scope.
+
+## Built, 2026-10-21
+
+- **Stage 1**, server (Opus subagent): `src/store/pg-gift-prep.ts`, `src/store/pg-main-modes.ts`
+  (the loop the import shares), `switchOnHighPowerIn` in `src/store/pg-high-power.ts`, the two
+  creates and the new route. Not watched red: the rollback test (an outside-the-transaction switch
+  would hang rather than fail) and the replay test (a replay is answered before the transaction).
+- **Differs from the plan**: `create_gift_voucher` takes no starter, so it has no `high_power` (D4).
+  The add page's *For the author…* sends no `highPower`; its own High-powered AI box, which it
+  ticks, already switches the article on.
+- **Stage 2**, client (Opus subagent): twelve mutations, each red. `highPower` is out of the
+  voucher create key and the form's draft string, so toggling the box between a lost answer and
+  its retry is the same voucher.
+- **Browser check** (Sonnet, Playwright, this worktree's server): the box appears once an article
+  is chosen, ticked, in both form modes; Switch on turns the card to *on*, sets `high_power_since`
+  and queues the main-mode jobs, most of which skipped as already done; no console errors; no
+  horizontal scroll at 390 px. One lookup ran, $0.033. Shots:
+  [the Give form](261021j-shot-1-give-form.png), [a draft card](261021j-shot-2-draft-card.png),
+  [phone](261021j-shot-3-phone.png), [phone, author gift](261021j-shot-3b-phone-author.png).

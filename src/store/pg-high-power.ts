@@ -53,6 +53,11 @@ export type HighPowerExecutor = Db | Tx;
  * has locked and checked the owner of.
  */
 export async function switchOnHighPowerIn(db: HighPowerExecutor, row: SQL | undefined): Promise<boolean> {
+  /* Drizzle's `and` permits `undefined`, which is useful to optional clauses
+     but dangerous here: `and(undefined, isNull(high_power_since))` would match
+     every standard-power article. Keep the runtime boundary as narrow as the
+     function's contract even though `ownedSlug`'s inferred type is nullable. */
+  if (row === undefined) throw new Error("switchOnHighPowerIn requires a predicate that identifies one article");
   /* Conditional on the other state, so a repeat is a no-op that keeps the
      first `since` without a read-then-write window.
 

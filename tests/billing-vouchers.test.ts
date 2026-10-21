@@ -440,6 +440,10 @@ describe("the administrator's side", () => {
       ok: true,
       value: { id, email: "a@b.example", articles: 20, note: null, recipientNote: null, recipientName: null, starterSlug: null, highPower: false },
     });
+    expect(parseNewVoucher({ id, email: "a@b.example", articles: 20, highPower: true })).toEqual({
+      ok: false,
+      message: "highPower needs a starterSlug to switch on.",
+    });
     /* The id is the browser's, and required: it is what makes a replay the same create. */
     expect(parseNewVoucher({ email: "a@b.example", articles: 20 }).ok).toBe(false);
     expect(parseNewVoucher({ id: "not-a-uuid", email: "a@b.example", articles: 20 }).ok).toBe(false);

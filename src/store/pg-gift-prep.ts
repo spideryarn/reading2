@@ -12,11 +12,11 @@
  * ## What it does
  *
  * 1. **Locks the article row first** and re-checks it is still the current
- *    owner's, still serves a revision and is `full`. Otherwise it does nothing
- *    and says so: the gift is still made, because preparing the article is a
- *    bonus, not a precondition. A `minimal` paper cannot reach here (starter
- *    resolution refuses it, src/store/voucher-starter.ts), so that half of the
- *    check is a guard.
+ *    owner's, still serves a revision and is `full`. Otherwise the caller
+ *    refuses the create: its UI promises the modes (and, when ticked, Opus),
+ *    so a gift that silently skipped both would be a false success. A
+ *    `minimal` paper cannot ordinarily reach here (starter resolution refuses
+ *    it); the locked check closes the race after that unlocked resolution.
  * 2. **With `highPower`, switches the article to Opus** — the administrator's
  *    uncharged write (`switchOnHighPowerIn`, src/store/pg-high-power.ts), on
  *    this transaction. An article already on keeps its first `since`.
@@ -87,6 +87,8 @@ export type GiftPrep =
   | { readonly kind: "skipped"; readonly reason: "absent" | "not-owner" | "unpublished" }
   | { readonly kind: "prepared"; readonly switchedOn: boolean; readonly modes: readonly SuccessorOutcome[] };
 
+export type GiftPrepSkipReason = Extract<GiftPrep, { readonly kind: "skipped" }>["reason"];
+
 /** Lock the article row `FOR UPDATE`, and read what the preparation checks. */
 export async function lockGiftArticleIn(tx: Tx, articleId: string): Promise<LockedGiftArticle | undefined> {
   const [row] = await tx
@@ -105,6 +107,43 @@ export async function lockGiftArticleIn(tx: Tx, articleId: string): Promise<Lock
   return row;
 }
 
+/** A locked row `checkGiftArticle` passed: the current owner's, serving a revision, full. */
+export type PreparableGiftArticle = LockedGiftArticle & { readonly currentRevisionId: string };
+
+/**
+ * **May this locked row be prepared?** The row back, narrowed, or why not — a
+ * union rather than a reason-or-null, so a caller cannot reach
+ * `prepareLockedGiftArticleIn` without the check having passed.
+ */
+export function checkGiftArticle(
+  article: LockedGiftArticle | undefined,
+  owner: string = currentOwnerId(),
+):
+  | { readonly ok: true; readonly article: PreparableGiftArticle }
+  | { readonly ok: false; readonly reason: GiftPrepSkipReason } {
+  if (!article) return { ok: false, reason: "absent" };
+  if (article.ownerId !== owner) return { ok: false, reason: "not-owner" };
+  const { currentRevisionId } = article;
+  if (currentRevisionId === null || article.processing !== "full") return { ok: false, reason: "unpublished" };
+  return { ok: true, article: { ...article, currentRevisionId } };
+}
+
+/** Prepare a row the caller already locked and passed through `checkGiftArticle`. */
+export async function prepareLockedGiftArticleIn(
+  tx: Tx,
+  article: PreparableGiftArticle,
+  options: { readonly highPower: boolean },
+): Promise<Extract<GiftPrep, { readonly kind: "prepared" }>> {
+  const owner = currentOwnerId();
+  if (options.highPower && !isAdmin(owner)) {
+    throw Object.assign(new Error("Only an administrator may switch on without a charge."), { status: 403 });
+  }
+  const switchedOn = options.highPower ? await switchOnHighPowerIn(tx, eq(articles.id, article.id)) : false;
+  const reader = await readerProfileOf(tx, article.ownerId);
+  const modes = await enqueueMainModesIn(tx, article, reader?.profile ?? null, undefined, article.currentRevisionId);
+  return { kind: "prepared", switchedOn, modes };
+}
+
 /**
  * **Prepare one gift's article, on the caller's transaction.** See the file's
  * head for the three steps and the lock order. Throws only on a database error
@@ -117,25 +156,10 @@ export async function prepareGiftArticleIn(
   articleId: string,
   options: { readonly highPower: boolean },
 ): Promise<GiftPrep> {
-  const owner = currentOwnerId();
-  /* Checked before any write, though only the admin routes call this: the
-     switch below is uncharged, and an uncharged switch-on is the
-     administrator's alone (as `switchOnForAdmin` checks). */
-  if (options.highPower && !isAdmin(owner)) {
-    throw Object.assign(new Error("Only an administrator may switch on without a charge."), { status: 403 });
-  }
   const article = await lockGiftArticleIn(tx, articleId);
-  if (!article) return { kind: "skipped", reason: "absent" };
-  if (article.ownerId !== owner) return { kind: "skipped", reason: "not-owner" };
-  if (article.currentRevisionId === null || article.processing !== "full") {
-    return { kind: "skipped", reason: "unpublished" };
-  }
-
-  /* The switch first, so it commits with the jobs and each reads it as it starts. */
-  const switchedOn = options.highPower ? await switchOnHighPowerIn(tx, eq(articles.id, article.id)) : false;
-  const reader = await readerProfileOf(tx, article.ownerId);
-  const modes = await enqueueMainModesIn(tx, article, reader?.profile ?? null);
-  return { kind: "prepared", switchedOn, modes };
+  const checked = checkGiftArticle(article);
+  if (!checked.ok) return { kind: "skipped", reason: checked.reason };
+  return await prepareLockedGiftArticleIn(tx, checked.article, options);
 }
 
 /** The fields of a `GiftPrep` a log line may carry: kinds and counts, no ids of anybody's prose. */

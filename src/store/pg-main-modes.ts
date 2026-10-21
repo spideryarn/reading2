@@ -68,25 +68,36 @@ export async function readerProfileOf(
  * job, for a publication. Absent for a gift, which has no predecessor of its
  * own: whatever is already queued on the article claims first anyway, by
  * `created_at`.
+ *
+ * `replacementScope`: gifts pass the revision they found under the article
+ * lock. If an identical unscoped job already owns a draft, it may be based on
+ * an older revision and unable to publish; queue one revision-scoped
+ * replacement rather than reporting that holder as the gift's preparation.
+ * Imports omit it, preserving their established `boundToOlderBase` outcome.
  */
 export async function enqueueMainModesIn(
   tx: Tx,
   article: { readonly ownerId: string; readonly slug: string; readonly purpose: string | null },
   readerProfile: string | null,
   notBefore?: string,
+  replacementScope?: string,
 ): Promise<SuccessorOutcome[]> {
   const profile = renderProfile({ profile: readerProfile, purpose: article.purpose });
   const queued: SuccessorOutcome[] = [];
   for (const [i, steps] of autoModeJobs().entries()) {
+    const ask = {
+      ownerId: article.ownerId as OwnerId,
+      slug: article.slug,
+      steps,
+      ...(profile ? { profile } : {}),
+      after: i + 1,
+      ...(notBefore !== undefined ? { notBefore } : {}),
+    };
+    const first = await enqueueSuccessorIn(tx, ask);
     queued.push(
-      await enqueueSuccessorIn(tx, {
-        ownerId: article.ownerId as OwnerId,
-        slug: article.slug,
-        steps,
-        ...(profile ? { profile } : {}),
-        after: i + 1,
-        ...(notBefore !== undefined ? { notBefore } : {}),
-      }),
+      first.kind === "boundToOlderBase" && replacementScope !== undefined
+        ? await enqueueSuccessorIn(tx, { ...ask, scope: replacementScope })
+        : first,
     );
   }
   return queued;

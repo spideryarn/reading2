@@ -61,7 +61,14 @@ import {
 } from "./pg-billing.js";
 import { guardDbStore } from "./db-errors.js";
 import { type TransferTx, transferStarterOnClaim } from "./pg-article-transfer.js";
-import { type GiftPrep, giftPrepLogFields, lockGiftArticleIn, prepareGiftArticleIn } from "./pg-gift-prep.js";
+import {
+  type GiftPrep,
+  checkGiftArticle,
+  type GiftPrepSkipReason,
+  giftPrepLogFields,
+  lockGiftArticleIn,
+  prepareLockedGiftArticleIn,
+} from "./pg-gift-prep.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
 import {
@@ -638,6 +645,11 @@ export type CreateVoucherAnswer =
   /** The caller's transaction-local permission was revoked before insertion. */
   | { readonly kind: "create-refused" };
 
+/** The locked starter changed after its earlier resolution, so no create may claim it was prepared. */
+function lockedStarterRefusal(reason: GiftPrepSkipReason): CreateVoucherAnswer {
+  return { kind: "starter-refused", reason: reason === "unpublished" ? "unpublished" : "absent" };
+}
+
 /**
  * **Make one voucher, and queue its recipient's email in the same
  * transaction.** It then waits, unclaimed, until its address asks for a plan.
@@ -658,11 +670,13 @@ export type CreateVoucherAnswer =
  *
  * **A new voucher with a starter prepares its article** in the same
  * transaction: the main-mode jobs, and Opus if `highPower` (plan 261021j § D2,
- * `prepareGiftArticleIn`). The article is locked **first**, before the
- * caller's `beforeCreate` locks its gift and before the voucher row — article
- * before gift and voucher is the order the claim and the share-link switch
- * keep. A replay, a conflict and a refused create prepare nothing; the lock
- * they took is released with their transaction.
+ * `prepareLockedGiftArticleIn`). The article is locked and re-checked
+ * **first**, before the caller's `beforeCreate` locks its gift and before the
+ * voucher row — article before gift and voucher is the order the claim and the
+ * share-link switch keep. A replay, a conflict and a refused create prepare
+ * nothing; the lock they took is released with their transaction. If the
+ * starter changed after its unlocked resolution, the create is refused rather
+ * than sending an email while silently skipping its promised preparation.
  */
 export async function createVoucher(
   input: NewVoucher,
@@ -689,7 +703,10 @@ export async function createVoucher(
     async (tx): Promise<{ answer: CreateVoucherAnswer; prep: GiftPrep | null }> => {
       const only = (answer: CreateVoucherAnswer) => ({ answer, prep: null });
       /* The starter before the gift and the voucher: see above. */
-      if (starter !== null) await lockGiftArticleIn(tx, starter.articleId);
+      const checked = starter === null ? null : checkGiftArticle(await lockGiftArticleIn(tx, starter.articleId));
+      if (checked !== null && !checked.ok) {
+        return only((await replayOf(tx, input, email, createdBy)) ?? lockedStarterRefusal(checked.reason));
+      }
       if (deps.beforeCreate && !(await deps.beforeCreate(tx))) {
         /* A concurrent create may have committed since the first replay read.
            Its identity still wins; otherwise the caller revoked this create. */
@@ -718,9 +735,9 @@ export async function createVoucher(
           starter: starter === null ? null : { title: starter.title, url: starter.url },
         });
         const prep =
-          starter === null
+          checked === null
             ? null
-            : await prepareGiftArticleIn(tx, starter.articleId, { highPower: input.highPower === true });
+            : await prepareLockedGiftArticleIn(tx, checked.article, { highPower: input.highPower === true });
         return { answer: { kind: "created", id: row.id, delivery }, prep };
       }
       /* Another create of this id inserted between the check above and this
@@ -815,6 +832,9 @@ export function parseNewVoucher(body: unknown): Parsed<NewVoucher> {
   /* Default false (plan 261021j § D4); not a replay's identity, so not checked against anything. */
   if ("highPower" in body && typeof body.highPower !== "boolean") {
     return { ok: false, message: "highPower must be true or false." };
+  }
+  if (body.highPower === true && starterSlug === null) {
+    return { ok: false, message: "highPower needs a starterSlug to switch on." };
   }
   return {
     ok: true,
