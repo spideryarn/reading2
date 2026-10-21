@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "20 October 2026";
+const LAST_UPDATED = "21 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -262,6 +262,18 @@ export function PrivacyPage() {
             or file name, when it ran, and if it failed, which step and the error message, so that
             we can work out afterwards what went wrong. It goes when you delete the article; one that
             never became an article stays until your account is deleted.
+          </li>
+          {/* **Since 2026-10-21**: `private_link_openers`, Greg's 2C (reply
+              spya-xug3kf to q-agbc89). One row per article and account, a
+              count and the first and last time. Read only by the
+              administrator; the owner is not shown it. Cascades with the
+              account and with the article. docs/project/privacy.md § A
+              private link; plan 261021d. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">When you open somebody’s private link while
+            signed in</strong> — which article, the first and last time, and how many times. Only
+            the administrator can see it, not the article’s owner. It goes when your account does,
+            or when the article does.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What the models make for you</strong> — we keep
@@ -662,7 +674,10 @@ export function PrivacyPage() {
           <strong className="tw:text-foreground">private link</strong> to an article, anyone who has
           the link can read the article without signing in, and can pass it on. An article shared
           only this way is not listed anywhere, and they get the same things a public reader gets, your comments and searches
-          included. We cannot tell you who has read it. The link’s key is part of its address, so
+          included. We do not tell you who has read it. We do record it: when somebody signed in
+          opens the link, their account and when; when somebody signed out does, a rough count and
+          the first and last time a signed-out open was recorded.
+          Only the administrator can see that. The link’s key is part of its address, so
           it stays in the browser history of whoever opens it. Turning the link off refuses the
           next request made with it; it cannot take back what somebody has already read or copied.
           And{" "}

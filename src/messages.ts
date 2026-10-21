@@ -4216,15 +4216,18 @@ export const OWNERSHIP_ADMIN_OWNER = "Admin: it belongs to";
 export const OWNERSHIP_ADMIN_CHECKING = "Admin: looking up its owner…";
 /** The address could not be read from the sign-in service; the rest of the row could. */
 export const OWNERSHIP_ADMIN_NO_EMAIL = "Admin: the owner's address could not be read just now.";
-/** Not in the admin list under this address (renamed since, or the list is stale). */
-export const OWNERSHIP_ADMIN_NOT_LISTED = "Admin: it is not in the articles list under this address.";
+/** The route found no article it may answer for under this address and key (renamed since, say). */
+export const OWNERSHIP_ADMIN_NOT_FOUND = "Admin: no article under this address could be looked up.";
 /**
- * **A private-link article's owner is not shown, even to the administrator**
- * — admin.md § What it deliberately does not show: the key lets you read it,
- * not learn whose it is. Plan 261020j, question q-agbc89.
+ * **Who opened its private link**, for the administrator — Greg's 2C (reply
+ * `spya-xug3kf` to q-agbc89, plan 261021d). Recorded from the day it shipped.
  */
-export const OWNERSHIP_ADMIN_LINK =
-  "Admin: the owner of an article shared by private link is not shown, not even to an admin.";
+export const LINK_OPENS_HEADING = "Admin: opened through its private link by";
+export const LINK_OPENS_NONE = "Admin: nobody has opened it through its private link since we started recording, on 21 October 2026.";
+/** Before the count of signed-out opens: approximate, since anybody with the link can add to it (security-risks.md § R31). */
+export const LINK_OPENS_SIGNED_OUT = "Signed-out opens, roughly:";
+/** An opener whose address the sign-in service did not give. */
+export const LINK_OPENS_UNKNOWN_ACCOUNT = "an account with no address on record";
 /** Then the reason from `describeFetchFailure`. */
 export const OWNERSHIP_ADMIN_FAILED = "Admin: could not look up its owner.";
 

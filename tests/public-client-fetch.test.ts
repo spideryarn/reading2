@@ -16,10 +16,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublicArticle } from "../src/public-types.js";
-import { pathOf, PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
+import { pathOf, PRIVATE_LINK_OPENED, PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
 import type { PublicLibrary } from "../src/public-library-types.js";
 import { parseShareKey, type ShareKey } from "../src/share-key.js";
-import { loadPublicArticle, loadPublicLibrary, publicFetch } from "../src/web/public-api.js";
+import { loadPublicArticle, loadPublicLibrary, notePrivateLinkOpened, publicFetch } from "../src/web/public-api.js";
 
 /** Every request this file's calls made, exactly as `fetch` saw it. */
 const calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -335,5 +335,26 @@ describe("the client and the server agree about the paths", () => {
     /* The inventory really does hold a slugless route, or the line above is
        comparing against a set that could not have contained this path anyway. */
     expect(PUBLIC_ROUTE_NAMES.some((r) => r.kind === "collection")).toBe(true);
+  });
+});
+
+/**
+ * **The one public write, from the client** — plan 261021d § 3 and GPT Sol's
+ * F5: a fixed shape nobody can add to. POST, no credentials, no body, no
+ * headers, and the path the server's own name spells.
+ */
+describe("notePrivateLinkOpened", () => {
+  it("POSTs to the server's write route with the key, and nothing else", async () => {
+    const key = parseShareKey("abcdefghijklmnopqrstuv") as ShareKey;
+    await notePrivateLinkOpened("a piece/x", key);
+
+    expect(calls).toHaveLength(1);
+    const [call] = calls;
+    expect(call?.url).toBe(`${PRIVATE_LINK_OPENED.path(encodeURIComponent("a piece/x"))}?key=${key}`);
+    expect(PRIVATE_LINK_OPENED.pattern.test(call?.url.split("?")[0] ?? "")).toBe(true);
+    expect(call?.init?.method).toBe("POST");
+    expect(call?.init?.credentials).toBe("omit");
+    expect(call?.init?.body).toBeUndefined();
+    expect(call?.init?.headers).toBeUndefined();
   });
 });

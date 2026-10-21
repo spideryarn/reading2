@@ -1,7 +1,7 @@
 ---
 reports: spya-cf30ac
 ending: shipped
-comment: The details page now says "You own this article" (and which account) or "You don't own this article". As admin you also see who owns another reader's public article. Private-link owners and who opened a link wait on q-agbc89.
+comment: The details page says "You own this article" or "You don't own this article". As admin you also see whose it is on a public or private-link article, and since 21 October who opened its private link.
 ---
 # The details page says whose article it is
 
@@ -31,9 +31,22 @@ beside it.
   reader or an unconfirmed session, either of whom may be the owner.
 - **As admin**, on another reader's **public** article, the same section adds *Admin: it belongs
   to <address>*, read from the existing `/admin/articles` list.
-- **Not built, and asked** ([q-agbc89](questions/q-agbc89.md), queue item `qi-pf9h5nps`): the owner
-  of an article you read through a **private link** (GPT Sol's plan review showed that widens the
-  admin privacy rule, so the page says it is not shown), and **who opened a private link**, which
-  nothing records today and which is a new field stored about readers.
+- **Asked, then built** ([q-agbc89](questions/q-agbc89.md), queue item `qi-pf9h5nps`). The owner of
+  an article read through a **private link** widened the admin privacy rule, and **who opened a
+  private link** was a new record about readers, so both were put to Greg. He chose both
+  (reply `spya-xug3kf`, 2026-10-20 21:41 UTC):
+
+  > As an admin, I want to be able to see anything. Because after all, I've got access to the
+  > database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
+  > which users open which articles.
+
+  Built on `dev` by plan
+  [261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md), with both GPT
+  Sol reviews beside it. As admin, the details page says whose the article is on a private link too,
+  asked with the link's key, so only for an article you can already open. And from 21 October 2026
+  a private link's opens are recorded: the signed-in accounts (first and last time, how many
+  times) and a rough count of signed-out opens. Only the administrator sees them, on the details
+  page; owners are not shown. The privacy page and Help say so. The signed-out count can be inflated
+  by anybody holding the link, throttled; a request limit is risk R31, proposed.
 - The Tinbergen article itself was not looked up in production; once this is deployed, its details
   page answers it.

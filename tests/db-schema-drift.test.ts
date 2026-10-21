@@ -296,6 +296,8 @@ describe("declaredTables", () => {
       "jobs",
       "link_previews",
       "link_summaries",
+      "private_link_openers",
+      "private_link_signed_out_opens",
       "queue_state",
       "quiz_attempts",
       "rate_limit_events",
@@ -416,8 +418,10 @@ describe("against a real database", () => {
          `related_work_searches`, 2026-10-11 (plan 261011ac); sixty-one since
          `chat_mentions`, 2026-10-12 (plan 261012d); sixty-two since
          `citation_web_notes`, 2026-10-19 (plan 261018o stage 2); sixty-three
-         since `article_open_times`, 2026-10-20 (plan 261020y). */
-      expect(report.declaredTables).toBe(63);
+         since `article_open_times`, 2026-10-20 (plan 261020y); sixty-five
+         since `private_link_openers` and `private_link_signed_out_opens`,
+         2026-10-21 (plan 261021d). */
+      expect(report.declaredTables).toBe(65);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

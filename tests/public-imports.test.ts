@@ -255,6 +255,14 @@ describe("the public API's import graph", () => {
     expect(listing).not.toContain("src/store/public-access.ts");
     expect(listing).not.toContain("src/store/link-shared-slug.ts");
     expect(listing).not.toContain("src/share-key.ts");
+    /* **Nor the writer that records who opened a private link** (plan
+       261021d, GPT Sol's F1): it takes a reader id, so a public door that
+       reached it could be made to say somebody opened something. The public
+       write is the signed-out count's own leaf, which the routes do reach. */
+    for (const entry of PUBLIC_ENTRIES) {
+      expect(graphFrom(entry), entry).not.toContain("src/store/pg-private-link-openers.ts");
+    }
+    expect(PUBLIC_ENTRIES.some((e) => graphFrom(e).includes("src/store/private-link-signed-out-opens.ts"))).toBe(true);
     /* The control: the article reader does reach all three. */
     const reader = graphFrom("src/store/public-reader.ts");
     expect(reader).toContain("src/store/public-access.ts");
@@ -476,6 +484,17 @@ describe("the public API's tables", () => {
        writer is the authenticated coordinator (src/public-shelf-topics.ts),
        which stays forbidden above with every model and gateway module. */
     "src/store/public-topic-tree.ts": ["shelfTopicSets"],
+    /* **The one public write**, Greg's option C in reply `spya-xug3kf` to
+       q-agbc89 (2026-10-20), plan 261021d § 4. Its three sentences: the write
+       is `countSignedOutOpen`, an `insert … select` from `articles` by
+       `privateLinkWhere` (slug, key and private) with nothing returned, so it
+       reads nothing back to the caller; the row it writes is a count and two
+       times, keyed by the article, with no reader in it, bounded and
+       throttled in the statement (security-risks.md § R31); and the signed-in
+       half, which records who, is `private_link_openers` in
+       src/store/pg-private-link-openers.ts — not here, and still forbidden in
+       every public file, this one included. */
+    "src/store/private-link-signed-out-opens.ts": ["privateLinkSignedOutOpens"],
   };
 
   /**

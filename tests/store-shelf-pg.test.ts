@@ -67,6 +67,8 @@ import {
   glossaryLookups,
   ingestEvents,
   linkSummaries,
+  privateLinkOpeners,
+  privateLinkSignedOutOpens,
   quizAttempts,
   staleNoticeDismissals,
   commandSuggestionDismissals,
@@ -1256,6 +1258,11 @@ describe("destroying an article", () => {
           model: "test/model",
           expiresAt: new Date(now.getTime() + 86_400_000),
         }),
+      /* Who opened its private link — plan 261021d. Both go with the article. */
+      private_link_openers: () =>
+        db.insert(privateLinkOpeners).values({ articleId: GONE_ARTICLE, readerId: owner }),
+      private_link_signed_out_opens: () =>
+        db.insert(privateLinkSignedOutOpens).values({ articleId: GONE_ARTICLE }),
       realtime_sessions: () =>
         db.insert(realtimeSessions).values({
           id: GONE_SESSION,
