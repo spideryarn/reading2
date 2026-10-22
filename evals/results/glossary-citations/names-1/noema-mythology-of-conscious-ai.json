@@ -1,0 +1,188 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "names-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "f50e0cfc3ec0a0b0292801bceef48a6af14e803eb0ce8d698991583aea7b31da",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "Ex Machina",
+      "kind": "work",
+      "aliases": [
+        "Garland test"
+      ],
+      "background": "A 2014 film written and directed by Alex Garland about an inventor, Nathan, and a programmer, Caleb, who is asked to judge whether the humanlike robot Ava is conscious."
+    },
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "Google engineer who in 2022 publicly claimed the company's LaMDA chatbot was conscious. Google dismissed him for breaching confidentiality."
+    },
+    {
+      "name": "artificial general intelligence",
+      "kind": "concept",
+      "aliases": [
+        "AGI"
+      ],
+      "senseHere": "AI meant to match or beat human abilities across thinking tasks. The author rejects the idea that consciousness will appear at this arbitrary threshold."
+    },
+    {
+      "name": "artificial superintelligence",
+      "kind": "concept",
+      "aliases": [
+        "ASI"
+      ],
+      "senseHere": "AI that improves itself until it goes beyond human understanding and control."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [
+        "Nagel"
+      ],
+      "background": "American philosopher whose 1974 paper 'What Is It Like to Be a Bat?' gave the standard way of defining consciousness: there is something it is like to be the creature."
+    },
+    {
+      "name": "pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "background": "The tendency to see meaningful patterns, especially faces, in random things, such as a face in a piece of toast."
+    },
+    {
+      "name": "computational functionalism",
+      "kind": "concept",
+      "aliases": [
+        "functionalism"
+      ],
+      "senseHere": "The assumption that running the right kind of computation, or information processing, is enough to produce consciousness, whatever the machine is made of. The author calls it an assumption, not an established fact, and doubts it.",
+      "background": "In philosophy of mind, functionalism says mental states are defined by what they do, not by what they are made of."
+    },
+    {
+      "name": "Alan Turing",
+      "kind": "person",
+      "aliases": [
+        "Turing"
+      ],
+      "background": "British mathematician who defined computation with his abstract machine in the 1930s. In 1950 he proposed the Turing test, which asks whether a machine can pass for a human in conversation."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation",
+        "Turing world",
+        "Turing-complete"
+      ],
+      "senseHere": "A simple imaginary device that reads and writes symbols on an endless tape by fixed rules, which defines what an algorithm is. A universal one can imitate any other such machine. 'Turing world' is the author's name for the view that only this kind of step-by-step computation matters.",
+      "background": "Alan Turing described it around 1936 as a way to pin down what can be calculated by a mechanical procedure. Ordinary computers are practical versions of it."
+    },
+    {
+      "name": "substrate independence",
+      "kind": "concept",
+      "aliases": [
+        "substrate-flexible",
+        "substrate flexibility",
+        "substrate independent"
+      ],
+      "senseHere": "The idea that a computation does the same thing whatever material runs it. The author prefers 'substrate flexible', because you cannot build a working computer from just any material, such as cheese."
+    },
+    {
+      "name": "autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "autopoietic"
+      ],
+      "senseHere": "Self-production: a living thing constantly rebuilds and maintains the very conditions that keep it alive. The author treats it as a defining mark of living systems, and a link between life and consciousness."
+    },
+    {
+      "name": "neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "background": "Imagined scenario in which brain parts are swapped one by one for silicon parts that behave identically, to see whether consciousness would persist. David Chalmers is its best-known proponent."
+    },
+    {
+      "name": "mortal computation",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Computing in which the program is tied to its particular physical hardware, so it effectively dies when that hardware ceases to exist. It could save energy.",
+      "background": "Proposed by AI pioneer Geoffrey Hinton as an alternative to digital computing, where software can be copied between machines."
+    },
+    {
+      "name": "neuromorphic computation",
+      "kind": "concept",
+      "aliases": [
+        "neuromorphic computing"
+      ],
+      "senseHere": "Computing hardware that copies detailed properties of real neurons, such as the precise timing of their spikes, rather than using simplified artificial neurons."
+    },
+    {
+      "name": "Watt governor",
+      "kind": "other",
+      "aliases": [
+        "governor of a steam engine"
+      ],
+      "background": "A mechanical regulator on steam engines. Spinning weights swing outward as the engine speeds up and close a valve, slowing it, with no calculation involved."
+    },
+    {
+      "name": "4E cognitive science",
+      "kind": "concept",
+      "aliases": [
+        "dynamical systems"
+      ],
+      "senseHere": "Approaches holding that mind is enactive, embodied, embedded and extended, arising from the body's continuous interaction with its surroundings. Together with dynamical systems approaches, they reject accounting for the mind purely by algorithms."
+    },
+    {
+      "name": "biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive is necessary for consciousness, though perhaps not enough on its own. The author supports it tentatively and admits he has no knock-down argument.",
+      "background": "Associated with philosopher John Searle, who held that consciousness is a real biological process in brains, as digestion is in stomachs. It remains a minority view."
+    },
+    {
+      "name": "controlled hallucination",
+      "kind": "concept",
+      "aliases": [
+        "predictive processing",
+        "prediction error"
+      ],
+      "senseHere": "The view that what we consciously see is the brain's best guess about the world, constantly corrected by incoming senses. The brain works to shrink the gap between its guesses and what arrives, called prediction error. The same guessing about the body's inner state gives rise to emotions and the sense of self.",
+      "background": "Predictive processing is a leading theory in neuroscience. The author has promoted the 'controlled hallucination' phrase in his own work."
+    },
+    {
+      "name": "interoceptive inference",
+      "kind": "term",
+      "aliases": [
+        "interoception"
+      ],
+      "senseHere": "The brain's best guesses about the body's inner condition, such as heart rate. Interoception is sensing the body from within. The author links these guesses to emotion, mood and the feeling of being alive."
+    },
+    {
+      "name": "simulation is not instantiation",
+      "kind": "concept",
+      "aliases": [
+        "instantiation",
+        "instantiate",
+        "simulation"
+      ],
+      "senseHere": "A computer simulation of something does not create the real thing, unless that thing is itself a computation. A simulated rainstorm makes nothing wet, and a simulated brain would not be conscious unless consciousness is computation."
+    },
+    {
+      "name": "simulation hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "Nick Bostrom",
+        "Bostrom"
+      ],
+      "background": "Philosopher Nick Bostrom argued that if advanced civilizations run many detailed simulated worlds, we are probably living in one. The argument assumes a suitably programmed computer could be conscious."
+    }
+  ]
+}

@@ -7,6 +7,9 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 > yet — [reading-view-overview.md](reading-view-overview.md) says how it does work. When a piece of
 > this is decided, it moves into the doc that owns that piece and comes out of here.
 
+The decorated text has a sibling direction: what the marks in it should explain, and how many of
+them there should be — [explain-this-vision.md](explain-this-vision.md).
+
 ## What Greg asked for
 
 > I suspect I'm probably not going to want to actually scroll through the glossary, say. What I want

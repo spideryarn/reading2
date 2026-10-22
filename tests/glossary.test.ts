@@ -18,7 +18,9 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  BATCH_SIZE,
+  FIND_MORE_FLOOR,
+  MAX_ENTRIES,
+  renderPrompt,
   buildGlossary,
   dedupe,
   findOccurrences,
@@ -37,6 +39,7 @@ import {
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
 import { articleFingerprint } from "../src/source-hash.js";
 import { CAPABLE_MODEL } from "../src/models.js";
+import { budgetFor } from "../src/token-budget.js";
 import {
   GATE_STEP,
   PRIORITY_GATE,
@@ -557,12 +560,47 @@ describe("buildGlossary score accounting", () => {
 });
 
 describe("suggestedCount", () => {
-  it("scales with the article and never exceeds one batch", () => {
+  it("scales with the article, past twenty, up to one call's ceiling", () => {
     expect(suggestedCount(400)).toBe(6);
     expect(suggestedCount(4000)).toBe(10);
-    // The ceiling is the whole point: their extraction 504'd on OUTPUT tokens,
-    // because every entry carries two explanations.
-    expect(suggestedCount(100_000)).toBe(BATCH_SIZE);
+    // The book that missed Torricelli: 38,255 body words, which the old cap
+    // of twenty turned into one entry per 1,900 words (spya-e5t77w).
+    expect(suggestedCount(38_255)).toBe(96);
+    // Still a ceiling: their extraction 504'd on OUTPUT tokens.
+    expect(suggestedCount(1_000_000)).toBe(MAX_ENTRIES);
+  });
+
+  it("asks a Find more on an essay exactly what it always asked", () => {
+    expect(suggestedCount(4000, 10)).toBe(10);
+    expect(suggestedCount(8000, 20)).toBe(20);
+  });
+
+  it("asks a Find more on a long piece for the rest of its length, never fewer than twenty", () => {
+    // Greg's own list: written by the old rule, 20 entries on that book.
+    expect(suggestedCount(38_255, 20)).toBe(76);
+    expect(suggestedCount(38_255, 90)).toBe(FIND_MORE_FLOOR);
+    // The ceiling is on the whole list's target, so the rest of it is what is asked.
+    expect(suggestedCount(1_000_000, 10)).toBe(MAX_ENTRIES - 10);
+  });
+
+  const TREE = {
+    slug: "s",
+    rootId: "root",
+    nodes: {
+      root: { id: "root", depth: 0, parent: null, children: [], title: "root", gist: "g", range: ["spya-aaaaaa", "spya-bbbbbb"] },
+    },
+  } as unknown as Tree;
+  const LONG = "This is a long piece. Work through it part by part";
+
+  it("tells the model to go part by part only when it asks for more than a Find more's floor", () => {
+    expect(renderPrompt({ tree: TREE, count: FIND_MORE_FLOOR + 1, existing: [], profile: null })).toContain(LONG);
+    // An essay's request is the one it always was.
+    expect(renderPrompt({ tree: TREE, count: FIND_MORE_FLOOR, existing: [], profile: null })).not.toContain(LONG);
+    expect(renderPrompt({ tree: TREE, count: 10, existing: [], profile: null })).not.toContain(LONG);
+  });
+
+  it("keeps the answer's budget under the response ceiling at the most entries one call may ask for", () => {
+    expect(() => budgetFor("glossary", 600 + MAX_ENTRIES * 340)).not.toThrow();
   });
 });
 
