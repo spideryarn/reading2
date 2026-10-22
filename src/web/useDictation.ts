@@ -1145,14 +1145,18 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          succeed on a second try. An empty transcript is an answer, and will be
          the same answer.
 
-         Two further gates. `retryable` is the upload saying whether the same
+         One further gate: `retryable` is the upload saying whether the same
          bytes could ever work — **for every failed part**, since a retry that
-         cannot finish the set cannot publish anything. `s.confirmed === 0` is
-         the *field*: a retry arrives after `onEnd`, so it lands beside the
-         recogniser's rough words rather than replacing them, which would
-         duplicate half the dictation. That second gate is a limit rather than a
-         decision, and it is named in the plan. */
-      if (s.confirmed === 0 && failures.every((r) => r.retryable)) {
+         cannot finish the set cannot publish anything.
+
+         **Rough live words in the box are not a gate.** Until 2026-10-22
+         `s.confirmed === 0` was one, because a retry arrives after `onEnd` and
+         the field could only put it beside the recogniser's guesses, which
+         duplicated the dictation; so on Chromium a failure offered the audio
+         and nothing else. The field now remembers the failed session's words
+         and the retry's transcript replaces them (`spent` in
+         useDictationField.ts; qi-qxkryezr). */
+      if (failures.every((r) => r.retryable)) {
         retryable.current = {
           recorded,
           texts: results.map((r) => (r.ok ? r.text : null)),
@@ -1900,9 +1904,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
    * are not the same problem: `landed` is arbitrating between a live recogniser,
    * a session that may have been superseded, and a tape that has just finished
    * draining. None of that exists here — there is no session, no microphone and
-   * no claim, and `canRetry` is only ever true where the recogniser confirmed
-   * nothing, so there is nothing in the box for a late transcript to collide
-   * with. What is left is: close the box, send the bytes, put the words in.
+   * no claim. Any rough live words the failed session left are the field's to
+   * replace, as it would have on the first try (`spent` in
+   * useDictationField.ts). What is left is: close the box, send the bytes, put
+   * the words in.
    *
    * `phase` goes to `transcribing` for the round trip, which is what makes the
    * text box `readOnly` and the microphone button dead — the same protection the
