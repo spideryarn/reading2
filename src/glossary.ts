@@ -147,12 +147,17 @@ export const PROMPT_VERSION = "glossary/10";
  * rather than cut off. Measured on that book: asked for 96, it returned 70 in
  * 6,300 output tokens and 38 seconds, against 340 a term budgeted.
  *
- * It is still a ceiling, because a single unbounded call would eventually meet
- * an encyclopaedia of an article: 150 × 340 + 600 is 51,600 answer tokens,
- * which with the thinking headroom stays under the response ceiling. Past about
- * 60,000 words the density falls again, and *Find more* is the way on.
+ * It is still a ceiling, and **the job's deadline is what sets it**, not the
+ * response ceiling. This call has no clock of its own; it runs inside the
+ * job's 740 s self-abort (`LEASE_MS - DEADLINE_MARGIN_MS`, src/jobs.ts). A
+ * call that used every token it was allowed, at `STREAM_TOKENS_PER_SECOND`,
+ * must finish inside that, or a long, valid answer is thrown away unread:
+ * 80 × 340 + 600 answer tokens plus the thinking headroom is about 714 s.
+ * tests/glossary.test.ts pins it (GPT Sol's code review, C1). Past about
+ * 32,000 words the density falls below one per 400, and *Find more* is the
+ * way on.
  */
-export const MAX_ENTRIES = 150;
+export const MAX_ENTRIES = 80;
 
 /**
  * The fewest a *Find more* on a long piece asks for. Twenty, the old cap: what
@@ -176,8 +181,8 @@ const KINDS: ReadonlySet<string> = new Set<GlossaryKind>([
  *
  * `existing` is how many the list already has, for *Find more*. It asks for
  * what the length still wants, `target - existing`, but never fewer than one
- * press always asked for, so on an essay it is exactly what it was before
- * (the target again, at most twenty) and on a book written by the old
+ * press always asked for, so where the target is at most twenty it is exactly
+ * what it was before, and on a book written by the old
  * twenty-term rule it is the rest of the book's worth in one press.
  */
 export function suggestedCount(words: number, existing = 0): number {
@@ -318,10 +323,26 @@ function text(value: unknown): string {
  * a mechanical backstop for the reported author-label shape, so `toEntries`
  * drops it whatever the model did. A standalone "et al." survives; a longer
  * real phrase containing "word et al." can be a false positive, the trade-off
- * the plan accepts to make "Saha et al." impossible. Author-and-year forms
+ * the plan accepts to make "Saha et al." impossible. Author-and-year names
  * ("Stenhoff (1999)") are left to the prompt: in code they cannot be told from
- * "Blade Runner (1982)". docs/project/glossary.md § A cited work is not a term.
+ * "Blade Runner (1982)". As an alias the same shape is dropped, by
+ * `aliasCitesByYear` above, where it costs nothing. docs/project/glossary.md § A cited work is not a term.
  */
+/**
+ * Is this alias a name with a year in brackets, "Stenhoff (1999)" or
+ * "Brand (1923, 2010)"? **Aliases only, never a name**, and that is what
+ * makes it safe where `citesByEtAl`'s note above says the shape cannot be
+ * judged: an alias is only another way to find the entry in the prose, and
+ * every alias is underlined there, so this one put a glossary mark on a
+ * citation. Dropping it loses nothing, because the bare name, or the
+ * bare alias beside it, already matches, "Blade Runner (1982)" included.
+ * Added with `glossary/10`, whose passing-name rule let these back in on a
+ * citation-dense review (plan 261022f § Results).
+ */
+export function aliasCitesByYear(value: string): boolean {
+  return /\S\s*\(\s*\d{4}[a-z]?(?:\s*[,;–-]\s*\d{4}[a-z]?)*\s*\)\s*$/.test(value);
+}
+
 export function citesByEtAl(value: string): boolean {
   /* Some text before it, so an entry named only for the abbreviation, or a
      work titled exactly "Et Al.", survives (GPT Sol's plan review, finding 1). */
@@ -388,7 +409,7 @@ function toEntries(
     for (const alias of Array.isArray(item.aliases) ? item.aliases : []) {
       const value = text(alias);
       const key = normaliseTerm(value);
-      if (!key || seen.has(key) || citesByEtAl(value)) continue;
+      if (!key || seen.has(key) || citesByEtAl(value) || aliasCitesByYear(value)) continue;
       seen.add(key);
       aliases.push(value);
     }
@@ -1122,7 +1143,7 @@ export async function previousGlossaryFrom(
    particular is a concrete, testable target for something prompts usually
    hand-wave, and `findOccurrences` above is what tests it. */
 
-const SYSTEM = `You are writing an AUTHOR'S GLOSSARY: the terms THIS PIECE uses in a
+export const SYSTEM = `You are writing an AUTHOR'S GLOSSARY: the terms THIS PIECE uses in a
 non-obvious way, defined from the piece itself.
 
 WHO READS AN ENTRY
@@ -1145,8 +1166,9 @@ them. That includes:
 - people, organisations, places, works and events named without introduction,
   even when the piece names them only once, in passing. A reader who meets a
   name they do not know wants to know who or what it is, whether or not the
-  argument rests on it.
-- a phrase the piece leans on as if it were already agreed
+  argument rests on it. A person or work named only to say where a claim came
+  from is still a citation, not a passing name, and belongs under WHAT DOES NOT
+ - a phrase the piece leans on as if it were already agreed
 
 WHAT DOES NOT
 
@@ -1417,6 +1439,14 @@ export function renderPrompt(opts: {
   count: number;
   existing: GlossaryEntry[];
   /**
+   * Whether the piece is long enough to ask for more than twenty, by its
+   * length, `suggestedCount(words) > FIND_MORE_FLOOR`. Not read off `count`:
+   * a *Find more* on a nearly full book asks for the floor, and that is when
+   * the quiet terms in the middle chapters are what it is looking for (GPT
+   * Sol's code review, C4). Required, so a caller cannot drop it and compile.
+   */
+  longPiece: boolean;
+  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * **The stage this matters most to.** Elsewhere a profile changes how a
@@ -1432,7 +1462,7 @@ export function renderPrompt(opts: {
    */
   profile: string | null;
 }): string {
-  const { tree, count, existing } = opts;
+  const { tree, count, existing, longPiece } = opts;
   const skeleton = partsOf(tree)
     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
     .join("\n\n");
@@ -1474,13 +1504,14 @@ That is a real answer and a better one than padding.
      reach them. src/profile.ts § PROFILE_RULES. */
   const who = profileSection(opts.profile);
 
-  /* **Only on a long piece**, so an essay's request is the one it always was.
+  /* **Only on a piece long enough to ask for more than twenty**, so shorter
+     pieces' requests stay as they were.
      Asked for a book's worth in one go, the model ranked the whole book and
      stopped where the ranking thinned, which is how a name met once in a middle
      chapter missed every pass (spya-e5t77w; plan 261022f). Going part by part
      gives a late name the same chance as an early one. */
   const throughout =
-    count > FIND_MORE_FLOOR
+    longPiece
       ? `\nThis is a long piece. Work through it part by part, from the first PART to
 the last, and give a name or term met only in a late part the same chance as one
 met early.
@@ -1787,6 +1818,7 @@ export async function generateGlossary(opts: {
             content: renderPrompt({
               tree,
               count,
+              longPiece: suggestedCount(words) > FIND_MORE_FLOOR,
               existing: existing?.entries ?? [],
               profile,
             }),

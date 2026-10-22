@@ -43,7 +43,7 @@ The whole report is in production's row, and `feedback-unswept.ts --show spya-e5
 most 20 terms whatever the length, so his 38,000-word book got 21. And the prompt left out on
 purpose a name the argument does not rest on, which is what a name dropped once is.
 
-**What changed** (`glossary/10`). The count follows the length, up to 150. A long piece is worked
+**What changed** (`glossary/10`). The count follows the length, up to 80. A long piece is worked
 through part by part. A name met once earns an entry. Measured on his book, read from production and
 never written back: a first run gives about 70 entries, Torricelli among them, in about 40 seconds
 for $0.25. One *Find more* on his existing list takes it from 20 to 87. Section in

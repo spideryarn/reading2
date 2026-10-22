@@ -1,0 +1,195 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "names-final-2",
+  "promptVersion": "glossary/10",
+  "sourceSha256": {
+    "glossary.ts": "0d59aafecd5167a7ce1acf7fa25d8864da06d7ea653d485cb47d28083079addb",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "Google engineer who claimed in 2022 that the company's chatbot LaMDA was conscious. Google dismissed him for breaching confidentiality."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [
+        "Nagel"
+      ],
+      "background": "American philosopher whose 1974 essay \"What Is It Like to Be a Bat?\" gave the standard modern way of defining consciousness: there is something it is like to be the creature."
+    },
+    {
+      "name": "anthropocentrism, human exceptionalism and anthropomorphism",
+      "kind": "concept",
+      "aliases": [
+        "anthropocentrism",
+        "human exceptionalism",
+        "anthropomorphism"
+      ],
+      "senseHere": "Three biases that make us link intelligence with consciousness. They are viewing everything through the human example, ranking humans above all else, and projecting human qualities onto non-human things."
+    },
+    {
+      "name": "computational functionalism",
+      "kind": "concept",
+      "aliases": [
+        "functionalism"
+      ],
+      "senseHere": "The assumption that running the right kind of information processing, whatever it runs on, is enough to produce consciousness. If it is false, ordinary computers cannot be conscious.",
+      "background": "In philosophy, functionalism holds that a mental state is defined by the role it plays, not by what it is made of."
+    },
+    {
+      "name": "Alan Turing",
+      "kind": "person",
+      "aliases": [
+        "Turing"
+      ],
+      "background": "British mathematician who defined computation in the 1930s and helped found computer science. In 1950 he proposed the imitation game, now called the Turing test, for judging machine intelligence."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation",
+        "Turing world"
+      ],
+      "senseHere": "Turing computation means step-by-step rule-following on symbols, where only the order of steps matters, not timing. The author calls this narrow view of computation and of brains \"Turing world\".",
+      "background": "An imaginary device that reads and writes symbols on an endless tape by fixed rules. Alan Turing used it to define what an algorithm is. A universal one can imitate any other such machine."
+    },
+    {
+      "name": "substrate independence",
+      "kind": "concept",
+      "aliases": [
+        "substrate flexible",
+        "substrate-flexible",
+        "substrate independent"
+      ],
+      "senseHere": "The idea that a computation does the same thing whatever physical material runs it. The author prefers \"substrate flexible\", since not every material, such as cheese, can make a working computer."
+    },
+    {
+      "name": "McCulloch and Pitts",
+      "kind": "person",
+      "aliases": [
+        "Walter Pitts",
+        "Warren McCulloch",
+        "McCulloch-Pitts neuron"
+      ],
+      "background": "Neurophysiologist Warren McCulloch and mathematician Walter Pitts published a 1943 paper modelling neurons as simple on/off switches that perform logic. This was the ancestor of modern artificial neural networks."
+    },
+    {
+      "name": "autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "autopoietic"
+      ],
+      "senseHere": "The way a living cell constantly rebuilds itself and the conditions for its own survival. The author treats it as a defining mark of living things."
+    },
+    {
+      "name": "generative entrenchment",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The way a brain's levels, from molecules to whole circuits, are so tangled together that no one part can be swapped without changing the rest."
+    },
+    {
+      "name": "neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "senseHere": "Imagining brain parts replaced one by one with silicon copies that behave identically, to argue that consciousness does not depend on biological material.",
+      "background": "Associated with philosopher David Chalmers."
+    },
+    {
+      "name": "mortal computation",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Computing in which the program is tied to its particular hardware and effectively dies with it, which saves energy.",
+      "background": "Idea introduced by Geoffrey Hinton."
+    },
+    {
+      "name": "neuromorphic computation",
+      "kind": "term",
+      "aliases": [
+        "neuromorphic computing"
+      ],
+      "senseHere": "Computing that copies more detailed features of real neurons, such as the exact timing of their spikes, rather than treating them as simple units that sum inputs."
+    },
+    {
+      "name": "watt governor",
+      "kind": "concept",
+      "aliases": [
+        "governor of a steam engine"
+      ],
+      "background": "A steam-engine speed regulator in which spinning weighted balls swing outward and close a valve as the engine speeds up. It controls speed by mechanics alone, without calculating anything."
+    },
+    {
+      "name": "4E cognitive science",
+      "kind": "concept",
+      "aliases": [
+        "dynamical systems"
+      ],
+      "senseHere": "Approaches that see mind as arising from the body, its surroundings and ongoing physical processes, not from rule-following computation alone.",
+      "background": "The four Es are enactive, embodied, embedded and extended."
+    },
+    {
+      "name": "biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive is necessary for consciousness, though perhaps not enough by itself.",
+      "background": "Position associated with the philosopher John Searle, who held that consciousness is a biological process of brains, as digestion is of stomachs."
+    },
+    {
+      "name": "predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "prediction error",
+        "interoceptive inference",
+        "interoception"
+      ],
+      "senseHere": "The view that the brain constantly guesses the causes of its sensory input and treats the mismatch between guess and input as an error to shrink. What we consciously perceive is the guess, including guesses about the body's inner state."
+    },
+    {
+      "name": "controlled hallucination",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The author's description of perception: the brain's own inner guesses about the world, kept in check by incoming senses."
+    },
+    {
+      "name": "simulation is not instantiation",
+      "kind": "concept",
+      "aliases": [
+        "instantiation",
+        "instantiate"
+      ],
+      "senseHere": "A computer model of something does not create the real thing, such as a simulated rainstorm that makes nothing wet. It does so only if the thing is itself computation."
+    },
+    {
+      "name": "simulation hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "ancestor simulations",
+        "base reality"
+      ],
+      "background": "The idea that our universe may be a computer simulation run by advanced descendants. Philosopher Nick Bostrom argued such simulations would outnumber real worlds, so we are probably in one."
+    },
+    {
+      "name": "cerebral organoids",
+      "kind": "term",
+      "aliases": [],
+      "background": "Small brain-like clumps of tissue grown in a lab, typically from human embryonic stem cells."
+    },
+    {
+      "name": "Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A test of whether a human still feels a machine is conscious even after knowing it is a machine. It measures human persuasion, not machine consciousness.",
+      "background": "Named for Alex Garland, director of the film \"Ex Machina\"."
+    }
+  ]
+}

@@ -302,9 +302,12 @@ not repeat itself.
 So: a ceiling per call, `suggestedCount(words)` scales the ask and clamps to it, and **running the
 step again appends**. The ceiling was `BATCH_SIZE = 20` until 2026-10-22, and on a book that was a
 fixed cap on a list that ought to scale with its input: see
-[§ A long piece, and a name met once](#a-long-piece-and-a-name-met-once). It is `MAX_ENTRIES = 150`
+[§ A long piece, and a name met once](#a-long-piece-and-a-name-met-once). It is `MAX_ENTRIES = 80`
 now, because the call streams and its budget is sized from the count, so a long answer is paid for
-rather than cut off. `passes` on the artefact counts the calls. The panel used to print it under the
+rather than cut off. What sets 80 is the job: this call has no clock of its own, so one that used
+every token it was allowed has to finish inside the job's 740 s self-abort, and 80 is about 714 s
+at 95 tokens a second (`tests/glossary.test.ts` pins it; GPT Sol caught 150 at about 964 s).
+`passes` on the artefact counts the calls. The panel used to print it under the
 list, on the argument that it was the only way to see that *Find more* had done anything; that
 stopped being true once the band grew a term count and the threshold row grew *n of m*, both of which
 move when a pass lands and both of which are the number the reader was actually waiting for. It went
@@ -728,8 +731,13 @@ The alias half matters as much as the entry half: an alias is what the prose und
 Behind the prompt, `citesByEtAl` in [`src/glossary.ts`](../../src/glossary.ts) drops any model
 entry or alias containing a word followed by "et al". That guarantees the reported "Saha et al."
 shape; a standalone entry named "et al." survives, but a longer real phrase containing it can be a
-false positive. Author-and-year forms are left to the prompt: code cannot tell "Stenhoff (1999)"
-from "Blade Runner (1982)".
+false positive. Author-and-year *names* are left to the prompt: code cannot tell "Stenhoff (1999)"
+from "Blade Runner (1982)". An *alias* ending in a bracketed year is dropped in code since
+`glossary/10` (`aliasCitesByYear`), because there it costs nothing: the bare name still matches.
+That arrived with the rule that lets a name met once earn an entry, which on a citation-dense review
+let some runs give entries to the authors of the books the review surveys; the measured rate, and
+why the rest is accepted for now, is in
+[261022f § Results](../plans/261022f-explain-this-and-a-glossary-that-scales-with-length.md#results).
 
 **What it does and costs**, measured in
 [261003g](../investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md): on a
@@ -758,20 +766,25 @@ does:
 
 - **The count stopped at twenty.** One per 400 words, clamped to 20, so a 38,000-word book got 21
   entries, where an essay gets one per 400 words. It now follows the length up to `MAX_ENTRIES`,
-  150, and a request for more than 20 adds one line: work through the piece part by part, and give a
+  80 (the job's deadline sets that: § One, above), and a piece long enough to ask for more than
+  20 adds one line: work through the piece part by part, and give a
   name met only late the same chance as one met early. Without that line, a single request for 96
   came back with 55 entries and 48 entries in two runs, and neither had him: the model ranked the
   whole book and stopped where the ranking thinned.
 - **A name dropped in passing was excluded on purpose.** The rule against *terms you can define
   only from general knowledge and which the piece does not depend on* caught names too. It is now
   about terms only: a person, place, work or event named without introduction earns an entry even
-  when it is named once, and its `centrality` says how little rests on it.
+  when it is named once, and its `centrality` says how little rests on it. A person or work named
+  only to say where a claim came from remains a citation, not a passing name; `glossary/10` repeats
+  that exception beside the new rule after the first evaluation wording let known citation-only
+  entries back in.
 
 Measured on that book, read from production and never written back
 ([261022f § Results](../plans/261022f-explain-this-and-a-glossary-that-scales-with-length.md#results)).
 A first run gave 71 and 73 entries, both with Torricelli, in about 40 seconds and $0.25, against 21
 in 20 seconds and $0.17. Nothing the old list had was lost. One *Find more* on Greg's own 20-entry
-list made it 87. Essays are asked what they always were, give or take the names rule.
+list made it 87. Pieces whose count stays at 20 or fewer are asked what they always were, give or
+take the names rule; long essays cross the same part-by-part threshold as books.
 
 **What it does to the band.** A name met once has low centrality, so about half of a book's list
 sits under the default threshold and is counted in *N terms hidden*. Every entry is still
@@ -1496,8 +1509,8 @@ hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md
 The [run row](#the-run-row-find-more-or-write-a-new-list) is the one button at the top of the
 column. Its forced run appends only when `existingFor` accepts the list; otherwise it rewrites.
 Each append pass asks for what the length still wants, `suggestedCount(words, existing)`, which is
-the old ask on an essay and the rest of a book's worth on a list the old cap wrote (and never fewer
-than 20 on a long piece), and every pass records how many
+the old ask when the target is at most 20 and the rest of a book's worth on a list the old cap wrote
+(and never fewer than 20 on a long piece), and every pass records how many
 entries it added (`lastAdded`).
 
 ### Each entry keeps the time it was added

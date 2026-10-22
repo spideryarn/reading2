@@ -34,21 +34,26 @@ cited, only told about, and none of the 20 cited works is his.
 
 ## What was built (`glossary/10`)
 
-- **The count follows the length.** `MAX_ENTRIES = 150` replaces `BATCH_SIZE = 20`. The call streams
-  and its budget is sized from the count (`600 + count × 340` answer tokens), and 150 stays under the
-  response ceiling; a test pins that. Past about 60,000 words the density falls again, and *Find
-  more* is the way on. That is a ceiling, stated, not a fix for every length.
+- **The count follows the length.** `MAX_ENTRIES = 80` replaces `BATCH_SIZE = 20`. The call streams
+  and its budget is sized from the count (`600 + count × 340` answer tokens). The ceiling is set by
+  the job, not the response limit: the call has no clock of its own, so a call that used every token
+  it was allowed must still finish inside the job's 740 s self-abort, and 80 is about 714 s at 95
+  tokens a second; a test pins that (GPT Sol's code review, C1, which caught 150 at about 964 s).
+  Past about 32,000 words the density falls below one per 400, and *Find more* is the way on. That
+  is a ceiling, stated, not a fix for every length.
 - ***Find more* asks for what the length still wants**: `suggestedCount(words, existing)` is
-  `target − existing`, never fewer than the old ask (at most 20) on an essay. So on an essay it is
-  byte-for-byte the old request, and on Greg's 20-entry book list one press asks for 76. This is what
-  makes the fix reach the list that prompted it (GPT Sol F1).
+  `target − existing`, never fewer than the old ask. At the old ceiling of 20 it is byte-for-byte
+  the old request, and on Greg's 20-entry book list one press asks for 60. This is what makes the fix
+  reach the list that prompted it (GPT Sol F1).
 - **A long piece is worked through part by part.** When the count is over 20, the request gains one
   line: *work through it part by part … give a name or term met only in a late part the same chance
-  as one met early.* An essay's request does not change.
+  as one met early.* A request of 20 or fewer is otherwise unchanged; long essays cross that line
+  too.
 - **A name met once earns an entry.** *WHAT BELONGS* says people, organisations, places, works and
   events named without introduction count *even when the piece names them only once, in passing*,
-  and the *does not depend on* exclusion now says it is about terms, not names; `centrality` says how
-  little rests on a name.
+  while repeating beside that rule that citation-only people and works remain citations. The *does
+  not depend on* exclusion now says it is about terms, not names; `centrality` says how little rests
+  on a name.
 
 No new artefact, column, route or screen. The prompt bump does not announce older lists as outdated
 (260929c), and *Find more* still appends to them (`appendableVersion`, 261004f).
@@ -70,7 +75,7 @@ No new artefact, column, route or screen. The prompt bump does not announce olde
 ### What it costs, and what it does to the page
 
 - **Money and time, on a book:** about $0.25 and 40 seconds a first run, against $0.17 and 20
-  seconds. On an essay, nothing changes but the names rule.
+  seconds. On a piece short enough to ask for 20 or fewer, nothing changes but the names rule.
 - **The band:** about half of a book's entries are names with low centrality, under the default
   threshold of 0.10, so they are counted in *N terms hidden* rather than listed. That bends Greg's
   2026-09-12 wish that *most entries come in by default* on a book. It is left as is, because the
@@ -96,7 +101,10 @@ essays are `evals/glossary-citations.ts` arms against the local database.
 | `names-96b` | the same again | 48 | no | 16 | 27 | 4,580 | 27 s |
 | `spread-1` | + part by part (shipped) | 71 | **yes** | 25 | 36 | 6,469 | 40 s |
 | `spread-2` | the same again | 73 | **yes** | 35 | 35 | 6,807 | 44 s |
-| `append-prod-2` | shipped, *Find more* on Greg's 20-entry list | 87 | **yes** | 33 | 41 | 6,414 | 41 s |
+| `append-prod-2` | *Find more* on Greg's 20-entry list (ceiling 150) | 87 | **yes** | 33 | 41 | 6,414 | 41 s |
+| `final-1` | **as shipped**: ceiling 80, `longPiece`, citation line | 70 | **yes** | 28 | 34 | 6,482 | 39 s |
+| `final-2` | the same again | 64 | **yes** | 28 | 31 | 5,831 | 36 s |
+| `append-final` | as shipped, *Find more* on Greg's 20-entry list | 68 | **yes** | 30 | 32 | 4,646 | 30 s |
 
 - Input was about 76,000 tokens on every run, uncached, and is most of the cost: $0.17 before, about
   $0.22–0.25 after.
@@ -108,13 +116,36 @@ essays are `evals/glossary-citations.ts` arms against the local database.
 - `append-prod-2` cleared the list's `profileHash` to take the append path; a first emulation that
   kept Greg's profile hash took the rewrite path instead (63 entries, Torricelli present), which is
   what *Write a new list* would do.
-- **Essays, three runs of the names rule against the `glossary/9` arms of 261003g:** no citation
-  entries or citation aliases in any run (the 261003o guard holds). People went up a little:
-  `noema-mythology-of-conscious-ai` 3–4 against 3–7; `source-spya-f550ta` 11–13 against 5–10.
-  `scaling-hypothesis` and `source-spya-f550ta` are long enough to be asked for more than 20 now,
-  and gave 32 and 25–27 entries against 19–20 and 7–20.
-- Two runs per arm on the book, so the numbers are a dated example, not a rate: the same prompt
-  differed by 22 entries between two runs (`names-96`, `names-96b`).
+- **Nothing the old list had was lost in any `final` run either**, and none had an unmatched entry.
+- **Essays, and the citation regression GPT Sol's code review found (C2).** The first reading of the
+  `names-1..3` report missed it: `names-1` returned the citation-only Stenhoff entry, and `names-1`
+  and `names-3` returned Martin Uman with the alias *Rakov and Uman*. 261003g had already
+  classified those exact shapes as citations, and `glossary/9` had none in 15 runs.
+  - Sol added a line beside the names rule: a person or work named only to say where a claim came
+    from is still a citation. Re-run as `names-final-1..3` on `source-spya-f550ta` (the
+    ball-lightning review) and `noema-mythology-of-conscious-ai`: the essay was clean in all three.
+    On the review, one run in three had *Stenhoff* and *Rakov and Uman* as entries (with the alias
+    *Rakov and Uman (2003)*), and two of three had *Walther Brand* and *Stanley Singer*, authors of the
+    books the review surveys, whose entries say who wrote which book.
+  - A more specific line about authors named beside their book (`names-final2-1..3`) did no
+    better: *Stenhoff* came back as a work, with the alias *Stenhoff (1999)*, in two of three. It was
+    taken back out.
+  - **What shipped against it:** Sol's line, and a code guard, `aliasCitesByYear`, that drops any
+    alias ending in a bracketed year. An alias is underlined in the prose, so this one put a glossary
+    mark on a citation; the bare name still matches, so dropping it loses nothing. Red-first test
+    in `tests/glossary.test.ts`.
+  - **What is left, and accepted:** on a review whose subject is partly its own literature, some
+    runs give an entry to the author of a book it surveys, without the year. That is the line
+    between Greg's two asks, *a cited work is not a term* (2026-10-03) and *include stuff like
+    Torricelli* (2026-10-21), and the measured cost of the second is one or two such entries in some
+    runs on one paper out of four. *Hide* removes one. Queued as `qi-zyr6rsh4` for a second look,
+    not closed.
+  - People went up on the review (10–14 against 5–10), and the long pieces (`scaling-hypothesis`,
+    `source-spya-f550ta`) now ask for more than 20 and give 22–32 entries against 7–20.
+- Two or three runs per arm, so the numbers are a dated example, not a rate: the same prompt
+  differed by 22 entries between two runs (`names-96`, `names-96b`). The part-by-part line rests on
+  five shipped-shape runs with Torricelli in all five, against one in two without it; that is
+  suggestive, not established (GPT Sol C3).
 
 ## Not built, and why: the write-up holds these
 
