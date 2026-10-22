@@ -693,8 +693,8 @@ change is actually about. Idle is unchanged at 0.5–0.6% of a core.
 tick and tooltip to move one div a few pixels.
 
 The two things a scroll drives are now split by how often they change. **The viewport band's
-position** changes every frame and is pure presentation, so it is written straight to a
-track-height wrapper (`el.style.transform`), the same trick `MicLevel.tsx` uses for `--level`.
+position** changes every frame and is pure presentation, so it is written straight to two
+track-height wrappers, the band's and the veil's under it (`el.style.transform`, plan 261022c), the same trick `MicLevel.tsx` uses for `--level`.
 **Which band is active** changes
 when the reader crosses a part — a handful of times per article — so it stays in state, with a local
 mirror of its id so the setter fires only on a real transition, the same trick as
