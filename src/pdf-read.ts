@@ -111,6 +111,7 @@ import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.j
 import { modelFor, PDF_READER_MODEL } from "./models.js";
 import {
   baselineFor,
+  ENDS_A_SENTENCE,
   foldLine,
   type Pass0,
   pass0,
@@ -1550,8 +1551,6 @@ const FLOATS_AND_FURNITURE: ReadonlySet<RecordType> = new Set<RecordType>([
   ...PAGE_FURNITURE,
 ]);
 
-/** A sentence's end in any script, allowing closing punctuation and a footnote marker after it (`limits³.`, `problems.4, 5`). */
-const ENDS_A_SENTENCE = /(?:\p{Sentence_Terminal}|…)[\p{Pe}\p{Pf}"']*[\p{N}\s,*∗†‡]*$/u;
 
 /**
  * May `record` carry on from `last`, with `between` printed in the middle?

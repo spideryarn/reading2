@@ -43,7 +43,7 @@
  * with the checker itself playing the part of the thing that reports success.
  */
 
-import { baselineFor, CHECKED, type Pass0, type PdfRecord } from "./pdf.js";
+import { baselineFor, CHECKED, ENDS_A_SENTENCE, type Pass0, type PdfRecord } from "./pdf.js";
 import {
   integrityVerdict,
   structuralFailureMessages,
@@ -145,6 +145,16 @@ export interface PageScore {
    * zero is text that moved, which `order` is the number for.
    */
   spans: { words: number; lost: number; text: string }[];
+  /**
+   * The baseline words the page **opens** with that the in-order alignment does
+   * not cover — zero when the transcription starts where the page starts.
+   *
+   * Positional, not a bag of words, and that is the whole point: `spans` asks
+   * whether a run's words are anywhere in the output, and a line of common words
+   * always is. Only `check`'s seam rule reads it. `text` is the run as folded
+   * tokens, for the failure message.
+   */
+  head: { words: number; text: string };
   /**
    * Numbers, dates, URLs and citations **in what the reader will see** that are
    * nowhere on the page.
@@ -700,6 +710,25 @@ function spansOf(base: string[], aligned: boolean[], present: boolean[]): PageSc
   return spans.sort((a, b) => b.lost - a.lost || b.words - a.words);
 }
 
+/**
+ * The unaligned run at the start of the baseline — `PageScore.head`.
+ *
+ * Anchor the exact first `SEAM_HEAD` words before consulting the LCS mask
+ * (two, not one: a lost line and the paragraph after it can both open with
+ * "the"). Backtracking one
+ * LCS is ambiguous when the opening words occur again: for `a b a b` against
+ * `a b`, it may align the output with the later copy and leave the real opening
+ * uncovered. If the transcription itself starts where the baseline starts,
+ * that positional evidence is stronger than which equally good LCS happened
+ * to be chosen. The alignment remains untouched for every other score.
+ */
+function headOf(base: string[], got: string[], aligned: boolean[]): PageScore["head"] {
+  const n = Math.min(SEAM_HEAD, base.length);
+  if (n > 0 && base.slice(0, n).every((w, i) => w === got[i])) return { words: 0, text: "" };
+  const words = aligned.indexOf(true) === -1 ? aligned.length : aligned.indexOf(true);
+  return { words, text: base.slice(0, words).join(" ") };
+}
+
 // ────────────────────────────────────────────────────────── the check
 
 /**
@@ -741,7 +770,7 @@ export function scorePage(
   const hiddenText = said(records.filter((r) => !CHECKED.has(r.type)));
   const shared: Omit<
     PageScore,
-    "recall" | "precision" | "order" | "spans" | "absent" | "invented" | "unshown"
+    "recall" | "precision" | "order" | "spans" | "head" | "absent" | "invented" | "unshown"
   > = {
     page,
     base: base.length,
@@ -761,6 +790,7 @@ export function scorePage(
       precision: null,
       order: null,
       spans: [],
+      head: { words: 0, text: "" },
       absent: [],
       invented: [],
       unshown: [],
@@ -776,6 +806,7 @@ export function scorePage(
     precision: got.length ? round(hits(got, tokens(onPage)) / got.length) : 0,
     order: matched ? round(aligned.filter(Boolean).length / matched) : 0,
     spans: spansOf(base, aligned, mask),
+    head: headOf(base, got, aligned),
     absent: protectedFaults(protect(baselineText), text),
     invented: protectedFaults(protect(shownText), onPage, defused),
     unshown: [
@@ -933,6 +964,7 @@ export function check(
   if (overall.recall !== null && !pass.isScan) {
     failures.push(...contentFailures(overall, where, thresholds, pages));
     failures.push(...thinPages(records, checkable, pass, thresholds.recall, overall.recall));
+    failures.push(...seamHead(overall, requested, checkable, options.context, pass));
     if (overall.unshown.length) {
       notes.push(
         `${where}: ${overall.unshown.length} fault(s) in text v1 does not render — ${overall.unshown.slice(0, SPANS_SHOWN).join(", ")}.`,
@@ -995,6 +1027,68 @@ function thinPages(
     }
   }
   return out;
+}
+
+/**
+ * **A chunk that opens mid-sentence must open with the page's first words** —
+ * the seam rule.
+ *
+ * Every chunk but the first is sent the page before it as context, with the
+ * instruction not to emit it, and the line at the top of the first requested
+ * page that finishes the context page's last sentence is easy for a model to
+ * treat as the context page's. *The Order of Time*, p. 43: "realized that it was
+ * impossible to do so exactly." was left out, and the paragraph has ended
+ * "…the moment at which Einstein" ever since (feedback spya-rg5kk6). The missing-
+ * run check above could not see it: nine common words, every one of them
+ * somewhere else in six pages of output, so the run counted as text that moved.
+ *
+ * So this one is positional. It fires when the context page's text layer stops
+ * mid-sentence and the in-order alignment of the whole chunk's output does not
+ * cover the words the first requested page opens with — whether they are
+ * missing or were put somewhere further down, which leaves the reader the same
+ * cut paragraph. A content failure, so the chunk is asked again once, and a
+ * second miss is published with a quality note.
+ *
+ * **"Stops mid-sentence" is a heuristic, not a proof**, and the narrowing it
+ * buys is the reason for it: without it, any page-top text the model is right
+ * to leave out and pass 0 did not call furniture (a running head that changes
+ * per chapter) would cost a second call. Its limits, from GPT Sol's plan review:
+ * a footnote below the paragraph ends the text layer with a full stop, and a
+ * two-column page whose layer is stored out of reading order can end on either
+ * column — a miss in the first case, a needless second call in the second. A
+ * scan, and a first page with no baseline, are outside the rule: there is no
+ * head to check. docs/plans/261022h-a-line-at-the-top-of-a-chunk-is-not-lost-at-the-seam.md.
+ */
+/**
+ * How many opening words must be uncovered before the seam rule speaks.
+ *
+ * Two, not one, and measured: on 44 real seams one uncovered word was always a
+ * token the page prints and the model rightly writes another way — the second
+ * half of a word hyphenated across the turn (`dis-` / `patcher`, which the
+ * model writes whole), a folio pass 0 did not call furniture (`66`), a note
+ * marker fused to the next word (`30certain`). The cost is that a sentence
+ * whose only missing piece is its last word is not caught.
+ */
+const SEAM_HEAD = 2;
+
+function seamHead(
+  overall: PageScore,
+  requested: number[],
+  checkable: number[],
+  context: number | undefined,
+  pass: Pass0,
+): string[] {
+  const first = requested[0];
+  if (context === undefined || first === undefined || checkable[0] !== first) return [];
+  if (overall.head.words < SEAM_HEAD) return [];
+  const last = baselineFor(pass, context).filter((l) => l.trim()).at(-1);
+  if (last === undefined || ENDS_A_SENTENCE.test(last.trimEnd())) return [];
+  const shown = overall.head.text.split(" ").slice(0, 12).join(" ");
+  return [
+    `Page ${first} opens with ${overall.head.words} word(s) the transcription does not have there — ` +
+      `“${shown}${overall.head.words > 12 ? " …" : ""}”. Page ${context} stops mid-sentence, so ` +
+      `its last paragraph continues at the top of page ${first}.`,
+  ];
 }
 
 /**

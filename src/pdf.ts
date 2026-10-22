@@ -1080,6 +1080,14 @@ function isSideways(transform: number[]): boolean {
 }
 
 /**
+ * A sentence's end in any script, allowing closing punctuation and a footnote
+ * marker after it (`limits³.`, `problems.4, 5`). Shared by the join rule in
+ * src/pdf-read.ts § `reaches` and the seam rule in src/pdf-score.ts § `check`,
+ * which ask the same question of a record and of a page's last line.
+ */
+export const ENDS_A_SENTENCE = /(?:\p{Sentence_Terminal}|…)[\p{Pe}\p{Pf}"']*[\p{N}\s,*∗†‡]*$/u;
+
+/**
  * The baseline a transcribed page is checked against: this page's text layer
  * with the furniture lines removed.
  *

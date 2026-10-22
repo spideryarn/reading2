@@ -240,6 +240,15 @@ The differences that matter to a reader:
   [`src/pdf-read.ts`](../../src/pdf-read.ts) glues it back where pass 0's own lines say so on both
   pages, and declines otherwise — the evidence rules, and the case it deliberately gives up on, are
   in the comment above the function.
+- **A chunk whose context page stops mid-sentence must open with the words that finish it.** The
+  model is told not to transcribe the context page, and the line at the top of the next page that
+  ends its last sentence is easy to treat as the context page's. *The Order of Time* lost "realized
+  that it was impossible to do so exactly." that way, and the gate passed it, because nine common
+  words are always somewhere else in six pages of output. Since 2026-10-22 `check` in
+  [`src/pdf-score.ts`](../../src/pdf-score.ts) § `seamHead` fails such a chunk when two or more
+  opening words are uncovered by the in-order alignment, so it is read again. Forward-only: a
+  Refresh replays a cached reading and does not re-read one that fails a content check —
+  [261022h](../plans/261022h-a-line-at-the-top-of-a-chunk-is-not-lost-at-the-seam.md).
 - **A continuation joins only on the same source page or the immediately following one.** The join
   cursor advances after every joined record, so legitimate three-page continuations work without
   allowing backwards or cross-gap joins.
