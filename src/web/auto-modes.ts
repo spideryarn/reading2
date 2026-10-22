@@ -53,11 +53,13 @@ import { SOURCES_SUB_MODES } from "./sub-modes.js";
  *
  * Summary is the one: a press arms `simple` or nothing, by the view it lands on
  * (activation.ts § `activationForSummary`), and the mode shows two artefacts —
- * the plain-words levels and the thread. The box queued both on 2026-10-02,
- * `simple` as Summary's step and `tweets` as the Tweets mode's, and both are
- * queued still. Left to the derivation, making Summary delegated and retiring
- * Tweets would have dropped the pair without a word (GPT Sol, F2 of the 261003l
- * review) — tests/auto-modes.test.tsx asserts the whole list for that reason.
+ * the plain-words levels and the thread. Only the levels are queued: the thread
+ * was on the list from 2026-09-30 until Greg took it off on 2026-10-22 ("we
+ * should generate that if someone presses on it"), and opening the Thread view
+ * writes it (docs/plans/261022b-summary-thread-writes-only-when-pressed.md).
+ * Left to the derivation, a delegated Summary would drop `simple` without a
+ * word (GPT Sol, F2 of the 261003l review) — tests/auto-modes.test.tsx asserts
+ * the whole list for that reason.
  *
  * Diagram, another delegated mode, is behind the experimental switch and so
  * is not a main mode; if it leaves the switch, its row here is a decision to
@@ -69,7 +71,7 @@ import { SOURCES_SUB_MODES } from "./sub-modes.js";
  * for every article again.
  */
 const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
-  summary: ["simple", "tweets"],
+  summary: ["simple"],
   /* **Sources, since 2026-10-09: Bibliography's list, and only that.**
      Its press is delegated by sub-mode (activation.ts §
      `activationForSources`). `bibliography` is the default sub-mode's, and
@@ -83,7 +85,7 @@ const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
 
 /**
  * The main modes that make something, each with its step, in `STEP_ORDER` —
- * one entry per step, so Summary is here twice.
+ * one entry per step.
  */
 function autoModes(): { mode: Mode; step: StepName }[] {
   const found: { mode: Mode; step: StepName }[] = [];
@@ -129,7 +131,7 @@ export const AUTO_MODES_LABEL = "Generate the main modes as soon as it opens";
  * rule `MODE_CATALOG`'s `how` keeps for the bar.
  */
 export function autoModesDetail(): string {
-  /* A mode with two steps (Summary: its lengths and its thread) is named once.
+  /* A mode is named once, however many steps it has.
      Sources is named by the one sub-mode it prepares, so the line does
      not promise its Reception search. */
   const names = [
