@@ -146,8 +146,8 @@ export function layoutViewportWidth(): number {
  * The root font size, in px, because one number in the layout is a measure of
  * type rather than of screen.
  *
- * `PROSE_ALONE_MAX_REM` is the width of 65 characters plus two rem paddings, and
- * a reader whose browser default is 20px has all three of those 25% wider than
+ * `PROSE_ALONE_MAX_REM` is the width of the reading measure plus two rem paddings,
+ * and a reader whose browser default is 20px has all three of those 25% wider than
  * this file would otherwise assume. Everything else `fitView` works in is a real
  * screen width and stays px — layout.ts § `FitInput.rootFontPx`.
  *

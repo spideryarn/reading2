@@ -76,7 +76,7 @@
   position: absolute;
   /* **It travels with the measure, because the measure moved.** `.prose` is
      centred in this cell (§ text), so in a mode — where the cell is the window
-     minus the rail and the band and the text is 65ch of it — a gutter kept at
+     minus the rail and the band and the text is the measure of it — a gutter kept at
      `--blk-gutter-x` alone would be a column of icons 200px out in the margin,
      marking paragraphs it is no longer beside.
 
@@ -93,7 +93,7 @@
      the gutter stays exactly where it has always been.
 
      **It follows the PARAGRAPH's measure, not this row's box**, and that is a
-     choice rather than an oversight. A callout is 58ch, a caption and an opaque
+     choice rather than an oversight. A callout is 7ch inside the measure, a caption and an opaque
      block are narrower again (§ text), so tracking each row would give a ragged
      column of icons — the thing `align-items: center` below already exists to
      avoid. One straight column, aligned to the ordinary paragraphs that are
@@ -154,7 +154,7 @@
       )
   );
   /* **These properties are here to make `ch` mean what it means in the article, and
-     for nothing else.** `--reading-measure` is `65ch` (styles/tokens.css), and
+     for nothing else.** `--reading-measure` is `56ch` (styles/tokens.css), and
      `ch` is the zero glyph of the font the length is *used* on — **including
      its weight**, because Source Serif is a variable face and the axis changes the
      digit's advance. So the line above would otherwise measure 65 zeroes at the

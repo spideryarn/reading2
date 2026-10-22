@@ -349,7 +349,7 @@
    reads as a note in the margin and cannot be taken for the author's words.
    The whole line is the button — a real target on touch, no hover needed. */
 /* **On the prose's own measure and axis**, not the cell's: `.prose` is a
-   centred 65ch box inside a wider cell whenever a band is open (prose.css §
+   centred measure-wide box inside a wider cell whenever a band is open (prose.css §
    `.prose`), so a line drawn against the cell hung 36px left of the text, under
    the gutter's icons — the 260930i browser check. The same `max-width` and
    `margin-inline: auto`, and the prose's face, size **and weight** so that `ch`

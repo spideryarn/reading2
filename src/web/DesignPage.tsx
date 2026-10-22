@@ -1353,8 +1353,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
       <section>
         <h2>Vertical rhythm</h2>
         <p className="design-note">
-          One unit is 17px × 1.4 ≈ 23.8px, and the gaps are thirds of it. Two thirds between
-          paragraphs; a full unit above a heading, a third below it — a heading belongs to what
+          One unit is 17px × 1.4 ≈ 23.8px, and every gap is a multiple of a quarter of it. Half a
+          unit between paragraphs; more above a heading than below it — a heading belongs to what
           follows it.
         </p>
         <div className="design-panel design-rhythm">

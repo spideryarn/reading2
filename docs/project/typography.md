@@ -41,7 +41,9 @@ reader voices deliberately differ from the chrome; [fonts.md](fonts.md) owns the
 
 Two numbers from that research doc *are* worth keeping, because they are independently attested:
 
-- **65ch**, the reading measure — which the previous app really did ship, as `max-w-[65ch]`. Since
+- **The reading measure** — which the previous app really did ship, as `max-w-[65ch]`, and which
+  is `56ch` since 2026-10-22, because a `ch` is not a character (§ The measure, counted in real
+  characters, next). Since
   2026-09-04 it also **sits in the middle of whatever cell it is given**, in every mode and at every
   width — Greg: *"Always centre the Text view within its column when visible, no matter which mode
   is active."* Three rules carry it and each is commented where it lives:
@@ -72,6 +74,53 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
 `TableView` writes `kind-<the splitter's kind>` onto every cell, so that hook now carries two more:
 `kind-callout`, an indent and a big faint quote mark ([260831ae-callouts-the-box-the-author-drew.md](../plans/260831ae-callouts-the-box-the-author-drew.md)),
 and `kind-caption`, which had never been styled at all.
+
+## The measure, counted in real characters
+
+> I did a rough count of the number of characters visible horizontally, and I think it was more like
+> 70. … between sort of about 45 and 65. … where we can, stay within these bounds. … I think it's
+> important that when we have space, that we are optimizing the reading experience.
+>
+> — Greg, 2026-10-21 (`spya-vywcpu`)
+
+**The rule: when the window has room, a line of the article holds about 60 characters (the median,
+spaces counted), and at most about 65 on nine lines in ten.** Where the window is narrower than
+that, the column takes the window and holds fewer — a phone in portrait gets about 42, and that is
+the screen's limit, not a choice. A mode beside the prose can take it below 45 too; that trade is
+the mode's to make.
+
+**`ch` is the width of a "0", not of a character.** In Source Serif 4, the author's face, a zero is
+8.82px at 17px and the average prose character 8.19px, so `65ch` — the number carried from the
+previous app — held a median of 70 characters, and its longest lines 80. Nobody had counted until
+Greg did. `--reading-measure` is `56ch` ([`styles/tokens.css`](../../styles/tokens.css)), which
+counts out at median 60, 90th percentile 64.
+
+- **Change the measure only by counting it**, never by writing the number of characters you want as
+  `ch`: `scripts/measure-line-length.ts` counts every full line of a long article in Playwright at
+  Greg's iPad (725 wide, at Default, Large and Largest), an 820 iPad, a 1440 desktop and two phones,
+  and exits 1 when a column at the measure is over median 62 or 90th percentile 66. **Change the
+  author's face and you have changed the measure**, so run it then too.
+- **`PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) is a copy of the measure** in
+  rem, for the layout's arithmetic, and has to move with it. The script also fails when a window
+  1000px or wider has a column narrower than the measure, which is that copy clipping it.
+- **The text size keeps the count**, because `ch` grows with the type: Large holds the same ~60 in
+  a wider column, and only when the window runs out does a bigger size mean fewer characters.
+- **Narrower things are written relative to it**: a quotation and a callout are
+  `calc(var(--reading-measure) - 7ch)`, so they stay narrower whatever the measure is. A fixed
+  58ch, as they were, would have come out wider than the body at 56.
+- **On a phone the margins are already the minimum we can give**: at 390 wide on a touch screen the
+  first glyph is 21.6px in (the 12px spine and 0.6rem) and the last ends 20px from the edge, which
+  holds the reading mark and its inset
+  ([narrow-window.css § a no-hover screen](../../src/web/styles/narrow-window.css)). What is left is
+  a few pixels, under half a character.
+
+**Leading and paragraph spacing were checked against the evidence and left alone.** 1.6 sits inside
+the flat optimum the studies find (roughly 1.2–1.6; 1.8 measured worse), and there is no screen
+evidence on paragraph gaps at all, so § Vertical rhythm stays Greg's call. The one leading fault
+found was a footnote mark or exponent opening up its own line by about 4px; `.prose :is(sup, sub)`
+is `line-height: 0` now. The evidence, and the one citation of ours it corrected:
+[261022a](../research/261022a-reading-measure-line-spacing-and-paragraph-spacing-evidence.md); the
+plan, [261022d](../plans/261022d-reading-measure-in-real-characters.md).
 
 ## A face per voice
 
@@ -277,4 +326,4 @@ fewer characters than at Default. Accepted for v1; the layout and rotation sweep
 - [design-css-overview.md](design-css-overview.md) — the map this was split out of:
   the stylesheets in load order, which mechanism owns which rule, and the colour tokens
 - [original-version/typography.md](original-version/typography.md) — where Geist, the 65ch
-  measure and the Georgia that never shipped came from
+  measure (56ch since 2026-10-22) and the Georgia that never shipped came from

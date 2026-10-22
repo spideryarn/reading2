@@ -303,10 +303,14 @@
     --font-reader: Arial, Helvetica, 'Liberation Sans', sans-serif;
 
     /* ---- reading measure --------------------------------------------- */
-    /* 55-70 chars/line; 80 reads ~7% faster but comprehends ~12% worse (Dyson & Kipping 1998).
-       65ch is also what the original app actually shipped — `max-w-[65ch]` on the document
-       viewer — so this number is the one part of their typography that is doubly attested. */
-    --reading-measure: 65ch;
+    /* About 60 real characters a line (median), and at most ~65 on most lines — the rule is
+       docs/project/typography.md § The measure, counted in real characters, and the evidence is
+       docs/research/261022a-…. **`ch` is the width of a "0", not of a character**: in Source
+       Serif 4, the author's face, a zero is 8.82px at 17px and the average prose character 8.19,
+       so the 65ch the original app shipped held a median of 70 characters (Greg counted them,
+       spya-vywcpu). 56ch holds ~60. **Change this only by counting**:
+       `scripts/measure-line-length.ts`, and `PROSE_ALONE_MAX_REM` in layout.ts moves with it. */
+    --reading-measure: 56ch;
     --reading-size: 1.0625rem;                          /* 17px */
     --reading-line-height: 1.6;
 
