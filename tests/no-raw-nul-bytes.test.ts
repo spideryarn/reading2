@@ -82,7 +82,8 @@ const BINARY = new Set(["png", "jpg", "jpeg", "svg", "webm", "pdf", "ico", "woff
  */
 function authoredFiles(): string[] {
   const args = ["ls-files", "-z", "--cached", "--others", "--exclude-standard"];
-  const out = execFileSync("git", args, { encoding: "buffer" });
+  /* The file list passed the 1 MB default on 2026-10-22, at 18,000 files. */
+  const out = execFileSync("git", args, { encoding: "buffer", maxBuffer: 64 * 1024 * 1024 });
   return out
     .toString("utf8")
     .split("\0")

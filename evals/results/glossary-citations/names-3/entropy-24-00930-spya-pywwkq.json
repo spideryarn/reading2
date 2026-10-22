@@ -1,0 +1,216 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "names-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "b6d5d4e97e157383b52f6e85ace11459f0445b165ea9707c085c70174536ee91",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "partial information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "PID",
+        "partial information decomposition (PID)"
+      ],
+      "senseHere": "A way of splitting what several input neurons together tell you about a target neuron into separate pieces. The pieces are shared (redundant), unique to one input, and available only from the inputs combined (synergistic)."
+    },
+    {
+      "name": "synergy",
+      "kind": "concept",
+      "aliases": [
+        "synergistic information",
+        "synergistic integration",
+        "synergistic dynamics",
+        "Syn"
+      ],
+      "senseHere": "Information about a target neuron that appears only when the pattern of several input neurons is seen together. No single input carries it alone. The article treats it as a measure of neural computation."
+    },
+    {
+      "name": "rich club",
+      "kind": "concept",
+      "aliases": [
+        "rich clubs",
+        "rich club coefficient"
+      ],
+      "senseHere": "A set of the best-connected neurons that are also densely connected to each other. In these cultures such neurons carry most information flow and most synergy."
+    },
+    {
+      "name": "multielectrode array",
+      "kind": "term",
+      "aliases": [
+        "512-channel multielectrode arrays",
+        "microelectrode array"
+      ],
+      "background": "A grid of many tiny electrodes placed under tissue to record electrical activity from many neurons at once."
+    },
+    {
+      "name": "mutual information",
+      "kind": "concept",
+      "aliases": [
+        "joint mutual information",
+        "marginal mutual information"
+      ],
+      "senseHere": "A measure of how much knowing one neuron's activity helps you guess another's, like a correlation that can also catch nonlinear links. It has no direction, so it cannot show which neuron influences which.",
+      "background": "Introduced by Claude Shannon's information theory, it counts how much uncertainty about one thing disappears when you know another."
+    },
+    {
+      "name": "transfer entropy",
+      "kind": "concept",
+      "aliases": [
+        "TE",
+        "sorted local transfer entropy"
+      ],
+      "senseHere": "A measure of how much the past activity of one neuron helps predict another neuron's next state, beyond what that neuron's own past already predicts. It gives a directed measure of information flow."
+    },
+    {
+      "name": "effective connectivity",
+      "kind": "concept",
+      "aliases": [
+        "effective network",
+        "effective networks"
+      ],
+      "senseHere": "A map of which neurons appear to influence which, with direction, here built from transfer entropy. It is contrasted with functional connectivity, which only records that activity is related."
+    },
+    {
+      "name": "redundancy",
+      "kind": "concept",
+      "aliases": [
+        "redundant information",
+        "Red"
+      ],
+      "senseHere": "Information about the target that each of several input neurons carries separately, so the same thing is learned from any of them. It is double-counted if you add up what each input tells you."
+    },
+    {
+      "name": "unique information",
+      "kind": "concept",
+      "aliases": [
+        "Unq"
+      ],
+      "senseHere": "Information about the target that only one particular input neuron provides, and the other inputs do not."
+    },
+    {
+      "name": "Williams and Beer",
+      "kind": "person",
+      "aliases": [
+        "Williams and Beer [1]"
+      ],
+      "background": "Paul Williams and Randall Beer, who in 2010 proposed splitting joint information into redundant, unique and synergistic parts. Their work founded PID."
+    },
+    {
+      "name": "redundancy function",
+      "kind": "concept",
+      "aliases": [
+        "redundancy measure",
+        "Imin",
+        "Isx",
+        "Ics",
+        "I∩"
+      ],
+      "senseHere": "The formula chosen to say how much information is shared among inputs. PID needs one to pin down all its pieces, and no single choice is universally accepted. Imin is the original one."
+    },
+    {
+      "name": "triad",
+      "kind": "term",
+      "aliases": [
+        "triads",
+        "computational triad",
+        "computational triads"
+      ],
+      "senseHere": "A group of three neurons in which two source neurons both connect to the same target neuron. It is the basic unit on which PID is run."
+    },
+    {
+      "name": "partial information lattice",
+      "kind": "concept",
+      "aliases": [
+        "PI lattice",
+        "lattice",
+        "partial information atoms",
+        "PI atoms"
+      ],
+      "senseHere": "An ordered diagram of every distinct way a group of input neurons can share information about a target. Each node, or atom, is one such way, and nodes are ordered by which would be visible from which."
+    },
+    {
+      "name": "Möbius inversion",
+      "kind": "concept",
+      "aliases": [
+        "Mobius inversion"
+      ],
+      "senseHere": "The step that works out each atom's own information by subtracting what is already accounted for by simpler combinations lower on the lattice.",
+      "background": "A mathematical technique for recovering individual values from cumulative totals over an ordered structure."
+    },
+    {
+      "name": "organotypic cultures",
+      "kind": "term",
+      "aliases": [
+        "organotypic culture",
+        "cortical cultures"
+      ],
+      "background": "Thin slices of brain tissue kept alive in nutrient fluid in a dish, where they regrow connections resembling those of intact tissue. Here they come from mouse cortex."
+    },
+    {
+      "name": "feedforward, feedback, and recurrent connections",
+      "kind": "term",
+      "aliases": [
+        "feedforward connections",
+        "feedback connections",
+        "recurrent connections",
+        "connectivity motif"
+      ],
+      "senseHere": "Three kinds of links within a triad. Feedforward goes from sources to target, feedback goes from the target back to a source, and recurrent links the two sources to each other."
+    },
+    {
+      "name": "IDTxl",
+      "kind": "other",
+      "aliases": [
+        "DIT",
+        "SxPID",
+        "Discrete Information Theory (DIT) toolbox"
+      ],
+      "background": "IDTxl, DIT and SxPID are Python software packages for information-theoretic analysis. DIT and SxPID work from probability tables, while IDTxl works directly on time series."
+    },
+    {
+      "name": "Dedekind number",
+      "kind": "concept",
+      "aliases": [
+        "Dedekind numbers"
+      ],
+      "background": "A sequence counting certain ways of combining a set of items, which grows explosively as the set grows. The article uses it to count the atoms in the lattice."
+    },
+    {
+      "name": "O-information",
+      "kind": "concept",
+      "aliases": [
+        "O-information [65]"
+      ],
+      "senseHere": "A single summary number that says whether a group of variables is mainly synergy-dominated or redundancy-dominated. It scales to large groups but gives up the full breakdown into pieces."
+    },
+    {
+      "name": "local PID",
+      "kind": "concept",
+      "aliases": [
+        "local mutual information",
+        "localizable"
+      ],
+      "senseHere": "PID done for each single moment's configuration of states rather than averaged over all of them. It gives a time series of redundant, unique and synergistic information."
+    },
+    {
+      "name": "neuronal avalanches",
+      "kind": "concept",
+      "aliases": [
+        "neuronal avalanche"
+      ],
+      "background": "Bursts of neural activity that cascade through a network in sizes and durations following a power-law pattern. They are taken as a sign that the brain operates near a critical point."
+    },
+    {
+      "name": "integrated information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of PID to several targets. It splits how the past of a system constrains its future into redundant, unique and synergistic parts."
+    }
+  ]
+}

@@ -1,0 +1,268 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "names-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "f50e0cfc3ec0a0b0292801bceef48a6af14e803eb0ce8d698991583aea7b31da",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis",
+        "weak scaling hypothesis"
+      ],
+      "senseHere": "The bet that simply making neural networks bigger, with more data and computing power, will eventually produce general intelligence. The strong version says no new ideas are needed; the weak version says new algorithms are still needed, just run at huge scale."
+    },
+    {
+      "name": "GPT-3",
+      "kind": "work",
+      "aliases": [
+        "GPT3"
+      ],
+      "background": "A very large language model released by OpenAI in 2020, with 175 billion adjustable numbers (parameters). It was trained to predict the next word of Internet text."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [
+        "learning to learn"
+      ],
+      "senseHere": "A model picking up a new task from a few examples or instructions in its prompt, without being retrained. GPT-3 was never built to do this."
+    },
+    {
+      "name": "GPT-2",
+      "kind": "work",
+      "aliases": [
+        "GPT-2-1.5b"
+      ],
+      "background": "OpenAI's 2019 language model with 1.5 billion parameters. It could write fluent text and was the direct predecessor of GPT-3."
+    },
+    {
+      "name": "OpenAI",
+      "kind": "organization",
+      "aliases": [
+        "OA"
+      ],
+      "background": "An AI research lab founded in 2015 that built the GPT models. It later created a for-profit arm to raise money for large-scale training."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "concept",
+      "aliases": [
+        "blessing of scale"
+      ],
+      "senseHere": "The observation that in deep learning, bigger systems often get easier to train and better at generalizing. Problems that plague small networks vanish as size grows."
+    },
+    {
+      "name": "unsupervised learning",
+      "kind": "term",
+      "aliases": [
+        "unsupervised",
+        "raw (unsupervised) data"
+      ],
+      "background": "Learning from data with no human-written labels or answers. A language model learns from raw text by predicting what comes next."
+    },
+    {
+      "name": "Transformer",
+      "kind": "term",
+      "aliases": [
+        "Transformers"
+      ],
+      "background": "A neural network design from 2017 that uses a mechanism called self-attention to relate every part of the input to every other. It underlies GPT models."
+    },
+    {
+      "name": "scaling laws",
+      "kind": "concept",
+      "aliases": [
+        "scaling curves",
+        "scaling curve",
+        "power-law"
+      ],
+      "background": "Regular mathematical patterns showing that model error falls smoothly and predictably as model size, data and computing power rise."
+    },
+    {
+      "name": "AGI",
+      "kind": "term",
+      "aliases": [
+        "artificial general intelligence"
+      ],
+      "background": "Artificial general intelligence: AI that can handle a broad range of intellectual tasks at roughly human level, rather than one narrow task."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [
+        "Moravec"
+      ],
+      "background": "Robotics researcher who in the 1990s forecast that human-level computing power would become affordable in the 2020s. He argued AI progress would follow falling hardware costs."
+    },
+    {
+      "name": "reinforcement learning",
+      "kind": "term",
+      "aliases": [
+        "DRL",
+        "deep reinforcement learning",
+        "RL"
+      ],
+      "background": "Training a system by rewarding good actions, as when a game-playing program learns from wins and losses."
+    },
+    {
+      "name": "Jukebox",
+      "kind": "work",
+      "aliases": [],
+      "background": "An OpenAI model released in 2020 that generates raw music audio, including singing voices."
+    },
+    {
+      "name": "pretraining thesis",
+      "kind": "concept",
+      "aliases": [
+        "pretraining"
+      ],
+      "senseHere": "The argument that training a model only to predict the next piece of text forces it to learn logic, causality and understanding. Predicting well at the very end requires real comprehension."
+    },
+    {
+      "name": "Turing-NLG",
+      "kind": "work",
+      "aliases": [],
+      "background": "A 17-billion-parameter language model from Microsoft, the largest before GPT-3."
+    },
+    {
+      "name": "AlphaGo Zero",
+      "kind": "work",
+      "aliases": [
+        "AlphaZero",
+        "AlphaStar",
+        "MuZero"
+      ],
+      "background": "DeepMind systems that learned games like Go, chess and StarCraft (AlphaStar) mostly by playing themselves. MuZero learned without even being told the rules."
+    },
+    {
+      "name": "loss",
+      "kind": "term",
+      "aliases": [
+        "cross-entropy loss",
+        "likelihood loss",
+        "validation loss"
+      ],
+      "background": "A number measuring how badly a model predicts. For text it is the average bits of surprise per character, and lower is better."
+    },
+    {
+      "name": "Bitter Lesson",
+      "kind": "concept",
+      "aliases": [],
+      "background": "Richard Sutton's 2019 essay arguing that AI progress has mostly come from more computing power rather than clever hand-designed methods."
+    },
+    {
+      "name": "neural nets are lazy",
+      "kind": "concept",
+      "aliases": [
+        "NNs are lazy"
+      ],
+      "senseHere": "Networks grab the easiest shortcuts, like memorizing or surface patterns, and only learn deeper skills when data and tasks are hard and varied enough to make shortcuts fail."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "background": "A London AI lab owned by Google. It built AlphaGo, AlphaZero and AlphaStar, game-playing systems that reached superhuman skill."
+    },
+    {
+      "name": "agency",
+      "kind": "concept",
+      "aliases": [
+        "agent",
+        "agents",
+        "agentic"
+      ],
+      "senseHere": "The ability to pursue goals by planning actions. The author treats it as a matter of degree rather than a yes-or-no property, so a model trained on human text can pick it up."
+    },
+    {
+      "name": "double descent",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A puzzling pattern where bigger models first get worse at new data, then get better again as they grow past a certain size."
+    },
+    {
+      "name": "lottery ticket hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "background": "The idea that a big network contains many small sub-networks, and some happen to be able to learn the task well on their own."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A situation where computers powerful enough for a breakthrough already exist, but nobody has yet spent the money or effort to use them that way."
+    },
+    {
+      "name": "Ilya Sutskever",
+      "kind": "person",
+      "aliases": [
+        "Sutskever"
+      ],
+      "background": "Co-founder and chief scientist of OpenAI, long a believer that large neural networks plus data and compute would work."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "concept",
+      "aliases": [
+        "intentional interpretive stance"
+      ],
+      "background": "Philosopher Daniel Dennett's idea of explaining a system by treating it as if it had goals and beliefs. It works even for non-human things like thermostats."
+    },
+    {
+      "name": "variational principle",
+      "kind": "concept",
+      "aliases": [
+        "variational approaches",
+        "variational interpretations"
+      ],
+      "background": "The physics idea that a system's behavior can be described as it choosing the path that minimizes or maximizes some quantity, like light taking the fastest route."
+    },
+    {
+      "name": "SayCan",
+      "kind": "work",
+      "aliases": [],
+      "background": "A Google robotics system that uses a language model to turn spoken instructions, such as fetching a drink, into steps a real robot carries out."
+    },
+    {
+      "name": "Janus",
+      "kind": "person",
+      "aliases": [],
+      "background": "Online pseudonymous writer on language models who views GPT as a simulator of the world rather than as an agent."
+    },
+    {
+      "name": "Conway's Game of Life",
+      "kind": "concept",
+      "aliases": [
+        "Game of Life",
+        "GoL",
+        "cellular automaton",
+        "cellular automata"
+      ],
+      "background": "A grid game where cells live or die by simple neighbor rules, producing moving shapes like gliders. It is a famous example of complex behavior from simple rules."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "Turing machines",
+        "TM",
+        "Turing-completeness"
+      ],
+      "background": "Alan Turing's abstract model of a computer: a head reading and writing symbols on a tape following fixed rules. Any computation can be done on one."
+    },
+    {
+      "name": "Occam's razor",
+      "kind": "concept",
+      "aliases": [],
+      "background": "The principle that the simplest explanation fitting the facts is usually best."
+    }
+  ]
+}
