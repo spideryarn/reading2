@@ -233,6 +233,19 @@ whitespace *between two lines of one paragraph* is around 10px, and once the gap
 stops clearly exceeding that, the paragraph stops being a unit the eye can see. A fifth would be
 past it.
 
+**A model's answer has its own gap between paragraphs: `--answer-gap`, one em**
+([`tokens.css`](../../src/web/styles/tokens.css)). Anything that draws a model's answer as
+paragraphs puts it between them, rather than picking a number: Chat (and every mode that draws a
+conversation through it), the AI's answer to a comment, and Help's *Ask*. Chat's 0.6rem was barely
+more than the space between two of its lines, so an answer read as one block (Greg, 2026-10-21,
+`q-x0y2gh`: *"follow best practices … so that, you know, everything's better going forwards by
+default"*). It is a top margin on the second block, so it collapses with whatever bottom margin a
+surface already has and leaves the space after the answer alone. Left out: a single `pre-wrap`
+element (Quiz's reply, Referee's notes, the Guide's offer), where a blank line is already a full
+line; Summary, which has its own 0.9rem; and Dig deeper and Glossary's lookups, which are short
+fragments rather than an answer you read down. Plan
+[261022e](../plans/261022e-phone-tap-bar-at-40px-and-a-wider-gap-between-paragraphs-of-model-answers.md).
+
 **The column ends with a mark**: a short hairline, a small diamond, a short hairline, in a footer
 row after the last block, six pads above it and eight below. Greg, 2026-10-04 (report
 `spya-zgf8p2`): *"Add some subtle pleasant visual marker at the very end of the article in the text

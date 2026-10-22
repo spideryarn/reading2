@@ -279,13 +279,16 @@ caching off — and on the numbers that is about right:
   saved was a few dollars of it.
 - **The one recurring shape is the import burst** — an import's publication queues every main mode at
   once ([`autoModePosts`](../../src/auto-mode-steps.ts)), and mode jobs on one article run in
-  parallel since 2026-09-29. Of the jobs it posts only **two pairs** can share an article —
-  tweets with ideas, glossary with quotes — worth about **2.6¢ an import** on a 10,000-token article.
+  parallel since 2026-09-29. Of the jobs it posted, **two pairs** could share an article — tweets
+  with ideas, glossary with quotes — worth about **2.6¢ an import** on a 10,000-token article.
+  Since 2026-10-22 the thread is no longer posted
+  ([261022b](../plans/261022b-summary-thread-writes-only-when-pressed.md)), so only glossary with
+  quotes remains, worth less.
 - **Capturing it needs cross-job coordination**, and that has no honest signal: the moment an entry
   becomes readable is the writer's `message_start`, which only the writer's process sees; a step
   persisted as `running` says nothing about it. Marking the pairs *without* waiting makes it worse
-  (both write, neither reads). Posting each pair as one job would work with the code as it is, and
-  holds Quotes behind Glossary and Ideas behind Tweets on every import.
+  (both write, neither reads). Posting the remaining pair as one job would work with the code as it
+  is, and hold Quotes behind Glossary on every import.
 
 So it is **deliberately not done**, by Greg's rule for caching — sparingly, and for good reason
 (2026-10-01, via the Overseer). [261001l](../plans/261001l-prompt-caching-across-every-call.md) has

@@ -233,13 +233,18 @@
 /* Two lanes' swatches touch, the way two lanes do on the rail. */
 .tip-key-lanes + .tip-key-lanes { margin-left: -0.2rem; }
 .tip-key-here { background: var(--depth-1); opacity: 0.8; }
-/* The two palest marks are drawn a little stronger than on the rail, where
-   they sit over a band and a reader sees them in context; at 6px on a card's
-   ground the rail's own 12% and 0.1 left nothing to see in light mode (browser
-   pass, plan 261020e). Still their own tokens. */
+/* *On screen* is the rail's lit stretch between two orange edges (spine.css §
+   `.spine-veil-track`), so the swatch is that: the edges, round an unveiled part's
+   tint. The supplement's mark is drawn a little stronger than on the rail,
+   where it sits over a band and a reader sees it in context; at 6px on a
+   card's ground the rail's own 0.1 left nothing to see in light mode (browser
+   pass, plan 261020e). */
 .tip-key-screen {
-  border: 1px solid var(--highlight);
-  background: color-mix(in oklab, var(--highlight) 20%, transparent);
+  border-block: 1px solid var(--highlight);
+  background: color-mix(in oklab, var(--depth-1) 45%, transparent);
+}
+@media (forced-colors: active) {
+  .tip-key-screen { border-color: Highlight; }
 }
 .tip-key-supplement {
   background: color-mix(in oklab, var(--depth-1) 25%, transparent);

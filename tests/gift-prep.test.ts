@@ -91,7 +91,7 @@ const PURPOSE = "To see whether the gift's modes are written for this.";
  * src/auto-mode-steps.ts, so a change there is made twice.
  */
 const EXPECTED: StepName[][] = [
-  ["tweets"],
+  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b). */
   ["glossary"],
   ["quotes"],
   ["ideas"],
@@ -279,12 +279,12 @@ describe("a new author gift", () => {
     await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [mine.id, currentRevision]);
     const profile = renderProfile({ profile: ABOUT, purpose: PURPOSE });
     const holder = mintId();
-    const plainKey = workKeyFor(["tweets"], new Set(), profile ?? undefined);
+    const plainKey = workKeyFor(["glossary"], new Set(), profile ?? undefined);
     await pool.query(
       `insert into spideryarn.jobs
          (id, owner_id, slug, steps, status, work_key, reserves_name, url_key, ingest_event_id, profile, draft_revision_id)
        values ($1, $2, $3, $4::jsonb, 'queued', $5, false, null, null, $6, $7)`,
-      [holder, OPTED_OUT, mine.slug, JSON.stringify([{ name: "tweets", label: "Tweets", status: "pending" }]), plainKey, profile, draftRevision],
+      [holder, OPTED_OUT, mine.slug, JSON.stringify([{ name: "glossary", label: "Glossary", status: "pending" }]), plainKey, profile, draftRevision],
     );
 
     expect((await runAsOwner(OPTED_OUT, () => ensureAuthorGift(mine.slug, OPTED_OUT, draft(false)))).kind).toBe(
@@ -292,9 +292,9 @@ describe("a new author gift", () => {
     );
     const jobs = await jobsOf(mine.slug);
     expect(jobs).toHaveLength(EXPECTED.length + 1);
-    const tweets = jobs.filter((job) => job.steps.map((step) => step.name).join(",") === "tweets");
-    expect(tweets).toHaveLength(2);
-    expect(tweets.some((job) => job.work_key !== plainKey), "no scoped replacement was queued").toBe(true);
+    const glossary = jobs.filter((job) => job.steps.map((step) => step.name).join(",") === "glossary");
+    expect(glossary).toHaveLength(2);
+    expect(glossary.some((job) => job.work_key !== plainKey), "no scoped replacement was queued").toBe(true);
   });
 
   it("switches the article on with highPower, and keeps the first `since` of one already on", async () => {

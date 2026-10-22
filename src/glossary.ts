@@ -117,27 +117,54 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * citation is never an alias (Greg, spya-zn97q5: *"I don't think the glossary
  * should include citations. That's what citations are for."*
  * docs/plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md).
+ *
+ * `glossary/10`, 2026-10-22: a name the piece drops once, in passing, earns an
+ * entry; the count follows the length past twenty (`MAX_ENTRIES`); and a long
+ * piece is worked through part by part (Greg, spya-e5t77w, on *Torricelli*:
+ * *"the glossary should include stuff like Torricelli"*;
+ * docs/plans/261022f-explain-this-and-a-glossary-that-scales-with-length.md).
  */
-export const PROMPT_VERSION = "glossary/9";
+export const PROMPT_VERSION = "glossary/10";
 
 /**
- * The most entries one call may return.
+ * The most entries one call may return, and the reason it is not twenty any more.
  *
- * **Twenty is their number, and it was arrived at by a production outage rather
+ * **Twenty was their number, and it was arrived at by a production outage rather
  * than by taste.** Their extraction hit 504s, and the cause was the size of the
  * answer, not the size of the article: every entry carries a short definition
  * and a longer explanation, so the output grows with the entry count and
- * nothing else. Capping the answer and paginating the work is the fix, and it
- * is the lesson that generalises past this feature —
+ * nothing else. Capping the answer and paginating the work was the fix —
  * docs/project/original-version/glossary.md § Bug one.
  *
- * Our token budget (src/token-budget.ts) is honest about the ceiling in a way
- * theirs was not, so this cap is no longer the only thing between us and a
- * truncated response. It is still the right shape: a glossary is a list that
- * can grow, so "twenty now, twenty more if you want them" costs nothing and a
- * single unbounded call would eventually meet an encyclopaedia of an article.
+ * **Twenty here was a fixed cap on a list that ought to scale with its input**,
+ * and on a book it was silently thin: Rovelli's *The Order of Time*, 38,000
+ * words, got 21 entries, one per 1,800 words where an essay gets one per 400,
+ * and the name Greg stopped at was not among them (spya-e5t77w, 2026-10-21;
+ * docs/plans/261022f-explain-this-and-a-glossary-that-scales-with-length.md).
+ * What made twenty necessary over there is answered here another way: the call
+ * streams, and its budget is sized from the count (`answerTokens` in
+ * `generateGlossary`, src/token-budget.ts), so a long answer is paid for
+ * rather than cut off. Measured on that book: asked for 96, it returned 70 in
+ * 6,300 output tokens and 38 seconds, against 340 a term budgeted.
+ *
+ * It is still a ceiling, and **the job's deadline is what sets it**, not the
+ * response ceiling. This call has no clock of its own; it runs inside the
+ * job's 740 s self-abort (`LEASE_MS - DEADLINE_MARGIN_MS`, src/jobs.ts). A
+ * call that used every token it was allowed, at `STREAM_TOKENS_PER_SECOND`,
+ * must finish inside that, or a long, valid answer is thrown away unread:
+ * 80 × 340 + 600 answer tokens plus the thinking headroom is about 714 s.
+ * tests/glossary.test.ts pins it (GPT Sol's code review, C1). Past about
+ * 32,000 words the density falls below one per 400, and *Find more* is the
+ * way on.
  */
-export const BATCH_SIZE = 20;
+export const MAX_ENTRIES = 80;
+
+/**
+ * The fewest a *Find more* on a long piece asks for. Twenty, the old cap: what
+ * a press of the button has always added at most, and "a bunch more" (Greg,
+ * 2026-10-04, spya-try2v7) on a list that is already as long as its piece.
+ */
+export const FIND_MORE_FLOOR = 20;
 
 /** The kinds we accept. Anything else the model invents becomes `other`. */
 const KINDS: ReadonlySet<string> = new Set<GlossaryKind>([
@@ -149,11 +176,19 @@ const KINDS: ReadonlySet<string> = new Set<GlossaryKind>([
  *
  * One per ~400 words, which on a normal essay lands somewhere in the low teens,
  * clamped at both ends. The floor stops a 600-word post being asked for two
- * terms and padding to reach them; the ceiling is `BATCH_SIZE` and the reason
- * for it is above.
+ * terms and padding to reach them; the ceiling is `MAX_ENTRIES` and the reason
+ * for it is above. "Up to", always: the prompt says fewer is fine.
+ *
+ * `existing` is how many the list already has, for *Find more*. It asks for
+ * what the length still wants, `target - existing`, but never fewer than one
+ * press always asked for, so where the target is at most twenty it is exactly
+ * what it was before, and on a book written by the old
+ * twenty-term rule it is the rest of the book's worth in one press.
  */
-export function suggestedCount(words: number): number {
-  return Math.min(BATCH_SIZE, Math.max(6, Math.round(words / 400)));
+export function suggestedCount(words: number, existing = 0): number {
+  const target = Math.min(MAX_ENTRIES, Math.max(6, Math.round(words / 400)));
+  if (existing === 0) return target;
+  return Math.min(MAX_ENTRIES, Math.max(Math.min(FIND_MORE_FLOOR, target), target - existing));
 }
 
 /**
@@ -288,10 +323,30 @@ function text(value: unknown): string {
  * a mechanical backstop for the reported author-label shape, so `toEntries`
  * drops it whatever the model did. A standalone "et al." survives; a longer
  * real phrase containing "word et al." can be a false positive, the trade-off
- * the plan accepts to make "Saha et al." impossible. Author-and-year forms
+ * the plan accepts to make "Saha et al." impossible. Author-and-year names
  * ("Stenhoff (1999)") are left to the prompt: in code they cannot be told from
- * "Blade Runner (1982)". docs/project/glossary.md § A cited work is not a term.
+ * "Blade Runner (1982)". As an alias the same shape is dropped, by
+ * `withoutBracketedYear` above, where it costs nothing. docs/project/glossary.md § A cited work is not a term.
  */
+/**
+ * The alias without a trailing year in brackets, "Stenhoff (1999)" to
+ * "Stenhoff" and "Brand (1923, 2010)" to "Brand", or `null` when it has none.
+ *
+ * `toEntries` drops such an alias **only when that bare form is already the
+ * entry's name or another of its aliases**, and that is what makes it safe
+ * where `citesByEtAl`'s note above says the shape cannot be judged. Every alias
+ * is underlined in the prose, so "Stenhoff (1999)" put a glossary mark on a
+ * citation, and dropping it loses nothing because "Stenhoff" already matches.
+ * "Apollo 11 (1969)" with no bare form beside it is the only way to find its
+ * entry, so it stays, whatever it looks like (GPT Sol, round 2, C2). Added with
+ * `glossary/10`, whose passing-name rule let these back in on a
+ * citation-dense review (plan 261022f § Results).
+ */
+export function withoutBracketedYear(value: string): string | null {
+  const match = /^(.*\S)\s*\(\s*\d{4}[a-z]?(?:\s*[,;–-]\s*\d{4}[a-z]?)*\s*\)\s*$/.exec(value);
+  return match?.[1] ?? null;
+}
+
 export function citesByEtAl(value: string): boolean {
   /* Some text before it, so an entry named only for the abbreviation, or a
      work titled exactly "Et Al.", survives (GPT Sol's plan review, finding 1). */
@@ -355,10 +410,15 @@ function toEntries(
        key, kept in the model's own spelling. */
     const seen = new Set<string>([normaliseTerm(name)]);
     const aliases: string[] = [];
-    for (const alias of Array.isArray(item.aliases) ? item.aliases : []) {
-      const value = text(alias);
+    const given = (Array.isArray(item.aliases) ? item.aliases : []).map(text);
+    /* Every form the model gave, for `withoutBracketedYear`: the bare form may
+       come after the bracketed one in the list. */
+    const forms = new Set([name, ...given].map(normaliseTerm));
+    for (const value of given) {
       const key = normaliseTerm(value);
+      const bare = withoutBracketedYear(value);
       if (!key || seen.has(key) || citesByEtAl(value)) continue;
+      if (bare !== null && forms.has(normaliseTerm(bare))) continue;
       seen.add(key);
       aliases.push(value);
     }
@@ -1092,7 +1152,7 @@ export async function previousGlossaryFrom(
    particular is a concrete, testable target for something prompts usually
    hand-wave, and `findOccurrences` above is what tests it. */
 
-const SYSTEM = `You are writing an AUTHOR'S GLOSSARY: the terms THIS PIECE uses in a
+export const SYSTEM = `You are writing an AUTHOR'S GLOSSARY: the terms THIS PIECE uses in a
 non-obvious way, defined from the piece itself.
 
 WHO READS AN ENTRY
@@ -1112,8 +1172,12 @@ them. That includes:
 
 - words the author uses in a special or narrowed sense
 - technical vocabulary, jargon, and coinages
-- people, organisations, places, works and events named without introduction
-- a phrase the piece leans on as if it were already agreed
+- people, organisations, places, works and events named without introduction,
+  even when the piece names them only once, in passing. A reader who meets a
+  name they do not know wants to know who or what it is, whether or not the
+  argument rests on it. A person or work named only to say where a claim came
+  from is still a citation, not a passing name, and belongs under WHAT DOES NOT
+ - a phrase the piece leans on as if it were already agreed
 
 WHAT DOES NOT
 
@@ -1122,7 +1186,9 @@ WHAT DOES NOT
 - the article's own title, or the author's name
 - terms you can define only from general knowledge and which the piece does not
   actually depend on. This is a glossary FOR this article, not an encyclopaedia
-  entry that happens to be adjacent to it.
+  entry that happens to be adjacent to it. This is about terms, not names: a
+  person, place, work or event the piece names without introducing still
+  earns an entry, as above, and its "centrality" says how little rests on it.
 - a work the piece only cites as a source: a paper, book or report pointed at
   by its authors and a year, by "et al.", or by a number in brackets ("Saha et
   al.", "Kahneman and Tversky (1979)", "[12]"). Nor its authors, where the
@@ -1382,6 +1448,14 @@ export function renderPrompt(opts: {
   count: number;
   existing: GlossaryEntry[];
   /**
+   * Whether the piece is long enough to ask for more than twenty, by its
+   * length, `suggestedCount(words) > FIND_MORE_FLOOR`. Not read off `count`:
+   * a *Find more* on a nearly full book asks for the floor, and that is when
+   * the quiet terms in the middle chapters are what it is looking for (GPT
+   * Sol's code review, C4). Required, so a caller cannot drop it and compile.
+   */
+  longPiece: boolean;
+  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * **The stage this matters most to.** Elsewhere a profile changes how a
@@ -1397,7 +1471,7 @@ export function renderPrompt(opts: {
    */
   profile: string | null;
 }): string {
-  const { tree, count, existing } = opts;
+  const { tree, count, existing, longPiece } = opts;
   const skeleton = partsOf(tree)
     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
     .join("\n\n");
@@ -1439,9 +1513,23 @@ That is a real answer and a better one than padding.
      reach them. src/profile.ts § PROFILE_RULES. */
   const who = profileSection(opts.profile);
 
+  /* **Only on a piece long enough to ask for more than twenty**, so shorter
+     pieces' requests stay as they were.
+     Asked for a book's worth in one go, the model ranked the whole book and
+     stopped where the ranking thinned, which is how a name met once in a middle
+     chapter missed every pass (spya-e5t77w; plan 261022f). Going part by part
+     gives a late name the same chance as an early one. */
+  const throughout =
+    longPiece
+      ? `\nThis is a long piece. Work through it part by part, from the first PART to
+the last, and give a name or term met only in a late part the same chance as one
+met early.
+`
+      : "";
+
   return `Find up to ${count} terms. Fewer is fine — a short piece has few, and a
 list padded to a number is worse than a short list.
-${who ? `\n${who}\n` : ""}${already}
+${throughout}${who ? `\n${who}\n` : ""}${already}
 === ITS SHAPE ===
 
 ${skeleton}`;
@@ -1674,10 +1762,10 @@ export async function generateGlossary(opts: {
      proportion to a length that counts the bibliography, from a prompt that
      does not carry it, is the braiding one layer down. */
   const words = articleWordCounts(blocks).body;
-  const count = suggestedCount(words);
+  const count = suggestedCount(words, existing?.entries.length ?? 0);
   const started = Date.now();
 
-  /* Bounded by `count`, which is bounded by BATCH_SIZE — the whole reason the
+  /* Bounded by `count`, which is bounded by MAX_ENTRIES — the whole reason the
      answer has a ceiling at all. Each entry is a name, a handful of aliases,
      and one or two short prose fields, which comes to a few hundred tokens.
      The allowance still scales with the article because the model reads the
@@ -1739,6 +1827,7 @@ export async function generateGlossary(opts: {
             content: renderPrompt({
               tree,
               count,
+              longPiece: suggestedCount(words) > FIND_MORE_FLOOR,
               existing: existing?.entries ?? [],
               profile,
             }),

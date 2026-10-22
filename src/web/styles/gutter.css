@@ -1109,7 +1109,8 @@ td.text.kind-heading .blk-gutter[data-open] {
    column it reveals on hover. narrow-window.css § a no-hover screen shrinks the
    right pad under the same query to a narrow strip, which holds only what the
    column shows at rest. Nothing here depends on the width: the bar is at most
-   four 24px controls against the cell's right edge.
+   four 40px controls (`--blk-bar-slot`, since 2026-10-22, plan 261022e)
+   against the cell's right edge.
    docs/plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md has the
    phone's measurements and the options passed over;
    docs/plans/261019d-touch-screens-get-the-gutter-bar-and-narrower-prose-margins-ipad-included.md
@@ -1172,10 +1173,12 @@ td.text.kind-heading .blk-gutter[data-open] {
     grid-auto-flow: column;
     grid-template-columns: none;
     grid-auto-columns: auto;
-    grid-template-rows: var(--blk-slot);
-    column-gap: max(0.5rem, 8px);
+    /* 40px slots touching, a 40px pitch like the masthead's icons: the gap
+       between targets is inside them. Plan 261022e. */
+    grid-template-rows: var(--blk-bar-slot);
+    column-gap: 0;
     align-content: center;
-    padding: 2px 6px;
+    padding: 0 4px;
     z-index: 3;
     background: var(--page);
     border: 1px solid var(--border);
@@ -1187,7 +1190,10 @@ td.text.kind-heading .blk-gutter[data-open] {
     display: inline-flex;
     justify-content: center;
     padding: 0;
-    min-width: var(--blk-slot);
+    /* Both directions: `.blk-gutter > *`'s 24px `min-height` would otherwise
+       hold the control at 24 tall inside its 40px row (GPT Sol, plan review). */
+    min-width: var(--blk-bar-slot);
+    min-height: var(--blk-bar-slot);
   }
   tr.row-active td.text .blk-gutter > .blk-cmt {
     opacity: 1;

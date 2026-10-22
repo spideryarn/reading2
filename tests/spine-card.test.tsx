@@ -794,6 +794,13 @@ describe("the key", () => {
     expect(css).toMatch(/@media \(max-height: 600px\)\s*{\s*\.tip-key\s*{\s*display: none;/);
     expect(css).toMatch(/\.tip-key-here\s*{[^}]*var\(--depth-1\)/);
     expect(css).toMatch(/\.tip-key-screen\s*{[^}]*var\(--highlight\)/);
+    /* *On screen* is the lit stretch between two orange edges since plan
+       261022c, not an orange wash: a swatch still washed in orange would key a
+       band the rail no longer draws. */
+    expect(css).not.toMatch(/\.tip-key-screen\s*{[^}]*color-mix\(in oklab, var\(--highlight\)/);
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)\s*{\s*\.tip-key-screen\s*{\s*border-color: Highlight;/,
+    );
     expect(css).toMatch(/\.tip-key-supplement\s*{[^}]*var\(--depth-1\)/);
     expect(css).toMatch(/\.tip-key-reading\s*{[^}]*var\(--read-time\)/);
     expect(css).toMatch(/\.tip-key-from\s*{[^}]*var\(--ink-faint\)/);

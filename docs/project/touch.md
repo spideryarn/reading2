@@ -538,7 +538,9 @@ depends on the side.)
 no-hover screen, the iPad included, since 2026-10-19. Under `(hover: none)` the right pad shrinks
 to a narrow strip and the left one edges towards the spine. At rest it holds only
 state: the marks, without their counts, and the reading-time hairline at the outer edge. The tap that
-selects a row turns the gutter into a horizontal bar above the paragraph. Everything below about
+selects a row turns the gutter into a horizontal bar above the paragraph. Its controls are a finger's 40px since 2026-10-22, so it covers about
+a line and a half of what is above it
+([controls.md § The numbers](controls.md#the-numbers)). Everything below about
 which row is selected still holds; only where the icons are drawn changes. Greg, on a phone: *"we
 only need it when there's an explicit action"* (spya-k49y3q,
 [261018g](../plans/261018g-phone-portrait-gutter-icons-above-the-paragraph.md)). The iPad followed

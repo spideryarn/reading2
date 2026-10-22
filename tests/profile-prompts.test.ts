@@ -56,7 +56,7 @@ const MARKERS = ["WHO IS READING", "neuroethologist", "I want the evidence"];
 
 describe("glossary's prompt", () => {
   const render = (profile: string | null) =>
-    glossaryPrompt({ tree: TREE, count: 8, existing: [], profile });
+    glossaryPrompt({ tree: TREE, count: 8, longPiece: false, existing: [], profile });
 
   it("carries the profile when there is one", () => {
     const out = render(PROFILE);
@@ -73,7 +73,7 @@ describe("glossary's prompt", () => {
        mistake: a `${profile ?? ""}` left in place emits nothing visible and two
        newlines, and nobody notices until a diff of two prompts is the only way
        to explain a cache miss. */
-    expect(render(null)).toBe(glossaryPrompt({ tree: TREE, count: 8, existing: [] , profile: null }));
+    expect(render(null)).toBe(glossaryPrompt({ tree: TREE, count: 8, longPiece: false, existing: [] , profile: null }));
     expect(render(null)).not.toMatch(/\n{3,}/);
   });
 });
