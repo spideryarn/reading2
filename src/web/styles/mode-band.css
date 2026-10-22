@@ -884,6 +884,16 @@ svg.band-waiting-ghost { flex: none; }
   white-space: pre-wrap;
 }
 .chat-turn.model p:last-child { margin-bottom: 0; }
+/* **Between two of the answer's own blocks, `--answer-gap`** (plan 261022e).
+   A top margin on the second, which collapses with the first's 0.6rem bottom
+   margin to the larger, so the gap widens and the space *after* the answer, before
+   its sources and actions, stays as it was. Direct children only, so a list
+   item's own paragraphs keep their tighter spacing; unclassed `p`s only, so the
+   answer's status lines (`.chat-failed`, `.chat-stopped`) are left out. */
+:is(.chat-turn.model, .chat-hint-text) > :is(p:not([class]), .fmt-list, .fmt-quote, .fmt-pre)
+  + :is(p:not([class]), .fmt-list, .fmt-quote, .fmt-pre) {
+  margin-top: var(--answer-gap);
+}
 .chat-turn.model.failed { color: var(--ink-faint); }
 
 /* A geometry marker immediately before the answer's first character. It is an

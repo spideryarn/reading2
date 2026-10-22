@@ -50,6 +50,12 @@
      actually is at a given root and CSS cannot tell it. `tests/gutter-target-size.test.ts`
      reads this declaration and fails when they disagree. */
   --blk-slot: max(1.5rem, 24px);
+  /* **A slot in the bar a tap raises on a no-hover screen** (gutter.css § a
+     no-hover screen): a finger's 40, not a mouse's 24, because the bar is only
+     ever pressed by a finger. It covers about a line and a half of what is above
+     it instead of one, and that was judged worth it — controls.md § The numbers,
+     plan 261022e. Written `max(40px, 2.5rem)`, never a bare 2.5rem. */
+  --blk-bar-slot: max(40px, 2.5rem);
   /* **The gutter's one column, and nothing else** — the inset below is
      separate. One since 2026-09-05: the bookmark used to have a column beside
      the line, and it is now *in* the line, at the top of it (§ the gutter). The

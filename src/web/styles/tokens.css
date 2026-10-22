@@ -467,6 +467,13 @@
   --type-count: max(var(--text-min), 0.83rem); /* a number standing for how many */
   --type-label: max(var(--text-min), 0.77rem); /* a group's small uppercase heading */
 
+  /* **The space between two paragraphs of a model's answer** (plan 261022e;
+     Greg, 2026-10-21, on chat's 0.6rem: "follow best practices"). One em,
+     the usual body-text default, in `em` so it follows each answer's own size.
+     Anything that draws a model's answer as paragraphs puts this between them.
+     docs/project/typography.md § Vertical rhythm. */
+  --answer-gap: 1em;
+
   /* **The smallest text a touch screen gets** (plan 261021c; Greg on an iPhone,
      2026-10-20: the investigate chat's sources were "too small … for an
      iPhone"). Read as `font-size: max(var(--text-min), <the size>)`, so a size

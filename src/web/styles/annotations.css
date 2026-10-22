@@ -1126,6 +1126,9 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink);
 }
 .cmt-answer p:last-child { margin-bottom: 0.3rem; }
+/* `--answer-gap` between paragraphs; it collapses with the 0.7rem above to the
+   larger, so the space after the last one is unchanged. Plan 261022e. */
+.cmt-answer p + p { margin-top: var(--answer-gap); }
 
 /* The answer that is being replaced, while a deeper search runs.
    Dimmed rather than removed: the reader asked for something better than this,

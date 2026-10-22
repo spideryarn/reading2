@@ -111,7 +111,7 @@ function helpLink(url: string, label: ReactNode): ReactNode | null {
 
 /** The answer's own elements, which come out of the walk with Cited's `fmt-*` classes and no styling here. */
 const ANSWER_CLASS =
-  "tw:mt-3 tw:flex tw:flex-col tw:gap-2 tw:text-sm tw:leading-relaxed tw:text-foreground tw:[overflow-wrap:anywhere] tw:[&_p]:m-0 tw:[&_ul]:m-0 tw:[&_ol]:m-0 tw:[&_ul]:pl-5 tw:[&_ol]:pl-5 tw:[&_li]:mt-1 tw:[&_li:first-child]:mt-0 tw:[&_strong]:font-semibold tw:[&_code]:font-mono tw:[&_code]:text-xs tw:[&_pre]:m-0 tw:[&_pre]:overflow-x-auto tw:[&_pre]:whitespace-pre-wrap tw:[&_blockquote]:m-0 tw:[&_blockquote]:border-l-2 tw:[&_blockquote]:border-rule tw:[&_blockquote]:pl-3 tw:[&_.fmt-h]:m-0 tw:[&_.fmt-h]:text-sm tw:[&_.fmt-h]:font-semibold";
+  "tw:mt-3 tw:flex tw:flex-col tw:gap-[var(--answer-gap)] tw:text-sm tw:leading-relaxed tw:text-foreground tw:[overflow-wrap:anywhere] tw:[&_p]:m-0 tw:[&_ul]:m-0 tw:[&_ol]:m-0 tw:[&_ul]:pl-5 tw:[&_ol]:pl-5 tw:[&_li]:mt-1 tw:[&_li:first-child]:mt-0 tw:[&_strong]:font-semibold tw:[&_code]:font-mono tw:[&_code]:text-xs tw:[&_pre]:m-0 tw:[&_pre]:overflow-x-auto tw:[&_pre]:whitespace-pre-wrap tw:[&_blockquote]:m-0 tw:[&_blockquote]:border-l-2 tw:[&_blockquote]:border-rule tw:[&_blockquote]:pl-3 tw:[&_.fmt-h]:m-0 tw:[&_.fmt-h]:text-sm tw:[&_.fmt-h]:font-semibold";
 
 const NOTE_CLASS = "tw:m-0 tw:text-xs tw:leading-relaxed tw:text-muted-foreground";
 
