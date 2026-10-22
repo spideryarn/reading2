@@ -11,7 +11,7 @@ An admin report from Greg (`feedback-reporter.ts` exit 0), filed from Summary, F
 > great. I don't think we need to generate the thread submode by default. I think we should generate
 > that if someone presses on it, not until then.
 >
-> — Greg, 2026-10-21 22:27 UTC (`spya-jex764`, #671)
+> — Greg, 2026-10-21 22:27 UTC (`spya-jex764`, #671, Sentry `SPIDERYARN-READING2-N4`)
 
 **Ending: Shipped**, to `dev`, not deployed. Plan and both GPT Sol reviews:
 [261022b](../plans/261022b-summary-thread-writes-only-when-pressed.md).
