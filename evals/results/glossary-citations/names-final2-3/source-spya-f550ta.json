@@ -1,0 +1,226 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "names-final2-3",
+  "promptVersion": "glossary/10",
+  "sourceSha256": {
+    "glossary.ts": "3e3332d26fd55dc9851a9cea353fe69e831bae2782ea31ce34d92ca0c9df4cc9",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A glowing ball seen during thunderstorms that lasts a few seconds and then vanishes, with or without leaving traces. No accepted explanation exists, and most evidence is eyewitness accounts.",
+      "background": "Reports go back centuries, but the phenomenon has rarely been recorded by instruments. Many theories exist and none is accepted."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist who wrote Sur le tonnerre (1837), where the term ball lightning took hold. He also received Lorenzo Butti's letter about the 1841 Milan sighting."
+    },
+    {
+      "name": "Lorenzo Butti",
+      "kind": "person",
+      "aliases": [
+        "Butti"
+      ],
+      "background": "Marine painter at the Austrian imperial court who saw a fireball in Milan in June 1841 and wrote about it to Arago."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "School official who wrote Der Kugelblitz (1923), the only German-language monograph on ball lightning. He collected many old reports, including Arago's."
+    },
+    {
+      "name": "Rakov and Uman handbook",
+      "kind": "work",
+      "aliases": [
+        "Rakov and Uman",
+        "lightning handbook"
+      ],
+      "background": "Standard reference book on lightning by Vladimir Rakov and Martin Uman (2003). Its chapter 20 reviews ball lightning."
+    },
+    {
+      "name": "Stenhoff",
+      "kind": "work",
+      "aliases": [
+        "Stenhoff (1999)"
+      ],
+      "background": "Mark Stenhoff's 1999 book on ball lightning, with about 2400 references. It is the main English-language compilation of cases and theories."
+    },
+    {
+      "name": "Stanley Singer",
+      "kind": "work",
+      "aliases": [
+        "Singer"
+      ],
+      "background": "Author of the 1971 book The Nature of Ball Lightning, an early broad compilation of reports and theories."
+    },
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov",
+        "Vladimir Bychkov"
+      ],
+      "background": "Russian physicist who keeps a database of ball lightning reports, including accounts by scientists."
+    },
+    {
+      "name": "Fragmented science",
+      "kind": "concept",
+      "aliases": [],
+      "background": "Phrase coined by Turner in 2001 for ball lightning research, which is done by scattered individuals with little coordination."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "background": "Austria's network of sensors that records the time, place and strength of lightning strikes."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "background": "Germany's lightning location network, run by Siemens."
+    },
+    {
+      "name": "positive stroke",
+      "kind": "term",
+      "aliases": [
+        "positive strokes",
+        "positive cloud–ground lightning"
+      ],
+      "background": "A lightning strike carrying positive electric charge to the ground. Positive strokes are far rarer than negative ones, typically about a tenth of strikes, but are often stronger."
+    },
+    {
+      "name": "Pyotr Leonidovich Kapitsa",
+      "kind": "person",
+      "aliases": [
+        "Kapitsa"
+      ],
+      "background": "Soviet physicist and Nobel laureate who proposed a theory of ball lightning."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "Austrian geologist and mineralogist and a member of the Imperial Academy of Sciences in Vienna. He sketched and reported a ball lightning seen in Vienna in 1868."
+    },
+    {
+      "name": "Axel D. Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann",
+        "Axel Wittmann"
+      ],
+      "background": "German astrophysicist at Göttingen. As a child he saw ball lightning split into smaller spheres that melted road asphalt."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "Yale palaeontologist, famed for dinosaur discoveries, and president of the US National Academy of Sciences."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German experimental physicist known for the 1922 Stern–Gerlach experiment, which showed that the spin of atoms takes only certain fixed values in a magnetic field."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer and later physics professor at the University of Kent. His 1963 in-flight sighting of a glowing sphere passing down an airliner aisle became widely known."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "Physicist at the St Petersburg Academy of Sciences, killed by electricity in 1753 while experimenting with atmospheric electricity."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "background": "Temporary paralysis, numbness or loss of feeling after a lightning strike, which usually clears within hours."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician, founder of modern neurology, at the Salpêtrière Hospital in Paris. He taught Sigmund Freud, who translated his lectures into German."
+    },
+    {
+      "name": "Dorstone",
+      "kind": "event",
+      "aliases": [
+        "Dorstone tub",
+        "Dorstone case"
+      ],
+      "background": "A 1936 report from Herefordshire, England, of a red-hot ball that fell into a tub of water and made it boil. It is often used to estimate how much energy ball lightning holds."
+    },
+    {
+      "name": "Rozlyn Krjcik",
+      "kind": "person",
+      "aliases": [
+        "Krjcik",
+        "Poughquag glass"
+      ],
+      "background": "New York woman who saw a blue sphere at her front door in 2008. Her glass porch window was later tested for radiation-induced fluorescence."
+    },
+    {
+      "name": "Camp Blanding experiment",
+      "kind": "event",
+      "aliases": [
+        "Camp Blanding"
+      ],
+      "background": "A 2008 experiment in Florida in which rocket-triggered lightning was aimed at over 100 ground materials. It produced glowing effects but the researchers did not call them ball lightning."
+    },
+    {
+      "name": "Qinghai spectrum",
+      "kind": "event",
+      "aliases": [
+        "Qinghai",
+        "Xining",
+        "Cen"
+      ],
+      "background": "A 2012 recording on the Qinghai Plateau in China in which cameras with a diffraction grating captured the light spectrum of a ball lightning. The spectrum showed iron, calcium, silicon, nitrogen and oxygen lines."
+    },
+    {
+      "name": "Mitino incident",
+      "kind": "event",
+      "aliases": [
+        "Mitino"
+      ],
+      "background": "A 2015 Moscow case in which three people filmed a glowing object with mobile phones. Triangulating the videos gave its height and speed."
+    }
+  ]
+}

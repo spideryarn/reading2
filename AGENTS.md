@@ -56,6 +56,8 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `interface-vision.md` (three columns — not decided, a direction to explore) ·
   `chat-llm-help-commands-vision.md` (say what you want and a model picks the command — not
   decided) ·
+  `explain-this-vision.md` (glossary, citations and uncited names as one "explain this" — not
+  decided) ·
   `marginalia.md` (the notes right of the prose, and what other modes' items belong there) ·
   `web-client.md` (where the client code is) · `mode.md` (the checklist) ·
   `granularity-zoom.md` (the tree Structure draws; most of it is the removed gist columns) ·

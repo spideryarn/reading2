@@ -71,7 +71,18 @@ Summary, and why writing on arrival was kept). The rule that writing on arrival 
   summary` never does.
 - **Sharing**: the owner's *make public* list names the thread once one is stored. A visitor reads
   a stored thread, or is told under the control that nobody has built one.
-- **An import** still queues the thread with the main modes
+- **Neither default path makes it up front** since 2026-10-22: not an import's *Generate the main
+  modes*, not a gift. Its owner's first open writes it if the Guide has not already prepared it for
+  that reader; the Guide's deliberate, reader-specific preparation is not the default batch.
+
+  > I don't think we need to generate the thread submode by default. I think we should generate
+  > that if someone presses on it, not until then.
+  >
+  > — Greg, 2026-10-21 (`spya-jex764`), in
+  > [261022b](../plans/261022b-summary-thread-writes-only-when-pressed.md)
+
+  So a visitor to a public article sees a thread only if its owner or the Guide prepared one. From
+  2026-09-30 to then an import queued it with the main modes
   ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)).
 
 ## Where the code is

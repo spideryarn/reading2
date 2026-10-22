@@ -71,7 +71,10 @@ A trial, built so that going back is a client-only revert
   the same place whichever view is showing.
 - **Brief and Fuller arm the plain-words run; Thread arms nothing.** The thread writes when its
   owner opens it, however they arrived — Greg's 2026-09-12 rule, kept ([tweets.md](tweets.md)). So
-  a press that lands on the thread mints no token, and a last-view restore never opens it.
+  a press that lands on the thread mints no token, and a last-view restore never opens it. **Only
+  Brief and Fuller are made up front** (*Generate the main modes*, and a gift); the thread is not
+  part of either batch, since 2026-10-22
+  ([261022b](../plans/261022b-summary-thread-writes-only-when-pressed.md)).
 - **The Simple level is gone** (since 2026-10-04). It was hidden here and still written for a day;
   [§ Two levels](#two-levels-brief-and-fuller-since-2026-10-04) has what replaced that.
   `?summary=simple` reads as Brief.

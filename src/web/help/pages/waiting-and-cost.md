@@ -20,6 +20,7 @@ What sets one off:
 - **Chat, Search and the margin’s ?** work when you ask, and answers appear as they are written.
 - **When you add an article**, leaving **Generate the main modes as soon as it opens** ticked
   prepares the modes named beneath the tick-box, plus the links between passages, in the background.
+  Summary’s Thread is not among them: if it has not been prepared, opening it writes it.
 
 The work runs while a Spideryarn tab is open; close them all and it pauses until you come back. On
 someone else’s shared article you see whatever has already been made, but you cannot start anything

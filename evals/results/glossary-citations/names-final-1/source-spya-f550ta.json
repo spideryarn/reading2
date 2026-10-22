@@ -1,0 +1,209 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "names-final-1",
+  "promptVersion": "glossary/10",
+  "sourceSha256": {
+    "glossary.ts": "0d59aafecd5167a7ce1acf7fa25d8864da06d7ea653d485cb47d28083079addb",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A glowing ball seen during thunderstorms that lasts a few seconds and vanishes, sometimes leaving traces. It has never been explained.",
+      "background": "Eyewitnesses have reported it for centuries, but almost no photographs or instrument recordings exist. Many theories have been proposed and none is accepted."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist who wrote Sur le tonnerre in 1837. He collected early reports of ball lightning and is credited with the term."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "German school official who wrote Der Kugelblitz (1923), the only German-language monograph on ball lightning. It collected many older reports."
+    },
+    {
+      "name": "Stanley Singer",
+      "kind": "person",
+      "aliases": [
+        "Singer"
+      ],
+      "background": "Author of the 1971 book The Nature of Ball Lightning. It collected many case reports."
+    },
+    {
+      "name": "Stenhoff",
+      "kind": "person",
+      "aliases": [
+        "Mark Stenhoff"
+      ],
+      "background": "Author of the 1999 book Ball Lightning: An Unsolved Problem in Atmospheric Physics, with about 2400 references."
+    },
+    {
+      "name": "Rakov and Uman",
+      "kind": "person",
+      "aliases": [
+        "Rakov and Uman (2003)",
+        "Martin A. Uman"
+      ],
+      "background": "Vladimir Rakov and Martin Uman wrote a major lightning handbook in 2003. Its chapter 20 reviews ball lightning, and Uman also led a lightning field experiment at Camp Blanding."
+    },
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov"
+      ],
+      "background": "Russian physics professor who keeps a database of Russian ball lightning case reports. He also reported his own sighting."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "background": "A US network of cameras that photographed the night sky for meteors. A search of its records found two probable ball lightning events."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "background": "Austria's network of sensors that records when and where lightning strikes, and with what current."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "background": "Germany's lightning location service, which detects strikes using a network of sensors."
+    },
+    {
+      "name": "Pyotr Leonidovich Kapitsa",
+      "kind": "person",
+      "aliases": [
+        "Kapitsa"
+      ],
+      "background": "Russian Nobel Prize-winning physicist who proposed a theory of ball lightning."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "Austrian geologist and mineralogist in Vienna. He reported glowing balls seen during a storm in 1868."
+    },
+    {
+      "name": "Axel D. Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann",
+        "Axel Wittmann"
+      ],
+      "background": "German astrophysicist at Göttingen who saw ball lightning as a child in 1951. He reported it to the journal Nature."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "American palaeontologist at Yale and president of the US National Academy of Sciences. He saw a ball of fire on a yacht in 1878."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German experimental physicist known for the Stern–Gerlach experiment of 1922, which showed that atoms in a magnetic field take only certain discrete spin orientations."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer and later professor of electronics. He reported a glowing sphere drifting down an airliner aisle in 1963."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "Baltic German physicist in St Petersburg who was killed by lightning in 1753 while experimenting with atmospheric electricity."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician and founder of modern neurology at the Salpêtrière Hospital in Paris. He taught Sigmund Freud."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Short-lived paralysis and other nerve effects after a lightning strike, as opposed to lasting nervous disorders that follow."
+    },
+    {
+      "name": "Dorstone case",
+      "kind": "event",
+      "aliases": [
+        "Dorstone",
+        "Dorstone tub"
+      ],
+      "background": "A 1936 report from Herefordshire, England, of a red-hot ball that fell into a tub of water and made it boil. The water volume allowed researchers to estimate the ball's energy."
+    },
+    {
+      "name": "Poughquag case",
+      "kind": "event",
+      "aliases": [
+        "Poughquag glass",
+        "Rozlyn Krjcik"
+      ],
+      "background": "A 2008 sighting in New York State of a blue ball near a glass porch door. Later tests of the glass estimated the ball's radiation output."
+    },
+    {
+      "name": "Camp Blanding experiment",
+      "kind": "event",
+      "aliases": [
+        "Camp Blanding"
+      ],
+      "background": "A 2008 experiment at a Florida military base in which rockets trailing wires triggered lightning onto over 100 materials on the ground. It was designed to see whether ball-like effects could be produced."
+    },
+    {
+      "name": "Qinghai spectrum",
+      "kind": "event",
+      "aliases": [
+        "Jianyong Cen",
+        "Xining"
+      ],
+      "background": "A 2012 recording on China's Qinghai Plateau in which video cameras with spectrometers captured a ball lightning event and its light spectrum."
+    },
+    {
+      "name": "Nikitin Mitino case",
+      "kind": "event",
+      "aliases": [
+        "Mitino"
+      ],
+      "background": "A 2015 event in a Moscow district in which three people filmed a glowing object with phones. Triangulating the videos gave its height and speed."
+    }
+  ]
+}

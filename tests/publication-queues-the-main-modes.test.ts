@@ -124,7 +124,7 @@ const PURPOSE = "To see whether the modes are written for this.";
  * change somebody has to make twice.
  */
 const EXPECTED: StepName[][] = [
-  ["tweets"],
+  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b). */
   ["glossary"],
   ["quotes"],
   ["ideas"],
