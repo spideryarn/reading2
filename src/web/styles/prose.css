@@ -808,9 +808,9 @@ td.text .figure-note-icon:focus-visible {
 }
 
 /* A quotation is a different voice, so it is set differently rather than just
-   indented: narrower (7ch less than the body's measure, so it stays narrower
-   whatever the measure is — it was a fixed 58ch against 65 until 2026-10-22,
-   and a fixed number would have gone wider than the body at 56), a little
+   indented: narrower (`7ch` less than the token, resolved in the quotation's
+   italic face, so about 6 body `ch`; it was a fixed 58ch against 65 until
+   2026-10-22, and a fixed number would have gone wider than the body at 56), a little
    tighter, and italic. Their research says
    1.3 for the leading; that number was written for Georgia and is too tight for
    a sans on a dark ground, where the lines close up visually as well as

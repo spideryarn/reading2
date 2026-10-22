@@ -1289,12 +1289,12 @@
    of a window it no longer shares with anything — the prose's own width, and
    auto margins to put it on the prose's own axis.
 
-   **It tracks the prose from about 780px of window upwards, and not below**,
+   **It tracks the prose once the bar has room for the measure, and not below**,
    which is a smaller claim than the obvious one; the original measurements are
-   in docs/plans/plain-mode-and-the-way-out.md § Centring the column. Under that
-   width this bar has less room than the measure, so `max-width` stops
-   controlling anything and the title stays at the gutter while the prose slides
-   towards it. The gap closes smoothly and there is no jump.
+   in docs/plans/plain-mode-and-the-way-out.md § Centring the column. When the
+   bar has less room, `max-width` stops controlling anything and the title stays
+   at the gutter while the prose slides towards it. The gap closes smoothly and
+   there is no jump.
 
    **That crossover was ~1009px until 2026-09-06 and the reservations were why.**
    This bar held `--logo-w` open on its left for the corner wordmark and
@@ -1373,7 +1373,9 @@
      What `--table-w` also carried was a width that *shrank with the window*, so
      the old rule was guaranteed to stop biting on any narrow screen. This one
      is a constant per root, so that guarantee has to be checked rather than
-     assumed. At the default root it holds — 705px against a bar with 696 to
+     assumed. **The numbers below were measured at the 65ch measure** (before
+     2026-10-22); at 56ch every width is smaller, but the two shapes are the same.
+     At the default root it holds — 705px against a bar with 696 to
      give at a 1000px window and 596 at 900, so the rule is inert and the title
      stays where it has always been while the prose slides towards it. **At a
      small root it does not.** `--blk-slot`'s px floor stops `--text-pad-r`
@@ -1387,7 +1389,7 @@
      **And below the measure's own crossover this rule simply does not follow the
      prose.** `.prose` is `clamp(45ch, 90vw, --reading-measure)` (§ text), so
      under about `measure / 0.9` of window it is `90vw` and narrower than the
-     length this calc uses — 824px at a 16px root, but only 618px at a 12px one,
+     length this calc uses — then 824px at a 16px root, but only 618px at a 12px one,
      because the crossover moves with the type. Measured at a 12px root: −5.7px
      at 700 and 731px of window, and **−22.1px at 600**, where `90vw` has taken
      over. The title is then out by roughly half of what the prose gave up. Not

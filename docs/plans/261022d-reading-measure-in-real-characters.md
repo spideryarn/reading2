@@ -58,7 +58,7 @@ line in our comments is not in the paper cited (Dyson & Kipping 1998 tested 25/5
 3. **Correct the comments** that state 65ch as current or quote the Dyson & Kipping figures
    (`styles/tokens.css`, `prose.css` header, `layout.ts`'s `PROSE_ALONE_MAX_REM` comment, which
    also says 65ch is "≈46rem" when it is 35.8rem at 16px).
-4. **`PROSE_ALONE_MAX_REM` comes down with it — stage 2.** The plan said leave it at 49; GPT Sol's
+4. **`PROSE_ALONE_MAX_REM` comes down with it — stage 2, held for Greg (§ Stage 2, held).** The plan said leave it at 49; GPT Sol's
    plan review showed it is not just Plain's whitespace. It is what `fitMargin` and `fitBoth` place
    Marginalia against, and what `spareBeyondTheMeasure` subtracts before a band may widen. And it
    was already stale: 49rem was "65ch ≈ 46rem" in *Geist*, and since the author's face became
@@ -92,6 +92,28 @@ line in our comments is not in the paper cited (Dyson & Kipping 1998 tested 25/5
    (median 70, p90 75 → exit 1) before it was green (60 / 64 → exit 0), which is the reason to
    trust it. It also fails when a window 1000px or wider has a column narrower than the measure:
    the cap clipping it, the stage-2 mistake it is there to catch.
+
+## Stage 2, held
+
+Built and then not landed, 2026-10-22. With the cap at 34rem, 28 tests moved and four of them
+were invariants, not hand numbers, which showed what the change really is:
+
+- **Bands widen from a 980px window, not 1220.** `spareBeyondTheMeasure` gives a band whatever the
+  prose cell cannot use, so a smaller cap is a lower threshold. At a 16px root the standard band
+  goes 400 → 444 at 1024, **400 → 544 at 1194 (iPad landscape)**, 460 → 544 at 1280, and is 544
+  either way from 1366. Greg said of exactly those windows, "the way it works right now for
+  slightly narrow windows is pretty good, so we don't want to screw that up" (spya-xebdgz), and
+  544 is the landscape Tweets band he asked to be narrower on 2026-09-30 (6G).
+- **Tweets' wide band fell below the standard one** between ~980 and ~1300, because its lower bound
+  is the unwidened standard band; it would need `max(standard, spare)`.
+- **At a 9–11px root the prose went below `MODE_PROSE_FLOOR`** and the roomy band overflowed: 34rem
+  + gutter is 330px at 9px. It would need the spare taken against `max(cap, PROSE_MIN)`.
+- What it buys is Marginalia's notes ~120px closer to their paragraph (a ~157px gap → ~37px at 1440).
+
+So it is a product trade-off, not a stale number, and the question offers: both (A), Marginalia only
+with a separate "bands widen from" number (B, recommended), or neither (C). The 34rem version of
+value and its derivation are item 4 above; whichever of A or B is chosen, the two invariant fixes
+above go with it.
 
 ## What is not changing, and why
 
@@ -129,6 +151,15 @@ token.
 - [x] Stage 1: the measure, the quotation and callout, `sup`, the rule, the script, the sweep —
   measured after: median 60, p90 64, max 69 wherever the column is at the measure, at every
   text size; phones unchanged (42 / 40)
-- [ ] Stage 2: `PROSE_ALONE_MAX_REM` 49 → 34, tests re-derived, screenshots
-- [ ] GPT Sol code review
-- [ ] Push to dev, note in docs/user-feedback/
+- [x] Stage 2 **not built; put to Greg as [q-z3j0ep](../user-feedback/questions/q-z3j0ep.md)**
+  (see § Stage 2, held). `layout.ts`'s comment says the cap is known loose and why; the two tests
+  that said "under a rem of slack" are now `it.fails` against the true ~31rem measure, red on 34
+  and green on 49, so they turn red the day it comes down
+- [x] GPT Sol code review — ship with fixes, made
+  ([review](261022d-reading-measure-in-real-characters-code-review-sol.md)): the counter now also
+  fails on an implausible or too-short median and a missing measure (its silent-success hole), and
+  more stale 65ch wording was corrected. One of its edits was put back: it had deleted
+  narrow-window.css's written-down small-root title drift, which still holds at 56ch; restored,
+  marked as measured at 65ch. Counter re-run green, touched suites and typecheck green
+- [x] Note: [261021_2302](../user-feedback/261021_2302-reading-measure-in-real-characters.md);
+  question q-z3j0ep published

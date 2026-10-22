@@ -309,7 +309,8 @@
        Serif 4, the author's face, a zero is 8.82px at 17px and the average prose character 8.19,
        so the 65ch the original app shipped held a median of 70 characters (Greg counted them,
        spya-vywcpu). 56ch holds ~60. **Change this only by counting**:
-       `scripts/measure-line-length.ts`, and `PROSE_ALONE_MAX_REM` in layout.ts moves with it. */
+       `scripts/measure-line-length.ts`. `PROSE_ALONE_MAX_REM` in layout.ts must remain wide enough
+       for it; its deliberate extra room, and the mode-band trade-off, are documented there. */
     --reading-measure: 56ch;
     --reading-size: 1.0625rem;                          /* 17px */
     --reading-line-height: 1.6;

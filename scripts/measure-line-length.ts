@@ -16,9 +16,9 @@
  *
  * Use a long article of ordinary prose; the default is the essay the rule was
  * measured on. **Exit 1** when any window where the column is at the measure
- * (as wide as `--reading-measure`, not squeezed by the window) has a median over 62 or a
- * 90th percentile over 66: that is the rule, and it was red on `65ch` (70 / 75)
- * before it was green. A window too narrow for the measure is reported and not
+ * (as wide as `--reading-measure`, not squeezed by the window) has a median
+ * outside 45–62 or a 90th percentile over 66: that is the rule, and it was red
+ * on `65ch` (70 / 75) before it was green. A window too narrow for the measure is reported and not
  * judged — that one is the screen's choice, not ours — except that a window
  * 1000px or wider must be at the measure: narrower there means
  * `PROSE_ALONE_MAX_REM` in layout.ts is clipping it.
@@ -35,8 +35,14 @@ const slug = flag("slug") ?? "simulators-spya-q2xbny";
 const shots = flag("shots");
 
 /** The rule, as numbers. typography.md § The measure owns the words. */
+const MIN_MEDIAN = 45;
 const MAX_MEDIAN = 62;
 const MAX_P90 = 66;
+/* A broken collector that splits every glyph into its own "line" satisfies an
+   upper bound more convincingly than a correct one. This is not a reading rule;
+   it is the positive control that proves the instrument still sees lines. The
+   narrowest window in the default ordinary-prose corpus is about 40 characters. */
+const MIN_PLAUSIBLE_MEDIAN = 25;
 
 const IPHONE =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
@@ -73,6 +79,7 @@ interface Count {
   /** `--reading-measure` resolved in the prose's own font: the width the column is at when nothing squeezes it. */
   measureWidth: number;
   zeroWidth: number;
+  measureToken: string;
   textSizeAttr: string | null;
 }
 
@@ -128,6 +135,7 @@ function count(): Count {
     proseWidth: Math.round(proseWidth * 10) / 10,
     measureWidth: Math.round(measureWidth * 10) / 10,
     zeroWidth: Math.round(zeroWidth * 1000) / 1000,
+    measureToken: getComputedStyle(prose).getPropertyValue("--reading-measure").trim(),
     textSizeAttr: document.documentElement.getAttribute("data-text-size"),
   };
 }
@@ -166,13 +174,24 @@ try {
       throw new Error(`${w.name}: asked for text size ${w.textSize}, the page has ${c.textSizeAttr ?? "default"}`);
     }
     if (c.lines < 40) throw new Error(`${w.name}: only ${c.lines} full lines — pick a longer article`);
+    if (c.median < MIN_PLAUSIBLE_MEDIAN) {
+      throw new Error(
+        `${w.name}: median ${c.median} is not a plausible line — the character-to-line collector is not measuring what it claims`,
+      );
+    }
+    if (!c.measureToken || c.measureWidth <= 0 || c.zeroWidth <= 0) {
+      throw new Error(
+        `${w.name}: the reading-measure instrument is missing (${c.measureToken || "unset"}, ${c.measureWidth}px, ${c.zeroWidth}px)`,
+      );
+    }
     const atMeasure = Math.abs(c.proseWidth - c.measureWidth) < 1;
+    const under = atMeasure && c.median < MIN_MEDIAN;
     const over = atMeasure && (c.median > MAX_MEDIAN || c.p90 > MAX_P90);
     /* A wide window has room for the measure, so a column narrower than it there
-       is layout.ts's `PROSE_ALONE_MAX_REM` clipping it — the cap is a copy of the
-       measure and has to move when it does. */
+       is layout.ts's `PROSE_ALONE_MAX_REM` clipping it. The cap may deliberately
+       be wider than the measure, but it must never be narrower. */
     const clipped = !atMeasure && w.width >= 1000;
-    if (over || clipped) failed = true;
+    if (under || over || clipped) failed = true;
     console.log(
       [
         w.name.padEnd(15),
@@ -185,7 +204,15 @@ try {
         String(c.proseWidth).padStart(9),
         String(c.measureWidth).padStart(9),
         String(c.zeroWidth).padStart(8),
-        atMeasure ? (over ? "  OVER" : "  ok") : clipped ? "  CLIPPED by the cap" : "  (window-bound, not judged)",
+        atMeasure
+          ? under
+            ? "  UNDER"
+            : over
+              ? "  OVER"
+              : "  ok"
+          : clipped
+            ? "  CLIPPED by the cap"
+            : "  (window-bound, not judged)",
       ].join(" "),
     );
     if (shots) {
@@ -203,5 +230,9 @@ try {
 } finally {
   await browser.close();
 }
-console.log(failed ? `FAIL: a column at the measure holds more than median ${MAX_MEDIAN} / p90 ${MAX_P90}, or a wide window's column is narrower than the measure` : "ok");
+console.log(
+  failed
+    ? `FAIL: a column at the measure is outside median ${MIN_MEDIAN}–${MAX_MEDIAN} / p90 ≤ ${MAX_P90}, or a wide window's column is narrower than the measure`
+    : "ok",
+);
 process.exit(failed ? 1 : 0);

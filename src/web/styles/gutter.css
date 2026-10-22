@@ -125,8 +125,8 @@
      measure, and those two want `9 × (--text-pad-l + --text-pad-r + --spine-w)
      < --reading-measure`. With the pad's width it was the other way round
      everywhere — 842 against 742 at a 16px root — which is why it could be left
-     alone. With one column it is **626 against 742**, so the interval is live
-     again and the `clamp` above is the fix rather than the note. GPT Sol,
+     alone. At the then-65ch measure, one column made it **626 against 742**, so
+     the interval became live and the shared `clamp` above was the fix. GPT Sol,
      2026-09-04, for the arithmetic; re-run at one column 2026-09-05.
 
      The `max(0px, …)` above is the second reason this rule is safe where the
@@ -157,7 +157,7 @@
      for nothing else.** `--reading-measure` is `56ch` (styles/tokens.css), and
      `ch` is the zero glyph of the font the length is *used* on — **including
      its weight**, because Source Serif is a variable face and the axis changes the
-     digit's advance. So the line above would otherwise measure 65 zeroes at the
+     digit's advance. So the line above would otherwise measure 56 zeroes at the
      cell's 1rem/400 rather than the prose's 1.0625rem/450: 6% short on size,
      and a further ~3px on weight. GPT Sol found the weight half, 2026-09-04,
      from a 2.8px residual in the measurements.
@@ -168,7 +168,7 @@
      lines that will have moved it.
 
      **And the family, since 2026-10-03.** The author's face became every
-     reader's on 2026-10-02 (styles/voices.css), so `.prose` measures 65 serif
+     reader's on 2026-10-02 (styles/voices.css), so `.prose` then measured 65 serif
      zeroes; this column went on measuring 65 Geist ones and stood 88px off the
      text at 1440 — measured in the browser for 261003c. Nothing in the column
      is set in it: `.blk-n` and `.block-chat-n` name their own face.

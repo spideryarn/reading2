@@ -79,7 +79,7 @@ describe("the reading column is centred in its cell", () => {
     expect(r).toContain("var(--text-pad-r)");
     // Self-limiting: a cell narrower than the measure leaves the gutter alone.
     expect(r).toMatch(/max\(\s*0px/);
-    /* `65ch` is the zero glyph of the font it is USED on, size AND weight —
+    /* A `ch` is the zero glyph of the font it is USED on, size AND weight —
        the reading face is variable. Without both, the gutter is 6% + ~3px shy of the
        prose's own right edge. */
     expect(r).toContain("font-size: var(--reading-size)");
@@ -87,10 +87,10 @@ describe("the reading column is centred in its cell", () => {
   });
 
   it("geometry beside the prose measures `ch` in the prose's own face", () => {
-    /* `65ch` is the zero glyph of the font it is used on — family as well as
+    /* A `ch` is the zero glyph of the font it is used on — family as well as
        size and weight. When the author's face became every reader's on
-       2026-10-02 (styles/voices.css), `.prose` started measuring 65 serif
-       zeroes while these geometry boxes went on measuring 65 Geist ones, and
+       2026-10-02 (styles/voices.css), `.prose` started measuring the then-65
+       serif zeroes while these geometry boxes went on measuring 65 Geist ones, and
        at 1440 the icons stood 88px off the text — on the left, and then on the
        right when the column moved there (261003c, measured in the browser). The in-prose
        quiz used the same wrong measure, although its button sets its visible UI
@@ -108,7 +108,7 @@ describe("the reading column is centred in its cell", () => {
     expect(rule(".blk-gutter")).toContain(`font-family: ${proseFace}`);
     expect(rule(".fold-toggle")).toContain(`font-family: ${proseFace}`);
     expect(rule("td.text .quiz-in-prose")).toContain(`font-family: ${proseFace}`);
-    /* And both mastheads, which centre a `65ch` box on the prose's axis: in
+    /* And both mastheads, which centre a measure-wide box on the prose's axis: in
        Geist they put the title ~80px off the first line of the article at 1440
        (261003c code review). Every visible child names its own face. */
     expect(rule(".reader.text-alone .masthead-inner")).toContain(`font-family: ${proseFace}`);

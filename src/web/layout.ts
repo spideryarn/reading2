@@ -143,8 +143,8 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * **Everything in it except the gutter is rem, so it is not one number any
  * more.** `proseAloneMaxPx` below is the cap; this is the rem part of it.
  *
- * 49rem is `--reading-measure` (65ch, ≈46rem in the reading face), plus the
- * cell's plain pad (1.4 — `--text-pad-l` since the gutter moved right in
+ * 49rem was `--reading-measure` (65ch, ≈46rem in Geist, the reading face then),
+ * plus the cell's plain pad (1.4 — `--text-pad-l` since the gutter moved right in
  * 261003c, `--text-pad-r` before; the sum is the same), plus the gutter's inset on each side (0.35 × 2)
  * — 48.1, rounded up to something round, exactly as the old 50 rounded its own
  * 49.5. The rounding runs upwards on purpose: `.prose` keeps its own clamp, so
@@ -152,6 +152,17 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * measure. A whole number of rem is worth keeping — 51.6 was tried on the way
  * here and left every width this derives fractional, so the tests had to round
  * with it and stopped asserting anything checkable by hand.
+ *
+ * **It is no longer the measure plus its pads, and that is known and left.**
+ * The measure is 56ch of Source Serif since 2026-10-22 (≈30.9rem; 35.8rem as
+ * 65ch from 2026-10-02), so this cap is ~15rem wider than the column it holds.
+ * `.prose` keeps its own clamp, so the prose reads at the measure regardless;
+ * what the slack costs is distance — Marginalia sits that much further from its
+ * paragraphs — and what it buys is that bands do not widen until 1220px
+ * (`spareBeyondTheMeasure`). Bringing it to 34rem moves the band on an iPad in
+ * landscape from 400px to 544px, so it waits on Greg: plan 261022d § Stage 2,
+ * question q-z3j0ep. `scripts/measure-line-length.ts` fails if any change
+ * here clips the measure.
  *
  * **Rem, and this is the second time that has mattered in this file.** `SPINE_W`
  * above records the same lesson from the other side: nothing in this app locks
@@ -716,7 +727,7 @@ function fitBoth(
  * shared with `fitMode` and `bandCoversProse`.
  *
  * **Alone, the prose stops growing at the measure.** A 1588px cell holding a
- * 738px measure is 850px of empty page rather than a wide reading column. See
+ * 494px measure is over 1000px of empty page rather than a wide reading column. See
  * `PROSE_ALONE_MAX_REM` for why the cap is phrased as "alone" rather than
  * "Plain", `proseAloneMaxPx` for why it is a function of the root rather than
  * one number, and narrow-window.css § `.reader.text-alone` for the auto margins that put the

@@ -758,32 +758,40 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
     expect(BLK_SLOT_MIN_PX).toBe(px);
   });
 
+  const MEASURE_REM = 31;
+  const padPlain = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
+  const insetRem = Number(/--blk-gutter-x:\s*([\d.]+)rem/.exec(css)?.[1]);
+  // The desktop value of the pad, not the phone's 0.9rem override further down the sheet.
+  const needed = (root: number) => (MEASURE_REM + padPlain + insetRem * 2) * root + slotPx(root);
+
   it("reserves the whole gutter in the lone-column cap, at every root", () => {
     /* The failure this replaces: a single rem constant under-reserved by 1.2px
        at a 12px root and 12.9px at 9px, because below 16 the gutter stops
        shrinking while everything else keeps going — so the cell's gutter padding
        (the left until 261003c, the right since) grows *in rem terms* exactly where a rem constant cannot follow it.
 
-       `--reading-measure` is 65ch, ≈46rem in the reading face; that
-       approximation is the constant's own, and the assertion is the inequality
-       rather than the total. The plain pad — `--text-pad-l` since the gutter
-       moved right (261003c) — is read from the stylesheet so this fails if it
-       moves. */
-    const MEASURE_REM = 46;
-    const padPlain = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
-    const insetRem = Number(/--blk-gutter-x:\s*([\d.]+)rem/.exec(css)?.[1]);
-    // The desktop value, not the phone's 0.9rem override further down the sheet.
+       `--reading-measure` is 56ch, ≈31rem of Source Serif 4 at 17px (46 until
+       2026-10-22, which was 65ch of Geist); that approximation is the
+       constant's own, and the assertion is the inequality rather than the
+       total. The plain pad — `--text-pad-l` since the gutter moved right
+       (261003c) — is read from the stylesheet so this fails if it moves. */
     expect(padPlain).toBe(1.4);
     expect(insetRem).toBeGreaterThan(0);
 
     for (const root of ROOTS) {
-      const needed = (MEASURE_REM + padPlain + insetRem * 2) * root + slotPx(root);
       expect(proseAloneMaxPx(root), `the cap clips the measure at a ${root}px root`).toBeGreaterThanOrEqual(
-        Math.round(needed),
+        Math.round(needed(root)),
       );
-      // And not so generous that the column stops looking capped: the rounding
-      // runs upwards by design, but by under a rem.
-      expect(proseAloneMaxPx(root), `the cap is loose at a ${root}px root`).toBeLessThan(needed + root);
+    }
+  });
+
+  /* **Known loose, and waiting on Greg** (q-z3j0ep, plan 261022d § Stage 2): the
+     cap is ~15rem wider than the measure since it came down to 56ch, and taking
+     it down widens bands on iPad-landscape windows, which is his call. This goes
+     red the day the cap comes down; then drop the `.fails`. */
+  it.fails("is not so generous that the column stops looking capped (under a rem of slack)", () => {
+    for (const root of ROOTS) {
+      expect(proseAloneMaxPx(root), `the cap is loose at a ${root}px root`).toBeLessThan(needed(root) + root);
     }
   });
 
