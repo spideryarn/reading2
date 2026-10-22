@@ -1,0 +1,12 @@
+Review complete. I found and fixed five issues, including ARIA state loss, the hybrid-device touch flag, stale clipping detection, memo-test coverage, and stale documentation. All plan-review points F1–F6 now hold.
+
+Report: [261020g-marginalia-tooltips-code-review-sol.md](/var/tmp/spideryarn-worktrees/fb-marginalia-tooltips/docs/plans/261020g-marginalia-tooltips-code-review-sol.md)
+
+Checks:
+
+- Requested tests: 60/60 passed.
+- Related tests: 20/20 passed.
+- Typecheck passed via the socket-free equivalent; `npm run typecheck` itself hit a sandbox IPC `EPERM`.
+- Lint exited 0 with only existing advisories.
+- `git diff --check` passed.
+- No commit or index changes made.

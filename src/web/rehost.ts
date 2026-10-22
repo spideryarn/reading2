@@ -463,11 +463,16 @@ function fillFigures(parsed: HTMLElement, srcFor: (ref: string) => StoredSrc | n
 
     const img = parsed.ownerDocument.createElement("img");
     img.setAttribute("src", src.src);
-    /* **`alt=""`, deliberately empty.** The visible `<figcaption>` beside it
-       carries the caption, so alt text would be the same sentence announced
-       twice to a screen reader — and there is nothing else we could honestly
-       put there, since nobody has looked at this picture. GPT Sol, I-4. */
-    img.setAttribute("alt", "");
+    /* **`alt=""`, deliberately empty, when there is a caption.** The visible
+       `<figcaption>` beside it carries the caption, so alt text would be the
+       same sentence announced twice to a screen reader — and there is nothing
+       else we could honestly put there, since nobody has described this
+       picture. GPT Sol, I-4. **A figure with no caption says so instead**,
+       since empty alt would hide a diagram the prose points at; not where it
+       came from, because a located picture's page need not be the marker's.
+       docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md. */
+    const captioned = (figure.querySelector(":scope > figcaption")?.textContent ?? "").trim() !== "";
+    img.setAttribute("alt", captioned ? "" : "Figure without a caption");
     /* The real pixel dimensions, from the manifest, so the row does not jump as
        the picture lands. */
     img.setAttribute("width", String(src.width));
@@ -889,9 +894,9 @@ export const IMAGE_WAIT_MS = 15_000;
  * something a slow connection could plausibly exceed would trade a hang nobody
  * has for figures somebody would really lose, which is the wrong way round.
  *
- * **And what it degrades to is a state this file already has**: caption-only,
- * no message, because the manifest says the picture is there and this is a
- * transport failure the reader can do nothing about. So the bound adds a
+ * **And what it degrades to is a state this file already has**: a figure without
+ * its picture, no message, because the manifest says the picture is there and
+ * this is a transport failure the reader can do nothing about. So the bound adds a
  * ceiling and no new reader-facing state — see `rehostImages`'s header.
  */
 export const FIGURE_WAIT_MS = 15_000;
@@ -905,9 +910,9 @@ export const FIGURE_WAIT_MS = 15_000;
  *
  * `Promise.allSettled` and not `all`: one figure that fails to load must not
  * take the other seven off the page with it. **A `ref` absent from the map is
- * how a failure is spelled**, which is what leaves that figure caption-only —
- * the promise in this module's header, and until 2026-09-06 a promise only the
- * owner's branch kept. A figure the clock ran out on is absent for the same
+ * how a failure is spelled**, which is what leaves that figure without a
+ * picture — the promise in this module's header, and until 2026-09-06 a promise
+ * only the owner's branch kept. A figure the clock ran out on is absent for the same
  * reason and means the same thing, so `FIGURE_WAIT_MS` needed no new vocabulary.
  *
  * **Its own `AbortController`, downstream of the load's** — the shape

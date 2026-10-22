@@ -107,7 +107,6 @@ function thread(id: string, kind: ThreadKind, over: Partial<ChatThread> = {}): C
    no thread at all, and every case below about a pasted id would pass idly. */
 const CHAT = thread("spya-chat22", "chat");
 const LEARN = thread("spya-rem022", "learn");
-const TUTORIAL = thread("spya-tut023", "tutorial");
 const EXPLORE = thread("spya-exp024", "explore");
 const CANDIDATES = thread("spya-can025", "candidates");
 
@@ -190,17 +189,17 @@ function prop<T>(name: string): T {
 }
 
 describe("what Chat lists", () => {
-  it("lists Recall, Tutorial and Explore beside the chats, and never Candidates", async () => {
-    stored = [CHAT, LEARN, TUTORIAL, EXPLORE, CANDIDATES];
+  it("lists Recall and Explore beside the chats, and never Candidates", async () => {
+    stored = [CHAT, LEARN, EXPLORE, CANDIDATES];
     await mount("?mode=chat");
-    expect(ids("listed").sort()).toEqual([CHAT.id, LEARN.id, TUTORIAL.id, EXPLORE.id].sort());
+    expect(ids("listed").sort()).toEqual([CHAT.id, LEARN.id, EXPLORE.id].sort());
     for (const props of renders) expect(ids("listed", props)).not.toContain(CANDIDATES.id);
   });
 });
 
 describe("what Chat may open is only its own kind (F3)", () => {
   it("hands the panel only chat-kind conversations to open, on every render", async () => {
-    stored = [CHAT, LEARN, TUTORIAL, EXPLORE, CANDIDATES];
+    stored = [CHAT, LEARN, EXPLORE, CANDIDATES];
     await mount("?mode=chat");
     expect(ids("threads")).toEqual([CHAT.id]);
     for (const props of renders) {
@@ -226,8 +225,8 @@ describe("what Chat may open is only its own kind (F3)", () => {
     expect(param("mode")).toBe("chat");
   });
 
-  it("does the same for a pasted Tutorial or Explore id", async () => {
-    stored = [CHAT, TUTORIAL, EXPLORE];
+  it("does the same for a pasted Explore id", async () => {
+    stored = [CHAT, EXPLORE];
     await mount(`?mode=chat&thread=${EXPLORE.id}`);
     await written();
     expect(param("thread")).toBeNull();
@@ -308,10 +307,10 @@ describe("what Chat may open is only its own kind (F3)", () => {
 
 describe("an article whose only conversations are Learn's", () => {
   it("shows their rows and does not start a blank chat over them", async () => {
-    stored = [LEARN, TUTORIAL];
+    stored = [LEARN, EXPLORE];
     await mount("?mode=chat");
     await written();
-    expect(ids("listed").sort()).toEqual([LEARN.id, TUTORIAL.id].sort());
+    expect(ids("listed").sort()).toEqual([LEARN.id, EXPLORE.id].sort());
     for (const props of renders) expect(ids("threads", props), "a blank chat was begun").toEqual([]);
     expect(last()?.threadId ?? null).toBeNull();
     expect(param("thread")).toBeNull();
@@ -341,25 +340,25 @@ describe("an article whose only conversations are Learn's", () => {
 
 describe("pressing a Learn row goes to Learn", () => {
   it("keeps the row's id when pressed before a rejected URL has flushed", async () => {
-    stored = [CHAT, LEARN, TUTORIAL];
+    stored = [CHAT, LEARN, EXPLORE];
     await mount(`?mode=chat&thread=${LEARN.id}`);
-    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("tutorial", TUTORIAL.id));
+    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("explore", EXPLORE.id));
     await written();
     expect(param("mode")).toBe("learn");
-    expect(param("learn")).toBe("tutorial");
-    expect(param("thread")).toBe(TUTORIAL.id);
+    expect(param("learn")).toBe("explore");
+    expect(param("thread")).toBe(EXPLORE.id);
   });
 
   it("sets mode, sub-mode and thread in one navigation", async () => {
-    stored = [CHAT, LEARN, TUTORIAL];
+    stored = [CHAT, LEARN, EXPLORE];
     await mount("?mode=chat");
     await written();
     const before = history.length;
-    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("tutorial", TUTORIAL.id));
+    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("explore", EXPLORE.id));
     await written();
     expect(param("mode")).toBe("learn");
-    expect(param("learn")).toBe("tutorial");
-    expect(param("thread")).toBe(TUTORIAL.id);
+    expect(param("learn")).toBe("explore");
+    expect(param("thread")).toBe(EXPLORE.id);
     expect(history.length, "one entry, so Back is one press").toBe(before + 1);
   });
 

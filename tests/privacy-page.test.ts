@@ -208,7 +208,32 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "19 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "21 October 2026"');
+  });
+
+  it("distinguishes the article-free open record from the request log", () => {
+    /* Plan 261020y: `article_open_times`, one row per account per UTC
+       half-hour, with no article column, cascading with the account. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "the time, at most once each half hour. That record does not say which article; the ordinary server log for the request does, and is kept about a day. We keep the record so that we can see how often Spideryarn is used. It is not shown to anybody reading an article you have shared, and it goes when your account does.",
+    );
+    /* And the reading-time bullet no longer reads as denying that history. */
+    expect(prose).toContain("We keep the totals, not a history of which passages you read when");
+  });
+
+  it("says a chat is told roughly how much of the article you have read, and not which parts", () => {
+    /* Plan 261020ac, Greg's answer to q-rwkq2e: src/reading-so-far.ts sends
+       one coarse phrase per chat turn, so both places that list what a model
+       is shown have to say so. Plain "when you chat", not the four kinds:
+       the page's comment above the bullet says why. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When you chat about one of your articles, the AI model is told roughly how much of it you have read — “about a quarter”, say — and nothing about which parts.",
+    );
+    expect(prose).toContain(
+      "chat and search (a chat about one of your articles is also told roughly how much of it you have read)",
+    );
   });
 
   it("says what the notes on cited works send, and that an upload's are looked up by identifier only", () => {
@@ -361,7 +386,7 @@ describe("the privacy page", () => {
        check cannot notice this disclosure being deleted. Held to the job: if
        the call moves to another model, this clause should move with it. */
     const prose = PAGE.replace(/\s+/g, " ");
-    expect(prose).toContain("to answer a question you ask in Help’s <em>Ask about Spideryarn</em>");
+    expect(prose).toContain("to answer a question you ask with the <em>Ask</em> button in Help’s");
     expect(prose).toContain("box, for which it is shown that question and the Help pages, and nothing of yours besides");
     expect(prose).toContain("the question is not kept, and is not written to our logs");
     const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");
@@ -412,12 +437,24 @@ describe("the privacy page", () => {
       expect(read("src/store/link-shared-slug.ts")).toMatch(/eq\(articles\.shareToken, key\)/);
     });
 
-    it("says it is not listed, and that we cannot tell who read it", () => {
+    /* Until 2026-10-21 the page said "We cannot tell you who has read it", and
+       this case pinned that nothing recorded a visit. Greg's 2C (reply
+       spya-xug3kf to q-agbc89, plan 261021d) changed the fact, so the page and
+       this case changed with it: signed-in openers are recorded, signed-out
+       opens counted, and only the administrator sees either. */
+    it("says it is not listed, and who records which opens and who sees them", () => {
       expect(prose).toMatch(/An article shared only this way is not listed anywhere/);
-      expect(prose).toMatch(/cannot tell (you )?who (has )?(read|opened)/);
+      expect(prose).toContain("We do not tell you who has read it.");
+      expect(prose).toContain("when somebody signed in opens the link, their account and when");
+      expect(prose).toContain(
+        "when somebody signed out does, a rough count and the first and last time a signed-out open was recorded",
+      );
+      expect(prose).toContain("Only the administrator can see that.");
+      expect(prose).toContain("When you open somebody’s private link while signed in");
       expect(read("src/store/public-library.ts")).not.toMatch(/from "\.\/public-access\.js"/);
-      /* Nothing records a visit: the public routes write nothing. */
-      expect(read("src/db/schema.ts")).not.toMatch(/share_link_(reads|visits|opens)/);
+      /* The two tables the sentences describe, and no third. */
+      const tables = [...read("src/db/schema.ts").matchAll(/spideryarn\.table\(\s*"(private_link_\w+|share_link_\w+)"/g)].map((m) => m[1]);
+      expect(tables.sort()).toEqual(["private_link_openers", "private_link_signed_out_opens"]);
     });
 
     it("says they get what a public reader gets", () => {

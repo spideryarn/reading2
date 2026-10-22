@@ -1,6 +1,13 @@
 /**
  * Sorting controls and a dense table, over any list of rows.
  *
+ * **We are on TanStack Table v8 (`^8.21.3`), and v9's docs will not match.**
+ * v9 shipped in August 2026, a bare `npm i @tanstack/react-table` now installs
+ * it, and tanstack.com's current guides show v9's API — so read this file and
+ * its callers, not the library's site, before writing table code here. The
+ * move to v9 is its own piece of work, deliberately not done yet:
+ * docs/research/261021a-table-library-for-sortable-hideable-columns.md.
+ *
  * Greg, 2026-08-26, on why this is a shared thing rather than part of the shelf:
  *
  * > Switch over to Tanstack … because I think we'll also want this kind of
@@ -56,7 +63,7 @@
  * attribute to every sorted header is not what WAI-ARIA asks for. Only the
  * first key carries it; the rest say where they are through the chip ordinal.
  */
-import { useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useMemo, useRef, useState } from "react";
 import {
   type Column,
   type ColumnDef,
@@ -209,6 +216,41 @@ const FLUID_CELL = "tw:w-full tw:max-w-0 tw:min-w-56";
 /** Everything a non-fluid cell gets: its own width, on one line, quieter than the title. */
 const FIXED_CELL = "tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground";
 
+/** `PINNED` without its background, for a cell that has to choose its own. */
+const PINNED_AT_LEFT = "tw:sticky tw:left-0 tw:z-10 tw:shadow-[1px_0_0_var(--border)]";
+
+/**
+ * A first column held at the left while its table scrolls sideways — the
+ * column that says what a row *is*. Opaque in the page's own colour — the
+ * tables sit on the page, not on a card — so a cell passing under it does not
+ * show through, in either theme. The shadow is the column's right-hand rule: a
+ * collapsed border does not travel with a sticky cell.
+ *
+ * `SidewaysScrollBox`'s shades sit above this `z-10`. Only ever on the first
+ * column: `left: 0` on any later one would draw it over the first. Shared by
+ * `DataTable`'s `pinFirst` and the hand-drawn admin tables, which have no row
+ * tint to carry. docs/plans/261019o-admin-tables-freeze-the-first-column.md.
+ */
+export const PINNED = `${PINNED_AT_LEFT} tw:bg-background`;
+
+/**
+ * The marked row's tint (`?user=`): the orange mixed into the page, opaque.
+ * Opaque so that a pinned cell can wear it without a scrolled cell showing
+ * through, and worn by the row as well as the cell so the two are one colour
+ * by construction — an alpha tint over the page and an opaque mix are not
+ * (tailwind.css § `--color-highlight-wash`). The runtime variables, not
+ * Tailwind's `--color-*` names: `@theme inline` does not emit those.
+ */
+const MARKED_BG = "tw:bg-[color-mix(in_oklab,var(--spideryarn-orange)_10%,var(--background))]";
+
+/**
+ * Below `sm`, a held column is a column you cannot scroll past, so its floor
+ * comes down from the fluid column's 224px to 160px — the cap the costs labels
+ * already use (AdminCostsPage.tsx § `LABEL_WIDTH`) — leaving a phone room for
+ * the columns that scroll.
+ */
+const PINNED_FLUID_FLOOR = "tw:max-sm:min-w-40";
+
 /**
  * **Column hiding is controlled state: pass both halves or neither.** With
  * neither, hiding is switched off outright (`enableHiding: false`), so a page
@@ -238,7 +280,8 @@ export function useSortedTable<T>({
   columnVisibility,
   onColumnVisibilityChange,
 }: {
-  data: T[];
+  /* Read-only: it is copied before it is sorted, below. */
+  data: readonly T[];
   columns: SortableColumn<T>[];
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
@@ -543,7 +586,7 @@ export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
           <Columns3 size={12} aria-hidden="true" />
           Columns
           {hidden > 0 && (
-            <span className="tw:rounded-full tw:bg-highlight/20 tw:px-1.5 tw:text-[10px] tw:leading-4 tw:tabular-nums">
+            <span className="tw:rounded-full tw:bg-highlight/20 tw:px-1.5 tw:text-[length:max(var(--text-min),10px)] tw:leading-4 tw:tabular-nums">
               {hidden}
             </span>
           )}
@@ -583,6 +626,26 @@ export function ColumnsMenu<T>({ table }: { table: Table<T> }) {
 /* ------------------------------------------------------------ the table --- */
 
 /**
+ * What a row wears, handed to `renderRow` so a page-drawn row is dressed
+ * exactly as the default one: the same padding, the fixed-or-fluid width
+ * rule, the numeric alignment, the held first column and the marked row's
+ * tint. A cell that needs more appends its own classes; one that needs a
+ * different voice (`FIXED_CELL` is one quiet line) sets it on an element
+ * inside, since two utilities for one property on one element are ordered by
+ * Tailwind's stylesheet, not by the class string.
+ */
+export interface RowDress {
+  /** For the `<tr>`: its `data-row-id` (what `markedRowId` scrolls to), `aria-current` and classes. */
+  readonly rowProps: {
+    readonly "data-row-id": string;
+    readonly "aria-current": "true" | undefined;
+    readonly className: string;
+  };
+  /** The classes the default `<td>` of column `columnId` wears in this row. */
+  readonly cellClass: (columnId: string) => string;
+}
+
+/**
  * The rows, dense, one column each.
  *
  * `rows` is passed rather than read off the table, because the caller may have
@@ -605,6 +668,9 @@ export function DataTable<T>({
   rows,
   caption,
   sidewaysCue = false,
+  markedRowId = null,
+  pinFirst = false,
+  renderRow,
 }: {
   table: Table<T>;
   rows: Row<T>[];
@@ -617,7 +683,65 @@ export function DataTable<T>({
    * and the shelf and `/admin/users` draw as they did (plan 261006g § Stage 2).
    */
   sidewaysCue?: boolean;
+  /**
+   * The row a link pointed at — `/admin/users?user=<id>` (plan 261019k). Drawn
+   * highlighted with `aria-current`, and `data-row-id` on every row is how the
+   * page finds it to scroll to. `row.id` is the table's own `rowId`.
+   */
+  markedRowId?: string | null;
+  /**
+   * Hold the first visible column at the left while the table scrolls
+   * sideways (`PINNED`). A prop rather than a column's `meta`, because only the
+   * first column can be held at `left: 0`, so this is right by construction.
+   * Off unless asked for: the admin tables ask, the shelf does not (plan 261019o).
+   */
+  pinFirst?: boolean;
+  /**
+   * **Draw a row yourself**, for a row whose cells share state — the one on
+   * `/admin/vouchers` that turns into a form, where the edit state, the focus
+   * refs and the form id belong to the row, not to any one cell (plan 261021i
+   * § Stage 2). Given it, the body calls `renderRow(row, dress)` instead of
+   * drawing its own `<tr>`; the headers, sorting, hiding and the held column
+   * are unchanged.
+   *
+   * `dress` is what the default row wears, so the two cannot drift: spread
+   * `rowProps` onto the `<tr>`, give each `<td>` `cellClass(column.id)`, and
+   * draw `row.getVisibleCells()` in order, or the cells stop lining up with
+   * the headers. **The key is ours, not the caller's**: each result is
+   * wrapped in a `<Fragment key={row.id}>`, so a re-sort moves a half-edited
+   * row's state with its row rather than leaving it at the old position to
+   * save over somebody else's (Sol F2).
+   */
+  renderRow?: (row: Row<T>, dress: RowDress) => ReactNode;
 }) {
+  const pinnedId = pinFirst ? (table.getVisibleLeafColumns()[0]?.id ?? null) : null;
+  /* One function for the default row and `renderRow`'s alike — see `RowDress`. */
+  const dressFor = (row: Row<T>): RowDress => {
+    const marked = row.id === markedRowId;
+    return {
+      rowProps: {
+        "data-row-id": row.id,
+        "aria-current": marked ? "true" : undefined,
+        className: `tw:group tw:border-b tw:border-border/60 tw:last:border-0 ${
+          marked ? MARKED_BG : "tw:hover:bg-card"
+        }`,
+      },
+      cellClass: (columnId) => {
+        const meta = table.getColumn(columnId)?.columnDef.meta;
+        /* A held cell is opaque, so the row's own tint has to be
+           repeated on it or the hover and the mark stop at it. */
+        const pin =
+          columnId !== pinnedId
+            ? ""
+            : `${marked ? `${PINNED_AT_LEFT} ${MARKED_BG}` : `${PINNED} tw:group-hover:bg-card`} ${
+                meta?.fluid ? PINNED_FLUID_FLOOR : ""
+              }`;
+        return `${CELL_X} tw:py-2 ${
+          meta?.fluid ? FLUID_CELL : FIXED_CELL
+        } ${meta?.numeric ? "tw:text-right tw:tabular-nums" : ""} ${pin}`;
+      },
+    };
+  };
   const drawn = (
       <table className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">{caption}</caption>
@@ -625,32 +749,30 @@ export function DataTable<T>({
           {table.getHeaderGroups().map((group) => (
             <tr key={group.id} className="tw:border-b tw:border-border">
               {group.headers.map((header) => (
-                <HeaderCell key={header.id} table={table} header={header} />
+                <HeaderCell
+                  key={header.id}
+                  table={table}
+                  header={header}
+                  pinned={header.column.id === pinnedId}
+                />
               ))}
             </tr>
           ))}
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              className="tw:group tw:border-b tw:border-border/60 tw:last:border-0 tw:hover:bg-card"
-            >
-              {row.getVisibleCells().map((cell) => {
-                const meta = cell.column.columnDef.meta;
-                return (
-                  <td
-                    key={cell.id}
-                    className={`${CELL_X} tw:py-2 ${
-                      meta?.fluid ? FLUID_CELL : FIXED_CELL
-                    } ${meta?.numeric ? "tw:text-right tw:tabular-nums" : ""}`}
-                  >
+          {rows.map((row) => {
+            const dress = dressFor(row);
+            if (renderRow) return <Fragment key={row.id}>{renderRow(row, dress)}</Fragment>;
+            return (
+              <tr key={row.id} {...dress.rowProps}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className={dress.cellClass(cell.column.id)}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
-                );
-              })}
-            </tr>
-          ))}
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
   );
@@ -684,7 +806,15 @@ export function DataTable<T>({
  * carries the two rules from `DataTable`'s doc comment: `aria-sort` on the
  * sorted column and no other, and `w-full` on the one fluid column.
  */
-function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, unknown> }) {
+function HeaderCell<T>({
+  table,
+  header,
+  pinned,
+}: {
+  table: Table<T>;
+  header: Header<T, unknown>;
+  pinned: boolean;
+}) {
   const meta = header.column.columnDef.meta;
   const sorted = header.column.getIsSorted();
   const head = flexRender(header.column.columnDef.header, header.getContext());
@@ -767,7 +897,9 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
          cells alone is half a constraint. */
       className={`tw:whitespace-nowrap ${CELL_X} tw:py-2 tw:text-xs tw:font-medium ${
         meta?.fluid ? "tw:w-full tw:min-w-56" : "tw:w-0"
-      } ${meta?.numeric ? "tw:text-right" : "tw:text-left"}`}
+      } ${meta?.numeric ? "tw:text-right" : "tw:text-left"} ${
+        pinned ? `${PINNED} ${meta?.fluid ? PINNED_FLUID_FLOOR : ""}` : ""
+      }`}
     >
       {sortable ? (
         <button

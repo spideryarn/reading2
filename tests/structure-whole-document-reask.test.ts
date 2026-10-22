@@ -100,7 +100,7 @@ const BLOCKS: Block[] = [
   { id: "spya-rsk003", tag: "p", kind: "text", text: "More prose entirely.", words: 3, html: "<p>More prose entirely.</p>", gistable: true },
 ];
 
-/* A schema-valid `toc/11` answer: starts only, with all three promised levels. */
+/* A schema-valid `toc/13` answer: numbered starts, with all three promised levels. */
 const SOUND = JSON.stringify({
   root: {
     title: "The whole piece",
@@ -111,12 +111,12 @@ const SOUND = JSON.stringify({
         title: "The part",
         gist: "The part covers the whole piece.",
         question: "The part — what does it say?",
-        start: BLOCKS[0]!.id,
+        start: 0,
         children: [
           {
             title: "The section",
             gist: "The section covers the whole piece in detail.",
-            start: BLOCKS[0]!.id,
+            start: 0,
           },
         ],
       },
@@ -125,24 +125,77 @@ const SOUND = JSON.stringify({
 });
 /** Broken three characters from the end, the way the book's second answer was. */
 const BROKEN = `${SOUND.slice(0, -2)}]}`;
-/** A child that starts at a block the article does not have — refused by the starts-only conversion. */
+/**
+ * A child that starts at a block the article does not have — refused by the starts-only
+ * conversion on any answer. It is the **second** of two: a first child's start is not asked, and
+ * dropping the second would leave one child covering the whole article
+ * (src/start-ranges.ts § `UnresolvedStarts`).
+ */
 const INVENTED = JSON.stringify({
   root: {
     title: "The whole piece",
     gist: "A gist.",
     question: "The whole piece — what does it say?",
     children: [
+      { title: "Opening", gist: "A gist.", question: "Opening — what?", start: 0 },
       {
         title: "Part",
         gist: "A gist.",
         question: "Part — what?",
-        start: "spya-zzz999",
-        children: [{ title: "Section", gist: "A section gist.", start: "spya-zzz999" }],
+        start: 99,
+        children: [{ title: "Section", gist: "A section gist.", start: 99 }],
       },
     ],
   },
 });
 
+/** Three parts, the middle one's start given as `start`. */
+const threeParts = (start: unknown) =>
+  JSON.stringify({
+    root: {
+      title: "The whole piece",
+      gist: "A gist.",
+      question: "The whole piece — what does it say?",
+      children: [
+        { title: "Opening", gist: "The heading.", question: "Opening — what?", start: 0 },
+        { title: "Turnips", gist: "The turnips.", question: "Turnips — why?", start },
+        { title: "The rest", gist: "The rest.", question: "The rest — what?", start: 2 },
+      ],
+    },
+  });
+/**
+ * The prompt's line number spliced into the id: `[1] spya-rsk002` written as `spya-1rsk`. Since
+ * `toc/13` the answer gives the number, not the id; an answer that has one anyway is read like any
+ * other start that names no block.
+ */
+const SPLICED = threeParts("spya-1rsk");
+/** A middle start that names nothing: refused by a first answer, dropped by the last. */
+const DROPPABLE = threeParts(99);
+/**
+ * The first reading refuses at root child 2. The last-answer reading drops that child, then reaches
+ * a distinct nested refusal under child 3. This makes which error escaped observable.
+ */
+const DIFFERENT_FALLBACK_ERROR = JSON.stringify({
+  root: {
+    title: "The whole piece",
+    gist: "A gist.",
+    question: "The whole piece — what does it say?",
+    children: [
+      { title: "Opening", gist: "The heading.", question: "Opening — what?", start: 0 },
+      { title: "First refusal", gist: "Not kept.", question: "Why?", start: 99 },
+      {
+        title: "The rest",
+        gist: "The rest.",
+        question: "The rest — what?",
+        start: 2,
+        children: [
+          { title: "Nested opening", gist: "Nested.", start: 2 },
+          { title: "Fallback refusal", gist: "Not kept.", start: 98 },
+        ],
+      },
+    ],
+  },
+});
 function memoryCheckpoints(): CheckpointStore & { entries: Map<string, unknown> } {
   const entries = new Map<string, unknown>();
   return {
@@ -285,5 +338,69 @@ describe("what is not asked for again", () => {
     const result = await run();
     expect(wholeDocumentCalls).toBe(1);
     expect(result.wholeDocumentCalls).toBe(1);
+  });
+});
+
+/* docs/plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md */
+describe("a start that names no block", () => {
+  const titles = (result: Awaited<ReturnType<typeof run>>) => {
+    const tree = result.parts.tree;
+    return tree.nodes[tree.rootId]!.children.map((child) => tree.nodes[child]!.title);
+  };
+
+  it("is not read as the line number it splices in: it buys the re-ask like any other", async () => {
+    answers = [{ text: SPLICED }, { text: SOUND }];
+    const result = await run();
+    expect(wholeDocumentCalls).toBe(2);
+    expect(result.startsDropped).toBe(0);
+    expect(result.droppedChildren).toBe(0);
+  });
+
+  it("buys the re-ask, and the re-ask may drop it rather than fail the step", async () => {
+    answers = [{ text: DROPPABLE }, { text: DROPPABLE }];
+    const checkpoints = memoryCheckpoints();
+    const result = await run({ checkpoints });
+    expect(wholeDocumentCalls).toBe(2);
+    expect(titles(result)).toEqual(["Opening", "The rest"]);
+    expect(result.startsDropped).toBe(1);
+    expect(result.droppedChildren).toBe(1);
+
+    /* And what it stored is replayed: a dropped answer must not be bought again on every
+       run because the checkpoint's own gate refuses it. ⟨Sol r2, finding 2⟩ */
+    expect([...checkpoints.entries.values()]).toEqual([expect.objectContaining({ answer: DROPPABLE })]);
+    wholeDocumentCalls = 0;
+    const again = await run({ checkpoints });
+    expect(wholeDocumentCalls).toBe(0);
+    expect(again.wholeDocumentResumed).toBe(true);
+    expect(again.startsDropped).toBe(1);
+  });
+
+  it("is dropped from a first answer that has no time left for a re-ask, which is the last answer", async () => {
+    answers = [{ text: DROPPABLE, ms: 100_000 }, { text: SOUND }];
+    const result = await run({ deadlineAt: Date.now() + 100_000 + 140_000 });
+    expect(wholeDocumentCalls).toBe(1);
+    expect(titles(result)).toEqual(["Opening", "The rest"]);
+    expect(result.startsDropped).toBe(1);
+  });
+
+  it("fails the step on the first refusal when even the last-answer reading refuses", async () => {
+    answers = [{ text: DIFFERENT_FALLBACK_ERROR, ms: 100_000 }, { text: SOUND }];
+    await expect(run({ deadlineAt: Date.now() + 100_000 + 140_000 })).rejects.toThrow(
+      /^Node range not in blocks\.json — at root > child 2: start not a block id \(a number\)$/,
+    );
+    expect(wholeDocumentCalls).toBe(1);
+  });
+
+  it("reports a prior drop when the last answer then fails somewhere else", async () => {
+    answers = [{ text: BROKEN }, { text: DIFFERENT_FALLBACK_ERROR }];
+    let message = "";
+    try {
+      await run();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toMatch(/It had also read 1 start\(s\) that named no block: root > child 2 \(dropped\)\./);
+    expect(message).not.toMatch(/mended 0 boundary/);
+    expect(wholeDocumentCalls).toBe(2);
   });
 });

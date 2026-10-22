@@ -66,6 +66,8 @@ import { mintId } from "./ids.js";
 import { costStore, totalLedger } from "./store/ai-calls.js";
 import type { LedgerRead } from "./store/contracts.js";
 import { pgJobStore } from "./store/pg-jobs.js";
+import { pdfPricing, priceFetchedPdf } from "./store/pg-billing.js";
+import { priceWithResync } from "./billing/admission.js";
 /* The refusal a publication answers with, by name, because the walk has to tell
    it apart from a database fault: one is a draft that is not fit to be an
    article and ends the job with something a person can act on, the other is a
@@ -92,6 +94,7 @@ import { slugWithShortId, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
+import { refuseWhileViewingAs, viewingAs } from "./view-as-scope.js";
 import { isAdmin } from "./admin.js";
 import { isMinimalJob, isReadThisFor, processingOf } from "./minimal-paper.js";
 import { NotProcessed } from "./not-processed.js";
@@ -134,6 +137,7 @@ import {
   type PaidPurchase,
   type StepName,
   type StepPreview,
+  type StepProgress,
 } from "./types.js";
 import { articlePower, type ModelPower } from "./models.js";
 import { highPowerStore } from "./store/index.js";
@@ -825,8 +829,17 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      `POST /api/jobs` can. tests/jobs-lease-budget.test.ts derives the floor.
      docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
   tweets: 600_000,
-  /* GUESS. Fans out over the article; no wall-clock measurement recorded. */
-  glossary: 120_000,
+  /* **The full-token time, not a measurement**, since 2026-10-22. One call over
+     the whole article, and the job's window is its only clock, so the call
+     must not start with less left than one that used every token it was
+     allowed would take: `MAX_ENTRIES` in src/glossary.ts is sized to about
+     714 s at `STREAM_TOKENS_PER_SECOND`, and tests/glossary.test.ts pins
+     worst case ≤ this ≤ the window (GPT Sol, plan 261022f, C1). Measured
+     beside it: 30–44 s on a 38,000-word book asked for 80. A glossary is
+     queued on its own, so the number decides nothing there; after another
+     step it hands the job back for a fresh window rather than starting late.
+     It was a 120 s guess while the answer was at most twenty terms. */
+  glossary: 720_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
      effort, with a shorter answer than the glossary's because a quote is copied
      rather than composed. Never measured on its own.
@@ -1228,14 +1241,32 @@ function stillForced(step: JobStep): boolean {
 type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
 
 /**
- * **A running step's preview: put on the job row, and taken off before the
- * step settles** (`JobStep.preview`, src/types.ts; `StepContext.preview`,
+ * **How often a step's counted progress may reach the job row**: at the first
+ * report that carries one, then no more than once per this many milliseconds.
+ * Two steps count (PDF extract, assets), so this is at most one row write per
+ * five seconds per such step: ~44 for the slowest measured PDF extract (216 s),
+ * ~148 for a step that ran a whole 740 s window. A count that arrives inside
+ * the interval waits for the next one that does not, or for the step's end,
+ * whose own write replaces it. Plan 261020a § B1, and GPT Sol's plan review,
+ * finding 7, on why reports without a count are not saved.
+ */
+export const REPORT_SAVE_EVERY_MS = 5_000;
+
+/**
+ * **A running step's preview and its report: put on the job row, and taken
+ * off before the step settles** (`JobStep.preview`, src/types.ts; `StepContext.preview`,
  * src/pipeline.ts). `runStep`'s, lifted out so the rule is in one place.
  *
  * `show` sets it on the step and writes the row through `note`, once per call,
- * chained so two calls land in the order they were made. `settle` waits for
- * whatever write is still on its way and then deletes the preview from the
- * step in memory, so the write that settles the step carries none.
+ * chained so two calls land in the order they were made. `report` sets
+ * `detail`, and `progress` when the step is counting; only a counted report
+ * writes, through the same chain, and only when `REPORT_SAVE_EVERY_MS` has
+ * passed since the last one it wrote. Until plan 261020a no report wrote, and
+ * PDF extract and assets make no other write while running, so their counts
+ * never reached a reader's poll. `settle` waits for
+ * whatever write is still on its way and then deletes the preview and the
+ * progress from the step in memory, so the write that settles the step carries
+ * neither. (`detail` is the step's to set again: success writes the product's.)
  *
  * **Why `settle` waits.** `noteProgress` replaces the whole `steps` array and
  * is fenced on the claim, not on this step. A preview write that reached
@@ -1254,17 +1285,24 @@ type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
  * **The preview is never logged**: it is the model's words about the article
  * (docs/project/logging.md). The line below carries the error's class only.
  */
-function stepPreviews(
+function stepNotes(
   job: Job,
   step: JobStep,
   note: () => Promise<unknown>,
   jlog: Log,
-): { show(preview: StepPreview): void; settle(): Promise<void> } {
+  now: () => number = Date.now,
+): {
+  show(preview: StepPreview): void;
+  report(detail: string, progress?: StepProgress): void;
+  settle(): Promise<void>;
+} {
   let written: Promise<void> = Promise.resolve();
+  let reportedAt: number | null = null;
+  let settled = false;
   const notWritten = (err: unknown): void => {
     jlog.debug(
       { step: step.name, error: err instanceof Error ? err.name : typeof err },
-      `step preview not written: ${step.name} — ${job.slug}`,
+      `step note not written: ${step.name} — ${job.slug}`,
     );
   };
   return {
@@ -1272,9 +1310,23 @@ function stepPreviews(
       step.preview = preview;
       written = written.then(() => note()).then(() => undefined, notWritten);
     },
+    report(detail, progress) {
+      /* After `settle` the step is the commit's: a report from work the step
+         left running must not write it back to `running`. */
+      if (settled) return;
+      step.detail = detail;
+      if (!progress) return;
+      step.progress = progress;
+      const at = now();
+      if (reportedAt !== null && at - reportedAt < REPORT_SAVE_EVERY_MS) return;
+      reportedAt = at;
+      written = written.then(() => note()).then(() => undefined, notWritten);
+    },
     async settle() {
+      settled = true;
       await written;
       delete step.preview;
+      delete step.progress;
     },
   };
 }
@@ -1330,6 +1382,9 @@ async function runStep(
   /* `JobStore.beginPaidStep` on this claim: for a `oncePerJob` step here, and
      for a purchase inside a step through `StepContext.beginPaidWork`. */
   beginPaidStep: (purchase: PaidPurchase) => Promise<"begun" | "begun-before">,
+  /* The long-PDF reprice and its stage-2 assertion, bound to this claim — see
+     `StepContext.priceFetchedPdf`. */
+  billing: Pick<StepContext, "priceFetchedPdf" | "pdfIsPriced">,
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
   /* **The article's power, read once per step, when the step starts** (plan
      260930f decision 3): flipping High-powered AI mid-job moves the steps
@@ -1350,18 +1405,17 @@ async function runStep(
      nothing downstream read either one. Both went with the filesystem store;
      a step is told where its artefacts go by the `ArtifactStore` it is handed
      and by nothing else. */
-  const shown = stepPreviews(job, step, note, jlog);
+  const shown = stepNotes(job, step, note, jlog);
   const ctx: StepContext = {
     slug: job.slug,
     ...(job.url ? { url: job.url } : {}),
     ...(job.upload ? { upload: job.upload } : {}),
-    // In memory only. Persisting at this rate would be two writes a second
-    // per running job, to record something nobody reads afterwards.
-    report: (detail: string) => {
-      step.detail = detail;
-    },
+    /* In memory, unless it carries a count: then saved at most every
+       `REPORT_SAVE_EVERY_MS` (`stepNotes`, plan 261020a). Saving every report
+       would be two writes a second per running job. */
+    report: shown.report,
     /* Persisted, unlike `report`: once per call, which for `simple` is once
-       per step. See `stepPreviews`. */
+       per step. See `stepNotes`. */
     preview: shown.show,
     signal: controller.signal,
     /* The same instant the abort timer above is set for, passed rather than
@@ -1374,6 +1428,7 @@ async function runStep(
     /* The same once-per-job marker as `oncePerJob` below, for a purchase a
        step makes part-way through (Illustrated's plates). Plan 261009o. */
     beginPaidWork: beginPaidStep,
+    ...billing,
     stepBudgetMs: STEP_BUDGET_MS[step.name],
     /* Which lease window this is, and whether `pauseForDeadline` would grant
        one more. `requeues` is absent at zero (src/store/pg-jobs.ts), so it is
@@ -1484,6 +1539,7 @@ async function runStep(
      (src/store/pg-jobs.ts § `settledSteps`), so the last attempt's preview
      would otherwise be shown under this one. */
   delete step.preview;
+  delete step.progress;
   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
   const starting = await note();
 
@@ -1573,7 +1629,7 @@ async function runStep(
       },
     });
     /* **The preview comes off before the step settles**, and only once its own
-       write has landed (`stepPreviews`). What it showed is in `product` now
+       write has landed (`stepNotes`). What it showed is in `product` now
        and is stored by the commit below; the job row keeps nothing of it. */
     await shown.settle();
     step.detail = product.detail;
@@ -3247,6 +3303,14 @@ async function walkClaim(
         parts.onStepSpend,
         parts.power,
         (name) => store.beginPaidStep(job.id, attempt, name),
+        {
+          /* **Bound to this claim**, as `beginPaidStep` is: the reprice is fenced
+             on `attempt`, so a stale claimant can neither lower nor raise the
+             replacement's slots (plan 261020b). Stale entitlements resync once. */
+          priceFetchedPdf: (pages, previousPages) =>
+            priceWithResync(job.ownerId, () => priceFetchedPdf(job.id, attempt, pages, previousPages)),
+          pdfIsPriced: (pages) => pdfPricing(job.id, pages),
+        },
       );
 
       if (ran.outcome === "skipped") continue;
@@ -3767,6 +3831,8 @@ export interface ResetQueued {
  * docs/plans/260928a-reset-and-regenerate-article.md.
  */
 export async function enqueueReset(request: ResetRequest): Promise<ResetQueued> {
+  /* Before the reads below, as `enqueue` does — the reason is there. */
+  refuseWhileViewingAs("starting a job");
   if (!(await articleExists(request.slug))) {
     throw Object.assign(new Error("No such article."), { status: 404 });
   }
@@ -3860,6 +3926,11 @@ async function refuseOnAMinimalArticle(
  * find out what happened to it.
  */
 export async function enqueue(request: EnqueueRequest): Promise<Job> {
+  /* **The boundary every job passes through.** A job outlives its request and
+     runs as its owner, so one started while the administrator is viewing as a
+     reader would write and spend in the reader's name after the read-only
+     marker had gone. Plan 261019n § Part 3, GPT Sol's F4. */
+  refuseWhileViewingAs("starting a job");
   // `DEFAULT_INGEST_STEPS`, not `STEP_ORDER`. They were the same list until
   // `tweets` arrived — a step you can ask for by name that must not run on
   // every add, because it costs a model call nobody asked for.
@@ -4988,6 +5059,10 @@ export async function listJobs(): Promise<Job[]> {
    * refused that phrase for this line, and was right to.
    */
   if (!listed.some((job) => job.status === "running")) return listed;
+  /* **Never while the administrator is viewing as a reader**: settling is a
+     write, and a requeue would restart the reader's work. The list as it
+     stands. Plan 261019n § Part 3. */
+  if (viewingAs()) return listed;
 
   const settled = await store.settleExpired(undefined, owner, REQUEUE_BUDGET);
   /* **Not quite "nothing settled means the answer did not change"**, which is

@@ -146,17 +146,18 @@ export function layoutViewportWidth(): number {
  * The root font size, in px, because one number in the layout is a measure of
  * type rather than of screen.
  *
- * `PROSE_ALONE_MAX_REM` is the width of 65 characters plus two rem paddings, and
- * a reader whose browser default is 20px has all three of those 25% wider than
- * this file would otherwise assume. Everything else `fitView` works in is a real
- * screen width and stays px — layout.ts § `FitInput.rootFontPx`.
+ * `PROSE_ALONE_MAX_REM` is the rem-relative cap around the reading measure. It
+ * deliberately has extra room today (layout.ts says why), but the cap, measure
+ * and cell pads still all grow with a reader's root font size. Everything else
+ * `fitView` works in is a real screen width and stays px — layout.ts
+ * § `FitInput.rootFontPx`.
  *
  * **Not read once at module scope.** Text-only zoom and a settings change both
  * move it while the page is open, and the same `resize` that already re-measures
  * the window is the cheapest thing that notices — browsers fire one for text
- * zoom. Nothing notices a change made in another tab's settings until the next
- * resize or reload, which is a smaller failure than pinning it at import time,
- * when a stylesheet may not even have loaded.
+ * zoom. The reading-comfort storage listener dispatches that same event after
+ * a change made in another tab; using the existing measurement path avoids a
+ * second source of truth for the root size.
  */
 export function useRootFontPx(): number {
   const [px, setPx] = useState(rootFontPx);

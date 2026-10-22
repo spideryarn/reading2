@@ -11,7 +11,8 @@
  * a draft; *found, not applied* and *suggested, not seen*; *Draft a gift*'s
  * 202 and 200 told apart; and the re-read while a lookup runs, which stops.
  */
-import { act } from "react";
+import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +36,11 @@ const { AdminVouchersPage } = await import("../src/web/AdminVouchersPage.js");
 const { SignedInReader } = await import("../src/web/lib/made-for.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/* The tab is in the address through nuqs (plan 261020ab), so the page is
+   mounted under the adapter the app has — src/web/main.tsx, which calls this
+   too, for the same reason as tests/admin-page.test.tsx. */
+enableHistorySync();
 
 const DRAFT = "dddddddd-dddd-4ddd-8ddd-ddddddddddd1";
 const SENT = "dddddddd-dddd-4ddd-8ddd-ddddddddddd2";
@@ -79,6 +85,7 @@ function gift(over: Partial<AdminAuthorGift> = {}): AdminAuthorGift {
     sendStartedAt: null,
     discardedAt: null,
     voucherId: null,
+    highPower: false,
     lookups: [],
     ...over,
   };
@@ -112,6 +119,7 @@ let ensureAnswer: Answer;
 let patchAnswer: Answer;
 let sendAnswer: Answer;
 let lookupAnswer: Answer;
+let highPowerAnswer: Answer;
 let heldWrite: Promise<Response> | null;
 
 beforeEach(() => {
@@ -121,7 +129,10 @@ beforeEach(() => {
   patchAnswer = { status: 200, body: { ok: true } };
   sendAnswer = { status: 201, body: { voucherId: "v", email: "queued" } };
   lookupAnswer = { status: 202, body: { lookupId: LOOKUP } };
+  highPowerAnswer = { status: 200, body: { highPower: true, queued: 0 } };
   heldWrite = null;
+  /* A tab click writes `?tab=` into the address, which would outlive the test. */
+  history.replaceState(null, "", "/admin/vouchers");
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     const method = init?.method ?? "GET";
@@ -134,6 +145,7 @@ beforeEach(() => {
     if (method === "POST" && url === "/api/admin/author-gifts") return json(ensureAnswer);
     if (method === "POST" && url.endsWith("/lookups")) return json(lookupAnswer);
     if (method === "POST" && url.endsWith("/send")) return json(sendAnswer);
+    if (method === "POST" && url.endsWith("/high-power")) return json(highPowerAnswer);
     if (method === "PATCH") return json(patchAnswer);
     if (url.startsWith("/api/library")) return json({ status: 200, body: { articles: SHELF } });
     return json({ status: 200, body: { vouchers: [] } });
@@ -151,24 +163,53 @@ async function settle(rounds = 10) {
   }
 }
 
-async function mount() {
+/** The page as the app draws it: signed in, under nuqs' adapter. */
+function page(): ReactNode {
+  return (
+    <NuqsAdapter>
+      <SignedInReader.Provider value="reader-1">
+        <AdminVouchersPage />
+      </SignedInReader.Provider>
+    </NuqsAdapter>
+  );
+}
+
+/** Mounted, and on the Drafts tab, where the gifts are (plan 261020ab) — unless `tab` says otherwise. */
+async function mount({ tab = "Drafts" }: { tab?: "Give" | "Drafts" | "Given" | null } = {}) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () =>
-    root.render(
-      <SignedInReader.Provider value="reader-1">
-        <AdminVouchersPage />
-      </SignedInReader.Provider>,
-    ),
-  );
+  await act(async () => root.render(page()));
   await settle(20);
+  if (tab !== null) await act(async () => tabNamed(tab)?.click());
+}
+
+const tabNamed = (name: string) =>
+  [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((t) => t.textContent?.startsWith(name));
+const panelOf = (name: string) => {
+  const id = tabNamed(name)?.getAttribute("aria-controls");
+  return id ? (host.querySelector(`#${id}`) as HTMLElement | null) : null;
+};
+/** What a person can see of an element: its text without any `hidden` part. */
+const visibleText = (el: Element | null | undefined) => {
+  if (!el) return "";
+  const copy = el.cloneNode(true) as Element;
+  for (const h of copy.querySelectorAll("[hidden]")) h.remove();
+  return copy.textContent ?? "";
+};
+/** Whether an element is inside a `hidden` part, or is one. */
+const isHidden = (el: Element | null | undefined) => el?.closest("[hidden]") != null;
+/** nuqs writes the address behind a throttle, so a single read is a race. */
+async function addressSettles(test: (search: URLSearchParams) => boolean) {
+  for (let i = 0; i < 50 && !test(new URLSearchParams(location.search)); i++) await settle(1);
+  return new URLSearchParams(location.search);
 }
 
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
   vi.useRealTimers();
+  history.replaceState(null, "", "/");
 });
 
 const section = () => host.querySelector('section[aria-label="Author gifts"]') as HTMLElement;
@@ -297,6 +338,11 @@ describe("Author gifts", () => {
     await act(async () => button(card(DRAFT), "Send")?.click());
     expect(writes()).toEqual([]);
     expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
+    /* Plan 261020z: green outline send, red back-out. */
+    const sendTo = button(card(DRAFT), "Send to ann@example.test");
+    expect(sendTo?.classList.contains("tone-positive")).toBe(true);
+    expect(sendTo?.getAttribute("data-variant")).toBe("outline");
+    expect(button(card(DRAFT), "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
     await settle();
     /* Plan 261010i: the gift as the confirmation showed it, so an agent's edit since is refused. */
@@ -462,12 +508,17 @@ describe("Author gifts", () => {
     ];
     await mount();
     const c = card(SENT);
+    /* A sent gift is folded to its line (plan 261020ab); its notes are inside. */
+    await act(async () => button(c, "Show")?.click());
     expect(c?.textContent).toContain("Old notes.\nSecond line.");
     expect(c?.textContent).toContain("last written");
     await act(async () => button(c, "Edit notes")?.click());
     const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
     expect(box.value).toBe("Old notes.\nSecond line.");
     await act(async () => sets(box, "Old notes.\nSecond line.\nShe replied."));
+    /* Plan 261020z: Save notes green, Cancel red. */
+    expect(button(c, "Save notes")?.classList.contains("tone-positive")).toBe(true);
+    expect(button(c, "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => button(c, "Save notes")?.click());
     await settle();
     expect(writes()).toEqual([
@@ -669,6 +720,9 @@ describe("Author gifts", () => {
     await act(async () => button(c, "Edit")?.click());
     const name = c?.querySelector('input[aria-label="Their name"]') as HTMLInputElement;
     await act(async () => sets(name, "Ann Author"));
+    /* Plan 261020z: Save green, Cancel red. */
+    expect(button(c, "Save")?.classList.contains("tone-positive")).toBe(true);
+    expect(button(c, "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => button(c, "Save")?.click());
     await settle();
     expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { recipientName: "Ann Author" } }]);
@@ -693,6 +747,63 @@ describe("Author gifts", () => {
     ]);
   });
 
+  /* Plan 261021j § D4: the draft card's High-powered AI line. */
+  describe("High-powered AI on the card", () => {
+    const line = (id: string) => card(id)?.querySelector("[data-high-power]");
+
+    it("says on or off on a draft, with Switch on only when off, and nothing on a finished gift", async () => {
+      giftsAnswer = () => [
+        gift({ id: "off", highPower: false }),
+        gift({ id: "on", highPower: true }),
+        gift({ id: "sent", status: "sent", email: "x@example.test", voucherId: "v1", highPower: false }),
+        gift({ id: "gone", status: "discarded", discardedAt: "2026-10-09T12:00:00Z" }),
+      ];
+      await mount();
+      expect(line("off")?.textContent).toContain("High-powered AI: off");
+      expect(button(card("off"), "Switch on")).toBeDefined();
+      expect(line("on")?.textContent).toContain("High-powered AI: on");
+      expect(button(card("on"), "Switch on")).toBeUndefined();
+      expect(line("sent")).toBeNull();
+      expect(line("gone")).toBeNull();
+    });
+
+    it("posts Switch on to the gift's high-power route, then reads the list again", async () => {
+      let on = false;
+      giftsAnswer = () => [gift({ highPower: on })];
+      highPowerAnswer = { status: 200, body: { highPower: true, queued: 8 } };
+      await mount();
+      const reads = () => calls.filter((c) => c.method === "GET" && c.url === "/api/admin/author-gifts").length;
+      const before = reads();
+      on = true;
+      await act(async () => button(card(DRAFT), "Switch on")?.click());
+      await settle();
+      expect(writes()).toEqual([{ method: "POST", url: `/api/admin/author-gifts/${DRAFT}/high-power`, body: undefined }]);
+      expect(reads()).toBeGreaterThan(before);
+      expect(line(DRAFT)?.textContent).toContain("High-powered AI: on");
+      expect(card(DRAFT)?.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it("says Switching on… while it is in flight, with the card's actions held", async () => {
+      giftsAnswer = () => [gift()];
+      await mount();
+      heldWrite = new Promise<Response>(() => {});
+      act(() => button(card(DRAFT), "Switch on")?.click());
+      expect(button(card(DRAFT), "Switching on…")?.disabled).toBe(true);
+      expect(button(card(DRAFT), "Discard")?.disabled).toBe(true);
+    });
+
+    it("shows a refused Switch on in the server's words", async () => {
+      giftsAnswer = () => [gift()];
+      highPowerAnswer = { status: 409, body: { error: "That gift has been sent or discarded, so its article is no longer switched from here." } };
+      await mount();
+      await act(async () => button(card(DRAFT), "Switch on")?.click());
+      await settle();
+      expect(card(DRAFT)?.querySelector('[role="alert"]')?.textContent).toBe(
+        "That gift has been sent or discarded, so its article is no longer switched from here.",
+      );
+    });
+  });
+
   it("discards a draft, and restores a discarded one", async () => {
     giftsAnswer = () => [gift(), gift({ id: SENT, status: "discarded", discardedAt: "2026-10-09T12:00:00Z" })];
     await mount();
@@ -706,55 +817,128 @@ describe("Author gifts", () => {
     ]);
   });
 
-  describe("Draft a gift for an author", () => {
-    const form = () => host.querySelector('form[aria-label="Draft a gift for an author"]') as HTMLFormElement;
+  /* Plan 261020ab, Greg 2026-10-20 (spya-vusqvg): one *New gift* form on
+     Give, and a tick-box that makes it the draft of an author gift. */
+  describe("New gift, ticked for the author of one of my articles", () => {
+    const form = () => host.querySelector('form[aria-label="New gift"]') as HTMLFormElement;
+    const forAuthor = () => host.querySelector("#voucher-new-for-author") as HTMLInputElement;
     const picker = () => host.querySelector("#author-gift-new-article") as HTMLSelectElement;
-    const submit = () => form().querySelector('button[type="submit"]') as HTMLButtonElement;
+    const voucherPicker = () => host.querySelector("#voucher-new-starter") as HTMLSelectElement;
+    const submit = () => [...form().querySelectorAll<HTMLButtonElement>('button[type="submit"]')].find((b) => !isHidden(b)) as HTMLButtonElement;
+    const rights = () => form().querySelector("#voucher-new-rights") as HTMLInputElement;
 
-    async function fill() {
-      for (let i = 0; i < 50 && (picker()?.options.length ?? 0) < 2; i++) await settle();
-      await act(async () => {
-        picker().value = "some-paper";
-        picker().dispatchEvent(new Event("change", { bubbles: true }));
-      });
-      expect(submit().disabled).toBe(true);
-      const tick = form().querySelector('input[type="checkbox"]') as HTMLInputElement;
-      await act(async () => tick.click());
+    async function tick() {
+      await act(async () => forAuthor().click());
     }
 
-    it("reuses the starter picker, and asks for the private link's rights confirmation", async () => {
-      await mount();
-      for (let i = 0; i < 50 && (picker()?.options.length ?? 0) < 2; i++) await settle();
-      /* Newest first, as the voucher form's picker. */
-      expect([...picker().options].map((o) => o.value)).toEqual(["", "some-paper", "the-bitter-lesson"]);
-      expect(form().textContent).toContain(SHARING_RIGHTS_CONFIRM);
-      expect(form().textContent).toContain("up to three searches");
+    async function choose(select: HTMLSelectElement, slug: string) {
+      await act(async () => {
+        select.value = slug;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+
+    async function shelfIn() {
+      for (let i = 0; i < 50 && (voucherPicker()?.options.length ?? 0) < 2; i++) await settle();
+    }
+
+    async function fill() {
+      await shelfIn();
+      await tick();
+      await choose(picker(), "some-paper");
       expect(submit().disabled).toBe(true);
+      await act(async () => rights().click());
+    }
+
+    it("is unticked at first: the voucher form as before, ending on Create voucher", async () => {
+      await mount({ tab: null });
+      expect(tabNamed("Give")?.getAttribute("aria-selected")).toBe("true");
+      expect(forAuthor().checked).toBe(false);
+      expect(isHidden(host.querySelector("#voucher-new-email"))).toBe(false);
+      expect(picker()).toBeNull();
+      expect(submit().textContent).toBe("Create voucher");
+    });
+
+    it("ticked, hides the voucher's fields without clearing them, and asks for the article and the rights", async () => {
+      await mount({ tab: null });
+      await shelfIn();
+      const email = host.querySelector("#voucher-new-email") as HTMLInputElement;
+      await act(async () => sets(email, "kept@example.test"));
+      await tick();
+      expect(isHidden(email)).toBe(true);
+      expect(isHidden(host.querySelector("#voucher-new-recipient-note"))).toBe(true);
+      expect(isHidden(host.querySelector("#voucher-new-note"))).toBe(true);
+      /* The article is required: Choose one…, newest first, as the voucher's picker. */
+      expect([...picker().options].map((o) => o.value)).toEqual(["", "some-paper", "the-bitter-lesson"]);
+      expect(picker().options[0]?.textContent).toBe("Choose one…");
+      expect(visibleText(form())).toContain(SHARING_RIGHTS_CONFIRM);
+      expect(visibleText(form())).toContain("up to three searches");
+      expect(visibleText(form())).toContain("Nothing is emailed");
+      expect(visibleText(form())).toContain("Drafts");
+      expect(submit().textContent).toBe("Draft a gift");
+      expect(submit().disabled).toBe(true);
+      await tick();
+      expect(isHidden(email)).toBe(false);
+      expect(email.value).toBe("kept@example.test");
+      expect(submit().textContent).toBe("Create voucher");
+    });
+
+    it("carries the chosen article across the tick, both ways", async () => {
+      await mount({ tab: null });
+      await shelfIn();
+      await choose(voucherPicker(), "the-bitter-lesson");
+      await tick();
+      expect(picker().value).toBe("the-bitter-lesson");
+      await choose(picker(), "some-paper");
+      await tick();
+      expect(voucherPicker().value).toBe("some-paper");
+    });
+
+    /* P1-02 of the plan review: drafting makes the private link, so the
+       ticked form takes an article with none, which the voucher form refuses. */
+    it("takes an article with no private link once the rights are ticked; unticked, Create still waits for one", async () => {
+      await mount({ tab: null });
+      await fill();
+      expect(submit().disabled).toBe(false);
+      await tick();
+      expect(voucherPicker().value).toBe("some-paper");
+      expect(submit().textContent).toBe("Create voucher");
+      expect(submit().disabled).toBe(true);
+      expect(host.querySelector("#voucher-new-starter-status")?.textContent).toContain("no private link yet");
     });
 
     it("locks the chosen article and rights while drafting is in flight", async () => {
-      await mount();
+      await mount({ tab: null });
       await fill();
       heldWrite = new Promise<Response>(() => {});
       act(() => form().requestSubmit());
       expect(picker().disabled).toBe(true);
-      expect((form().querySelector('input[type="checkbox"]') as HTMLInputElement).disabled).toBe(true);
-      expect(button(form(), "Refresh")?.disabled).toBe(true);
+      expect(rights().disabled).toBe(true);
+      expect(button(picker().parentElement?.parentElement ?? null, "Refresh")?.disabled).toBe(true);
     });
 
-    it("sends the slug with the rights confirmed, and says a new gift's lookup is running (202)", async () => {
-      await mount();
+    it("sends the slug with the rights confirmed, then opens Drafts on the new gift, whose lookup is running (202)", async () => {
+      let drafted = false;
+      giftsAnswer = () => (drafted ? [gift({ id: SENT, status: "sent", email: "a@example.test", voucherId: "v1" }), gift()] : []);
+      ensureAnswer = { status: 202, body: { id: DRAFT, status: "draft", created: true, lookupId: LOOKUP } };
+      await mount({ tab: null });
       await fill();
       expect(submit().disabled).toBe(false);
+      drafted = true;
       await act(async () => form().requestSubmit());
       await settle();
       expect(writes()).toEqual([
-        { method: "POST", url: "/api/admin/author-gifts", body: { slug: "some-paper", rightsConfirmed: true } },
+        { method: "POST", url: "/api/admin/author-gifts", body: { slug: "some-paper", rightsConfirmed: true, highPower: true } },
       ]);
-      expect(form().querySelector('[role="status"]')?.textContent).toContain("lookup for its author is running");
+      expect(tabNamed("Drafts")?.getAttribute("aria-selected")).toBe("true");
+      expect(panelOf("Drafts")?.hidden).toBe(false);
+      expect(panelOf("Give")?.hidden).toBe(true);
+      expect(panelOf("Drafts")?.querySelector('[role="status"]')?.textContent).toContain("lookup for its author is running");
+      expect(card(DRAFT)?.className).toContain("tw:ring-2");
+      expect(await addressSettles((q) => q.get("tab") === "drafts")).toBeDefined();
     });
 
-    it("says the article already has a gift (200), and scrolls to it", async () => {
+    it("says the article already has a gift (200), opens Drafts, and scrolls to it", async () => {
       ensureAnswer = { status: 200, body: { id: SENT, status: "sent", created: false } };
       giftsAnswer = () => [gift(), gift({ id: SENT, status: "sent", email: "a@example.test", voucherId: "v1" })];
       const scrolled: Element[] = [];
@@ -762,17 +946,296 @@ describe("Author gifts", () => {
         scrolled.push(this);
       };
       try {
-        await mount();
+        await mount({ tab: null });
+        /* A fresh pointer must supersede an earlier fold choice. Otherwise
+           drafting this article says it is highlighted, but leaves the
+           finished card's fields shut. */
+        await act(async () => tabNamed("Drafts")?.click());
+        await act(async () => button(card(SENT), "Show")?.click());
+        await act(async () => button(card(SENT), "Hide")?.click());
+        expect(isHidden(card(SENT)?.querySelector("dl"))).toBe(true);
+        await act(async () => tabNamed("Give")?.click());
         await fill();
         await act(async () => form().requestSubmit());
         await settle();
-        expect(form().querySelector('[role="status"]')?.textContent).toContain("already has a gift");
+        expect(panelOf("Drafts")?.querySelector('[role="status"]')?.textContent).toContain("already has a gift");
+        expect(panelOf("Drafts")?.hidden).toBe(false);
         expect(scrolled).toEqual([card(SENT)]);
         expect(card(SENT)?.className).toContain("tw:ring-2");
         expect(card(DRAFT)?.className).not.toContain("tw:ring-2");
+        /* Highlighted, so open although it is sent (P2-02). */
+        expect(isHidden(card(SENT)?.querySelector("dl"))).toBe(false);
       } finally {
         delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
       }
+    });
+
+    /* Plan 261021j § D4. */
+    const highPower = () => form().querySelector("#author-gift-new-high-power") as HTMLInputElement | null;
+
+    it("offers High-powered AI, ticked, once an article is chosen, and says what it does", async () => {
+      await mount({ tab: null });
+      await shelfIn();
+      await tick();
+      expect(highPower()).toBeNull();
+      await choose(picker(), "some-paper");
+      expect(highPower()?.checked).toBe(true);
+      expect(visibleText(form())).toContain(
+        "Uses Opus for what is made from now on. What is already made, Structure included, stays as it is — to have it all on Opus, tick High-powered AI when you import it.",
+      );
+      expect(visibleText(form())).toContain("queues the article's main modes");
+    });
+
+    it("sends highPower false when it is unticked, and is ticked again after drafting", async () => {
+      await mount({ tab: null });
+      await fill();
+      await act(async () => highPower()?.click());
+      await act(async () => form().requestSubmit());
+      await settle();
+      expect(writes()).toEqual([
+        { method: "POST", url: "/api/admin/author-gifts", body: { slug: "some-paper", rightsConfirmed: true, highPower: false } },
+      ]);
+      await act(async () => tabNamed("Give")?.click());
+      await choose(picker(), "some-paper");
+      expect(highPower()?.checked).toBe(true);
+    });
+
+    it("keeps a refusal on the form, on Give", async () => {
+      ensureAnswer = { status: 409, body: { error: "That article is not published yet." } };
+      await mount({ tab: null });
+      await fill();
+      await act(async () => form().requestSubmit());
+      await settle();
+      expect(form().querySelector('[role="alert"]')?.textContent).toBe("That article is not published yet.");
+      expect(tabNamed("Give")?.getAttribute("aria-selected")).toBe("true");
+    });
+  });
+
+  /* Plan 261020ab, Greg 2026-10-20 (spya-vyddks): *"add tabs at the top to divide it"*. */
+  describe("the three tabs", () => {
+    const names = () => [...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
+
+    it("opens on Give, with the other two panels hidden rather than gone", async () => {
+      giftsAnswer = () => [gift()];
+      await mount({ tab: null });
+      expect(host.querySelector('[role="tablist"]')).not.toBeNull();
+      expect(names().map((n) => n?.replace(/\d+$/, ""))).toEqual(["Give", "Drafts", "Given"]);
+      expect(tabNamed("Give")?.getAttribute("aria-selected")).toBe("true");
+      expect(panelOf("Give")?.hidden).toBe(false);
+      expect(panelOf("Drafts")?.hidden).toBe(true);
+      expect(panelOf("Given")?.hidden).toBe(true);
+      /* Mounted all the same, so the gift list is there to come back to. */
+      expect(panelOf("Drafts")?.contains(card(DRAFT))).toBe(true);
+      expect(panelOf("Give")?.textContent).toContain("A voucher adds articles");
+    });
+
+    it("switches by click, and puts the tab in the address", async () => {
+      await mount({ tab: null });
+      await act(async () => tabNamed("Given")?.click());
+      expect(tabNamed("Given")?.getAttribute("aria-selected")).toBe("true");
+      expect(panelOf("Given")?.hidden).toBe(false);
+      expect(panelOf("Give")?.hidden).toBe(true);
+      expect((await addressSettles((q) => q.get("tab") === "given")).get("tab")).toBe("given");
+      await act(async () => tabNamed("Give")?.click());
+      expect(panelOf("Give")?.hidden).toBe(false);
+      expect((await addressSettles((q) => !q.has("tab"))).has("tab")).toBe(false);
+    });
+
+    it("moves with the arrow keys, round the ends, and keeps only the chosen tab in the Tab order", async () => {
+      await mount({ tab: null });
+      const key = async (k: string) =>
+        act(async () => {
+          (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+        });
+      tabNamed("Give")?.focus();
+      await key("ArrowRight");
+      expect(document.activeElement).toBe(tabNamed("Drafts"));
+      expect(panelOf("Drafts")?.hidden).toBe(false);
+      await key("ArrowRight");
+      expect(document.activeElement).toBe(tabNamed("Given"));
+      await key("ArrowRight");
+      expect(document.activeElement).toBe(tabNamed("Give"));
+      await key("ArrowLeft");
+      expect(document.activeElement).toBe(tabNamed("Given"));
+      expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.getAttribute("tabindex"))).toEqual(["-1", "-1", "0"]);
+    });
+
+    it("opens the tab `?tab=` names, and Give for one it does not know", async () => {
+      history.replaceState(null, "", "/admin/vouchers?tab=given");
+      await mount({ tab: null });
+      expect(panelOf("Given")?.hidden).toBe(false);
+      act(() => root.unmount());
+      host.remove();
+      history.replaceState(null, "", "/admin/vouchers?tab=nonsense");
+      await mount({ tab: null });
+      expect(tabNamed("Give")?.getAttribute("aria-selected")).toBe("true");
+      expect(panelOf("Give")?.hidden).toBe(false);
+    });
+
+    it("opens Drafts for `?gift=` without a tab, and a tab chosen by hand clears it", async () => {
+      giftsAnswer = () => [gift()];
+      history.replaceState(null, "", `/admin/vouchers?gift=${DRAFT}`);
+      await mount({ tab: null });
+      expect(panelOf("Drafts")?.hidden).toBe(false);
+      await act(async () => tabNamed("Give")?.click());
+      const q = await addressSettles((s) => !s.has("gift"));
+      expect(q.has("gift")).toBe(false);
+      expect(panelOf("Give")?.hidden).toBe(false);
+    });
+
+    it("opens and points at `?gift=` when it arrives after the page is already mounted", async () => {
+      giftsAnswer = () => [gift()];
+      const scrolled: Element[] = [];
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolled.push(this);
+      };
+      try {
+        await mount({ tab: null });
+        expect(panelOf("Give")?.hidden).toBe(false);
+        await act(async () => history.pushState(null, "", `/admin/vouchers?gift=${DRAFT}`));
+        await settle();
+        expect(panelOf("Drafts")?.hidden).toBe(false);
+        expect(card(DRAFT)?.className).toContain("tw:ring-2");
+        expect(scrolled).toEqual([card(DRAFT)]);
+      } finally {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+
+    it("waits to scroll to `?gift=` until Drafts is visible", async () => {
+      giftsAnswer = () => [gift()];
+      history.replaceState(null, "", `/admin/vouchers?tab=given&gift=${DRAFT}`);
+      const scrolled: Element[] = [];
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolled.push(this);
+      };
+      try {
+        await mount({ tab: null });
+        expect(panelOf("Drafts")?.hidden).toBe(true);
+        expect(scrolled).toEqual([]);
+        await act(async () => tabNamed("Drafts")?.click());
+        expect(scrolled).toEqual([card(DRAFT)]);
+      } finally {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+
+    it("counts the gifts waiting on you in Drafts, and the vouchers in Given", async () => {
+      giftsAnswer = () => [
+        gift({ id: "a1" }),
+        gift({ id: "a2", status: "sending", email: "x@example.test", sendStartedAt: "2026-10-09T11:00:00Z" }),
+        gift({ id: "a3", status: "sent", email: "x@example.test", voucherId: "v1" }),
+        gift({ id: "a4", status: "discarded", discardedAt: "2026-10-09T12:00:00Z" }),
+      ];
+      await mount({ tab: null });
+      expect(names()).toEqual(["Give", "Drafts2", "Given0"]);
+    });
+
+    it("draws no count on Drafts when nothing waits", async () => {
+      giftsAnswer = () => [gift({ id: "a3", status: "sent", email: "x@example.test", voucherId: "v1" })];
+      await mount({ tab: null });
+      expect(tabNamed("Drafts")?.textContent).toBe("Drafts");
+    });
+  });
+
+  /* Plan 261020ab, Greg 2026-10-20 (spya-vcnmrd, #663): *"I discarded the
+     message re Tinbergen & ethology, but it's still hanging around. At the
+     very least collapse it"*. */
+  describe("a finished gift, folded to one line", () => {
+    const TINBERGEN = "Niko Tinbergen's 1963 paper on the four questions of ethology. ".repeat(24);
+    const discarded = () =>
+      gift({
+        id: SENT,
+        status: "discarded",
+        discardedAt: "2026-10-20T16:33:50Z",
+        starter: { slug: "tinbergen1963onethology-spya-ks84se", title: "On aims and methods of Ethology", linkable: true, owner: null },
+        notes: TINBERGEN,
+        notesUpdatedAt: "2026-10-20T16:30:00Z",
+        lookups: [lookup({ outcome: "author", authorName: "Niko Tinbergen" })],
+      });
+
+    it("shows a discarded gift's title and status, and none of its notes or lookups until Show", async () => {
+      giftsAnswer = () => [discarded()];
+      await mount();
+      const c = card(SENT);
+      const seen = visibleText(c);
+      expect(seen).toContain("On aims and methods of Ethology");
+      expect(seen).toMatch(/Discarded on /);
+      expect(seen).not.toContain("four questions");
+      expect(seen).not.toContain("Niko Tinbergen");
+      expect(button(c, "Restore")).toBeDefined();
+      expect(isHidden(button(c, "Restore"))).toBe(false);
+      const show = button(c, "Show") as HTMLButtonElement;
+      expect(show.getAttribute("aria-expanded")).toBe("false");
+      const body = host.querySelector(`#${show.getAttribute("aria-controls")}`);
+      expect(body?.hasAttribute("hidden")).toBe(true);
+      await act(async () => show.click());
+      expect(visibleText(c)).toContain("four questions");
+      expect(button(c, "Hide")?.getAttribute("aria-expanded")).toBe("true");
+      await act(async () => button(c, "Hide")?.click());
+      expect(visibleText(c)).not.toContain("four questions");
+    });
+
+    it("folds a sent gift too, and says its voucher is under Given", async () => {
+      giftsAnswer = () => [gift({ id: SENT, status: "sent", email: "a@example.test", voucherId: "v1", notes: "Sent notes." })];
+      await mount();
+      expect(card(SENT)?.querySelector("[data-gift-status]")?.textContent).toBe("Sent — its voucher is under Given");
+      expect(visibleText(card(SENT))).not.toContain("Sent notes.");
+    });
+
+    it("folds a gift at once when it is discarded, with Restore on its line", async () => {
+      let gone = false;
+      giftsAnswer = () => [gone ? gift({ status: "discarded", discardedAt: "2026-10-20T16:33:50Z", notes: "Long notes." }) : gift({ notes: "Long notes." })];
+      await mount();
+      expect(visibleText(card(DRAFT))).toContain("Long notes.");
+      gone = true;
+      await act(async () => button(card(DRAFT), "Discard")?.click());
+      await settle();
+      expect(visibleText(card(DRAFT))).not.toContain("Long notes.");
+      const restore = button(card(DRAFT), "Restore");
+      expect(restore).toBeDefined();
+      expect(isHidden(restore)).toBe(false);
+      gone = false;
+      await act(async () => restore?.click());
+      await settle();
+      expect(visibleText(card(DRAFT))).toContain("Long notes.");
+    });
+
+    it("keeps a just-sent gift's Sent message on its folded line", async () => {
+      let sent = false;
+      giftsAnswer = () => [
+        sent
+          ? gift({ status: "sent", email: "ann@example.test", voucherId: "v1", notes: "Draft notes." })
+          : gift({ email: "ann@example.test", notes: "Draft notes." }),
+      ];
+      await mount();
+      await act(async () => button(card(DRAFT), "Send")?.click());
+      sent = true;
+      await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
+      await settle();
+      const seen = visibleText(card(DRAFT));
+      expect(seen).toContain("The gift email is on its way; its voucher is under Given.");
+      expect(seen).not.toContain("Draft notes.");
+    });
+
+    it("keeps open a finished gift `?gift=` names", async () => {
+      giftsAnswer = () => [discarded()];
+      history.replaceState(null, "", `/admin/vouchers?gift=${SENT}`);
+      await mount({ tab: null });
+      expect(visibleText(card(SENT))).toContain("four questions");
+    });
+
+    it("lists the finished gifts after the ones waiting, newest first within each", async () => {
+      giftsAnswer = () => [
+        gift({ id: "f1", status: "sent", email: "x@example.test", voucherId: "v1" }),
+        gift({ id: "w1" }),
+        gift({ id: "f2", status: "discarded", discardedAt: "2026-10-09T12:00:00Z" }),
+        gift({ id: "w2", status: "sending", email: "x@example.test", sendStartedAt: "2026-10-09T11:00:00Z" }),
+      ];
+      await mount();
+      expect([...section().querySelectorAll("li[id^='author-gift-']")].map((li) => li.id)).toEqual(
+        ["w1", "w2", "f1", "f2"].map((id) => `author-gift-${id}`),
+      );
     });
   });
 
@@ -800,13 +1263,7 @@ describe("Author gifts", () => {
       host = document.createElement("div");
       document.body.append(host);
       root = createRoot(host);
-      await act(async () =>
-        root.render(
-          <SignedInReader.Provider value="reader-1">
-            <AdminVouchersPage />
-          </SignedInReader.Provider>,
-        ),
-      );
+      await act(async () => root.render(page()));
       await advance(100);
       const first = reads();
       expect(first).toBe(1);
@@ -829,13 +1286,7 @@ describe("Author gifts", () => {
       host = document.createElement("div");
       document.body.append(host);
       root = createRoot(host);
-      await act(async () =>
-        root.render(
-          <SignedInReader.Provider value="reader-1">
-            <AdminVouchersPage />
-          </SignedInReader.Provider>,
-        ),
-      );
+      await act(async () => root.render(page()));
       await advance(60_000);
       expect(reads()).toBe(1);
     });
@@ -848,13 +1299,7 @@ describe("Author gifts", () => {
       host = document.createElement("div");
       document.body.append(host);
       root = createRoot(host);
-      await act(async () =>
-        root.render(
-          <SignedInReader.Provider value="reader-1">
-            <AdminVouchersPage />
-          </SignedInReader.Provider>,
-        ),
-      );
+      await act(async () => root.render(page()));
       /* In steps, so each read's answer is drawn and its effect sets the next timer. */
       for (let t = 0; t < 3 * 60_000 + 10_000; t += 1_000) await advance(1_000);
       const atLimit = reads();

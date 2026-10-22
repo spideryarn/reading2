@@ -35,6 +35,7 @@ type Allowance = { column: string } | { exempt: string };
  * row is not something a person or a model did at a moment.
  */
 const WITHOUT_CREATED_AT: Record<string, Allowance> = {
+  article_open_times: { column: "opened_at" },
   article_visibility_changes: { column: "at" },
   /* A fetch cache rather than an action, but it does say when it fetched. */
   bibliographic_records: { column: "fetched_at" },
@@ -49,6 +50,9 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
   citation_index_lookups: { column: "fetched_at" },
   ingest_events: { column: "reserved_at" },
   link_previews: { column: "fetched_at" },
+  /* Plan 261021d: one row per article (and account), first and last open. */
+  private_link_openers: { column: "first_opened_at" },
+  private_link_signed_out_opens: { column: "first_opened_at" },
   queue_state: { column: "updated_at" },
   rate_limit_events: { column: "started_at" },
   reader_arrivals: { column: "first_seen_at" },
@@ -67,6 +71,8 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
      time that stays put, which this check cannot see — it reads names and
      types. The table has a real `created_at` now. */
   uploads: { column: "minted_at" },
+  /* A view-as session starts when it is written (plan 261019n). */
+  view_as_sessions: { column: "started_at" },
 };
 
 function isTimestamp(sqlType: string): boolean {

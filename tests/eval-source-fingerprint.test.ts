@@ -91,7 +91,7 @@ describe("each harness's recorded fingerprint", () => {
     ["paperwork/run", PAPERWORK_SOURCES, ["plain-words.ts", "paperwork.ts", "structure-prompt.ts"]],
     ["paperwork/modes", PAPERWORK_MODES_SOURCES, ["plain-words.ts", "paperwork.ts"]],
     ["plain-words/run", PLAIN_WORDS_SOURCES, ["plain-words.ts", "paperwork.ts", "structure-prompt.ts"]],
-    ["plain-words/answers", ANSWERS_SOURCES, ["plain-words.ts"]],
+    ["plain-words/answers", ANSWERS_SOURCES, ["plain-words.ts", "chat-principles.ts"]],
     ["plain-words/artefacts (quiz)", PROMPT_FILES.quiz, ["plain-words.ts", "paperwork.ts"]],
     ["plain-words/artefacts (arc)", PROMPT_FILES.arc, ["plain-words.ts", "paperwork.ts"]],
     ["quiz-build-up", QUIZ_BUILD_UP_SOURCES, ["plain-words.ts", "paperwork.ts"]],

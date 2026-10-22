@@ -40,11 +40,16 @@
  * geometry (`stubRowGeometry`), and scrolling moves the reading line between
  * them.
  */
+import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BAND_MODES } from "../src/modes.js";
 import { Spine } from "../src/web/Spine.js";
+import { railMarks } from "../src/web/reader/passages.js";
 import type { OutlineEntry } from "../src/web/tree.js";
+import type { BlockMatch } from "../src/web/search-hits.js";
+import { SEARCH_RAIL_MARKS, spineKeyItems } from "../src/web/spine-key.js";
 import type { BlockId, NodeId, TreeNode } from "../src/types.js";
 
 class FakeResizeObserver {
@@ -666,5 +671,174 @@ describe("a bullet that would repeat a row of the outline", () => {
     expect(rows).toContain("Participants");
     expect(rows).toContain("Results");
     expect(kidText(card)).toEqual(["Stimulus timing", "Participants", "Results", "Procedure"]);
+  });
+});
+
+/**
+ * **The key under the foot: what the spine is, and what is on it now** — plan
+ * 261020e, Greg's `spya-ah5ws6`. The assertions that matter are the negative
+ * ones: a key that listed every mark whatever the rail drew would pass every
+ * "it says search matches" test and be the full legend this plan passed over.
+ */
+describe("the key", () => {
+  const keyed = (card: HTMLElement) =>
+    [...card.querySelectorAll<HTMLElement>(".tip-key-items li")].map((li) => li.dataset.key);
+
+  function mountWith(props: Partial<Parameters<typeof Spine>[0]>) {
+    act(() => {
+      root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} {...props} />);
+    });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+  }
+
+  it("says what the spine is, and keys only the two marks that are always drawn", () => {
+    mountSpine();
+    const card = openCard(S1);
+    expect(card.querySelector(".tip-key-what")?.textContent).toContain("whole article");
+    expect(keyed(card)).toEqual(["here", "screen"]);
+  });
+
+  it("keys the lanes when, and only when, they draw something — one swatch per lane", () => {
+    mountWith({
+      matches: new Map<BlockId, BlockMatch>([
+        ["b1" as BlockId, { searches: [{ runId: "r1", slot: 0 }, { runId: "r2", slot: 3 }], count: 2 }],
+        ["b2" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
+      ]),
+      marksWords: SEARCH_RAIL_MARKS,
+    });
+    const card = openCard(S1);
+    expect(keyed(card)).toEqual(["here", "screen", "lanes"]);
+    const lanes = card.querySelector<HTMLElement>('[data-key="lanes"]')!;
+    expect(lanes.textContent).toBe("search matches");
+    expect(
+      [...lanes.querySelectorAll<HTMLElement>(".tip-key-swatch")].map((s) => s.style.background),
+    ).toEqual(["rgb(var(--cat-0-rgb))", "rgb(var(--cat-3-rgb))"]);
+  });
+
+  it("does not key a lane for a match on a block the page does not have", () => {
+    mountWith({
+      matches: new Map<BlockId, BlockMatch>([
+        ["gone" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
+      ]),
+    });
+    expect(keyed(openCard(S1))).toEqual(["here", "screen"]);
+  });
+
+  it("keys the quote strip when there are quotes, in the open mode's words for the lanes", () => {
+    mountWith({
+      quotes: new Map<BlockId, number>([["b3" as BlockId, 0.9]]),
+      matches: new Map<BlockId, BlockMatch>([
+        ["b1" as BlockId, { searches: [{ runId: "i1", slot: 0 }], count: 1 }],
+      ]),
+      marksWords: { label: "this idea", one: "passage of this idea", many: "passages of this idea" },
+    });
+    const card = openCard(S1);
+    expect(keyed(card)).toEqual(["here", "screen", "lanes", "quotes"]);
+    expect(card.querySelector('[data-key="lanes"]')?.textContent).toBe("this idea");
+  });
+
+  it("keys supplement, reading and quote marks only when they have visible geometry", () => {
+    const withSupplement = OUTLINE.map((entry) =>
+      entry.node.id === "p2" ? { ...entry, supplement: true as const } : entry,
+    );
+    mountWith({
+      outline: withSupplement,
+      reading: new Map<BlockId, number>([["b2" as BlockId, 8]]),
+      quotes: new Map<BlockId, number>([["b3" as BlockId, 0.9]]),
+    });
+    expect(keyed(openCard(S1))).toEqual([
+      "here",
+      "screen",
+      "quotes",
+      "reading",
+      "supplement",
+    ]);
+
+    const zeroHeightSupplement: OutlineEntry = {
+      node: node("notes", 1, { title: "Notes" }),
+      startRow: ROW_IDS.length,
+      endRow: ROW_IDS.length,
+      words: 0,
+      children: [],
+      supplement: true,
+    };
+    mountWith({
+      outline: [...OUTLINE, zeroHeightSupplement],
+      reading: new Map<BlockId, number>([["gone" as BlockId, 8]]),
+      quotes: new Map<BlockId, number>([["gone" as BlockId, 0.9]]),
+    });
+    expect(keyed(openCard(S1))).toEqual(["here", "screen"]);
+  });
+
+  it("includes the jump-origin chip only when the origin mark exists", () => {
+    const input = {
+      supplement: false,
+      reading: false,
+      quotes: false,
+      laneColours: [],
+      marksLabel: "marked passages",
+    };
+    expect(spineKeyItems({ ...input, from: false }).map((item) => item.kind)).not.toContain("from");
+    expect(spineKeyItems({ ...input, from: true }).map((item) => item.kind)).toContain("from");
+  });
+
+  it("is hidden from a screen reader, which hears the card as every band's description", () => {
+    mountSpine();
+    expect(openCard(S1).querySelector(".tip-key")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("is hidden at 600px and below, and every swatch follows the rail's theme token", () => {
+    const css = readFileSync("src/web/styles/tooltip.css", "utf8");
+    expect(css).toMatch(/@media \(max-height: 600px\)\s*{\s*\.tip-key\s*{\s*display: none;/);
+    expect(css).toMatch(/\.tip-key-here\s*{[^}]*var\(--depth-1\)/);
+    expect(css).toMatch(/\.tip-key-screen\s*{[^}]*var\(--highlight\)/);
+    /* *On screen* is the lit stretch between two orange edges since plan
+       261022c, not an orange wash: a swatch still washed in orange would key a
+       band the rail no longer draws. */
+    expect(css).not.toMatch(/\.tip-key-screen\s*{[^}]*color-mix\(in oklab, var\(--highlight\)/);
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)\s*{\s*\.tip-key-screen\s*{\s*border-color: Highlight;/,
+    );
+    expect(css).toMatch(/\.tip-key-supplement\s*{[^}]*var\(--depth-1\)/);
+    expect(css).toMatch(/\.tip-key-reading\s*{[^}]*var\(--read-time\)/);
+    expect(css).toMatch(/\.tip-key-from\s*{[^}]*var\(--ink-faint\)/);
+    expect(css).toMatch(/\.tip-key-quotes\s*{[^}]*var\(--quote-rgb\)/);
+  });
+
+  it("keeps every mode's lane words stable for the memoised Spine", () => {
+    for (const mode of BAND_MODES) expect(railMarks(mode)).toBe(railMarks(mode));
+  });
+});
+
+describe("a band's accessible name counts the lane marks in the open mode's words", () => {
+  function mountWith(props: Partial<Parameters<typeof Spine>[0]>) {
+    act(() => {
+      root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} {...props} />);
+    });
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+  }
+  const MATCH = new Map<BlockId, BlockMatch>([
+    ["b0" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
+  ]);
+  const names = () =>
+    [...host.querySelectorAll(".spine-hit")].map((b) => b.getAttribute("aria-label") ?? "");
+
+  it("says search matches by default", () => {
+    mountWith({ matches: MATCH });
+    expect(names().some((n) => n.endsWith("— 1 search match"))).toBe(true);
+  });
+
+  it("and not search matches in Ideas, where the lane is an idea's passages", () => {
+    mountWith({
+      matches: MATCH,
+      marksWords: { label: "this idea", one: "passage of this idea", many: "passages of this idea" },
+    });
+    expect(names().some((n) => n.endsWith("— 1 passage of this idea"))).toBe(true);
+    expect(names().some((n) => n.includes("search"))).toBe(false);
+    expect(openCard(S1).querySelector(".tip-matches")?.textContent).toBe("1 passage of this idea");
   });
 });

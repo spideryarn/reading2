@@ -64,7 +64,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import type { Verifier } from "../src/auth.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
+import { articleRevisions, articles, blockIdentities, comments, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import type { OwnerId } from "../src/owner.js";
@@ -253,6 +253,8 @@ async function clean(): Promise<void> {
   await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, ARTICLE_ID));
   await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, ARTICLE_ID));
   await db.delete(articleRevisions).where(eq(articleRevisions.id, REVISION_ID));
+  /* Before the identities: `comments_identity_fk` points a comment at its block id. */
+  await db.delete(comments).where(eq(comments.articleId, ARTICLE_ID));
   await db.delete(blockIdentities).where(eq(blockIdentities.articleId, ARTICLE_ID));
   await db.delete(articles).where(eq(articles.id, ARTICLE_ID));
 }
@@ -285,6 +287,7 @@ async function sweepAbandoned(): Promise<void> {
     await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, id));
     await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
     await db.delete(articleRevisions).where(eq(articleRevisions.articleId, id));
+    await db.delete(comments).where(eq(comments.articleId, id));
     await db.delete(blockIdentities).where(eq(blockIdentities.articleId, id));
     await db.delete(articles).where(eq(articles.id, id));
   }
@@ -327,6 +330,17 @@ describe("downloading one article's data", { timeout: 20_000 }, () => {
       words: 2,
       html: "<p>a paragraph</p>",
       gistable: true,
+    });
+    /* The reader's own words, for your-words.md below. */
+    await db.insert(comments).values({
+      articleId: ARTICLE_ID,
+      id: "c-export-route",
+      ownerId: TEST_OWNER,
+      blockId: BLOCK_ID,
+      quote: "a paragraph",
+      start: 0,
+      body: "My own note on the paragraph",
+      status: "none",
     });
   });
 
@@ -566,5 +580,53 @@ describe("downloading one article's data", { timeout: 20_000 }, () => {
     expect(sent.status).toBe(404);
     expect(sent.headers["content-type"]).not.toBe("application/zip");
     expect(seen.calls).toEqual([]);
+  });
+
+  /* ------------------------------- your-words.md on its own, plan 261020w */
+
+  /**
+   * **`GET /api/export/:slug/your-words`** — the reader's own words as one
+   * Markdown file (src/routes.ts § `sendYourWords`). The same three claims as
+   * the zip: the owner gets a file that holds their words, another reader
+   * gets 404 with none of them, and nobody signed out reaches it. The owner's
+   * 200 is the outsider's 404's positive control, as above.
+   */
+  it("hands the owner their words as a Markdown download", async () => {
+    const { contentDisposition } = await import("../src/routes.js");
+    const sent = await get(`/api/export/${SLUG}/your-words`);
+    expect(sent.status).toBe(200);
+    expect(sent.headers).toEqual({
+      "content-type": "text/markdown; charset=utf-8",
+      "content-length": String(sent.body.byteLength),
+      "content-disposition": contentDisposition(`${SLUG}-your-words.md`, "attachment"),
+      "x-content-type-options": "nosniff",
+      "cache-control": "private, no-store",
+    });
+    const text = sent.body.toString("utf8");
+    expect(text).toMatch(/^---\nspideryarn: "your-words"\n/);
+    expect(text).toContain("My own note on the paragraph");
+    expect(text).toContain("> a paragraph");
+  });
+
+  it("404s another reader asking for their words, and says none of them", async () => {
+    const sent = await get(`/api/export/${SLUG}/your-words`, { verify: acceptOutsider });
+    expect(sent.status).toBe(404);
+    expect(sent.body.toString()).not.toContain("My own note");
+    expect(sent.body.toString()).not.toContain("The article the download is built from");
+  });
+
+  it("401s a request for their words with no sign-in", async () => {
+    expect((await get(`/api/export/${SLUG}/your-words`, { headers: {} })).status).toBe(401);
+  });
+
+  it("400s a traversal-shaped slug before the words are read", async () => {
+    expect((await get("/api/export/..%2F..%2Fetc%2Fpasswd/your-words")).status).toBe(400);
+  });
+
+  it("puts the same file in the zip", async () => {
+    const sent = await get(`/api/export/${SLUG}`);
+    const entries = unzipSync(new Uint8Array(sent.body));
+    const inZip = new TextDecoder().decode(entries["your-words.md"]);
+    expect(inZip).toContain("My own note on the paragraph");
   });
 });

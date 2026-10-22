@@ -157,10 +157,105 @@
          is the default; the script below rewrites both metas and `data-theme`
          for a reader who chose Light, or System on a light OS. -->
     <meta name="color-scheme" content="dark" />
+    <!-- **Viewing the app as another reader: the tab is set up before anything
+         else runs.** docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+         § Part 3, and its round 1 F1 and round 2 R2-1 / R2-4, which put it here.
+
+         An administrator's *View as* opens `/#view-as=<nonce>`. This script, and
+         only when that fragment holds a well-formed nonce:
+
+          1. takes the fragment out of the address (`replaceState`), so it is in
+             no history entry, no bookmark and no copied link;
+          2. replaces `localStorage` and `sessionStorage` with **empty stores in
+             this page's memory**, so nothing the administrator's own tabs saved
+             (reading positions, drafts, a cached shelf key) is read here, and
+             nothing written here reaches them. The one exception is Supabase's
+             session keys already present at boot, `sb-<project>-auth-token`
+             and any matching `-code-verifier`, which read and write **through**
+             to the real storage: the tab signs in as
+             the administrator exactly as any tab does, and a token refresh here
+             rotates the one refresh token every tab shares instead of forking a
+             copy (R2-1);
+          3. leaves the nonce on `window.__spideryarnViewAs`, frozen and not
+             reconfigurable — src/web/lib/view-as.ts is its only reader;
+          4. sets `data-view-as` on `<html>`, which moves the page down for the
+             bar before the first paint (styles/view-as.css).
+
+         **A reload ends the view**: the nonce and both stores were only ever in
+         memory. Before the appearance script, so that one reads the empty store
+         too, and before every module. tests/view-as-boot.test.ts runs this exact
+         text. No CSP here or in vercel.json pins inline scripts, so there is no
+         hash to update. -->
+    <script id="view-as-boot">
+      (function () {
+        var match = /^#view-as=([A-Za-z0-9_-]{43})$/.exec(location.hash);
+        if (!match) return;
+        var nonce = match[1];
+        try {
+          history.replaceState(history.state, "", location.pathname + location.search);
+        } catch (e) {}
+        var real = null;
+        try { real = window.localStorage; } catch (e) {}
+        var authShape = /^sb-[A-Za-z0-9._-]+-auth-token(-code-verifier)?$/;
+        var authKeys = Object.create(null);
+        if (real) {
+          try {
+            for (var i = 0; i < real.length; i += 1) {
+              var existing = real.key(i);
+              if (existing !== null && authShape.test(existing)) authKeys[existing] = true;
+            }
+          } catch (e) {}
+        }
+        var passes = function (key) { return authKeys[key] === true; };
+        function memoryStorage(through) {
+          var items = Object.create(null);
+          var keys = function () { return Object.keys(items); };
+          var store = {
+            getItem: function (key) {
+              key = String(key);
+              if (through && passes(key)) {
+                try { return through.getItem(key); } catch (e) { return null; }
+              }
+              return key in items ? items[key] : null;
+            },
+            setItem: function (key, value) {
+              key = String(key);
+              if (through && passes(key)) { through.setItem(key, String(value)); return; }
+              items[key] = String(value);
+            },
+            removeItem: function (key) {
+              key = String(key);
+              if (through && passes(key)) {
+                try { through.removeItem(key); } catch (e) {}
+                return;
+              }
+              delete items[key];
+            },
+            clear: function () { items = Object.create(null); },
+            key: function (i) { var k = keys(); return i >= 0 && i < k.length ? k[i] : null; }
+          };
+          Object.defineProperty(store, "length", { get: function () { return keys().length; } });
+          return store;
+        }
+        Object.defineProperty(window, "localStorage", {
+          configurable: true, enumerable: true, value: memoryStorage(real)
+        });
+        Object.defineProperty(window, "sessionStorage", {
+          configurable: true, enumerable: true, value: memoryStorage(null)
+        });
+        Object.defineProperty(window, "__spideryarnViewAs", {
+          configurable: false, enumerable: false, writable: false,
+          value: Object.freeze({ nonce: nonce })
+        });
+        document.documentElement.setAttribute("data-view-as", "");
+      })();
+    </script>
     <!-- **The reader's appearance, before first paint.** A second copy of
          src/web/appearance.ts § resolveTheme, because it has to run before any
          module does; tests/appearance.test.ts runs this exact script and checks
-         the two agree. Same key, same default (dark), same theme colours. -->
+         the two agree. Same key, same default (dark), same theme colours.
+         It also sets brightness and text size, whose module copy is
+         src/web/reading-comfort.ts and whose test is tests/reading-comfort.test.ts. -->
     <script id="appearance-boot">
       (function () {
         var choice = null;
@@ -176,6 +271,20 @@
         if (scheme) scheme.setAttribute("content", theme);
         var tc = document.querySelector('meta[name="theme-color"]');
         if (tc) tc.setAttribute("content", theme === "light" ? "#fafafa" : "#0a0a0a");
+        /* Brightness and text size: src/web/reading-comfort.ts. The first value
+           of each is its default, which sets no attribute. */
+        var comfort = [
+          ["spya.brightness", "data-brightness", ["full", "dim", "dimmer", "dimmest"]],
+          ["spya.text-size", "data-text-size", ["default", "large", "larger", "largest"]]
+        ];
+        for (var i = 0; i < comfort.length; i++) {
+          var value = null;
+          try { value = localStorage.getItem(comfort[i][0]); } catch (e) {}
+          var values = comfort[i][2];
+          if (value !== values[0] && values.indexOf(value) > 0) {
+            document.documentElement.setAttribute(comfort[i][1], value);
+          }
+        }
       })();
     </script>
   </head>

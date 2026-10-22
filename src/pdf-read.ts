@@ -150,7 +150,7 @@ import { ProviderRefused, openRouterJson, worthAskingAgain } from "./ai-call.js"
  * constant only invalidates a cache if somebody remembers to bump it, and the
  * person who forgets is the person who just changed the prompt.
  */
-export const PROMPT_VERSION = "pdf-v4";
+export const PROMPT_VERSION = "pdf-v5";
 
 /* `MAX_PAGES` — the cost cap on how long a document may be — is imported from
    src/uploads.ts, where it lives beside `MAX_UPLOAD_BYTES`, the other half of
@@ -437,6 +437,15 @@ export function encodedBytes(rawBytes: number): number {
  * alone would have lost to it (F7). The check learned to read the TeX first
  * (src/pdf-score.ts § `mathsAsText`), or every maths chunk would have been
  * paid for twice. docs/plans/260924b-pdf-transcriber-writes-maths-as-tex.md.
+ *
+ * **Rule 7 names the cell separator since 2026-10-20 (`pdf-v5`): a tab.** It
+ * named none, and the renderer split on the `|` the model mostly wrote; a third
+ * of the PDFs with tables in production came back with tabs or runs of spaces
+ * instead, drawn one cell per row (report spya-xn4597). A tab rather than `|`
+ * because a PDF prints no tab, so the separator can never be the author's own
+ * character; and the rule says the tabs are structure, or rules 1 and 2 would
+ * forbid them. `tableRows` is the other half of the contract.
+ * docs/plans/261020h-pdf-table-cells-split-on-tabs-and-the-prompt-names-the-separator.md.
  */
 export const SYSTEM = `You transcribe pages of a PDF into structured records, verbatim.
 
@@ -467,6 +476,12 @@ Rules, in order of importance:
 7. For a figure, emit ONE record of type "figure" whose text is the caption exactly as printed
    (empty string if there is none). For a table, emit a "table" record for the caption AND then
    record(s) of type "tabledata" carrying the cells as printed, reading across each row in turn.
+   In "tabledata" text, put ONE tab character between cells and a newline between rows; a record
+   may hold one row or several. These tabs and newlines are the table's structure, not copied text.
+   Write an empty cell as nothing between two tabs, including the blank corner above a column of
+   row labels, so that every row lines up with the columns printed above it. A cell whose text
+   wraps onto several lines is one cell, its lines joined by a space. Never separate cells with
+   spaces or "|", and never add rows that are not printed, such as markdown's "---".
 8. Emit only the schema's fields and enum values. No HTML, no markdown, no links, no styling. Write
    mathematical notation as LaTeX and everything else as plain text: inline notation — a symbol, a
    variable with a subscript, a formula within a sentence — between \\( and \\), and a displayed
@@ -1431,6 +1446,10 @@ interface OpenRouterResponse {
  * carries meaning, and a model emits them: on the `easy` fixture, reliably,
  * where a URL is hyphenated across a line, `…/27/rock␦waga.html`.
  *
+ * Not the control characters, NUL among them: those become spaces in
+ * `validateChunkReading` (src/pdf-integrity.ts), which every reading passes,
+ * a replayed checkpoint included. src/control-characters.ts.
+ *
  * Stripping them here rather than in the renderer is deliberate — this is the
  * boundary where a stranger's model output becomes our data, and the cached
  * chunk should hold the cleaned version so a renderer fix does not have to
@@ -1627,7 +1646,10 @@ function reaches(
  *
  * Anything else ends the flow too: a heading, a `reference` or `cover` record,
  * a change of type, a page gap. An empty record is skipped, as `renderHtml`
- * skips it.
+ * skips it, except for an empty `figure`: `renderHtml` now keeps that as a
+ * marked block, so it has to participate here too. Otherwise its own
+ * `continues` can never suppress it, and a later continued caption can jump
+ * across it to an older figure.
  */
 export function continuationTargets(
   records: readonly PdfRecord[],
@@ -1649,7 +1671,7 @@ export function continuationTargets(
       continue;
     }
     const rendered = RENDERED.has(record.type);
-    if (rendered && !record.text.trim()) continue;
+    if (rendered && !record.text.trim() && record.type !== "figure") continue;
     if (!rendered) {
       sincePrevious.push(record);
       sinceProse.push(record);
@@ -1862,11 +1884,14 @@ export function mendSeamHyphens(
  * a second claimant on any page holding both and turn a recoverable figure into
  * an `ambiguous` one. docs/plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md.
  *
- * **A record with no caption still produces nothing at all**, because of the
- * `if (!text) continue` a few lines below — so a captionless figure has no
- * block, no marker and nothing to re-mint. That is v1's boundary rather than an
- * oversight; giving those a media block of their own is a separate decision.
- * GPT Sol, I-3.
+ * **A figure with no caption is a figure**, marked and empty: `<figure
+ * data-spya-pdf-figure="…"></figure>`. Until 2026-10-19 the `if (!text)` below
+ * skipped it, and a book whose diagrams print no caption lost every one without
+ * a word — 27 of 33 figures in Rovelli's *The Order of Time*, report
+ * spya-x9gn3d. Any other empty record still produces nothing. Its ref folds in
+ * the prose either side of it (`neighbourContext`), since page and ordinal alone
+ * would let a re-extraction move its id onto another figure.
+ * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md.
  *
  * **A table's cells are written inside its `<figure>`, after the caption**,
  * since 2026-10-01. Rule 7 of the prompt has always asked for them as
@@ -1876,7 +1901,9 @@ export function mendSeamHyphens(
  * place, but `CHECKED` includes it: invented numbers and markup in visible cells
  * gate like prose. `tableOwners` says which table a run of cells belongs to; a
  * run with none is shown in a figure of its own rather than dropped. No prompt
- * change, so no cached chunk goes stale.
+ * change was needed when cells were first shown. Since `pdf-v5`, rule 7 names
+ * tabs as the cell separator; `promptFingerprint` therefore makes a later
+ * re-extraction re-read chunks cached under an older prompt.
  * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
  */
 export function renderHtml(
@@ -1928,6 +1955,16 @@ export function renderHtml(
     const target = targets[i];
     const into = target === null || target === undefined ? undefined : blockOf.get(target);
     const text = record.text.trim();
+    if (!text && record.type === "figure" && into === undefined) {
+      blockOf.set(i, blocks.length);
+      blocks.push({
+        record,
+        text,
+        uncertain: record.uncertain,
+        pieces: [{ page: record.page, start: 0 }],
+      });
+      continue;
+    }
     if (!text) {
       /* A seam repair can consume a one-word continuation. Keep its place in
          the precomputed target chain so the following piece still reaches the
@@ -1938,16 +1975,24 @@ export function renderHtml(
     }
     if (into !== undefined) {
       /* Join, with a space — the model was told to mend hyphenation itself, so
-         what arrives here is two halves of a sentence, not two halves of a word. */
+         what arrives here is two halves of a sentence, not two halves of a
+         word. An empty first figure piece is the one exception: its continued
+         caption starts at zero, without an invented leading space. */
       const block = blocks[into]!;
-      block.pieces.push({ page: record.page, start: block.text.length + 1 });
-      block.text = `${block.text} ${text}`;
+      const start = block.text.length === 0 ? 0 : block.text.length + 1;
+      block.pieces.push({ page: record.page, start });
+      block.text = block.text.length === 0 ? text : `${block.text} ${text}`;
       block.uncertain ||= record.uncertain;
       blockOf.set(i, into);
       continue;
     }
     blockOf.set(i, blocks.length);
-    blocks.push({ record, text, uncertain: record.uncertain, pieces: [{ page: record.page, start: 0 }] });
+    blocks.push({
+      record,
+      text,
+      uncertain: record.uncertain,
+      pieces: [{ page: record.page, start: 0 }],
+    });
   }
 
   const notes = collectNotes(records);
@@ -1955,6 +2000,14 @@ export function renderHtml(
 
   const parts: string[] = [];
   let list: "ul" | null = null;
+  /* Part of a captionless figure's identity. If another figure appears on the
+     page, every captionless ref there remints rather than an indistinguishable
+     newcomer taking an old ordinal's ref. */
+  const figuresPerPage = new Map<number, number>();
+  for (const block of blocks) {
+    if (block.record.type !== "figure") continue;
+    figuresPerPage.set(block.record.page, (figuresPerPage.get(block.record.page) ?? 0) + 1);
+  }
   /* Per page, and counted over the figures actually **emitted** — a record
      joined onto the one before it by `continues` is not a new figure, and a
      record skipped for having no text never had one. The ordinal is an input to
@@ -1974,7 +2027,15 @@ export function renderHtml(
     const caption = text ? `<figcaption>${escapeHtml(text)}</figcaption>` : "";
     const html =
       record.type === "figure" || record.type === "table"
-        ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}>${caption}${tableHtml(rows ?? [], rowsUncertain ?? false)}</figure>`
+        ? `<figure${cls}${figureMarker(
+            record,
+            text,
+            rawSha256,
+            ordinals,
+            text
+              ? undefined
+              : neighbourContext(blocks, b, figuresPerPage.get(record.page) ?? 0),
+          )}>${caption}${tableHtml(rows ?? [], rowsUncertain ?? false)}</figure>`
         : `<${tag}${cls}>${withLines(record.type, text, withMarkers(text, markers.filter((m) => m.block === b)))}</${tag}>`;
     parts.push(html);
   }
@@ -2124,30 +2185,65 @@ function tableOwners(
 }
 
 /**
- * One `tabledata` record as rows of cells: a row per line, a cell per `|`.
+ * One `tabledata` record as rows of cells: a row per line, cells split on tabs
+ * under `pdf-v5` and on `|` for older records.
  *
- * The prompt does not name a separator, and on the eval corpus the model writes
- * `a | b` unprompted, one row per record or several joined by newlines. A row
- * with no `|` is one cell. A leading `|` is kept as an empty first cell — that
- * is how a header row over the data columns comes out — and a row both opened
- * and closed by one is markdown's spelling and loses both. A line that is only
- * separators says nothing and is skipped.
+ * Before `pdf-v5` the prompt did not name a separator, and on the eval corpus
+ * the model wrote `a | b` unprompted, one row per record or several joined by
+ * newlines. A row with no `|` is one cell. A leading `|` is kept as an empty
+ * first cell — that is how a header row over the data columns comes out — and a
+ * row both opened and closed by one is markdown's spelling and loses both. A
+ * line that is only separators says nothing and is skipped.
+ *
+ * **Since `pdf-v5` the prompt names the separator: a tab** (rule 7), and a
+ * line with a tab in it is split on tabs, whatever else it holds — a `|` there
+ * is the author's, as in `\(P(A | B)\)`. A tab is the separator because a PDF
+ * prints no tab glyph, so a cell's own text cannot contain one; a bar it can.
+ * Until `pdf-v5` the prompt named none, and "the model writes `a | b`" was a
+ * habit taken for a contract: in production 44 of 421 `tabledata` records, in
+ * 4 of the 9 PDFs with tables, came back tab-separated and were drawn one cell
+ * per row (report spya-xn4597), and 318 came back with runs of spaces, which
+ * nothing after the fact can split. The `|` path stays for every chunk read
+ * before `pdf-v5`; no stored record mixes tab and bar separators.
+ *
+ * Splitting on tabs keeps an empty first or last cell — the blank corner over a
+ * row-label column is how the header row lines up — so the line is not trimmed
+ * of tabs first, only each cell of spaces. Dash-only cells are kept: `---` can
+ * be a printed missing-data marker, so the parser cannot safely distinguish it
+ * from a markdown alignment row the model invented. Rule 7 forbids the latter.
+ * docs/postmortems/261020a-a-table-parser-relied-on-a-separator-the-prompt-never-named.md.
  */
 function tableRows(text: string): string[][] {
   const rows: string[][] = [];
   for (const raw of text.split(/\r?\n/)) {
-    let line = raw.trim();
-    if (!line.replace(/\|/g, "").trim()) continue;
-    if (line.length > 1 && line.startsWith("|") && line.endsWith("|")) line = line.slice(1, -1);
-    rows.push(line.split("|").map((cell) => cell.trim()));
+    let cells: string[];
+    if (raw.includes("\t")) {
+      cells = raw.split("\t").map((cell) => cell.trim());
+    } else {
+      let line = raw.trim();
+      if (line.length > 1 && line.startsWith("|") && line.endsWith("|")) line = line.slice(1, -1);
+      cells = line.split("|").map((cell) => cell.trim());
+    }
+    if (cells.every((cell) => cell === "")) continue;
+    rows.push(cells);
   }
   return rows;
 }
 
-/** The cells as a `<table>`, every one escaped; nothing at all for no rows. */
+/**
+ * The cells as a `<table>`, every one escaped; nothing at all for no rows.
+ *
+ * The spaces between cells and rows are text nodes on purpose. The browser's
+ * `textContent` otherwise glues adjacent cells (`a` + `b` → `ab`), while the
+ * old one-cell rendering kept the tab or newline between them. Comments,
+ * cross-references and search marks resolve in that rendered-text space, so a
+ * structural repair must not silently move it.
+ */
 function tableHtml(rows: readonly string[][], uncertain: boolean): string {
   if (rows.length === 0) return "";
-  const body = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
+  const body = rows
+    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join(" ")}</tr>`)
+    .join(" ");
   return `<table${uncertain ? ' class="pdf-uncertain"' : ""}><tbody>${body}</tbody></table>`;
 }
 
@@ -2258,7 +2354,11 @@ function endnotesTypedAsProse(records: readonly PdfRecord[]): PdfRecord[] {
     let fits: boolean = inNotes && previousWasNotes && previousPage === page - 1 && number !== null;
     for (let j = 0; j < candidate.length && fits; j++) {
       const r = candidate[j]!;
-      if (r.type === "publisher" || !r.text.trim()) continue;
+      /* An empty figure used to produce nothing, so treating it like any other
+         empty record was harmless. It is a visible marked block now, and the
+         rule below says any figure makes this a mixed page rather than an
+         endnote page. Let it reach that rule even without a caption. */
+      if (r.type === "publisher" || (!r.text.trim() && r.type !== "figure")) continue;
       if (r.type === "footnote") {
         if (!r.continues) number = numericLabel(r.text.trim());
       } else if (CITING.has(r.type)) {
@@ -2543,13 +2643,53 @@ function figureMarker(
   caption: string,
   rawSha256: string,
   ordinals: Map<number, number>,
+  context?: string,
 ): string {
   if (record.type !== "figure") return "";
   const ordinal = (ordinals.get(record.page) ?? 0) + 1;
   ordinals.set(record.page, ordinal);
-  const figureRef = pdfFigureRef({ rawSha256, page: record.page, ordinal, caption });
+  const figureRef = pdfFigureRef({
+    rawSha256,
+    page: record.page,
+    ordinal,
+    caption,
+    ...(context === undefined ? {} : { context }),
+  });
   const value = pdfFigureMarkerValue({ figureRef, page: record.page, ordinal });
   return ` ${RESERVED_ATTRS.pdfFigure}="${value}"`;
+}
+
+/** How much of each neighbour names a captionless figure. */
+const NEIGHBOUR_CHARS = 80;
+
+/**
+ * **What a captionless figure is called instead of its caption**: how many
+ * emitted figures share its page, then the end of the block before it and the
+ * start of the block after it, as rendered.
+ *
+ * An identity, not evidence of where the picture is — it only has to stay the
+ * same for the same transcript and differ between two captionless figures on
+ * one page. Proving which picture is this figure's needs positions on the page,
+ * which this does not carry
+ * (docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md).
+ * A neighbour that is itself a captionless figure contributes its
+ * empty text. Several adjacent empty figures therefore have identical prose
+ * contexts; the page count makes an insertion remint the whole ambiguous run
+ * instead of moving its old ids down by one. The per-page ordinal in the ref
+ * still makes each member distinct within one render.
+ */
+function neighbourContext(
+  blocks: readonly RenderBlock[],
+  at: number,
+  figuresOnPage: number,
+): string {
+  const before = blocks[at - 1]?.text ?? "";
+  const after = blocks[at + 1]?.text ?? "";
+  return JSON.stringify([
+    figuresOnPage,
+    before.slice(-NEIGHBOUR_CHARS),
+    after.slice(0, NEIGHBOUR_CHARS),
+  ]);
 }
 
 // ─────────────────────────────────────────────────────────── the stage

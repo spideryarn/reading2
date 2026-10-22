@@ -611,8 +611,8 @@ export function AccessSharing({
               works — docs/reusable/silent-success.md.
 
               `outline`, not the orange `default`: this button does not share
-              anything, it opens the question. The primary is on `Share it`
-              inside the confirmation, which is the press that does. */}
+              anything, it opens the question. The committing action is the
+              green `Share it` inside the confirmation. */}
           {!shared && inventory && !confirming && (
             <Tooltip placement="bottom" content={<TipNote>{SHARING_OPEN_TIP}</TipNote>}>
               {/* **Allowed to wrap, which `Button` on its own is not.** The
@@ -662,14 +662,16 @@ export function AccessSharing({
                 <span>{SHARING_RIGHTS_CONFIRM}</span>
               </label>
               <div className="tw:flex tw:items-center tw:gap-2">
-                {/* **The primary, and the only one on this card.** It is the
-                    press that publishes, so it is the press that gets the
-                    orange; everything else here is `outline` or `ghost`. The
-                    disabled state is `Button`'s own `opacity-50`, which reads
+                {/* **The committing action on this card.** It is the press
+                    that publishes, so it is the green of the pair that
+                    ends a form, with its Cancel red (controls.md, plan
+                    261020z). Disabled, it dims (button-tone.css), which reads
                     as not-yet rather than as broken. */}
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
+                  className="tone-positive"
                   /* The server refuses a publish without it too — this is the
                      reader being told why the button is not live yet, in the
                      one place where a silent refusal would be baffling.
@@ -687,6 +689,7 @@ export function AccessSharing({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  className="tone-negative"
                   onClick={() => {
                     setConfirming(false);
                     setRights(false);

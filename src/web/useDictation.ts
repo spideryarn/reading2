@@ -69,11 +69,18 @@
  *
  * `idle | opening | listening | transcribing`.
  *
- * `opening` is armed-but-deaf, and it is measured rather than assumed:
- * `audiostart` lands **1.1 seconds** after `start()` in Chrome, and the button
- * that went orange on the line after `start()` was lying for a second exactly
- * when the reader was watching it. Safari's automatic restart drops back to
- * `opening`, because it genuinely is deaf again.
+ * `opening` is armed-but-deaf: **the device is not open yet** — the permission
+ * prompt, the microphone lock, `getUserMedia`. A button that went orange on the
+ * press would be lying for exactly as long as the reader is watching it.
+ *
+ * `listening` starts on the line where `start()` takes ownership of the track,
+ * on every browser, and the tape starts with it. Until plan 261019m it waited
+ * for the recogniser's `audiostart`, which lands **1.1 seconds** after the
+ * track is already delivering audio on Chrome — so the first second of every
+ * dictation went into the track and nowhere else. A recogniser restart after a
+ * pause no longer drops back to `opening` either: only the live words pause,
+ * and the tape is still running.
+ * [docs/plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md](../../docs/plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md).
  *
  * `transcribing` is the new one, and it is the two seconds between the reader
  * pressing stop and the good words arriving. The text box is `readOnly` for the
@@ -137,6 +144,7 @@ import {
   recordTrack,
 } from "./mic-recording.js";
 import { useAudioLevel } from "./useAudioLevel.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { playCappedChime, useLastMinuteChime, useQuietChime } from "./quiet-chime.js";
 
 /**
@@ -346,7 +354,7 @@ export interface UseDictation {
   /** `not-allowed` and friends, in the reader's words. `no-speech` never gets here. */
   error: string | null;
   /**
-   * `Date.now()` at the first `audiostart` of this dictation, for the timer.
+   * `Date.now()` when this dictation took ownership of its track, for the timer.
    * Null until the microphone is genuinely open — see {@link Session.audioAt}.
    */
   startedAt: number | null;
@@ -483,12 +491,14 @@ interface Session<C> {
   /** The track we opened and must stop. Null when the recogniser opened its own. */
   track: MediaStreamTrack | null;
   /**
-   * When audio actually began — the first `audiostart`, not the press.
+   * When audio actually began — the moment `start()` took ownership of a live
+   * track, not the press, and the same moment the tape starts.
    *
-   * The press is the wrong zero: there is a measured 1.1 seconds before the
-   * microphone opens, and a timer counting it would claim a second of recording
-   * that does not exist. Survives a Safari mid-session restart, because that is
-   * still one dictation.
+   * The press is the wrong zero: the permission prompt and `getUserMedia` come
+   * before the microphone opens, and a timer counting them would claim
+   * recording that does not exist. Until plan 261019m it was the first
+   * `audiostart`, which on Chrome is a second *later* than the audio. Survives
+   * a recogniser restart mid-session, because that is still one dictation.
    */
   audioAt: number | null;
   /** How many confirmed phrases came out. Zero is what makes a recording worth offering. */
@@ -502,12 +512,10 @@ interface Session<C> {
    * the dictation on alone.
    *
    * Its own flag rather than `!live`, which was the first attempt and was
-   * wrong: `live` is *also* false for the measured ~1.1 seconds between the
-   * press and the microphone opening, so guarding the recogniser's events on
-   * `!live` silenced `soundstart` during the one window where those events are
-   * the only thing the meter has. A test that had nothing to do with this
-   * change caught it. The two states are "not yet" and "not any more", and only
-   * the second one means stop listening.
+   * wrong: `live` is also false on Safari and Firefox, where no recogniser ever
+   * starts. That is "not available", not "gave up"; only the latter means
+   * queued recogniser events must be ignored and `onend` must not restart it.
+   * The two states need different names rather than one negated boolean.
    */
   liveGaveUp: boolean;
   /**
@@ -688,11 +696,18 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const { onText, onTranscript, onEnd, context } = options;
   /* **"Can open a microphone", not "has Web Speech".** The live half is
      optional now; the recording is not. See the header. */
-  const [supported] = useState(() => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined");
+  /* `false` in a tab viewing as another reader, which hides every dictation
+     button: a transcription is a paid call (plan 261019n § round 2, R2-5). */
+  const [supported] = useState(() => viewAsNonce() === null && typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined");
   const [phase, setPhase] = useState<DictationPhase>("idle");
   const [interim, setInterim] = useState("");
   /* Never called directly: `setError`, below, is the one door, and it reports. */
   const [error, showError] = useState<string | null>(null);
+  /* The same value synchronously, for an ending whose tape settles in a later
+     task. React state in that closure is stale: without this, a specific
+     `[mic-unplugged]` set before `finish()` was replaced by `[mic-empty]` when
+     the newly early tape later proved too short to keep. */
+  const shownError = useRef<string | null>(null);
   const [track, setTrack] = useState<MediaStreamTrack | null>(null);
   const [ctx, setCtx] = useState<AudioContext | null>(null);
   const [hearing, setHearing] = useState(false);
@@ -829,6 +844,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
      an unmount, was never reported. GPT Sol's plan review, F1. A call is an
      occurrence; every one of them is reported. */
   const setError = useCallback((message: string | null) => {
+    shownError.current = message;
     showError(message);
     if (message === null) return;
     try {
@@ -997,10 +1013,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          reader has only whatever the browser's recogniser managed — which on
          Safari and Firefox is nothing at all.
          
-         Three ways here: the microphone never opened; the reader stopped inside
-         the second before `audiostart`; or every `MediaRecorder` container this
-         browser claims to support failed to start. The third used to be
-         completely silent, which is the worst of the three because it is the
+         Two ways here: the microphone never opened, or every `MediaRecorder`
+         container this browser claims to support failed to start. (A third,
+         stopping inside the second before `audiostart`, went with plan 261019m:
+         the tape now starts with the track.) The second used to be
+         completely silent, which is the worst of them because it is the
          only one where everything looked like it was working.
          GPT Sol's code review, item 6. */
       s.kept?.forget();
@@ -1128,14 +1145,18 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          succeed on a second try. An empty transcript is an answer, and will be
          the same answer.
 
-         Two further gates. `retryable` is the upload saying whether the same
+         One further gate: `retryable` is the upload saying whether the same
          bytes could ever work — **for every failed part**, since a retry that
-         cannot finish the set cannot publish anything. `s.confirmed === 0` is
-         the *field*: a retry arrives after `onEnd`, so it lands beside the
-         recogniser's rough words rather than replacing them, which would
-         duplicate half the dictation. That second gate is a limit rather than a
-         decision, and it is named in the plan. */
-      if (s.confirmed === 0 && failures.every((r) => r.retryable)) {
+         cannot finish the set cannot publish anything.
+
+         **Rough live words in the box are not a gate.** Until 2026-10-22
+         `s.confirmed === 0` was one, because a retry arrives after `onEnd` and
+         the field could only put it beside the recogniser's guesses, which
+         duplicated the dictation; so on Chromium a failure offered the audio
+         and nothing else. The field now remembers the failed session's words
+         and the retry's transcript replaces them (`spent` in
+         useDictationField.ts; qi-qxkryezr). */
+      if (failures.every((r) => r.retryable)) {
         retryable.current = {
           recorded,
           texts: results.map((r) => (r.ok ? r.text : null)),
@@ -1152,7 +1173,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          still hold audio the page could not offer, so the device copy stays. */
       if (broken) s.kept?.release();
       else s.kept?.forget();
-      if (!stillOurs()) return;
+      /* This is a fallback explanation for an otherwise unexplained empty
+         ending. A terminal path may already have said why it stopped before
+         the tape settled; that specific sentence wins. */
+      if (!stillOurs() || shownError.current !== null) return;
       if (broken) {
         if (!s.brokeReported) {
           s.brokeReported = true;
@@ -1438,19 +1462,13 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       // makes the transcript nonsense rather than merely worse.
       r.lang = document.documentElement.lang || navigator.language;
 
-      r.onaudiostart = () => {
-        if (session.current !== s || s.finished) return;
-        setPhase("listening");
-        /* The timer's zero, set once per dictation rather than once per
-           `audiostart`: Safari restarts mid-session on a pause, and a clock that
-           reset there would tell the reader they had been talking for two
-           seconds after two minutes of it. */
-        if (s.audioAt === null) {
-          s.audioAt = Date.now();
-          setStartedAt(s.audioAt);
-          armTape(s, tapeEvents, setEndsAt);
-        }
-      };
+      /* **No `onaudiostart`, on purpose.** It used to be the zero for the
+         timer, the tape and `listening`, a measured 1.1 seconds after our track
+         was already delivering audio, so the first second of every Chromium
+         dictation was lost. All three now start when `start()` takes the track
+         (plan 261019m), and a handler that still set the phase would let a
+         late `audiostart` after Stop put `transcribing` back to `listening`.
+         GPT Sol's plan review of 261019m, F4. */
       /* Both of these are the recogniser reporting, so both stop counting when
          we have stopped listening to it — otherwise a queued `soundstart` puts
          the fallback meter back to "hearing" on behalf of a recogniser that is
@@ -1538,19 +1556,14 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           setLiveText(false);
           setInterim("");
           setHearing(false);
-          /* **The recogniser can die before `audiostart` ever fires**, and
-             `audiostart` is the zero for the timer, the word "listening" and
-             the tape. Without this the session would sit armed in `opening`
-             recording nothing at all — which is worse than the ending it
-             replaced. These four lines are the Firefox path verbatim (see
-             `!outcome.live` in `start`), because this is now the same
-             situation: our track is open and there is no recogniser.
-             GPT Sol's plan review, F6. */
-          if (s.audioAt === null) {
-            s.audioAt = Date.now();
-            setStartedAt(s.audioAt);
-            setPhase("listening");
-          }
+          /* **The recogniser can die before `audiostart` ever fires.** Until
+             plan 261019m that event was the zero for the timer, the word
+             "listening" and the tape, so this path had to start all three or
+             the session sat in `opening` recording nothing (GPT Sol's plan
+             review, F6). `start()` now starts them when it takes the track, so
+             by here the tape is normally running already; the call stays
+             because it is idempotent, and a later reordering must never leave
+             a session without a tape. */
           armTape(s, tapeEvents, setEndsAt);
           /* **`recordTrack` can return null**, when every container this browser
              claims to support refuses to start. Carrying on then would leave the
@@ -1587,8 +1600,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
            there is nothing waiting for an `onend` that will never come. */
         if (s.liveGaveUp) return;
         /* The recogniser ends the session on a pause. Restart while the reader
-           still wants it. Back to `opening`, because until the next
-           `audiostart` the microphone genuinely is not listening. */
+           still wants it. **Not** back to `opening`, as it was until plan
+           261019m: the tape never stopped, so the microphone is listening and
+           only the live words pause until the next `audiostart`. */
         const t = s.track;
         if (t?.readyState !== "live") {
           /* **No bare `r.start()` here, and that is the point.** It used to
@@ -1603,7 +1617,6 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           return;
         }
         try {
-          setPhase("opening");
           setHearing(false);
           r.start(t);
           return;
@@ -1702,6 +1715,32 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          session's page-wide microphone claim. */
       s.track = outcome.track;
       s.live = outcome.live;
+      /* **And start recording on the same line, on every browser** (plan
+         261019m). The track is live and delivering audio from here; anything
+         that waits — the recogniser's `audiostart`, a measured 1.1 seconds
+         later on Chromium, or the device listing below — is speech that goes
+         into the track and nowhere else. So the meter, the `ended` listener,
+         the timer's zero, `listening` and the tape all start now, and nothing
+         about which device this turned out to be holds them up. `finish` stops
+         `s.track` whatever happens next, so a Stop inside the await below is
+         an ordinary ending. GPT Sol's plan review of 261019m, F3.
+
+         The context is a shared singleton, so this is a get rather than a
+         build most of the time. */
+      setCtx(audio());
+      setTrack(outcome.track);
+      /* An externally ended track — the headset unplugged, the Continuity mic
+         walking out of the room — otherwise leaves a meter measuring nothing
+         and a button claiming to listen. */
+      outcome.track.addEventListener("ended", () => {
+        if (session.current !== s || s.finished) return;
+        setError("The microphone was disconnected. Press it again to start over. [mic-unplugged]");
+        finish(s);
+      });
+      s.audioAt = Date.now();
+      setStartedAt(s.audioAt);
+      setPhase("listening");
+      armTape(s, tapeEvents, setEndsAt);
       failureCause.current = {
         micError: null,
         live: outcome.live,
@@ -1709,6 +1748,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       };
       setLiveText(outcome.live);
       const opened = labelled(outcome.track);
+      /* The label describes the track already recording, so show it now. A
+         non-honoured remembered device still needs an asynchronous list to say
+         whether this is the same device under a new id, but that metadata must
+         not leave the truthful microphone line blank while it waits. */
+      setDeviceLabel(opened);
       /* **Was it the microphone they chose?** Asked of the name as well as the
          id since 2026-10-01: on an iPhone with AirPods every press said the
          chosen microphone was not available and then worked (spya-k3q9mc). A
@@ -1754,43 +1798,6 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           }
         }
       }
-      /* **The name of what we opened**, which is the piece that was missing. A
-         meter reading zero and a meter pointed at a dead conferencing loopback
-         are the same picture until something says which device produced it.
-         docs/plans/260827k-microphone-device-and-recording.md. */
-      setDeviceLabel(opened);
-      /* The context is created only now, and only when there is something to
-         measure. It is a shared singleton, so this is a get rather than a build
-         most of the time. */
-      setCtx(audio());
-      setTrack(outcome.track);
-      /* An externally ended track — the headset unplugged, the Continuity mic
-         walking out of the room — otherwise leaves a meter measuring nothing
-         and a button claiming to listen. */
-      outcome.track.addEventListener("ended", () => {
-        if (session.current !== s || s.finished) return;
-        setError("The microphone was disconnected. Press it again to start over. [mic-unplugged]");
-        finish(s);
-      });
-
-      if (!outcome.live) {
-        /* **No recogniser, so no `audiostart` is ever coming** — and the timer,
-           the recorder and the word "listening" all hang off that event. On
-           this path the track being live *is* the microphone being open, so
-           this is the same moment by a different name. Miss it and the strip
-           says "Opening the microphone…" for the whole dictation and the
-           recording never starts. */
-        s.audioAt = Date.now();
-        setStartedAt(s.audioAt);
-        setPhase("listening");
-        armTape(s, tapeEvents, setEndsAt);
-        return;
-      }
-      /* Both orders covered. `audiostart` is the recorder's zero, and it is
-         measured at ~1.1s after the track arrives — but it is a task rather
-         than a microtask, so it could in principle land before the assignment
-         above. Whichever happens second arms the tape. */
-      armTape(s, tapeEvents, setEndsAt);
     })();
     return undefined;
   }, [elsewhere, finish, holdKept, setError]);
@@ -1897,9 +1904,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
    * are not the same problem: `landed` is arbitrating between a live recogniser,
    * a session that may have been superseded, and a tape that has just finished
    * draining. None of that exists here — there is no session, no microphone and
-   * no claim, and `canRetry` is only ever true where the recogniser confirmed
-   * nothing, so there is nothing in the box for a late transcript to collide
-   * with. What is left is: close the box, send the bytes, put the words in.
+   * no claim. Any rough live words the failed session left are the field's to
+   * replace, as it would have on the first try (`spent` in
+   * useDictationField.ts). What is left is: close the box, send the bytes, put
+   * the words in.
    *
    * `phase` goes to `transcribing` for the round trip, which is what makes the
    * text box `readOnly` and the microphone button dead — the same protection the
@@ -2168,24 +2176,23 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
 }
 
 /**
- * Start recording, **at `audiostart` and not before**.
+ * Start recording, **the moment the track is ours**.
  *
- * `getUserMedia` hands back a track that is already live, a measured 1.1
- * seconds before the recogniser reports the microphone open. A recorder started
- * when the track arrives therefore captures that second and a bit, and the
- * saved file is longer than the timer beside it claims — a small lie, but
- * exactly the kind this round exists to stop telling. So the timer's zero and
- * the recording's zero are the same event. GPT Sol's plan review, item 4.
+ * The timer's zero and the recording's zero are the same event (GPT Sol's plan
+ * review, item 4). That event used to be the recogniser's
+ * `audiostart`, on the reasoning that a recorder started earlier would capture
+ * a second the timer did not count. The second it did not count was a second
+ * the reader was talking into, so plan 261019m moved both zeros to the track
+ * instead: `getUserMedia` hands back a track that is already live.
  *
- * Needs both the track and `audioAt`, and is called from whichever arrives
- * second. Does nothing twice.
+ * Needs both the track and `audioAt`. Does nothing twice, which is why the
+ * recogniser's give-up path can call it again safely.
  */
 function armTape(s: Session<unknown>, events: TapeEvents, armed: (endsAt: number) => void): void {
   if (s.tape || s.finished || !s.track || s.audioAt === null) return;
   s.tape = recordTrack(s.track, events);
-  /* The tape's own deadline, not one worked out here from `audioAt`, which can
-     be a second earlier when the track arrives after `audiostart`. No tape, no
-     ceiling, and nothing to count down to. */
+  /* The tape's own deadline, not one worked out here from `audioAt`. No tape,
+     no ceiling, and nothing to count down to. */
   if (s.tape) armed(s.tape.endsAt);
 }
 

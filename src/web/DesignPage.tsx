@@ -433,6 +433,7 @@ const FACES: { token: string; used: string }[] = [
      2026-10-02. docs/project/fonts.md. */
   { token: "--font-author", used: "the article, and verbatim quotes of it" },
   { token: "--font-ai", used: "model-generated prose" },
+  { token: "--font-ai-code", used: "code inside a model's answer" },
   { token: "--font-reader", used: "anything the reader typed" },
 ];
 
@@ -628,6 +629,11 @@ export function DesignPage() {
    * `--spine-w`, the gutter's `max()` against WCAG's 24px). Anywhere a height
    * in one meets a height in the other, the agreement recorded in
    * controls.md § The numbers is an agreement at a 16px root only.
+   *
+   * An inline style, so while it is on it overrides the reader's own Text size
+   * (reading-comfort.css), which also sets the root — at Largest it makes the
+   * page smaller. It is a diagnostic at a fixed 20px, not a preview of that
+   * setting.
    *
    * Restored on unmount, or leaving `/design` would leave the whole app at
    * 20px with nothing on screen to say why.
@@ -1347,8 +1353,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
       <section>
         <h2>Vertical rhythm</h2>
         <p className="design-note">
-          One unit is 17px × 1.4 ≈ 23.8px, and the gaps are thirds of it. Two thirds between
-          paragraphs; a full unit above a heading, a third below it — a heading belongs to what
+          One unit is 17px × 1.4 ≈ 23.8px, and every gap is a multiple of a quarter of it. Half a
+          unit between paragraphs; more above a heading than below it — a heading belongs to what
           follows it.
         </p>
         <div className="design-panel design-rhythm">
@@ -1633,6 +1639,43 @@ function ControlsAcrossModes() {
           failures in tests/failure-colour-and-order-chips.test.ts.
         </p>
       </figure>
+
+      <Family
+        name="Send and back out"
+        real=".tone-positive, .tone-negative, button-tone.css"
+        rule={
+          <>
+            the pair that ends a form: the button that sends what you wrote is{" "}
+            <code className="design-token">--positive</code> green, the one that leaves or puts off
+            without sending is <code className="design-token">--danger</code> red — text and border
+            only, with low-contrast hover washes suppressed, and dimmed when it cannot be pressed
+            unless it is working. One class on any button: a shadcn <code>Button</code> (outline or
+            ghost, never the orange fill), an admin pill or a hand-rolled one, because the sheet is
+            in a layer above the utilities. Red is a back-out cue, not a promise about draft
+            retention: Write's Cancel keeps the Write draft; the addendum's Cancel discards its
+            own. Not for a delete (the destructive fill), navigation, undoing, or a button that
+            starts a model call. The words carry the meaning; the colour is a shortcut.
+          </>
+        }
+        finger={<>the family's own size; the colour adds nothing to the target.</>}
+        usedBy="the Feedback dialog's pairs; sharing and private links on Add and Metadata; an author gift; Start again; the reader panel's Done; a note's Save and Discard; Chat's rename and edit-a-question ticks; the admin pages' Save and Send. The list: plan 261020z"
+      >
+        <button type="button" className="fb-cancel tone-negative">
+          Cancel
+        </button>
+        <button type="button" className="fb-send tone-positive">
+          Send
+        </button>
+        <Button type="button" variant="outline" size="sm" className="tone-positive">
+          Share it
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="tone-negative">
+          Cancel
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="tone-positive" disabled>
+          Share it
+        </Button>
+      </Family>
 
       <Family
         name="The hit area"

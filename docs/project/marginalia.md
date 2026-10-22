@@ -241,8 +241,8 @@ owner-only rule as the words, so they ride on the call that was already there, s
 - **Owner only**, as the words are.
 
 **A note about the world outside the piece** (a source, a correction, how others see a claim)
-would be a note whose content is *not* in the article. The labels and the trigger Chat, Recall,
-Tutorial and Quiz use for that since 2026-10-18 are one shared section, `widerWorld()` in
+would be a note whose content is *not* in the article. The labels and the trigger Chat, Recall
+and Quiz use for that since 2026-10-18 are one shared section, `widerWorld()` in
 [`src/wider-world.ts`](../../src/wider-world.ts):
 [prompting-guide.md § The wider world](prompting-guide.md#the-wider-world-labelled-widerworld).
 The relations call does not use it: its four article kinds keep to the article, and its one
@@ -294,13 +294,34 @@ to the passage that backs it, many to an article and unranked, in the prose. A *
 >
 > — Greg, 2026-10-01 (spya-atv4nx)
 
-**Every note, and the head's path and arc, has a house card**: what it is, then which mode made it,
-who wrote the words (AI, the author, the reader) and why it sits beside this passage. The words are
-one table, `src/web/marginalia/tips.ts`; **a new kind of note needs a row there**, and the `Record`
-over the keys makes a missing row a type error. The shut lines carry their key as `data-marg-tip` and
-the reading view's one delegated card draws it ([tooltips.md](tooltips.md)); a question is a button
-with a card of its own, because it has nothing to press and the delegated card answers neither a
-keyboard nor a finger. **And each note's words are in their writer's face** ([fonts.md](fonts.md)):
+**Every note, and the head's path and arc, has a card that explains it.** Most use the house card:
+what the note is, then which mode made it, who wrote the words (AI, the author, the reader) and why
+it sits beside this passage. Those words are one table, `src/web/marginalia/tips.ts`; **a new kind
+without a richer card to reuse needs a row there**, and the `Record` over the house-card keys makes
+a missing row a type error. Most shut lines carry their key as `data-marg-tip` and the reading
+view's one delegated card draws it ([tooltips.md](tooltips.md)); a question is a button with a card
+of its own, because it has nothing to press and the delegated card answers neither a keyboard nor a
+finger. The *Cites* exception is below.
+
+> The Marginalia mode tooltip for a citation is pretty unhelpful. It's just a kind of generic
+> message. I feel like we have more information than that for a citation if I hover over it in the
+> text. So let's try and reuse that same tooltip. And the same goes for other stuff in the Marginalia
+> mode - their tooltips should be the best we can make them, and ideally reuse what tooltip
+> machinery we already have for that kind of marginalia-annotation.
+>
+> — Greg, 2026-10-19 (spya-gdbsq2)
+
+**Where the prose has a richer card for the same kind of item, the margin uses it.** Since
+2026-10-20 that is the *Cites* line: its card is the prose's `CiteCard`, one per work, with its
+buttons, in an interactive `Tooltip` of the line's own (`LineCard` in `MarginaliaColumn.tsx`; the
+senders come through `MarginCiteActions`). It is shut while the line is open, and a finger's press
+opens the line, not the card. No other kind has a card in the prose to reuse
+([tooltips.md § Every card on a mode's mark](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode)),
+so the rest keep the house card, which **says the item's own words when its line is cut off**
+(`cutWords` in `BlockLinkCard.tsx`), in their writer's face. Plan
+[261020g](../plans/261020g-marginalia-tooltips-reuse-the-prose-citation-card-and-say-the-item.md),
+which also names what was left: a count line's card listing its items, and a press on *Cites*
+opening the card in place of the panel. **And each note's words are in their writer's face** ([fonts.md](fonts.md)):
 the shut line takes the voice of the one item it shows, a count is ours. Tested in
 `tests/marginalia-note-cards.test.tsx`;
 [261002g](../plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md).

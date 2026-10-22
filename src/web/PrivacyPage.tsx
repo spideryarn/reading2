@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "19 October 2026";
+const LAST_UPDATED = "21 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -217,14 +217,39 @@ export function PrivacyPage() {
               then the bullet said "with experimental features on", which was
               when it was kept. There is no control yet to turn it off or erase
               it, and the bullet promises none.
+              **Since 2026-10-20 a chat is told roughly how much of the article
+              has been read** — one coarse phrase from these totals, never which
+              parts (Greg's answer to q-rwkq2e; src/reading-so-far.ts). "When
+              you chat", not a list of the four kinds or the failed-read case:
+              Greg, 2026-10-01, wanted the page free of which-mode detail, and
+              Candidates (a find-reviewers tool, not a chat about your reading)
+              and a turn with no figure make it no less true. The precise list
+              is docs/project/privacy.md § Reading time. Anything finer sent to
+              a model rewrites this sentence first.
               docs/project/privacy.md § Reading time. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">How long you have spent on each part of your
             articles</strong> — a running total of the seconds each
             passage has been on your screen. Some of Spideryarn’s features use it — to show you
-            where you have been, for example. We keep the totals, not a history of your reading (our
-            ordinary server logs do show when an update arrived). It is not shown to anybody reading
-            an article you have shared, and it goes when the article does.
+            where you have been, for example. We keep the totals, not a history of which passages
+            you read when (our ordinary server logs do show when an update arrived). When you chat
+            about one of your articles, the AI model is told roughly how much of it you have read —
+            “about a quarter”, say — and nothing about which parts. It is not shown to anybody
+            reading an article you have shared, and it goes when the article does.
+          </li>
+          {/* **Since 2026-10-20**: `article_open_times`, so that Active days on
+              /admin/users counts a day spent only reading — Greg's answer to
+              question q-xcc7xq. One row per account per UTC half-hour, and no
+              article column. The ordinary request log still names the slug,
+              so the prose distinguishes that short-lived log from this durable
+              record. It cascades with the account, not the article.
+              docs/project/privacy.md § Article open times; plan 261020y. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">When you open your articles</strong> — the
+            time, at most once each half hour. That record does not say which article; the ordinary
+            server log for the request does, and is kept about a day. We keep the record so that we
+            can see how often Spideryarn is used. It is not shown to anybody reading an article you
+            have shared, and it goes when your account does.
           </li>
           {/* **Since 2026-10-08**: `import_records`, kept so we can find out
               afterwards why an import failed, and outlasting the job list on
@@ -237,6 +262,18 @@ export function PrivacyPage() {
             or file name, when it ran, and if it failed, which step and the error message, so that
             we can work out afterwards what went wrong. It goes when you delete the article; one that
             never became an article stays until your account is deleted.
+          </li>
+          {/* **Since 2026-10-21**: `private_link_openers`, Greg's 2C (reply
+              spya-xug3kf to q-agbc89). One row per article and account, a
+              count and the first and last time. Read only by the
+              administrator; the owner is not shown it. Cascades with the
+              account and with the article. docs/project/privacy.md § A
+              private link; plan 261021d. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">When you open somebody’s private link while
+            signed in</strong> — which article, the first and last time, and how many times. Only
+            the administrator can see it, not the article’s owner. It goes when your account does,
+            or when the article does.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What the models make for you</strong> — we keep
@@ -525,14 +562,15 @@ export function PrivacyPage() {
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5-5</code> (<code>claude-sonnet-5</code>{" "}
           until 9 October 2026) for most of the reading
-          aids, chat and search, and for the guide in Chat, which is also told roughly how many other
+          aids, chat and search (a chat about one of your articles is also told roughly how much of
+          it you have read), and for the guide in Chat, which is also told roughly how many other
           articles you have opened here (none, a few, or many), and Opus or a similar frontier model in its place on an article
           switched to High-powered AI; <code>gpt-6-luna</code> (<code>gpt-5.6-luna</code> until 9 October 2026, and
           still to check a summary’s paragraphs against the passages they cite)
           for quick jobs and for reading PDFs,
           and, when you ask the command bar to suggest what to do with an article, to write that short
           list, for which it is shown your profile and your reason for reading the article, with our
-          list of commands, and to answer a question you ask in Help’s <em>Ask about Spideryarn</em>{" "}
+          list of commands, and to answer a question you ask with the <em>Ask</em> button in Help’s{" "}
           box, for which it is shown that question and the Help pages, and nothing of yours besides
           (the question is not kept, and is not written to our logs);{" "}
           <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,
@@ -636,13 +674,17 @@ export function PrivacyPage() {
           <strong className="tw:text-foreground">private link</strong> to an article, anyone who has
           the link can read the article without signing in, and can pass it on. An article shared
           only this way is not listed anywhere, and they get the same things a public reader gets, your comments and searches
-          included. We cannot tell you who has read it. The link’s key is part of its address, so
+          included. We do not tell you who has read it. We do record it: when somebody signed in
+          opens the link, their account and when; when somebody signed out does, a rough count and
+          the first and last time a signed-out open was recorded.
+          Only the administrator can see that. The link’s key is part of its address, so
           it stays in the browser history of whoever opens it. Turning the link off refuses the
           next request made with it; it cannot take back what somebody has already read or copied.
           And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
-          written in order to fix a bug or make the thing better. We won’t sell it, publish it, or
+          written, including by viewing the app as you, read-only, in order to fix a bug or make the
+          thing better. We won’t sell it, publish it, or
           feed it to a model’s training. An administrator may also look up account details (your
           email address, when you joined and were last active, and how much you have used
           Spideryarn, but not what you read or wrote) by asking an AI assistant of their choosing,

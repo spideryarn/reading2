@@ -698,14 +698,14 @@ describe("embedBatch's own loop, through the real gateway", () => {
 describe("the callers that count their asks make one request per ask", () => {
   it("the figure locator: one request on a 503, so MAX_LOCATE_CALLS stays a cap on requests", async () => {
     const t = script(refused(503), refused(503), refused(503));
-    const run = await drive(() => openRouterFigureLocator({ caption: "Figure 1", pages: [] }, new AbortController().signal));
+    const run = await drive(() => openRouterFigureLocator({ subject: { kind: "caption", caption: "Figure 1" }, pages: [] }, new AbortController().signal));
     expect(run.outcome).toEqual({ ok: true, value: { ok: false } });
     expect(t.sent()).toBe(1);
   });
 
   it("the figure locator: one request on a dropped connection", async () => {
     const t = script(dropped(), dropped(), dropped());
-    await drive(() => openRouterFigureLocator({ caption: "Figure 1", pages: [] }, new AbortController().signal));
+    await drive(() => openRouterFigureLocator({ subject: { kind: "caption", caption: "Figure 1" }, pages: [] }, new AbortController().signal));
     expect(t.sent()).toBe(1);
   });
 

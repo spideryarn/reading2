@@ -540,6 +540,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "chat-help-route's harness: seeds through `scratchArticleInPg`; what it still reaches is the " +
       "seeder's copy step and the ledger row the stubbed model call records.",
   },
+  "tests/chat-reading-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "READING SO FAR at the route (plan 261020ac): what a send, retry, edit, Learn and Candidates " +
+      "turn is told. chat-help-route's harness: seeds through `scratchArticleInPg`; what it still " +
+      "reaches is the seeder's copy step and the ledger row the stubbed model call records.",
+  },
   "tests/chat-help-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2898,6 +2907,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      its own two seeded owners, its own articles, ledger rows and jobs, and its
      oracle is those rows — the private lane, as billing-points. */
   "tests/billing-minimal.test.ts": "private-postgres",
+  /* Plan 261020b: the long-PDF ledger, with its own seeded reader and barrier
+     tests holding real rows; and the fetch step pricing an upload, Storage too. */
+  "tests/billing-long-documents-db.test.ts": "private-postgres",
+  "tests/long-pdf-fetch-step.test.ts": "private-postgres",
+  "tests/long-pdf-fetch-matrix.test.ts": "private-postgres",
   /* 261001m Stage 3: the thin article. `pgReady`, its own two seeded readers,
      and uploads through the real routes — so Storage too, as
      `an-upload-is-queued-…` below — and its oracle is the rows it wrote. */
@@ -2918,6 +2932,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 261006a: the thread kind `remember` → `learn`, replayed the same way
      against the schema of the day before. `pgReady`, its own three articles. */
   "tests/learn-kind-migration.test.ts": "private-postgres",
+  /* 261020m: Tutorial folded into Recall, replayed the same way against the
+     schema of the day before. `pgReady`, its own three articles. */
+  "tests/tutorial-fold-migration.test.ts": "private-postgres",
   /* 261002b: a job row written under a retired step name reads back under the new one. */
   "tests/retired-step-names.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
@@ -2935,6 +2952,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      its own articles minted per run, the Auth lookup replaced, every send to
      an injected fetch, and the after-response lookup replaced by a recorder. */
   "tests/author-gifts.test.ts": "private-postgres",
+  /* 261021j: a gift's article prepared — the main-mode jobs queued and High-
+     powered AI switched on. The author gifts' shape: its own stem, owner and
+     articles minted per run, the Auth lookup replaced, no email sent, and the
+     queued jobs swept by its slug prefix after every case. */
+  "tests/gift-prep.test.ts": "private-postgres",
   /* Plan 261010c, stage 2: its own scratch article, a gift and lookups on it,
      and the ledger rows a fake call writes under the lookup's run id. */
   "tests/author-lookup-start.test.ts": "private-postgres",
@@ -2942,6 +2964,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      own stem, owners and articles minted per run, the Auth lookup and listing
      replaced — plus the `information_schema` scan, which reads only the schema. */
   "tests/article-transfer.test.ts": "private-postgres",
+  /* 261019n § Part 3: view as. The same shape — its own stem, owners and
+     articles minted per run, the Auth lookup replaced — plus writes refused by
+     the read-only pool, counted on rows tagged with this run. */
+  "tests/view-as-gate.test.ts": "private-postgres",
   /* 261011n § D3: a voucher's claim moving its starter. The same shape — its
      own stem, owners, articles and vouchers minted per run, the Auth lookup
      replaced, the creator's notice not queued. */
@@ -2987,6 +3013,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  /* Plan 261020ac. chat-help-route's harness and its lane: it reads the first
+     thread back with `chatStore.load`, and adds reading time to its own
+     scratch article. */
+  "tests/chat-reading-route.test.ts": "private-postgres",
   /* Plan 261011z. chat-help-route's harness and its lane: it reads the first
      thread back with `chatStore.load` after every post. */
   "tests/chat-modality-route.test.ts": "private-postgres",
@@ -3081,6 +3111,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
+  /* Question ids minted per run, deleted after; no owner (plan 261021h). */
+  "tests/feedback-questions-publish.test.ts": "private-postgres",
   /* Owners minted per run under its own stem; plan 261002f. */
   "tests/feedback-shipped-emails-ledger.test.ts": "private-postgres",
   /* The first inbound rate limiter, and the lane follows from what it
@@ -3169,6 +3201,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      other turns through the route with `fetch` stubbed to keep the request and
      fail, the experience count stubbed on the store. No model is called. */
   "tests/guide-route.test.ts": "private-postgres",
+  /* The guide's prepare route and its once-a-conversation claim (plan 261019p § Stage 2b). */
+  "tests/guide-prepare-route.test.ts": "private-postgres",
   /* The guide's experience count, 261007j stage 1. Seeds two private owners in
      `auth.users` and seven bare articles, one per rule the count keeps, and
      deletes them all afterwards. */
@@ -3652,6 +3686,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* The owner's article read of `article_revisions.matter`, and the
      publication that queues the `matter` successor (plan 261018a). */
   "tests/matter-step-pg.test.ts": "private-postgres",
+  /* Who opened a private link, and the admin's read of it (plan 261021d). */
+  "tests/private-link-opens-pg.test.ts": "private-postgres",
 };
 
 /**
@@ -3914,6 +3950,17 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/billing-minimal.test.ts": {
     "0b11a1a0-0000-4000-8000-0000000d0c01": { kind: "seeded" },
     "0b11a1a0-0000-4000-8000-0000000d0c02": { kind: "seeded" },
+  },
+  /* Plan 261020b's two files. `seedAuthUser` before any row, because every
+     ledger row, job and upload hangs off the `auth.users` foreign key. */
+  "tests/billing-long-documents-db.test.ts": {
+    "0b11a1a0-0000-4000-8000-00000010ba01": { kind: "seeded" },
+  },
+  "tests/long-pdf-fetch-matrix.test.ts": {
+    "0b11a1a0-0000-4000-8000-00000010ba02": { kind: "seeded" },
+  },
+  "tests/long-pdf-fetch-step.test.ts": {
+    "33333333-3333-4333-8333-3333000ba5e5": { kind: "seeded" },
   },
   /* 261001m Stage 3's two readers: one who adds and reads papers, one whose
      duplicates are counted apart. `seedAuthUser` in `beforeAll`; uploads,

@@ -208,6 +208,7 @@ import { returnToSubMode, withSubMode, withSubModeParams, type SubMode } from ".
    because an import back the other way would close a cycle. GPT Sol, F3 on
    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
 import { CommandBar, type CommandBarArticle, type CommandBarExperimental, type ShelfRow } from "./CommandBar.js";
+import type { Original } from "./SourceLink.js";
 import type { CommandExecutor } from "./command-proposal.js";
 import { MORE_HOME_ATTR, useDockFit } from "./dock-fit.js";
 /* Plain data and no React (help-anchors.ts says so on purpose), so the bar
@@ -510,6 +511,12 @@ interface Props {
    * `CommandBarArticle.executor`.
    */
   executor?: CommandExecutor | undefined;
+  /**
+   * **What the bar's *Open the original* opens** — the page's `originalOf`
+   * answer, straight through like `shelfRow`: CommandBar.tsx §
+   * `CommandBarArticle.original`. Plan 261019f.
+   */
+  original?: Original | undefined;
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
@@ -1927,6 +1934,7 @@ export function Dock({
   visitor,
   shelfRow,
   executor,
+  original,
   drawer,
   experimental,
   entrance = false,
@@ -2484,8 +2492,9 @@ export function Dock({
            from, so the bar's rows and the buttons cannot go to different
            places. `search` is already through `carriedSearch`. `help` is the
            Help link's href, for the same reason. `shelfRow` is the page's,
-           handed straight on (Archive and Export in the bar). */
-        article={{ slug, search, view, help: helpLink, shelfRow, executor }}
+           handed straight on (Archive and Export in the bar), and so is
+           `original` (Open the original). */
+        article={{ slug, search, view, help: helpLink, shelfRow, executor, original }}
         /* **The drawer's own callback, bound to its panel**, and `undefined`
            where there is no drawer. `Comments` is the one row in the bar that
            is neither a mode nor a page — it opens the thing that is already

@@ -10,10 +10,13 @@
  * only while a voucher waits; and a refusal from the server reaches the page in
  * its own words.
  */
+import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AdminUser } from "../src/admin.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -30,8 +33,13 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 const { AdminVouchersPage } = await import("../src/web/AdminVouchersPage.js");
 const { useAdminVouchers } = await import("../src/web/useAdminVouchers.js");
 const { SignedInReader } = await import("../src/web/lib/made-for.js");
+const { accountUsageFacts } = await import("../src/web/AdminUserCard.js");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/* The tab is in the address through nuqs (plan 261020ab): mounted under the
+   adapter the app has, as tests/admin-page.test.tsx says why. */
+enableHistorySync();
 
 const WAITING = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 const CLAIMED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
@@ -101,6 +109,45 @@ let retryAnswer: { status: number; body: unknown } | Promise<{ status: number; b
 let listAnswer: unknown[];
 /** What `GET /api/library` answers: the administrator's own shelf, for the starter picker. */
 let shelfAnswer: unknown[];
+/** What `GET /api/admin/users` answers: the accounts each row links to (plan 261019k). Status 0 throws. */
+let usersAnswer: { status: number; body: unknown };
+
+/** An account as /admin/users draws it. */
+const account = (over: Partial<AdminUser> & { readonly id: string; readonly email: string }): AdminUser => ({
+  createdAt: "2026-09-01T10:00:00Z",
+  lastSignInAt: "2026-10-18T10:00:00Z",
+  providers: ["email"],
+  articles: 7,
+  archived: 2,
+  uploads: 1,
+  questions: 31,
+  chats: 4,
+  searches: 9,
+  opens: 55,
+  activeDays: 0,
+  activeDays30: 0,
+  readingSeconds: 0,
+  importFailures: 0,
+  recentImportFailures: [],
+  lastReadAt: "2026-10-18T11:00:00Z",
+  spendNanos: 3_141_600_000,
+  spendCalls: 41,
+  spendUnpricedCalls: 3,
+  spendMonth: "2026-10",
+  plan: "free",
+  ingests: 4,
+  ingestsShared: 0,
+  highPower: 0,
+  highPowerShared: 0,
+  minimal: 0,
+  ingestLimit: 3,
+  ingestWindow: "lifetime",
+  ...over,
+});
+/* The claimant of CLAIMED, under the address it holds now. */
+const CLAIMANT = account({ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", email: "claimed-now@example.test" });
+/* An existing reader the waiting voucher was sent to, who has not been back since. */
+const WAITING_ACCOUNT = account({ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", email: "waiting@example.test" });
 
 /** A shelf row with what the picker reads, and what the shelf's cache insists on. */
 const shelfRow = (over: { readonly slug: string; readonly [field: string]: unknown }) => ({
@@ -134,6 +181,10 @@ beforeEach(() => {
   retryAnswer = { status: 202, body: { id: "x", email: "sending" } };
   listAnswer = VOUCHERS;
   shelfAnswer = SHELF;
+  usersAnswer = { status: 200, body: { users: [CLAIMANT] } };
+  /* Most of this file is about the table, which is on the Given tab (plan
+     261020ab); the form's describes below open on Give instead. */
+  history.replaceState(null, "", "/admin/vouchers?tab=given");
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     const method = init?.method ?? "GET";
@@ -155,6 +206,10 @@ beforeEach(() => {
       return json(answer.status, answer.body);
     }
     if (url.startsWith("/api/library")) return json(200, { articles: shelfAnswer });
+    if (url === "/api/admin/users") {
+      if (usersAnswer.status === 0) throw new TypeError("Failed to fetch");
+      return json(usersAnswer.status, usersAnswer.body);
+    }
     /* The *Author gifts* section's own read (plan 261010c); its suite is tests/admin-author-gifts.test.tsx. */
     if (url === "/api/admin/author-gifts") return json(200, { gifts: [] });
     return json(200, { vouchers: listAnswer });
@@ -171,9 +226,11 @@ async function mount() {
   /* Signed in, as App draws every admin page: the starter picker reads this reader's shelf. */
   await act(async () =>
     root.render(
-      <SignedInReader.Provider value="reader-1">
-        <AdminVouchersPage />
-      </SignedInReader.Provider>,
+      <NuqsAdapter>
+        <SignedInReader.Provider value="reader-1">
+          <AdminVouchersPage />
+        </SignedInReader.Provider>
+      </NuqsAdapter>,
     ),
   );
   for (let i = 0; i < 50 && !host.querySelector("tbody tr"); i++) {
@@ -195,6 +252,8 @@ const rowFor = (email: string) =>
   [...host.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(email)) as
     | HTMLTableRowElement
     | undefined;
+const rowById = (id: string) =>
+  host.querySelector<HTMLTableRowElement>(`tbody tr[data-row-id="${id}"]`) ?? undefined;
 
 const buttonIn = (el: Element | undefined, label: string) =>
   [...(el?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.trim() === label);
@@ -202,11 +261,14 @@ const buttonIn = (el: Element | undefined, label: string) =>
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  history.replaceState(null, "", "/");
 });
 
 describe("/admin/vouchers", () => {
   it("draws one row per voucher, each with its status", async () => {
     await mount();
+    /* `?tab=given`, from beforeEach: the table is on screen, not just in the page. */
+    expect(host.querySelector("table")?.closest("[hidden]")).toBeNull();
     expect(host.querySelectorAll("tbody tr")).toHaveLength(3);
     expect(rowFor("waiting@example.test")?.textContent).toContain("Waiting for sign-up");
     expect(rowFor("waiting@example.test")?.textContent).toContain("met at the conference");
@@ -216,6 +278,23 @@ describe("/admin/vouchers", () => {
     expect(claimed).toMatch(/4 added.*free allowance 13.*9 further private articles/);
     expect(claimed).not.toContain("used of");
     expect(rowFor("revoked@example.test")?.textContent).toContain("Revoked");
+  });
+
+  /* Plan 261020ab (spya-vyddks): the table is its own tab, Given, and the
+     explanation of what a voucher is sits on Give, above the form. */
+  it("puts the table, its count and Refresh under Given, and the explanation and form under Give", async () => {
+    await mount();
+    const panel = (name: string) => {
+      const tab = [...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent?.startsWith(name));
+      return host.querySelector(`#${tab?.getAttribute("aria-controls")}`);
+    };
+    expect(panel("Given")?.querySelector("table")).not.toBeNull();
+    expect(panel("Given")?.textContent).toContain("3 vouchers");
+    expect(panel("Given")?.querySelector('[aria-label="Refresh the vouchers"]')).not.toBeNull();
+    expect(panel("Give")?.textContent).toContain("A voucher adds articles");
+    expect(panel("Give")?.querySelector('form[aria-label="New gift"]')).not.toBeNull();
+    expect(panel("Give")?.textContent).not.toMatch(/list at the bottom|table below/);
+    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Give", "Drafts", "Given3"]);
   });
 
   /**
@@ -234,10 +313,21 @@ describe("/admin/vouchers", () => {
     expect(box?.className).toMatch(/\btw:relative\b/);
   });
 
+  /* Plan 261019o: the address says whose voucher a row is, so it stays on
+     screen while the notes and statuses scroll past. */
+  it("pins the Email column while the table scrolls sideways", async () => {
+    await mount();
+    const pinned = [...host.querySelectorAll("table tr")].map((tr) =>
+      [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : [])),
+    );
+    expect(pinned.length).toBeGreaterThan(1);
+    expect(pinned.every((p) => p.length === 1 && p[0] === 0)).toBe(true);
+  });
+
   /* Plan 261006h: the arrow keys scroll whatever has focus. jsdom lays nothing
      out, so the two widths are stand-ins. */
   for (const [what, content, expected] of [
-    ["makes the table's box a named tab stop when the table is wider than it", 900, { tabindex: "0", role: "region", name: "Every gift voucher, newest first" }],
+    ["makes the table's box a named tab stop when the table is wider than it", 900, { tabindex: "0", role: "region", name: "Every gift voucher" }],
     ["does not make the table's box a tab stop when the table fits", 360, { tabindex: null, role: null, name: null }],
   ] as const) {
     it(what, async () => {
@@ -296,6 +386,9 @@ describe("/admin/vouchers", () => {
     const email = waiting?.querySelector('input[type="email"]');
     expect(email).not.toBeNull();
     expect(document.activeElement).toBe(email);
+    /* Plan 261020z: Save green, Cancel red. */
+    expect(buttonIn(waiting, "Save")?.classList.contains("tone-positive")).toBe(true);
+    expect(buttonIn(waiting, "Cancel")?.classList.contains("tone-negative")).toBe(true);
     await act(async () => buttonIn(waiting, "Cancel")?.click());
     expect(document.activeElement).toBe(buttonIn(waiting, "Edit"));
 
@@ -612,7 +705,9 @@ describe("/admin/vouchers", () => {
   });
 
   describe("creating one", () => {
-    const form = () => host.querySelector('form[aria-label="New gift voucher"]') as HTMLFormElement;
+    /* The form is on Give, the tab the page opens on. */
+    beforeEach(() => history.replaceState(null, "", "/admin/vouchers"));
+    const form = () => host.querySelector('form[aria-label="New gift"]') as HTMLFormElement;
 
     async function fill(email: string) {
       const input = host.querySelector("#voucher-new-email") as HTMLInputElement;
@@ -1030,7 +1125,8 @@ describe("/admin/vouchers", () => {
    * no screen.
    */
   describe("its starter article", () => {
-    const form = () => host.querySelector('form[aria-label="New gift voucher"]') as HTMLFormElement;
+    beforeEach(() => history.replaceState(null, "", "/admin/vouchers"));
+    const form = () => host.querySelector('form[aria-label="New gift"]') as HTMLFormElement;
     const picker = () => host.querySelector("#voucher-new-starter") as HTMLSelectElement;
     const statusLine = () => host.querySelector("#voucher-new-starter-status");
     const createButton = () => form().querySelector('button[type="submit"]') as HTMLButtonElement;
@@ -1177,6 +1273,49 @@ describe("/admin/vouchers", () => {
       await submit();
       expect(creates()[1]?.body).toMatchObject({ email: "new@example.test", starterSlug: "the-bitter-lesson" });
       expect(picker().value).toBe("");
+    });
+
+    /* Plan 261021j § D4: High-powered AI for the starter, on by default. */
+    const highPower = () => host.querySelector("#voucher-new-high-power") as HTMLInputElement | null;
+
+    it("offers High-powered AI, ticked, once a starter is chosen, and sends it only with one", async () => {
+      await mountWithShelf();
+      expect(highPower()).toBeNull();
+      await fill("new@example.test");
+      await submit();
+      expect(creates()[0]?.body).not.toHaveProperty("highPower");
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      expect(highPower()?.checked).toBe(true);
+      expect(form().textContent).toContain(
+        "Uses Opus for what is made from now on. What is already made, Structure included, stays as it is",
+      );
+      await submit();
+      expect(creates()[1]?.body).toMatchObject({ starterSlug: "the-bitter-lesson", highPower: true });
+    });
+
+    it("sends highPower false when it is unticked, and is ticked again once the voucher is made", async () => {
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      await act(async () => highPower()?.click());
+      expect(highPower()?.checked).toBe(false);
+      await submit();
+      expect(creates()[0]?.body).toMatchObject({ starterSlug: "the-bitter-lesson", highPower: false });
+      await choose("the-bitter-lesson");
+      expect(highPower()?.checked).toBe(true);
+    });
+
+    it("keeps the id when only High-powered AI changed after a create whose answer was lost", async () => {
+      /* The server ignores it on a replay; a new id would be a second voucher and a second email. */
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      await act(async () => highPower()?.click());
+      await submit();
+      expect(idOf(creates()[1])).toBe(idOf(creates()[0]));
     });
 
     it("mints a new id when only the starter changed after a create whose answer was lost", async () => {
@@ -1356,4 +1495,511 @@ describe("/admin/vouchers", () => {
       expect(row?.textContent).not.toContain("without the starter article");
     });
   });
+});
+
+/**
+ * Each account on the page links to /admin/users, with a card on the link
+ * summarising its usage — Greg, 2026-10-19 (spya-qdd2vc), plan 261019k.
+ */
+describe("the link from each account to /admin/users", () => {
+  const linkIn = (email: string) => rowFor(email)?.querySelector<HTMLAnchorElement>("a[data-account-link]") ?? null;
+
+  it("links a claimed voucher's claimant, by id, under the address they hold now", async () => {
+    await mount();
+    await settle();
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    /* In Status, as its claimant: the Email column is where the gift was sent. */
+    expect(link?.textContent).toBe("claimed-now@example.test");
+    expect(link?.closest("td")?.textContent).toContain("Claimed by claimed-now@example.test");
+    expect(rowFor("claimed@example.test")?.querySelectorAll("a[data-account-link]")).toHaveLength(1);
+  });
+
+  it("lets a claimed id win when the voucher's old address belongs to another account", async () => {
+    const oldAddressHolder = account({
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      email: "claimed@example.test",
+    });
+    usersAnswer = { status: 200, body: { users: [oldAddressHolder, CLAIMANT] } };
+    await mount();
+    await settle();
+
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    expect(link?.textContent).toBe("claimed-now@example.test");
+  });
+
+  it("uses the id-matched account address when the voucher read could not resolve it", async () => {
+    listAnswer = VOUCHERS.map((voucher) =>
+      voucher.id === CLAIMED ? { ...voucher, claimantEmail: null } : voucher,
+    );
+    await mount();
+    await settle();
+
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    expect(link?.textContent).toBe("claimed-now@example.test");
+    expect(link?.closest("td")?.textContent).not.toContain("address could not be read");
+  });
+
+  it("puts the account's usage on the link's card, as its description", async () => {
+    await mount();
+    await settle();
+    const link = linkIn("claimed@example.test");
+    await act(async () => link?.focus());
+    await settle();
+    const tooltip = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(tooltip?.textContent).toContain("claimed-now@example.test");
+    expect(tooltip?.textContent).toContain("31 comments");
+    expect(tooltip?.textContent).toContain("Open in Users");
+    expect(link?.getAttribute("aria-describedby")?.split(/\s+/)).toContain(tooltip?.id);
+    expect(document.activeElement).toBe(link);
+    expect(tooltip?.querySelector("a, button")).toBeNull();
+  });
+
+  it("links a waiting voucher whose address already has an account, whatever its case", async () => {
+    const shouted = { ...WAITING_ACCOUNT, email: " Waiting@Example.TEST" };
+    usersAnswer = { status: 200, body: { users: [CLAIMANT, shouted] } };
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")?.getAttribute("href")).toBe(`/admin/users?user=${WAITING_ACCOUNT.id}`);
+  });
+
+  it("does not link a revoked voucher nobody claimed, even if its address has an account", async () => {
+    usersAnswer = {
+      status: 200,
+      body: { users: [CLAIMANT, account({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", email: "revoked@example.test" })] },
+    };
+    await mount();
+    await settle();
+    expect(linkIn("revoked@example.test")).toBeNull();
+  });
+
+  it("leaves an address nobody has signed up with as plain text", async () => {
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")).toBeNull();
+    expect(linkIn("revoked@example.test")).toBeNull();
+  });
+
+  it("links nobody when two accounts share the waiting address, rather than guessing", async () => {
+    const twin = account({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", email: "waiting@example.test" });
+    usersAnswer = { status: 200, body: { users: [CLAIMANT, WAITING_ACCOUNT, twin] } };
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")).toBeNull();
+  });
+
+  it("still links a claimed row when the user list could not be read, and says what is missing", async () => {
+    usersAnswer = { status: 500, body: { error: "nope" } };
+    await mount();
+    await settle();
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent ?? "");
+    expect(alerts.some((a) => a.includes("Could not read the accounts"))).toBe(true);
+    await act(async () => link?.focus());
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain(
+      "Could not read their usage",
+    );
+  });
+
+  it("keeps a claimed link usable while its usage is still loading", async () => {
+    const ordinaryFetch = globalThis.fetch;
+    let answerUsers: (response: Response) => void = () => {};
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+      if ((init?.method ?? "GET") === "GET" && url === "/api/admin/users") {
+        return new Promise<Response>((resolve) => {
+          answerUsers = resolve;
+        });
+      }
+      return ordinaryFetch(input, init);
+    }) as typeof fetch;
+
+    await mount();
+    const link = linkIn("claimed@example.test");
+    expect(link?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    await act(async () => link?.focus());
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain(
+      "usage is still loading",
+    );
+
+    await act(async () => answerUsers(new Response(JSON.stringify({ users: [CLAIMANT] }), { status: 200 })));
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain("31 comments");
+  });
+
+  it("reads the accounts again on Refresh", async () => {
+    await mount();
+    await settle();
+    const before = calls.filter((c) => c.url === "/api/admin/users").length;
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Refresh the vouchers"]')?.click());
+    await settle();
+    expect(calls.filter((c) => c.url === "/api/admin/users").length).toBe(before + 1);
+  });
+
+  it("does not link a waiting address from stale accounts after Refresh fails", async () => {
+    usersAnswer = { status: 200, body: { users: [CLAIMANT, WAITING_ACCOUNT] } };
+    await mount();
+    await settle();
+    expect(linkIn("waiting@example.test")?.getAttribute("href")).toBe(
+      `/admin/users?user=${WAITING_ACCOUNT.id}`,
+    );
+
+    usersAnswer = { status: 500, body: { error: "accounts unavailable" } };
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Refresh the vouchers"]')?.click());
+    await settle();
+
+    expect(linkIn("waiting@example.test")).toBeNull();
+    expect(linkIn("claimed@example.test")?.getAttribute("href")).toBe(`/admin/users?user=${CLAIMANT.id}`);
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent ?? "");
+    expect(alerts.some((a) => a.includes("waiting vouchers are not linked"))).toBe(true);
+
+    const claimed = linkIn("claimed@example.test");
+    await act(async () => claimed?.focus());
+    await settle();
+    expect(document.querySelector<HTMLElement>('[role="tooltip"]')?.textContent).toContain(
+      "Usage is from the last successful read",
+    );
+  });
+
+  it("summarises the account's usage, one short line a fact", () => {
+    const now = Date.parse("2026-10-19T10:00:00Z");
+    const facts = Object.fromEntries(accountUsageFacts(CLAIMANT, now).map((f) => [f.label, f.value]));
+    expect(facts.Shelf).toBe("7 articles, 2 archived; 1 PDF uploaded");
+    expect(facts.Used).toBe("31 comments · 4 chats · 9 searches");
+    expect(facts.Opened).toMatch(/^55 times, last /);
+    expect(facts.Plan).toBe("free");
+    expect(facts["Model calls"]).toBe("$3 in 2026-10 (UTC), 41 calls, 3 unpriced");
+    const idle = Object.fromEntries(
+      accountUsageFacts(
+        (({ lastSignInAt: _never, ...rest }) => ({ ...rest, spendCalls: 0, spendNanos: 0, opens: 0 }))(CLAIMANT),
+        now,
+      ).map(
+        (f) => [f.label, f.value],
+      ),
+    );
+    expect(idle["Model calls"]).toBe("none recorded in 2026-10 (UTC)");
+    expect(idle.Opened).toBe("never");
+    expect(idle["Last sign-in"]).toBe("never");
+  });
+});
+
+/**
+ * The *Given* table on `DataTable`, with a row the page draws itself — plan
+ * 261021i § Stage 2. What is pinned: a header sorts and says so in the
+ * address beside `?tab=`; Status ranks revoked lowest whatever else is true;
+ * an empty note sinks under either arrow; a hidden column stays hidden; Email
+ * and Actions cannot be hidden; and — the one that matters (Sol F2) — a
+ * half-made edit stays with its voucher when a re-sort moves the row.
+ */
+describe("sorting and hiding the Given table", () => {
+  /** A real round-trip store: Node's own `localStorage` shadows jsdom's here (admin-page.test.tsx). */
+  let stored: Map<string, string>;
+  beforeEach(() => {
+    stored = new Map();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => void stored.set(key, value),
+        removeItem: (key: string) => void stored.delete(key),
+        clear: () => stored.clear(),
+        key: () => null,
+        length: 0,
+      },
+    });
+  });
+
+  const headerButton = (name: string) =>
+    [...host.querySelectorAll<HTMLButtonElement>("thead button")].find((b) =>
+      b.getAttribute("aria-label")?.startsWith(name),
+    );
+  const headers = () => [...host.querySelectorAll("thead th")].map((th) => th.textContent?.trim() ?? "");
+  /** Each row by the address in its first cell. */
+  const order = () =>
+    [...host.querySelectorAll("tbody tr")].map(
+      (tr) => tr.querySelector("td")?.textContent?.match(/^[a-z-]+@example\.test/)?.[0],
+    );
+  const query = () => new URLSearchParams(location.search);
+  async function click(el: HTMLElement | undefined) {
+    if (!el) throw new Error("nothing to click");
+    await act(async () => el.click());
+    await settle();
+  }
+  async function remount() {
+    act(() => root.unmount());
+    host.remove();
+    await mount();
+  }
+  async function hideFromMenu(label: string): Promise<(string | undefined)[]> {
+    const trigger = [...host.querySelectorAll("button")].find((b) =>
+      (b.getAttribute("aria-label") ?? "").startsWith("Columns"),
+    );
+    if (!trigger) throw new Error("no Columns menu");
+    const press = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(press, "pointerType", { value: "mouse" });
+    act(() => trigger.dispatchEvent(press));
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')];
+    const labels = items.map((item) => item.textContent?.trim());
+    const item = items.find((i) => i.textContent?.trim() === label);
+    if (!item) throw new Error(`no ${label} in the Columns menu`);
+    act(() => item.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await settle();
+    return labels;
+  }
+  async function typeInto(el: HTMLInputElement | null | undefined, value: string) {
+    if (!el) throw new Error("no field");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("is newest first by default, under the headers it always had and an order-neutral caption", async () => {
+    /* Deliberately neither server order nor UUID order, so this proves the
+       Created accessor rather than TanStack's stable-id fallback. */
+    listAnswer = [
+      { ...VOUCHERS[1], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1" },
+      { ...VOUCHERS[0], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3" },
+      { ...VOUCHERS[2], id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2" },
+    ];
+    await mount();
+    expect(order()).toEqual(["waiting@example.test", "claimed@example.test", "revoked@example.test"]);
+    expect(host.querySelector("caption")?.textContent).toBe("Every gift voucher");
+    expect(headerButton("Created")?.closest("th")?.getAttribute("aria-sort")).toBe("descending");
+    expect(headers()).toEqual([
+      "Email",
+      "Articles",
+      "Note to them",
+      "Private note",
+      "Created",
+      "Status",
+      "Claimant's free usage",
+      "Actions",
+    ]);
+    const usage = [...host.querySelectorAll("thead th")].find(
+      (th) => th.textContent?.trim() === "Claimant's free usage",
+    );
+    expect(usage?.querySelector(".tw\\:text-muted-foreground")).not.toBeNull();
+    expect(headerButton("Claimant's free usage")).toBeUndefined();
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (button) => button.textContent?.trim() === "Claimant's free usage",
+      ),
+    ).toBe(false);
+  });
+
+  it("sorts from a header, keeps ?tab= and ?gift=, and reads all of them back on a reload", async () => {
+    history.replaceState(null, "", `/admin/vouchers?tab=given&gift=${WAITING}`);
+    await mount();
+    await click(headerButton("Email"));
+    expect(order()).toEqual(["claimed@example.test", "revoked@example.test", "waiting@example.test"]);
+    expect(query().get("by")).toBe("email");
+    expect(query().get("tab")).toBe("given");
+    expect(query().get("gift")).toBe(WAITING);
+    await click(headerButton("Email"));
+    expect(query().get("dir")).toBe("desc");
+    expect(query().get("tab")).toBe("given");
+    expect(query().get("gift")).toBe(WAITING);
+
+    await remount();
+    expect(order()).toEqual(["waiting@example.test", "revoked@example.test", "claimed@example.test"]);
+    expect(host.querySelector("table")?.closest("[hidden]")).toBeNull();
+    expect(query().get("gift")).toBe(WAITING);
+  });
+
+  it("keeps the sort when the tab changes, and the tab when the sort does", async () => {
+    history.replaceState(null, "", "/admin/vouchers?tab=given&by=articles&dir=asc");
+    await mount();
+    expect(order()).toEqual(["revoked@example.test", "claimed@example.test", "waiting@example.test"]);
+    const tab = (name: string) =>
+      [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.startsWith(name));
+    await click(tab("Give"));
+    expect(query().get("tab")).toBeNull();
+    expect(query().get("by")).toBe("articles");
+    expect(query().get("dir")).toBe("asc");
+    await click(tab("Given"));
+    expect(query().get("tab")).toBe("given");
+    expect(order()).toEqual(["revoked@example.test", "claimed@example.test", "waiting@example.test"]);
+  });
+
+  it("ranks Status as it is drawn: claimed, then waiting, then revoked — revoked even when it was claimed", async () => {
+    listAnswer = [
+      ...VOUCHERS,
+      {
+        ...VOUCHERS[1],
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+        email: "claimed-then-revoked@example.test",
+        createdAt: "2026-09-15T10:00:00Z",
+        revokedAt: "2026-09-25T10:00:00Z",
+      },
+    ];
+    await mount();
+    await click(headerButton("Status"));
+    expect(query().get("by")).toBe("status");
+    /* Equal statuses newest first: the two revoked ones. */
+    expect(order()).toEqual([
+      "claimed@example.test",
+      "waiting@example.test",
+      "claimed-then-revoked@example.test",
+      "revoked@example.test",
+    ]);
+    await click(headerButton("Status"));
+    expect(order()).toEqual([
+      "revoked@example.test",
+      "claimed-then-revoked@example.test",
+      "waiting@example.test",
+      "claimed@example.test",
+    ]);
+  });
+
+  it("sinks a voucher with no note, or a blank one, under either arrow", async () => {
+    listAnswer = [VOUCHERS[0], { ...VOUCHERS[1], note: "   " }, { ...VOUCHERS[2], note: "zebra crossing" }];
+    await mount();
+    await click(headerButton("Private note"));
+    expect(order()).toEqual(["waiting@example.test", "revoked@example.test", "claimed@example.test"]);
+    await click(headerButton("Private note"));
+    expect(order()).toEqual(["revoked@example.test", "waiting@example.test", "claimed@example.test"]);
+
+    /* Only the waiting voucher has a note to them: first under either arrow. */
+    await click(headerButton("Note to them"));
+    expect(order()[0]).toBe("waiting@example.test");
+    await click(headerButton("Note to them"));
+    expect(query().get("dir")).toBe("desc");
+    expect(order()[0]).toBe("waiting@example.test");
+  });
+
+  it("hides a column from the Columns menu, never offers Email or Actions, and remembers it across a reload", async () => {
+    await mount();
+    const labels = await hideFromMenu("Claimant's free usage");
+    expect(labels).toEqual(["Articles", "Note to them", "Private note", "Created", "Status", "Claimant's free usage"]);
+    expect(headers()).not.toContain("Claimant's free usage");
+    expect(JSON.parse(stored.get("spya.admin.vouchers.hiddenColumns") ?? "null")).toEqual(["usage"]);
+    await remount();
+    expect(headers()).not.toContain("Claimant's free usage");
+    /* Every row draws exactly the visible columns — what would catch a column
+       id the row has no drawer for. */
+    const rows = [...host.querySelectorAll("tbody tr")];
+    expect(rows).toHaveLength(3);
+    for (const tr of rows) expect(tr.children).toHaveLength(headers().length);
+    expect(rowFor("claimed@example.test")?.textContent).not.toContain("free allowance");
+  });
+
+  it("moves focus into a claimed voucher's editor when Articles is hidden", async () => {
+    await mount();
+    await hideFromMenu("Articles");
+    const claimed = rowFor("claimed@example.test");
+    await click(buttonIn(claimed, "Edit"));
+    expect(document.activeElement).toBe(claimed?.querySelector('input[aria-label="Their name"]'));
+  });
+
+  it("keeps every visible editor control attached to the row's form when another column is hidden", async () => {
+    await mount();
+    await hideFromMenu("Note to them");
+    const waiting = rowFor("waiting@example.test");
+    await click(buttonIn(waiting, "Edit"));
+    const form = waiting?.querySelector("form");
+    const controls = [
+      ...(waiting?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea") ?? []),
+    ];
+    expect(controls.map((control) => control.getAttribute("aria-label"))).toEqual([
+      "Email address",
+      "Their name",
+      "Articles",
+      "Private note",
+    ]);
+    for (const control of controls) expect(control.form).toBe(form);
+  });
+
+  it("keeps a half-made edit with its voucher when Refresh adds and removes rows", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await click(buttonIn(waiting, "Edit"));
+    await typeInto(
+      waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]'),
+      "edited across refresh",
+    );
+    listAnswer = [
+      {
+        ...VOUCHERS[2],
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+        email: "new@example.test",
+        createdAt: "2026-10-10T10:00:00Z",
+      },
+      VOUCHERS[0],
+    ];
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="Refresh the vouchers"]') ?? undefined);
+    expect(rowById(WAITING)).toBe(waiting);
+    expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]')?.value).toBe(
+      "edited across refresh",
+    );
+    await click(buttonIn(waiting, "Save"));
+    expect(calls.filter((call) => call.method === "PATCH")).toEqual([
+      { method: "PATCH", url: `/api/admin/vouchers/${WAITING}`, body: { note: "edited across refresh" } },
+    ]);
+  });
+
+  it("keeps a half-made edit mounted through a tab switch", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await click(buttonIn(waiting, "Edit"));
+    await typeInto(
+      waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]'),
+      "edited across tabs",
+    );
+    const tab = (name: string) =>
+      [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((item) => item.textContent?.startsWith(name));
+    await click(tab("Give"));
+    await click(tab("Given"));
+    expect(rowById(WAITING)).toBe(waiting);
+    expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]')?.value).toBe(
+      "edited across tabs",
+    );
+  });
+
+  it("keeps a refusal on its voucher when a re-sort moves the row", async () => {
+    patchAnswer = { status: 409, body: { error: "That voucher changed elsewhere." } };
+    await mount();
+    const claimed = rowFor("claimed@example.test");
+    await click(buttonIn(claimed, "Revoke"));
+    expect(claimed?.textContent).toContain("That voucher changed elsewhere.");
+    await click(headerButton("Email"));
+    expect(rowFor("claimed@example.test")).toBe(claimed);
+    expect(claimed?.textContent).toContain("That voucher changed elsewhere.");
+    expect(rowFor("revoked@example.test")?.textContent).not.toContain("That voucher changed elsewhere.");
+  });
+
+  /* Sol F2: the row's edit state must travel with its voucher. Keyed by
+     position, the half-made edit would stay on the top row and save itself
+     over whichever voucher had moved there. */
+  for (const hidden of [null, "Note to them"] as const) {
+    it(`keeps a half-made edit with its voucher when a re-sort moves the row${hidden ? `, with ${hidden} hidden` : ""}`, async () => {
+      await mount();
+      if (hidden) await hideFromMenu(hidden);
+      const waiting = rowFor("waiting@example.test");
+      expect(order()[0]).toBe("waiting@example.test");
+      await act(async () => buttonIn(waiting, "Edit")?.click());
+      await typeInto(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]'), "edited mid-sort");
+
+      await click(headerButton("Email"));
+      /* Moved from first to last, and still being edited. */
+      const drawn = [...host.querySelectorAll("tbody tr")];
+      expect(drawn.indexOf(waiting as HTMLTableRowElement)).toBe(2);
+      expect(waiting?.querySelector<HTMLInputElement>('input[aria-label="Private note"]')?.value).toBe(
+        "edited mid-sort",
+      );
+
+      await act(async () => buttonIn(waiting, "Save")?.click());
+      await settle();
+      expect(calls.filter((c) => c.method === "PATCH")).toEqual([
+        { method: "PATCH", url: `/api/admin/vouchers/${WAITING}`, body: { note: "edited mid-sort" } },
+      ]);
+    });
+  }
 });

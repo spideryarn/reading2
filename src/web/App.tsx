@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { SignedInShell } from "./BackLink.js";
@@ -26,6 +26,7 @@ import { type AddVisit, addAddress, nextAddVisit } from "./add-visit.js";
 import {
   type AdminPage,
   adminOnly,
+  allowedWhileViewingAs,
   CALLBACK_HREF,
   LIBRARY_HREF,
   loginHref,
@@ -39,14 +40,18 @@ import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
 import { useLastView } from "./last-view.js";
+import { onViewAsEnd, viewAsEnded, viewAsNonce } from "./lib/view-as.js";
+import { NotWhileViewingAs } from "./ViewAsBar.js";
+import { useViewAsState } from "./view-as-session.js";
 
 /**
- * **The three routes whose code is not in the reader's initial download.**
- * `LazyPage.tsx`
- * has the reasoning; these are the six loaders it takes.
+ * **The routes whose code is not in the reader's initial download** — the
+ * admin pages, `/design`, `/changelog` and `/help`. `LazyPage.tsx` has the
+ * reasoning; these are the loaders it takes. `tests/eager-client-graph.test.ts`
+ * reads them from the graph, so a new one is walked without being listed there.
  *
  * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
- * because `React.lazy` reads `module.default` and neither page has one — the
+ * because `React.lazy` reads `module.default` and no page has one — the
  * bare form would send every visit to the failure surface. And **module
  * scope**, because a loader's identity is a `useMemo` dependency: an inline
  * arrow would build a new lazy type, and start a new fetch, on every render.
@@ -417,6 +422,19 @@ export function App() {
      once is tests/dock-corner-controls.test.tsx, which walks the routes and
      counts — including, since the bug above, the two addresses that reach the
      shelf sideways. */
+  /* **No Feedback at all in a tab viewing as another reader** (plan 261019n
+     § Part 3, Client 3): a report filed there would be filed as the
+     administrator about a page that is not theirs, with the subject's screen
+     in its screenshot. No host means every trigger below draws nothing — the
+     same rule that hides it from a stranger. */
+  if (viewAsNonce() !== null)
+    return (
+      <SignedInReader.Provider value={user.id}>
+        <SignedInShell.Provider value={true}>
+          <SignedIn route={route} user={user} addVisit={addVisit} />
+        </SignedInShell.Provider>
+      </SignedInReader.Provider>
+    );
   return (
     /* Who everything below was drawn for, so a write any of it makes late (an
        unmount, an idle save, `pagehide`, a recording still draining) can name
@@ -491,6 +509,8 @@ function SignedIn({
   /** `App`'s add visit: who an `/add/` address is running for, or that it has been stopped. */
   addVisit: AddVisit | null;
 }) {
+  const viewAsSession = useViewAsState();
+  const viewAsHasEnded = useSyncExternalStore(onViewAsEnd, viewAsEnded, viewAsEnded);
   /* **The administrator's pages, refused before the branch chain rather than
      inside it — and this is a courtesy, not a gate.**
 
@@ -519,6 +539,28 @@ function SignedIn({
 
      `key` for the same reason the shelf below carries one — this is the same
      component, reached a different way. */
+  /* **A tab viewing as another reader draws three pages and no others**, and
+     this is the one place that decides it, above every branch for the reason
+     the administrator's check below gives: a check inside a branch has to be
+     remembered by whoever adds the next page. router.ts § `VIEW_AS_ALLOWED`,
+     exhaustive over route kinds; plan 261019n § round 1, F3. Above
+     `drawsShelf` too, so `/admin` is "not available" here rather than the
+     shelf. */
+  if (viewAsNonce() !== null && (viewAsHasEnded || viewAsSession.kind !== "live")) {
+    return (
+      <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans tw:text-sm">
+        <p>{viewAsHasEnded ? "This view has ended." : "Checking whose account this is…"}</p>
+      </main>
+    );
+  }
+  if (viewAsNonce() !== null && !allowedWhileViewingAs(route)) {
+    return (
+      <>
+        <HomeLogo />
+        <NotWhileViewingAs />
+      </>
+    );
+  }
   if (drawsShelf(route, user)) return <Library key={user.id} readerId={user.id} />;
 
   /* The shelf is home, so it gets no way-home logo — a link to the page you

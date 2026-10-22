@@ -23,22 +23,20 @@
  * Tailwind utilities rather than styles.css, like every other chrome page —
  * note the `tw:` prefix, without which the class does nothing.
  */
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChartColumn, FileText, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
-import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import { functionalUpdate } from "@tanstack/react-table";
-import { throttle, useQueryState } from "nuqs";
+import { parseAsString, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
 import { FEEDBACK_FROM, type AdminFeedbackReport, type FeedbackFrom } from "../types.js";
 import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
-import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
-import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
+import { ColumnsMenu, DataTable, SortChips } from "./lib/DataTable.js";
+import { useUrlSortedTable } from "./lib/useUrlSortedTable.js";
 import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
+import { adminByParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import {
   ADMIN_ARTICLES_HREF,
@@ -54,9 +52,18 @@ import { AdminPublicTopics } from "./AdminPublicTopics.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
+import { ViewAsStart } from "./ViewAsStart.js";
+import type { HiddenColumnKeys } from "./shelf-hidden-columns.js";
 
-/** Kept out of the render so the table is not rebuilt from a fresh `[]`. */
-const EMPTY: AdminUser[] = [];
+/**
+ * Where `/admin/users` remembers which columns are hidden, in this browser —
+ * the shelf's mechanism under keys of its own (plan 261020c). Exported so the
+ * page test can prove a reveal is stored under the admin keys, not the shelf's.
+ */
+export const ADMIN_USERS_COLUMN_KEYS: HiddenColumnKeys = {
+  hidden: "spya.admin.users.hiddenColumns",
+  shown: "spya.admin.users.shownColumns",
+};
 
 /**
  * Stable identity, and — see lib/DataTable.tsx — the tiebreak behind every sort.
@@ -300,61 +307,53 @@ export function AdminUsersPage() {
   const { users, error, loading, reload } = useAdminUsers();
   const now = useNow();
 
-  const [by, setBy] = useQueryState("by", adminByParam);
-  const [rawDir, setDir] = useQueryState("dir", sortDirParam);
+  /* `?user=<id>`: the account a link from /admin/vouchers pointed at, marked
+     in the whole table rather than filtered to, so it can still be compared
+     with everyone else (plan 261019k). The name `/admin/costs` uses for it. */
+  const [pointedAt, setPointedAt] = useQueryState("user", parseAsString);
 
-  const columns = useMemo(() => adminColumns(now), [now]);
-  const natural = useMemo(() => naturalDirections(columns), [columns]);
-  /* `rawDir` straight in, `null` and all — absent means "each key goes whichever
-     way it naturally goes", which `sortingFromUrl` fills in per column. Do not
-     write `rawDir ?? []` here: a fresh array per render is what froze the shelf
-     (docs/postmortems/260827e-shelf-render-loop.md). */
-  const sorting = useMemo(
-    () => sortingFromUrl(by, rawDir, natural, ADMIN_DEFAULT_BY),
-    [by, rawDir, natural],
-  );
-
-  const onSortingChange = useCallback<OnChangeFn<SortingState>>(
-    (updater) => {
-      /* Applied to the very array TanStack was handed as its state, so what it
-         computed the update against and what we apply it to cannot be two
-         different things. */
-      const next = functionalUpdate(updater, sorting);
-      /* `enableSortingRemoval: false` should make this impossible; an empty
-         sort would fall back to whatever order the server sent, which is a
-         state the reader cannot name or ask for. */
-      if (next.length === 0) return;
-      const url = sortingToUrl(next);
-      void setBy(url.by, { limitUrlUpdates: throttle(0) });
-      /* Left out when it says nothing the columns would not have said
-         themselves — and an absent `dir` is what makes the per-column fallback
-         run at all. */
-      void setDir(isAllNatural(next, natural) ? null : url.dir);
-    },
-    [sorting, natural, setBy, setDir],
-  );
-
-  const table = useSortedTable({
-    data: users ?? EMPTY,
+  /* The account *View as* was pressed on (ViewAsStart.tsx). */
+  const [viewing, setViewing] = useState<AdminUser | null>(null);
+  const columns = useMemo(() => adminColumns(now, setViewing), [now]);
+  /* `sorted` is the list the table is drawn from, missing primary keys sunk —
+     lib/useUrlSortedTable.ts, whose identity contract `columns` above and
+     `idOf` keep. */
+  const { table, rows: sorted } = useUrlSortedTable({
+    data: users,
     columns,
-    sorting,
-    onSortingChange,
     rowId: idOf,
+    byParam: adminByParam,
+    hiddenColumnKeys: ADMIN_USERS_COLUMN_KEYS,
   });
+  const pointedUser = pointedAt === null || users === null ? undefined : users.find((u) => u.id === pointedAt);
 
-  const rows = table.getRowModel().rows;
-  const primary = sorting[0]?.id;
-  /* Missing values last, whichever way the arrow points — the same rule the
-     shelf follows, and the same reason: sorting by "last sign-in" ascending
-     must not fill the top of the page with everyone who has never signed in.
-     `sortUndefined` is deliberately off; lib/table-sort.ts has the measurement. */
-  const sorted = useMemo(
-    () => (primary ? sinkLast(rows, (r) => r.getValue(primary) === undefined) : rows),
-    [rows, primary],
-  );
+  /* Scrolled to once per id, when the list that holds it arrives, so a
+     refresh or a re-sort does not drag the page back to it. Recorded only once
+     the row was found and scrolled, and forgotten when `?user=` changes. The
+     effect runs again when the pointed-at user arrives or changes. */
+  const tableBox = useRef<HTMLDivElement>(null);
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (scrolledTo.current !== pointedAt) scrolledTo.current = null;
+    if (!pointedUser || scrolledTo.current === pointedUser.id) return;
+    const row = [...(tableBox.current?.querySelectorAll<HTMLElement>("tr[data-row-id]") ?? [])].find(
+      (tr) => tr.dataset.rowId === pointedUser.id,
+    );
+    if (!row) return;
+    row.scrollIntoView({ block: "center" });
+    scrolledTo.current = pointedUser.id;
+  }, [pointedAt, pointedUser]);
 
   return (
     <Shell title="Users" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
+      {viewing && (
+        <ViewAsStart
+          key={viewing.id}
+          subjectId={viewing.id}
+          label={viewing.email}
+          onCancel={() => setViewing(null)}
+        />
+      )}
       {error && (
         <p className="tw:mb-4 tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">
           {/* **Which numbers you are looking at, when there are still numbers.**
@@ -376,6 +375,9 @@ export function AdminUsersPage() {
       <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
         {users ? <SortChips table={table} order={ADMIN_CHIP_ORDER} /> : <span />}
         <div className="tw:flex tw:items-center tw:gap-3">
+          {/* Always drawn, like the shelf's: it is the only way back to a
+              hidden column, and five start hidden here. */}
+          <ColumnsMenu table={table} />
           {users && (
             /* **Counted off `sorted`, which is the list the table is drawn
                from** — not off `users`, the list the request returned.
@@ -418,12 +420,57 @@ export function AdminUsersPage() {
           upstream of this page.
         </p>
       ) : (
-        <DataTable table={table} rows={sorted} caption="Everyone with an account" />
+        <>
+          {pointedAt !== null && (
+            <PointedAtLine id={pointedAt} user={pointedUser} onClear={() => void setPointedAt(null)} />
+          )}
+          <div ref={tableBox}>
+            <DataTable
+              table={table}
+              rows={sorted}
+              caption="Everyone with an account"
+              markedRowId={pointedUser ? pointedUser.id : null}
+              pinFirst
+            />
+          </div>
+        </>
       )}
     </Shell>
   );
 }
 
+/**
+ * The line above the table while `?user=` names an account: which one is
+ * marked, or that it is not in the list — an account deleted since the link
+ * was made, most likely — rather than a table with nothing marked and nothing
+ * said (docs/reusable/silent-success.md).
+ */
+function PointedAtLine({ id, user, onClear }: { id: string; user: AdminUser | undefined; onClear: () => void }) {
+  return (
+    <p
+      data-pointed-at=""
+      role="status"
+      className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground"
+    >
+      {user ? (
+        <span>
+          Marked: <span className="tw:text-foreground">{user.email}</span>
+        </span>
+      ) : (
+        <span>
+          The account <span className="tw:font-mono">{id}</span> is not in this list.
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onClear}
+        className="tw:inline-flex tw:h-6 tw:items-center tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:hover:text-foreground"
+      >
+        Clear
+      </button>
+    </p>
+  );
+}
 
 /**
  * `/admin/feedback` — the bug reports, newest first.
@@ -480,13 +527,18 @@ const FROM_LABEL: Record<FeedbackFrom, { label: string; title: string }> = {
     label: "Readers only",
     title: "Leave out the administrators' own reports — src/admin.ts says who they are",
   },
+  admins: {
+    label: "Admins only",
+    title: "Only the administrators' own reports — src/admin.ts says who they are",
+  },
 };
 
 /**
  * **Whose reports** — Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"provide a
  * filter to show only non-admin suggestions (i.e. suggestions from people other
- * than me)."* Two buttons with `aria-pressed`, the shape the shelf's own
- * two-way toggles take. The filtering is the server's (`?from=readers`).
+ * than me)."* And 2026-10-19 (`spya-kmqd7n`): *"And also show a filter for
+ * admins only on this page."* Buttons with `aria-pressed`, the shape the shelf's
+ * own toggles take. The filtering is the server's (`?from=readers`, `?from=admins`).
  */
 function FeedbackFromToggle({
   from,
@@ -582,7 +634,9 @@ function FeedbackInbox({
         <p className="tw:text-sm tw:text-muted-foreground">
           {from === "readers"
             ? "No reader other than an administrator has filed a report yet."
-            : "Nobody has filed a report yet."}
+            : from === "admins"
+              ? "No administrator has filed a report yet."
+              : "Nobody has filed a report yet."}
         </p>
       ) : (
         <>

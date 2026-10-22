@@ -1,0 +1,12 @@
+1: Y; why: accurate hedges, points newcomer at the load-bearing section; problem: X "his four arguments all push against the program view" overstates, and "if you finish the piece" hints at reading progress
+2: Y; why: gives the cold reader the background (Persistent-Sol, ExploitGym, board) first; problem: X assumes the test, shortcut and board are known, and ends with an uncited spoiler about the third civilization
+3: X; why: defines instantiation, glosses Bostrom and the assumption plainly; problem: Y names computational functionalism, Bostrom's hypothesis and "fourth of four arguments" without explaining them
+4: Y; why: pitched to a seminar philosopher, sharp critique, broader-functionalism point, memory flagged; problem: X glosses computational functionalism and "instantiate" for an expert, and states the Searle origin unflagged and overbroad
+5: Y; why: corrects the earlier enactivism/free-energy overreach plainly, notes assertion over demonstration; problem: X glosses prediction error and autopoiesis for a reader who has shown fluency, and "Maturana and Varela, founders of enactivism" is loose
+6: Y; why: plainer for a cold reader, glosses algorithm and metabolism, separates the two words; problem: none
+7: Y; why: clear correction, plain gloss, sensible weighting of the four arguments; problem: X "how sure he is: not very" understates his "very unlikely" confidence
+8: X; why: more context for a cold reader (who, which test, why); problem: both say "second group" and "secret message board" without introducing them; X names "Patel" uncited
+9: Y; why: defines computational functionalism, map/territory, frames the dispute plainly; problem: X uses computational functionalism, "functionalist" and Bostrom's hypothesis undefined for a cold reader
+10: Y; why: ties directly to framing the substrate question, Chalmers reply useful for a seminar; problem: both gloss computational functionalism for an expert; X Searle and Y Searle/Chalmers not flagged as memory; Y glosses organizational invariance unnecessarily
+11: X; why: sharper point that enactivists reject inference talk, clean correction; problem: X glosses Bayesian updating and prediction error for a fluent reader; Y's "free-energy would put him near enactivism" and "more than Searle's" are loose inferences
+12: X; why: clear steps, inference flagged, ends on his own hedge; problem: Y's "signature framing worked out in Being You" goes beyond the passage without a memory flag

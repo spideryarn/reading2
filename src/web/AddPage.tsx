@@ -47,7 +47,7 @@
  *
  * See docs/project/ingest-queue.md and docs/project/library.md.
  */
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
@@ -80,16 +80,25 @@ import { useUpload } from "./useUpload.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { AUTO_MODES_LABEL, autoModesDetail } from "./auto-modes.js";
 import { useAutoModesSetting } from "./auto-modes-setting.js";
-import { MAX_PURPOSE_CHARS } from "../types.js";
+import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "../types.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import {
   type AddPurposeIo,
   AddPurposeSession,
   type AddPurposeSnapshot,
 } from "./add-purpose.js";
-import { SaveStatus, useUnsavedWarning } from "./ProfileBox.js";
+import { AUTOSAVE_IDLE_MS, SaveStatus, useIdleCommit, useUnsavedWarning } from "./ProfileBox.js";
+import { useFitTextarea } from "./useFitTextarea.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { keepDictation } from "./dictation-keep.js";
+import { dictationReporter } from "./dictation-report.js";
+import { type DictationContext, useReaderTranscriber } from "./dictation-upload.js";
+import { type UseDictationField, useDictationField } from "./useDictationField.js";
+import { type UseProfile, useProfile } from "./useProfile.js";
+import type { SaveState } from "./useAutosavedText.js";
 import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
+import { CircleCheck } from "lucide-react";
 import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
@@ -822,6 +831,57 @@ export function AddPage({
    * on it. Plan 261001s § Stage 3, GPT Sol's plan review item 2.
    */
   const purposeTouchedRef = useRef(false);
+  /**
+   * **About you, for a reader who has none** (spya-kan788). The save is the
+   * one `/profile` uses. Whether to offer the box is decided once, from the
+   * first successful read, and kept: a box that vanished as the reader's first
+   * words saved would be a box taken out from under them. A read that failed
+   * offers nothing, since it cannot say they have none.
+   */
+  const profile = useProfile();
+  const [askAboutYou, setAskAboutYou] = useState<boolean | null>(null);
+  /* Use the first successful answer in this render as well as latching it for
+     later ones. The completion effect runs in the same passive-effect flush as
+     the latch: reading only `askAboutYou` there could open over an empty-profile
+     answer that had already arrived but whose state update had not rendered. */
+  const askAboutYouNow =
+    askAboutYou ?? (profile.saved === null ? null : profile.saved.trim() === "");
+  useEffect(() => {
+    if (askAboutYou === null && profile.saved !== null) setAskAboutYou(profile.saved.trim() === "");
+  }, [askAboutYou, profile.saved]);
+  /* Read at completion, like `focusedRef`, to ask whether the box keeps the
+     page (`aboutYouHolds`). The save's state as of the last render. */
+  const aboutYouFocusedRef = useRef(false);
+  const profileNowRef = useRef(profile);
+  profileNowRef.current = profile;
+  const askAboutYouRef = useRef(false);
+  askAboutYouRef.current = askAboutYouNow === true;
+  /* Its words are unsaved: what keeps *Open the article* waiting, and what
+     the leave warning asks about. Only for a box that was drawn. */
+  const aboutYouPending = askAboutYouNow === true && aboutYouUnsaved(profile.state, profile.inFlight);
+  const aboutYouRefused = askAboutYouNow === true && profile.state.kind === "error";
+  useUnsavedWarning(aboutYouPending);
+  /**
+   * **A dictation in either box** (plan 261020r § Stage 3). Unmounting a box
+   * aborts its dictation, and this page leaves by itself, so every exit asks.
+   * One ref per box, because two boxes sharing one boolean would be
+   * last-writer-wins, read in the same tick as the change; and the OR as state
+   * for what is drawn (GPT Sol's review of 261020a, P1-2). The purpose box's
+   * also pauses its session's saves.
+   */
+  const purposeBusyRef = useRef(false);
+  const aboutYouBusyRef = useRef(false);
+  const [dictating, setDictating] = useState(false);
+  const busyNow = (): boolean => purposeBusyRef.current || aboutYouBusyRef.current;
+  const tellPurposeBusy = (busy: boolean): void => {
+    purposeBusyRef.current = busy;
+    purposeRef.current?.session.setPaused(busy);
+    setDictating(busyNow());
+  };
+  const tellAboutYouBusy = (busy: boolean): void => {
+    aboutYouBusyRef.current = busy;
+    setDictating(busyNow());
+  };
   const [phase, setPhase] = useState<Phase>({ kind: "running" });
   /**
    * **The once-guard on the terminal decision**, holding the completion's key.
@@ -1143,9 +1203,12 @@ export function AddPage({
   const highPowerSlug = job?.slug ?? completion?.slug ?? null;
   const highPowerAlive = !vanished && (job ? job.status === "queued" || job.status === "running" : completion === null);
   const highPowerLate = mayHaveStartedOnStandard(job?.steps, Boolean(job?.upload)) || (job === null && completion !== null);
+  /* A completion means the article and its price exist, so a waiting intent
+     may go out; a job that died without one may not (add-high-power.ts). */
+  const highPowerCompleted = completion !== null;
   useEffect(() => {
-    highPower.observe(highPowerSlug, highPowerAlive, highPowerLate);
-  }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);
+    highPower.observe(highPowerSlug, highPowerAlive, highPowerLate, highPowerCompleted);
+  }, [highPower, highPowerSlug, highPowerAlive, highPowerLate, highPowerCompleted]);
 
   /**
    * ***Make it public* for this add** — plan 261005l § 3. The tab keeps one
@@ -1261,6 +1324,14 @@ export function AddPage({
     purposeRef.current = purposeHeld;
     purposeHeld.activate();
   }, [purposeHeld]);
+  /* **No save of the live guesses** (GPT Sol's review of 261020a, P1-3): the
+     session's idle timer and the commit a landing read makes wait for the end
+     of a dictation. Here as well as in `tellPurposeBusy`, because the session
+     is replaced when the job's slug first arrives, which can be mid-sentence;
+     in the same commit as its activation, so before its first read answers. */
+  useLayoutEffect(() => {
+    purpose.setPaused(purposeBusyRef.current);
+  }, [purpose]);
   const purposeNow = useSyncExternalStore(purpose.subscribe, purpose.get);
 
   /* The read of the stored purpose runs while the add is alive: a job queued
@@ -1294,7 +1365,10 @@ export function AddPage({
        session needs its successor, and only a render makes one. */
     if (purposeRef.current?.session.isRetired) renewPurpose((n) => n + 1);
     const hidden = (): void => {
-      if (document.visibilityState === "hidden") purposeRef.current?.session.commit();
+      /* Not mid-dictation: the box holds the recogniser's rough guesses, and
+         its own commit follows in seconds (GPT Sol's review of 261020r, P1-1).
+         Leaving the page still sends what is in the box: `pagehide`, below. */
+      if (document.visibilityState === "hidden" && !purposeBusyRef.current) purposeRef.current?.session.commit();
     };
     const leaving = (): void => purposeRef.current?.session.leaveNow();
     document.addEventListener("visibilitychange", hidden);
@@ -1348,7 +1422,7 @@ export function AddPage({
 
   /** **Open the article anyway**, after the author gift was refused or lost. Opens; sends nothing more. */
   const openAnyway = (): void => {
-    if (phase.kind !== "gift") return;
+    if (phase.kind !== "gift" || busyNow()) return;
     const done = phase.completion;
     if (activeCompletionKey.current !== done.key || sourceRef.current !== done.source) return;
     setPhase({ kind: "opened" });
@@ -1396,7 +1470,10 @@ export function AddPage({
       /* The request can be slow enough for the reader to enter a purpose.
          Keep their draft and the save controls instead of hiding a refused save. */
       setPhase(
-        purposeTouchedRef.current || purposeRef.current?.session.get().unsaved
+        purposeTouchedRef.current ||
+          busyNow() ||
+          purposeRef.current?.session.get().unsaved ||
+          aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current)
           ? { kind: "ready", completion: finished, opening: false }
           : { kind: "repeat", completion: finished },
       );
@@ -1404,10 +1481,14 @@ export function AddPage({
     }
     /* **Nothing to wait for**: the box is not focused, and it holds nothing
        the server does not have. Never typed in, or typed and saved with no
-       write in flight. Read from the session in this tick, not from a render. */
+       write in flight. Read from the session in this tick, not from a render.
+       And neither box is dictating: pressing the microphone takes the focus
+       out of the box, and leaving would abort the words (plan 261020r). */
     if (
       !focusedRef.current &&
+      !busyNow() &&
       !purposeRef.current?.session.get().unsaved &&
+      !aboutYouHolds(askAboutYouRef.current, profileNowRef.current.state, profileNowRef.current.inFlight, aboutYouFocusedRef.current) &&
       !sharingUnsettled
     ) {
       /* **And ask once, when it opens**, if the reader never so much as
@@ -1424,7 +1505,10 @@ export function AddPage({
     setPhase({ kind: "ready", completion: finished, opening: false });
   }, [completionKey, completionSlug, completionRepeat, wanted, highPower]);
 
+  /* Every press that opens the article is also refused while a box is
+     dictating, and its button is disabled (`ReadyBar`'s `busy`). */
   const mayOpen = (done: Completion): boolean =>
+    !busyNow() &&
     claimed.current !== done.key &&
     activeCompletionKey.current === done.key &&
     sourceRef.current === done.source;
@@ -1437,9 +1521,16 @@ export function AddPage({
    */
   const openTheArticle = (): void => {
     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
+    /* About you too, and the press waits for both (GPT Sol's plan review,
+       finding 5): the write on the way out is the net for a reader who leaves
+       some other way, not the success path of this button. */
+    profile.commit();
     purpose.commit();
     const now = purpose.get();
-    if (!now.unsaved) {
+    const about = profileNowRef.current;
+    const aboutWaiting =
+      askAboutYouRef.current && aboutYouUnsaved(about.state, about.inFlight);
+    if (!now.unsaved && !aboutWaiting) {
       leave(phase.completion);
       return;
     }
@@ -1453,14 +1544,20 @@ export function AddPage({
     if (phase.kind !== "ready" || !phase.opening || !mayOpen(phase.completion)) return;
     const now = purposeRef.current?.session.get();
     if (!now) return;
-    if (!now.unsaved) {
-      leave(phase.completion);
+    /* One refusal does not cancel the other request. Wait for every request
+       already sent before offering to abandon both drafts: an in-flight PATCH
+       cannot be taken back, so "Open without saving" would otherwise promise
+       something the page can no longer do. */
+    if (now.inFlight || (askAboutYouRef.current && profile.inFlight)) return;
+    /* A refusal lets go: the reason is in the status line, the words are in
+       the box, and *Open without saving* appears beside the button. Either
+       box's refusal. */
+    if (cannotSave(now) || aboutYouRefused) {
+      setPhase({ kind: "ready", completion: phase.completion, opening: false });
       return;
     }
-    /* A refusal lets go: the reason is in the status line, the words are in
-       the box, and *Open without saving* appears beside the button. */
-    if (cannotSave(now)) setPhase({ kind: "ready", completion: phase.completion, opening: false });
-  }, [phase, purposeNow]);
+    if (!now.unsaved && !aboutYouPending) leave(phase.completion);
+  }, [phase, purposeNow, aboutYouPending, aboutYouRefused, profile.inFlight, dictating]);
 
   /** A repeat's *Open the article*: nothing was imported, so there is nothing of the import's to save. */
   const openTheRepeat = (): void => {
@@ -1468,10 +1565,11 @@ export function AddPage({
     leave(phase.completion);
   };
 
-  /** **Open without saving**: give the draft up, so retiring does not send it, and open. */
+  /** **Open without saving**: give both drafts up, so retiring does not send them, and open. */
   const openWithoutSaving = (): void => {
     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
     purpose.abandon();
+    if (askAboutYouRef.current) profile.abandon();
     leave(phase.completion);
   };
 
@@ -1512,7 +1610,14 @@ export function AddPage({
      false for a finished job and for an existing-article answer, which are
      exactly when the box has to stay. While running it also stays over a failed
      job, whose card has a Retry that may yet finish it (F3). */
-  const showPurpose = deciding || (phase.kind === "running" && !choosing && (showAutoModes || job !== null));
+  /* **And while either box is dictating, whatever else changed**: a
+     public-copy answer or a failed queue request would otherwise unmount a
+     live recording (GPT Sol's review of 261020a, P1-1). The box goes once its
+     words have landed. */
+  const showPurpose =
+    dictating || deciding || (phase.kind === "running" && !choosing && (showAutoModes || job !== null));
+  /* *Open the article* is on its way, so no new dictation can start under it. */
+  const micOff = (phase.kind === "ready" && phase.opening) || phase.kind === "gift" || phase.kind === "opened";
   /* A failed or stopped job is not on its way to making the article: its
      card's Retry may yet, but "it saves once the article exists" would be a
      promise. The 261001s browser check found that line under a failed import. */
@@ -1525,6 +1630,33 @@ export function AddPage({
         ? { text: uploadFilename, voice: "reader" as const }
         : { text: "your file", voice: "ui" as const }
       : { text: ok ? source : url, voice: "reader" as const };
+
+  /* The same block at both ends of the page while it waits (`ReadyBar`),
+     including an untouched repeat paste: it too has finished and waits for a
+     press, even though there was no new import to save. */
+  const readyCompletion =
+    phase.kind === "ready" || phase.kind === "repeat" ? phase.completion : null;
+  const readyBar = (top: boolean) =>
+    readyCompletion && (
+      <ReadyBar
+        top={top}
+        sentence={
+          readyCompletion.repeat
+            ? REPEAT_PASTE_ON_THE_SHELF
+            : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."
+        }
+        opening={phase.kind === "ready" && phase.opening}
+        busy={dictating}
+        offerWithoutSaving={
+          phase.kind === "ready" &&
+          (cannotSave(purposeNow) || aboutYouRefused) &&
+          !purposeNow.inFlight &&
+          !(askAboutYouNow === true && profile.inFlight)
+        }
+        onOpen={phase.kind === "ready" ? openTheArticle : openTheRepeat}
+        onOpenWithoutSaving={openWithoutSaving}
+      />
+    );
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
@@ -1549,12 +1681,59 @@ export function AddPage({
         </p>
       </header>
 
+      {/* **Ready, at the top as well as the bottom** (spya-kan788): the
+          reader is in a box up here by the time it finishes. */}
+      {readyBar(true)}
+
       {/* **The transfer, while it is this tab's to show.** Everything below
           this is about a job, and until the bytes have landed there is no job —
           which is the whole difference the background upload made to this page.
           Above the disclosure sentence rather than below it, because it is what
           the reader came here to watch. */}
       {mine && <Sending transfer={mine} />}
+      {/* **The boxes near the top** (spya-kan788: *"put the 'Why are you
+          reading this?' box nearer the top of the add page"*). Under the upload
+          bar, which is what a reader who just pressed Add came to watch, and
+          above everything about the job. */}
+      {showPurpose && (
+        <div data-add-boxes className="tw:mb-4 tw:flex tw:flex-col tw:gap-4">
+          <PurposeBox
+            now={purposeNow}
+            stopped={jobStopped}
+            slug={job?.slug ?? completion?.slug ?? null}
+            keeper={`add:purpose:${wanted}`}
+            micOff={micOff}
+            onCommit={purpose.commit}
+            onBusyChange={tellPurposeBusy}
+            onChange={(value) => {
+              /* Straight into the session, which is what a completion landing
+                 before the next render will read. */
+              purposeTouchedRef.current = true;
+              purpose.setText(value, true);
+            }}
+            onFocusChange={(focused) => {
+              focusedRef.current = focused;
+              if (focused) purposeTouchedRef.current = true;
+              /* A blur saves. While waiting at the end it still does not open. */
+              else purpose.commit();
+            }}
+            /* ⌘/Ctrl+Enter saves while the import runs, and is *Open the
+               article* once it is in. */
+            onShortcut={phase.kind === "ready" ? openTheArticle : purpose.commit}
+          />
+          {askAboutYouNow === true && (
+            <AboutYouBox
+              profile={profile}
+              micOff={micOff}
+              onBusyChange={tellAboutYouBusy}
+              onFocusChange={(focused) => {
+                aboutYouFocusedRef.current = focused;
+              }}
+            />
+          )}
+        </div>
+      )}
+
       {/* **Queueing gets a line and no button.** One small request, and it
           cannot be undone — see `cancel` in uploadEngine.ts. Saying so beats
           both a Stop that declines and a bar that has silently stopped moving. */}
@@ -1845,60 +2024,9 @@ export function AddPage({
         />
       )}
 
-      {showPurpose && (
-        <PurposeBox
-          now={purposeNow}
-          stopped={jobStopped}
-          onChange={(value) => {
-            /* Straight into the session, which is what a completion landing
-               before the next render will read. */
-            purposeTouchedRef.current = true;
-            purpose.setText(value, true);
-          }}
-          onFocusChange={(focused) => {
-            focusedRef.current = focused;
-            if (focused) purposeTouchedRef.current = true;
-            /* A blur saves. While waiting at the end it still does not open. */
-            else purpose.commit();
-          }}
-          /* ⌘/Ctrl+Enter saves while the import runs, and is *Open the
-             article* once it is in. */
-          onShortcut={phase.kind === "ready" ? openTheArticle : purpose.commit}
-        />
-      )}
+      {readyBar(false)}
 
-      {phase.kind === "ready" && (
-        <div className="tw:mt-3">
-          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
-            {phase.completion.repeat
-              ? REPEAT_PASTE_ON_THE_SHELF
-              : "Ready. Any first modes that were queued use the reason saved when the import finished. Changes saved after that reach chat and anything you generate later."}
-          </p>
-          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <Button type="button" size="sm" disabled={phase.opening} onClick={openTheArticle}>
-              {phase.opening ? "Saving…" : "Open the article"}
-            </Button>
-            {/* Only when the words cannot be saved from here: a refusal, or
-                the read of the stored purpose gave up. */}
-            {cannotSave(purposeNow) && (
-              <Button type="button" variant="ghost" size="sm" onClick={openWithoutSaving}>
-                Open without saving
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {choosing && <PublicChoice found={publicAnswer} onOwnCopy={chooseOwnCopy} />}
-
-      {phase.kind === "repeat" && (
-        <div data-add-repeat className="tw:mt-3">
-          <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{REPEAT_PASTE_ON_THE_SHELF}</p>
-          <Button type="button" size="sm" onClick={openTheRepeat}>
-            Open the article
-          </Button>
-        </div>
-      )}
+      {choosing && <PublicChoice found={publicAnswer} busy={dictating} onOwnCopy={chooseOwnCopy} />}
 
       {job?.status === "done" && phase.kind === "opened" && <Done job={job} />}
 
@@ -1918,15 +2046,30 @@ export function AddPage({
  * ordinary import. Greg, 2026-10-09 (`spya-ahvk74`);
  * docs/plans/261009j-a-public-copy-offered-at-import.md.
  */
-function PublicChoice({ found, onOwnCopy }: { found: PublicCopyFound["publicCopy"]; onOwnCopy: () => void }) {
+function PublicChoice({
+  found,
+  busy,
+  onOwnCopy,
+}: {
+  found: PublicCopyFound["publicCopy"];
+  /** A box above is dictating. The link leaves the page and would abort it; *Add my own copy* stays. */
+  busy: boolean;
+  onOwnCopy: () => void;
+}) {
   return (
     <div data-add-public className="tw:mt-3">
       <p className="tw:mt-0 tw:mb-1 tw:text-sm tw:text-foreground">{PUBLIC_COPY_FOUND(found.title)}</p>
       <p className="tw:mt-0 tw:mb-3 tw:text-sm tw:text-muted-foreground">{PUBLIC_COPY_EXPLAIN}</p>
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-        <Button asChild size="sm">
-          <Link href={readHref(found.slug)} className="tw:no-underline">{PUBLIC_COPY_READ}</Link>
-        </Button>
+        {busy ? (
+          <Button type="button" size="sm" disabled>
+            {PUBLIC_COPY_READ}
+          </Button>
+        ) : (
+          <Button asChild size="sm">
+            <Link href={readHref(found.slug)} className="tw:no-underline">{PUBLIC_COPY_READ}</Link>
+          </Button>
+        )}
         <Button type="button" variant="outline" size="sm" onClick={onOwnCopy}>
           {PUBLIC_COPY_OWN}
         </Button>
@@ -1948,11 +2091,15 @@ function cannotSave(now: AddPurposeSnapshot): boolean {
  * **"Why are you reading this?"**: a plain textarea in `ProfileBox`'s clothes,
  * saving as it is typed (plan 261004l).
  *
- * Not `ProfileBox` itself: that brings dictation, which the add page has never
- * loaded, and a microphone running while the page opens the article by itself
- * is a new way to lose words (the plan's § The simpler option passed over).
- * It uses the leave warning and status line exported from there. The session
- * in add-purpose.ts owns the save timer so it also runs during suspended renders.
+ * Not `ProfileBox` itself: the session in add-purpose.ts owns the save timer
+ * so it also runs during suspended renders. It uses the leave warning and
+ * status line exported from there.
+ *
+ * **With a microphone** (Greg, 2026-10-19, spya-wc4vku: *"make sure there's a
+ * dictation button next to the Why are you reading this? input box"*). This
+ * page leaves by itself and unmounting aborts a dictation, so the box tells
+ * the page when it is `busy` and the page holds every exit while it is: plan
+ * docs/plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md.
  *
  * Capped rather than counted past: the server refuses more than
  * `MAX_PURPOSE_CHARS`, and the box is a better place to learn that than a
@@ -1965,31 +2112,65 @@ function cannotSave(now: AddPurposeSnapshot): boolean {
 function PurposeBox({
   now,
   stopped,
+  slug,
+  keeper,
+  micOff,
   onChange,
+  onCommit,
   onFocusChange,
+  onBusyChange,
   onShortcut,
 }: {
   now: AddPurposeSnapshot;
   /** The job failed or was stopped, so nothing is on its way to making the article. */
   stopped: boolean;
+  /** The article's slug once the job has one: the dictation's vocabulary. */
+  slug: string | null;
+  /** The keeper's box name: `add:purpose:<wanted>` (GPT Sol's review of 261020a, P1-4). */
+  keeper: string;
+  /** *Open the article* is on its way: no new dictation. Stopping one always works. */
+  micOff: boolean;
   onChange: (value: string) => void;
+  onCommit: () => void;
   onFocusChange: (focused: boolean) => void;
+  onBusyChange: (busy: boolean) => void;
   onShortcut: () => void;
 }) {
+  const box = useRef<HTMLTextAreaElement>(null);
+  /* **Bigger, and as tall as its words.** Greg, 2026-10-19 (spya-jk0cgg):
+     *"make the 'Why are you reading this?' box bigger/auto-expanding."* Four
+     rows is the floor; useFitTextarea.ts grows it. */
+  useFitTextarea(box, now.text);
+  const dictate = useBusyDictation({
+    value: now.text,
+    onChange,
+    onCommit,
+    box,
+    /* The article's glossary and title once there is an article; the
+       reader's profile before (GPT Sol's review of 261020a, P2-5). Read at
+       the press, so a slug arriving mid-sentence changes nothing. */
+    context: slug === null ? { kind: "profile" } : { kind: "article", slug },
+    keeper,
+    onBusyChange,
+  });
   return (
-    <div className="prof-box tw:mt-4">
+    <div className="prof-box">
       <div className="prof-box-head">
         <label className="prof-box-label" htmlFor="add-purpose">
           Why are you reading this?
         </label>
+        <span className="prof-box-scope">This article</span>
+        <AddMic dictate={dictate} micOff={micOff} />
       </div>
       <textarea
         id="add-purpose"
-        className="prof-box-input"
-        rows={2}
+        ref={box}
+        className="prof-box-input is-fit"
+        rows={4}
         maxLength={MAX_PURPOSE_CHARS}
         placeholder="e.g. I want to know how they handled missing data"
         value={now.text}
+        readOnly={dictate.readOnly}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => onFocusChange(true)}
         onBlur={() => onFocusChange(false)}
@@ -2001,6 +2182,7 @@ function PurposeBox({
           }
         }}
       />
+      <DictationStrip dictation={dictate.dictation} />
       <div className="prof-box-foot">
         {/* Each sentence has to be true with automatic modes off, on a re-add,
             and when the import failed after its row was made (Sol's F8). */}
@@ -2015,6 +2197,263 @@ function PurposeBox({
         </span>
       </div>
       <PurposeLine now={now} stopped={stopped} />
+    </div>
+  );
+}
+
+/**
+ * Whether the About-you box holds anything the server may not have, or the
+ * reader is in it: either one keeps the page from opening the article by
+ * itself, as the purpose box does.
+ */
+function aboutYouHolds(shown: boolean, state: SaveState, inFlight: boolean, focused: boolean): boolean {
+  /* Only a box the reader could see. A read that failed is `error` too, and
+     holding on it would wait for ever behind a box that was never drawn (GPT
+     Sol's plan review, finding 2). */
+  if (!shown) return false;
+  return focused || aboutYouUnsaved(state, inFlight);
+}
+
+/** Words in the About-you box the server may not have. */
+function aboutYouUnsaved(state: SaveState, inFlight: boolean): boolean {
+  return inFlight || state.kind === "dirty" || state.kind === "saving" || state.kind === "error";
+}
+
+/**
+ * **About you**, offered on the add page to a reader who has never written
+ * one. Greg, 2026-10-19 (spya-kan788): *"if they haven't filled out a user
+ * profile yet at all, perhaps also add a box for that too, so they can
+ * potentially fill out both. Make it clear which is which and how they're
+ * different."* The difference is said in the scope beside each label and in
+ * the first words of each hint.
+ *
+ * `useProfile`'s save, the one `/profile` uses, including the write on the way
+ * out. A plain textarea rather than `ProfileBox`, whose microphone does not
+ * tell a page that leaves by itself when it is busy. Its own microphone does,
+ * as `PurposeBox`'s.
+ */
+function AboutYouBox({
+  profile,
+  micOff,
+  onFocusChange,
+  onBusyChange,
+}: {
+  profile: UseProfile;
+  micOff: boolean;
+  onFocusChange: (focused: boolean) => void;
+  onBusyChange: (busy: boolean) => void;
+}) {
+  const box = useRef<HTMLTextAreaElement>(null);
+  useFitTextarea(box, profile.draft);
+  const dictate = useBusyDictation({
+    value: profile.draft,
+    onChange: profile.setDraft,
+    onCommit: profile.commit,
+    box,
+    context: { kind: "profile" },
+    /* One field for every article, so not keyed on the source: its words can
+       be offered back on the next add, whatever is being added. */
+    keeper: "add:about-you",
+    onBusyChange,
+  });
+  /* Not while dictating: the live guesses are not the words (ProfileBox.tsx;
+     GPT Sol's review of 261020a, P1-3). The dictation commits at its end. */
+  useIdleCommit({
+    text: profile.draft,
+    dirty: profile.state.kind === "dirty",
+    inFlight: profile.inFlight,
+    paused: dictate.busy,
+    ms: AUTOSAVE_IDLE_MS,
+    commit: profile.commit,
+  });
+  return (
+    <div className="prof-box">
+      <div className="prof-box-head">
+        <label className="prof-box-label" htmlFor="add-about-you">
+          About you
+        </label>
+        <span className="prof-box-scope">Every article</span>
+        <AddMic dictate={dictate} micOff={micOff} />
+      </div>
+      <textarea
+        id="add-about-you"
+        ref={box}
+        className="prof-box-input is-fit"
+        rows={3}
+        readOnly={dictate.readOnly}
+        /* No `maxLength`: the browser would silently drop the end of a long
+           paste. Counted past instead, and the server refuses it with the
+           words still here (ProfileBox.tsx; GPT Sol's plan review, finding 3). */
+        placeholder="e.g. I'm a nurse, new to statistics, reading up for a research project"
+        value={profile.draft}
+        onChange={(e) => profile.setDraft(e.target.value)}
+        onFocus={() => onFocusChange(true)}
+        onBlur={() => {
+          onFocusChange(false);
+          profile.commit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            profile.commit();
+          }
+        }}
+      />
+      <DictationStrip dictation={dictate.dictation} />
+      <div className="prof-box-foot">
+        <p className="prof-box-hint">
+          For every article you read here, not just this one: your background, what you already
+          know, what you are working on. Optional. Saved to your profile, which you can change any
+          time on the Profile page.
+        </p>
+        <span className={`prof-count${profile.draft.length > MAX_PROFILE_CHARS ? " over" : ""}`}>
+          {profile.draft.length} / {MAX_PROFILE_CHARS}
+        </span>
+      </div>
+      <SaveStatus save={profile.state} />
+    </div>
+  );
+}
+
+/**
+ * **The two boxes' microphone**, the same in each: `useDictationField` as
+ * dictation.md § Adding it to a box has it, plus `busy` told to the page from
+ * a layout effect, so the page's refs have it before any passive effect or
+ * press reads them. The page holds every exit while either box is busy.
+ */
+function useBusyDictation({
+  keeper,
+  onBusyChange,
+  ...field
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+  box: RefObject<HTMLTextAreaElement | null>;
+  context: DictationContext;
+  keeper: string;
+  onBusyChange: (busy: boolean) => void;
+}): UseDictationField {
+  const transcribe = useReaderTranscriber();
+  const dictate = useDictationField({
+    ...field,
+    transcribe,
+    report: dictationReporter("add"),
+    keep: keepDictation(keeper),
+  });
+  const tell = useRef(onBusyChange);
+  tell.current = onBusyChange;
+  /** Busy said at a press, before the hook's own state has rendered. */
+  const claimed = useRef(false);
+  const claim = (): void => {
+    if (dictate.busy) return;
+    claimed.current = true;
+    tell.current(true);
+  };
+  const toggle = (): void => {
+    /* The press and an add answer can be batched into one render. Say busy at
+       the press, before that render can remove this box. */
+    claim();
+    dictate.toggle();
+  };
+  const retry = (): void => {
+    /* Retrying kept audio also enters `transcribing`, and has the same
+       same-batch unmount race as a first microphone press. */
+    claim();
+    dictate.dictation.retry();
+  };
+  useLayoutEffect(() => {
+    tell.current(dictate.busy);
+  }, [dictate.busy]);
+  /* **A refused press leaves `busy` false**, so the effect above never runs
+     again to take the claim back (a moved offer the hook will not clear, a
+     press inside the cap's grace, a retry with nothing to send), and the page
+     would wait for ever. The first render after the press settles it. Every
+     render, but it calls out only after a claim. */
+  useLayoutEffect(() => {
+    if (!claimed.current) return;
+    claimed.current = false;
+    if (!dictate.busy) tell.current(false);
+  });
+  /* A box that has gone is not busy: its dictation was aborted with it. */
+  useLayoutEffect(() => () => tell.current(false), []);
+  return { ...dictate, dictation: { ...dictate.dictation, retry }, toggle };
+}
+
+/**
+ * The button. Off only while idle, once *Open the article* is on its way: a
+ * button switched off mid-dictation would be a Stop that cannot stop.
+ */
+function AddMic({ dictate, micOff }: { dictate: UseDictationField; micOff: boolean }) {
+  if (!dictate.dictation.supported) return null;
+  return (
+    <DictationButton
+      dictation={dictate.dictation}
+      toggle={dictate.toggle}
+      disabled={micOff && !dictate.busy}
+    />
+  );
+}
+
+/**
+ * **The import is in, said where the reader is looking.** Greg, 2026-10-19
+ * (spya-kan788): *"when the import process has finished, make that crystal
+ * clear, e.g. a button appearing at both bottom and top."* One component drawn
+ * at both ends of the page, with the same handlers, so the two cannot
+ * disagree. `top` is the highlighted one.
+ */
+function ReadyBar({
+  top,
+  sentence,
+  opening,
+  busy,
+  offerWithoutSaving,
+  onOpen,
+  onOpenWithoutSaving,
+}: {
+  top: boolean;
+  sentence: string;
+  opening: boolean;
+  /** A box is dictating: opening now would abort it. The handlers refuse as well. */
+  busy: boolean;
+  offerWithoutSaving: boolean;
+  onOpen: () => void;
+  onOpenWithoutSaving: () => void;
+}) {
+  return (
+    <div
+      data-add-ready={top ? "top" : "bottom"}
+      className={
+        top
+          ? "tw:mb-4 tw:rounded-md tw:border tw:border-highlight-text/40 tw:bg-highlight-text/10 tw:p-4"
+          : "tw:mt-3"
+      }
+    >
+      {/* **A big green tick.** Greg, 2026-10-19 (spya-a40t70): *"a loading
+          spinner that becomes a big green check mark or something, so it's
+          really clear when things have finished importing."* */}
+      {top && (
+        <p
+          role="status"
+          className="tw:mt-0 tw:mb-1 tw:flex tw:items-center tw:gap-2 tw:text-base tw:font-semibold tw:text-foreground"
+        >
+          <CircleCheck size={28} className="add-ready-tick" aria-hidden="true" />
+          Your article is ready.
+        </p>
+      )}
+      <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{sentence}</p>
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+        <Button type="button" size="sm" disabled={opening || busy} onClick={onOpen}>
+          {opening ? "Saving…" : "Open the article"}
+        </Button>
+        {/* Only when the words cannot be saved from here: a refusal, or the
+            read of the stored purpose gave up. */}
+        {offerWithoutSaving && (
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onOpenWithoutSaving}>
+            Open without saving
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

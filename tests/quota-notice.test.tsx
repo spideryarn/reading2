@@ -44,6 +44,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import {
   BILLING_NOT_AVAILABLE,
   BILLING_UNREACHABLE,
+  longPdfQuotaReached,
   NOTHING_TO_MANAGE,
   QUOTA_CODES,
   READ_THIS_ALREADY_RUNNING,
@@ -104,6 +105,11 @@ const REFUSALS = [
     why: "a minimal add needs more allowance, and plans are compared on /pricing",
     refusal: minimalQuotaReached({ fits: 0 }),
     href: "/pricing",
+  },
+  {
+    why: "a long PDF that needs more articles than are left, on any plan: /profile works for both",
+    refusal: longPdfQuotaReached({ pages: 250, slots: 5, slotsLeft: 2 }),
+    href: "/profile",
   },
 ] as const;
 

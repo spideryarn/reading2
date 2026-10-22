@@ -49,7 +49,11 @@ Two numbers here *are* independently attested by the code, and both are kept:
 The evidence, and it is unusually good:
 
 - **Dyson & Kipping (1998)**, *Reading and Writing* 10(6):379–393 — 55 characters gave the highest
-  comprehension; **80 characters read ~7% faster but comprehended ~12% worse**.
+  comprehension; **80 characters read ~7% faster but comprehended ~12% worse**. *Corrected
+  2026-10-22: not what that paper found.* It is *Visible Language* 32(2), it tested 25, 55 and 100
+  characters, and its abstract says the 100-character lines were read faster with comprehension
+  unchanged, and 55 was rated easiest. The 80 / 7% / 12% figures have no source we could find —
+  [261022a](../../research/261022a-reading-measure-line-spacing-and-paragraph-spacing-evidence.md).
 - **Bernard, Fernandez & Hull (2002)**, *Usability News* 4(2) — preference: 55–70 chars, 85%
   approval; 95+ chars, 23% approval.
 - **Shaikh & Chaparro (2005)**, HFES 49th — 95 characters was **fastest** to read (+12% speed) and

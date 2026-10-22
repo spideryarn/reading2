@@ -18,7 +18,7 @@
  * keeps the first `since`.
  */
 
-import { and, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
 
 import { isAdmin } from "../admin.js";
 import { getDb } from "../db/client.js";
@@ -33,6 +33,46 @@ function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
+type Db = ReturnType<typeof getDb>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+/** The pool or a transaction somebody else holds: the switch-on is one statement either way. */
+export type HighPowerExecutor = Db | Tx;
+
+/**
+ * **Switch the one article `row` names on, uncharged, if it is off** — and
+ * answer whether this statement made the transition.
+ *
+ * The write `switchOnForAdmin` makes, on whatever executor the caller holds, so
+ * that a gift can switch its article on **inside** the transaction that makes
+ * the gift (`prepareGiftArticleIn`, src/store/pg-gift-prep.ts, plan 261021j §
+ * D2). It checks nobody: each caller is the administrator's and says so where
+ * it calls. Never the reader's charged path (`chargeAndSwitchOnHighPower`,
+ * src/billing/admission.ts), which writes its charge in the same transaction.
+ *
+ * `row` must narrow to one article — `ownedSlug(slug)`, or an id the caller
+ * has locked and checked the owner of.
+ */
+export async function switchOnHighPowerIn(db: HighPowerExecutor, row: SQL | undefined): Promise<boolean> {
+  /* Drizzle's `and` permits `undefined`, which is useful to optional clauses
+     but dangerous here: `and(undefined, isNull(high_power_since))` would match
+     every standard-power article. Keep the runtime boundary as narrow as the
+     function's contract even though `ownedSlug`'s inferred type is nullable. */
+  if (row === undefined) throw new Error("switchOnHighPowerIn requires a predicate that identifies one article");
+  /* Conditional on the other state, so a repeat is a no-op that keeps the
+     first `since` without a read-then-write window.
+
+     `updated_at` rides in the same conditional statement, so it moves on a real
+     transition and not on a repeat. Use the database wall clock rather than an
+     application clock read before sending the query. */
+  const at = new Date();
+  const switched = await db
+    .update(articles)
+    .set({ highPowerSince: at, updatedAt: sql`clock_timestamp()` })
+    .where(and(row, isNull(articles.highPowerSince)))
+    .returning({ id: articles.id });
+  return switched.length > 0;
+}
+
 async function writeState(slug: string, on: boolean): Promise<string | null> {
   requireSlug(slug);
   const db = getDb();
@@ -42,14 +82,9 @@ async function writeState(slug: string, on: boolean): Promise<string | null> {
 
      `updated_at` rides in the same conditional statement, so it moves on a real
      transition and not on a repeat — and it is the only thing switching *off*
-     leaves behind, since that nulls `high_power_since`. Use the database wall
-     clock rather than an application clock read before sending the query. */
+     leaves behind, since that nulls `high_power_since`. */
   if (on) {
-    const at = new Date();
-    await db
-      .update(articles)
-      .set({ highPowerSince: at, updatedAt: sql`clock_timestamp()` })
-      .where(and(ownedSlug(slug), isNull(articles.highPowerSince)));
+    await switchOnHighPowerIn(db, ownedSlug(slug));
   } else {
     await db
       .update(articles)

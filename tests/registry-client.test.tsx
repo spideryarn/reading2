@@ -354,7 +354,7 @@ function receptionOwner(row: ClaimReceptionRow): UseReception {
 }
 
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
 describe("a Debate row on screen", () => {
   it("draws the registry by-line and names the exact fields it supplied", async () => {
@@ -380,9 +380,12 @@ describe("a Debate row on screen", () => {
         }),
       ),
     );
-    const byline = host.querySelector<HTMLElement>(".rcp-byline");
-    expect(byline?.textContent).toContain("Erin Wamsley, Stickgold · 2010");
-    expect(byline?.getAttribute("data-tip")).toContain("Authors and year from DataCite");
+    /* A row is two lines until opened (plan 261020n): the year on the closed
+       row, with whose it is on hover; every author in the open row. */
+    const year = host.querySelector<HTMLElement>(".rcp-meta .rcp-year");
+    expect(year?.textContent).toBe("2010");
+    expect(year?.getAttribute("data-tip")).toContain("Year from DataCite");
+    expect(host.querySelector(".rcp-detail .rcp-authors")?.textContent).toBe("By Erin Wamsley, Stickgold");
     expect(host.querySelector(".rcp-detail")?.textContent).toContain("Authors and year from DataCite");
   });
 });

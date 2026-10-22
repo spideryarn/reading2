@@ -40,7 +40,7 @@ import type { FindMoreMode } from "./find-more.js";
  * Neither has a verb in the bar either: the bar has its own mode rows and its
  * own *Quick search “X”* row, and these are those rows as a model may name
  * them. A `mode` key is a command-pick catalogue id — `mode:glossary`,
- * `submode:learn:tutorial` (command-match.ts § `commandId`) — and parsing it
+ * `submode:learn:quiz` (command-match.ts § `commandId`) — and parsing it
  * says only that it is shaped like one: whether the reader can open it *here*
  * is the live set's to say (`ArgumentSources.modes`, GPT Sol's F3).
  */
@@ -247,9 +247,9 @@ export interface GlossaryLookupSource {
  * set (command-runners.ts § `modeDoor`), never from the whole catalogue.
  */
 export interface ModeTarget {
-  /** The catalogue key: `mode:glossary`, `submode:learn:tutorial`. */
+  /** The catalogue key: `mode:glossary`, `submode:learn:quiz`. */
   readonly key: string;
-  /** Its name as the reader sees it: `Glossary`, `Learn › Tutorial`. */
+  /** Its name as the reader sees it: `Glossary`, `Learn › Quiz`. */
   readonly label: string;
   /** The bar's own sentence about it. */
   readonly description: string;
@@ -542,7 +542,7 @@ export interface CommandExecutor {
    * **Put a question about the debate, seen from this angle, in Chat's box** —
    * since 2026-10-05, plan 261005k: what the bar's suggested lens row presses.
    * The reading view's own waiting handoff (Reader.tsx §
-   * `suggestedLensInChat`), deliberately not the sending wrapper Debate's box
+   * `suggestedLensInChat`), deliberately not the sending one Sources › Investigate
    * calls, so nothing is sent until the reader presses Send. The bar's own,
    * like `quickSearch`: chat's chips never see it.
    *

@@ -61,7 +61,7 @@ contract come from.
 - [§ The "?" says so, and the answer teaches](#the-says-so-and-the-answer-teaches) — the "?" gesture
 - [§ The bug that shaped the literal search](#the-bug-that-shaped-the-literal-search) — (history) why word search is literal
 - [§ What chat is told is on screen](#what-chat-is-told-is-on-screen) — the on-screen blocks the composer sends
-- [§ Command buttons: chat proposes, the reader presses](#command-buttons-chat-proposes-the-reader-presses) — chat-proposed commands
+- [§ Command buttons: chat proposes, the reader presses](#command-buttons-chat-proposes-the-reader-presses) — chat-proposed commands, and [Chat's offer to keep an instruction in About you](#chat-and-explore-offer-to-keep-an-instruction-in-about-you)
 - [§ Not built, and worth building](#not-built-and-worth-building) — backlog
 - [§ What the browser pass found](#what-the-browser-pass-found) — (history) a browser test round
 - [§ The model claimed a search it never ran](#the-model-claimed-a-search-it-never-ran) — (history) a postmortem-style note
@@ -142,8 +142,8 @@ arrives is a count in `usage` — which is why the panel renders it as one row s
 searches ran. **It does not say what was searched for, because we do not know**, and a plausible
 invented query would be the most convincing wrong thing on the screen.
 
-**Every typed conversation but the guide has it** — Chat, Learn's Recall, Tutorial and Explore, and
-Referee's Candidates (on Exa).
+**Every typed conversation but the guide has it** — Chat, Learn's Recall and Explore, and
+Referee's Candidates (on Exa). (Tutorial had it too, until Recall took it in on 2026-10-20.)
 
 > I think we should allow web searches in all of the chat modes because very often users are going
 > to wanting to be situating this article relative to other stuff on the web, and it's too strict
@@ -364,7 +364,7 @@ model to say the paper was not read. One deadline covers the registry and the pa
 [`tests/read-cited-work.test.ts`](../../tests/read-cited-work.test.ts).
 
 **Chat and Explore only**, beside `reader_notes` in `toolsFor`: not Live (a 25-second PDF read in a
-spoken turn), not Learn, Tutorial, Candidates or the guide.
+spoken turn), not Learn, Candidates or the guide.
 
 **Measured before the button was built**, because a tool the model never calls looks built
 (`evals/read-cited-work.ts`, 2026-10-11, four articles): called 4 of 4 times, the paper read 2 of 4;
@@ -399,7 +399,9 @@ This is the plumbing it needs, and Chat got it first.
 ```
 reader_notes()                    → the reader's comments, highlights and bookmarks on this
                                     article, then a list of their other conversations about it
-reader_notes({ thread: "<id>" })  → one of those conversations
+reader_notes({ thread: "<id>" })  → one of those conversations, newest exchanges first into the space
+reader_notes({ thread: "<id>", before: n })
+                                  → the exchanges of it numbered below n
 ```
 
 The formatting is [`src/reader-notes.ts`](../../src/reader-notes.ts): pure functions with no store
@@ -434,9 +436,16 @@ reads and what to say when one fails.
 - **A direct read obeys the same rule as the index.** Naming a Candidates thread's id gets the
   sentence an unknown id gets, word for word. The current thread's id gets its own sentence. None
   of them throws.
-- **One conversation is its finished exchanges, as whole pairs.** The newest
-  `MAX_TRANSCRIPT_EXCHANGES` (10) that fit `TRANSCRIPT_CHARS` (8,000) including headings and
-  fence, each turn clipped to `TRANSCRIPT_TURN_CHARS` (700) and carrying its time, shown oldest first.
+- **One conversation is its finished exchanges, as whole pairs, and all of it can be read.** The
+  newest `MAX_TRANSCRIPT_EXCHANGES` (40) that fit `TRANSCRIPT_CHARS` (32,000) including headings
+  and fence, each turn shown whole up to `TRANSCRIPT_TURN_CHARS` (6,000), numbered from 1 for the
+  oldest, carrying its time, shown oldest first. A call that does not reach exchange 1 says so and
+  names the call for the rest, `reader_notes({ thread, before: n })`, which shows the exchanges
+  numbered below `n`. Until 2026-10-20 it was 10 exchanges, 700 characters a turn and 8,000 in all,
+  with no way to the earlier part: 79% of Chat answers on production were longer than 700, and an
+  Explore model asked to pick up from a Recall conversation told the reader it could not read all
+  of it (`spya-sfpcmm`, plan
+  [261020k](../plans/261020k-reading-another-conversation-in-full.md)).
 - **An unfinished turn is never shown as a finished one** (PR-4). A failed answer keeps its partial
   prose in storage, and an interrupted spoken one keeps words nobody heard. So failed, pending and
   interrupted exchanges are left out and counted in a sentence. An answer the reader stopped, or one
@@ -449,7 +458,7 @@ reads and what to say when one fails.
   of our rows.
 
 **Who gets it: typed Chat and Explore.** It is not in `CHAT_TOOLS`. `toolsFor(kind)` returns the
-shared eight plus this for `chat` and `explore`, the shared eight for Recall, Tutorial and
+shared eight plus this for `chat` and `explore`, the shared eight for Recall and
 Candidates, and the guide's five for the guide; the `switch` is exhaustive, so a new kind has to be
 given an answer. Chat reaches for it when the reader
 asks what they marked or said. **Explore has the notes and the list already**, sent with every turn
@@ -458,9 +467,9 @@ conversation in full. Why each of the others is left out (PR-3):
 
 - **Live** shares `CHAT_TOOLS`, and its tool endpoint is given a tool's name and an article and no
   thread. It could not leave the current conversation out, and it is callable on its own.
-- **Recall and Tutorial** are about the article, and their prompts say not to guess how far the
-  reader has got. A tool that tempts them off that job is better withheld than argued with in the
-  prompt. Either can be added later, with a check of how it behaves.
+- **Recall** is about the article, and its prompt says not to guess how far the reader has got
+  (Tutorial's said the same, until Recall took it in). A tool that tempts it off that job is better
+  withheld than argued with in the prompt. It can be added later, with a check of how it behaves.
 - **Candidates** is Referee machinery.
 
 **The offer is not the gate.** `runTool` asks the applicable list again before it runs **any** name,
@@ -490,6 +499,10 @@ query and fragment, which bounds how much can leave in one request; a short note
 on bulk, and a single note can still leave. The tool's description tells the model never to put
 what it read in a search or a URL, which is advice to a model and not a boundary. The fix is the
 same allowlist as before ([§ Still open](#still-open)), and this is one more thing waiting on it.
+**Since 2026-10-20 there is more to take**: one call shows up to 32,000 characters of a
+conversation rather than 8,000, and `before` reaches its oldest exchanges, which were unreachable
+before ([261020k](../plans/261020k-reading-another-conversation-in-full.md)). The owner boundary
+and the URL caps are unchanged; what an injected model can see, and how far back, is not.
 
 **And since 2026-10-08 part of it is in the prompt without a call.** Every typed Chat turn now
 carries the index of the reader's other conversations, each with a model-written line on what it
@@ -555,6 +568,10 @@ the conversation went. Two pieces fix that:
   (Explore) or have no tool to open a conversation with. The rows share `THREADS_CHARS`, raised to
   5,000 for the longer rows; with the sentences around them the section is under 6,000 characters,
   a few hundred tokens for a reader with a handful of conversations.
+- **READING SO FAR**, in the final user message of every kind but Candidates: one coarse phrase
+  for how much of the piece the owner has read, with its rule beside it (pitch silently; not the
+  reader saying they read it; asked, say plainly what you are told).
+  [reading-time.md § Who else reads it](reading-time.md#who-else-reads-it).
 
 The prompt's bullet asks for a narrow trigger: open a conversation that took up the same question,
 claim, passage or objection, not one on a nearby topic, and add to it rather than repeat it.
@@ -645,7 +662,7 @@ Since 2026-10-05, for report `spya-hyfqkq`
 ([261005i](../plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md), D5).
 From 2026-10-01 it showed chats only.
 
-- **What is listed.** Chats, and Learn's Recall, Tutorial and Explore conversations. Referee's
+- **What is listed.** Chats, and Learn's Recall and Explore conversations. Referee's
   Candidates thread is not: it is not a conversation the reader had. **The guide is not listed but
   pinned** (since 2026-10-07,
   [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)): one row above the
@@ -662,7 +679,7 @@ From 2026-10-01 it showed chats only.
   (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
-  from a claim in Sources › Claims*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
+  from a claim in Sources › Claims*), one of Learn's conversation kinds (`learn` or `explore`,
   rendered as *From Learn › Recall* and its siblings), an anchor (*About a
   passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
   an icon at its head, the source mode's own from the bar
@@ -871,7 +888,7 @@ of the one column a shared transcript would have to publish.
 **Two smaller things its own plan must also handle**, both found in the same review and both
 verified against the schema:
 
-- **`chat_threads.kind` is `'chat' | 'learn' | 'candidates' | 'tutorial' | 'explore'`**
+- **`chat_threads.kind` is `'chat' | 'learn' | 'candidates' | 'explore' | 'guide'`**
   ([`schema.ts`](../../src/db/schema.ts) § `chatThreads`; [`types.ts`](../../src/types.ts) §
   `THREAD_KINDS`). A public query that does not filter `kind = 'chat'`
   **in SQL** publishes Learn conversation transcripts and Referee candidate machinery, whatever the visitor's
@@ -982,7 +999,7 @@ and the before-and-after numbers are in
 Since 2026-10-05 Debate's *Look at the debate from an angle* leans on this trigger's *"what do others
 say?"*: it starts an ordinary chat whose first question uses those words and also asks for a web
 search outright, with no prompt of its own
-([reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle)).
+([reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle); since 2026-10-20 that box is [sources.md § Investigate](sources.md#investigate)).
 
 ## The "?" says so, and the answer teaches
 
@@ -1133,7 +1150,7 @@ prompt.
   ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md), stage 2):
   `quick-search:<words>` is the bar's own *Quick search “X”* row (the words take `find`'s rule;
   it *generates*; in a chat surface its press runs in place, below), and `mode:<catalogue key>` —
-  `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
+  `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Aquiz]` — opens a mode or a
   sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
   at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
   [`command-runners.ts`](../../src/web/command-runners.ts), whose rows are
@@ -1159,7 +1176,7 @@ prompt.
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat, the guide (opened in Chat's band) and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
+- **Who gets them.** Chat, the guide (opened in Chat's band) and the passage chat dialog, the owner's. Recall, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`
@@ -1214,6 +1231,35 @@ screen beside a chat search (the dialog over Search) does not hear of it until i
 ***Copy answer* leaves the button lines out** (`withoutCommandLines`, src/citable.ts): the reader was
 shown a button, not a token. A token that was drawn as text is copied as text.
 
+### Chat and Explore offer to keep an instruction in About you
+
+> Sometimes in a chat (either within the Guide chat, or in any other chat), the user might give
+> broad instructions (e.g. "try to give brief answers", "I already know about X"), etc.
+>
+> If so, as part of the response, offer to make an appropriate minimal update to the User Profile
+> (where appropriate).
+>
+> — Greg, 2026-10-19, `spya-aqnz99`
+
+**Built 2026-10-20** ([261020o](../plans/261020o-chat-offers-to-save-a-broad-instruction-to-about-you.md)).
+Chat and Explore are offered the guide's `offer_to_save` too, as `OFFER_PROFILE_TOOL` in
+[`src/chat-tools.ts`](../../src/chat-tools.ts): **About you only, and always pressed.** When the
+reader's latest message says how they want to be answered or what they already know or do, and
+About you does not say it yet, the model offers the current About you plus one short sentence, and
+the card under the answer is the guide's ([`GuideSaveOffer.tsx`](../../src/web/GuideSaveOffer.tsx),
+drawn `pressOnly`) with the same basis check and Undo. A request about this answer only
+(*"shorter please"*) is not offered. The prompt section is `OFFER_TO_REMEMBER` in
+[`src/converse.ts`](../../src/converse.ts), after `PROFILE_RULES`. It names the two narrow exceptions
+needed for the offer: this one tool may carry what the reader said because it stays inside
+Spideryarn, and the few words about the button may address the reader and need not be about the
+article. It asks for the call first, before any prose, because a lone offer does not end a turn
+(`ENDS_THE_TURN`) and prose before it would go round again.
+
+Neither save-at-once route reaches these kinds: `typed` is refused on any kind but the guide
+(src/routes.ts), the tool consults `savesAtOnce` only for the guide, and the card drops any `now`
+on a stored run. Learn, Tutorial and Candidates are not offered it yet, nor Live, which has nowhere
+for the button. The eval is `evals/guide/offers.ts --kind chat|explore`.
+
 ## The guide
 
 > think of it as a chat less about the content and more about the reading experience. So more
@@ -1247,8 +1293,13 @@ A thread kind of its own, `guide`, one per article (`chat_threads_one_guide`), o
 from the pinned row above the list. What makes it a guide rather than a chat:
 
 - **Its prompt**, `GUIDE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts): the subject is the
-  reading, never a summary in its place; ask why they are reading if they have not said; invite
-  *About you* once; under 60 words; point to at most two places, by block id. It carries our
+  reading, never a summary in its place; never assume they have read it; a concrete suggestion
+  first, from what they said, and a question about their reading at most once more and only as a
+  guess they can confirm; never a question about who they are; under 60 words; point to at most two
+  places, by block id. Since 2026-10-19
+  ([261019p](../plans/261019p-guide-chat-plainer.md); Greg, `spya-p4uqye`: *"shouldn't nag them
+  tooooo much for more information"*, and `spya-ptjk63`: *"make suggestions. Rather than simply
+  asking the user to do all the work in stating their needs"*). It carries our
   words for every mode, each ordinary one with its ready-made button (`modeWordsSection`,
   [`src/guide.ts`](../../src/guide.ts)) — stable bytes, above the cache breakpoint.
 - **How experienced the reader is**: none, a few or many other articles opened, in the last
@@ -1288,24 +1339,35 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   card says. Reading the two fields is no tool: every guide turn
   carries both under WHO IS READING THIS, read fresh. Not offered in Live (`GUIDE_TOOLS` is what
   Live reads, and a voice has nowhere for the button). It replaced 261009i's *Keep this as why
-  you're reading*.
+  you're reading*. Since 2026-10-20 About you also takes how they want to be answered (*"try to
+  give brief answers"*), and Chat and Explore offer About you too, press only
+  ([§ Chat and Explore offer to keep an instruction](#chat-and-explore-offer-to-keep-an-instruction-in-about-you)).
 - **Its next steps**, since 2026-10-09: a second tool of its own, **`offer_next_steps`**, which runs
-  nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
+  nothing during the tool call ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
   Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as
   the language"*). At the end of an answer the model gives up to three steps, each `ask` (words the
   reader can send next), `chat` (a question about what the piece says, for a fresh Chat; at most
   one, since 2026-10-12), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
-  search), `share` or `archive`; [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
+  search), `prepare` (a fixed-list mode to make in the background), `share` or `archive`;
+  [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
   server and again on the page, and they ride on the run (`ToolRun.steps`). The page draws the
   latest settled answer's as a row of buttons
   ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)) under a visible *Next steps* heading,
-  **never pressed by the guide**: an ask sends exactly the words on it; *Ask in Chat*, drawn first
+  ordinarily pressed by the reader; the `prepare` exception is below. An ask sends exactly the
+  words on it; *Ask in Chat*, drawn first
   and the one orange button, starts a fresh Chat with exactly its words as the first question,
   through the list box's `onSendNew`, and leaves the guide as it was. Greg, 2026-10-12
   (`spya-es283p`), asked for it, prominent: *"when I watch people using the guide, they often
   didn't notice that it was suggesting actions for them to take"*. So a question about the content
-  gets a sentence and that button rather than an answer
-  ([261012f](../plans/261012f-guide-hands-content-questions-to-a-new-chat.md)); a mode is the chip `chipFor` would make; a search is a box the
+  gets that button
+  ([261012f](../plans/261012f-guide-hands-content-questions-to-a-new-chat.md)), and since
+  2026-10-19 a short answer above it as well: at most three sentences on that one point, each
+  carrying its block id, ending on the passage to read; a question about the whole piece gets one
+  sentence of what kind of piece it is and Summary as a map, never its argument
+  ([261019p](../plans/261019p-guide-chat-plainer.md); Greg, `spya-yt2v73`: *"I think maybe they'll
+  just get confused/frustrated if the initial chat is weak/limited"*). The chat step's words are
+  the reader's question copied exactly, changed only where it would not stand on its own; a mode is the chip `chipFor` would make; a **prepare** step
+  (since 2026-10-20, below) is *Get Skim ready*; a search is a box the
   reader can edit and the quick-search chip for its words; *Share this article…* goes to
   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in
@@ -1317,17 +1379,52 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   with a tail like *"I'm done with my answer above."*
   ([261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md)). Typed
   only, like `offer_to_save`.
+- **It can get a mode ready in the background**, since 2026-10-20: a seventh step kind,
+  `prepare`, for a mode on a fixed list (`PREPARABLE` in
+  [`src/preparable-modes.ts`](../../src/preparable-modes.ts): Summary's Brief, Fuller and Thread,
+  Glossary, Quotes, Ideas, Skim, Learn's Quiz), which starts the job that mode's own band would
+  start and never opens it
+  ([261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build)).
+
+  > Maybe we make it an option, so the Guide has the option to do A, but there's a minimal
+  > explanation in the prompt that this incurs expense, so if it's not confident that the user
+  > will want it, it just does B
+  >
+  > — Greg, 2026-10-20 (reply `spya-tgeg6v` to q-y4p2ct)
+
+  So the step carries `now`. **`now: false` is a button** the reader presses (*Get Skim ready*);
+  **`now: true` is the one exception to "the reader presses every one"**: the page presses it
+  itself, once, on an answer this tab watched being written, and the button shows what it
+  started. The server keeps `now` only on a typed turn and when no earlier answer in the
+  conversation carried one, and drops any Skim step beside an offer of the reason (its save
+  lands after the answer, so the route would be planned on the old one); the page drops that
+  pair too, whichever order the model wrote them. The press posts `POST /api/guide-prepare/<slug>`,
+  where a `now` press first claims the thread's one automatic start
+  (`chat_threads.mode_prepared_at`, atomic: two tabs, a retry or an edit cannot make a second),
+  and then `prepareMode` ([`src/prepare-mode.ts`](../../src/prepare-mode.ts)) finds the mode
+  made and starts nothing, or queues the band's own job through `enqueue`. A Skim route made for
+  another profile, its notice not dismissed, is planned again, which is Greg's *"generate a
+  Skim-route based on what they're saying"*. A failed start still spends the claim: it fails
+  closed, and the button remains. Most of the list is already made on import
+  (`AUTO_MODE_STEPS`), so on most articles a press finds it made and spends nothing. The prompt
+  says it costs money, to start one only when confident, more readily Summary and Skim, and never
+  to say a mode is ready. The eval is `evals/guide/prepare.ts`; the risk is
+  [R30](security-risks.md#r30).
 - **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
   words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since
   2026-10-09 it asks in the conversation rather than in a box
   ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md); Greg,
   `spya-s6qhzv`: *"if we're in a chat interface, I want to use the chat interface"*). It welcomes
-  the reader to the piece by title, asks why they are reading it when no reason is stored, quotes
-  the start of *About you* back and asks if it is still right, and stays above the turns while the
-  conversation is mounted. What the reader answers is saved only through the guide's offer and
-  their press (above). While the conversation is empty it offers three ways in, each sent as the
-  reader's first message (*Where should I start?*, *Help me work out what I want from this*, *How
-  could I read this well?*; plan 261009u); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
+  the reader to the piece by title, asks why they are reading it when no reason is stored (*a few
+  words is plenty*) and says they can just ask something about it instead, and stays above the
+  turns while the conversation is mounted. Since 2026-10-19 it no longer asks about the reader
+  themselves, nor quotes *About you* back to ask if it is still right: the guide uses it without
+  asking. The older optional profile link remains only when a reason is already stored and *About
+  you* is empty ([261019p](../plans/261019p-guide-chat-plainer.md)). What the reader answers is saved only
+  through the guide's offer and their press (above). While the conversation is empty it offers
+  three ways in, each sent as the reader's first message (*Where should I start?*, *What is this
+  piece about?*, *Help me work out what I want from this*; plan 261009u, and 261019p's second
+  in place of *How could I read this well?*); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
 - **A row in the command bar**, *Guide chat*, on the owner's reading view (`guideRow` in
   [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does — first on
   an empty bar, with the guide's `Compass`, since 2026-10-10
@@ -1343,7 +1440,8 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   the same in a voice's terms (`SPOKEN_GUIDE`, [live-conversation.md](live-conversation.md)).
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
   (§ Command buttons), and **the reader presses every one**: the guide never opens a mode or moves
-  the reader itself. Its prompt prints every mode as *Button* (`modeWordsSection` in
+  the reader itself. (The one press the page makes for it is a `prepare` step marked `now`, above,
+  which starts a mode's generation and opens nothing.) Its prompt prints every mode as *Button* (`modeWordsSection` in
   [`src/guide.ts`](../../src/guide.ts)) and tells it to offer the next step with its button, say
   what pressing it will do, and never say it has opened or done anything.
 
@@ -1368,9 +1466,11 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   [url-state.md](url-state.md#an-article-never-opened-here-arrives-at-a-default)), which also
   stands in for the add page's "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
 
-Its cost is reported as `chat` (`jobFor`), on purpose for now. The eval is
+Its cost is reported as `chat` (`jobFor`), on purpose for now. The evals are
 [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) and
-[`evals/guide/run.ts`](../../evals/guide/run.ts).
+[`evals/guide/run.ts`](../../evals/guide/run.ts), and for how it reads over a short conversation,
+[261019b](../investigations/261019b-guide-plainer-blind-judged.md) and
+[`evals/guide/conversations.ts`](../../evals/guide/conversations.ts).
 
 ## Not built, and worth building
 

@@ -162,6 +162,14 @@ experimental features off" pins it through the real `App`.
   been on screen for 70% of their reading time (level 2 or more since 2026-10-02), and says what share of the body's words is. The hook's `status` exists for it —
   `off`, `loading`, `loaded`, `failed` — because an empty level map means "read nothing" only once
   the opening read has answered. [quiz.md § Only what you have read](quiz.md#only-what-you-have-read).
+- **The chats**, since 2026-10-20: each turn of Chat, Learn, Explore and the guide is told one
+  coarse phrase for the share read ("about a quarter of it"), by the quiz's rule, on the server
+  from the stored totals — so up to a minute behind what the quiz shows, since the browser flushes
+  every 60 seconds (GPT Sol's plan review F2, accepted as within "a rough guide"). Never which
+  parts. `readingSoFarLine` in [`src/reading-so-far.ts`](../../src/reading-so-far.ts); Greg's
+  answer to [q-rwkq2e](../user-feedback/questions/q-rwkq2e.md); plan
+  [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md). Anything
+  finer sent to a model rewrites `/privacy` first ([privacy.md § Reading time](privacy.md#reading-time)).
 
 ## Not built
 

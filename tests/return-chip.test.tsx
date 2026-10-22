@@ -123,6 +123,9 @@ let pushAt: (id: BlockId) => void = () => {};
 /** The scroll spy's replace once its debounce enters nuqs's global queue. */
 let replaceAtNow: (id: BlockId) => void = () => {};
 
+/** How many times the chip's `onReturn` has run — by a click or by Backspace. */
+let presses = 0;
+
 /** A mode parameter queued the way the Dock's press queues one. */
 let queueMode: (mode: string) => void = () => {};
 
@@ -135,8 +138,10 @@ function Harness(): ReactNode {
   queueMode = (mode) => void setMode(mode, { history: "push" });
   /* `useReadingPosition`'s `returnToOrigin`, less the `synced` bookkeeping that
      only matters to its restore effect, which is not mounted here. */
-  const onReturn = () =>
+  const onReturn = () => {
+    presses += 1;
     void beginReturn((id) => void set(id, { history: "push", limitUrlUpdates: throttle(0) }));
+  };
   return createElement(ReturnChip, { sections: SECTIONS, rowOf: ROW_OF, onReturn });
 }
 
@@ -148,9 +153,13 @@ function mount(): void {
 }
 
 const chip = () => host.querySelector(".return-chip");
-/** What the return button itself says, whitespace collapsed. */
-const label = () =>
-  host.querySelector(".return-chip-go")?.textContent?.replace(/\s+/g, " ").trim() ?? null;
+/** What the return button itself says, whitespace collapsed, less its ⌫ hint. */
+const label = () => {
+  const go = host.querySelector(".return-chip-go")?.cloneNode(true) as HTMLElement | undefined;
+  if (!go) return null;
+  for (const hint of go.querySelectorAll(".return-chip-key")) hint.remove();
+  return go.textContent?.replace(/\s+/g, " ").trim() ?? null;
+};
 
 /**
  * A jump, as the wrapper sees one: arm the origin, then push the destination.
@@ -236,6 +245,7 @@ function viewChanged(search: string): void {
 
 beforeEach(() => {
   moves.list = [];
+  presses = 0;
   history.replaceState(null, "", "/read/x");
   clearArmedJump();
   /* A same-path replace preserves the stamp on purpose, so resetting the
@@ -926,5 +936,199 @@ describe("the chip times out", () => {
 
     /* Leave the shared harness mounted for the outer cleanup. */
     mount();
+  });
+});
+
+/* ------------------------------------------------------------ Backspace -- */
+
+/**
+ * **Backspace presses the chip, while it shows** — a reader asked (spya-yjnpjg)
+ * and Greg chose it (spya-dzfvs2, 2026-10-20). Each refusal below is a place
+ * where the key belongs to something else: a text box, a picker, a dialog in
+ * front, another handler, a held key, an IME.
+ * docs/plans/261020u-backspace-takes-the-way-back.md § Greg's answer.
+ */
+describe("Backspace presses the chip", () => {
+  /** A Backspace keydown at `target`, bubbling to window as a real one does. */
+  function backspace(target: EventTarget = document.body, init: KeyboardEventInit = {}): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", {
+      key: "Backspace",
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    act(() => void target.dispatchEvent(event));
+    return event;
+  }
+  /** Some markup appended to the page, and the element `select` names focused. */
+  function put(html: string, select: string): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    document.body.append(wrap);
+    const el = wrap.querySelector<HTMLElement>(select);
+    if (!el) throw new Error(`nothing matches ${select}`);
+    el.focus();
+    return el;
+  }
+
+  it("presses it from the page, and claims the key", () => {
+    jumped(at(block(15)), block(25));
+    const event = backspace();
+    expect(presses).toBe(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("presses the return, not the ×, from either of the chip's buttons", () => {
+    jumped(at(block(15)), block(25));
+    const close = host.querySelector<HTMLButtonElement>(".return-chip-close");
+    act(() => close?.focus());
+    backspace(close ?? undefined);
+    expect(presses).toBe(1);
+    expect(readStamp(history.state)).not.toBeNull();
+    jumped(at(block(15)), block(25));
+    const go = host.querySelector<HTMLButtonElement>(".return-chip-go");
+    act(() => go?.focus());
+    backspace(go ?? undefined);
+    expect(presses).toBe(2);
+  });
+
+  it("presses it from Structure's tree, where a press on a section leaves the focus", () => {
+    /* The `<ol role="tree" tabindex="0">` is the tree's one focus target; its
+       rows take none (OutlinePanel.tsx). */
+    jumped(at(block(15)), block(25));
+    backspace(put('<ol role="tree" tabindex="0"><li role="treeitem">A</li></ol>', "ol"));
+    expect(presses).toBe(1);
+  });
+
+  it("presses it from a plain button elsewhere", () => {
+    jumped(at(block(15)), block(25));
+    backspace(put('<button type="button">x</button>', "button"));
+    expect(presses).toBe(1);
+  });
+
+  it("does nothing with no chip, and leaves the key to the browser", () => {
+    const event = backspace();
+    expect(presses).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it.each([
+    ["an input", "<input>", "input"],
+    ["a search box", '<input type="search">', "input"],
+    ["a textarea", "<textarea></textarea>", "textarea"],
+    ["a select", "<select><option>a</option></select>", "select"],
+    ["nested contenteditable", '<div contenteditable="true"><p><span tabindex="0">x</span></p></div>', "span"],
+  ])("does nothing while typing in %s", (_name, html, select) => {
+    jumped(at(block(15)), block(25));
+    const event = backspace(put(html, select));
+    expect(presses).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it.each(["listbox", "combobox", "menu", "menubar", "grid", "slider", "spinbutton", "textbox", "searchbox"])(
+    "does nothing with focus in a %s, which may use the key itself",
+    (role) => {
+      jumped(at(block(15)), block(25));
+      const event = backspace(put(`<div role="${role}"><span tabindex="0">x</span></div>`, "span"));
+      expect(presses).toBe(0);
+      expect(event.defaultPrevented).toBe(false);
+    },
+  );
+
+  it.each([
+    ["Shift", { shiftKey: true }],
+    ["Alt", { altKey: true }],
+    ["Ctrl", { ctrlKey: true }],
+    ["⌘", { metaKey: true }],
+    ["auto-repeat", { repeat: true }],
+    ["IME composition", { isComposing: true }],
+    ["the older IME sentinel", { keyCode: 229 }],
+  ])("does nothing with %s", (_name, init) => {
+    jumped(at(block(15)), block(25));
+    const event = backspace(document.body, init);
+    expect(presses).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("does nothing once another handler has claimed the key", () => {
+    jumped(at(block(15)), block(25));
+    const claim = (e: Event) => e.preventDefault();
+    document.body.addEventListener("keydown", claim);
+    try {
+      backspace();
+    } finally {
+      document.body.removeEventListener("keydown", claim);
+    }
+    expect(presses).toBe(0);
+  });
+
+  it("does nothing while a modeless dialog is open in front — Chat, a comment, the drawer", () => {
+    jumped(at(block(15)), block(25));
+    backspace(put('<aside role="dialog" aria-label="Chat"><button type="button">x</button></aside>', "button"));
+    expect(presses).toBe(0);
+    /* And with focus fallen back to the page behind it. */
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    backspace();
+    expect(presses).toBe(0);
+  });
+
+  it("does nothing over an open native dialog", () => {
+    jumped(at(block(15)), block(25));
+    put("<dialog open><p tabindex='0'>x</p></dialog>", "p");
+    const event = backspace();
+    expect(presses).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("is not switched off by dialog markup inside the article's own prose", () => {
+    /* Both survive the sanitiser, and the prose is a stranger's (GPT Sol,
+       261020u build review). */
+    jumped(at(block(15)), block(25));
+    put('<div class="prose"><div role="dialog">a</div><dialog open>b</dialog><p tabindex="0">c</p></div>', "p");
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    backspace();
+    expect(presses).toBe(1);
+  });
+
+  it("is advertised on the chip", () => {
+    jumped(at(block(15)), block(25));
+    const go = host.querySelector(".return-chip-go");
+    expect(go?.getAttribute("aria-keyshortcuts")).toBe("Backspace");
+    expect(go?.querySelector(".return-chip-key")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("stops listening once the chip has gone", () => {
+    jumped(at(block(15)), block(25));
+    act(() => dismissJumpOrigin());
+    expect(chip()).toBeNull();
+    const event = backspace();
+    expect(presses).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  describe("on a held or a fading chip", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("still takes the key while it fades", () => {
+      jumped(at(block(15)), block(25));
+      act(() => void vi.advanceTimersByTime(RETURN_CHIP_MS + 100));
+      expect(chip()?.classList.contains("return-chip-going")).toBe(true);
+      backspace();
+      expect(presses).toBe(1);
+    });
+
+    it("still takes the key while focus holds it past thirty seconds", () => {
+      jumped(at(block(15)), block(25));
+      const go = host.querySelector<HTMLButtonElement>(".return-chip-go");
+      act(() => go?.focus());
+      act(() => void vi.advanceTimersByTime(RETURN_CHIP_MS * 2));
+      backspace(go ?? undefined);
+      expect(presses).toBe(1);
+    });
   });
 });

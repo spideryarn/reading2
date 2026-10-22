@@ -18,9 +18,11 @@
  *      A representative element is also put through the full sheet cascade, so
  *      a different, more specific selector that wins on the real class context
  *      is a failure too.
- *   3. **Each named exception keeps its literal and its reason.** Quiz's
- *      question is the first: so the next tidy-up cannot "fix" it onto
- *      `--type-item` without deleting the comment that says why it is not one.
+ *   3. **Each named exception keeps its chosen size and its reason.** A small
+ *      exception still takes `--text-min`; the exception is to a shared role,
+ *      not to the phone floor. Quiz's question is the first: so the next
+ *      tidy-up cannot "fix" it onto `--type-item` without deleting the comment
+ *      that says why it is not one.
  *
  * **Parsed, not grepped.** Comments, nested at-rules and `font:` shorthands
  * are all real in these sheets (GPT Sol's F6 on the plan), so the sheets go
@@ -41,12 +43,12 @@ import { describe, expect, it } from "vitest";
 import { readerSheets, stripComments } from "./helpers/stylesheets.js";
 
 const ROLES = {
-  item: "0.92rem",
-  quote: "0.88rem",
-  body: "0.85rem",
-  meta: "0.78rem",
-  count: "0.83rem",
-  label: "0.77rem",
+  item: "max(var(--text-min), 0.92rem)",
+  quote: "max(var(--text-min), 0.88rem)",
+  body: "max(var(--text-min), 0.85rem)",
+  meta: "max(var(--text-min), 0.78rem)",
+  count: "max(var(--text-min), 0.83rem)",
+  label: "max(var(--text-min), 0.77rem)",
 } as const;
 type Role = keyof typeof ROLES;
 
@@ -187,7 +189,7 @@ const REGISTRY: Row[] = [
 interface Exception {
   file: string;
   selector: string;
-  /** The literal it keeps. */
+  /** The exact size it keeps; a small literal still takes the touch floor. */
   value: string;
   /** Why it is not on a role — the comment beside the rule says the same. */
   reason: string;
@@ -197,7 +199,7 @@ const EXCEPTIONS: Exception[] = [
   {
     file: "skim.css",
     selector: ".skim-row.current .skim-place",
-    value: "0.82rem",
+    value: "max(var(--text-min), 0.82rem)",
     reason:
       "The open stop's section heading, a step below --type-item and in the soft ink, so the " +
       "quote under it is read first (Greg's answer to q-u04sye, plan 261009m). The other rows " +
@@ -206,10 +208,10 @@ const EXCEPTIONS: Exception[] = [
   {
     file: "skim.css",
     selector: ".skim-cue",
-    value: "0.78rem",
+    value: "max(var(--text-min), 0.78rem)",
     reason:
       "The model's optional question before a quote, which matters less than the quote it " +
-      "introduces (Greg, spya-qpgvq9). Its monospace face reads larger than the quote's serif " +
+      "introduces (Greg, spya-qpgvq9). Its typed face, wider than the quote's serif, reads larger " +
       "at the same size, so it sits a clear step below --type-quote rather than at --type-body.",
   },
   {
@@ -424,10 +426,11 @@ describe("the text-role tokens", () => {
     const defined = Object.fromEntries(
       Object.keys(ROLES).map((role) => [
         role,
-        roots.map((r) => r.style.getPropertyValue(`--type-${role}`).trim()).find((v) => v) ?? "",
+        // The CSSOM drops the space after a comma inside `max()`.
+        (roots.map((r) => r.style.getPropertyValue(`--type-${role}`).trim()).find((v) => v) ?? "").replace(/\s+/g, ""),
       ]),
     );
-    expect(defined).toEqual(ROLES);
+    expect(defined).toEqual(Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k, v.replace(/\s+/g, "")])));
   });
 });
 
@@ -470,7 +473,7 @@ describe("each registered line uses its role's token", () => {
 
 describe("the named exceptions", () => {
   for (const ex of EXCEPTIONS) {
-    it(`${ex.selector} (${ex.file}) keeps ${ex.value}, with a comment saying why`, () => {
+    it(`${ex.selector} (${ex.file}) keeps its exception size, with a comment saying why`, () => {
       expect(ex.reason.length).toBeGreaterThan(20);
       const sizes = sizesOf(ex.selector);
       expect(sizes.length).toBeGreaterThan(0);
@@ -494,9 +497,9 @@ describe("the named exceptions", () => {
   /* The exact-selector check above cannot see a later, more specific rule
      that wins on the open stop (GPT Sol on plan 261009m), so its heading is
      put through the cascade too. */
-  it("the open Skim stop's heading resolves to 0.82rem through the full cascade", () => {
+  it("the open Skim stop's heading resolves to its floored 0.82rem through the full cascade", () => {
     const open = witness(".skim-row.current button.skim-go .skim-place");
-    expect(window.getComputedStyle(open.target).fontSize).toBe("0.82rem");
+    expect(window.getComputedStyle(open.target).fontSize).toBe("max(var(--text-min), 0.82rem)");
     open.host.remove();
   });
 

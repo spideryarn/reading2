@@ -95,6 +95,10 @@ function wayOut(code: QuotaCode): WayOut {
       return { href: PRICING_HREF, label: "Plans and prices" };
     case "pay-limit":
     case "pay-lapsed":
+    /* A long PDF that does not fit (plan 261020b): one sentence for every plan,
+       so the page that works for both halves — plans for a free reader, the
+       plan for a paying one. */
+    case "pay-pages":
       /* *Your plan*, because that is what is on the other end — a subscription
          that exists, with whatever can still be done to it. Not "Upgrade":
          for `pay-limit` there is nothing to upgrade to. */

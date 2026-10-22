@@ -421,8 +421,9 @@ const CHAT: BandShape = {
      inline JSX to a fragment passed as `head` — so it is the one part where
      "the DOM did not change" is a claim rather than a restatement of the diff.
      The way back was an unlabelled × at the far end until plan 261008c § 1
-     (spya-pd9fnc): on a phone nobody could tell it was the way back. */
-  headChildren: ["button.chat-back.tap-target[aria-label,data-tip,data-tip-describes,type]", "h2", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
+     (spya-pd9fnc): on a phone nobody could tell it was the way back. Copy
+     this conversation sits before the delete since plan 261020w. */
+  headChildren: ["button.chat-back.tap-target[aria-label,data-tip,data-tip-describes,type]", "h2", "button.chat-icon[aria-label,data-tip,type]", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
 };
 
 /**
@@ -441,8 +442,8 @@ const LEARN: BandShape = {
   /* The title and `ArmedDelete` in its unarmed state, as Start over — and,
      since plan 261001m (2026-10-01), no "All conversations" close: Learn is
      one conversation and has no list to close back to. `subMode` renders
-     nothing for this fixture. */
-  headChildren: ["h2", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
+     nothing for this fixture. Copy this conversation before it, plan 261020w. */
+  headChildren: ["h2", "button.chat-icon[aria-label,data-tip,type]", "button.chat-icon.danger[aria-label,data-tip,data-tip-describes,type]"],
 };
 
 /**
@@ -1625,7 +1626,7 @@ function mountVisitorTweets(): ReactNode {
 }
 
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
 function mountReception(reception: Reception | null, over: Partial<ReceptionOwner> = {}): ReactNode {
   return createElement(ReceptionAndClaimsPanel, {
@@ -1914,9 +1915,10 @@ const TWEETS_VISITOR: BandShape = {
  * both went with plan 261003o. The relevance bar (`.rcp-rel`) is Claims', so
  * Reception, which this fixture opens on, has none.
  *
- * `div.gloss-ask.rcp-lens` is the owner's *Look at the debate from an angle*
- * box, the first row since 2026-10-05 (plan 261005k, A) and a deliberate
- * change to both shapes: it is drawn with or without a stored debate.
+ * `div.gloss-ask.rcp-lens`, the owner's *Look at the debate from an angle*
+ * box, was the first row from 2026-10-05 (plan 261005k, A) until 2026-10-20,
+ * when it became Sources › Investigate's box (plan 261020n Stage 2) — a deliberate
+ * change to both shapes.
  */
 const RECEPTION_SHAPE: BandShape = {
   className: "mode-band gloss rcp sources has-about",
@@ -1925,7 +1927,6 @@ const RECEPTION_SHAPE: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "div.gloss-ask.rcp-lens",
     "div.rcp-scroll",
   ],
   headChildren: ["div.summ-views.rcp-views[aria-label,data-more-unmasked,role]"],
@@ -1949,7 +1950,6 @@ const RECEPTION_LOADING: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "div.gloss-ask.rcp-lens",
     "p.band-waiting.gloss-quiet[role]",
     "div.rcp-scroll",
   ],

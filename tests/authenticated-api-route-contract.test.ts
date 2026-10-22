@@ -395,6 +395,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["POST"],
     witnesses: ["/api/admin/author-gifts/w1/lookups"],
   },
+  /* A draft gift's article switched to Opus, 261021j. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/high-power$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/author-gifts/w1/high-power"],
+  },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$", flags: "" },
     methods: ["PATCH"],
@@ -416,6 +422,22 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$", flags: "" },
     methods: ["GET", "POST"],
     witnesses: ["/api/admin/articles/w1/transfer"],
+  },
+  /* View as, 261019n § Part 3: start, the live session, Stop. */
+  {
+    match: { kind: "literal", path: "/api/admin/view-as" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/view-as"],
+  },
+  {
+    match: { kind: "literal", path: "/api/admin/view-as/current" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/view-as/current"],
+  },
+  {
+    match: { kind: "literal", path: "/api/admin/view-as/end" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/view-as/end"],
   },
   {
     match: { kind: "literal", path: "/api/admin/feedback" },
@@ -460,6 +482,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     },
     methods: ["GET"],
     witnesses: ["/api/admin/feedback/w1/w2/screenshot"],
+  },
+  {
+    /* Whose an article is, and who opened its private link, for the details
+       page, 261021d. */
+    match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/access$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/articles/w1/access"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$", flags: "" },
@@ -513,6 +542,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/library\\/([\\w.%-]+)\\/open$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/library/w1/open"],
+  },
+  {
+    /* A signed-in visitor opened a private link, 261021d. */
+    match: { kind: "regex", source: "^\\/api\\/private-link-opens\\/([\\w.%-]+)$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/private-link-opens/w1"],
   },
   {
     /* One article's tags, 261003d. */
@@ -715,6 +750,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/skim/w1/profile-notice-dismissal"],
   },
   {
+    /* Get a mode ready without opening it, the guide's prepare step — plan
+       261019p § Stage 2b. Owner only; a `now` press claims the thread's one start. */
+    match: { kind: "regex", source: "^\\/api\\/guide-prepare\\/([\\w.%-]+)$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/guide-prepare/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/reception\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/reception/w1"],
@@ -857,6 +899,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/export\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/export/w1"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/export\\/([\\w.%-]+)\\/your-words$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/export/w1/your-words"],
   },
   // -------------------------------------------------------------- comments
   {
@@ -1136,8 +1183,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    an admin's addenda to their own reports (plan 261010o); 118 with a
    reviewer's major/minor comment sort (plan 261011f); 120 with every article
    and one article's transfer (plan 261011n); 121 with Sources › Not cited
-   (plan 261011ac); 122 with a cited work's web note (plan 261018o). */
-const EXPECTED_MATCHER_COUNT = 122;
+   (plan 261011ac); 122 with a cited work's web note (plan 261018o); 123 with
+   your-words.md on its own (plan 261020w); 124 with the guide's prepare step
+   (plan 261019p); 126 with an article's access for the admin and a private
+   link's opens (plan 261021d); 129 with view as's start, current and end
+   (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j). */
+const EXPECTED_MATCHER_COUNT = 130;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1155,8 +1206,12 @@ const EXPECTED_MATCHER_COUNT = 122;
    261010o); 145 with a reviewer's major/minor comment sort (plan 261011f); 148
    with every article, and a transfer's preview and POST (plan 261011n); 150
    with Not cited's GET and POST (plan 261011ac); 151 with a cited work's web
-   note (plan 261018o). */
-const EXPECTED_GUARD_COUNT = 151;
+   note (plan 261018o); 152 with your-words.md (plan 261020w); 153 with the
+   guide's prepare step (plan 261019p); 155 with an article's access for the
+   admin and a private link's opens (plan 261021d); 158 with view as's start,
+   current and end (plan 261019n); 159 with a draft gift's High-powered AI
+   (plan 261021j). */
+const EXPECTED_GUARD_COUNT = 159;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1727,7 +1782,16 @@ function readTableEntry(element: unknown, constants: Map<string, AstNode>): Pars
   if (kind !== "exact" && kind !== "pattern") {
     refuse(element, `an ${ROUTE_TABLE} entry whose \`kind\` is not "exact" or "pattern"`);
   }
-  const expected = ENTRY_KEYS[kind];
+  /* `viewAs` is the one optional key (plan 261019n § Part 3): the view-as
+     allowlist, a string literal `"read"` on a GET row and nothing else. Which
+     rows carry it is pinned in tests/view-as-gate.test.ts. */
+  const viewAs = byKey.get("viewAs");
+  if (viewAs !== undefined) {
+    if (stringValue(viewAs) !== "read" || stringValue(byKey.get("method")) !== "GET") {
+      refuse(element, `an ${ROUTE_TABLE} entry whose \`viewAs\` is not "read" on a GET row`);
+    }
+  }
+  const expected = viewAs === undefined ? ENTRY_KEYS[kind] : [...ENTRY_KEYS[kind], "viewAs"];
   if (sorted([...byKey.keys()]).join(",") !== sorted(expected).join(",")) {
     refuse(element, `an ${ROUTE_TABLE} \`${kind}\` entry whose keys are not ${expected.join(", ")}`);
   }
@@ -2319,12 +2383,17 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/author-gifts",
         "POST literal /api/admin/author-gifts",
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/lookups$/",
+        // a draft gift's article switched to Opus, 261021j
+        "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/high-power$/",
         "PATCH regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$/",
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/send$/",
         // every article, and one article's transfer, 261011n — after the gifts
         "GET literal /api/admin/articles",
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$/",
         "POST regex /^\\/api\\/admin\\/articles\\/([\\w-]+)\\/transfer$/",
+        "POST literal /api/admin/view-as",
+        "GET literal /api/admin/view-as/current",
+        "POST literal /api/admin/view-as/end",
         "GET literal /api/admin/feedback",
         // an admin's own earlier reports, 261007d — beside the list across owners
         "GET literal /api/admin/feedback/earlier",
@@ -2338,6 +2407,8 @@ describe("the authenticated API's route contract", () => {
         // mark one report ignored, 261003j — beside the read of it
         "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
+        // whose an article is and who opened its private link, 261021d
+        "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/access$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
         // the cost cube, for /admin/costs, 261005a — beside the article's cost
@@ -2366,6 +2437,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/reader",
         "PATCH literal /api/reader",
         "POST regex /^\\/api\\/library\\/([\\w.%-]+)\\/open$/",
+        // a signed-in visitor opened a private link, 261021d — beside the owner's open
+        "POST regex /^\\/api\\/private-link-opens\\/([\\w.%-]+)$/",
         // the article block, 260911d
         "GET regex /^\\/api\\/article\\/([\\w.%-]+)$/",
         "GET literal /api/link-preview",
@@ -2382,6 +2455,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/source\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/asset\\/([\\w.%-]+)\\/([0-9a-f]{64})\\.(png|jpeg|gif)$/",
         "GET regex /^\\/api\\/export\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/export\\/([\\w.%-]+)\\/your-words$/",
         "GET regex /^\\/api\\/metadata\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/tweets\\/([\\w.%-]+)$/",
         // the glossary, 260911d
@@ -2410,6 +2484,8 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         // Skim's profile notice, 261009i
         "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
+        // the guide's prepare step, 261019p stage 2b
+        "POST regex /^\\/api\\/guide-prepare\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/reception\\/([\\w.%-]+)$/",
         // Reception's old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
@@ -2978,6 +3054,13 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       const simple = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "simple");
       expect(simple?.id).toBe(modelFor("simple", powerFor("simple", "standard")));
       expect(simple?.id).toBe(modelFor("simple", "high"));
+    });
+
+    it("reports Chat on Opus even for a standard article (plan 261020q)", async () => {
+      const reply = await call("GET", "/api/models");
+      const chat = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "chat");
+      expect(chat?.id).toBe(modelFor("chat", powerFor("chat", "standard")));
+      expect(chat?.id).toBe(modelFor("chat", "high"));
     });
 
     it("sends each task's wire in the real model response", async () => {

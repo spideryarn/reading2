@@ -61,10 +61,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { useMadeFor } from "./lib/made-for.js";
 import { rowCache, rowsOnScreen } from "./on-screen.js";
 import {
   expectedSeconds,
+  type ReadingTimeStatus,
   type ReadLevel,
   type ReadReach,
   readLevel,
@@ -123,20 +125,10 @@ async function waitForReadingTimeWrites(path: string): Promise<void> {
   }
 }
 
-/**
- * Whether `levels` can be believed yet — which is not the same as whether it
- * is empty.
- *
- * `off`: not recording for this reader at all — a visitor, since 2026-10-05,
- * and nobody else until there is a setting to turn it off. `loading`: the
- * opening read has not answered for *this* run of the effect (a slug, or
- * `enabled` going off and on again, is a new run). `failed`: it never will, so the levels hold only
- * what this page has credited since. Only `loaded` means an empty map is "read
- * nothing". GPT Sol's findings 1 and 3 on
- * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md, which is what
- * reads it.
- */
-export type ReadingTimeStatus = "off" | "loading" | "loaded" | "failed";
+/* `ReadingTimeStatus` lives in reading-time.ts, which has no DOM and no
+   React, so the server can import read-filter.ts without this file
+   (src/reading-so-far.ts, plan 261020ac). */
+export type { ReadingTimeStatus } from "./reading-time.js";
 
 /** What one block has had, and what it takes to read, in seconds. */
 export interface BlockReadingTime {
@@ -210,6 +202,11 @@ export function useReadingTime(
   words: ReadonlyMap<BlockId, number>,
   enabled: boolean,
 ): ReadingTime {
+  /* **Off while viewing as another reader** (plan 261019n § Part 3, Client
+     3): the administrator's seconds are not the subject's, and every flush,
+     the `pagehide` one included, is a write. Off is the hook's own "switch is
+     off" path, so the marks simply are not drawn. Constant for the page. */
+  if (viewAsNonce() !== null) enabled = false;
   const [levels, setLevels] = useState<ReadonlyMap<BlockId, ReadLevel>>(NO_LEVELS);
   const [reach, setReach] = useState<ReadonlyMap<BlockId, ReadReach>>(NO_REACH);
   /* Keyed to the slug it answers for, so a render between a slug change and

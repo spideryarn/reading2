@@ -196,13 +196,15 @@ describe("which sub-mode rows the bar offers", () => {
     expect(fullName(first as HTMLElement)).toBe("Learn › Quiz");
   });
 
-  it("offers Tutorial first when the reader types `tutorial`", () => {
+  /* Tutorial was folded into Recall on 2026-10-20 (plan 261020m); the word
+     is Recall's alias now (sub-modes.ts § `LEARN_SUB_MODES`). */
+  it("offers Recall first when the reader types `tutorial`", () => {
     reading();
     openBar();
     type("tutorial");
     const first = rows()[0];
     expect(first?.dataset.kind).toBe("submode");
-    expect(fullName(first as HTMLElement)).toBe("Learn › Tutorial");
+    expect(fullName(first as HTMLElement)).toBe("Learn › Recall");
   });
 
   it("offers Explore first when the reader types `explore`", () => {
@@ -261,11 +263,11 @@ describe("which sub-mode rows the bar offers", () => {
     const names = subRows().map(fullName);
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
     /* Learn is in every reader's bar since 2026-10-05 (spya-cnqcjf), and
-       all four of its parts since Explore came out on 2026-10-11 (spya-jm0nfg). */
+       all its parts since Explore came out on 2026-10-11 (spya-jm0nfg);
+       three since Tutorial was folded into Recall on 2026-10-20. */
     expect(modeRows).toContain("Learn");
     expect(names.filter((n) => n.startsWith("Learn"))).toEqual([
       "Learn › Recall",
-      "Learn › Tutorial",
       "Learn › Explore",
       "Learn › Quiz",
     ]);
@@ -335,7 +337,7 @@ describe("which sub-mode rows the bar offers", () => {
         const names = subRows().map(fullName);
         expect(names.includes("Learn › Explore"), search).toBe(offered);
         expect(names).toEqual(expect.arrayContaining([
-          "Learn › Recall", "Learn › Tutorial", "Learn › Quiz",
+          "Learn › Recall", "Learn › Quiz",
         ]));
         act(() => dialog().close());
       }
@@ -574,14 +576,14 @@ describe("Enter on Referee › Hidden text, on the reading view", () => {
    so a sub-mode that lives only in the panel is one the bar never offers; and
    Reader's batched setter enumerates its keys, so one missing from it opens
    the mode and drops the view. */
-describe("Sources' five sub-modes", () => {
+describe("Sources' six sub-modes", () => {
   const BIBLIOGRAPHY: SubMode = { mode: "sources", view: "bibliography" };
   const NOT_CITED: SubMode = { mode: "sources", view: "not-cited" };
   const LINKS: SubMode = { mode: "sources", view: "links" };
   const CLAIMS: SubMode = { mode: "sources", view: "claims" };
   const RECEPTION: SubMode = { mode: "sources", view: "reception" };
 
-  it("lists all five under Sources, in the control's order", () => {
+  it("lists all six under Sources, in the control's order", () => {
     reading();
     openBar();
     type("sources");
@@ -592,6 +594,7 @@ describe("Sources' five sub-modes", () => {
       "Sources › Links",
       "Sources › Reception",
       "Sources › Claims",
+      "Sources › Investigate",
     ]);
     /* Its name until 2026-10-09 still finds it, ahead of Referee (plan 261009w). */
     type("peer review");

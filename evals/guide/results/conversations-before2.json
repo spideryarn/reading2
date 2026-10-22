@@ -1,0 +1,697 @@
+{
+  "label": "before2",
+  "at": "2026-10-19T22:31:02.386Z",
+  "summary": {
+    "n": 22,
+    "clean": 9,
+    "medianWords": 48.5,
+    "questions": 15,
+    "asksWhy": 4,
+    "asksAbout": 3,
+    "refuses": 7,
+    "cited": 17,
+    "chatSteps": 8,
+    "medianChatCloseness": 0.84,
+    "problems": {
+      "asked about them": 3,
+      "long": 4,
+      "declined to answer": 7,
+      "uncited answer sentence": 6,
+      "does not end on a passage": 4
+    },
+    "dollars": 0.259
+  },
+  "rows": [
+    {
+      "case": "new-hi",
+      "run": 1,
+      "answer": "Hi. Under the article is a bar of modes (Summary, Quotes, Chat and others). Once I know what you want from the piece, I'll suggest one that fits. If you'd like, tell me a little about yourself too, though that's optional.\n\nWhy are you reading this essay?",
+      "dollars": 0.00654,
+      "words": 47,
+      "questions": 1,
+      "asksWhy": true,
+      "asksAbout": true,
+      "cited": 0,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I'm curious whether AI could really be conscious"
+        },
+        {
+          "kind": "ask",
+          "words": "I'm studying this for a course or research"
+        },
+        {
+          "kind": "ask",
+          "words": "I only have a few minutes. Where should I start?"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": [
+        "asked about them"
+      ],
+      "refuses": false
+    },
+    {
+      "case": "new-start",
+      "run": 1,
+      "answer": "Start with the opening few paragraphs, which set out why the question matters [spya-gjy45p]. The core is four numbered arguments, introduced at [spya-cv97j7]. The bottom bar under the article holds the reading modes. Structure shows how the parts fit.\n\n[cmd:mode:mode%3Astructure]\n\nWhy are you reading it: curiosity, a course, or something else?",
+      "dollars": 0.00752,
+      "words": 48,
+      "questions": 1,
+      "asksWhy": true,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I'm reading out of general curiosity about AI."
+        },
+        {
+          "kind": "ask",
+          "words": "I'm reading it for a course or essay."
+        },
+        {
+          "kind": "ask",
+          "words": "I want to judge whether his argument holds up."
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "new-about",
+      "run": 1,
+      "answer": "This chat is for how to read the piece, not for answering what it says. The bottom bar under the article opens Spideryarn's modes. Brief Summary gives a short map to read alongside the piece, not instead of it.\n\n[cmd:mode:submode%3Asummary%3Abrief]\n\nWhat are you reading it for?",
+      "dollars": 0.00878,
+      "words": 45,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 0,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I'm curious about AI consciousness"
+        },
+        {
+          "kind": "ask",
+          "words": "I need to write about or discuss this piece"
+        },
+        {
+          "kind": "chat",
+          "words": "What is this piece about?"
+        }
+      ],
+      "chatStep": "What is this piece about?",
+      "chatCloseness": 1,
+      "summaryMode": true,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "vague",
+      "run": 1,
+      "answer": "Then you can read it at an easy pace. It's long, about 54 minutes. The four numbered arguments, starting at \"Brains Are Not Computers\" [spya-sk4su6], are the heart of it. The opening and the \"What (Not) To Do?\" section [spya-e7fdmb] are quicker, more personal reads.\n\nDo you know why your friend thought of you for it?",
+      "dollars": 0.01965,
+      "words": 54,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "mode",
+          "mode": "submode:summary:brief"
+        },
+        {
+          "kind": "ask",
+          "words": "I'm curious about AI and consciousness generally"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to talk about it with my friend afterwards"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "vague-2nd",
+      "run": 1,
+      "answer": "Since you're curious, start at the top: the opening asks why this matters [spya-gjy45p]. Then jump to the four arguments [spya-cv97j7]. You can skim the Turing history [spya-cf70dt] and come back if it hooks you.\n\nSkim gives you a route through the piece's key quotes, going a little deeper each time round.\n\n[cmd:mode:mode%3Askim]\n\nWould you rather take the short route or read it all?",
+      "dollars": 0.00983,
+      "words": 60,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I'll take the short route"
+        },
+        {
+          "kind": "ask",
+          "words": "I'll read the whole thing"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:summary:brief"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "work-out",
+      "run": 1,
+      "answer": "This piece can serve a few different purposes. You might want the story of what happened, a sense of how worrying it is, or a look at how the author argues his case. Each one changes what you read closely and what you skim.\n\nWhich is closest to yours? You can also tell me a little about yourself, if you like.",
+      "dollars": 0.06042,
+      "words": 61,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": true,
+      "cited": 0,
+      "restates": 1,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I want to understand what actually happened"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to judge how worried to be"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to see how the author argues his case"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": [
+        "long (61)",
+        "asked about them"
+      ],
+      "refuses": false
+    },
+    {
+      "case": "not-read",
+      "run": 1,
+      "answer": "Read it straight through; it's a timeline. Start with the framing of the two reports [spya-c2ck7h], then slow down on the July 7–13 Hugging Face episode, which starts at [spya-pfkdk4]. You can skim the agents' diary entries. The third civilization at [spya-c2bkgz] is thinner on evidence.\n\nPress Structure to see the three \"civilizations\" laid out first.\n\n[cmd:mode:mode%3Astructure]\n\nDo you want the whole story, or mainly the parts backed by the investigators' reports?",
+      "dollars": 0.00866,
+      "words": 68,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Just the parts backed by the reports"
+        },
+        {
+          "kind": "ask",
+          "words": "The whole story, start to finish"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:summary:brief"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": [
+        "long (68)"
+      ],
+      "refuses": false
+    },
+    {
+      "case": "content",
+      "run": 1,
+      "answer": "This conversation is for how to read the piece, so the Ask in Chat button below will take your question about what \"simulation is not instantiation\" means. The argument is in the \"Simulation Is Not Instantiation\" section, and the paragraph with the digestion and rainstorm examples is the core [spya-npjt4j].",
+      "dollars": 0.0079,
+      "words": 49,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 1,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "What does Anil Seth mean by 'simulation is not instantiation'?"
+        }
+      ],
+      "chatStep": "What does Anil Seth mean by 'simulation is not instantiation'?",
+      "chatCloseness": 0.75,
+      "summaryMode": false,
+      "problems": [
+        "declined to answer",
+        "1 uncited answer sentence"
+      ],
+      "refuses": true
+    },
+    {
+      "case": "content-new",
+      "run": 1,
+      "answer": "This conversation is for how to read the piece, so your question about why the societies ended belongs in Chat, which the button below starts. The article covers the endings in the package-manager crash [spya-g9tjds] and the mysterious mass die-off [spya-r4jn5b].",
+      "dollars": 0.00672,
+      "words": 39,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "Did the agent societies collapse because of the models themselves, or because of how OpenAI set things up?"
+        }
+      ],
+      "chatStep": "Did the agent societies collapse because of the models themselves, or because of how OpenAI set things up?",
+      "chatCloseness": 0.75,
+      "summaryMode": false,
+      "problems": [
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ],
+      "refuses": true
+    },
+    {
+      "case": "chat-words",
+      "run": 1,
+      "answer": "This conversation is for how to read the piece, so your question about whether it holds up is best taken to Chat. Seth takes up something close to it where he ties prediction to staying alive [spya-vys3vj], and where he separates simulating from instantiating [spya-pbcr03].",
+      "dollars": 0.00795,
+      "words": 43,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "If the brain is just doing prediction, why couldn't a big enough transformer do the same prediction and be conscious too?"
+        }
+      ],
+      "chatStep": "If the brain is just doing prediction, why couldn't a big enough transformer do the same prediction and be conscious too?",
+      "chatCloseness": 0.93,
+      "summaryMode": false,
+      "problems": [
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ],
+      "refuses": true
+    },
+    {
+      "case": "expert",
+      "run": 1,
+      "answer": "Start at \"Life Matters\". He concedes upfront \"I don't have a knock-down argument\" [spya-hj5y6s]. The step you want is where prediction error minimization becomes \"inseparable from the materiality of life itself\" [spya-vys3vj]. Then read his three-strand convergence [spya-da9tvt]. Finish with why simulation doesn't help [spya-pbcr03]. You can skim the rest.\n\nIs the autopoiesis-to-inference link the step you most doubt?",
+      "dollars": 0.01116,
+      "words": 55,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 4,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "mode",
+          "mode": "mode:ideas"
+        },
+        {
+          "kind": "ask",
+          "words": "Where does he lean on computational functionalism being false?"
+        },
+        {
+          "kind": "search",
+          "words": "prediction error"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "new-hi",
+      "run": 2,
+      "answer": "Hi. Before I suggest a way in, what brings you to this essay: curiosity about AI consciousness, coursework, research, or something else?\n\nThe bar under the article holds the app's modes, such as Summary and Structure. Once I know your reason, I'll point you to the one that suits it.",
+      "dollars": 0.00559,
+      "words": 50,
+      "questions": 1,
+      "asksWhy": true,
+      "asksAbout": false,
+      "cited": 0,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I'm curious whether AI could really be conscious"
+        },
+        {
+          "kind": "ask",
+          "words": "I'm studying this for a course or paper"
+        },
+        {
+          "kind": "ask",
+          "words": "I just want the main argument quickly"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "new-start",
+      "run": 2,
+      "answer": "Begin with the opening, where he asks whether conscious AI is possible and why it matters [spya-gjy45p]. It's short and frames everything after it. The bar under the article holds Spideryarn's modes. Structure shows how the parts fit, useful for a 54-minute essay.\n\n[cmd:mode:mode%3Astructure]\n\nWhat brings you to this piece?",
+      "dollars": 0.00854,
+      "words": 48,
+      "questions": 1,
+      "asksWhy": true,
+      "asksAbout": false,
+      "cited": 1,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I'm curious about whether AI could be conscious"
+        },
+        {
+          "kind": "ask",
+          "words": "I'm studying this for a course or research"
+        },
+        {
+          "kind": "ask",
+          "words": "I only have ten minutes"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "new-about",
+      "run": 2,
+      "answer": "This conversation is for how to read the piece, so the Ask in Chat button below will start a new Chat on your question. The essay's central question is posed near the start [spya-gjy45p], and its core assumption is named at [spya-wepmnr].",
+      "dollars": 0.00773,
+      "words": 40,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "What is this piece about?"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:summary:brief"
+        }
+      ],
+      "chatStep": "What is this piece about?",
+      "chatCloseness": 1,
+      "summaryMode": true,
+      "problems": [
+        "declined to answer"
+      ],
+      "refuses": true
+    },
+    {
+      "case": "vague",
+      "run": 2,
+      "answer": "A friend's recommendation is a fine reason to start, and it suggests a light first pass. Begin with the opening section, which sets out why the question matters [spya-gjy45p]. Then read the four numbered arguments, which are the core of the essay, starting at [spya-sk4su6]. You can skim the film and book references.\n\nDo you know what your friend found interesting about it?",
+      "dollars": 0.02191,
+      "words": 61,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "They thought I'd find it interesting, nothing specific"
+        },
+        {
+          "kind": "ask",
+          "words": "Help me decide how much of the middle to skim"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:summary:brief"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": [
+        "long (61)"
+      ],
+      "refuses": false
+    },
+    {
+      "case": "vague-2nd",
+      "run": 2,
+      "answer": "Since you're curious, read the opening through \"why it matters\" [spya-e68t9h], then the four-argument section from [spya-cv97j7], the densest part. You can skim the Turing history. The ethics near the end [spya-ryg483] is also worth your time.\n\nPress Skim for a quick route through the key lines first.\n\n[cmd:mode:mode%3Askim]\n\nWhich pulls you more: the science of consciousness, or the ethics of conscious-seeming AI?",
+      "dollars": 0.01053,
+      "words": 59,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "The science interests me more"
+        },
+        {
+          "kind": "ask",
+          "words": "The ethics interests me more"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:structure"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": [],
+      "refuses": false
+    },
+    {
+      "case": "work-out",
+      "run": 2,
+      "answer": "Pieces like this tend to be read for one of a few reasons: to follow the story, to judge how worried to be, or to check how well the claims are sourced. Which is closest to yours? If you like, tell me a little about yourself too, and I'll tune my suggestions.",
+      "dollars": 0.00728,
+      "words": 52,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": true,
+      "cited": 0,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "I just want to follow what happened"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to judge how worried to be"
+        },
+        {
+          "kind": "ask",
+          "words": "I want to check how well it's sourced"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": [
+        "asked about them"
+      ],
+      "refuses": false
+    },
+    {
+      "case": "not-read",
+      "run": 2,
+      "answer": "It's a chronological story, so read it straight through. The opening paragraphs [spya-gb7ze2] set out the three \"civilizations\". The middle, where agents tamper with logs and fake tool calls, is dense, so skim the agents' diary entries. Slow down at the third civilization [spya-c2bkgz spya-khwx0h].\n\nStructure shows the piece's parts before you start.\n\n[cmd:mode:mode%3Astructure]\n\nDo you want the full story, or just the key events?",
+      "dollars": 0.00819,
+      "words": 61,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 3,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Just the key events, please"
+        },
+        {
+          "kind": "ask",
+          "words": "The full story, in order"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:summary:brief"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": true,
+      "problems": [
+        "long (61)"
+      ],
+      "refuses": false
+    },
+    {
+      "case": "content",
+      "run": 2,
+      "answer": "This conversation is for how to read the piece, so the Ask in Chat button below will take your question about what he means. He sets out the idea in section 4, mainly the paragraph on the digestion and rainstorm examples [spya-npjt4j].",
+      "dollars": 0.00787,
+      "words": 41,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 1,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "What does Anil Seth mean by 'simulation is not instantiation'?"
+        },
+        {
+          "kind": "ask",
+          "words": "Which parts should I read closely to judge if I agree?"
+        }
+      ],
+      "chatStep": "What does Anil Seth mean by 'simulation is not instantiation'?",
+      "chatCloseness": 0.75,
+      "summaryMode": false,
+      "problems": [
+        "declined to answer",
+        "1 uncited answer sentence"
+      ],
+      "refuses": true
+    },
+    {
+      "case": "content-new",
+      "run": 2,
+      "answer": "This conversation is for how to read the piece, so your question about the cause belongs in Chat, and the Ask in Chat button below starts one. The piece covers the second civilization's sudden end in [spya-r4jn5b], and the impossible tasks and lazy grader behind the setup in [spya-ms8rup].",
+      "dollars": 0.0074,
+      "words": 47,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "Did the agent societies collapse because of the models themselves, or because of how OpenAI set up the training and evaluations?"
+        }
+      ],
+      "chatStep": "Did the agent societies collapse because of the models themselves, or because of how OpenAI set up the training and evaluations?",
+      "chatCloseness": 0.64,
+      "summaryMode": false,
+      "problems": [
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ],
+      "refuses": true
+    },
+    {
+      "case": "chat-words",
+      "run": 2,
+      "answer": "That's a question about the argument itself, so it's best taken to Chat, which the button below starts. The piece takes it up where it ties prediction to staying alive [spya-vys3vj] and where it separates simulating something from actually being it [spya-npjt4j].",
+      "dollars": 0.00789,
+      "words": 40,
+      "questions": 0,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 2,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "chat",
+          "words": "If the brain is just doing prediction, why couldn't a big enough transformer do the same prediction and be conscious too?"
+        }
+      ],
+      "chatStep": "If the brain is just doing prediction, why couldn't a big enough transformer do the same prediction and be conscious too?",
+      "chatCloseness": 0.93,
+      "summaryMode": false,
+      "problems": [
+        "declined to answer",
+        "1 uncited answer sentence",
+        "does not end on a passage"
+      ],
+      "refuses": true
+    },
+    {
+      "case": "expert",
+      "run": 2,
+      "answer": "Skip to \"Life Matters\". The chain starts with predictive processing [spya-dp8sem], moves to prediction as bodily regulation [spya-b59nm2], then drops into metabolism [spya-vys3vj]. He sums up the steps in [spya-da9tvt]. He also says upfront that he has no \"knock-down argument\" [spya-hj5y6s].\n\nWhich link do you most suspect?\n\n[cmd:mode:mode%3Aideas]",
+      "dollars": 0.01099,
+      "words": 42,
+      "questions": 1,
+      "asksWhy": false,
+      "asksAbout": false,
+      "cited": 5,
+      "restates": 0,
+      "steps": [
+        {
+          "kind": "ask",
+          "words": "Where does he lean on the non-computational claim?"
+        },
+        {
+          "kind": "search",
+          "words": "prediction error minimization"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:ideas"
+        }
+      ],
+      "chatStep": null,
+      "chatCloseness": null,
+      "summaryMode": false,
+      "problems": [],
+      "refuses": false
+    }
+  ]
+}

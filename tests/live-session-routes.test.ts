@@ -762,13 +762,13 @@ describe("a GPT-Live session", () => {
   });
 
   it("refuses a stored conversation whose kind takes no Live before journalling or creating", async () => {
-    /* A Tutorial is one per article (`targetOf`), so the stored id may not be
+    /* An Explore is one per article (`targetOf`), so the stored id may not be
        the one asked for: open the one the store kept. */
     const turn = await asTestOwner(() =>
       chatStore.begin(SLUG, {
         threadId: "spya-lgaagt",
         question: "Teach me this",
-        kind: "tutorial",
+        kind: "explore",
       }),
     );
     const before = await journalled();

@@ -253,7 +253,7 @@ describe("read_cited_work — who is offered it (Sol S7)", () => {
   it("chat and explore, and nothing else", () => {
     expect(offered(toolsFor("chat"))).toBe(true);
     expect(offered(toolsFor("explore"))).toBe(true);
-    for (const kind of ["learn", "tutorial", "candidates", "guide"] as const) expect(offered(toolsFor(kind))).toBe(false);
+    for (const kind of ["learn", "candidates", "guide"] as const) expect(offered(toolsFor(kind))).toBe(false);
     /* Live flattens `CHAT_TOOLS` (src/live.ts). */
     expect(offered(CHAT_TOOLS)).toBe(false);
     expect(READ_CITED_WORK_TOOL.function.parameters.required).toEqual(["work", "claim"]);

@@ -13,6 +13,7 @@
  * addresses that were right before Help was pages (`/help#spine`).
  */
 import { act } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -376,7 +377,7 @@ describe("the contents page", () => {
     history.replaceState(null, "", "/help");
     mountForReader("reader-a");
     const question = host.querySelector<HTMLTextAreaElement>(
-      'textarea[aria-label="Ask a question about Spideryarn"]',
+      'textarea[aria-label="Search Help or ask a question about Spideryarn"]',
     );
     if (!question) throw new Error("no Help question box");
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
@@ -389,7 +390,7 @@ describe("the contents page", () => {
     mountForReader("reader-b");
     expect(
       host.querySelector<HTMLTextAreaElement>(
-        'textarea[aria-label="Ask a question about Spideryarn"]',
+        'textarea[aria-label="Search Help or ask a question about Spideryarn"]',
       )?.value,
     ).toBe("");
   });
@@ -731,7 +732,9 @@ describe("the search box", () => {
     expect(host.querySelector('[role="status"]')?.className).not.toContain("sr-only");
   });
 
-  it("goes to the best match on Enter, and empties the box so the page is not left under the matches", () => {
+  /* Folded, not emptied, since 261020x: the box is a question too when signed
+     in, and the words are the reader's (GPT Sol, plan review, finding 1). */
+  it("goes to the best match on Enter, and folds the matches away so the page is not left under them", () => {
     mountAt("/help");
     const before = history.length;
     type("heat");
@@ -741,11 +744,42 @@ describe("the search box", () => {
     expect(address()).toBe("/help/spine");
     expect(history.length).toBe(before + 1);
     expect(host.querySelector("h1 > span")?.textContent).toBe(helpEntry("spine").title);
-    expect(searchBox()?.value).toBe("");
+    expect(searchBox()?.value).toBe("heat");
+    expect(resultHrefs()).toEqual([]);
+    expect(host.querySelector('nav[aria-label="Help contents"]')).not.toBeNull();
     expect(tops).toBe(1);
+    /* The next edit brings them back. */
+    type("heatm");
+    type("heat");
+    expect(resultHrefs()[0]).toBe("/help/spine");
   });
 
-  it("goes to a match that is pressed, and empties the box; a ⌘-press leaves both alone", () => {
+  it("uses the words in the box when Enter arrives before the deferred results catch up", () => {
+    mountAt("/help");
+    type("heat");
+    expect(resultHrefs()[0]).toBe("/help/spine");
+
+    const input = searchBox();
+    if (!input) throw new Error("no search box");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    /* Commit the urgent input update without flushing React's deferred search
+       render. This is the ordinary browser interval in which the box already
+       says the new words while the result list still shows the old ones. */
+    flushSync(() => {
+      setter?.call(input, "price");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(input.value).toBe("price");
+    expect(resultHrefs()[0]).toBe("/help/spine");
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("");
+
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(address()).toBe("/help/plans");
+  });
+
+  it("goes to a match that is pressed, and folds the matches; a ⌘-press leaves both alone", () => {
     mountAt("/help/keyboard");
     type("heat");
     const row = link('ul[aria-label="Search results"]', "/help/spine");
@@ -756,9 +790,11 @@ describe("the search box", () => {
     expect(modified.defaultPrevented).toBe(false);
     expect(address()).toBe("/help/keyboard");
     expect(searchBox()?.value).toBe("heat");
+    expect(resultHrefs()).toContain("/help/spine");
     press(row);
     expect(address()).toBe("/help/spine");
-    expect(searchBox()?.value).toBe("");
+    expect(searchBox()?.value).toBe("heat");
+    expect(resultHrefs()).toEqual([]);
     expect(link('nav[aria-label="Help contents"]', "/help/spine")?.getAttribute("aria-current")).toBe("page");
   });
 

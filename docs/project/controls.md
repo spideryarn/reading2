@@ -21,6 +21,13 @@ the reason turned out to be one line of CSS rather than taste.
 >
 > — Greg, 2026-10-07
 
+> Yes, but keep it a minimal update. And just to be clear, we obviously don't want the URL to, for
+> when importing an article from the homepage to have a voice button, because that wouldn't make
+> sense. And not so we need a voice button for, like, the search bar on the homepage. So use your
+> judgment a little bit.
+>
+> — Greg, 2026-10-20 (`q-ccv9qq`, on a microphone for every prose box)
+
 **The aim:** a control that does the same job looks the same in every mode, so reuse the shared
 piece rather than drawing a new one. **Orange marks the mode; a part within it is marked
 neutrally.** Look at `/design` § Controls across modes before drawing one; it shows each piece
@@ -37,6 +44,13 @@ below, live. The families came from plan
 | says something failed | [`ReadError`](../../src/web/ReadError.tsx) or `.gloss-error`, in `--danger` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |
 | is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
 | floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, or a shape of its own with its alpha times `--shadow-strength`, [`tokens.css`](../../src/web/styles/tokens.css) | [`elevation-shadows-soften-in-light`](../../tests/elevation-shadows-soften-in-light.test.ts) |
+| sends what you wrote, or leaves without sending | `.tone-positive` (green) and `.tone-negative` (red), [`button-tone.css`](../../src/web/button-tone.css) | [`feedback-dialog-styles`](../../tests/feedback-dialog-styles.test.ts) |
+| takes more than a few words of the reader's writing (not a URL, a search or a title) | a microphone: `DictationButton` and `DictationStrip`, through `useDictationField` ([dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box)) | [`prose-boxes-have-a-microphone`](../../tests/prose-boxes-have-a-microphone.test.ts) (every textarea, or its component listed with why) |
+
+The pair that ends a form is coloured by what it does: the button that sends what you wrote is
+green, the one that leaves without sending is red. Red is a direction, not a warning: a button
+whose job is to delete something is the solid destructive fill. Buttons that move you or undo stay
+neutral. Greg, 2026-10-20: *"use your judgment, don't over-use it"* (`q-yvmweg`).
 
 Some tests check the shared piece itself; the caller checks hold only the callers they list.
 A new mode needs adding to those checks. "Use your judgment" is meant: Skim's ‹ › is a pager,
@@ -179,6 +193,48 @@ instead.
 
 ## The numbers
 
+**Under a finger, nothing to press is smaller than 40 × 40px** (Greg on an iPhone, 2026-10-20:
+*"the icons are too small"*; plan
+[261021c](../plans/261021c-minimum-text-and-touch-target-sizes-on-a-phone.md)). Either draw it
+that size under `@media (any-pointer: coarse)` (as Chat's icons and steppers, Summary's view
+buttons and the close cross are; the bottom dock keeps `pointer: coarse` for the reason in
+[touch.md](touch.md#how-big-a-thing-has-to-be-to-press-it)), or give it `.tap-target`'s invisible
+40px halo. Use the halo only where the neighbours leave room. Where two halos would overlap, as
+with Chat's Rename and Delete, draw the controls bigger or let the row grow. Size the thing that
+is pressed, not its row: a 40px `<li>` round a 20px link is still a 20px link. **The one
+exception is a passage id**: ids sit 3px apart in a chip row, so their halo is bounded to their
+own width and 1.3rem tall (`tap-target.css`), and they get the text floor instead. The rows below
+are the mouse sizes.
+
+Three things learned making the rest of the app meet it (plan
+[261021g](../plans/261021g-phone-sizes-part-two-citations-spacing-and-remaining-touch-targets.md)):
+
+- **Write 40px, never a bare `2.5rem`** (nor Tailwind's `size-10`/`min-h-10`, which are 2.5rem).
+  The iPhone measured has a 15.36px root, so 2.5rem is 38.4px there. Write `max(40px, 2.5rem)`
+  or `tw:any-pointer-coarse:size-[40px]`. `tests/touch-targets-261021g.test.tsx` fails on a bare
+  2.5rem inside a coarse-pointer block.
+- **shadcn `Button` is 40px under a finger at every size.** That is one line in `button.tsx`, so
+  the 24, 32 and 36px rows below apply to a mouse only. A call site's `h-7` cannot undercut it,
+  because it is a `min-height`.
+- **A list of things to press needs a shape, not only 40px boxes.** In Chat's "From the web",
+  big targets alone left each *Bring into this chat* nearer the next title than its own. So each
+  source is now one block: its button always under its own title, and a hairline between
+  sources. Greg: *"as much about sort of line spacing or paragraph spacing being quite close as
+  font size"* (2026-10-21).
+
+- **A control drawn over text is not an exception.** Cover more of the text, or move the control;
+  do not shrink the target. The bar a tap raises above a paragraph on a phone is 40px slots for
+  this reason, though it now hides about a line and a half above instead of one (`--blk-bar-slot`;
+  Greg, 2026-10-21, `q-trbv2r`: *"use your judgment"*;
+  [261022e](../plans/261022e-phone-tap-bar-at-40px-and-a-wider-gap-between-paragraphs-of-model-answers.md)).
+
+**Still under 40, on purpose or awaiting a decision:** the gutter's at-rest marks
+(touch.md § The gutter), the shelf's sort and topic chips, Skim's place button, the fold toggle, a figure's zoom button,
+links inside a footnote card, Structure's rows in the prose, and the threshold slider in touch.md § How big (16px tall when last measured, and older than these plans). 261021g says why for the rest.
+
+Text has its own floor:
+[typography.md § The smallest text](typography.md#the-smallest-text).
+
 Not a scale — the page has no spacing scale and this does not invent one — but the controls on a
 list page now agree, and agreeing is the whole of it:
 
@@ -194,7 +250,7 @@ list page now agree, and agreeing is the whole of it:
 | chat's Send, beside its one-line box | 36px, **`var(--control-h)`** | `var(--radius)`, the box's own |
 | Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28), and Quotes' and Diagram's steppers | 44px, **`max(44px, var(--control-h-lg))`** | `var(--radius)` |
 | every modal's and panel's close cross, **`.close-x`** (Greg: *"I kept missing it on my iPad"*, 2026-10-01) | 32px, an 18px glyph, and a 40px invisible target wherever there is a finger (so 4px of gap beside it) | 6px, or the component's own |
-| the shelf card's action icons, for a finger on a card ≥ 28rem; the "⋯" | 40px (`size-10`) | `rounded-md` |
+| the shelf card's action icons, for a finger on a card ≥ 28rem; the "⋯" | 40px (`size-[40px]` under a finger) | `rounded-md` |
 | any other small control a finger has to hit, **`.tap-target`** (Greg: *"yes to all as you see fit"*, 2026-10-07): Quotes' ⓘ, a bare passage id, /profile's and Metadata's section headings, "Forgot your password?", "back to sign in" | drawn its own size; under `any-pointer: coarse` an invisible `::after` at least 40 × 40, centred. **A passage id is bounded** to its own width and 1.3rem tall, because ids sit 3px apart; where two 40px targets would overlap, **the row grows instead** (Quotes stacks its ⓘ over its id) | the control's own |
 
 **`--control-h` is the first of these with a token behind it**, added 2026-09-12 in

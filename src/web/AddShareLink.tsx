@@ -98,8 +98,8 @@ export function AddShareLink({
 
       {canAsk && (
         <Tooltip placement="bottom" content={<TipNote>{PRIVATE_LINK_OPEN_TIP}</TipNote>}>
-          {/* `outline`: this opens the question. The primary is on *Create
-              the link*, which is the press that makes one. */}
+          {/* `outline`: this opens the question. The green *Create the link*
+              inside the confirmation is the press that makes one. */}
           <Button type="button" variant="outline" size="sm" className="tw:mt-2" onClick={() => link.open()}>
             <Link2 size={14} />
             {LINK_AT_ADD_LABEL}
@@ -128,11 +128,11 @@ export function AddShareLink({
             {/* The press that makes a link. `LinkAtAdd.create` refuses it
                 without the tick too; the disabled state is the reader being
                 told why. */}
-            <Button type="button" size="sm" disabled={!state.rights} onClick={() => link.create()}>
+            <Button type="button" variant="outline" size="sm" className="tone-positive" disabled={!state.rights} onClick={() => link.create()}>
               <Link2 size={14} />
               Create the link
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => link.cancel()}>
+            <Button type="button" variant="ghost" size="sm" className="tone-negative" onClick={() => link.cancel()}>
               Cancel
             </Button>
           </div>

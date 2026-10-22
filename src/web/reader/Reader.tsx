@@ -34,12 +34,15 @@ import {
   type ClaimOrigin,
   type GlossaryEntry,
   type Idea,
+  MAX_LENS_CHARS,
   sameOrigin,
   type ThreadOrigin,
 } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
+  MarginCiteActions,
+  type MarginCiteSenders,
   MarginNotesSlot,
   type MarginFeed,
   NO_OWNER_FEED,
@@ -100,6 +103,7 @@ import {
   askAboutTerm,
   itemOrigin,
   askReceptionThroughLens,
+  askInSources,
   askToCheckClaim,
 } from "../chat-handoff.js";
 import type { QuizArrival } from "../QuizPanel.js";
@@ -227,7 +231,7 @@ import {
 } from "../reader-capability.js";
 import { markedModes, visitorGap } from "../visitor.js";
 import { SharedNotice, ViewOnlyChip, VisitorBand } from "../PublicChrome.js";
-import { webSource } from "../SourceLink.js";
+import { originalOf, webSource } from "../SourceLink.js";
 import { SmallScreenHint } from "../SmallScreenHint.js";
 import { useRenderCount } from "../perf.js";
 import { makeBlockBookmarker } from "../block-bookmark.js";
@@ -235,7 +239,7 @@ import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-conte
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
 import { useModeFlashOwnership } from "./mode-flash.js";
-import { proseFound, railFound, selectPassages } from "./passages.js";
+import { proseFound, railFound, railMarks, selectPassages } from "./passages.js";
 import { quoteAlphaByBlock } from "../spine-marks.js";
 import { stepQuote } from "../QuotesPanel.js";
 import { stepByKey } from "../list-step.js";
@@ -747,7 +751,11 @@ export function Reader({
   // the section start under an unchanged 44px bar (261003h postmortem).
   const tallCrumbsBar =
     showCrumbs && media(`(max-width: ${NARROW_WINDOW_MAX}px)`);
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
+  //
+  // `rootFontPx` since 2026-10-19: the reader's Text size scales the root, which
+  // rewraps every paragraph and can leave every width above unchanged (GPT Sol,
+  // plan review of 261019g, P1).
+  const layoutKey = `${windowWidth}|${rootFontPx}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
@@ -1073,31 +1081,44 @@ export function Reader({
     (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), "send", origin),
     [handToChat],
   );
-  /* **A fourth, the same day: Debate's *Look at the debate from an angle*.**
-     The reader's words travel twice too, in the question and as the lens the
-     thread stores, which is what Debate's *Your angles* lists it by. A lens is
+  /* **A fourth, the same day: Debate's *Look at the debate from an angle***,
+     Sources › Investigate's questions since plan 261020n. The words travel twice too,
+     in the question and as the lens the thread stores. A lens is
      Debate's second origin shape and has no block or quote, so this takes the
      words and builds the origin here: a claim's handler cannot be handed one
      (docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A).
      Trimmed here as the route trims it, so what is stored equals what is sent
      and a resent first question is the same origin.
 
-     **Two callers, and only one of them sends.** Debate's box is the reader's
-     own typed words and a button named *Ask in chat*: the press sends. The
-     command bar's suggested row is worded by a model from the reader's
-     private profile, and the privacy page says its question is sent only when
-     the reader presses Send in Chat, so that one still waits in the box
-     (docs/plans/261006j-ask-in-chat-sends-the-question.md, D5). */
+     **Two callers, two questions, one origin.** The command bar's suggested
+     row is an angle worded by a model from the reader's private profile, and
+     the privacy page says its question is sent only when the reader presses
+     Send in Chat, so it waits in the box
+     (docs/plans/261006j-ask-in-chat-sends-the-question.md, D5) and asks
+     through the angle (`askReceptionThroughLens`). Sources › Investigate's box and its
+     suggested questions are questions, a press on words the reader can read
+     in full: they send, asked as they are (`askInSources`, plan 261020n
+     Stage 2). Both store the words as the lens, which is what Investigate's *Your
+     questions* lists them by. */
   const lensInChat = useCallback(
-    (lens: string, then: "send" | "wait") => {
+    (lens: string, ask: (words: string) => string, then: "send" | "wait") => {
       const words = lens.trim();
       if (words === "") return;
-      handToChat(askReceptionThroughLens(words), then, { mode: "reception", lens: words });
+      /* The origin's cap is the route's; the box's `maxLength` already keeps
+         to it, and a suggested question is far under it. Cut rather than
+         refused, so a press can never fail on its origin alone. */
+      handToChat(ask(words), then, { mode: "reception", lens: words.slice(0, MAX_LENS_CHARS).trimEnd() });
     },
     [handToChat],
   );
-  const receptionThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
-  const suggestedLensInChat = useCallback((lens: string) => lensInChat(lens, "wait"), [lensInChat]);
+  const askSourcesQuestion = useCallback(
+    (question: string) => lensInChat(question, askInSources, "send"),
+    [lensInChat],
+  );
+  const suggestedLensInChat = useCallback(
+    (lens: string) => lensInChat(lens, askReceptionThroughLens, "wait"),
+    [lensInChat],
+  );
   /* **The command bar's *Ask the guide: “…”* row** (plan 261007j F6): the
      reader's own typed sentence, sent to this article's one guide — opened if
      it exists, begun if not (`ChatHandoffToGuide`). It sends, because the row
@@ -1303,6 +1324,8 @@ export function Reader({
      "the list happens to be empty" is a much weaker guarantee than "the branch
      does not exist". */
   const chatSummaries = owner?.chatAnchors.summaries ?? NO_THREADS;
+  /* Whether that list has answered yet: an empty one before it has is "not known". */
+  const chatSummariesLoaded = owner?.chatAnchors.loaded ?? false;
 
   /* Memoised, and this is a performance fix rather than tidiness. Both of these
      build a fresh array and a fresh Map, so calling them inline in the JSX
@@ -1831,13 +1854,18 @@ export function Reader({
           setBandAway(false);
           void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
           return;
-        /* A lens's origin lands on Reception, a claim's on Claims (both
-           `debate` until plan 261009w's Stage 3). */
+        /* A lens's origin lands on Investigate, a claim's on Claims (both `debate`
+           until plan 261009w's Stage 3). */
         case "reception":
           setBandAway(false);
-          /* An angle is not in the article: the angles box is Reception's. */
+          /* A question is not in the article: *Your questions* is Investigate's (it
+             was Reception's angle box until plan 261020n, and an angle chat
+             made then lands here too, where it is now listed). **`?thread=`
+             is kept**, so the conversation the reader came back from stays
+             open beside Investigate, rather than the panel opening its newest
+             (InvestigatePanel.tsx § `useReopenNewest`; plan 261021b). */
           void setSourcesWay(
-            { mode: "sources", sources: "reception", thread: null },
+            { mode: "sources", sources: "investigate" },
             { history: "push" },
           );
           return;
@@ -2846,13 +2874,40 @@ export function Reader({
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
   const claimChats = useMemo(
+    () => ({ summaries: chatSummaries, onCheck: checkClaim, onOpen: openClaimChat }),
+    [chatSummaries, checkClaim, openClaimChat],
+  );
+  /* And Sources › Investigate's (InvestigatePanel.tsx § `SourcesInvestigateChats`, plan 261020n):
+     its own question sender, and Claims' and Bibliography's senders, so a
+     claim or a work asked about there records the same origin and finds the
+     same mark as one asked about in its own sub-mode. The raw summaries, for
+     `entryChats`' reason below. */
+  const investigateChats = useMemo(
     () => ({
       summaries: chatSummaries,
+      loaded: chatSummariesLoaded,
+      /* Anything already open beside the mode, which the arrival must not
+         replace: a `?thread=` (shown, or Chat's state carried across), an
+         unsent passage chat, a note, or an annotation in progress. GPT Sol's
+         F1 on plan 261021b; the annotation was found in built-code review. */
+      occupied: thread !== null || chatDraft !== null || note !== null || annotating !== null,
+      onQuestion: askSourcesQuestion,
       onCheck: checkClaim,
-      onLens: receptionThroughLensInChat,
+      onAskWork: askWork,
       onOpen: openClaimChat,
     }),
-    [chatSummaries, checkClaim, receptionThroughLensInChat, openClaimChat],
+    [
+      chatSummaries,
+      chatSummariesLoaded,
+      thread,
+      chatDraft,
+      note,
+      annotating,
+      askSourcesQuestion,
+      checkClaim,
+      askWork,
+      openClaimChat,
+    ],
   );
   /* The same three things for Glossary's entries and Bibliography's rows
      (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`
@@ -2865,6 +2920,20 @@ export function Reader({
   const workChats = useMemo(
     () => ({ summaries: chatSummaries, onAsk: askWork, onOpen: openClaimChat }),
     [chatSummaries, askWork, openClaimChat],
+  );
+  /**
+   * **What a *Cites* line's card in the margin can do** — the prose card's own
+   * senders (below, `ProseHoverCard`), so a press there records the same
+   * origin. Memoised, because every *Cites* line reads it and Reader re-renders
+   * on every scroll (GPT Sol F5 on plan 261020g). Null for a visitor, whose
+   * column draws no citations anyway. MarginaliaColumn.tsx § MarginCiteSenders.
+   */
+  const marginCiteActions = useMemo<MarginCiteSenders | null>(
+    () =>
+      isOwner
+        ? { onAsk: askWork, onCheck: checkCitedWorkInChat, onOpen: openCitedWorkFromCard, onJump: jumpTo }
+        : null,
+    [isOwner, askWork, checkCitedWorkInChat, openCitedWorkFromCard, jumpTo],
   );
   /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
   const ideaChats = useMemo(
@@ -3859,6 +3928,7 @@ export function Reader({
             articleTitle={article.meta.title}
             workChats={workChats}
             claimChats={claimChats}
+            investigateChats={investigateChats}
             citeFocus={citeFocus}
             onCiteFocusTaken={citeFocusTaken}
             claimFocus={claimFocus}
@@ -4338,6 +4408,7 @@ export function Reader({
           outline={outline}
           layoutKey={layoutKey}
           matches={hitBlocks}
+          marksWords={railMarks(mode)}
           reading={owner?.readingTime.reach}
           quotes={quoteRail}
           onJump={jumpTo}
@@ -4468,6 +4539,7 @@ export function Reader({
               which was the first sign it was not carrying its space. */}
         </div>
       )}
+      <MarginCiteActions.Provider value={marginCiteActions}>
       <TableView
         article={article}
         /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
@@ -4550,6 +4622,7 @@ export function Reader({
         onSelect={selectProse}
         onOpenComment={openCommentDialog}
       />
+      </MarginCiteActions.Provider>
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and
           it calls the same `selectProse`, saying it was a finger — which is
@@ -5053,6 +5126,9 @@ export function Reader({
         shelfRow={archive === undefined ? undefined : { archive, tags: tagsControl }}
         /* The bar's argument rows — `executor` above. */
         executor={executor}
+        /* The bar's *Open the original* — the uploaded PDF only for the
+           owner, whose route it is (SourceLink.tsx § `originalOf`). */
+        original={originalOf(article.meta, owner !== null) ?? undefined}
         drawer={
           owner
             ? {

@@ -21,6 +21,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { adminQueries } from "../src/store/pg-admin.js";
 import * as schema from "../src/db/schema.js";
+import { SITE_OWNER_ID } from "../src/site-account.js";
 
 /**
  * A Drizzle handle with no connection behind it.
@@ -177,17 +178,18 @@ describe("the three child counts", () => {
 describe("the ingest ledger's half-price split", () => {
   it("falls back to the price frozen at deletion, in both windows", () => {
     const sql = sqlOf(q.ingests);
-    /* Four times: once per window, for each of the two kinds of charge (an
-       ingest, and a High-powered AI upgrade, plan 260930k) — the same
-       duplication `usageSql` has, which is why this asserts a count rather than
-       a presence. */
+    /* Eight times: once per window, for each of the two kinds of charge (an
+       ingest, and a High-powered AI upgrade, plan 260930k), and each of those
+       twice — counted and summed in slots (plan 261020b) — the same duplication
+       `usageSql` has, which is why this asserts a count rather than a
+       presence. */
     const matches = sql.match(
       /coalesce\("articles"\."visibility", "ingest_events"\."article_visibility_at_delete", 'private'\) = 'public'/g,
     );
     expect(
       matches ?? [],
       "expected the fallback once per window for each kind of charge",
-    ).toHaveLength(4);
+    ).toHaveLength(8);
   });
 
   it("never asks bare `visibility = 'public'`, which is the drift", () => {
@@ -204,5 +206,91 @@ describe("the ingest ledger's half-price split", () => {
     expect(sqlOf(q.ingests)).toContain(
       'left join "articles" on "articles"."id" = "ingest_events"."article_id"',
     );
+  });
+});
+
+/* ------------------------------------------------- engagement, 261020c --- */
+
+describe("active days", () => {
+  it("counts reader requests' model calls, and not job steps, evals or the CLI", () => {
+    /* Sol's plan review, finding 1: a job step runs on the queue's clock and
+       `scripts/stage.ts` records its runs as `job_step` too. */
+    const sql = sqlOf(q.activity);
+    const params = paramsOf(q.activity);
+    expect(sql).toMatch(/from "ai_calls" where "ai_calls"\."scope_kind" = \$\d/);
+    expect(params).toContain("request");
+    expect(params).not.toContain("job_step");
+  });
+
+  it("leaves out reader_arrivals, whose backfill is not anybody's sign-up day", () => {
+    expect(sqlOf(q.activity)).not.toMatch(/reader_arrivals/);
+  });
+
+  it("counts a day once however many sources it appears in, by UTC date", () => {
+    const sql = sqlOf(q.activity);
+    expect(sql).toMatch(/union all/);
+    expect(sql).toMatch(/count\(distinct \("at" at time zone 'UTC'\)::date\)/);
+    /* Every branch's time under the one name the union takes from its first. */
+    expect(sql).toMatch(/select "owner_id", "started_at" as "at" from "ai_calls"/);
+  });
+
+  it("counts when the account opened an article, not only each article's latest open", () => {
+    /* Plan 261020y: keyed on the account, so no join and no shelf predicate. */
+    expect(sqlOf(q.activity)).toMatch(/union all \(select "owner_id", "opened_at" from "article_open_times"\)/);
+  });
+
+  it("takes exactly the five intended sources and excludes the site account", () => {
+    const sql = sqlOf(q.activity);
+    const params = paramsOf(q.activity);
+    expect(sql).toMatch(/union all \(select "owner_id", "reserved_at" from "ingest_events"\)/);
+    expect(sql).toMatch(
+      /select "articles"\."owner_id", "comments"\."created_at" from "comments" inner join "articles"/,
+    );
+    expect(sql).toMatch(/union all \(select "owner_id", "last_opened_at" as "at" from "articles"/);
+    expect(sql).toMatch(/where "activity"\."owner_id" <> \$\d/);
+    expect(params).toContain(SITE_OWNER_ID);
+  });
+
+  it("puts the last-30 window between today and 29 days ago, so a future row is not recent", () => {
+    expect(sqlOf(q.activity)).toMatch(
+      /between \(now\(\) at time zone 'UTC'\)::date - 29 and \(now\(\) at time zone 'UTC'\)::date/,
+    );
+  });
+
+  it("asks the shelf predicate of both article-shaped sources", () => {
+    /* Comments and the latest open: once per branch. */
+    const sql = sqlOf(q.activity);
+    expect(sql.match(/"current_revision_id" is not null/g) ?? []).toHaveLength(2);
+    expect(sql.match(/left\("articles"\."slug", 1\) <> '_'/g) ?? []).toHaveLength(2);
+  });
+});
+
+describe("reading time", () => {
+  it("sums through the article, on the shelf, by the article's owner", () => {
+    const sql = sqlOf(q.reading);
+    expect(sql).toMatch(/sum\("reading_time"\."seconds"\)/);
+    expect(sql).toMatch(/inner join "articles" on "reading_time"\."article_id" = "articles"\."id"/);
+    expect(sql).toMatch(/"current_revision_id" is not null/);
+    expect(sql).toMatch(/group by "articles"\."owner_id"/);
+  });
+});
+
+describe("failed imports", () => {
+  it("are the error rows only, capped per owner, newest first", () => {
+    const sql = sqlOf(q.failures);
+    const params = paramsOf(q.failures);
+    expect(sql).toMatch(/where "import_records"\."status" = \$\d/);
+    expect(params).toContain("error");
+    expect(params).not.toContain("cancelled");
+    expect(sql).toMatch(/row_number\(\) over \(\s*partition by "owner_id"\s*order by coalesce/);
+    expect(sql).toMatch(/"rank" <= \$\d/);
+  });
+
+  it("select nothing that names what was being read", () => {
+    /* admin.md's one rule: no slug, no URL, no filename, no sentence. */
+    const sql = sqlOf(q.failures);
+    for (const column of ['"slug"', '"url"', '"upload_filename"', '"error"', '"steps"']) {
+      expect(sql, column).not.toContain(column);
+    }
   });
 });

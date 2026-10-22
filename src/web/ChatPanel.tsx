@@ -84,6 +84,7 @@ import {
   X,
 } from "lucide-react";
 import { withoutCommandLines } from "../citable.js";
+import { conversationDocument, type MarkdownArticle } from "../chat-markdown.js";
 import { worthRetrying } from "../messages.js";
 import { splitHint } from "../recall-hint.js";
 import { MODE_LABEL } from "../title-text.js";
@@ -131,6 +132,7 @@ import {
   CHAT_FROM_LABEL,
   GUIDE_LABEL,
   type LearnConversationView,
+  LENS_BACK,
   narrowed,
   originBack,
   sourcesIn,
@@ -384,7 +386,7 @@ interface Props {
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Tutorial | Explore | Quiz control**, when this panel is one of
+   * **The Recall | Explore | Quiz control**, when this panel is one of
    * Learn's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
@@ -509,8 +511,8 @@ export function ChatPanel({
   onOrigin,
 }: Props) {
   useRenderCount("ChatPanel");
-  /* **Learn's layout, for all three of its conversations** — Recall,
-     Tutorial and Explore are each one thread per article, dictated into a tall
+  /* **Learn's layout, for both of its conversations** — Recall and
+     Explore are each one thread per article, dictated into a tall
      box, with no list (`LEARN_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
   const learn = isLearnKind(kind);
@@ -568,7 +570,7 @@ export function ChatPanel({
    * the store once (`ChatHandoff` in ConversationModes.tsx), does not come
    * back after the reader has cleared it.
    *
-   * **Learn's is by kind, not by id.** Recall, Tutorial and Explore are each
+   * **Learn's is by kind, not by id.** Recall and Explore are each
    * one conversation per article and the band decides which conversation that
    * is — it can be a different one on the way back, when a stored one has
    * arrived or Start over has begun another — so the words go to whichever it
@@ -654,7 +656,7 @@ export function ChatPanel({
       about={
         learn ? (
           <LearnSubModesAbout
-            current={kind === "tutorial" ? "tutorial" : kind === "explore" ? "explore" : "recall"}
+            current={kind === "explore" ? "explore" : "recall"}
           />
         ) : open ? (
           /* Which model answered this conversation, and its thinking
@@ -663,9 +665,7 @@ export function ChatPanel({
         ) : undefined
       }
       label={
-        kind === "tutorial"
-          ? "A tutorial on this article"
-          : kind === "explore"
+        kind === "explore"
             ? "Explore what you think about this article"
             : learn
             ? "Recall what you took from this article"
@@ -732,16 +732,22 @@ export function ChatPanel({
                an empty one has nothing to start over from, and one still being
                answered or not yet named by the server would need a DELETE held
                for a name. Plan 261001m § 4 and F1. */
-            open && canStartOver && (
-              <ArmedDelete
-                key={open.id}
-                onDelete={() => onDelete(open.id)}
-                tip="Start over — delete this conversation"
-                armedTip="Press again to delete this conversation and start over"
-              />
-            )
+            <>
+              {open && (
+                <CopyConversation thread={open} article={{ slug, title: articleTitle }} blocks={blocks} />
+              )}
+              {open && canStartOver && (
+                <ArmedDelete
+                  key={open.id}
+                  onDelete={() => onDelete(open.id)}
+                  tip="Start over — delete this conversation"
+                  armedTip="Press again to delete this conversation and start over"
+                />
+              )}
+            </>
           ) : open ? (
             <>
+              <CopyConversation thread={open} article={{ slug, title: articleTitle }} blocks={blocks} />
               {/* The same delete the list offers, where the reader actually is.
                   Greg, 2026-08-26: *"Also add a Delete button within a chat."*
                   Asking twice rather than once, unlike the list — see
@@ -1087,8 +1093,8 @@ function ChatListLoading({ what = "your conversations" }: { what?: string }) {
 /**
  * Every conversation about this article, most recently used first.
  *
- * **Every one, since 2026-10-05**: Recall's, Tutorial's and Explore's as well
- * as the chats, each with an icon at its head for where it came from, and a
+ * **Every one, since 2026-10-05**: Recall's and Explore's (and Tutorial's,
+ * until it was folded into Recall on 2026-10-20) as well as the chats, each with an icon at its head for where it came from, and a
  * filter above them when they came from more than one place. It showed only
  * chats from 2026-10-01 (plan 261001m) until report `spya-hyfqkq` asked for
  * all of them; plan
@@ -1401,7 +1407,7 @@ function OriginBack({ origin, onBack }: { origin: ThreadOrigin; onBack(origin: T
       <span className="chat-origin-back-text">
         Back to{" "}
         {back.quote === null ? (
-          "your angle"
+          LENS_BACK
         ) : (
           <span className={withVoice("chat-origin-back-quote", "author")}>“{back.quote}”</span>
         )}{" "}
@@ -1528,10 +1534,10 @@ function RenameRow({
           if (e.key === "Escape") onCancel();
         }}
       />
-      <button type="button" className="chat-icon" data-tip="Save" data-tip-describes="off" aria-label="Save" onClick={() => onDone(value)}>
+      <button type="button" className="chat-icon tone-positive" data-tip="Save" data-tip-describes="off" aria-label="Save" onClick={() => onDone(value)}>
         <Check size={12} />
       </button>
-      <button type="button" className="chat-icon" data-tip="Cancel" data-tip-describes="off" aria-label="Cancel" onClick={onCancel}>
+      <button type="button" className="chat-icon tone-negative" data-tip="Cancel" data-tip-describes="off" aria-label="Cancel" onClick={onCancel}>
         <X size={12} />
       </button>
     </div>
@@ -1660,13 +1666,65 @@ export function Conversation({
   /** A Live session is running in this conversation — the test `leave` uses. */
   const speaking = live !== undefined && live.phase !== "idle" && live.phase !== "failed";
   /**
-   * Which question the reader is rewriting, if any.
+   * Which question the reader is rewriting, if any, and the rewrite so far.
    *
    * State here rather than inside each `Turn`, so that opening a second editor
    * closes the first. Two open at once is not a mode anybody wants and it makes
    * the "this will discard N turns" count below ambiguous about which N.
+   *
+   * **The text and the queued ask live here too, not in the editor**, because
+   * the editor can be remounted under the reader. A question asked in this tab
+   * carries an id this tab invented until the answer's `begin` frame swaps in
+   * the server's (`withServerIds`, chat/model.ts), and `Turn` is keyed by id.
+   * Rewriting the question whose answer is arriving — the case report
+   * spya-yur0eq is about — is exactly when that swap lands mid-edit. So the
+   * editor finds its row again by position and original words (`rewriting`
+   * below), and nothing it held is lost. GPT Sol's plan review F1.
    */
-  const [editing, setEditing] = useState<string | null>(null);
+  const [rewrite, setRewrite] = useState<Rewrite | null>(null);
+  const rewriting = rewriteRow(rewrite, thread.messages);
+  /* **A queued rewrite goes once the answer it stopped has settled.** Not when
+     the answer ended in an error: that is a turn that failed (before `begin`,
+     its rows were never the server's), so asking against it would be refused.
+     The editor stays open with its text, and Ask again is the reader's again. */
+  useEffect(() => {
+    if (!rewrite?.queued || busy) return;
+    if (rewriting === null) setRewrite(null);
+    else if (last?.status === "error") setRewrite({ ...rewrite, queued: false });
+    else {
+      const next = rewrite.text.trim();
+      setRewrite(null);
+      /* The box stays editable while Stop settles. Recheck here as well as at
+         the press: the reader may since have restored the original words (or
+         cleared them), which is no longer an edit and must not discard turns. */
+      if (next !== "" && next !== rewrite.original.trim()) onEdit(rewriting, next);
+    }
+  }, [rewrite, rewriting, busy, last?.status, onEdit]);
+  /**
+   * Ask the rewrite: now, or — while an answer is arriving — once that answer
+   * is stopped. Stopped with the Composer's own Stop, and the edit then goes
+   * through the ordinary path: two paths that each work, in the one order they
+   * are known to (report spya-yur0eq;
+   * docs/plans/261020i-edit-your-question-while-chat-is-answering.md).
+   */
+  const askRewrite = (r: Rewrite, id: string): void => {
+    const next = r.text.trim();
+    /* An edit to the same words is not an edit: re-running would throw away
+       the answers below to arrive at the same question. Checked before the
+       stop, so an unchanged Enter never stops a useful answer (Sol F2). */
+    if (next === "" || next === r.original.trim()) {
+      setRewrite(null);
+      return;
+    }
+    if (!busy) {
+      setRewrite(null);
+      onEdit(id, next);
+      return;
+    }
+    if (r.queued || !last) return;
+    setRewrite({ ...r, queued: true });
+    onStop(last.id);
+  };
   /** Whether the reader has scrolled up, which is what shows the jump button. */
   const [away, setAway] = useState(false);
   /**
@@ -2096,9 +2154,7 @@ export function Conversation({
           <GuideGreeting greeting={openingGreeting} starts={empty} onAsk={(q) => onSend(q)} />
         )}
         {empty &&
-          (kind === "guide" ? null : kind === "tutorial" ? (
-            <TutorialInvitation />
-          ) : kind === "explore" ? (
+          (kind === "guide" ? null : kind === "explore" ? (
             <ExploreInvitation onAsk={(q) => onSend(q)} />
           ) : kind === "learn" ? (
             <LearnInvitation />
@@ -2121,19 +2177,24 @@ export function Conversation({
                because a button that exists and always says no is worse than one
                that was never there. */
             onRetry={i === thread.messages.length - 1 ? onRetry : undefined}
-            /* And nothing may be edited while an answer is arriving: the edit
-               would discard the row being written into. The server settles the
-               stream first and would cope, but offering it mid-answer invites
-               the reader to do something they would then watch half-happen. */
-            onEdit={onEdit}
-            /* The pencil goes away while an answer is arriving; an editor
-               already OPEN does not. Withdrawing `onEdit` wholesale unmounted a
-               half-typed rewrite the moment the reader asked something else —
-               and then remounted it, by itself, with the original text back in
-               it, because `editing` still named the row. Found in review. */
-            canEdit={!busy}
-            editing={editing === m.id}
-            onEditing={(on) => setEditing(on ? m.id : null)}
+            /* **The pencil stays while an answer is arriving** (since
+               2026-10-20, report spya-yur0eq); it is the ask that waits — see
+               `askRewrite`. */
+            onRewrite={() =>
+              setRewrite({ id: m.id, index: i, original: m.text, text: m.text, queued: false })
+            }
+            editor={
+              rewrite && rewriting === m.id
+                ? {
+                    text: rewrite.text,
+                    queued: rewrite.queued,
+                    canAsk: !busy,
+                    onText: (text) => setRewrite((r) => (r ? { ...r, text } : r)),
+                    onAsk: () => askRewrite(rewrite, m.id),
+                    onCancel: () => setRewrite(null),
+                  }
+                : undefined
+            }
             /* How many turns an edit here would throw away. Counted from the
                rendered list rather than passed down, so it cannot drift from
                what is on screen. */
@@ -2151,8 +2212,10 @@ export function Conversation({
             bring={bring}
           />
           {/* The guide's offers to save their reason or About you, each a
-              card they press (GuideSaveOffer.tsx, plan 261009q). */}
+              card they press (GuideSaveOffer.tsx, plan 261009q); and Chat's
+              and Explore's, About you only and always pressed (plan 261020o). */}
           {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
+          {(kind === "chat" || kind === "explore") && <GuideSaveOffers slug={slug} message={m} pressOnly />}
           </Fragment>
         ))}
         {/* The guide's next steps, under its latest answer only
@@ -2161,6 +2224,7 @@ export function Conversation({
         {kind === "guide" && !busy && (
           <GuideNextSteps
             slug={slug}
+            threadId={thread.id}
             message={thread.messages.at(-1)}
             blocks={blocks}
             onAsk={(q) => onSend(q)}
@@ -2289,6 +2353,15 @@ export function Conversation({
  * So the nudges are prose. They are there because "say what you took from it"
  * is a genuinely hard instruction to obey from a standing start, and naming
  * three ways in is the cheapest help that does not contaminate the answer.
+ *
+ * **And it says a reader who has not read it is welcome**, since Recall took
+ * Tutorial in on 2026-10-20 (docs/plans/261020m-recall-and-tutorial-become-one-recall.md):
+ * Tutorial's empty state said so, and it is the one thing Tutorial's name said
+ * better. **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
+ * 2026-10-03, about Tutorial's: *"I don't think the user should have to say
+ * that they haven't read it … you're letting them know it's okay if they
+ * haven't read/finished it."* `readItFor` in src/converse.ts says the same
+ * thing in the same way.
  */
 function LearnInvitation() {
   return (
@@ -2298,39 +2371,16 @@ function LearnInvitation() {
         apart from the piece — and at the paragraphs worth another look.
       </p>
       <p className="chat-empty-hint">
+        It's fine if you haven't read it yet, or haven't finished. Then I'll take you through it a
+        piece at a time, each with a link to its passage and a question for you to answer in your
+        own words.
+      </p>
+      <p className="chat-empty-hint">
         It doesn't need to be tidy. Talking is usually easier than typing, and rambling is fine.
       </p>
       <p className="chat-empty-hint">
         Stuck for a way in? Try the argument in one sentence, the part you're least sure of, or what
         you'd tell someone about it.
-      </p>
-    </div>
-  );
-}
-
-/**
- * **Tutorial's empty state asks the opening question**, so the reader speaks
- * first and the model never writes an unprompted turn. Greg, `spya-j0scgz`:
- * *"I think it might start with the sort of basic recall question. You know,
- * what do you remember about the article? But it may be that the user says
- * nothing. I haven't read it yet."*
- *
- * **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
- * 2026-10-03: *"I don't think the user should have to say that they haven't
- * read it … you're letting them know it's okay if they haven't read/finished
- * it."* The composer's placeholder and `readItFor` in src/converse.ts say the
- * same thing in the same way.
- */
-function TutorialInvitation() {
-  return (
-    <div className="chat-suggest">
-      <p className="chat-empty-hint">
-        What do you remember about this article? It's fine if you haven't read it yet, or haven't
-        finished — we can start from wherever you are.
-      </p>
-      <p className="chat-empty-hint">
-        We'll take short turns: a little of the piece at a time, with a link to the passage, and then
-        a question for you to answer in your own words.
       </p>
     </div>
   );
@@ -2434,11 +2484,9 @@ export function Turn({
   blocks,
   cross,
   onRetry,
-  onEdit,
   onHintOpened,
-  canEdit,
-  editing,
-  onEditing,
+  onRewrite,
+  editor,
   discards,
   onDeleteFrom,
   holdDeleteFrom = false,
@@ -2465,17 +2513,16 @@ export function Turn({
   cross?: CrossArticles | undefined;
   /** Present only on the last message. See the call site. */
   onRetry?: ((messageId: string) => void) | undefined;
-  onEdit(messageId: string, question: string): void;
-  /** Whether the pencil is offered. False while an answer is arriving. */
-  canEdit: boolean;
-  editing: boolean;
-  onEditing(on: boolean): void;
+  /** The pencil: open this question's editor. */
+  onRewrite(): void;
+  /** This question's editor, when it is open. Its state is the transcript's. */
+  editor?: RewriteEditor | undefined;
   /** Turns an edit here would discard. */
   discards: number;
   /**
    * Delete this question and everything after it. Absent on the first
-   * question and wherever the caller offers no delete; withheld with the
-   * pencil while an answer is arriving.
+   * question and wherever the caller offers no delete; withheld while an
+   * answer is arriving.
    */
   onDeleteFrom?: ((messageId: string) => void) | undefined;
   /** Reserve the bin's place in the held action row while it cannot be pressed. */
@@ -2491,15 +2538,13 @@ export function Turn({
    * the pencil they opened it from is the least surprising place, and it is
    * where they were. Found by a GPT-5.6 review, 2026-08-26.
    *
-   * It does nothing whenever the pencil is not there to receive it, which is
-   * any time an answer is arriving: after a submitted edit, and also after a
-   * *cancelled* one if the reader started another answer while the box was
-   * open. `canEdit` withdraws the pencil in both cases and the caret falls back
-   * to the body, as it did before. Restoring focus to something that is about
-   * to be withdrawn would be worse.
+   * The pencil stays while an answer is arriving (since 2026-10-20), so this
+   * holds after a submitted edit too: the caret lands on the pencil of the
+   * question just rewritten.
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const remove = useRef<HTMLButtonElement>(null);
+  const editing = editor !== undefined;
   const wasEditing = useRef(editing);
   const commands = useChatCommands() ?? undefined;
   useEffect(() => {
@@ -2543,30 +2588,7 @@ export function Turn({
   };
 
   if (message.role === "user") {
-    if (editing) {
-      return (
-        <EditQuestion
-          text={message.text}
-          discards={discards}
-          onCancel={() => onEditing(false)}
-          /* The pencil is withdrawn while an answer is arriving and an editor
-             already open is deliberately left alone — closing it would destroy
-             a half-typed rewrite. But left alone it could still be *submitted*,
-             which discards the row being streamed into and contradicts the rule
-             the pencil is enforcing. So the editor stays, and its Ask-again is
-             what waits. Found by a GPT-5.6 review, 2026-08-26. */
-          canAsk={canEdit}
-          onDone={(next) => {
-            onEditing(false);
-            // An edit to the same words is not an edit. Re-running would throw
-            // away the answers below to arrive at the same question.
-            if (next.trim() !== "" && next.trim() !== message.text.trim()) {
-              onEdit(message.id, next.trim());
-            }
-          }}
-        />
-      );
-    }
+    if (editor) return <EditQuestion {...editor} discards={discards} />;
     return (
       <div className="chat-turn you" data-turn="user">
         {message.text}
@@ -2578,26 +2600,7 @@ export function Turn({
             edited
           </span>
         )}
-        {/* **The row keeps its height while an answer arrives**, with nothing in
-            it to press. It used to be withdrawn whole, so every question in the
-            transcript grew a row the moment an answer finished, and the answer
-            being read moved down by one (seen in the browser check of plan
-            261005f). The pencil itself is still absent, which is what the focus
-            fallback above relies on. */}
-        {!canEdit && (
-          <div className="chat-actions held" aria-hidden="true">
-            <span className="chat-icon">
-              <Pencil size={12} />
-            </span>
-            {holdDeleteFrom && (
-              <span className="chat-icon">
-                <Trash2 size={12} />
-              </span>
-            )}
-          </div>
-        )}
-        {canEdit && (
-          <div className="chat-actions">
+        <div className="chat-actions">
             <button
               ref={pencil}
               type="button"
@@ -2605,7 +2608,7 @@ export function Turn({
               data-tip="Rewrite this question"
               data-tip-describes="off"
               aria-label="Rewrite this question"
-              onClick={() => onEditing(true)}
+              onClick={onRewrite}
             >
               <Pencil size={12} />
             </button>
@@ -2628,8 +2631,15 @@ export function Turn({
                 }}
               />
             )}
+            {/* **The bin keeps its place while an answer arrives**, with nothing
+                in it to press: withdrawn, the row would change width under the
+                reader mid-answer (seen in the browser check of plan 261005f). */}
+            {!onDeleteFrom && holdDeleteFrom && (
+              <span className="chat-icon held" aria-hidden="true">
+                <Trash2 size={12} />
+              </span>
+            )}
           </div>
-        )}
       </div>
     );
   }
@@ -3071,6 +3081,133 @@ function CopyAnswer({ text }: { text: string }) {
 }
 
 /**
+ * **Put the whole conversation on the clipboard, as Markdown** — for pasting
+ * into a note or another AI. Greg, 2026-10-19 (`spya-p88dcx`): *"provide a way
+ * to export the whole of a chat (in a nice machine-readable and ideally also
+ * human-readable format that could be pasted into another AI)"*.
+ *
+ * The text is src/chat-markdown.ts § `conversationDocument`, the renderer
+ * your-words.md uses too. No fetch: the panel already holds every message.
+ * A command button's line is left out on the same test `CopyAnswer` uses, so
+ * the executor is the one this thread's own answers draw with
+ * (`ChatCommandsFor`, which the header sits outside of).
+ *
+ * The three states and the live region are `CopyAnswer`'s, for its reasons.
+ * Not drawn on a conversation with nothing in it yet.
+ */
+export function CopyConversation(props: {
+  thread: ChatThreadView;
+  article: MarkdownArticle;
+  blocks: Map<string, string>;
+}) {
+  if (props.thread.messages.length === 0) return null;
+  return (
+    <ChatCommandsFor kind={props.thread.kind}>
+      <CopyConversationButton {...props} />
+    </ChatCommandsFor>
+  );
+}
+
+function CopyConversationButton({
+  thread,
+  article,
+  blocks,
+}: {
+  thread: ChatThreadView;
+  article: MarkdownArticle;
+  blocks: Map<string, string>;
+}) {
+  const { state, copy } = useCopy({ copiedMs: 1600, failedMs: 1600 });
+  const commands = useChatCommands() ?? undefined;
+  const label = "Copy this conversation as Markdown";
+  return (
+    <button
+      type="button"
+      className="chat-icon"
+      aria-label={label}
+      data-tip={
+        state === "failed"
+          ? "Your browser would not allow the copy — an insecure connection is the usual reason"
+          : `${label}, to paste into a note or another AI`
+      }
+      onClick={() =>
+        copy(
+          conversationDocument(thread, article, new Date(), {
+            isButton: (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
+          }),
+        )
+      }
+    >
+      {state === "copied" ? (
+        <ClipboardCheck size={14} />
+      ) : state === "failed" ? (
+        <TriangleAlert size={14} />
+      ) : (
+        <Copy size={14} />
+      )}
+      <span className="sr-only" aria-live="polite">
+        {state === "copied"
+          ? "Conversation copied."
+          : state === "failed"
+            ? "Copy refused by the browser."
+            : ""}
+      </span>
+    </button>
+  );
+}
+
+/** A question being rewritten: ChatTranscript's state, see `rewrite` there. */
+interface Rewrite {
+  /** The row's id when the editor opened; it may since have been renamed. */
+  id: string;
+  index: number;
+  /** The question as it stood, which is also what finds a renamed row. */
+  original: string;
+  text: string;
+  /** Asked while an answer was arriving: that answer is being stopped. */
+  queued: boolean;
+}
+
+/**
+ * The id of the row a rewrite belongs to now, or null when it is gone.
+ *
+ * Its own id while that is still there. Otherwise the `begin` frame has
+ * renamed it, which keeps its place and its words, so a user row at the same
+ * index with the same words is it. Anything else — a delete took it, the list
+ * changed under it — is gone, and the editor closes rather than reopening on
+ * some other question.
+ */
+function rewriteRow(rewrite: Rewrite | null, messages: readonly ChatMessage[]): string | null {
+  if (!rewrite) return null;
+  if (messages.some((m) => m.id === rewrite.id)) return rewrite.id;
+  const at = messages[rewrite.index];
+  return at?.role === "user" && at.text === rewrite.original ? at.id : null;
+}
+
+/** What `EditQuestion` draws and calls; the state behind it is the transcript's. */
+interface RewriteEditor {
+  text: string;
+  /**
+   * **Asked while an answer was arriving: stop it, then ask.** The edit cannot
+   * go while that answer is being written, so the press stops it and the
+   * rewrite waits here, open and saying so, until it has settled; then it goes
+   * by itself (`askRewrite` in ChatTranscript). Report spya-yur0eq. Cancel
+   * takes the wish with it, so no rewrite is asked behind the reader's back.
+   *
+   * Until 2026-10-20 the press was refused instead, with a sentence: a refusal
+   * that said nothing was the earlier bug (spya-f3b6ab;
+   * docs/postmortems/261002g-a-refusal-with-no-voice.md), and the sentence
+   * shown while queued is still what keeps the wait from being silent.
+   */
+  queued: boolean;
+  /** False while an answer is arriving. */
+  canAsk: boolean;
+  onText(text: string): void;
+  onAsk(): void;
+  onCancel(): void;
+}
+
+/**
  * Rewriting a question, in place, with the cost of it stated.
  *
  * The count is the entire safety mechanism, and it is a sentence rather than a
@@ -3085,36 +3222,14 @@ function CopyAnswer({ text }: { text: string }) {
  * on the window and would scroll the page under the reader's caret.
  */
 function EditQuestion({
-  text,
-  discards,
+  text: value,
+  queued,
   canAsk,
-  onDone,
+  discards,
+  onText,
+  onAsk: ask,
   onCancel,
-}: {
-  text: string;
-  discards: number;
-  /** False while an answer is arriving — see the call site. */
-  canAsk: boolean;
-  onDone(next: string): void;
-  onCancel(): void;
-}) {
-  const [value, setValue] = useState(text);
-  /**
-   * **A press that is refused says so.** While an answer is arriving the edit
-   * cannot go (see the call site), and Enter used to do nothing at all and the
-   * tick merely greyed out — a reader who pressed Enter saw no answer and no
-   * reason. Investigating spya-f3b6ab; the class is in
-   * docs/postmortems/261002g-a-refusal-with-no-voice.md. Cleared when asking
-   * becomes possible again, so the sentence never outlives its cause.
-   */
-  const [held, setHeld] = useState(false);
-  useEffect(() => {
-    if (canAsk) setHeld(false);
-  }, [canAsk]);
-  const ask = () => {
-    if (canAsk) onDone(value);
-    else setHeld(true);
-  };
+}: RewriteEditor & { discards: number }) {
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = box.current;
@@ -3134,7 +3249,7 @@ function EditQuestion({
            for the same reason. */
         enterKeyHint="send"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => onText(e.target.value)}
         onKeyDown={(e) => {
           e.stopPropagation();
           /* Not the Escape that dismisses an input method's candidates, which
@@ -3147,9 +3262,9 @@ function EditQuestion({
           if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
-      {held && !canAsk && (
+      {queued && (
         <p className="chat-discard-warning chat-edit-held" role="status">
-          An answer is still arriving. Ask again once it has finished — your rewrite is kept.
+          Stopping the answer, then asking again…
         </p>
       )}
       {discards > 0 && (
@@ -3160,17 +3275,14 @@ function EditQuestion({
       <div className="chat-actions">
         <button
           type="button"
-          className="chat-icon"
-          data-tip={canAsk ? "Ask again (Enter)" : "Wait for the answer above to finish"}
+          className="chat-icon tone-positive"
+          data-tip={canAsk ? "Ask again (Enter)" : "Stop the answer and ask again (Enter)"}
           aria-label="Ask again"
-          /* `aria-disabled`, not `disabled`, so a press still reaches `ask` and
-             can say why it was refused — the composer's Send does the same. */
-          aria-disabled={!canAsk || undefined}
           onClick={ask}
         >
           <Check size={12} />
         </button>
-        <button type="button" className="chat-icon" data-tip="Cancel (Esc)" aria-label="Cancel" onClick={onCancel}>
+        <button type="button" className="chat-icon tone-negative" data-tip="Cancel (Esc)" aria-label="Cancel" onClick={onCancel}>
           <X size={12} />
         </button>
       </div>
@@ -3356,7 +3468,7 @@ export function Composer({
      box starts non-empty, and then unrecorded until it is emptied
      (composer-modality.ts). */
   const provenance = useRef(freshProvenance(draft));
-  /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
+  /* Recall's and Explore's box alike: tall, microphone first. */
   const learn = isLearnKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
@@ -3716,12 +3828,11 @@ export function Composer({
             ? "Waiting for the answer…"
             : kind === "guide"
               ? "Ask how to read this, or say what you're after"
-              : kind === "tutorial"
-              ? "What do you remember about it? It's fine if you haven't read it yet."
               : kind === "explore"
                 ? "What do you make of it? Say what's on your mind, or where you'd like to take it."
                 : learn
-                ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
+                ? /* Tutorial's offer, since Recall took Tutorial in (plan 261020m). */
+                  "Tell me what you took from this, in your own words. It's fine if you haven't read it yet."
                 : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {

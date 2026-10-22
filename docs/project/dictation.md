@@ -14,6 +14,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ A double press on Stop](#a-double-press-on-stop-also-sends) — stop twice and it sends
 - [§ When it hears nothing](#when-it-hears-nothing-and-after) — the quiet warning and dismissing the message
 - [§ Adding it to a box](#adding-it-to-a-box) — the how-to for a new text box
+  - [§ A page that leaves by itself](#a-page-that-leaves-by-itself) — the add page, which holds every exit while a box is busy
 - [§ The hook does not know which server](#the-hook-does-not-know-which-server-it-is-talking-to) — the `transcribe` seam the fleet dashboard reuses
 - [§ The audio leaves the machine](#the-audio-leaves-the-machine-now) — what we do and do not promise about a voice
 - [§ The sizes](#the-sizes-and-the-wall-behind-them) — the 4.5 MB wall, tape rotation into parts
@@ -27,16 +28,21 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on eleven boxes today — both profile boxes, the chat composer, the comment follow-up, the
-annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
+box. It is on seventeen boxes today — both profile boxes, the add page's two (*Why are you reading
+this?* and *About you*, [§ A page that leaves by itself](#a-page-that-leaves-by-itself)), the chat composer, the comment follow-up and
+the comment's own note, the annotate box, Skim's *What are you skimming for?*, Referee's new
+criterion, the box that scopes the Candidates search, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
 ([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
 ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
 the note under an Illustrated picture
 ([illustrated.md](illustrated.md#steering)) and the command bar's box
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
-*Ask about Spideryarn* box on every Help page
+box at the top of every Help page
 ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
-twelfth is three lines.
+eighteenth is three lines. **A box for more than a few words of the reader's prose gets one by
+default** (Greg, 2026-10-19, `spya-wc4vku`), and
+[`tests/prose-boxes-have-a-microphone.test.ts`](../../tests/prose-boxes-have-a-microphone.test.ts)
+fails on a new `<textarea>` without one unless its component is listed there with the reason.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -285,9 +291,15 @@ means *"can open a microphone"* rather than *"has Web Speech"*.
 ships its audio to a server, so a captive portal or a VPN blip makes it fail — and that used to stop
 the recording **mid-sentence** and tell the reader to check their internet connection, about a path
 that had usually worked perfectly. It now takes the live words with it and nothing else: `s.live`
-goes false, `onend` does not restart it, late results are ignored, and if it died before
-`audiostart` ever fired the hook takes over the timer and arms the tape itself — which is the
-Firefox path verbatim, because it is now Firefox's situation. The gate is *"is our track still
+goes false, `onend` does not restart it, and late results are ignored — which is Firefox's
+situation, reached from a different direction. The timer, the tape and `listening` do not hang off
+the recogniser at all: since
+[261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md) they
+start on the line where `start()` takes the track, on every browser, rather than at `audiostart`,
+which on Chrome is 1.1 seconds after the track is already delivering audio and lost that second of
+every dictation. A recogniser that dies before `audiostart` therefore finds the tape already
+running; the give-up path still calls the idempotent `armTape`, so no ordering can leave a session
+without one. The gate is *"is our track still
 live"* rather than a list of error codes to trust, since a track that has really gone fires its own
 `ended` listener. [260905c](../plans/260905c-dictation-filler-words-and-mic-offline.md).
 
@@ -352,7 +364,7 @@ the stop button, then it should automatically send that message after it's finis
 A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's
 `sendingAfter` and `doubleStop` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
 Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
-quiz answer (Answer) and Help's Ask box (Ask). The annotate box saves (Save, never Ask AI), so its
+quiz answer (Answer) and Help's signed-in box (Ask). The annotate box saves (Save, never Ask AI), so its
 button and strip take `done="save"`; the command bar presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 
@@ -371,8 +383,9 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
   into Dictate, and the second press missed —
   [261011y](../plans/261011y-dictation-short-recordings-and-a-double-press-that-lands.md). **The hold
   is not withdrawn by a new `doneKey` or by the phase returning to `opening`** (Chromium's
-  recogniser does that after a pause, inside one session): the reader pressed Stop, so Stop
-  happens; only the wish to send is tied to the key. Nor by a change of microphone, which restarts
+  recogniser did that after a pause, inside one session, until
+  [261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md);
+  now only a new session starts in `opening`): the reader pressed Stop, so Stop happens; only the wish to send is tied to the key. Nor by a change of microphone, which restarts
   the capture without a press: it is still the dictation the reader pressed Stop on.
 - **The button has to be where the first press left it.** Nothing that positions it may change
   size at Stop. Since the hold, the second press arrives before Stop, so this matters less than it
@@ -475,7 +488,10 @@ const dictate = useDictationField({
 keeps score of which `onChange` ran, the hook's or the textarea's, and sends `typed`, `dictated`
 or `mixed` with the question ([`composer-modality.ts`](../../src/web/composer-modality.ts), plan
 [261011z](../plans/261011z-chat-messages-record-how-they-were-made.md)). The command bar's
-*Ask the guide* row does not yet, and its questions are stored unrecorded.
+*Ask the guide* row does not yet, and its questions are stored unrecorded. Rewriting a question
+already asked has no microphone for this reason: `withEdit` (src/chat.ts) keeps the original
+question's modality, so a voice rewrite would be stored as typed (plan
+[261021e](../plans/261021e-microphone-on-the-five-remaining-prose-boxes.md)).
 
 `transcribe` comes from `useReaderTranscriber` in
 [`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app. It binds the upload to the
@@ -551,6 +567,20 @@ dictation can finish with no phone keyboard on screen, as the reported iPhone ru
 be no Enter to press
 ([261005f](../postmortems/261005f-an-action-offered-in-words-that-only-a-key-can-take.md)). Anything a
 dictated box offers next has to be something a finger can press.
+
+### A page that leaves by itself
+
+**The add page is the one place a box's page goes away without a press**: when the import
+finishes and nobody is in either box, it opens the article — and unmounting aborts a dictation.
+So its two boxes tell the page when they are `busy` (a layout effect, into one ref per box and
+their OR as state), and the page holds every exit while either is: the completion waits at
+*ready*, both Ready bars' *Open the article*, ⌘+Enter, *Open without saving* and the public
+copy's link are refused and disabled, the boxes stay mounted over a public-copy or failed answer,
+and once *Open* is on its way neither microphone can start. Neither box saves by itself while
+dictating: About you's idle save is paused, and the purpose session holds both its timer and a
+stored purpose read meanwhile (`AddPurposeSession.setPaused`). Plan
+[261020r](../plans/261020r-dictation-on-the-add-page-boxes-and-a-microphone-by-default.md); the
+same-box-across-sources case is the existing `[mic-moved]`.
 
 ## The hook does not know which server it is talking to
 
@@ -753,9 +783,12 @@ passed over, and GPT Sol's review.
   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
   itself: `feedback`, `feedback-reply:<question>`, `feedback-addendum:<report>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
-  `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
-  `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
-  `profile:<field>:<slug>` for *Why you're reading this one*. **The name is the partition, so it
+  `:draft:<block>`), `comment:<id>`, `comment-note:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
+  `quiz:<slug>:<question>`, `commands:<slug>`, `skim:purpose:<slug>`,
+  `referee:criterion:<slug>`, `candidates:<slug>`, `profile:<field>` for About you and
+  `profile:<field>:<slug>` for *Why you're reading this one*, and on the add page
+  `add:purpose:<wanted>` (the normalised address or the upload's id, never the bare `source`,
+  which is empty for every upload) and `add:about-you`. **The name is the partition, so it
   names everything the words are about**: a per-article box keeping under a name without the slug
   offered one article's recording back on the next, and Try again put it there (Greg, 2026-10-09,
   `spya-vzj8fc`; [261009g](../plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md)
@@ -837,6 +870,17 @@ Feedback draft itself is the next step, and is named in the plan.
    [copy.md](copy.md) is explicit that inviting a futile retry is the expensive mistake.
    `TranscriptionResult.retryable` in [`dictation-upload.ts`](../../src/web/dictation-upload.ts)
    carries it, read off the HTTP status rather than out of the sentence.
+   **On Chromium too, since 2026-10-22.** Until then a failure with the recogniser's rough words
+   already in the box offered the audio and no Try again, because the retry's transcript could only
+   land *beside* those words and the box would hold the sentence twice. The field now remembers the
+   failed session's words (`spent` in [`useDictationField.ts`](../../src/web/useDictationField.ts)),
+   and Try again replaces them as the first try would have — at their old place if the box is
+   unchanged, or at one unique occurrence if the old surrounding text still anchors it (or the
+   phrase is long and distinctive enough not to be a stray *yes*). Otherwise it lands at the caret,
+   preserving what the reader typed. Discarding the failed recording also discards that replacement
+   claim, so a recovered tape from an earlier page cannot borrow it. Greg, 2026-10-22,
+   `spya-pnmrkw`: *"if you're sure this is going to be better, then do it"*;
+   [`tests/dictation-retry-replaces-rough-words.test.tsx`](../../tests/dictation-retry-replaces-rough-words.test.tsx).
 7. **`http://localhost` and Chrome's permission.** `localhost` is a secure context by exception, so
    `getUserMedia` and `SpeechRecognition` both work there — but the grant is keyed to the full
    origin *including the port*, and Vite's port moves. A plausible share of why the microphone
@@ -967,7 +1011,7 @@ chosen microphone, and whether it is the one that opened), `mic_live`, `browser_
 Search Sentry for `DictationFailure`.
 
 **Not covered: a permission prompt nobody answers.** `getUserMedia` may then never settle, the strip
-says "Opening the microphone…" for ever, and no sentence is shown, so nothing is reported.
+says "Wait — opening the microphone…" for ever, and no sentence is shown, so nothing is reported.
 
 ## Where the pieces are
 

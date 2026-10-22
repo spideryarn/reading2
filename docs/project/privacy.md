@@ -16,6 +16,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
 - [§ Import records](#import-records) — the record of each import, and when it goes
 - [§ Reading time](#reading-time) — the bullet and what it must keep true
+- [§ Article open times](#article-open-times) — the durable record and the short-lived request log
 - [§ Shelf topics](#shelf-topics) — what the topic model is shown
 - [§ Quick search](#quick-search) — what a quick search sends
 - [§ A sentence in the command bar](#a-sentence-in-the-command-bar) — what the pick models see
@@ -28,7 +29,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
-- [§ A private link](#a-private-link) — the four places the page names it
+- [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
 - [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
 - [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
 - [§ Where it lives](#where-it-lives-and-why-it-is-not-markdown) — why JSX, not markdown
@@ -78,7 +79,11 @@ Asked, on the day, because none of them could be read off the code:
    administrator's view across all owners ([admin.md](admin.md)), debugging a reader's broken
    article means looking at it, and a reader discovering that for themselves is far worse than
    being told. What the page rules out instead is the part that would actually offend: selling it,
-   publishing it, training on it.
+   publishing it, training on it. **Since 2026-10-20 it also says how**: *"including by viewing the
+   app as you, read-only"*, for the administrator's read-only *view as*
+   ([admin.md § Viewing the app as a reader](admin.md#viewing-the-app-as-a-reader-read-only)). The
+   wording was the recommended option of question q-kyhvkm, taken by default when Greg answered
+   only its first part.
 4. **Facts**: the database is Supabase `eu-west-2` (London); Vercel's functions are pinned to
    `lhr1` (`vercel.json`). Stripe was named before payments were live — Greg, *"let's include it
    anyway, because hopefully it will be soon"* — with the page saying out loud that it was off.
@@ -506,6 +511,52 @@ totals, showing them or a conclusion drawn from them to a shared link's reader, 
 outside Spideryarn — to a model, for example. The plan is
 [261001a](../plans/261001a-privacy-reading-time-wording.md).
 
+**Since 2026-10-20 one conclusion from them goes to a model**: a turn of Chat, Learn, Explore or the
+guide on the owner's own article carries one coarse phrase for how much of it they have read ("about
+a quarter"), worked out with the quiz's rule, and nothing about which parts. Not Candidates, and not
+a turn whose read of the totals failed. Greg chose it, answering
+[q-rwkq2e](../user-feedback/questions/q-rwkq2e.md):
+
+> I'm leaning towards A.
+>
+> — Greg, 2026-10-20
+
+The bullet gained a sentence saying so and the models paragraph a clause, the same day, before the
+code; `LAST_UPDATED` already read 20 October 2026. What keeps it true: `readingSoFarLine`
+([`src/reading-so-far.ts`](../../src/reading-so-far.ts)) can only return one of six phrases, the
+route reads the totals only for the article's owner, and the line is never stored with the turn.
+**Section names, per-part detail or a percentage would be a new disclosure**: rewrite the bullet
+first. Plan [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md).
+
+## Article open times
+
+**Added 2026-10-20**, with plan
+[261020y](../plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md): `article_open_times`,
+one row per account per UTC half-hour in which it opened one of its own articles, so that Active
+days on `/admin/users` counts a day spent only reading
+([admin.md § Engagement](admin.md#engagement-active-days-reading-time-failed-imports)).
+
+> B yes. e.g. store which days (and times?) they've opened an article
+>
+> — Greg, 2026-10-20, answering [q-xcc7xq](../user-feedback/questions/q-xcc7xq.md)
+
+What the bullet says, and what keeps each part true:
+
+- **"The time, at most once each half hour"** — the primary key is `(owner_id, slot)`, and
+  `recordOpen` (src/store/pg-shelf.ts) inserts `on conflict do nothing`.
+- **"That record does not say which article"** — the table has no article column. The ordinary
+  request log is different: its path names the article slug and the page says so, with the same
+  about-a-day retention disclosed under Vercel. Adding article identity to the durable record needs
+  this bullet rewritten first.
+- **"Not shown to anybody reading an article you have shared"** — only the owner's open is recorded
+  (the route is owner-scoped; a visitor's browser sends no POST), and only `activitySources` in
+  src/store/pg-admin.ts reads it, as a count of days.
+- **"It goes when your account does"** — `on delete cascade` to `auth.users`. Not with the article,
+  on purpose: the open happened, and Active days should not shrink when an article is deleted.
+
+The reading-time bullet's *"not a history of your reading"* became *"not a history of which passages
+you read when"* the same day, so the two bullets do not read as contradicting each other.
+
 ## Shelf topics
 
 **Added 2026-09-29**, with [shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement):
@@ -561,8 +612,8 @@ outcome's kind, counts and timings, never the sentence or the words.
 ## A question asked in Help
 
 **Added 2026-10-07**, with [help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)
-and [plan 261007k](../plans/261007k-help-chatbot.md): a signed-in reader's question in Help's *Ask
-about Spideryarn* box goes to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026; OpenAI's, through
+and [plan 261007k](../plans/261007k-help-chatbot.md): a signed-in reader's question in Help's box, once they press *Ask* (typing in it only searches
+the Help, in the browser; plan [261020x](../plans/261020x-one-box-on-help-for-search-and-ask.md)), goes to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026; OpenAI's, through
 OpenRouter, job `help-chat`), with every Help page and nothing of the reader's besides — no
 article, no profile. **A new flow of the
 reader's own words to a model already on the page**, so the `gpt-6-luna` clause in the models
@@ -849,8 +900,9 @@ way somebody else reads a reader's article, so the page names it in four places:
 
 - **Who can see your shelf** counts three exceptions where it counted two. It says anyone who has
   the link can read the article without signing in and can pass it on, that it is not listed, that
-  they get what a public reader gets, that we cannot tell who has read it, that the key is part of
-  the address and so stays in a browser's history, and what turning it off can and cannot do.
+  they get what a public reader gets, that we do not tell the owner who has read it but do record
+  it for the administrator (since 2026-10-21, below), that the key is part of the address and so
+  stays in a browser's history, and what turning it off can and cannot do.
 - **If you send us a bug report** says a report from such a page records the address without the
   key.
 - **Deleting things** says archiving leaves a private link working, as it leaves a public one, and
@@ -861,7 +913,36 @@ way somebody else reads a reader's article, so the page names it in four places:
 
 What we hold: the key itself, in `articles.share_token`, in the clear so the owner can copy the
 link again; and `article_share_link_events`, who made or turned off a link and when, without the
-key. We record nothing about who opens one.
+key.
+
+### Who opens one, since 2026-10-21
+
+Until 2026-10-21 we recorded nothing about who opens a private link. Greg chose to, when asked
+(question q-agbc89, option C):
+
+> As an admin, I want to be able to see anything. Because after all, I've got access to the
+> database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
+> which users open which articles.
+>
+> — Greg, 2026-10-20 (reply `spya-xug3kf`)
+
+So two tables
+([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)):
+
+- **`private_link_openers`** — one row per article and signed-in account that opened it through
+  its link: how many times, and the first and last time. Written by the visitor's page, once per
+  page, only when the key opens a private article that is not the reader's own. Cascades with the
+  account and with the article. Not in the article's export, and kept with the article on a
+  transfer.
+- **`private_link_signed_out_opens`** — one row per article: a count of signed-out opens and the
+  first and last time. Nobody is identified. Approximate, since anybody holding the link can add to
+  it (throttled to one per two seconds; [security-risks.md § R31](security-risks.md#r31)).
+
+**Only the administrator sees either**, on the article's details page; the owner is not shown who
+opened their link, and nothing else reads them (they are deliberately not in Active days). The
+page says so in *Who can see your shelf* and in *What we keep*, and Help's sharing page says the
+same. Nothing was backfilled. The administrator also sees whose an article read through a private
+link is, which is admin.md's business rather than this page's: it adds no stored data.
 
 ## An administrator's AI assistant can look up accounts
 

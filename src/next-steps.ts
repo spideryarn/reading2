@@ -15,8 +15,9 @@
  * the same function (src/web/GuideNextSteps.tsx), because a stored run is JSON
  * and is checked again rather than trusted. Node-free, so both can import it.
  *
- * Six kinds and no others. Each is a press by the reader; none of them writes,
- * shares or spends on its own:
+ * Seven kinds and no others. Each is a press by the reader; none of them writes,
+ * shares or spends on its own — **bar one `prepare` step marked `now`**, whose
+ * press the page makes itself, once (below):
  *
  * - `ask`: words the reader can send to the guide as their own message;
  * - `chat`: a question about what the piece says, sent as the first question of
@@ -28,9 +29,17 @@
  * - `search`: words for a quick search, in a box the reader can change first;
  * - `share`: to Metadata's *Access & sharing* card, the one place a private
  *   link or the public switch is pressed;
- * - `archive`: to Metadata, whose own *Archive* or *Put back* button does it.
+ * - `archive`: to Metadata, whose own *Archive* or *Put back* button does it;
+ * - `prepare`: a mode from `PREPARABLE` to get ready in the background, never
+ *   opened — *Get Skim ready*. At most one per answer. `now: true` is the
+ *   guide's choice to start it without a press (Greg's reply to q-y4p2ct): the
+ *   server keeps it only on a typed turn and once a conversation
+ *   (src/chat-tools.ts § `offerNextSteps`), and the page then presses it once
+ *   on an answer this tab finished (src/web/GuideNextSteps.tsx). Plan
+ *   docs/plans/261019p-guide-chat-plainer.md § Stage 2b.
  */
-import type { NextStep } from "./types.js";
+import { preparable } from "./preparable-modes.js";
+import type { ChatMessage, NextStep } from "./types.js";
 
 /** At most this many buttons under one answer: Greg's "three would be about right". */
 export const MAX_NEXT_STEPS = 3;
@@ -88,12 +97,19 @@ export function checkNextStep(raw: unknown, modeKeys?: ReadonlySet<string>): Nex
       }
       return { kind: "mode", mode };
     }
+    case "prepare": {
+      const mode = typeof step.mode === "string" ? step.mode.trim() : "";
+      if (preparable(mode) === undefined) {
+        return `"${mode.slice(0, 60)}" is not a mode that can be prepared`;
+      }
+      return { kind: "prepare", mode, now: step.now === true };
+    }
     case "share":
       return { kind: "share" };
     case "archive":
       return { kind: "archive" };
     default:
-      return `a step's kind must be ask, chat, mode, search, share or archive`;
+      return `a step's kind must be ask, chat, mode, search, prepare, share or archive`;
   }
 }
 
@@ -120,6 +136,11 @@ export function checkNextSteps(
       problems.push("only one chat step is shown");
       continue;
     }
+    /* One background start offered at a time (plan 261019p § Stage 2b). */
+    if (checked.kind === "prepare" && steps.some((s) => s.kind === "prepare")) {
+      problems.push("only one prepare step is shown");
+      continue;
+    }
     const key = JSON.stringify(checked);
     if (seen.has(key)) continue;
     if (steps.length === MAX_NEXT_STEPS) {
@@ -130,4 +151,19 @@ export function checkNextSteps(
     steps.push(checked);
   }
   return { steps, problems };
+}
+
+/**
+ * **Did this stored answer start a mode by itself?** — a `prepare` step marked
+ * `now` among its accepted next steps. Read by `converse` over the history
+ * (`ToolContext.preparedEarlier`): the model's once-a-conversation cap. The
+ * durable cap is the thread's claim at the press (plan 261019p § Stage 2b).
+ */
+export function startedAMode(message: Pick<ChatMessage, "tools">): boolean {
+  return (message.tools ?? []).some(
+    (run) =>
+      run.name === "offer_next_steps" &&
+      run.status === "done" &&
+      checkNextSteps(run.steps).steps.some((s) => s.kind === "prepare" && s.now),
+  );
 }

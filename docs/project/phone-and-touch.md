@@ -179,6 +179,9 @@ and close-cross reports
 
 - **Press-target sizing:** the primary-pointer rule and the named hybrid-device exceptions.
   [narrow-windows.md § What a control owes a finger](narrow-windows.md#what-a-control-owes-a-finger).
+- **Two floors, 40px to press and 13px to read**, under `any-pointer: coarse` (Greg, 2026-10-20).
+  [controls.md § The numbers](controls.md#the-numbers),
+  [typography.md § The smallest text](typography.md#the-smallest-text).
 - **Tap versus hover:** the meaning of a tap on each surface, including the cases that act at once.
   [touch.md § What happens where](touch.md#what-happens-where),
   [links.md § On a coarse pointer](links.md#on-a-coarse-pointer-the-first-tap-reveals-and-the-second-opens),

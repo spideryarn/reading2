@@ -67,6 +67,8 @@ import {
   glossaryLookups,
   ingestEvents,
   linkSummaries,
+  privateLinkOpeners,
+  privateLinkSignedOutOpens,
   quizAttempts,
   staleNoticeDismissals,
   commandSuggestionDismissals,
@@ -87,7 +89,7 @@ import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import { PgTable, QueryBuilder, getTableConfig } from "drizzle-orm/pg-core";
 
-import { lockedArticleForDestroyQuery, pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
+import { lockedArticleForDestroyQuery, openSlot, pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
 import { pgTagStore } from "../src/store/pg-tags.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -804,12 +806,70 @@ describe("the Postgres shelf and library search", () => {
       expect((await pgShelfStore.read(SLUG)).opens).toBe(before + 10);
     });
 
+    /* **When the reader opened an article, for Active days on /admin/users** —
+       plan 261020y. One row per account per UTC half-hour, and the primary key
+       is the whole throttle, so these read the table rather than trusting it. */
+    async function openTimes() {
+      return getDb()
+        .select()
+        .from(schema.articleOpenTimes)
+        .where(eq(schema.articleOpenTimes.ownerId, currentOwnerId()));
+    }
+    async function clearOpenTimes() {
+      await getDb()
+        .delete(schema.articleOpenTimes)
+        .where(eq(schema.articleOpenTimes.ownerId, currentOwnerId()));
+    }
+
+    it("records when the reader opened an article, in the same write", async () => {
+      await clearOpenTimes();
+      await pgShelfStore.recordOpen(SLUG);
+      const rows = await openTimes();
+      expect(rows).toHaveLength(1);
+      // The same transaction's `now()`, so the history and the column agree.
+      expect(rows[0]!.openedAt.toISOString()).toBe(
+        new Date((await pgShelfStore.read(SLUG)).lastOpenedAt as string).toISOString(),
+      );
+      expect(rows[0]!.slot.getTime() % (30 * 60_000)).toBe(0);
+      expect(rows[0]!.openedAt.getTime() - rows[0]!.slot.getTime()).toBeLessThan(30 * 60_000);
+    });
+
+    it("keeps one row per half-hour however many opens, and two tabs at once make one", async () => {
+      await clearOpenTimes();
+      const before = (await pgShelfStore.read(SLUG)).opens;
+      await pgShelfStore.recordOpen(SLUG);
+      await Promise.all([pgShelfStore.recordOpen(SLUG), pgShelfStore.recordOpen(OTHER_SLUG)]);
+      await Promise.all(Array.from({ length: 5 }, () => pgShelfStore.recordOpen(SLUG)));
+      // The counter still counts every open; only the history is throttled.
+      expect((await pgShelfStore.read(SLUG)).opens).toBe(before + 7);
+      // At most two: the eight opens could straddle one half-hour boundary.
+      const rows = await openTimes();
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+      expect(rows.length).toBeLessThanOrEqual(2);
+    });
+
+    it("never lets a half-hour slot cross a UTC midnight", async () => {
+      const slotOf = async (iso: string) => {
+        const { rows } = await getDb().execute<{ slot: string }>(
+          sql`select to_char(${openSlot(sql`${iso}::timestamptz`)} at time zone 'UTC', 'YYYY-MM-DD HH24:MI') as slot`,
+        );
+        return rows[0]!.slot;
+      };
+      expect(await slotOf("2026-10-20T23:50:00Z")).toBe("2026-10-20 23:30");
+      expect(await slotOf("2026-10-21T00:10:00Z")).toBe("2026-10-21 00:00");
+      expect(await slotOf("2026-10-21T00:29:59Z")).toBe("2026-10-21 00:00");
+      expect(await slotOf("2026-10-21T00:30:00Z")).toBe("2026-10-21 00:30");
+    });
+
     it("404s for an article that is not there, rather than a 500", async () => {
       // routes.ts turns a tagged 404 into a 404 and an untagged throw into a
       // 500, so "no such article" reporting as a server fault is a real risk.
+      await clearOpenTimes();
       await expect(pgShelfStore.recordOpen("test-pg-no-such-article")).rejects.toMatchObject({
         status: 404,
       });
+      // And nothing is recorded for an open that did not happen.
+      expect(await openTimes()).toEqual([]);
       await expect(pgShelfStore.patch("test-pg-no-such-article", { archived: true })).rejects.toMatchObject({
         status: 404,
       });
@@ -1198,6 +1258,11 @@ describe("destroying an article", () => {
           model: "test/model",
           expiresAt: new Date(now.getTime() + 86_400_000),
         }),
+      /* Who opened its private link — plan 261021d. Both go with the article. */
+      private_link_openers: () =>
+        db.insert(privateLinkOpeners).values({ articleId: GONE_ARTICLE, readerId: owner }),
+      private_link_signed_out_opens: () =>
+        db.insert(privateLinkSignedOutOpens).values({ articleId: GONE_ARTICLE }),
       realtime_sessions: () =>
         db.insert(realtimeSessions).values({
           id: GONE_SESSION,

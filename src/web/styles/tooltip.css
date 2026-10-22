@@ -66,7 +66,7 @@
    with the band marked, its gist and sub-sections under it, then how big it is
    (BandCard in Spine.tsx, plan 261003d). Here rather than in skim.css since
    the spine began using it. */
-.where-card { margin: 0; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.45; }
+.where-card { margin: 0; padding: 0; list-style: none; font-size: max(var(--text-min), 0.8rem); line-height: 1.45; }
 .where-node { color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Keep a trimmed level's count visible when its title is long. Scoped to the
    counted spine rows so moving these shared rules does not alter Skim's rows. */
@@ -117,14 +117,14 @@
 .tip-num {
   margin-right: 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.82em;
+  font-size: max(var(--text-min), 0.82em);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
 .tip-gist {
   margin: 0.35rem 0 0;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.5;
   color: var(--ink-soft);
 }
@@ -143,7 +143,7 @@
 .tip-kids li {
   position: relative;
   padding-left: 0.7rem;
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.45;
   color: var(--ink-soft);
   overflow: hidden;
@@ -170,7 +170,7 @@
   gap: 0.6rem;
   margin-top: 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: max(var(--text-min), 0.62rem);
   line-height: 1;
   color: var(--ink-faint);
   opacity: 0.8;
@@ -196,6 +196,72 @@
   color: var(--highlight-ink);
   opacity: 1;
   font-style: italic;
+}
+
+/* **The spine's key** — spine-key.tsx, Greg's `spya-ah5ws6`: what the spine is
+   and what the colours on it now mean. Ruled off under the footer and set in
+   the footer's faint small voice, because it is the part of the card a reader
+   who knows the spine reads past. Each swatch wears its mark's own token and
+   opacity from styles/spine.css, so the key says the colour the rail draws
+   rather than a restatement of it; a lane's swatch is coloured inline from the
+   lane itself (`laneColour`). */
+.tip-key {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+  font-size: max(var(--text-min), 0.66rem);
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+.tip-key p { margin: 0; }
+.tip-key-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.7rem;
+  margin: 0.3rem 0;
+  padding: 0;
+  list-style: none;
+}
+.tip-key-items li { display: inline-flex; align-items: center; gap: 0.25rem; }
+.tip-key-swatch {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: 0.4rem;
+  height: 0.7rem;
+}
+/* Two lanes' swatches touch, the way two lanes do on the rail. */
+.tip-key-lanes + .tip-key-lanes { margin-left: -0.2rem; }
+.tip-key-here { background: var(--depth-1); opacity: 0.8; }
+/* *On screen* is the rail's lit stretch between two orange edges (spine.css §
+   `.spine-veil-track`), so the swatch is that: the edges, round an unveiled part's
+   tint. The supplement's mark is drawn a little stronger than on the rail,
+   where it sits over a band and a reader sees it in context; at 6px on a
+   card's ground the rail's own 0.1 left nothing to see in light mode (browser
+   pass, plan 261020e). */
+.tip-key-screen {
+  border-block: 1px solid var(--highlight);
+  background: color-mix(in oklab, var(--depth-1) 45%, transparent);
+}
+@media (forced-colors: active) {
+  .tip-key-screen { border-color: Highlight; }
+}
+.tip-key-supplement {
+  background: color-mix(in oklab, var(--depth-1) 25%, transparent);
+  border: 1px solid color-mix(in oklab, var(--depth-1) 45%, transparent);
+}
+.tip-key-reading {
+  background: color-mix(in oklab, var(--read-time) 35%, transparent);
+  border-right: 1px solid var(--read-time);
+}
+.tip-key-from { background: var(--ink-faint); opacity: 0.55; }
+.tip-key-quotes { background: rgb(var(--quote-rgb) / 0.95); }
+/* **Not in a window 600px tall or shorter.** The card cannot scroll, and in a 400px-tall window
+   the band's own row, its footer and the tap hint already need all of it
+   (`.where-detail` above). The section is what the reader pointed for; the key
+   is the part that can go. */
+@media (max-height: 600px) {
+  .tip-key { display: none; }
 }
 
 /* **The shelf table's row card** — library-columns.tsx § RowCard, plan 260928a.
@@ -229,7 +295,7 @@
   grid-template-columns: auto 1fr;
   gap: 0.2rem 0.75rem;
   margin: 0;
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.45;
 }
 
@@ -249,7 +315,7 @@
    their hue's dot, wrapping in the facts' value column. */
 .tip-byline {
   margin: 0.15rem 0 0;
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.4;
   color: var(--ink-faint);
 }
@@ -258,6 +324,21 @@
   margin-top: 0.45rem;
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
+}
+
+/* **The account card** — AdminUserCard.tsx, plan 261019k: the paper card's
+   title and facts, then where the link goes, ruled off and arrowed like
+   `ControlTip`'s press line (dock.css § .tip-soon-press). */
+.tip-paper p.tip-account-press {
+  margin: 0.45rem 0 0;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  font-size: max(var(--text-min), 0.74rem);
+  font-weight: 500;
+  color: var(--ink);
+}
+.tip-paper p.tip-account-press::before {
+  content: "→\00a0";
 }
 
 .tip-topics {

@@ -81,6 +81,8 @@ carrying R8. A qualification beside an id wins over those words.
 | [R27](#r27) | A hostile article can choose which of the reader's own typed sentences saves itself to About you, out of its context | Medium | accepted | none | — |
 | [R28](#r28) | An uploaded file can say it was saved from any address, and a shared article then shows "Saved from" that site | Low | accepted | none | — |
 | [R29](#r29) | A hostile article can have the guide write what it holds, About you included, into a web address it then opens | Medium | accepted | none | — |
+| [R30](#r30) | A hostile article can have the guide start one mode's generation, without a press, once a conversation | Low | accepted | none | — |
+| [R31](#r31) | Anybody holding a private link can inflate its signed-out open count, and make one cheap write per request | Low | accepted | throttled in SQL; no request limit | a Vercel firewall rule: ~15 min of Greg's |
 
 ## Accepted
 
@@ -241,6 +243,36 @@ out."* Where it lives: [security-map.md, the `src/chat-tools.ts` row](security-m
 The fix, for the guide and Chat alike, is the allowlist in
 [chat-tools.md § Still open](chat-tools.md#still-open) (option A on q-g492eq); undoing it is
 taking `READ_WEB_PAGE_TOOL` out of `GUIDE_TYPED_TOOLS`.
+
+### R30
+
+**A hostile article can have the guide start one mode's generation, without a press.** Since
+2026-10-20 the guide's next steps include `prepare`, and one marked `now` is pressed by the page
+itself, so a model's choice starts a paid job. Every guide turn reads the article, so a planted
+instruction can ask for it. Low: a mode from a fixed list (`PREPARABLE`, never a step name), on
+the reader's own article (`enqueue`'s owner check), only on a turn the reader typed, at most once a
+conversation by an atomic claim on `chat_threads.mode_prepared_at`, and a mode already made costs
+nothing. Worst case: a few cents to a few tens of cents of our money (Skim can be three steps:
+Quotes, Ideas and the route) and one artefact the reader would have got by opening that mode, or
+one Skim route re-planned under the reader's own current profile. It cannot open a mode, choose
+an article, or start a second. Held by the prompt only (GPT Sol's C6): the guide's prose saying a
+mode is ready (the button says so only when the server does), and Skim planned on a reason given
+in the same message when the model did not offer to save it. A planted line in `evals/guide/prepare.ts` got no start in 12 of 12
+runs; that is the model, and is not counted as a bound. Decision: **accepted by Greg**, choosing
+the start without a press over a button alone:
+
+> Maybe we make it an option, so the Guide has the option to do A, but there's a minimal
+> explanation in the prompt that this incurs expense, so if it's not confident that the user will
+> want it, it just does B
+>
+> — Greg, 2026-10-20 (reply `spya-tgeg6v` to [q-y4p2ct](../user-feedback/questions/q-y4p2ct.md))
+
+where A read: *"Risk: a planted line in an article could get one mode made, at most one per
+conversation."* Where it lives: [security-map.md, the `chipFor` row](security-map.md#where-the-defences-physically-live),
+`preparePolicy` in [`src/chat-tools.ts`](../../src/chat-tools.ts), `claimModePreparation` in
+[`src/store/pg-chat.ts`](../../src/store/pg-chat.ts),
+[261019p § Stage 2b](../plans/261019p-guide-chat-plainer.md#stage-2b-what-greg-chose-and-the-build).
+Undoing it is `checkNextStep` reading `now` as always false.
 
 ## Proposed
 
@@ -427,6 +459,24 @@ scratchpad and up for two days. It was reachable from the tailnet; from the inte
 cloud firewall were wrong. This review did not re-contact the box, so it does not claim the listener
 is still present. **Fix:** stop it if still present, and have the box's tidy-up report or reap
 listeners started from a scratchpad. Five minutes.
+
+### R31
+
+**Anybody holding a private link can inflate its signed-out open count.** Since 2026-10-21
+(Greg's 2C, reply `spya-xug3kf` to [q-agbc89](../user-feedback/questions/q-agbc89.md); plan
+[261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md) § 4) the public
+namespace has one write, `POST /api/public/private-link-opened/:slug?key=`, so that a signed-out
+open can be counted at all. Anybody with the link can call it in a loop. Low: it needs the key; it
+writes one integer and a time on one row per article, and returns nothing; the upsert adds at most
+one per article per two seconds and saturates at `integer`'s ceiling rather than failing
+(`src/store/private-link-signed-out-opens.ts`), so the number can be pushed up by at most ~43,000 a
+day; and only the administrator ever sees it, labelled *roughly*. What it does not bound: each
+request is still one indexed write, comparable to the reads every public route already lets a
+key-holder repeat, and there is no per-address request limit in this app to reuse. GPT Sol's F2
+on the plan asked for one. **Fix, if wanted:** a Vercel firewall rate-limit rule on that one path,
+which is infrastructure an agent here may not change. About fifteen minutes of Greg's. Decision:
+**accepted**, Greg, 2026-10-21, reply `spya-ewzccp` to
+[q-wfdr7j](../user-feedback/questions/q-wfdr7j.md): *"A"* (accept it as a low risk; no firewall rule).
 
 ## From security.md's known gaps
 

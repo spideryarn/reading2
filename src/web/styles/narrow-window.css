@@ -286,7 +286,7 @@
    root. And the text edges towards the spine, as he asked. About 20px more
    line at 390 wide, and 28px at an iPad's 820 with Marginalia on, where the
    prose cell is held at 544 beside the notes. Where the line is already at
-   the 65ch measure, the pads that went become whitespace either side of it.
+   the measure, the pads that went become whitespace either side of it.
 
    **The box a mark sits in is still 24px, so it reaches 4px into the prose**
    (gutter.css § a no-hover screen). On a heading the fold chevron, which is later
@@ -850,8 +850,17 @@
     /* 52px. Note that § a small device no longer shrinks this to 2.2rem, and
        that these two queries overlap on every phone — this one wins because it
        is declared later, which is exactly the kind of dependence on source
-       order worth saying out loud. */
-    --dock-h: 3.25rem;
+       order worth saying out loud.
+
+       **And never so short that a mode button in its frame is under 40px**
+       (plan 261021g § Stage 2, Sol's R8). That button is the bar less its top
+       hairline, its frame's two 1px edges and `.dock-modes`' 0.3rem margins
+       (dock-fit.css § the mode switch), so `3.25rem` alone left it 39.4px at a
+       16px root and 37.7 at a phone's 15.36. The `calc` is those parts with a
+       40px button inside; it wins by under a pixel at 16px and by about two at
+       15.36, and the loose buttons, which take the whole bar, only gain.
+       tests/touch-targets-261021g.test.tsx does the sum. */
+    --dock-h: max(3.25rem, calc(43px + 0.6rem));
   }
 
   /* **Grow to share the bar, never shrink below the floor.** The `0` in the
@@ -934,24 +943,54 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.5rem;
+    min-height: max(40px, 2.5rem);
   }
 
   /* The profile icon is a button, not a decorative mark. Its 13px icon plus
      desktop padding makes an ~18px target, so it shares the row's existing
      finger floor on both axes. */
   .prof-badge.icon-only {
-    min-width: 2.5rem;
-    min-height: 2.5rem;
+    min-width: max(40px, 2.5rem);
+    min-height: max(40px, 2.5rem);
     justify-content: center;
   }
+}
 
-  /* **The band's corner, for a finger: 32px, both buttons alike.** Not the
-     2.5rem floor above — that is what made the corner's badge a 40px ring
-     beside a 24px (i) (spya-hf4svm). 32px clears WCAG 2.5.8's 24, and a corner
-     has no neighbour to be hit by mistake. mode-band.css § the band's (i)
-     sizes both from this and resets the floor for the corner's badge. */
-  .mode-band.has-about { --band-corner-btn: 2rem; }
+/* **Target floors follow every available finger.** The dock above stays on the
+   primary pointer, as touch.md § How big a thing has to be says: it is bulk
+   chrome, and a touchscreen laptop should not get a finger-sized bar it will
+   never touch. These are only the minimum box a finger can press, so they
+   follow 261021c's `any-pointer` (plan 261021g, GPT Sol's C3). The overlapping
+   `pointer: coarse` declarations above keep their older behaviour; this later
+   block supplies the hybrid case. */
+@media (any-pointer: coarse) {
+  .gloss-sort-btn { min-height: max(40px, 2.5rem); }
+  .prof-badge.icon-only {
+    min-width: max(40px, 2.5rem);
+    min-height: max(40px, 2.5rem);
+  }
+}
+
+/* **The band's corner, for a finger: 40px, both buttons alike.** It was 32px
+   (2rem) from 2026-10-02, on the reasoning that a corner has no neighbour to
+   hit by mistake; but the (i) and the owner's badge are each other's
+   neighbour, 3px apart, and the house floor is 40 (controls.md § The numbers;
+   plan 261021g § Stage 2, Sol's R2). Not the ringed 2.5rem floor above, which
+   is what made the badge a 40px circle beside a 24px (i) (spya-hf4svm): both
+   still take their box from this one token, and mode-band.css § the band's (i)
+   resets the floor for the corner's badge. `--band-about-room` derives from
+   both values, so every top row keeps clear of the bigger corner.
+
+   **`any-pointer`, unlike the block above**, because this is a target and not
+   bulk chrome: an iPad with a keyboard reports `pointer: fine` while its reader
+   taps the glass (261021c). `max(40px, 2.5rem)` so a phone's 15.36px root
+   does not make it 38.4 (261021c § C2). The gap opens from 0.2rem to 0.5rem, so
+   two 40px boxes are not drawn touching. */
+@media (any-pointer: coarse) {
+  .mode-band.has-about {
+    --band-corner-btn: max(40px, 2.5rem);
+    --band-corner-gap: 0.5rem;
+  }
 }
 
 /* ------------------------------------------------- § a field iOS zooms into ----
@@ -1250,12 +1289,12 @@
    of a window it no longer shares with anything — the prose's own width, and
    auto margins to put it on the prose's own axis.
 
-   **It tracks the prose from about 780px of window upwards, and not below**,
+   **It tracks the prose once the bar has room for the measure, and not below**,
    which is a smaller claim than the obvious one; the original measurements are
-   in docs/plans/plain-mode-and-the-way-out.md § Centring the column. Under that
-   width this bar has less room than the measure, so `max-width` stops
-   controlling anything and the title stays at the gutter while the prose slides
-   towards it. The gap closes smoothly and there is no jump.
+   in docs/plans/plain-mode-and-the-way-out.md § Centring the column. When the
+   bar has less room, `max-width` stops controlling anything and the title stays
+   at the gutter while the prose slides towards it. The gap closes smoothly and
+   there is no jump.
 
    **That crossover was ~1009px until 2026-09-06 and the reservations were why.**
    This bar held `--logo-w` open on its left for the corner wordmark and
@@ -1289,7 +1328,7 @@
    dock are chrome that spans the window in every mode, and the masthead is the
    one piece of *the article* above the fold. */
 .reader.text-alone .masthead-inner {
-  /* This box measures the same `65ch` as the article: the prose's face and
+  /* This box measures the same `--reading-measure` as the article: the prose's face and
      size (the face since 261003c, below). Size and not
      weight, for the sibling rule's reason: every
      child of this box inherits its weight, so matching the prose's 450 would
@@ -1297,7 +1336,7 @@
 
      **That left 2.8px before the prose moved to Source Serif.** It was
      not halved by arriving here through a width rather than a margin: the
-     weight axis makes this box's `65ch` 5.524px short of the prose's — measured,
+     weight axis made this box's `65ch` (the measure then) 5.524px short of the prose's — measured,
      732.614 against 738.138 at a 16px root — and the term reaches the left edge
      through `W / 2` either way. An earlier comment here claimed 1.4px, from
      halving the sibling's residual a second time — GPT Sol, 2026-09-05.
@@ -1334,7 +1373,9 @@
      What `--table-w` also carried was a width that *shrank with the window*, so
      the old rule was guaranteed to stop biting on any narrow screen. This one
      is a constant per root, so that guarantee has to be checked rather than
-     assumed. At the default root it holds — 705px against a bar with 696 to
+     assumed. **The numbers below were measured at the 65ch measure** (before
+     2026-10-22); at 56ch every width is smaller, but the two shapes are the same.
+     At the default root it holds — 705px against a bar with 696 to
      give at a 1000px window and 596 at 900, so the rule is inert and the title
      stays where it has always been while the prose slides towards it. **At a
      small root it does not.** `--blk-slot`'s px floor stops `--text-pad-r`
@@ -1348,7 +1389,7 @@
      **And below the measure's own crossover this rule simply does not follow the
      prose.** `.prose` is `clamp(45ch, 90vw, --reading-measure)` (§ text), so
      under about `measure / 0.9` of window it is `90vw` and narrower than the
-     length this calc uses — 824px at a 16px root, but only 618px at a 12px one,
+     length this calc uses — then 824px at a 16px root, but only 618px at a 12px one,
      because the crossover moves with the type. Measured at a 12px root: −5.7px
      at 700 and 731px of window, and **−22.1px at 600**, where `90vw` has taken
      over. The title is then out by roughly half of what the prose gave up. Not
@@ -1415,7 +1456,7 @@
    before it) the question does not arise anyway — a mode band with no room
    hides this bar outright (§ a band with no room). */
 .reader:has(table.only-prose):not(.text-alone) .masthead-inner {
-  /* This box measures the article's `65ch`, for the same reason as
+  /* This box measures the article's `--reading-measure`, for the same reason as
      `.blk-gutter` (§ the gutter): the prose's face and size.
      Inert: every child of this box sets its own size (h1 1.45rem, `.facts` and
      `.source-note` 0.82rem, `.root-gist` 0.95rem, the back link `text-xs`).
@@ -1427,7 +1468,7 @@
      small print nobody asked to change. Measured then: the title landed 2.8px
      right of the first line of the article, from the variable font's weight
      axis rather than from a bar's padding. Since 2026-10-02 the prose instead
-     measures `65ch` in Source Serif while this box keeps Geist. The gutter's
+     measures its `ch` in Source Serif while this box keeps Geist. The gutter's
      261003c gutter measurement (88px including the intended 5.6px inset) shows
      that family mismatch is roughly 82px at a 1440px window.
 

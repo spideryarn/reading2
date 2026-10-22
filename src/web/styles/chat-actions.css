@@ -63,7 +63,7 @@
   margin: 0 auto;
   padding: 0;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: max(var(--text-min), 0.75rem);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -117,7 +117,7 @@
   /* The section's title — words, so the UI face; it used to be the block id,
      in `--font-id`, which the id's own link already shows. */
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   font-weight: 600;
   color: var(--ink-faint);
   margin-bottom: 0.3rem;
@@ -158,9 +158,9 @@
   opacity: 0;
   transition: opacity 0.12s;
 }
-/* The row's place, kept while an answer is arriving and nothing in it may be
-   pressed (ChatPanel.tsx § Turn). Hidden on hover too. */
-.chat-actions.held { visibility: hidden; }
+/* The bin's place, kept while an answer is arriving and it may not be pressed
+   (ChatPanel.tsx § Turn). Hidden on hover too. */
+.chat-actions .held { visibility: hidden; }
 .chat-turn:hover .chat-actions,
 /* Keyboard reach: without this the buttons are tabbable but invisible, which is
    worse than not having them. `:focus-within` is what makes the hover-reveal
@@ -180,7 +180,7 @@
   margin-left: 0.4rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   font-style: italic;
 }
 
@@ -228,7 +228,7 @@
   margin: 0.35rem 0 0;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
 }
 
 /* Outlined, never filled: Stop is not the primary action, and the transparent
@@ -267,7 +267,13 @@
    tap-target.css says why neighbours need their own room). */
 @media (any-pointer: coarse) {
   .chat-steps { gap: 0.25rem; margin: 0.15rem auto; }
-  .chat-step { width: 2.5rem; height: 2.5rem; }
+  /* Keep the px half: 2.5rem is 38.4px at the measured iPhone root and
+     only 30px at the smallest supported root. This rule loads after the
+     shared `.chat-icon` floor in mode-band.css, so a bare 2.5rem here would
+     silently take that floor away again. */
+  .chat-step { width: max(40px, 2.5rem); height: max(40px, 2.5rem); }
+  /* "Latest" was 26px tall beside them (plan 261021c). */
+  .chat-to-bottom { min-height: 40px; }
 }
 .chat-to-bottom {
   flex: none;

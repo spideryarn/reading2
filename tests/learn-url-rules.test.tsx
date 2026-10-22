@@ -62,8 +62,8 @@ describe("the mode key is `learn`, and `review` is not a mode any more", () => {
 });
 
 describe("the sub-mode parameter is `?learn=`", () => {
-  it("accepts its four views, in the order the chips are drawn, and nothing else", () => {
-    expect(LEARN_VIEWS).toEqual(["recall", "tutorial", "explore", "quiz"]);
+  it("accepts its three views, in the order the chips are drawn, and nothing else", () => {
+    expect(LEARN_VIEWS).toEqual(["recall", "explore", "quiz"]);
     for (const view of LEARN_VIEWS) expect(learnParam.parse(view)).toBe(view);
     expect(learnParam.parse("review")).toBeNull();
     expect(learnParam.parse("")).toBeNull();

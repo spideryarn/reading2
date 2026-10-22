@@ -346,7 +346,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   },
   learn: {
     kind: "none",
-    reason: "opens on Recall, which waits on the reader's own words (so do Tutorial and Explore); the Quiz chip arms itself",
+    reason: "opens on Recall, which waits on the reader's own words (so does Explore); the Quiz chip arms itself",
   },
 };
 
@@ -617,6 +617,11 @@ export function activationForSources(view: SourcesView): AutoRunTarget | null {
        to buy (plan 261011d). */
     case "not-cited":
     case "links":
+      return null;
+    /* Investigate's rows each send one chat question on their own press, through
+       Chat's route and its limits; opening the sub-mode buys nothing (plan
+       261020n § Spend). */
+    case "investigate":
       return null;
     case "reception":
       return "reception";

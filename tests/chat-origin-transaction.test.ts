@@ -53,6 +53,13 @@ describe("origin checked against the transaction's thread snapshot", () => {
       .toThrow(ChatConflict);
   });
 
+  /* GPT Sol's F6 on plan 261020n: a lens is a question asked in Sources ›
+     Investigate, often a suggested one, which is not the reader's angle. */
+  it("names a lens chat as a question, after its words, not after the seeded first message", () => {
+    const made = withTurn([], { threadId: ID, question: "My question about this article…", origin: LENS }, AT);
+    expect(made.thread.title).toBe("Question: how it relates to Smith 2019");
+  });
+
   it("accepts the identical lens resent, and keeps it through a follow-up without one", () => {
     const first = withTurn([], { threadId: ID, question: "first", origin: LENS }, AT);
     const second = withTurn(first.threads, { threadId: ID, question: "second", origin: { ...LENS } }, AT);

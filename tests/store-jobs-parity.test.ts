@@ -1898,20 +1898,23 @@ for (const adapter of ADAPTERS) {
     });
 
     it.each(["pause", "requeue", "expiry", "expired-stop", "swept-stop", "queued-stop"] as const)(
-      "removes the stored preview when a step settles through %s",
+      "removes stored transient fields when a step settles through %s",
       async (door) => {
         const preview: StepPreview = {
           kind: "simple-brief",
           paragraphs: [{ text: "A checked Brief before Fuller finishes.", ids: ["spya-k3m9qt" as BlockId] }],
         };
+        /* And the counted progress, plan 261020a: as transient as the preview. */
+        const progress = { done: 3, total: 12, unit: "chunk" } as const;
         const job = aJob();
-        if (door === "queued-stop") job.steps[0]!.preview = preview;
+        if (door === "queued-stop") Object.assign(job.steps[0]!, { preview, progress });
         await store.enqueueOrGet(job, { workKey: "k-preview", reservesName: false });
         const attempt = mintAttempt();
         if (door !== "queued-stop") {
           expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
           await store.noteProgress(job.id, attempt, [{
-            ...job.steps[0]!, status: "running", startedAt: new Date().toISOString(), preview,
+            ...job.steps[0]!, status: "running", startedAt: new Date().toISOString(), preview, progress,
+            detail: "3/12 chunks, page 4",
           }]);
         }
         expect((await store.get(job.id, OWNER))?.steps[0]?.preview).toEqual(preview);
@@ -1950,11 +1953,15 @@ for (const adapter of ADAPTERS) {
         expect(after?.status).toBe(endings[door].status);
         expect(after?.steps[0]?.status).not.toBe("running");
         expect(after?.steps[0]?.preview, "a settled step retained the uncommitted Brief").toBeUndefined();
+        expect(after?.steps[0]?.progress, "a settled step still says it is part-way").toBeUndefined();
+        if (door !== "queued-stop") {
+          expect(after?.steps[0]?.detail, "a settled step kept what it said mid-way").toBeUndefined();
+        }
       },
     );
 
     /**
-     * **Every field except the transient preview is left alone on non-running steps.**
+     * **Every field except transient preview/progress is left alone on non-running steps.**
      *
      * The settlement rewrites the `steps` array whole — one `jsonb_agg` over
      * every element in Postgres, a loop over every step on the filesystem — so

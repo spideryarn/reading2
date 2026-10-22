@@ -218,7 +218,7 @@ export function LogoLoader({ label }: { label: string }) {
           className={`logo-loader tw:flex tw:items-center tw:gap-1.5 ${running.length ? `spya-anim ${running.join(" ")}` : ""}`}
         >
           <LogoMark />
-          <span className="tw:text-[0.82rem]">
+          <span className="tw:text-[length:max(var(--text-min),0.82rem)]">
             <LogoLetters />
           </span>
         </div>

@@ -254,8 +254,8 @@ describe("what is not a hint is shown as written", () => {
     expect(hintButton()).toBeNull();
   });
 
-  it("leaves a Tutorial answer alone", () => {
-    paint(thread({}, "tutorial"));
+  it("leaves an Explore answer alone", () => {
+    paint(thread({}, "explore"));
     expect(answer()?.textContent).toContain(HINT_WORDS);
     expect(hintButton()).toBeNull();
   });

@@ -315,6 +315,14 @@ describe("the current section in the spine", () => {
     expect(ringAt, "under the search marks").toBeLessThan(first("spine-matches"));
     expect(ringAt, "under the hit targets").toBeLessThan(first("spine-hit"));
     expect(ringAt, "under the viewport band").toBeLessThan(first("spine-viewport-track"));
+    /* And under the veil, with the hairlines: off screen, the section fill is
+       part of the field the lit stretch stands out from (plan 261022c). */
+    const veilAt = first("spine-veil-track");
+    expect(veilAt, "the fixture should render the veil").toBeGreaterThanOrEqual(0);
+    expect(ringAt, "under the off-screen veil").toBeLessThan(veilAt);
+    expect(last("spine-tick"), "the hairlines under the veil too").toBeLessThan(veilAt);
+    expect(veilAt, "the veil under the search marks").toBeLessThan(first("spine-matches"));
+    expect(veilAt, "the veil under the hit targets").toBeLessThan(first("spine-hit"));
   });
 
   it("is decorative — the accessible name is already on the button", async () => {

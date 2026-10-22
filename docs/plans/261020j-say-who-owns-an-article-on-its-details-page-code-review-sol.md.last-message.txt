@@ -1,0 +1,14 @@
+Fixed four findings, including the reader-change race that could issue an admin request with a non-admin session. Private-link owner privacy remains intact.
+
+Full findings and changes: [code review](/var/tmp/spideryarn-worktrees/fbcf30ac-who-owns-this-article/docs/plans/261020j-say-who-owns-an-article-on-its-details-page-code-review-sol.md)
+
+Checks passed:
+
+- Ownership tests: 13
+- Help corpus tests: 7
+- Public network trace: 98
+- Typecheck: all projects
+- Targeted lint: no errors
+- `git diff --check`
+
+`npm test` could not access the sandbox-blocked local database. No production data was touched and nothing was committed.

@@ -292,28 +292,32 @@ describe("referee mode parameters", () => {
 describe("Sources' sub-mode, and Reception's order", () => {
   /**
    * **`?sources=` is which list the band draws** — Bibliography (the
-   * default, and absent from the address), Not cited, Links, Reception or Claims. It replaced
+   * default, and absent from the address), Not cited, Links, Reception,
+   * Claims or Investigate (plan 261020n). It replaced
    * Debate's `?debate=` on 2026-10-09 (plan 261009l); an old one is lifted
    * before anything parses it (tests/sources-old-addresses.test.ts).
    */
-  it("reads the five sub-modes, and anything else as Bibliography", () => {
-    expect([...SOURCES_VIEWS]).toEqual(["bibliography", "not-cited", "links", "reception", "claims"]);
+  it("reads the six sub-modes, and anything else as Bibliography", () => {
+    expect([...SOURCES_VIEWS]).toEqual(["bibliography", "not-cited", "links", "reception", "claims", "investigate"]);
+    expect(sourcesParam.parse("investigate")).toBe("investigate");
     expect(sourcesParam.parse("not-cited")).toBe("not-cited");
     expect(sourcesParam.parse("links")).toBe("links");
     expect(sourcesParam.parse("claims")).toBe("claims");
     expect(sourcesParam.parse("reception")).toBe("reception");
     expect(sourcesParam.parse("bibliography")).toBe("bibliography");
-    for (const junk of ["Claims", "claim", "", "cited", "1", "citations", "debate"]) {
+    for (const junk of ["Claims", "claim", "", "cited", "1", "citations", "debate", "Investigate", "chat"]) {
       expect(sourcesParam.parse(junk), `?sources=${junk}`).toBeNull();
     }
     expect(sourcesParam.defaultValue).toBe("bibliography");
   });
 
-  /* Not cited is the owner's (plan 261011ac, F6): a visitor's band has no chip
-     for it and draws Bibliography for a shared `?sources=not-cited`. */
-  it("gives a visitor every sub-mode but Not cited, and reads Not cited as Bibliography", () => {
+  /* Not cited and Investigate are the owner's (plan 261011ac, F6; plan 261020n §
+     Visitors): a visitor's band has no chip for either and draws Bibliography
+     for a shared `?sources=not-cited` or `?sources=investigate`. */
+  it("gives a visitor every sub-mode but Not cited and Investigate, and reads those as Bibliography", () => {
     expect([...VISITOR_SOURCES_VIEWS]).toEqual(["bibliography", "links", "reception", "claims"]);
     expect(visitorSourcesView("not-cited")).toBe("bibliography");
+    expect(visitorSourcesView("investigate")).toBe("bibliography");
     for (const view of VISITOR_SOURCES_VIEWS) expect(visitorSourcesView(view)).toBe(view);
   });
 

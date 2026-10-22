@@ -10,7 +10,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Adding a mode](#adding-a-mode) — a pointer to mode.md
 - [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) — `FeatureBoundary`, `ModeBoundary`, what they cannot catch
 - [§ Tailwind and shadcn components](#tailwind-and-shadcn-components) — what Tailwind may touch, the four guards, the focus ring, never delete a semantic class
-- [§ Appearance: Light, Dark and System](#appearance-light-dark-and-system) — `data-theme`, where the choice lives, the two palettes
+- [§ Appearance: Light, Dark and System](#appearance-light-dark-and-system) — `data-theme`, where the choice lives, the two palettes, and Brightness (a dimming layer, not a third palette)
 - [§ Reading an API response](#reading-an-api-response) — `readJson`/`fetchOk`, why a body never becomes a message, "none yet" as `200 null`
 - [§ Empty is not the same as not asked yet](#empty-is-not-the-same-as-not-asked-yet) — loading, failed and empty states; reload that must keep the list; the waiting spinner
 - [§ Three more ways client state goes wrong](#client-state-traps) — out-of-order replies, `[]`-dep effects, flags nobody clears
@@ -41,7 +41,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/AppBoundary.tsx`](../../src/web/AppBoundary.tsx) | the last thing between a throw during render and a blank white page: `main.tsx` wraps the whole app in it. Hand-written rather than Sentry's, because reporting is optional and the fallback is not; it reports through `captureClientFailure` and `recordLog` and shows the reader `[render]` and no `error.message` — [260826p-error-boundary.md](../plans/260826p-error-boundary.md) |
 | [`src/web/FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) | **the smaller one**, around one mode's controller and panel, so a broken mode leaves the article readable — [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) |
 | [`src/web/modes/`](../../src/web/modes/) | a mode's controller and its band, out of `App.tsx` — `modes/ideas/IdeasMode.tsx` was the first, joined on 2026-09-06 by Timeline, Quotes, Debate and Glossary, then by Search, Summary, Diagram and Referee, and last by Chat and Learn, which share one `modes/conversation/ConversationModes.tsx` because `LearnBand` renders `ConversationBand`; more follow under [260905e](../plans/260905e-main-app-architecture-review.md). The extraction is what lets a boundary enclose the mode's own computation, since a boundary cannot catch a throw from the component that renders it |
-| [`src/web/LazyPage.tsx`](../../src/web/LazyPage.tsx) | **the two routes whose code is not in the reader's first download** — `/admin` and `/design`, fetched when somebody asks for the address. Takes a loader and a route key rather than children, because a rejected `React.lazy` re-throws its rejection forever, so *Try again* has to build a **fresh** lazy type, and because both routes sit in the same position in `SignedIn`'s tree, so without the key one route's failure — or its loaded component — follows the reader to the other. Reader, shelf and mode code stays **eager** on purpose: cached JSON cannot make an unloaded chunk execute, and in-tab offline navigation depends on that. [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) is what stops the boundary quietly rotting, and [260905i](../plans/260905i-lazy-load-admin-and-design-routes.md) has the numbers |
+| [`src/web/LazyPage.tsx`](../../src/web/LazyPage.tsx) | **the routes whose code is not in the reader's first download** — the `/admin` pages, `/design`, `/changelog` and `/help`, each fetched when somebody asks for the address. Takes a loader and a route key rather than children, because a rejected `React.lazy` re-throws its rejection forever, so *Try again* has to build a **fresh** lazy type, and because every such route sits in the same position in `SignedIn`'s tree, so without the key one route's failure — or its loaded component — follows the reader to the other. Reader, shelf and mode code stays **eager** on purpose: cached JSON cannot make an unloaded chunk execute, and in-tab offline navigation depends on that. [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) is what stops the boundary quietly rotting, and [260905i](../plans/260905i-lazy-load-admin-and-design-routes.md) has the numbers |
 | [`src/web/router.ts`](../../src/web/router.ts) + [`Link.tsx`](../../src/web/Link.tsx) | `/`, `/read/<slug>`, and its `/metadata` page (`/tweets` redirects to Summary's Thread view) — [library.md](library.md) |
 | [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [260825e-metadata-page.md](../plans/260825e-metadata-page.md). **Any change to its sections or their controls keeps its search current**, because Greg asked (`spya-nkjpte`, 2026-10-02): *"any time we update the Metadata page, we keep that search and ToC up-to-date."* The contents list (ToC) needs nothing: it reads the page's `<Section>`s ([`PageSection.tsx`](../../src/web/PageSection.tsx), shared with `/profile` since 2026-10-03). The search needs words: every `<Section>` must carry `keywords` (a type error without them), written as the words a reader would *type* — *regenerate*, *get rid of* — not the ones the section prints; a new kind of word that means the same everywhere on the page goes in [`page-search.ts`](../../src/web/page-search.ts) § `METADATA_SYNONYMS`; and a new control gets a phrasing in [`tests/metadata-contents-reveal.test.tsx`](../../tests/metadata-contents-reveal.test.tsx) § the words a reader brings. A new thing to *do* there may want an alias on the command bar's Metadata row too (`CommandBar.tsx` § `articleRows`) — [261002c](../plans/261002c-metadata-search-aliases-and-keeping-its-search-current.md) |
 | [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) | `TweetsPanel`, the thread's band — Summary's Thread view since 2026-10-03 ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)); a mode before that, and a page at `/read/<slug>/tweets` until 2026-09-29 — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)): the article as a numbered thread, each post linking to its passages, with the line that says the thread is out of date; the read and the job live in [`useTweets.ts`](../../src/web/useTweets.ts) — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
@@ -78,7 +78,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | comments in reading order, and the panel's prev/next — [comments.md](comments.md#several-at-once) |
 | [`src/web/Cited.tsx`](../../src/web/Cited.tsx) | **model prose with block ids in it**, drawn as chips you can press with the paragraph itself on hover. Shared by chat, Quiz and Referee's candidates rather than copied into each — [summaries.md § A summary is a door](summaries.md#a-summary-is-a-door) |
 | [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) + [`useChat.ts`](../../src/web/useChat.ts) | **chat**, in the band between the spine and the prose: threads, the streamed answer, the block-id chips that jump the article, and what a turn can have done to it — copy, retry, edit, **stop** — [260826a-chat-mode.md](../plans/260826a-chat-mode.md), and [§ What a turn can have done to it](../plans/260826a-chat-mode.md#what-a-turn-can-have-done-to-it) for why a stop is a `done` rather than an error |
-| [`src/web/chat-draft.ts`](../../src/web/chat-draft.ts) | **a question typed into chat and not sent survives a mode change**, since 2026-10-04: the words are kept per article in this module rather than in the panel, which unmounts whenever the reader switches mode. It holds a conversation's unsent words, the box under the list's, Recall's, Tutorial's and Explore's by kind, and where chat was — so coming back puts the reader in the conversation the words belong to even after Recall or Quiz has rewritten `?thread=`, and begins a new conversation again only if nothing was ever sent or said to it. The floating chat dialog reads and writes the same entry for a conversation; its passage drafts stay its own. **In memory only**: a reload or a closed tab still loses them. The arrival rule is `ConversationBand`'s in [`ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx), and what is deliberately not recovered is in [261004j](../plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md) |
+| [`src/web/chat-draft.ts`](../../src/web/chat-draft.ts) | **a question typed into chat and not sent survives a mode change**, since 2026-10-04: the words are kept per article in this module rather than in the panel, which unmounts whenever the reader switches mode. It holds a conversation's unsent words, the box under the list's, Recall's and Explore's by kind, and where chat was — so coming back puts the reader in the conversation the words belong to even after Recall or Quiz has rewritten `?thread=`, and begins a new conversation again only if nothing was ever sent or said to it. The floating chat dialog reads and writes the same entry for a conversation; its passage drafts stay its own. **In memory only**: a reload or a closed tab still loses them. The arrival rule is `ConversationBand`'s in [`ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx), and what is deliberately not recovered is in [261004j](../plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md) |
 | [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [260826a-chat-mode.md § The citation contract](../plans/260826a-chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → what goes in `?at=`, and the one rule about when the scroll spy may overwrite it |
@@ -215,7 +215,18 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   threshold slider uses it rather than a bare `<input type="range">`
   ([261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md)).
 - **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
-  the URL.
+  the URL. `pinFirst` holds its first column while it scrolls sideways; a hand-drawn table puts
+  `PINNED` from the same file on its first `<th>` and `<td>`s, as `/admin/costs`' do
+  ([261019o](../plans/261019o-admin-tables-freeze-the-first-column.md)). `renderRow` lets a page
+  draw its own `<tr>` — for a row whose cells share state, like `/admin/vouchers`' that turns into
+  a form — dressed by the same `cellClass` as the default row and keyed by `DataTable`, so a
+  re-sort carries the row's state with it
+  ([261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md)).
+- **`src/web/lib/useUrlSortedTable.ts` § `useUrlSortedTable`** — the wiring around it for a page:
+  `?by=&dir=` both ways, hidden columns remembered under the page's keys, missing primary keys
+  sunk. `/admin/users`, `/admin/articles` and `/admin/vouchers` use it; a new `?by=` parser comes from
+  `params.ts` § `byParam`. Its identity contract (memoised `data` and `columns`, a module-scope
+  `rowId`) is the render-loop rule — [261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md).
 - **`src/web/lib/SidewaysScrollBox.tsx` § `SidewaysScrollBox`, `useScrollBox`** — the box a wide
   table scrolls sideways in. While its content overflows it is a named tab stop, so the arrow keys
   can scroll it; `DataTable` draws it for you. A hand-written `overflow-x-auto` div is the older
@@ -640,6 +651,22 @@ once that nobody working on it could see.
   `--panel` rather than `--page` — which is exactly where the active gist cell and the active spine
   band put it. `tw:bg-highlight/20` is a plausible-looking substitution that renders subtly wrong on
   half its uses.
+
+### Brightness: a layer, not a third palette
+
+**Since 2026-10-19 a reader can dim the whole page below the screen's own lowest setting** —
+`/profile` → Settings → Brightness: Full, Dim, Dimmer, Dimmest (about 60 / 38 / 22% of the light; the stylesheet has the contrast each leaves). Greg,
+2026-10-18 (`spya-q645m0`), in a dark bedroom on an iPad: *"to enable the iPad, in effect, to show
+less light even than its own brightness setting allows."* It is one black `:root::after` layer with
+`pointer-events: none` over everything, in either theme, kept on the device and set before first
+paint by the same head script as the theme —
+[`styles/reading-comfort.css`](../../src/web/styles/reading-comfort.css) says why it is not a
+filter, and how the top-layer dialogs it cannot reach dim themselves. **So a new colour needs no
+dim value**, and a new `showModal()` dialog is covered by the `dialog[open]` rule; anything else that
+reaches the top layer (a `popover`) would need adding there. The dialog filter establishes a
+containing block for fixed descendants; Feedback's Toast is the one current case and stays anchored
+to the dialog's viewport-sized box, so recheck the rule if another appears. Why not a darker palette:
+[261019g](../plans/261019g-reading-comfort-on-profile-brightness-and-text-size.md#brightness-one-dimming-layer-over-everything).
 
 ## Reading an API response
 

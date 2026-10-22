@@ -279,8 +279,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* The way *out* of a mode, so the words are the ones somebody reaches for
        when they want the piece and nothing else. `article` first because that
        is what they are asking for; the mode's own name is a description of
-       what is missing rather than of what they get. */
-    aliases: ["article", "text", "reading", "just the article", "prose", "original", "no mode", "no panel"],
+       what is missing rather than of what they get. **Not `original`**, since
+       2026-10-19: Greg typed it meaning the publisher's page and found only
+       this (spya-r6a5s5), so it is *Open the original*'s (plan 261019f). */
+    aliases: ["article", "text", "reading", "just the article", "prose", "no mode", "no panel"],
     experimental: false,
   },
   chat: {
@@ -434,10 +436,14 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          suggested saved memories, and the sentence ended by denying them;
          *Learn* suggests a course, so it denies that instead. Explore's half
          follows Greg's widening of it the same day: your own view, and where
-         the piece may be weak (spya-mvmpks). */
-      "Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
+         the piece may be weak (spya-mvmpks). *A short Tutorial* left on
+         2026-10-20, when Recall absorbed it (plan 261020m), and Recall's half
+         says what Tutorial's name used to: it is for you before you have read
+         it too. */
+      "Take the piece in and think it through: Recall what it says (read it yet or not), a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
     /* **Two sentences about the whole mode, since 2026-10-04.** It was a
-       110-word walk through Recall, Tutorial and Explore; Greg (spya-usyhwy):
+       110-word walk through Recall, Tutorial and Explore (Tutorial was folded
+       into Recall on 2026-10-20); Greg (spya-usyhwy):
        *"it's like one big paragraph. Prefer smaller paragraphs or bullet
        points"*, and *"each submode button should have its own tooltip"*. So
        what each part does is on its chip (QuizPanel.tsx § `LEARN_VIEW_HOW`)
@@ -446,7 +452,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        Quiz's questions are one stored batch written from the article, and
        each answer is marked against it (src/quiz.ts, src/quiz-mark.ts). It
        describes the mode, not a press, so it is true for the Help page too. */
-    how: "Recall, Tutorial and Explore are conversations, and each waits on you: the AI does not reply until you say or type something. Quiz writes its questions from the piece and marks your answers against it.",
+    how: "Recall and Explore are conversations, and each waits on you: the AI does not reply until you say or type something. Quiz writes its questions from the piece and marks your answers against it.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 
@@ -467,7 +473,8 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["recall", "remember", "memorise", "memorize", "study", "revise", "revision", "practice", "practise"],
     /* In every reader's bar since 2026-10-05. Greg, 2026-10-04 (spya-cnqcjf):
        *"I think recall submode for sure. I think quiz mode as well. And then
-       let's try tutorial too."* Explore, the fourth part, stayed behind the
+       let's try tutorial too."* (Tutorial was folded into Recall on
+       2026-10-20.) Explore stayed behind the
        switch one level down until 2026-10-11 (spya-jm0nfg; src/web/sub-modes.ts
        § `LEARN_SUB_MODES`). docs/project/experimental-features.md. */
     experimental: false,

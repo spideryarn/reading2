@@ -1346,15 +1346,15 @@ describe("assetsInputHash", () => {
    * without the second it would pass against a hash of a constant.
    */
   it("stales a PDF article, and only a PDF article, when the figure policy changes", () => {
-    /* `pdf-figures/6` is the composite route
-       (docs/plans/261001q-pdf-tables-and-composite-figures.md § Stage 2): an
-       article stored under `/5` has multi-panel figures the model's box can now
-       render, and must read stale rather than current. A web article's stamp
+    /* `pdf-figures/7` is the located route asked about uncaptioned figures
+       (docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md):
+       an article stored under `/6` has uncaptioned figures that route can now
+       recover, and must read stale rather than current. A web article's stamp
        must not move with it. Both values pinned, so the next bump is a decision
        somebody makes here rather than a side effect. GPT Sol, 260924e stage 2
        plan review, 9. */
-    expect(PDF_FIGURE_RECOVERY_POLICY).toBe("pdf-figures/6");
-    expect(assetsInputHash([figure(3)])).toBe("4b54d93d822f51b9");
+    expect(PDF_FIGURE_RECOVERY_POLICY).toBe("pdf-figures/7");
+    expect(assetsInputHash([figure(3)])).toBe("fa892bc5109378d8");
     expect(assetsInputHash([img("https://cdn.test/a.png")])).toBe("440878edf3cb0169");
   });
 

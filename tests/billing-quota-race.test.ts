@@ -324,6 +324,8 @@ const NOTHING_CHARGED = (inFlightIngest: number) => ({
   /* High-powered AI upgrades, counted apart since 260930k — none here. */
   highPowerFullPrice: 0,
   highPowerHalfPrice: 0,
+  /* One slot a row: nothing here is a long document. */
+  slots: { chargedFullPrice: 0, chargedHalfPrice: 0, inFlightIngest, highPowerFullPrice: 0, highPowerHalfPrice: 0 },
 });
 
 describe("the refusal says what a reader needs", () => {
@@ -381,6 +383,7 @@ describe("the period is half-open", () => {
       minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
+      slots: { chargedFullPrice: 1, chargedHalfPrice: 0, inFlightIngest: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 },
     });
     /* And the free tier's allowance is lifetime, so it sees all three. */
     expect(await usageFor(OWNER, FREE)).toEqual({
@@ -391,6 +394,7 @@ describe("the period is half-open", () => {
       minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
+      slots: { chargedFullPrice: 3, chargedHalfPrice: 0, inFlightIngest: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 },
     });
   });
 });

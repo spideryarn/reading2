@@ -219,7 +219,7 @@ export function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
  * The middle case — a block with no quote — is a chat started from a
  * paragraph's chat button rather than from a selection.
  */
-function anchorOf(t: {
+export function anchorOf(t: {
   anchorBlockId: string | null;
   anchorQuote: string | null;
   anchorStart: number | null;
@@ -883,6 +883,25 @@ const rawPgChatStore: ChatStore = {
         .returning({ id: chatThreads.id });
       return written.length > 0;
     }, READ_COMMITTED);
+  },
+
+  async claimModePreparation(slug: string, threadId: string): Promise<boolean> {
+    const articleId = await articleIdForOwned(slug);
+    /* One conditional UPDATE: Postgres re-checks the null under the row lock,
+       so two concurrent claims cannot both return a row. */
+    const claimed = await getDb()
+      .update(chatThreads)
+      .set({ modePreparedAt: DB_NOW })
+      .where(
+        and(
+          eq(chatThreads.articleId, articleId),
+          eq(chatThreads.id, threadId),
+          eq(chatThreads.kind, "guide"),
+          isNull(chatThreads.modePreparedAt),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+    return claimed.length > 0;
   },
 
   async remove(slug: string, threadId: string): Promise<ChatThread[]> {

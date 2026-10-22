@@ -45,6 +45,9 @@ const NOTHING: UserCounts = {
   questions: [],
   chats: [],
   searches: [],
+  activity: [],
+  reading: [],
+  failures: [],
   spend: new Map(),
   spendMonth: "2026-08",
   ingests: [],
@@ -67,6 +70,19 @@ describe("joining accounts to their counts", () => {
       questions: [{ owner: ALICE, n: 13 }, { owner: BOB, n: 24 }],
       chats: [{ owner: ALICE, n: 15 }, { owner: BOB, n: 26 }],
       searches: [{ owner: ALICE, n: 17 }, { owner: BOB, n: 28 }],
+      /* The engagement three (plan 261020c), distinct on both owners too. Bob's
+         failures arrive interleaved with Alice's, as a query ordered by owner
+         would never send them, so the merge cannot be leaning on adjacency. */
+      activity: [
+        { owner: ALICE, days: 9, days30: 4, lastAt: new Date("2026-08-27T09:00:00.000Z") },
+        { owner: BOB, days: 2, days30: 1, lastAt: new Date("2026-08-20T09:00:00.000Z") },
+      ],
+      reading: [{ owner: ALICE, seconds: 3_600 }, { owner: BOB, seconds: 61 }],
+      failures: [
+        { owner: BOB, at: new Date("2026-08-22T09:00:00.000Z"), step: "fetch", kind: "retry", total: 3 },
+        { owner: ALICE, at: new Date("2026-08-21T09:00:00.000Z"), step: null, kind: null, total: 1 },
+        { owner: BOB, at: new Date("2026-08-19T09:00:00.000Z"), step: "extract", kind: "bug", total: 3 },
+      ],
       /* Money is the sixth aggregate and merges by owner id like the other
          five, so it belongs in the "nobody gets anybody else's numbers" test
          rather than in one of its own. */
@@ -81,8 +97,8 @@ describe("joining accounts to their counts", () => {
          tests/billing-admin-plan.test.ts, and this one is only about whose row
          they land on. */
       ingests: [
-        { owner: ALICE, lifetime: 2, inPeriod: 0, inFlight: 0, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0, minimalLifetime: 0, minimalInPeriod: 0, minimalInFlight: 0 },
-        { owner: BOB, lifetime: 1, inPeriod: 0, inFlight: 1, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0, minimalLifetime: 0, minimalInPeriod: 0, minimalInFlight: 0 },
+        { owner: ALICE, lifetime: 2, inPeriod: 0, inFlight: 0, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0, minimalLifetime: 0, minimalInPeriod: 0, minimalInFlight: 0, slots: { lifetime: 2, inPeriod: 0, inFlight: 0, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0 } },
+        { owner: BOB, lifetime: 1, inPeriod: 0, inFlight: 1, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0, minimalLifetime: 0, minimalInPeriod: 0, minimalInFlight: 0, slots: { lifetime: 1, inPeriod: 0, inFlight: 1, lifetimeShared: 0, inPeriodShared: 0, highPowerLifetime: 0, highPowerInPeriod: 0, highPowerLifetimeShared: 0, highPowerInPeriodShared: 0 } },
       ],
       accounts: new Map(),
       tiers: [],
@@ -95,6 +111,8 @@ describe("joining accounts to their counts", () => {
       lastReadAt: "2026-08-25T09:00:00.000Z",
       spendNanos: 19_000_000, spendCalls: 19, spendUnpricedCalls: 2, spendMonth: "2026-08",
       plan: "free", ingests: 2, ingestWindow: "lifetime",
+      activeDays: 9, activeDays30: 4, lastActiveAt: "2026-08-27T09:00:00.000Z", readingSeconds: 3_600,
+      importFailures: 1, recentImportFailures: [{ at: "2026-08-21T09:00:00.000Z" }],
     });
     expect(bob).toMatchObject({
       articles: 7, archived: 2, opens: 5, uploads: 22, questions: 24, chats: 26, searches: 28,
@@ -104,6 +122,12 @@ describe("joining accounts to their counts", () => {
          slot somebody is spending, which is what the wall counts — so the page
          counts it too, or it would show a free slot the server would refuse. */
       plan: "free", ingests: 2, ingestWindow: "lifetime",
+      activeDays: 2, activeDays30: 1, lastActiveAt: "2026-08-20T09:00:00.000Z", readingSeconds: 61,
+      importFailures: 3,
+      recentImportFailures: [
+        { at: "2026-08-22T09:00:00.000Z", step: "fetch", kind: "retry" },
+        { at: "2026-08-19T09:00:00.000Z", step: "extract", kind: "bug" },
+      ],
     });
   });
 
@@ -129,6 +153,11 @@ describe("joining accounts to their counts", () => {
     expect(alone).toMatchObject({ plan: "free", ingests: 0, ingestLimit: 3, ingestWindow: "lifetime" });
     expect(alone?.planStatus).toBeUndefined();
     expect(alone?.spendMonth).toBe("2026-08");
+    /* Engagement: zeros, an empty list, and no invented last-active date. */
+    expect(alone).toMatchObject({
+      activeDays: 0, activeDays30: 0, readingSeconds: 0, importFailures: 0, recentImportFailures: [],
+    });
+    expect(alone && "lastActiveAt" in alone).toBe(false);
     /* And the dates that genuinely have no answer stay *absent*, because
        `exactOptionalPropertyTypes` makes absent the only spelling of "no
        value" and the column draws that as an em dash with a reason on it. */

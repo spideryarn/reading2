@@ -363,7 +363,7 @@ describe("the Feedback button, in the shelf masthead", () => {
        `hasTouch` on its own is enough, which was not separately tested here.
        GPT Sol, P2. */
     expect(
-      btn.classList.contains("tw:pointer-coarse:min-h-10"),
+      btn.classList.contains("tw:any-pointer-coarse:min-h-[40px]"),
       "a phone control back under the touch floor",
     ).toBe(true);
     /* The failure mode, exactly as in the bar: `.fb-button` carries
@@ -426,7 +426,7 @@ describe("the Feedback button, in the site nav", () => {
     /* The masthead's two reasons, unchanged: the UA's button padding, and a
        finger's floor once it is gone. */
     expect(btn.classList.contains("tw:p-0")).toBe(true);
-    expect(btn.classList.contains("tw:pointer-coarse:min-h-10")).toBe(true);
+    expect(btn.classList.contains("tw:any-pointer-coarse:min-h-[40px]")).toBe(true);
     expect(btn.classList.contains("fb-button")).toBe(false);
     expect(host.querySelector(".fb-button")).toBeNull();
   });

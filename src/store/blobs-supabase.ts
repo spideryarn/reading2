@@ -19,6 +19,7 @@
  */
 import { MAX_UPLOAD_BYTES } from "../uploads.js";
 import { readStreamCapped } from "../read-capped.js";
+import { refuseWhileViewingAs } from "../view-as-scope.js";
 import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.js";
 
 /**
@@ -179,6 +180,10 @@ export function supabaseBlobs(baseUrl: string, serviceKey: string): RawSourceSto
     },
 
     async putIfAbsent(key, bytes, contentType): Promise<PutResult> {
+      /* The three writes here refuse while the administrator is viewing as a
+         reader: the database is read-only then (src/db/client.ts), and the
+         bucket is the other half of the same store. Plan 261019n § Part 3. */
+      refuseWhileViewingAs("a Storage write");
       /* `POST`, not `PUT`. Storage's `POST` is create-only and answers 409 for
          an existing key; `PUT` upserts. The difference is the whole guarantee,
          so it is not a style choice — and `x-upsert: false` is sent as well,
@@ -194,6 +199,7 @@ export function supabaseBlobs(baseUrl: string, serviceKey: string): RawSourceSto
     },
 
     async remove(key) {
+      refuseWhileViewingAs("a Storage delete");
       const res = await fetch(at(key), { method: "DELETE", headers: auth });
       if (res.ok) return;
       if ((await realStatus(res)) === 404) return;
@@ -201,6 +207,7 @@ export function supabaseBlobs(baseUrl: string, serviceKey: string): RawSourceSto
     },
 
     async sign(key) {
+      refuseWhileViewingAs("an upload grant");
       const res = await fetch(`${api}/object/upload/sign/${BUCKET}/${key}`, {
         method: "POST",
         headers: { ...auth, "Content-Type": "application/json" },

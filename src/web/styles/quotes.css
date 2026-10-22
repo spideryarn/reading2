@@ -34,7 +34,7 @@
 
 .quotes-empty { padding: 0.7rem; }
 .quotes-empty p { margin: 0 0 0.5rem; font-size: 0.91rem; color: var(--ink-soft); }
-.quotes-empty .quotes-hint { color: var(--ink-faint); font-size: 0.84rem; line-height: 1.45; }
+.quotes-empty .quotes-hint { color: var(--ink-faint); font-size: max(var(--text-min), 0.84rem); line-height: 1.45; }
 .quotes-run { display: flex; flex-direction: column; gap: 0.4rem; }
 
 .quotes-stale {
@@ -169,7 +169,7 @@
   display: inline-block;
   margin: 0.3rem 0 0 0.5rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }

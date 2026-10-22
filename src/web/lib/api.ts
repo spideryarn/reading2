@@ -93,6 +93,13 @@ import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
 import { heldReader, heldToken, onSession, sessionObserved, sessionRevision, tokenOwnerOf } from "./session.js";
 import { supabase } from "./supabase.js";
 import { noteRequest } from "./writes.js";
+import {
+  endViewAsTab,
+  VIEW_AS_ENDED_CODE,
+  VIEW_AS_HEADER,
+  VIEW_AS_READ_ONLY,
+  viewAsNonce,
+} from "./view-as.js";
 import type { QuizResponse } from "../../types.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
@@ -554,6 +561,46 @@ async function sendOwned(
     throw new Error(`apiFetch is for our own API only, and this is not: ${input}`);
   }
 
+  /**
+   * **A tab viewing the app as another reader** (lib/view-as.ts;
+   * docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+   * § Part 3, Client 2). Three things change here and nothing else does:
+   *
+   * - **Only a GET leaves the tab.** Anything else is refused before it is
+   *   sent, with the same 403 and the same sentence the server would give, so
+   *   a panel reads one set of words whichever side said no — and no write
+   *   reaches the network at all. The server refuses on its own regardless.
+   *   Stop is the one write such a tab makes, and it does not come through
+   *   here: `endViewAs` below is its own transport.
+   * - **Every request carries the nonce, and asks for `no-store`**, so the
+   *   browser's HTTP cache keeps none of the subject's answers past Stop
+   *   (round 1, F2).
+   * - **The offline drawer is nobody's**: `owner` is forced to `null`, which
+   *   every helper in offline-store.ts already reads as "keep nothing, read
+   *   nothing". Without it the subject's articles would be filed in the
+   *   administrator's own offline copy.
+   *
+   * The credential is untouched: it is the administrator's, and `NotThisReader`
+   * still fences it against the administrator, exactly as in any tab.
+   */
+  const viewAs = viewAsNonce();
+  const method = (init.method ?? "GET").toUpperCase();
+  if (viewAs !== null && method !== "GET") {
+    recordLog({
+      kind: "api",
+      outcome: "not-sent",
+      method,
+      path: input,
+      status: null,
+      ms: null,
+      vercelId: null,
+      bytes: null,
+      contentType: null,
+      error: "ViewAsReadOnly",
+    });
+    throw new HttpError(VIEW_AS_READ_ONLY, 403);
+  }
+
   const send = async (token: string | undefined): Promise<Response> => {
     /* `Headers` rather than object spread, because a caller may pass headers as
        an array of pairs or as a `Headers` instance, and spreading either of
@@ -561,13 +608,19 @@ async function sendOwned(
        looking almost right. */
     const headers = new Headers(init.headers);
     if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (viewAs !== null) headers.set(VIEW_AS_HEADER, viewAs);
     /* A `TypeError` out of `fetch` itself is the transport failing, and this is
        the one place that knows it came from `fetch` rather than from a bug —
        marked for `describeFetchFailure` (lib/reader-facing.ts). An abort is not
        a lost connection and is left alone. */
-    return fetch(input, { ...init, headers }).catch((e: unknown) => {
-      throw e instanceof TypeError ? markUnreachable(e) : e;
-    });
+    return fetch(input, { ...init, headers, ...(viewAs !== null && { cache: "no-store" as const }) })
+      .then((res) => {
+        if (viewAs !== null) watchForViewAsEnd(res);
+        return res;
+      })
+      .catch((e: unknown) => {
+        throw e instanceof TypeError ? markUnreachable(e) : e;
+      });
   };
 
   /**
@@ -590,7 +643,10 @@ async function sendOwned(
    * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md,
    * 2026-09-03.
    */
-  const { token, owner, tokenOwner } = await accessToken();
+  const credential = await accessToken();
+  const { token, tokenOwner } = credential;
+  /* The drawer, and nobody's while viewing as (above). */
+  const owner = viewAs === null ? credential.owner : null;
   /* Here and not before the lookup: a lookup that was waiting while the
      reader changed answers with the new reader's token (`NotThisReader`). */
   if (notTheirs(tokenOwner, madeFor)) {
@@ -653,7 +709,7 @@ async function sendOwned(
     if (!probablyOnline()) return { response: first, owner };
     const { data } = await supabase.auth.refreshSession();
     refreshed = data?.session?.access_token;
-    refreshedOwner = data?.session?.user?.id ?? owner;
+    refreshedOwner = viewAs === null ? (data?.session?.user?.id ?? owner) : null;
     refreshedTokenOwner = tokenOwnerOf(data?.session);
   } catch {
     return { response: first, owner };
@@ -1376,6 +1432,9 @@ export function leavingFetch(
   madeFor: string | null = null,
 ): Promise<void> {
   if (!input.startsWith("/api/")) return Promise.resolve();
+  /* Every caller is a write on the way out, and a tab viewing as another
+     reader writes nothing (plan 261019n § Part 3, Client 2). */
+  if (viewAsNonce() !== null) return Promise.resolve();
   if (madeFor !== null && (heldToken() === undefined || notTheirs(heldReader(), madeFor))) {
     return Promise.resolve();
   }
@@ -1447,6 +1506,91 @@ export function leavingFetch(
 const KEEPALIVE_LIMIT = 60 * 1024;
 
 /**
+ * **A terminal view-as refusal ends it in this tab**, whichever request heard
+ * it (plan 261019n § round 1, F5): a 410 ended session, or a 403 saying the
+ * actor/subject is no longer eligible. Read off a clone, so the caller's own
+ * handling of the response is untouched; fire-and-forget, because nothing
+ * waits on leaving.
+ */
+function watchForViewAsEnd(res: Response): void {
+  if (res.status !== 410 && res.status !== 403) return;
+  let copy: Response;
+  try {
+    copy = res.clone();
+  } catch {
+    return;
+  }
+  void copy
+    .text()
+    .then((text) => {
+      if (
+        text.includes(VIEW_AS_ENDED_CODE) ||
+        text.includes("[view-as-not-admin]") ||
+        text.includes("[view-as-subject-admin]") ||
+        text.includes("[admin-only]")
+      ) {
+        endViewAsTab();
+      }
+    })
+    .catch(() => {});
+}
+
+/** What pressing Stop came to. */
+export type ViewAsStop = { kind: "ended" } | { kind: "failed"; message: string };
+
+/**
+ * **Stop: the one write a view-as tab may send**, and its own transport rather
+ * than an exception inside `apiFetch`, so the rule there stays "no write
+ * leaves" with nothing carved out of it (plan 261019n § round 1, F5).
+ *
+ * `ended` on any 2xx and on a 410 — the server has no live session either way.
+ * `failed` on everything else, a lost connection included: the tab then keeps
+ * the nonce and the subject's page, behind a bar that says Stop did not go
+ * through and offers Retry (round 2, R2-6). Never throws.
+ */
+export async function endViewAs(): Promise<ViewAsStop> {
+  const viewAs = viewAsNonce();
+  if (viewAs === null) return { kind: "ended" };
+  const path = "/api/admin/view-as/end";
+  const started = Date.now();
+  try {
+    const { token } = await accessToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    headers.set(VIEW_AS_HEADER, viewAs);
+    const res = await fetch(path, { method: "POST", headers, cache: "no-store" });
+    recordLog({
+      kind: "api",
+      outcome: "response",
+      method: "POST",
+      path,
+      status: res.status,
+      ms: Date.now() - started,
+      vercelId: header(res, "x-vercel-id"),
+      bytes: null,
+      contentType: null,
+      error: null,
+    });
+    if (res.ok || res.status === 410) return { kind: "ended" };
+    return { kind: "failed", message: (await failure(res)).message };
+  } catch (e) {
+    recordLog({
+      kind: "api",
+      outcome: "transport-failed",
+      method: "POST",
+      path,
+      status: null,
+      ms: Date.now() - started,
+      vercelId: null,
+      bytes: null,
+      contentType: null,
+      error: e instanceof Error ? e.name : "Error",
+    });
+    return { kind: "failed", message: "Spideryarn couldn’t reach its server." };
+  }
+}
+
+/**
  * **What this file does when the tab's session changes.**
  *
  * The token `leavingFetch` uses, and whose it is, are no longer kept here:
@@ -1455,6 +1599,8 @@ const KEEPALIVE_LIMIT = 60 * 1024;
  * and the screen cannot hold different readers. Registered at import, so it
  * hears the first event.
  */
+let viewAsActor: string | undefined;
+
 onSession((session) => {
   /* **Whose cache to read, kept beside the token and for the same reason.** A
      request needs to know which reader's copies to look in before it knows
@@ -1480,6 +1626,18 @@ onSession((session) => {
       ? { id: signedIn.id, ...(signedIn.email !== undefined && { email: signedIn.email }) }
       : null,
   );
+
+  /* The Supabase auth session is deliberately shared with the administrator's
+     other tabs. Its broadcast must not make this isolated tab maintain the
+     administrator's real IndexedDB cache records. A sign-out or account switch
+     is terminal too: already-rendered subject data must not survive under a
+     different person at the keyboard. */
+  if (viewAsNonce() !== null) {
+    if (id === null) endViewAsTab();
+    else if (viewAsActor === undefined) viewAsActor = id;
+    else if (viewAsActor !== id) endViewAsTab();
+    return;
+  }
 
   if (id) {
     rememberUser(id);

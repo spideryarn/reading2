@@ -40,8 +40,17 @@ wiring.
 
 | Box | Scope | Stored | Edited at |
 |---|---|---|---|
-| **About you** | you, always | `reader_profiles.profile` | `/profile` |
+| **About you** | you, always | `reader_profiles.profile` | `/profile`; also offered on the add page to a reader who has none, and by the guide, Chat and Explore as a card under an answer when you tell them something lasting, such as how you want to be answered ([chat-tools.md](chat-tools.md#chat-and-explore-offer-to-keep-an-instruction-in-about-you)) |
 | **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata`; also asked on the add page and, when unset, in Skim's band |
+
+**On the add page since 2026-10-20 both boxes sit at the top**, the purpose box four rows and
+growing with its words, and *About you* under it for a reader whose stored profile is empty —
+decided from the first read and kept, so it does not vanish as their first words save. Each label
+carries its scope (*This article*, *Every article*). About you holds the page as the purpose does: a
+reader in it, or with words unsaved, is not navigated away at the finish, and *Open the article*
+waits for both saves. Greg (`spya-kan788`): *"if they haven't filled out a user profile yet at all,
+perhaps also add a box for that too … Make it clear which is which and how they're different."*
+[Plan 261020a](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md).
 
 The purpose is asked for in two more places since 2026-09-30, both writing through
 [`src/web/purpose.ts`](../../src/web/purpose.ts): the add page's *Why are you reading this?*, saved
@@ -226,7 +235,10 @@ the code inspects a search query before it goes out. Written down plainly becaus
 of this doc claimed the promise rather than the instruction, and a privacy claim that is really a
 request is worse than no claim. GPT Sol's review, 2026-08-26. The real fence, if this ever matters
 enough, is a check on the tool call's arguments in [`src/chat-tools.ts`](../../src/chat-tools.ts) —
-not more prompt.
+not more prompt. **One tool is the exception on purpose**: `offer_to_save`, whose argument *is*
+About you, offered back to the reader as a card they press. It stays inside Spideryarn, so the
+guide's and Chat's prompts narrow the rule for it
+([chat-tools.md § Chat and Explore offer to keep an instruction](chat-tools.md#chat-and-explore-offer-to-keep-an-instruction-in-about-you)).
 
 ### The command bar's suggestions: the one exception
 
@@ -748,8 +760,10 @@ supposed to appear.
 
 Three things fixed it, and the third is the interesting one:
 
-1. **Three phases rather than two** — `idle | opening | listening`. The orange is only worn once
-   `audiostart` has fired, and `opening` says *"Opening the microphone…"* in words.
+1. **Three phases rather than two** — `idle | opening | listening`. `opening` is only the time before
+   the track exists and says *"Wait — opening the microphone…"*; the orange and the tape start when
+   the track is ours. Waiting for Chromium's later `audiostart` lost the first second of speech
+   ([261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md)).
 2. **A strip that exists whenever the microphone is armed**, not only when it has something to say.
 3. **A live level meter** — Greg's ask, *"so that the user has a sense of whether it's working"*.
 
@@ -844,8 +858,9 @@ Two smaller things Greg asked for in the same breath. The armed button wore `Mic
 icon for *muted* — so the one moment the microphone was live it showed the glyph for dead. It is now
 a filled **square** in both armed phases, on the rule that the icon says what the *press* does; the
 phase is carried by colour, the pulse, and the strip's own words. And there is an `m:ss` timer,
-whose zero is the first `audiostart` rather than the press, because the 1.1 seconds before the
-device opens are not seconds of anything.
+whose zero is the moment the track is ours rather than the press, because the time before the
+device opens is not seconds of anything. It shares the tape's zero, so the time shown is the time
+recorded ([261019m](../plans/261019m-dictation-records-from-the-first-word-and-a-preview-everywhere.md)).
 
 ### What we heard, when nothing came back
 
@@ -959,6 +974,7 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
 | [`src/routes.ts`](../../src/routes.ts) | `GET`/`PATCH /api/reader`, `resolveProfile`, `withProfileChanged` |
 | [`src/web/SettingsSection.tsx`](../../src/web/SettingsSection.tsx) | the Settings card on the same page — [experimental-features.md](experimental-features.md), which is about what the app shows rather than what the model is told |
 | [`src/web/AppearanceSetting.tsx`](../../src/web/AppearanceSetting.tsx) | the card's first row: Light, Dark or System, kept on the device rather than on this row — [web-client.md § Appearance](web-client.md#appearance-light-dark-and-system) |
+| [`src/web/ReadingComfortSettings.tsx`](../../src/web/ReadingComfortSettings.tsx) | the next two rows: Brightness and Text size, kept on the device for the same reason — [typography.md § The reader's text size scales the root](typography.md#the-readers-text-size-scales-the-root) |
 | [`tests/profile.test.ts`](../../tests/profile.test.ts) | the pure rules, including the staleness table exhaustively |
 | [`tests/route-profile-concurrency.test.ts`](../../tests/route-profile-concurrency.test.ts) | that the profile read really starts before the artefact read has finished, and that the artefact's error still wins |
 | [`tests/profile-prompts.test.ts`](../../tests/profile-prompts.test.ts) | the batch prompts — which `article-prompt.test.ts` never covered |

@@ -242,3 +242,18 @@ export function gutterCss(levels: ReadonlyMap<BlockId, ReadLevel>): string {
 
 /** A block id in the closed format (docs/project/block-ids.md) — safe inside an attribute selector as it stands. */
 export const SAFE_ID = /^spya-[a-z0-9]+$/;
+
+/**
+ * Whether `levels` can be believed yet — which is not the same as whether it
+ * is empty.
+ *
+ * `off`: not recording for this reader at all — a visitor, since 2026-10-05,
+ * and nobody else until there is a setting to turn it off. `loading`: the
+ * opening read has not answered for *this* run of the effect (a slug, or
+ * `enabled` going off and on again, is a new run). `failed`: it never will, so the levels hold only
+ * what this page has credited since. Only `loaded` means an empty map is "read
+ * nothing". GPT Sol's findings 1 and 3 on
+ * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md, which is what
+ * reads it.
+ */
+export type ReadingTimeStatus = "off" | "loading" | "loaded" | "failed";

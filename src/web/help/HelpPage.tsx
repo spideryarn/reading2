@@ -26,7 +26,7 @@
  *
  * It asks the router which page (router.ts § the `help` variant) and draws
  * that. App.tsx mounts it once, under one `routeKey`, for all of them, so
- * moving from one Help page to the next keeps what is in the search box and
+ * moving from one Help page to the next keeps what is in the box and
  * where the contents list is scrolled to, and nothing is torn down to change
  * the words in the middle.
  *
@@ -35,7 +35,7 @@
  * `PageContents` (Metadata) is a flat list scanned off the DOM, sized for that
  * page's margin and hidden entirely below `lg`, search box included. Help's is
  * drawn from the typed group list: grouped, sticky in a left column at `lg`,
- * and above the page on a narrow screen, where the search box stays in view
+ * and above the page on a narrow screen, where the box stays in view
  * and the list folds shut. Only the search itself, `searchSections`, is
  * shared, with Help's own synonym table. GPT Sol, plan review of 261002b, R1.
  *
@@ -64,24 +64,23 @@
  * on mount would arrive once, at the first page, and never again: a link from
  * a topic to a question would open the questions' page at the top. GPT Sol,
  * plan review of 261007e, R5. The other choice was to put the page in App's
- * `routeKey` and remount; that loses the search box's words on every move for
+ * `routeKey` and remount; that loses the box's words on every move for
  * the sake of an effect dependency.
  */
 import {
   useContext,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
 } from "react";
 
 import { DocumentPage } from "../DocumentPage.js";
 import { scrollToAndFlash } from "../flash.js";
-import { isImeComposing } from "../key-chord.js";
 import { Link } from "../Link.js";
 import { SignedInReader } from "../lib/made-for.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
@@ -108,7 +107,8 @@ import {
   helpPlace,
   helpSearchText,
 } from "./help-content.js";
-import { HelpAsk, useHelpAsk } from "./HelpAsk.js";
+import { MAX_HELP_QUESTION_CHARS } from "../../help-chat.js";
+import { HelpBox, useHelpAsk } from "./HelpAsk.js";
 import { HelpSub, PageLink } from "./help-parts.js";
 
 /**
@@ -193,8 +193,32 @@ function HelpPageForReader() {
   const title = titleOf(shown);
   useDocumentTitle(pageTitle(title === undefined ? { kind: "help" } : { kind: "help", page: title }));
 
-  const [query, setQuery] = useState("");
-  const results = useMemo(() => (query.trim() === "" ? null : searchHelp(query)), [query]);
+  /* *Search or ask*: one box, its words held here with the answer, so both
+     survive a move from the contents page, where the box is above the
+     contents, to a page, where it is in the column (HelpAsk.tsx §
+     `useHelpAsk`). Plans 261007k, F10, and 261020x. */
+  const askState = useHelpAsk();
+  const query = askState.value;
+  /**
+   * **The words whose matches were folded away** by taking one. Taking a match
+   * used to empty the box; the box is a question now too, and a dictation's
+   * transcript is refused if the words it was written into changed under it,
+   * so the words stay and only the list goes, until they are next edited.
+   * GPT Sol, plan review of 261020x, finding 1.
+   */
+  const [folded, setFolded] = useState<string | null>(null);
+  /* Any edit unfolds, including one that comes back to the same words:
+     adjusted during render, React's pattern for state that follows a value. */
+  if (folded !== null && query !== folded) setFolded(null);
+  /* Behind the keystroke, and cut to what can be asked: a dictation can run
+     past it, and every word is compared with every page (plan 261020x § Review, 3). */
+  const searchQuery = query.slice(0, MAX_HELP_QUESTION_CHARS);
+  const searched = useDeferredValue(searchQuery);
+  const searchSettled = searched === searchQuery;
+  const results = useMemo(
+    () => (query.trim() === "" || searched.trim() === "" || query === folded ? null : searchHelp(searched)),
+    [searched, query, folded],
+  );
   /** `arrive`, kept where a click handler can reach it. Set by the effect. */
   const arriveRef = useRef<() => void>(() => {});
 
@@ -293,25 +317,28 @@ function HelpPageForReader() {
     go(anchor);
   };
 
-  const search = (
-    <SearchBox
-      query={query}
-      onQuery={setQuery}
-      results={results}
-      onEnter={(anchor) => {
-        setQuery("");
-        go(anchor);
+  /* Taking a result folds the matches away, so what comes back is the
+     contents with the new page marked in it, and on a phone the page is not
+     left under a list of matches. */
+  const fold = () => setFolded(query);
+  const box = (
+    <HelpBox
+      state={askState}
+      /* Do not make the status live region announce the old result count as
+         though it belonged to the new words while deferred search catches up. */
+      matches={!searchSettled || results === null ? null : results.length}
+      onGo={() => {
+        /* `results` belongs to `searched`, which intentionally trails the
+           controlled box. Enter belongs to the words the reader can see. */
+        const best = searchHelp(query.slice(0, MAX_HELP_QUESTION_CHARS))[0];
+        if (best === undefined) return false;
+        fold();
+        go(best);
+        return true;
       }}
     />
   );
-  /* Taking a result clears the box, so what comes back is the contents with
-     the new page marked in it, and on a phone the page is not left under a
-     list of matches. */
-  const found = results === null ? null : <Results results={results} onTake={() => setQuery("")} />;
-  /* *Ask about Spideryarn*: held here, so the answer survives a move from the
-     contents page, where the box is under the search, to a page, where it is
-     in the column (HelpAsk.tsx § `useHelpAsk`). Plan 261007k, F10. */
-  const askState = useHelpAsk();
+  const found = results === null ? null : <Results results={results} onTake={fold} />;
 
   return (
     /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx,
@@ -338,16 +365,15 @@ function HelpPageForReader() {
             How to get the most out of Spideryarn, and how to read what it shows you. For what it does
             and why, see <Link href={FEATURES_HREF} className={HELP_LINK_CLASS}>Features</Link>.
           </p>
-          {search}
+          {box}
           {found}
-          <HelpAsk state={askState} className="tw:mt-6" />
           {found === null && <ContentsPage />}
         </div>
       ) : (
         <>
           <Crumb shown={shown} />
           <div className="tw:mt-6 tw:grid tw:grid-cols-1 tw:gap-8 tw:lg:grid-cols-[15rem_minmax(0,1fr)]">
-            <HelpSidebar current={shown} box={search} found={found} ask={<HelpAsk state={askState} className="tw:mt-5" />} />
+            <HelpSidebar current={shown} box={box} found={found} />
             {shown.kind === "questions" ? <QuestionsView /> : <PageView anchor={shown.anchor} />}
           </div>
         </>
@@ -371,7 +397,7 @@ const WORDS_CLASS =
 
 /** The small tag beside an experimental mode's name. */
 const TAG_CLASS =
-  "tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[0.6875rem] tw:font-medium tw:text-ink-faint tw:no-underline";
+  "tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[length:max(var(--text-min),0.6875rem)] tw:font-medium tw:text-ink-faint tw:no-underline";
 
 /**
  * **The way back to the contents**, and which part of Help this page is in:
@@ -550,100 +576,14 @@ function ContentsPage() {
   );
 }
 
-/**
- * The search box, with its status line. One box for the contents page and for
- * every page's left column; what is shown under it is the caller's.
- */
-function SearchBox({
-  query,
-  onQuery,
-  results,
-  onEnter,
-}: {
-  query: string;
-  onQuery: (q: string) => void;
-  /** Null while the box is empty. */
-  results: readonly HelpAnchor[] | null;
-  /** Enter, with the best match. */
-  onEnter: (anchor: HelpAnchor) => void;
-}) {
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape" && query !== "") e.stopPropagation();
-    /* A key an input method is using is not ours: its Enter accepts a
-       candidate and its Escape dismisses the list. A `type="search"` box is
-       also emptied by the browser itself on Escape (measured in Chrome,
-       2026-10-07), so that default is cancelled. */
-    if (isImeComposing(e)) {
-      if (e.key === "Escape") e.preventDefault();
-      return;
-    }
-    if (e.key === "Enter" && results !== null && results[0] !== undefined) {
-      e.preventDefault();
-      onEnter(results[0]);
-    } else if (e.key === "Escape" && query !== "") {
-      /* Only when there is something to clear, as on Metadata's box
-         (PageContents.tsx), so an empty box's Escape reaches whoever else
-         listens — the command bar, the feedback dialog. */
-      e.preventDefault();
-      onQuery("");
-    }
-  };
-  return (
-    <>
-      {/* `any-pointer-coarse:text-[max(1rem,16px)]` — iOS zooms the page in on
-          a field under 16px, and the app-wide rule that prevents it cannot
-          reach a `tw:text-*` utility (narrow-windows.md § the utilities layer
-          is out of reach). A bare `text-base` is only `1rem`, which is still
-          under the threshold when the reader's root type is smaller; the
-          separate `leading-6` retains that utility's touch line height. This
-          box was `text-sm` with nothing over it until 2026-10-07, found while
-          giving PageContents.tsx's box the same. */}
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => onQuery(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder="Search Help"
-        enterKeyHint="search"
-        aria-label="Search Help"
-        className="tw:box-border tw:block tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:font-sans tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-[max(1rem,16px)] tw:any-pointer-coarse:leading-6 tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
-      />
-      {/* Mounted before the first keystroke, for PageContents.tsx's reason: a
-          live region inserted with its first message is not announced
-          reliably. Seen only when nothing matches; heard always.
-
-          It used to end by pointing at the browser's Find, "which searches
-          the text of every section". That was true of one long page and is
-          false of fifty short ones, so the search reads the words itself now
-          (page-search.ts) and the line stops there. GPT Sol, plan review of
-          261007e, R4. */}
-      <p
-        role="status"
-        aria-atomic="true"
-        className={
-          results !== null && results.length === 0
-            ? "tw:mt-3 tw:mb-0 tw:px-2 tw:text-sm tw:leading-relaxed tw:text-muted-foreground"
-            : "tw:sr-only"
-        }
-      >
-        {results === null
-          ? ""
-          : results.length === 0
-            ? `Nothing in Help matches “${query.trim()}”. Try other words.`
-            : `${results.length} ${results.length === 1 ? "page matches" : "pages match"}.`}
-      </p>
-    </>
-  );
-}
-
 const ROW_CLASS =
   "tw:block tw:rounded tw:px-2 tw:py-0.5 tw:text-sm tw:leading-snug tw:text-muted-foreground tw:no-underline tw:hover:bg-surface-raised tw:hover:text-foreground";
 /** The row for the page that is open: `aria-current="page"`, and seen as well as said. */
 const CURRENT_ROW_CLASS = `${ROW_CLASS} tw:bg-surface-raised tw:font-medium tw:text-foreground`;
 
 /**
- * **A page's left column**: the search box, the matches if it has any, the
- * *Ask about Spideryarn* box, and the contents with this page marked.
+ * **A page's left column**: the one box (search or ask) with its answer, the
+ * matches if it has any, and the contents with this page marked.
  *
  * **The contents list is drawn twice, and only one is ever displayed**: open
  * in the sticky column at `lg`, and folded inside a `<details>` above the
@@ -657,19 +597,16 @@ function HelpSidebar({
   current,
   box,
   found,
-  ask,
 }: {
   current: Extract<Shown, { kind: "page" | "questions" }>;
-  /** The search box. */
-  box: ReactNode;
-  /** The matches, or null while the box is empty and the contents show. */
-  found: ReactNode;
   /**
-   * *Ask about Spideryarn*, under the search and above the contents, where
-   * the column's first screen shows it. Drawn whether or not a search is
-   * open, so an answer arriving is not unmounted by a keystroke there.
+   * The box, and under it the answer: at the top of the column, where its
+   * first screen shows it, and drawn whether or not there are matches, so an
+   * answer arriving is not unmounted by a keystroke there.
    */
-  ask: ReactNode;
+  box: ReactNode;
+  /** The matches, or null while the box is empty (or they are folded) and the contents show. */
+  found: ReactNode;
 }) {
   const column = useRef<HTMLElement>(null);
   const at = current.kind === "page" ? current.anchor : null;
@@ -695,7 +632,6 @@ function HelpSidebar({
     >
       {box}
       {found}
-      {ask}
       {found === null && (
         <>
           <details className="tw:mt-3 tw:lg:hidden">
@@ -754,26 +690,34 @@ function ContentsList({ current }: { current: Extract<Shown, { kind: "page" | "q
   );
 }
 
-/** The matches, best first — or nothing, and the status line above says so. */
+/**
+ * The matches, best first — or nothing, and the status line above says so.
+ * Headed, because an answer may sit between them and the box.
+ */
 function Results({ results, onTake }: { results: readonly HelpAnchor[]; onTake: () => void }) {
   if (results.length === 0) return null;
   return (
-    <ul aria-label="Search results" className="tw:m-0 tw:mt-3 tw:list-none tw:p-0">
-      {results.map((a) => (
-        <li key={a}>
-          <Link
-            href={helpHref(a)}
-            className={ROW_CLASS}
-            onClick={(e) => {
-              /* Not on a ⌘-click: that opens a tab, and the list should still
-                 be here for the next one. */
-              if (isPlainClick(e)) onTake();
-            }}
-          >
-            {helpEntry(a).title}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <>
+      <h2 className="tw:m-0 tw:mt-5 tw:mb-1 tw:px-2 tw:font-sans tw:text-xs tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">
+        Pages that match
+      </h2>
+      <ul aria-label="Search results" className="tw:m-0 tw:list-none tw:p-0">
+        {results.map((a) => (
+          <li key={a}>
+            <Link
+              href={helpHref(a)}
+              className={ROW_CLASS}
+              onClick={(e) => {
+                /* Not on a ⌘-click: that opens a tab, and the list should still
+                   be here for the next one. */
+                if (isPlainClick(e)) onTake();
+              }}
+            >
+              {helpEntry(a).title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

@@ -12,7 +12,7 @@ asking politely. The build is
 - [§ The first live sale](#the-first-live-sale-and-the-four-things-it-measured) — what a real purchase established (history)
 - [§ What a reader sees](#what-a-reader-sees) — the pricing page, the allowance box, the refusal copy
 - [§ We never touch a card](#we-never-touch-a-card) — hosted Checkout and Portal, PCI scope
-- [§ The quota, and the one thing it has to survive](#the-quota-and-the-one-thing-it-has-to-survive) — slots, admission locking, settlement, vouchers, High-powered AI
+- [§ The quota, and the one thing it has to survive](#the-quota-and-the-one-thing-it-has-to-survive) — slots, admission locking, long PDFs, settlement, vouchers, High-powered AI
 - [§ Billing is a Postgres feature](#billing-is-a-postgres-feature) — why there is no filesystem path
 - [§ Test and live must never cross](#test-and-live-must-never-cross) — the three mode guards
 - [§ Setting it up](#setting-it-up) — `stripe:setup`, keys, dashboard steps
@@ -584,7 +584,7 @@ step on an article you already have is free. A failed ingest is free. Archiving 
 give the slot back, and neither does deleting it permanently
 ([library.md](library.md#archive-and-undo-is-the-confirmation); the delete is below).
 
-**And a public article costs half of one**, **switching an article to High-powered AI costs one more article** (half while it is public), and **a paper added without AI processing costs a hundredth of one** — all three below.
+**And a public article costs half of one**, **a PDF costs one per 50 pages, rounded up**, **switching an article to High-powered AI costs what the article cost again** (half while it is public), and **a paper added without AI processing costs a hundredth of one** — all four below.
 
 It is an **abuse boundary against model spend**, not an invoice. Nothing is derived from it and it
 reconciles against nothing; the subscription is a fixed charge. (Cost attribution lives in
@@ -771,6 +771,109 @@ refunds nothing: the ledger row survives with the price it had. `isPublicPrice` 
 [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) is the one spelling of that predicate, and
 the admin page's half-price split imports it rather than repeating it.
 
+### A long document costs a slot per 50 pages
+
+> I think we need to allow import of longer articles. Let's go up to 400 pages. But let's have a rule
+> that each 100 pages counts as 1 article (in terms of the user's allotted number of articles). …
+> Probably it should warn the user during the import process that multiple slots are being used for
+> long articles. But don't block - just let them know during the import process.
+>
+> — Greg, 2026-10-19 (`spya-p5x9wy`)
+
+> 3 hmmm, tricky. Ok, let's go with 50 instead of 100 pages per slot.
+>
+> — Greg, 2026-10-20 (reply `spya-km9brn`)
+
+**A PDF costs `ceil(pages / 50)` slots; anything without a page count costs one.** `PAGES_PER_SLOT`
+and `slotsForPages`, beside `MAX_PAGES` in [`src/uploads.ts`](../../src/uploads.ts), are the one
+home of the rule. A web page, Word, Markdown, text and Europe PMC's JATS stay at one slot whatever
+their length (named, not solved). A minimal paper stays at a hundredth whatever its length; its
+`pages` is recorded, because *Read this* needs it. The design, the options for when to charge and
+every proof below are in
+[261020b](../plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md).
+
+| pages | slots | points, private | points, public |
+|---|---|---|---|
+| 1–50 | 1 | 200 | 100 |
+| 51–100 | 2 | 400 | 200 |
+| 150 | 3 | 600 | 300 |
+| 250, today's `MAX_PAGES` | 5 | 1,000 | 500 |
+| 400, the most a row can be | 8 | 1,600 | 800 |
+
+So a free account's three slots take a PDF of at most 150 pages; Greg chose 50 knowing that. **The
+ledger allows 8 slots and the cap is 250**, because a 400-page maths-heavy book does not import yet
+([261020e](../investigations/261020e-four-hundred-page-imports-measured.md)); what would let it move
+is queued in [overseer-queue.md](overseer-queue.md#longer-documents-what-raising-the-page-cap-waits-on).
+
+**One row, weighted, not N rows.** `ingest_events.slots` (1–8, default 1, the
+`ingest_events_slots` check and `assertSlots` in [`src/billing/points.ts`](../../src/billing/points.ts))
+prices the row, and `ingest_events.pages` is the count it came from. `usageSql` gains a sum of
+`slots` beside each count: `wallUsed` prices the sums, while `ingestsUsed` and every sentence that
+says *added* count rows, so `/profile` reads *1 article added, using 3 of your 3*. Public halves
+each slot and deleting freezes all of them, by the rules above unchanged. N rows per import, the
+`high_power` shape, was passed over: it is the N : 1 ledger this doc already apologises for.
+
+**Charged in stage 1, once the pages are counted, before anything is paid for** (Greg's answer 1A).
+The route still reserves one slot, because nobody knows the count then. `fetch` counts the pages
+(`refuseAnOverlongPdf`), applies the cap, then `priceTheDocument` in
+[`src/pipeline.ts`](../../src/pipeline.ts) calls `priceFetchedPdf`
+([`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)) through a `StepContext` callback bound
+to the claim in `src/jobs.ts` — **before `writeRaw` and before an upload is promoted**, and stage 2
+cannot run without the raw. Its lock order is the house one plus the job: the owner read unlocked,
+then `lockBillingAccount`, the job row `for update` under `liveAttempt` (a stale claimant throws
+`StaleAttemptError`), then the ingest row. Settlement takes job then ingest row and never the
+billing row, so the two cannot deadlock. The wall is `admitsIngestOf`, `used + 200 × slots <=
+budget + 100`, with `used` taken **without this row's current weight** — the same half-article
+overdraft, once per admission, at the instant it commits; unsharing later can still put an account
+further over, as for any article.
+
+- **Refused**: the job fails in stage 1 with `longPdfQuotaReached` (`[pay-pages]`, in
+  [`src/messages.ts`](../../src/messages.ts)) — the pages, the slots, the slots left — and the
+  conditional sharing offer, which `articlesToShare` now computes against this request's cost: it
+  sums slots, orders articles by the points sharing them frees, and stops only when the predicate
+  that refused would admit. An upload stays `claimed`, so Retry succeeds once the allowance grows.
+- **Admitted, over 50 pages**: the import carries on and the fetch step's stored detail says
+  `longPdfUses` — *This PDF is 150 pages, so it uses 3 of your articles (one for every 50 pages).*
+  This is Greg's *"don't block - just let them know"*. Persisted, not `StepContext.report`, so the
+  card still says it after the step. Not said for the administrator, a minimal paper, a re-run, a
+  retry or a *Read this* — the last two do not run stage 1 (deferred, by name, in the plan).
+- **The gap between reserving and repricing** counts the job at one slot. It lets more jobs *start*
+  than can finish, never more paid work than the budget: twenty long PDFs at a free account admit
+  three, and all three fail in stage 1 having spent nothing. Two that would each fit alone may both
+  be refused; fails safe, said out loud ([261020b § The
+  race](../plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md#the-race-between-reserving-and-raising-the-charge)).
+
+**The paths that skip stage 1 carry the weight at the route instead.**
+
+- **A retry** reserves the old row's `slots` (`reservationShapeOf` → `withRetrySlot`), because a
+  retry of a job that failed after fetch does not fetch again.
+- ***Read this*** reserves `200 × slotsForPages(pages) − credit` from the minimal row's stored
+  `pages` (`reserveUpgrade`, `admitsUpgrade`).
+- **High-powered AI** charges the article's slots again (Greg's 2A) —
+  [§ High-powered AI counts double](#high-powered-ai-counts-double).
+
+**A re-run may not grow the document for free** (rule 4, Sol's R2-F1). Re-runs carry no
+reservation, so *add a one-page URL, make it serve a 250-page PDF, press Rebuild* would be a
+five-slot import for one. With no reservation, `priceFetchedPdf` compares the new count against the
+larger of the article's largest charged `slots` and the slots of the raw source being replaced
+(`previousSourcePages`: its manifest's count, or its stored bytes counted outside the lock; a web
+page or nothing is 1). More is refused before anything paid, with `pdfGrewOnRerun`
+(`[pdf-rerun-pages]`: add it as a new article). Equal or fewer runs free, so an honest Rebuild of a
+long PDF article runs. The administrator is exempt here as everywhere.
+
+**Stage 2 asserts, and does not charge** (R2-F4). Stage 1 writes `pages` into the raw manifest,
+durably as `article_revisions.raw_pages` — not the revision's `pages`, which is stage 2's own
+metadata, and `raw.json` is rebuilt from revision columns. Before transcription, for a job holding a
+reservation, `pdfPricing` asks whether it carries `slots >= slotsForPages(pages)`. No fails the step
+closed with `PDF_NOT_PRICED` (`[pdf-unpriced]`, ours), logged at `error`: it means some path skipped
+stage 1.
+
+**Grandfathered, said out loud** (R2-F2). Every row written before 2026-10-20 has `slots = 1` and no
+`pages`, and a manifest from then has no `raw_pages`. So a minimal paper added before costs one slot
+for *Read this* whatever its length, a long article added before costs one slot for High-powered
+AI, jobs already past fetch at the deploy ran at one slot, and the stage-2 assertion skips those
+manifests. A one-off backfill of `pages` would write to production, so it is Greg's call.
+
 ### High-powered AI counts double
 
 > it should double the processing cost per-article - that's how I'd think about it.
@@ -779,13 +882,20 @@ the admin page's half-price split imports it rather than repeating it.
 
 Switching an article to [High-powered AI](high-powered-ai.md) writes **one more charged row** to
 `ingest_events`, with `kind = 'high_power'`. That row is priced exactly like an ingest of the same
-article: 200 points while private, 100 while public, live, and frozen on delete by the same trigger.
-So the article costs double:
+article: 200 points a slot while private, 100 while public, live, and frozen on delete by the same
+trigger. **It carries the article's slots** (Greg, 2026-10-20, answer 2A to
+[261020b](../plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md)):
+`switchOnHighPower` copies the largest `slots` among the article's charged ingest rows
+(`chargedSlotsOf`) and any import still in flight (`activeImportPrice`), so a 250-page PDF is 5 to
+add and 5 more to switch on —
+[§ A long document costs a slot per 50 pages](#a-long-document-costs-a-slot-per-50-pages). So the
+article costs double:
 
 | | ingest | + High-powered AI | in articles |
 |---|---|---|---|
 | private | 200 | 200 | **2** |
 | public | 100 | 100 | **1** |
+| private, 150-page PDF | 600 | 600 | **6** |
 
 The rules, each for a reason:
 
@@ -796,15 +906,23 @@ The rules, each for a reason:
 - **Charged in the period it is switched on**, by the row's own `succeeded_at`, whatever the age of
   the article. Multiplying the ingest's row instead would have charged a three-month-old article's
   upgrade to three months ago.
-- **It must fit whole: `admitsHighPower`, `used + cost <= budget`.** This is not the ingest wall's
+- **It must fit whole: `admitsHighPower`, `used + cost × slots <= budget`.** This is not the ingest wall's
   `admitsIngest`. The half-article overdraft above exists so a free account can make six public
   articles; an upgrade is a
   second charge for something already had. If it doesn't fit, the answer is `[pay-high-power]`,
   which carries **no sharing offer**. That offer answers the ingest wall's question, and following
   it could publish an article and still leave the switch refused.
+- **Switched on while adding, it waits for the price.** The add page can ask before Fetch has
+  counted the pages. A first charge answers `pending` (a 409 the add page retries while the job
+  lives) when any import of the article with an unsettled reservation has not fetched yet. It also
+  answers `pending` when nothing is charged, nothing is in flight and nothing was ever published:
+  a long import stopped after fetch would otherwise read as one slot, and its Retry would then run
+  on Opus for one. GPT Sol found both in the code review (C1-F1, C2-F1, C3-F1 in
+  [261020b's reviews](../plans/261020b-longer-documents-up-to-400-pages-code-review-3-sol.md)).
 - **Admission, charge and switch are one transaction**, in the house lock order:
-  `lockBillingAccount`, then the article `for update` (`switchOnHighPower` in
-  [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)). A stale entitlement resyncs once
+  `lockBillingAccount`, then the article `for update`, then any live import's job and reservation
+  (`switchOnHighPower` in [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)). Article
+  before job is settlement's order; the reverse deadlocks with it. A stale entitlement resyncs once
   after the transaction commits, then gives a 503, exactly as for an ingest.
 - **The administrator is exempt**, and no row is written, as with ingests.
 - **The database enforces the row's shape** (`ingest_events_high_power_shape`). An upgrade is born
@@ -822,6 +940,7 @@ as "2 of them are public". `/admin/users` does the same split. GPT Sol found thi
 
 - An article with no charged ingest still pays one article's worth. That covers articles added
   before billing, charged before `article_id` existed, or added by the admin.
+- A long PDF added before 2026-10-20 has a one-slot row, so it pays one slot, whatever its length.
 - An article with N ingest rows (re-added before 2026-10-07, when that still charged) gets one
   upgrade, not N.
 - Re-runs stay free, so on a high-powered article each re-run costs us about twice what it would.
@@ -846,10 +965,13 @@ this* on one costs the other 198, so a paper never costs more than one article i
 
 | what | admits when | why |
 |---|---|---|
-| ingest — a URL, a single upload, a retry of either (`admitsIngest`) | `used + 200 <= budget + 100` | today's rule, multiplied out: the same half-article overdraft, once |
-| *Read this* on a minimal paper (`admitsUpgrade`) | `used + (200 − credit) <= budget + 100` | the same wall, crediting what the paper already paid |
+| ingest — a URL, a single upload, a retry of either, stage 1's reprice of a long PDF (`admitsIngestOf`; `admitsIngest` is its one-slot case) | `used + 200 × slots <= budget + 100` | today's rule, multiplied out: the same half-article overdraft, once |
+| *Read this* on a minimal paper (`admitsUpgrade`) | `used + (200 × slots − credit) <= budget + 100` | the same wall, crediting what the paper already paid |
 | a minimal paper (`admitsMinimal`) | `used + 2 <= budget` | must fit whole: a batch of a thousand never steps past the wall |
-| High-powered AI (`admitsHighPower`) | `used + cost <= budget` | must fit whole, as above |
+| High-powered AI (`admitsHighPower`) | `used + cost × slots <= budget` | must fit whole, as above |
+
+`slots` is 1 except for a PDF, where it is `slotsForPages`
+([§ A long document costs a slot per 50 pages](#a-long-document-costs-a-slot-per-50-pages)).
 
 `ingestHeadroom` (`max(0, floor((budget + 100 − used) / 200))`) and `minimalHeadroom`
 (`max(0, floor((budget − used) / 2))`) are exact counts of the adds each wall would admit, not
@@ -945,13 +1067,14 @@ the route still knows what was asked for.
 
 | | |
 |---|---|
-| `POST /api/jobs {url}` otherwise | reserves |
+| `POST /api/jobs {url}` otherwise | reserves one slot; a PDF is repriced to its pages in stage 1 ([§ A long document](#a-long-document-costs-a-slot-per-50-pages)) |
 | `POST /api/jobs {url}` for an article the reader already has, with no `steps` or `force` | free: answers `{ article, repeat: true }` and queues nothing |
 | `POST /api/jobs {url}` for an address somebody else has made public, without `ownCopy` | free: answers `{ publicCopy: { slug, title } }` and queues nothing, so the reader can choose ([261009j](../plans/261009j-a-public-copy-offered-at-import.md)) |
 | `POST /api/jobs {url, ownCopy: true}` | reserves: the reader chose their own copy over the public one |
-| `POST /api/jobs {uploadId}` | reserves |
-| `POST /api/jobs/:id/retry`, when the old job carried a slot | reserves a **fresh** one |
+| `POST /api/jobs {uploadId}` | reserves one slot, repriced in stage 1 as above |
+| `POST /api/jobs/:id/retry`, when the old job carried a slot | reserves a **fresh** one, at the old row's `slots` |
 | `POST /api/jobs {slug, steps}` — a glossary, ideas, a quiz | free |
+| `POST /api/jobs {slug, force: ["fetch"]}` — Rebuild, refresh | free, unless the PDF it fetches is more slots than the article was (`[pdf-rerun-pages]`) |
 | `POST /api/jobs/:id/retry` of a re-run | free |
 | `POST /api/uploads` | asks, reserves nothing — refuses at the door so nobody transfers 11 MB to be told no |
 | the free `labels` job a publication queues for itself | free, and never sees a route at all |
@@ -1123,15 +1246,23 @@ one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review
   always been so; a test now holds it
   ([261011k](../plans/261011k-vouchers-paste-name-and-address-several-to-one-person-add-up.md)).
 
-**The starter article becomes the recipient's when they claim it** (since 2026-10-11, Greg:
+**The starter article may become the recipient's when they claim it** (since 2026-10-11, Greg:
 *"when the recipient of the gift voucher with an associated article signs in, we actually want to
 transfer ownership … so that they then own that article and can use chat and everything else
 fully"*). Inside the claim's transaction, in a savepoint, all or nothing: the article moves to the
 claimant only when it is still the voucher creator's, private, the starter of no other unrevoked
 voucher, and carries none of the creator's own words (comments, chats and the like); otherwise the
-voucher is claimed as before and the admin moves it by hand on `/admin/articles`. A move makes it
+voucher is claimed as before and the article stays with its current owner. The admin can move it by
+hand on `/admin/articles` when that is appropriate. A move makes it
 private and freezes the creator's ledger rows for it, so the article never counts against the
-recipient's allowance and the creator's bill does not move with it. The reading view asks this same
+recipient's allowance and the creator's bill does not move with it. Reading one that stays through
+the link in its gift email charges nobody. So receiving and reading a gift's article costs
+the recipient nothing either way. Later choices are charged as usual: High-powered AI on a moved
+one, or a copy of their own of one that stayed. An author gift is the same voucher once sent.
+`tests/claim-starter-article.test.ts` § *costs the
+recipient none of their free articles* holds it, after a production read that day found the one
+claimed starter at zero rows for its recipient
+([261019i](../plans/261019i-starter-article-and-author-gift-cost-nothing-and-explained.md)). The reading view asks this same
 route once when a signed-in reader opens a private link, and re-reads the article as theirs if its
 slug comes back in `claimedArticles`. What moves, what is reset and what is deleted is
 [admin.md § `/admin/articles`](admin.md#adminarticles-moving-an-article-to-another-account); the
@@ -1736,6 +1867,7 @@ Two lessons outlived the bug, and neither of them is about Stripe:
 | [`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) | Read-only. Whether an account is actually fit to take money, one check per thing a real purchase has caught. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
 | [`src/billing/points.ts`](../../src/billing/points.ts) | The two units, the prices, and the four predicates that are the wall. Pure, though it sits in the directory the browser may not import. |
+| [`src/uploads.ts`](../../src/uploads.ts) | `MAX_PAGES`, `PAGES_PER_SLOT` and `slotsForPages`: what a PDF costs. Shared with the browser. |
 | [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`, `reserveMinimal` and `reserveUpgrade`. |
 | [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |
 | [`src/billing/summary.ts`](../../src/billing/summary.ts) | `GET /api/billing/usage`: the row, the tiers and the ledger, turned into a `ReaderPlan`. |

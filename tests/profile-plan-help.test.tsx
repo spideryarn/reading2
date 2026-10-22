@@ -116,7 +116,7 @@ describe("/profile's plan card", () => {
     expect(info?.getAttribute("href")).toBe("/pricing");
     expect(info?.getAttribute("aria-label")).toBe("How your plan works — open Pricing");
     expect(info?.className).toContain("tw:size-7");
-    expect(info?.className).toContain("tw:pointer-coarse:size-10");
+    expect(info?.className).toContain("tw:any-pointer-coarse:size-[40px]");
   });
 
   it("explains how the plan works, linking to Pricing and not to the page it is on", async () => {

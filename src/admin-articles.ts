@@ -33,6 +33,28 @@ export interface AdminArticle {
   readonly title: string | null;
   /** Null for another reader's private article. */
   readonly slug: string | null;
+  /**
+   * Whether an import ever finished and published it (it has a current
+   * revision). False is a failed or unfinished import, whose address says
+   * *Not shared* to anyone without its job. Null for another reader's private
+   * article, with the title (spya-zt7u0h, plan 261019n).
+   */
+  readonly published: boolean | null;
+  /** What the ledger says it has cost over its whole life (plan 261020s). */
+  readonly cost: AdminArticleCost;
+}
+
+/**
+ * **One article's ID-keyed total cost**, `/admin/costs`' rule in bulk
+ * (src/store/ai-calls-spend-pg.ts § `spendByArticle`): the three pockets
+ * already added, in nano-dollars. Unlike `spendForArticle`, this does not
+ * claim slug-only rows. `unpricedCalls` reported no money, so a total with any
+ * is a floor. Zeros for an article nothing has spent on.
+ */
+export interface AdminArticleCost {
+  readonly nanos: number;
+  readonly calls: number;
+  readonly unpricedCalls: number;
 }
 
 export interface AdminArticles {
@@ -139,4 +161,35 @@ export interface TransferDone {
   readonly deleted: TransferCounts;
   /** It was public, or had a private link, and is now neither. */
   readonly madePrivate: boolean;
+}
+
+/**
+ * **`GET /api/admin/articles/:slug/access[?key=]`** — whose an article is, and
+ * who opened its private link, for the administrator on its details page.
+ * Only for an article the administrator can already read: their own, a public
+ * one, or a private one named with its link's key; anything else is a 404.
+ * No title, slug or key. Greg's reply `spya-xug3kf` to q-agbc89; plan 261021d.
+ */
+export interface AdminArticleAccess {
+  readonly ownerId: string;
+  /** Null when the Auth service does not know the account, or the listing failed. */
+  readonly ownerEmail: string | null;
+  /** False when the account listing failed, so every address here is null for that reason. */
+  readonly emailsAvailable: boolean;
+  /** True when the owner is the administrator asking. */
+  readonly mine: boolean;
+  /** A private link is on now. */
+  readonly privateLink: boolean;
+  /** Signed-in accounts that opened it through its private link, most recent first. */
+  readonly openers: readonly AdminLinkOpener[];
+  /** Signed-out opens, counted, approximate (security-risks.md § R31). Null: none recorded. */
+  readonly signedOut: { readonly opens: number; readonly firstOpenedAt: string; readonly lastOpenedAt: string } | null;
+}
+
+export interface AdminLinkOpener {
+  readonly readerId: string;
+  readonly email: string | null;
+  readonly opens: number;
+  readonly firstOpenedAt: string;
+  readonly lastOpenedAt: string;
 }

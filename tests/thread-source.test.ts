@@ -38,17 +38,12 @@ describe("threadSource", () => {
     });
   });
 
-  it("names Learn and its sub-mode for each of Learn's three kinds, in the sub-mode's own words", () => {
+  it("names Learn and its sub-mode for each of Learn's two kinds, in the sub-mode's own words", () => {
     expect(threadSource(t("learn"))).toEqual({
       from: "learn",
       mode: "learn",
       label: `From Learn › ${LEARN_SUB_MODES.recall.label}`,
       learn: "recall",
-    });
-    expect(threadSource(t("tutorial"))).toMatchObject({
-      from: "learn",
-      label: `From Learn › ${LEARN_SUB_MODES.tutorial.label}`,
-      learn: "tutorial",
     });
     expect(threadSource(t("explore"))).toMatchObject({
       from: "learn",
@@ -108,23 +103,23 @@ describe("threadSource", () => {
 
 describe("what Chat lists", () => {
   it("is every kind but Candidates", () => {
-    const listed = (["chat", "learn", "tutorial", "explore", "candidates"] as const).filter((kind) =>
+    const listed = (["chat", "learn", "explore", "candidates"] as const).filter((kind) =>
       listedInChat(t(kind)),
     );
-    expect(listed).toEqual(["chat", "learn", "tutorial", "explore"]);
+    expect(listed).toEqual(["chat", "learn", "explore"]);
   });
 });
 
 describe("the filter", () => {
   const all = [
     { id: "a", ...t("chat") },
-    { id: "b", ...t("tutorial") },
+    { id: "b", ...t("explore") },
     { id: "c", ...t("chat", { origin: CLAIM }) },
     { id: "d", ...t("learn") },
     { id: "e", ...t("chat", { anchor: QUOTED }) },
   ];
 
-  it("puts each conversation under one word, and Learn's three kinds under the same one", () => {
+  it("puts each conversation under one word, and Learn's two kinds under the same one", () => {
     expect(all.map(chatFrom)).toEqual(["chats", "learn", "sources", "learn", "passage"]);
     expect(chatFrom(t("explore"))).toBe("learn");
   });
@@ -204,13 +199,15 @@ describe("originBack", () => {
     });
   });
 
-  it("calls an angle the reader's, with no quote: it is not an item in the article", () => {
+  /* Lands on Investigate, where *Your questions* lists every lens chat, since plan
+     261020n moved Reception's angle box there. */
+  it("calls a question the reader's, with no quote, and goes back to Investigate: it is not an item in the article", () => {
     expect(originBack({ mode: "reception", lens: "how it relates to Nagel" })).toEqual({
       mode: "sources",
-      view: "reception",
-      modeLabel: "Reception",
+      view: "investigate",
+      modeLabel: "Investigate",
       quote: null,
-      text: "Back to your angle in Reception",
+      text: "Back to your question in Investigate",
     });
   });
 });

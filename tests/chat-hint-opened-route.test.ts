@@ -159,7 +159,7 @@ describe("what it refuses", () => {
   });
 
   it("an answer in a conversation that is not Recall", async () => {
-    for (const kind of ["chat", "tutorial"] as const) {
+    for (const kind of ["chat", "explore"] as const) {
       const { threadId, replyId } = await answered(kind);
       const out = await post(SLUG, threadId, { messageId: replyId, hint: HINT });
       expect(out.status, kind).toBe(400);

@@ -21,12 +21,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as babelParse } from "@babel/parser";
+import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import type { Mode } from "../src/modes.js";
 import type { ArticleView } from "../src/read-address.js";
 import { gistVoiceOf } from "../src/library-scalars.js";
 import type { Route } from "../src/web/router.js";
 import { type Voice, voiceClass } from "../src/web/voice.js";
+import { readerSheets } from "./helpers/stylesheets.js";
 
 const CSS = readFileSync("src/web/styles/voices.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -34,7 +36,7 @@ const CSS = readFileSync("src/web/styles/voices.css", "utf8").replace(/\/\*[\s\S
 const selectors = [...CSS.matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => m[1]!.trim());
 
 function selectorUsing(
-  token: "--font-author" | "--font-ai" | "--font-reader" | "--font-ui",
+  token: "--font-author" | "--font-ai" | "--font-ai-code" | "--font-reader" | "--font-ui",
 ): string {
   const rule = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) =>
     m[2]!.includes(`var(${token})`),
@@ -202,6 +204,8 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".rcp-ai",
     ".rcp-title-ai",
     ".rcp-thread-gist",
+    /* Reception's sections, since plan 261020n: a theme's name and gist. */
+    ".rcp-section-gist",
   ],
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
@@ -289,7 +293,8 @@ function innerBranches(selector: string): string[] {
 
 describe("voices.css", () => {
   it("finds rules to check", () => {
-    expect(selectors.length).toBe(5); // author, AI, reader, reader placeholders, and voice-ui
+    // author, AI prose, AI code, reader, reader placeholders, and voice-ui
+    expect(selectors.length).toBe(6);
     expect(classes.length).toBeGreaterThan(40);
   });
 
@@ -383,8 +388,41 @@ describe("voices.css", () => {
     const tokens = readFileSync("styles/tokens.css", "utf8");
     const used = [...new Set([...CSS.matchAll(/var\((--font-[\w-]+)\)/g)].map((m) => m[1]!))];
     /* --font-ui only in the placeholder rule: app copy inside a reader's box. */
-    expect(used.sort()).toEqual(["--font-ai", "--font-author", "--font-reader", "--font-ui"]);
+    /* --font-ai-code only for code in a model's answer: the model's letters on one width. */
+    expect(used.sort()).toEqual([
+      "--font-ai",
+      "--font-ai-code",
+      "--font-author",
+      "--font-reader",
+      "--font-ui",
+    ]);
     for (const t of used) expect(tokens, t).toMatch(new RegExp(`${t}:`));
+  });
+
+  it("keeps code in Chat and Candidates on the model's monospace through the full cascade", () => {
+    const { window } = new JSDOM(`<!doctype html><body>
+      <div class="chat-turn model">
+        <p><code class="fmt-code" id="chat-inline">inline</code></p>
+        <pre class="fmt-pre"><code id="chat-block">block</code></pre>
+      </div>
+      <div class="cnd-answer">
+        <p><code class="fmt-code" id="candidate-inline">inline</code></p>
+        <pre class="fmt-pre"><code id="candidate-block">block</code></pre>
+      </div>
+      <p><code class="fmt-code" id="other-inline">inline</code></p>
+    </body>`);
+    for (const sheet of readerSheets()) {
+      const style = window.document.createElement("style");
+      style.textContent = sheet.css;
+      window.document.head.appendChild(style);
+    }
+    const family = (id: string) =>
+      window.getComputedStyle(window.document.getElementById(id)!).fontFamily;
+
+    for (const id of ["chat-inline", "chat-block", "candidate-inline", "candidate-block"]) {
+      expect(family(id), id).toBe("var(--font-ai-code)");
+    }
+    expect(family("other-inline"), "code outside a model answer").toBe("var(--font-mono)");
   });
 
   it("keeps the representative mixed and inheritance-breaking surfaces in the right voice", () => {
@@ -417,6 +455,7 @@ describe("voices.css", () => {
       ".cnd-why",
       ".chat-live-line.companion .chat-live-words",
       ".rcp-thread:not(.rcp-thread-key) .rcp-thread-name",
+      ".rcp-section-theme .rcp-section-name",
       ".prm-list .prm-promise",
       ".prm-why:not(.prm-why-withheld)",
     ]) {
@@ -429,6 +468,8 @@ describe("voices.css", () => {
     expect(innerBranches(ai)).not.toContain(".cnd-name");
     expect(innerBranches(ai)).not.toContain(".cnd-affil");
     expect(innerBranches(ai)).not.toContain(".rcp-thread-name");
+    /* *Key sources* and *Every page* are ours: only a theme's name is the model's. */
+    expect(innerBranches(ai)).not.toContain(".rcp-section-name");
     /* Hidden, untrusted source text is not obviously the author's (Sol, P2). */
     expect(author).not.toContain(".ref-scan-text");
     expect(ai).not.toContain(".ref-scan-text");

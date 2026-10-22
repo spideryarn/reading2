@@ -195,6 +195,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under `/read/public`'s lede — **the app's only `ControlTip` on a link to a *page* rather than on a control**, and the only one whose reader may want nothing from us at all ([public-readable-sharing.md](public-readable-sharing.md)). Greg asked for five claims in it; two of the five were false, so the card carries the idiom's two paragraphs and the page carries the claims |
 | [`src/web/library-columns.tsx`](../../src/web/library-columns.tsx) | the shelf table's **row card**, on each title — the second card defined by subtraction, after Structure's, and the first whose subtraction responds to columns the reader has chosen to hide ([library.md § The table's row card](library.md#the-tables-row-card-whole-titles-and-columns-you-can-hide)) |
 | [`src/web/PaperCard.tsx`](../../src/web/PaperCard.tsx) | **the paper card** — what a link to an article on your shelf says: title, authors and site, the gist (or a paper's abstract, cut short, before it is AI-processed), added, last opened, length or not-yet-processed status, any archive and sharing state, and up to six shelf topics it is in, followed by *+N more*. `titleIsTriggerName` keeps the title on screen but out of the description, for a link already named by it. Reusable by design (Greg, `spya-f28vqj`: *"a reusable component for paper-tooltips that we use anywhere there's a link to a paper"*): it takes a `LibraryEntry` and the topics to name, and the caller wraps its own link in a `Tooltip`. Unlike the row card it repeats the title, because it hangs off a bare link rather than a row that prints everything else. First used on the shelf topics' More-detail links ([shelf-terms.md](shelf-terms.md), plan [261002f](../plans/261002f-paper-card-on-topic-article-links.md)) |
+| [`src/web/AdminUserCard.tsx`](../../src/web/AdminUserCard.tsx) | **the account card** — what a link to one account on `/admin/users?user=<id>` says: its current address, then one short fact a line (signed up, last sign-in, shelf, comments, chats and searches, opens, plan, this month's model calls), then where the link goes. Shaped like the paper card, read off the same `AdminUser` row `/admin/users` draws, and says when a failed refresh made that row stale. First used on `/admin/vouchers` ([261019k](../plans/261019k-admin-vouchers-links-each-account-to-admin-users-with-a-usage-card.md)) |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
 | [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone; the state is [`usePressToggle`](../../src/web/usePressToggle.ts), shared with `HowToRead` below, which is what stops a quick double press being undone by a hover timer that was already pending. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
@@ -278,12 +279,13 @@ app's**, and the gutter's controls moved to `TipCard`, each saying `data-tip-des
 that reason; the shared hover intent moved into `useDelegatedCard.tsx`
 ([261017g](../plans/261017g-native-title-tooltips-become-rich-cards-everywhere-and-a-test-keeps-it-that-way.md)).
 
-**And Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in `data-marg-tip`,
-and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note is, which mode
-made it and who wrote it. It keeps `aria-describedby`, because the card says what the line's own
-words do not. A note with nothing to press — a part's question — is not on this branch: the
-delegated card opens for neither a finger nor a non-focusable element, so it has a `Tooltip` of its
-own ([marginalia.md § Every note says where it came from](marginalia.md#every-note-says-where-it-came-from)).
+**And most of Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in
+`data-marg-tip`, and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note
+is, which mode made it and who wrote it. It keeps `aria-describedby`, because the card says what the
+line's own words do not. A note with nothing to press — a part's question — is not on this branch:
+the delegated card opens for neither a finger nor a non-focusable element, so it has a `Tooltip` of
+its own. Since 2026-10-20 a *Cites* line is the other exception: it reuses the prose's interactive
+`CiteCard` ([marginalia.md § Every note says where it came from](marginalia.md#every-note-says-where-it-came-from)).
 
 ## `ControlTip`, which is what most of them are now
 
@@ -798,13 +800,14 @@ button that came and went with the mode would be a second rule to learn. Bringin
 had stepped aside on a phone is component state, so Back does not put it away again
 (`showBand`'s rule). Plan [261010e](../plans/261010e-every-annotation-card-opens-its-mode.md).
 
-This is the single home for which marks have a card. As of 2026-10-10:
+This is the single home for which marks have a card. As of 2026-10-20:
 
 | Mark on the prose | Drawn | Card | Way into its mode |
 |---|---|---|---|
 | Glossary term, `mark.term` | every mode | `TermCard` | *Open in Glossary*: `?term=`, the gate lowered if it hides the entry, the row landed (`termFocus`, owner and visitor) |
 | Quote, `mark.hit[data-quote]` | every mode | `QuoteCard` | *Open in Quotes*: `?quote=`, the bar lowered if needed; Quotes scrolls a selected row in |
 | Citation, `mark.cite` | every mode, owner only | `CiteCard` | *Open in Sources*: Bibliography, `openBibliographyWork`'s one-shot focus (no `?cite=`, no selection) |
+| Not on the prose: Marginalia's *Cites* line (since 2026-10-20) | with the column, owner only | `CiteCard`, the same | the same ([marginalia.md](marginalia.md#every-note-says-where-it-came-from)) |
 | Cross-reference, `mark.xref` | every mode | `BlockLinkCard` | none needed — it is a link to another passage, not a mode's |
 | Highlight, comment, Referee placement, `mark.cmt` | every mode | **none** | a press opens the comment's dialog (`?note=`) |
 | Chat anchor, `mark.chat` | every mode | **none** | a press opens the floating conversation (`?thread=`) |

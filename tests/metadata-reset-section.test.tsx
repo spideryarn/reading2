@@ -440,6 +440,10 @@ describe("the Start this article again section", () => {
     expect(text).toContain("no longer in this version");
     expect(text).toContain("Cost");
     expect(button("Yes, start again"), "no Yes on the confirm").toBeTruthy();
+    /* Plan 261020z: Yes green, Cancel red. */
+    expect(button("Yes, start again")?.classList.contains("tone-positive")).toBe(true);
+    expect(button("Yes, start again")?.getAttribute("data-variant")).toBe("outline");
+    expect(button("Cancel")?.classList.contains("tone-negative")).toBe(true);
   });
 
   it("describes the guarded press without making the button describe itself", async () => {

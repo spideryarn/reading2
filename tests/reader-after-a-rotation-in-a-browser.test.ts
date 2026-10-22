@@ -118,7 +118,7 @@ describe("the inert half: `fitView` never asks for more width than it was given"
         for (const margin of [false, true])
           for (const showSpine of [null, false])
             for (const bandShape of ["standard", "structure", "wide", "roomy"] as const)
-              for (const rootFontPx of [12, 16, 20]) {
+              for (const rootFontPx of [12, 16, 18, 20, 22]) {
                 const f = fitView({ windowWidth: w, modeBand, margin, showSpine, bandShape, rootFontPx });
                 if (f.minWidth > w) over.push(`${w} ${JSON.stringify({ modeBand, margin, showSpine, bandShape, rootFontPx })}`);
               }

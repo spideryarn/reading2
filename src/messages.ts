@@ -529,6 +529,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      back with. `ai-pdf-cut-off` is the one `bug` of the four, matching
      `ai-over-room` — it is our own room for the answer set too low. */
   "pdf-pages": "blocked",
+  /* A Rebuild that fetched a longer PDF than the article was added as, and a
+     long PDF stage 2 found unpriced (plan 261020b). The first is the same sum
+     on every press; the second is a ledger fault of ours. */
+  "pdf-rerun-pages": "blocked",
+  "pdf-unpriced": "ours",
   "pdf-chunk-big": "blocked",
   /* The two files pdf.js will not open. `blocked` and not `retry`, which is the
      whole of the finding they were added for: nothing declared reads as *nobody
@@ -736,6 +741,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      pressed twice on one paper — `minimalQuotaReached` and
      `READ_THIS_ALREADY_RUNNING`. `blocked`: another press is the same answer. */
   "pay-minimal": "blocked",
+  /* A long PDF needing more articles than are left (plan 261020b). */
+  "pay-pages": "blocked",
   "pay-reading": "blocked",
   /* Stripe had a bad minute. The one `pay-` code where another go is exactly
      the right thing to offer — see `BILLING_UNREACHABLE`, and note it is a
@@ -4194,6 +4201,36 @@ export const BANNER_TRAINING_LINK = "privacy policy";
 
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
+/**
+ * **Whose article this is**, the first line of the details page's *Access &
+ * sharing* (the owner's) and *Access* (a visitor's). Greg, 2026-10-19
+ * (`spya-cf30ac`): *"It doesn't seem obvious who owns an article"*.
+ * docs/plans/261020j-say-who-owns-an-article-on-its-details-page.md.
+ */
+export const OWNERSHIP_YOURS = "You own this article.";
+export const OWNERSHIP_NOT_YOURS = "You don't own this article.";
+/** Then the account's address, then a full stop. */
+export const OWNERSHIP_SIGNED_IN_AS = "Signed in as";
+/** The administrator's line on a visitor's page: then the owner's address. */
+export const OWNERSHIP_ADMIN_OWNER = "Admin: it belongs to";
+export const OWNERSHIP_ADMIN_CHECKING = "Admin: looking up its owner…";
+/** The address could not be read from the sign-in service; the rest of the row could. */
+export const OWNERSHIP_ADMIN_NO_EMAIL = "Admin: the owner's address could not be read just now.";
+/** The route found no article it may answer for under this address and key (renamed since, say). */
+export const OWNERSHIP_ADMIN_NOT_FOUND = "Admin: no article under this address could be looked up.";
+/**
+ * **Who opened its private link**, for the administrator — Greg's 2C (reply
+ * `spya-xug3kf` to q-agbc89, plan 261021d). Recorded from the day it shipped.
+ */
+export const LINK_OPENS_HEADING = "Admin: opened through its private link by";
+export const LINK_OPENS_NONE = "Admin: nobody has opened it through its private link since we started recording, on 21 October 2026.";
+/** Before the count of signed-out opens: approximate, since anybody with the link can add to it (security-risks.md § R31). */
+export const LINK_OPENS_SIGNED_OUT = "Signed-out opens, roughly:";
+/** An opener whose address the sign-in service did not give. */
+export const LINK_OPENS_UNKNOWN_ACCOUNT = "an account with no address on record";
+/** Then the reason from `describeFetchFailure`. */
+export const OWNERSHIP_ADMIN_FAILED = "Admin: could not look up its owner.";
+
 /** The switch, off. */
 export const SHARING_OFF = "Only you can read this.";
 
@@ -5680,16 +5717,39 @@ export function receptionWithheldOnSharedLink(search: string, n: number): string
 }
 
 /**
- * **The heading over Reception's title-only rows** — the pages that name this
- * piece by its title and neither link nor quote it. Since 2026-10-03, when the
- * identification slider that used to hide them went (src/web/reception-levels.ts).
+ * **The heading over Reception's title-only rows**, inside *Every page* — the
+ * pages that name this piece by its title and neither link nor quote it. Since
+ * 2026-10-03, when the identification slider that used to hide them went
+ * (src/web/reception-levels.ts); worded this way since plan 261020n
+ * (spya-dk4tfq), when the closed row lost its LINKS / NAMES chip and this
+ * heading became the one place the group is named.
  *
  * A heading in our voice, so it states only what was checked: the title was
- * found in the page's extract. It does not say the page is *not* about this
- * piece — a paper that cites it, and a published reply, both look like this —
- * and it does not say it is. That is the reader's call, from the row.
+ * found in the page's extract. *May be another piece* is the decoy (a page
+ * about a different document with the same title), said as a possibility: a
+ * paper that cites it, and a published reply, look exactly like this, so it
+ * does not say the page is not about this piece either. That is the reader's
+ * call, from the row.
  */
-export const RECEPTION_TITLE_ONLY = "Names this piece by its title only";
+export const RECEPTION_TITLE_ONLY = "Mentions its title only — may be another piece";
+
+/**
+ * **The same fact on one row**, on its second line wherever the row is drawn —
+ * a theme's section or *Key sources* as well as *Every page* — because only
+ * *Every page* has the heading (plan 261020n). The exception is marked, not the
+ * rule: a row that links or quotes the piece says nothing on its closed line.
+ */
+export const RECEPTION_TITLE_ONLY_FLAG = "title only, may be another piece";
+
+/**
+ * **Reception's sections** (plan 261020n): the AI's frame around its key
+ * sources and themes — the frame says whose the headings inside it are, so the
+ * panel's rule that a heading is a claim we stand behind still holds (GPT Sol's
+ * F2 on that plan) — and *Every page*, the one section in our voice, which
+ * lists every row the search kept.
+ */
+export const RECEPTION_AI_FRAME = "What the AI noticed in these sources";
+export const RECEPTION_EVERY_PAGE = "Every page";
 
 /**
  * **The button under Reception's empty sentence, when Claims has rows** — it
@@ -6593,6 +6653,77 @@ export function ingestQuotaReached(quota: {
 }
 
 /**
+ * **A long PDF needs more articles' worth than the account has left** — stage
+ * 1's refusal, once the pages are counted and before anything is paid for
+ * (plan 261020b). Greg, 2026-10-19: *"That user would not be able to import a
+ * 250-page article, because that would need 3 slots."* (At 50 pages a slot, as
+ * he later chose, it is 5.)
+ *
+ * It names the pages, the slots needed and the slots left — one wording for
+ * every plan, so one code, `pay-pages`, which `QuotaNotice` links to the
+ * profile page (it shows the plans to a free reader and the plan to a paying
+ * one) — with the same conditional sharing offer as the ingest wall, computed
+ * by `priceFetchedPdf` against *this* request's cost.
+ */
+export function longPdfQuotaReached(quota: {
+  pages: number;
+  slots: number;
+  /** `ingestHeadroom`: one-slot articles the account could still add. */
+  slotsLeft: number;
+  shareToMakeRoom?: readonly [NamedArticle, ...NamedArticle[]];
+}): ReaderFacingFailure {
+  const left = quota.slotsLeft === 0 ? "none" : String(quota.slotsLeft);
+  const share =
+    quota.shareToMakeRoom === undefined
+      ? ""
+      : ` A public article counts as half, so ${sharingOffer(quota.shareToMakeRoom)} would make room.`;
+  return {
+    kind: "blocked",
+    message:
+      `This PDF is ${quota.pages} pages, which counts as ${quota.slots} articles, and your account ` +
+      `has ${left} left. Trying again will not help; a shorter document, or the part of this one ` +
+      `you want, may fit, and your plan page says what more would take.${share} Everything you ` +
+      "have already added stays exactly where it is. [pay-pages]",
+  };
+}
+
+/**
+ * **A re-run fetched a longer PDF than the article was added as** — rule 4 of
+ * plan 261020b. Re-runs are free, so a Rebuild may not turn a one-slot article
+ * into an eight-slot one; adding the document again charges it.
+ */
+export function pdfGrewOnRerun(pages: number, slots: number, paidSlots: number): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    message:
+      `This PDF is now ${pages} pages, which counts as ${slots} articles; it was added as ` +
+      `${paidSlots}. Rebuilding again will not help; add it as a new article to read the longer version. [pdf-rerun-pages]`,
+  };
+}
+
+/**
+ * **Stage 2 found a long PDF its job had not been charged for** — the
+ * read-only assertion of plan 261020b. Ours: it means a path skipped stage 1's
+ * pricing, and the step fails closed rather than transcribe it.
+ */
+export const PDF_NOT_PRICED: ReaderFacingFailure = {
+  kind: "ours",
+  message:
+    "Something went wrong working out what reading this document costs, so it was not read, " +
+    "and that needs fixing on our side. Nothing has been charged for it. [pdf-unpriced]",
+};
+
+/**
+ * **The warning a long PDF's import shows, and does not stop for** — Greg,
+ * 2026-10-19: *"it should warn the user during the import process that
+ * multiple slots are being used for long articles. But don't block"*. The
+ * fetch step's stored detail, so it outlives the step (plan 261020b).
+ */
+export function longPdfUses(pages: number, slots: number): string {
+  return `This PDF is ${pages} pages, so it uses ${slots} of your articles (one for every 50 pages).`;
+}
+
+/**
  * **Switching High-powered AI on needs more allowance than is left** — the
  * refusal `PUT /api/article/:slug/high-power` answers with a 402.
  *
@@ -6617,8 +6748,9 @@ export function highPowerNoRoom(quota: {
   return {
     kind: "blocked",
     message:
-      "Switching on High-powered AI counts as one more article against your allowance — half " +
-      "of one if the article is shared publicly — and there is not that much left. Trying " +
+      "Switching on High-powered AI counts the article against your allowance again, at the " +
+      "same number of slots — half as much if it is shared publicly — and there is not that " +
+      "much left. Trying " +
       `again will not help ${more}. Nothing has changed, and reading is never limited. ` +
       "[pay-high-power]",
   };
@@ -6776,7 +6908,7 @@ export const ALREADY_ON_ITS_WAY: ReaderFacingFailure = {
  * above is one line away from the list that decides what is drawn around it —
  * and `tests/billing-plan.test.ts` asserts the producers agree with this array.
  */
-export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed" | "pay-minimal";
+export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed" | "pay-minimal" | "pay-pages";
 
 /* A union rather than loose strings, so that another refusal added above
    makes every `switch` over this go red at compile time — `QuotaNotice` chooses
@@ -6787,6 +6919,7 @@ export const QUOTA_CODES: readonly QuotaCode[] = [
   "pay-limit",
   "pay-lapsed",
   "pay-minimal",
+  "pay-pages",
 ];
 
 /**

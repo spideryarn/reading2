@@ -120,6 +120,65 @@
   border-left: 2px solid var(--rule-strong);
 }
 
+/* **The ribbon, Sankey-style: the marked part becoming the whole of column B**
+   (StructurePanel.tsx § the ribbon; Greg, spya-vqpeyr, 2026-10-19). One band
+   across the gutter and column B's bracket inset (so the 1rem gutter, and the
+   switch to two columns, did not have to grow for it — structure-ribbon.ts §
+   `RIBBON_EDGE_INSET_PX`), as tall as the marked row at its left end and as tall as
+   column B's header and rows at its right, in the bracket's own grey so it
+   reads as the bracket and the row's edge mark joined up — and never in the
+   orange, which stays the one "now" (§ the deepest marked row).
+
+   While it is drawn it carries the bracket itself (`.struct-ribbon-edge`, only
+   as tall as column B's content), so the border goes transparent but keeps its
+   2px in the box model: layout.ts counts it, and a ribbon that moved the rows
+   would move the ribbon. Without one — between parts, an undivided part, before
+   layout — the border is the bracket, as it always was. */
+.struct-ribbon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.struct-ribbon-band {
+  fill: var(--struct-ribbon);
+}
+.struct-ribbon-edge {
+  fill: var(--rule-strong);
+}
+.struct-grid[data-ribbon] > .struct-inner {
+  border-left-color: transparent;
+}
+/* The orange thumb moves with the bracket, onto the ribbon's edge 4px left of
+   the rows — `RIBBON_EDGE_INSET_PX` in structure-ribbon.ts; change both. */
+.struct-grid[data-ribbon] > .struct-inner .struct-row[aria-current]::before {
+  left: -4px;
+}
+/* **The marked part is the ribbon's source, so it wears the ribbon's ground**:
+   row, ribbon and column B read as one shape, a Sankey node and its link,
+   rather than a row with a wedge beside it. Grey and never orange — the
+   orange stays on the one deepest row (§ the deepest marked row), and this
+   rule exists only while column B has sections, which is exactly when that
+   row is in column B. The same colour as `.struct-ribbon-band` and not a
+   lookalike, so the seam at the column's edge cannot show. */
+.struct-grid[data-ribbon] > .struct-side:not(.struct-inner) .struct-row[aria-current] {
+  background: var(--struct-ribbon);
+  /* Square where it meets the ribbon, or the row's radius cuts a notch into the seam. */
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+/* The source selector above necessarily outranks the ordinary `.struct-row:hover`
+   rule. Restore that shared interaction state explicitly; `background` changes no
+   measured dimension, and `--surface-raised` is paired for light and dark. */
+.struct-grid[data-ribbon] > .struct-side:not(.struct-inner) .struct-row[aria-current]:hover {
+  background: var(--surface-raised);
+}
+.struct-grid {
+  --struct-ribbon: color-mix(in oklab, var(--rule-strong) 55%, transparent);
+}
+
 /* Column B's header: the part these rows are the inside of. Not a `.band-head`
    — that would be the *band* naming itself, which the Dock already does. This
    names the column's subject, which nothing else on screen says. */
@@ -133,7 +192,7 @@
   font-family: var(--font-ui);
   /* The numbers' size (0.82em of a row), so the label is plainly chrome and
      not a row. */
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -163,7 +222,7 @@
   padding: 0.15rem 0.3rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   font-style: italic;
 }
 
@@ -175,7 +234,7 @@
   padding: 0 0.3rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   font-style: italic;
 }
 
@@ -327,7 +386,7 @@
   min-width: 1.5em;
   max-width: 6em;
   color: var(--ink-faint);
-  font-size: 0.82em;
+  font-size: max(var(--text-min), 0.82em);
   font-variant-numeric: tabular-nums;
 }
 
@@ -427,7 +486,7 @@
    which is in the model's voice (voices.css). */
 .tip-matter {
   margin: 0.35rem 0 0;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.5;
   color: var(--ink-soft);
 }
@@ -458,7 +517,7 @@
   white-space: nowrap;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   font-style: normal;
   font-weight: 400;
   line-height: 1;
@@ -529,7 +588,7 @@
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   cursor: pointer;
 }
 .struct-arriving-note > .struct-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }

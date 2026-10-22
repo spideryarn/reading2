@@ -66,15 +66,6 @@ const WEB = path.join(ROOT, "src", "web");
 const ROOTS = [path.join(WEB, "boot.tsx"), path.join(WEB, "main.tsx")];
 
 /**
- * The other two entries — the far side of the boundary.
- *
- * Walked as a closure of their own so that the *seam* can be asserted rather
- * than six file names. See `SHARED_WITH_READER` below for why that is not the
- * same question.
- */
-const ROUTE_ROOTS = [path.join(WEB, "AdminPage.tsx"), path.join(WEB, "DesignPage.tsx")];
-
-/**
  * Suffixes we record an edge to and do not walk into.
  *
  * A stylesheet or an image is a real edge in the bundler's graph and worth
@@ -286,6 +277,8 @@ interface Closure {
   parent: Map<string, string>;
   /** file -> every eager importer of it. The half a shortest chain hides. */
   importers: Map<string, Set<string>>;
+  /** Package or local asset -> every walked local file that imports it statically. */
+  externalImporters: Map<string, Set<string>>;
   dynamic: Set<string>;
 }
 
@@ -293,6 +286,7 @@ function eagerClosure(roots: string[]): Closure {
   const files = new Set<string>();
   const parent = new Map<string, string>();
   const importers = new Map<string, Set<string>>();
+  const externalImporters = new Map<string, Set<string>>();
   const dynamic = new Set<string>();
   /* Breadth-first, so `parent` records the *shortest* chain rather than
      whichever one a depth-first walk happened to take. */
@@ -303,8 +297,19 @@ function eagerClosure(roots: string[]): Closure {
   }
   while (queue.length) {
     const file = queue.shift() as string;
-    const { staticLocal, dynamic: dyn } = edgesOf(file);
+    const { staticLocal, dynamic: dyn, external } = edgesOf(file);
     for (const d of dyn) dynamic.add(d);
+    for (const spec of external) {
+      /* Assets and packages matter to this boundary too: a stylesheet, image
+         or chart library can cost the reader bytes without any local admin
+         TypeScript module crossing the seam. */
+      let set = externalImporters.get(spec);
+      if (!set) {
+        set = new Set();
+        externalImporters.set(spec, set);
+      }
+      set.add(file);
+    }
     for (const next of staticLocal) {
       let set = importers.get(next);
       if (!set) {
@@ -318,7 +323,7 @@ function eagerClosure(roots: string[]): Closure {
       queue.push(next);
     }
   }
-  return { files, parent, importers, dynamic };
+  return { files, parent, importers, externalImporters, dynamic };
 }
 
 const closure = eagerClosure(ROOTS);
@@ -341,20 +346,73 @@ if (graphOut) {
 }
 
 /**
- * The seam: everything the two lazy routes reach that the reader reaches too.
+ * **Every lazy chunk the reader's graph can open that is *not* an admin or
+ * `/design` route, and why.** The far side of the boundary is derived from
+ * this, not listed — see `ROUTE_ROOTS` below.
  *
- * Walked a second time from the route roots, and intersected. The two closures
- * overlap in 47 files and are otherwise disjoint — measured 2026-09-06, and the
- * complement is exactly the six modules in `ROUTE_PRIVATE`, which is a pleasant
- * accident rather than something asserted.
+ * Keys are repo-relative for a local file and the bare specifier for a
+ * package, which is how `lazyKey` spells them.
+ */
+const NOT_ROUTE_ROOTS = new Map<string, string>([
+  ["src/web/main.tsx", "the reader's own entry, loaded by boot.tsx so Sentry starts first"],
+  [
+    "src/web/lib/supabase.ts",
+    "an ineffective dynamic import: eager importers already hold it in (see the header)",
+  ],
+  [
+    "src/web/ChangelogPage.tsx",
+    "lazy for its 210 KB of NDJSON, not because it is administrator-only — a reader's page",
+  ],
+  ["src/web/help/HelpPage.tsx", "lazy because it is prose read when stuck — a reader's page"],
+  ["temml", "maths rendering, fetched when an article has TeX (src/web/maths.ts)"],
+  ["temml/dist/Temml-Local.css", "temml's stylesheet, beside it"],
+]);
+
+const lazyKey = (d: string) => (path.isAbsolute(d) ? path.relative(ROOT, d) : d);
+
+/**
+ * The far side of the boundary: every page the reader's graph `import()`s that
+ * `NOT_ROUTE_ROOTS` does not claim — `/admin`'s pages and `/design`.
+ *
+ * **Derived, and it used to be two names.** `AdminPage.tsx` and `DesignPage.tsx`
+ * were listed by hand, and when `/admin/costs`, `/admin/vouchers` and
+ * `/admin/articles` became chunks of their own nobody added them, so a module
+ * private to one of them could join the reader's startup with every assertion
+ * here green — reproduced 2026-10-22 by importing `useAdminCosts.ts` from
+ * `App.tsx` (GPT Sol, 261021i stage 1 review, C4). Reading the `import()` edges
+ * the walk already records means a new lazy page is on this side the day its
+ * loader is written, and the default is the safe one: an unclassified chunk is
+ * treated as admin-only, so the seam test below asks about it.
+ *
+ * Walked as a closure of its own so that the *seam* can be asserted rather
+ * than a list of file names. See `SHARED_WITH_READER` below for why that is
+ * not the same question.
+ */
+const ROUTE_ROOTS = [...closure.dynamic]
+  .filter((d) => path.isAbsolute(d) && !NOT_ROUTE_ROOTS.has(lazyKey(d)))
+  .sort();
+
+/**
+ * The seam: everything the lazy routes reach that the reader reaches too.
+ *
+ * Walked a second time from the route roots, and intersected. `ROUTE_PRIVATE`
+ * below names the roots and a representative set outside that intersection.
  *
  * `parseFailures` is appended to by both walks, so a file in the overlap that
  * failed to parse is reported twice. That is untidy and harmless; the assertion
  * on it is `toEqual([])`. The walk does widen that assertion's reach, though —
- * the six route-private modules are now parsed and checked as well.
+ * the route-private modules are now parsed and checked as well.
  */
 const routeClosure = eagerClosure(ROUTE_ROOTS);
 const routeShared = [...routeClosure.files].filter((f) => closure.files.has(f)).map(rel).sort();
+const externalKey = (spec: string) => (path.isAbsolute(spec) ? rel(spec) : spec);
+const routeSharedExternals = [...routeClosure.externalImporters]
+  .filter(
+    ([spec, importers]) =>
+      closure.externalImporters.has(spec) && [...importers].some((f) => !closure.files.has(f)),
+  )
+  .map(([spec]) => externalKey(spec))
+  .sort();
 
 /**
  * Why the module is still in, said in the two ways that are both needed.
@@ -386,25 +444,11 @@ function why(p: string): string {
 }
 
 /**
- * The six modules the two lazy routes own between them, and nothing else uses.
- * Named individually rather than by directory because there is no directory —
- * they sit beside the reader's files.
- */
-const ROUTE_PRIVATE = [
-  "src/web/AdminPage.tsx",
-  "src/web/DesignPage.tsx",
-  "src/web/admin-columns.tsx",
-  "src/web/AdminFeedbackList.tsx",
-  "src/web/useAdminFeedback.ts",
-  "src/web/useAdminUsers.ts",
-];
-
-/**
- * Every module the two lazy routes and the reader **both** reach.
+ * Every module the lazy routes and the reader **both** reach.
  *
- * `ROUTE_PRIVATE` above is a readable positive statement and it is all this
- * file used to have. GPT Sol showed that it is weaker than the claim made for
- * it (code review 2026-09-05, F4, case 2): a new `review-admin-chart.ts`
+ * `ROUTE_PRIVATE` below is readable calibration, and a hand-written list was
+ * all this file used to have. GPT Sol showed that it is weaker than the claim
+ * made for it (code review 2026-09-05, F4, case 2): a new `review-admin-chart.ts`
  * imported statically from `App.tsx` **and** `AdminPage.tsx` left all five
  * assertions green, because a fixed list of six names cannot see a seventh.
  * Reproduced here on 2026-09-06 before this constant was written, which is the
@@ -443,11 +487,12 @@ const ROUTE_PRIVATE = [
  * `review-admin-chart.ts`, the first of these by adding `HomeLogo.js` to
  * `AdminPage`, the second by giving `pill.ts` an import of its own.
  *
- * Bare packages are not here. Only local files are walked, so `react` and
- * `lucide-react` are recorded as external and never enter either closure — this
- * list is about *this repo's* modules, not about node_modules.
+ * Packages and local assets have their own shorter allowlist below. They are
+ * not walked, but the seam records which route-private and eager local modules
+ * import them, so a route-only dependency cannot enter the reader through a
+ * second import while every local-file assertion stays green.
  *
- * Sorted, one per line, so a diff reads as a decision.
+ * One per line, so a diff reads as a decision.
  *
  * **There was a count in this sentence and it is gone** (2026-09-07). It said
  * how many entries the list has, and it was wrong at the base of this merge —
@@ -558,6 +603,12 @@ const SHARED_WITH_READER = [
   "src/web/ModeSurface.tsx",
   "src/web/SettingsSection.tsx",
   "src/web/ShelfEntry.tsx",
+  /* Arrived 2026-10-20 with /admin/users' Columns menu (plan 261020c), by the
+     zero-cost route: `Library.tsx` already imports it for the shelf table's
+     remembered hidden columns, and /admin/users now reuses the same hook with
+     its own storage keys rather than a second copy. Small, and importing only
+     React and TanStack Table, which the shelf already loads. */
+  "src/web/shelf-hidden-columns.ts",
   /* Arrived 2026-10-03 with the reader's own tags (plan 261003d), by the
      second zero-cost route: `ShelfEntry.tsx` (already here) draws every card's
      tags and their editor, so the editor, its API module and the spelling rules
@@ -609,6 +660,11 @@ const SHARED_WITH_READER = [
      follows it in for `StreamStalled`. Plan 260924a § Stage 2c. */
   "src/web/lib/describe-failure.ts",
   "src/web/lib/api.ts",
+  /* Arrived 2026-10-20 with *View as* (plan 261019n § Part 3). Eager by
+     necessity: `apiFetch` and main.tsx ask it on every request and at boot
+     whether this tab is viewing as another reader. `/admin` reaches it too,
+     for `isViewAsNonce` in ViewAsStart.tsx. It imports nothing at all. */
+  "src/web/lib/view-as.ts",
   /* Arrived 2026-10-03 the same way: `lib/api.ts` counts every write it sends
      (the article preload's staleness check, plan 261003d), and the count is
      a forty-line module of its own so that api.ts and the preload do not
@@ -682,6 +738,79 @@ const SHARED_WITH_READER = [
      downloads it — the shelf and every mode with a section title import it —
      and it is a leaf of three small functions importing nothing at runtime. */
   "src/web/voice.ts",
+  /* Thirteen that were shared before anybody looked, found 2026-10-22 when
+     `ROUTE_ROOTS` stopped being two hand-typed names and began to include the
+     admin pages with chunks of their own (`/admin/costs`, `/admin/vouchers`,
+     `/admin/articles`). All are zero-cost, by the first predicted route: each
+     was already in the reader's startup, and the admin page only reaches it.
+     `cost-cube.ts` is the article page's cost line (`ArticleCost.tsx`) and
+     /admin/costs' whole view. `made-for.ts` is App.tsx's, and the vouchers
+     page names a reader through it. The other eleven arrive together behind
+     `admin-vouchers-parts.tsx`, which reuses the shelf's own `useShelf` and
+     `useJobs` so its pickers can list the administrator's own shelf: the job engine,
+     uploads and the shelf cache come with them, all of it App.tsx's and
+     Library.tsx's already. */
+  "src/cost-cube.ts",
+  "src/step-order.ts",
+  "src/web/add-sharing-session.ts",
+  "src/web/auto-modes-setting.ts",
+  "src/web/batchUpload.ts",
+  "src/web/jobEngine.ts",
+  "src/web/lib/cached-shelf.ts",
+  "src/web/lib/made-for.ts",
+  "src/web/unload-guard.ts",
+  "src/web/upload.ts",
+  "src/web/uploadEngine.ts",
+  "src/web/useJobs.ts",
+  "src/web/useShelf.ts",
+];
+
+/**
+ * Packages or local assets imported by both an actually route-private local
+ * module and the reader's eager closure. Package specifiers stay exact because
+ * subpaths can be different modules; local assets use repo-relative paths.
+ * Like `SHARED_WITH_READER`, asserted in both directions.
+ */
+const SHARED_EXTERNALS_WITH_READER = [
+  "@tanstack/react-table",
+  "class-variance-authority",
+  "lucide-react",
+  "nuqs",
+  "radix-ui",
+  "react",
+];
+
+/**
+ * Every lazy route root, plus representative modules the routes own and
+ * nothing of the reader's uses — readable calibration beside the seam above,
+ * which can see a module nobody thought to name.
+ *
+ * Named individually rather than by directory because there is no directory —
+ * they sit beside the reader's files. Each must also be reached by the
+ * *derived* route closure (asserted below), which is what makes this list
+ * calibration for `ROUTE_ROOTS`. In particular every root itself is here: a
+ * root the derivation stops finding goes red rather than shrinking the seam to
+ * something that passes. This is not an inventory of every route-private
+ * dependency; the seam is what catches an unlisted one becoming eager. Until
+ * 2026-10-22 it was six names covering `/admin` and `/design` only; the three
+ * admin pages with chunks of their own were added then.
+ */
+const ROUTE_PRIVATE = [
+  "src/web/AdminPage.tsx",
+  "src/web/AdminArticlesPage.tsx",
+  "src/web/AdminCostsPage.tsx",
+  "src/web/AdminVouchersPage.tsx",
+  "src/web/DesignPage.tsx",
+  "src/web/admin-articles-columns.tsx",
+  "src/web/admin-columns.tsx",
+  "src/web/admin-costs-view.ts",
+  "src/web/admin-vouchers-columns.tsx",
+  "src/web/AdminFeedbackList.tsx",
+  "src/web/useAdminArticles.ts",
+  "src/web/useAdminCosts.ts",
+  "src/web/useAdminFeedback.ts",
+  "src/web/useAdminUsers.ts",
+  "src/web/useAdminVouchers.ts",
 ];
 
 /**
@@ -796,18 +925,61 @@ describe("the eager client graph", () => {
     expect([...closure.dynamic].map(rel)).toContain("src/web/main.tsx");
   });
 
+  it("classifies every lazy chunk the reader's graph opens", () => {
+    /* `ROUTE_ROOTS` takes every local `import()` target not in
+       `NOT_ROUTE_ROOTS`, so a local one cannot fall through; a package cannot
+       be walked, so an unclassified one is named here instead. And a line in
+       `NOT_ROUTE_ROOTS` that no longer names an import is a claim about the
+       graph that has stopped being true. */
+    const unclassified = [...closure.dynamic].filter(
+      (d) => !path.isAbsolute(d) && !NOT_ROUTE_ROOTS.has(d),
+    );
+    expect(unclassified, "a package loaded lazily that NOT_ROUTE_ROOTS does not name").toEqual([]);
+    const lazy = new Set([...closure.dynamic].map(lazyKey));
+    const stale = [...NOT_ROUTE_ROOTS.keys()].filter((k) => !lazy.has(k));
+    expect(stale, "NOT_ROUTE_ROOTS names an import() the reader's graph no longer makes").toEqual(
+      [],
+    );
+  });
+
+  it("derived a route closure that reaches every named calibration module", () => {
+    /* Calibration for `ROUTE_ROOTS`. Every root is in `ROUTE_PRIVATE`, so a
+       derivation that found no roots — or lost one — would shrink the seam to
+       something that passes elsewhere but goes red here. */
+    const unreached = ROUTE_PRIVATE.filter((p) => !routeClosure.files.has(path.join(ROOT, p)));
+    expect(
+      unreached,
+      `not reached from the derived roots (${ROUTE_ROOTS.map(rel).join(", ")})`,
+    ).toEqual([]);
+  });
+
+  it("finds no lazy chunk inside the routes that it has not walked", () => {
+    /* The route closure's own `import()`s are not followed, so a page an admin
+       route opens lazily would sit outside the seam. None does today; when one
+       does, it belongs in `ROUTE_ROOTS` (or `NOT_ROUTE_ROOTS`), and this says so. */
+    const known = new Set([...ROUTE_ROOTS.map(rel), ...NOT_ROUTE_ROOTS.keys()]);
+    const unwalked = [...routeClosure.dynamic].map(lazyKey).filter((k) => !known.has(k));
+    expect(unwalked).toEqual([]);
+  });
+
   it("does not reach the administrator's pages or /design", () => {
     const held = ROUTE_PRIVATE.filter((p) => inClosure(p));
     expect(held.map(why).join("\n\n"), held.join(", ")).toBe("");
   });
 
   it("shares with the reader only what somebody agreed it should share", () => {
-    /* The seam, in both directions — see `SHARED_WITH_READER`. The six names
-       above are the readable statement; this is the one that can see a
-       seventh. */
+    /* The local-file and external seams, in both directions — see the two
+       `SHARED_*_WITH_READER` lists. The names in `ROUTE_PRIVATE` are the
+       readable calibration; this is the check that can see a module nobody
+       named. */
     const allowed = new Set(SHARED_WITH_READER);
     const unexpected = routeShared.filter((p) => !allowed.has(p));
     const stale = SHARED_WITH_READER.filter((p) => !routeShared.includes(p));
+    const allowedExternals = new Set(SHARED_EXTERNALS_WITH_READER);
+    const unexpectedExternals = routeSharedExternals.filter((p) => !allowedExternals.has(p));
+    const staleExternals = SHARED_EXTERNALS_WITH_READER.filter(
+      (p) => !routeSharedExternals.includes(p),
+    );
 
     const report: string[] = [];
     if (unexpected.length > 0) {
@@ -832,12 +1004,31 @@ describe("the eager client graph", () => {
           `Delete them: ${stale.join(", ")}`,
       );
     }
+    if (unexpectedExternals.length > 0) {
+      report.push(
+        `${unexpectedExternals.length} package(s) or asset(s) are statically imported by ` +
+          "BOTH a route-private module and the reader's startup, and are not on " +
+          `SHARED_EXTERNALS_WITH_READER: ${unexpectedExternals.join(", ")}`,
+        "Adding a line to SHARED_EXTERNALS_WITH_READER is a decision that every reader " +
+          "downloads that package or asset before asking for the admin or /design route. " +
+          "Make it deliberately, or keep it behind the route.",
+      );
+    }
+    if (staleExternals.length > 0) {
+      report.push(
+        `SHARED_EXTERNALS_WITH_READER names ${staleExternals.length} package(s) or asset(s) ` +
+          "that are no longer imported by both a route-private module and the reader's " +
+          `startup. Delete them: ${staleExternals.join(", ")}`,
+      );
+    }
 
     expect(
       report.join("\n\n"),
       [
         unexpected.length > 0 ? `+${unexpected.join(", ")}` : "",
         stale.length > 0 ? `-${stale.join(", ")}` : "",
+        unexpectedExternals.length > 0 ? `+externals:${unexpectedExternals.join(", ")}` : "",
+        staleExternals.length > 0 ? `-externals:${staleExternals.join(", ")}` : "",
       ]
         .filter(Boolean)
         .join(" "),

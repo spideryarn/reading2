@@ -92,6 +92,16 @@ async function press(answer: () => Promise<Response>): Promise<string> {
 }
 
 describe("a failed View the original", () => {
+  it("says the page failed when the browser throws while opening the tab", async () => {
+    vi.stubGlobal("open", () => {
+      throw new DOMException("Document is not fully active", "InvalidAccessError");
+    });
+    const said = await press(async () => new Response("%PDF", { status: 200 }));
+    expect(said).toContain("Couldn't open the original.");
+    expect(said).toMatch(/\[web-unexpected\]$/);
+    expect(said).not.toContain("Document is not fully active");
+  });
+
   it("says the connection was lost, in our words, when the request never left", async () => {
     const said = await press(() => Promise.reject(new TypeError("Load failed")));
     expect(said).toContain("Couldn't open the original.");

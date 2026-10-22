@@ -78,6 +78,7 @@ import { urlKey } from "../ingest.js";
 import { isWebUrl } from "../urls.js";
 import type { LibraryEntry, LinkPreviewResponse, PagePreview } from "../types.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
+import { viewAsNonce } from "./lib/view-as.js";
 import { forgetOnReaderChange } from "./lib/reader-change.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { MalformedReply } from "./lib/reader-facing.js";
@@ -342,6 +343,11 @@ function readShelf(): Promise<Map<string, LibraryEntry> | null> {
  *   a caller: what it asked for did not happen.
  */
 function applyShelf(): Promise<boolean> {
+  /* **No lookups at all while viewing as another reader** (plan 261019n
+     § round 1, F3): the preview and summary routes fetch outside and spend,
+     Wikipedia is a request leaving the tab, and the card is as good without
+     them. Here and in `loadWiki`, `loadPage` and `loadSummary`. */
+  if (viewAsNonce() !== null) return Promise.resolve(false);
   const read = ++shelfRead;
   return readShelf().then((index) => {
     if (index === null) return false;
@@ -510,6 +516,7 @@ export function readSummary(body: unknown): WikiSummary | null {
 }
 
 function loadWiki(wiki: { lang: string; title: string }): Promise<void> {
+  if (viewAsNonce() !== null) return Promise.resolve();
   const key = wikiCacheKey(wiki);
   if (wikiCache.has(key)) return Promise.resolve();
   const existing = wikiPending.get(key);
@@ -676,6 +683,7 @@ async function askServer(slug: string, url: string): Promise<LinkPreviewResponse
  * `PAGE_RETRY_MS`.
  */
 function loadPage(slug: string, url: string): Promise<void> {
+  if (viewAsNonce() !== null) return Promise.resolve();
   if (pageCache.has(url)) return Promise.resolve();
   const existing = pagePending.get(url);
   if (existing) return existing;
@@ -861,6 +869,7 @@ export function forgetSummaries(): void {
  * screen to lose.
  */
 function loadSummary(slug: string, url: string, blockId: string | null): Promise<void> {
+  if (viewAsNonce() !== null) return Promise.resolve();
   const key = summaryKey(slug, url, blockId);
   if (summaryCache.has(key)) return Promise.resolve();
   const existing = summaryPending.get(key);

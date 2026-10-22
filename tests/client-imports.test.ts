@@ -46,6 +46,11 @@ const SHARED = new Set([
      two cannot disagree. Imports only types. See src/next-steps.ts and plan
      261009u. */
   "next-steps.js",
+  /* The fixed list of modes the guide may get ready, with their display
+     names: next-steps.js checks a prepare step against it, and the page draws
+     the button from it. Imports only types. See src/preparable-modes.ts and
+     plan 261019p § Stage 2b. */
+  "preparable-modes.js",
   /* The rules a Debate synthesis keeps — work identity, caps, lengths — which
      the server applies to the model's answer and the panel applies again to
      the stored one, so the two cannot drift. Imports `types.js` and `ids.js`
@@ -253,6 +258,15 @@ const SHARED = new Set([
      an unopened one out, so a browser copy and a server copy would be two
      rules for one paragraph. It imports types only. src/recall-hint.ts. */
   "recall-hint.js",
+  /* A conversation as Markdown: the chat header's *Copy this conversation*
+     builds it in the browser and your-words.md builds it on the server, so a
+     second copy would let the clipboard and the file disagree. Imports
+     `citable.js`, `recall-hint.js`, `urls.js` and types. Plan 261020w. */
+  "chat-markdown.js",
+  /* What kind of mark a comment is (note, asked the AI, highlight, bookmark):
+     the reading view labels it and your-words.md heads it, so the two cannot
+     disagree. Imports types only. Plan 261020w, code review C5. */
+  "comment-kind.js",
   /* A model id as a person reads it (`DISPLAY_NAME`). /profile names models
      through it on the server, and a chat thread's (i) names the model that
      answered in the browser, so a second copy would let the two disagree. It

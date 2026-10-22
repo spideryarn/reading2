@@ -130,7 +130,13 @@ async function keyFor(dir: string, slug: string): Promise<Key> {
   return readJson<Key>(path.join(dir, "keys", `key-${slug}.json`));
 }
 
-async function structureRows(runDir: string): Promise<Row[]> {
+/** `--structure-base <arm>` / `--structure-candidate <family>`, as lineup.ts takes them. */
+function structurePair(argv: readonly string[]): { baseArm: string; candidate: string } {
+  const at = (flag: string) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined);
+  return { baseArm: at("--structure-base") ?? "toc10-frozen", candidate: at("--structure-candidate") ?? "toc11" };
+}
+
+async function structureRows(runDir: string, pair = { baseArm: "toc10-frozen", candidate: "toc11" }): Promise<Row[]> {
   const run = await readJson<{
     results: {
       arm: string;
@@ -147,7 +153,7 @@ async function structureRows(runDir: string): Promise<Row[]> {
       ? null
       : (values as number[]).reduce((total, value) => total + value, 0);
   return run.results.flatMap((result): Row[] => {
-    const prefix = result.arm === "toc10-frozen" ? "base" : result.arm === "incumbent" ? "toc11" : null;
+    const prefix = result.arm === pair.baseArm ? "base" : result.arm === "incumbent" ? pair.candidate : null;
     if (prefix === null || (result.run !== 1 && result.run !== 2)) return [];
     const calls = result.calls ?? [];
     return [{
@@ -248,7 +254,7 @@ async function main(): Promise<void> {
   const structureRun = argv[argv.indexOf("--structure-run") + 1];
   const rows = mode === "structure"
     ? structureRun && argv.indexOf("--structure-run") >= 0
-      ? await structureRows(structureRun)
+      ? await structureRows(structureRun, structurePair(argv))
       : (() => { throw new Error("--mode structure needs --structure-run <dir>"); })()
     : (await readFile(path.join(results, `runs.${mode}.jsonl`), "utf-8"))
         .split("\n")
@@ -303,7 +309,7 @@ async function main(): Promise<void> {
   out.savings = { perArticle, medianTypicalThinkingReduction: median, invalid };
   lines.push("");
   if (mode === "structure") {
-    lines.push("**Thinking reduction**: not a gate — toc/10 and toc/11 both run at production `low` effort.");
+    lines.push("**Thinking reduction**: not a gate — both Structure arms run at production `low` effort.");
   } else {
     lines.push(
       `**Median thinking reduction, articles under ${TYPICAL_MAX_CHARS / 1000}k characters**: ${

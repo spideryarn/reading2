@@ -35,6 +35,33 @@ export type StartRangePolicy =
   | typeof WHOLE_DOCUMENT_START_POLICY
   | typeof SCOPED_START_POLICY;
 
+/**
+ * **What to do with a start that names no block** — whole-document answers only, and only
+ * when the caller asks. docs/plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md.
+ *
+ * - `refuse` — the answer is refused. The default, and the only mode the scoped cascade and the
+ *   long-document slices use.
+ * - `recover` — a first child is not asked (its start is pinned to its parent's whatever it says).
+ *   Any other start that names no block is refused, so the step's re-ask still runs.
+ *
+ *   It also read a start that spliced the prompt's line number into the id (`spya-582xcf0dz`) as
+ *   that line, until `toc/13`: the whole-document answer now gives the number itself, an integer
+ *   the schema types, so there is no id to splice it into and the decoder went.
+ *   docs/plans/261020aa-structure-answers-the-block-number-not-its-id.md.
+ * - `recover-or-drop` — as `recover`, and on top of it a later start that names no block drops its
+ *   child into the sibling before it, as a non-advancing start already does. For the last answer
+ *   the step will get, where refusing costs the reader the whole tree and every mode built on it.
+ */
+export type UnresolvedStarts = "refuse" | "recover" | "recover-or-drop";
+
+/** One start that named no block and did not refuse the answer. A first child's is not one. */
+export interface UnresolvedStart {
+  where: string;
+  /** Position in the model's proposal for this sibling set, as in `where`. */
+  childIndex: number;
+  outcome: "dropped";
+}
+
 export interface DerivedStartRange<C extends StartProposal> {
   proposed: C;
   childIndex: number;
@@ -46,6 +73,7 @@ export interface DerivedStartRange<C extends StartProposal> {
 interface PlannedEvidence {
   repairs: PartitionRepair[];
   droppedChildren: string[];
+  unresolvedStarts: UnresolvedStart[];
 }
 
 export type StartRangeResult<C extends StartProposal> =
@@ -69,6 +97,95 @@ export type StartRangeResult<C extends StartProposal> =
       proposedChildren: number;
     } & PlannedEvidence);
 
+interface RecoveredClaims {
+  claimed: number[];
+  dropped: Set<number>;
+  droppedChildren: string[];
+  unresolvedStarts: UnresolvedStart[];
+  refusedChildIndex?: number;
+}
+
+/** Resolve the opt-in whole-document exceptions before the ordinary tiling planner runs. */
+function recoverStartClaims(opts: {
+  resolved: readonly (number | undefined)[];
+  parent: readonly [number, number];
+  where: string;
+  unresolved: Exclude<UnresolvedStarts, "refuse">;
+}): RecoveredClaims {
+  const { resolved, where, unresolved } = opts;
+  const [p0] = opts.parent;
+  const claimed: number[] = [];
+  const dropped = new Set<number>();
+  const droppedChildren: string[] = [];
+  const unresolvedStarts: UnresolvedStart[] = [];
+
+  for (const [childIndex, real] of resolved.entries()) {
+    if (real !== undefined) {
+      claimed.push(real);
+      continue;
+    }
+    /* A first child is pinned to its parent's start whatever it says, so an
+       unresolvable one costs nothing and is not recorded. */
+    if (childIndex === 0) {
+      claimed.push(p0);
+      continue;
+    }
+    if (unresolved === "recover") {
+      return { claimed, dropped, droppedChildren, unresolvedStarts, refusedChildIndex: childIndex };
+    }
+    /* `recover-or-drop`: nothing says where this child begins, so it is not
+       built. The placeholder keeps `claimed` indexed by child; the planning
+       loop below skips it. */
+    dropped.add(childIndex);
+    claimed.push(p0);
+    droppedChildren.push(`${where} > child ${childIndex + 1}`);
+    unresolvedStarts.push({
+      where: `${where} > child ${childIndex + 1}`,
+      childIndex,
+      outcome: "dropped",
+    });
+  }
+
+  return { claimed, dropped, droppedChildren, unresolvedStarts };
+}
+
+type KeptClaims =
+  | { ok: true; kept: { childIndex: number; start: number }[] }
+  | { ok: false; outsideChildIndex: number };
+
+/** Apply the policy's range rule and discard claims that mark no new split point. */
+function keepStartClaims(opts: {
+  claimed: readonly number[];
+  dropped: ReadonlySet<number>;
+  parent: readonly [number, number];
+  policy: StartRangePolicy;
+  where: string;
+  droppedChildren: string[];
+}): KeptClaims {
+  const { claimed, dropped, policy, where, droppedChildren } = opts;
+  const [p0, p1] = opts.parent;
+  if (policy.outsideParent === "refuse") {
+    const outsideChildIndex = claimed.findIndex((at) => at < p0 || at > p1);
+    if (outsideChildIndex !== -1) return { ok: false, outsideChildIndex };
+  }
+
+  const clamp = (at: number) => Math.min(Math.max(at, p0), p1);
+  const kept: { childIndex: number; start: number }[] = [];
+  for (const [childIndex, raw] of claimed.entries()) {
+    if (dropped.has(childIndex)) continue;
+    const at = policy.outsideParent === "clamp" ? clamp(raw) : raw;
+    const previous = kept.at(-1);
+    if (previous === undefined) {
+      kept.push({ childIndex, start: p0 });
+    } else if (at <= previous.start) {
+      droppedChildren.push(`${where} > child ${childIndex + 1}`);
+    } else {
+      kept.push({ childIndex, start: at });
+    }
+  }
+  return { ok: true, kept };
+}
+
 /** Derive one sibling set without mutating its proposals, blocks, index or policy. */
 export function deriveStartRanges<C extends StartProposal>(opts: {
   children: readonly C[];
@@ -77,11 +194,15 @@ export function deriveStartRanges<C extends StartProposal>(opts: {
   index: ReadonlyMap<string, number>;
   where: string;
   policy: StartRangePolicy;
+  /** Only ever set by a whole-document caller; `refuse` when absent. */
+  unresolved?: UnresolvedStarts;
 }): StartRangeResult<C> {
   const { children, blocks, index, where, policy } = opts;
+  const unresolved = opts.unresolved ?? "refuse";
   const [p0, p1] = opts.parent;
   const repairs: PartitionRepair[] = [];
   const droppedChildren: string[] = [];
+  const unresolvedStarts: UnresolvedStart[] = [];
 
   /* Empty is knowably not an expansion before there is anything to resolve.
      A one-child scoped answer is different: the incumbent resolves and
@@ -95,26 +216,50 @@ export function deriveStartRanges<C extends StartProposal>(opts: {
       proposedChildren: children.length,
       repairs,
       droppedChildren,
+      unresolvedStarts,
     };
   }
 
   /* Resolve the whole sibling set before planning any of it. An invented id
-     therefore refuses the answer rather than returning a partially built set. */
-  const claimed: number[] = [];
-  for (const [childIndex, child] of children.entries()) {
-    const start = child.start;
-    const at = typeof start === "string" ? index.get(start) : undefined;
-    if (at === undefined) {
-      return {
-        ok: false,
-        reason: "invented-start",
-        childIndex,
-        start,
-        repairs,
-        droppedChildren,
-      };
-    }
-    claimed.push(at);
+     therefore refuses the answer rather than returning a partially built set —
+     unless the caller asked for `recover`, below. */
+  const resolved: (number | undefined)[] = children.map((child) =>
+    typeof child.start === "string" ? index.get(child.start) : undefined,
+  );
+  const refuse = (childIndex: number): StartRangeResult<C> => ({
+    ok: false,
+    reason: "invented-start",
+    childIndex,
+    start: children[childIndex]!.start,
+    repairs,
+    droppedChildren,
+    unresolvedStarts,
+  });
+  if (unresolved === "refuse") {
+    const first = resolved.indexOf(undefined);
+    if (first !== -1) return refuse(first);
+  }
+
+  /* **Whole-document exceptions, in document order.** The first unresolved
+     start is pinned to its parent. A later one either refuses the answer or is
+     marked for dropping; real starts continue to the ordinary planner. */
+  let claimed: number[];
+  let dropped: Set<number>;
+  if (unresolved === "refuse") {
+    claimed = resolved as number[];
+    dropped = new Set<number>();
+  } else {
+    const recovered = recoverStartClaims({
+      resolved,
+      parent: [p0, p1],
+      where,
+      unresolved,
+    });
+    claimed = recovered.claimed;
+    dropped = recovered.dropped;
+    droppedChildren.push(...recovered.droppedChildren);
+    unresolvedStarts.push(...recovered.unresolvedStarts);
+    if (recovered.refusedChildIndex !== undefined) return refuse(recovered.refusedChildIndex);
   }
 
   /* **Every claim is range-checked, the first one included.** The check once sat
@@ -122,33 +267,34 @@ export function deriveStartRanges<C extends StartProposal>(opts: {
      sibling section passed with that sibling's title and gist attached to this
      parent's prose. The pin is a rule about the parent's own first block, not a
      licence to believe a claim from outside it. */
-  if (policy.outsideParent === "refuse") {
-    const outside = claimed.findIndex((at) => at < p0 || at > p1);
-    if (outside !== -1) {
-      return {
-        ok: false,
-        reason: "outside-parent",
-        childIndex: outside,
-        start: children[outside]!.start,
-        repairs,
-        droppedChildren,
-      };
-    }
+  const plannedClaims = keepStartClaims({
+    claimed,
+    dropped,
+    parent: [p0, p1],
+    policy,
+    where,
+    droppedChildren,
+  });
+  if (!plannedClaims.ok) {
+    const outside = plannedClaims.outsideChildIndex;
+    return {
+      ok: false,
+      reason: "outside-parent",
+      childIndex: outside,
+      start: children[outside]!.start,
+      repairs,
+      droppedChildren,
+      unresolvedStarts,
+    };
   }
+  const { kept } = plannedClaims;
 
-  const clamp = (at: number) => Math.min(Math.max(at, p0), p1);
-  const kept: { childIndex: number; start: number }[] = [];
-  for (const [childIndex, raw] of claimed.entries()) {
-    const at = policy.outsideParent === "clamp" ? clamp(raw) : raw;
-    const previous = kept.at(-1);
-    if (previous === undefined) {
-      kept.push({ childIndex, start: p0 });
-    } else if (at <= previous.start) {
-      droppedChildren.push(`${where} > child ${childIndex + 1}`);
-    } else {
-      kept.push({ childIndex, start: at });
-    }
-  }
+  /* **A drop may fold one section into its neighbour, not a sibling set into
+     one section.** Two children with the second dropped would leave the first
+     covering its whole parent — at the root, the whole article. ⟨GPT Sol, plan
+     review r2, finding 4⟩ */
+  const firstDrop = [...dropped][0];
+  if (firstDrop !== undefined && kept.length < 2) return refuse(firstDrop);
 
   if (kept.length < policy.minimumChildren) {
     return {
@@ -158,6 +304,7 @@ export function deriveStartRanges<C extends StartProposal>(opts: {
       proposedChildren: children.length,
       repairs,
       droppedChildren,
+      unresolvedStarts,
     };
   }
 
@@ -193,5 +340,5 @@ export function deriveStartRanges<C extends StartProposal>(opts: {
       range: [blocks[child.start]!.id, blocks[end]!.id],
     };
   });
-  return { ok: true, children: derived, repairs, droppedChildren };
+  return { ok: true, children: derived, repairs, droppedChildren, unresolvedStarts };
 }

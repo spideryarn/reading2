@@ -1,0 +1,611 @@
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index acd5fb232..863f7b553 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -77,7 +77,7 @@
+   "summary": "What each mark on the strip down the left edge means, and how to point at it and click it to get around.",
+   "keywords": "rail strip map overview where am i position progress ticks lines heat coloured marks colours orange box results visuals legend meaning",
+   "experimental": false,
+-  "body": "The spine is the thin strip down the left edge: the whole article squeezed to the height of your\nwindow. It is **proportional** — a part that fills half the piece fills half the spine — so it is a\npicture of the article’s shape, not a list of headings. At a glance it shows how far through you\nare, how big each part is, and where the things you are looking for sit.\n\nWhat each mark means:\n\n- **Tinted blocks, stacked top to bottom: the parts.** Each is as tall as that part is long, with a\n  thin line between one and the next. A short part can be a sliver too thin to see.\n- **One block a little brighter: the part you are in.**\n- **The strongest fill: the section you are in**, inside the brighter part. It does not appear when\n  a part has no sections.\n- **Short hairlines inside a part: where its sections begin**, even where there is no room to name\n  them.\n- **Very faint blocks near the bottom: endnotes, references and other back matter.** Dimmed so you\n  can see where the argument ends, but kept at their true size. If the spine says you are 60%\n  through and the rest is faint, you have nearly finished the article itself.\n- **A box with orange top and bottom edges: what is on your screen.** It moves as you scroll, and\n  its height shows how much of the article fits on one screen.\n- **A tinted area from the left edge, with a brighter line at its edge: where you have spent time\n  reading.** The further across the strip it reaches, the longer you spent there. A quick glance may\n  leave no shading. Use it to find where you had got to after jumping around. Only whoever added the\n  article sees it.\n- **One faint grey bar across the full width: where you jumped from.** It appears with the **↩ back\n  to …** button and goes when that does — see [Jumping around](/help/jumping-around).\n- **Coloured marks down the right edge: the passages the open mode points at.** In Search, each\n  search you have switched on gets its own narrow lane in its own colour; in Quotes, Ideas, Skim and\n  the other modes that point at passages, the marks are those passages. **Each mark is as tall as\n  its paragraph**, so you can see how a set of results is spread: bunched in one section, scattered\n  evenly, or only in the notes. A list of results cannot show you that.\n\n**Point at the spine to read it.** Every section has a card. It starts with a small outline of the\narticle showing where the section sits: the part it belongs to, the sections on either side, and its\nplace in the part (“3 of 7”) when the part is long. Under the section’s own name are a short gist\nand what is inside it. Then come how many words it has, how far in it starts, and how many search\nmatches it holds. A heading set in the author’s typeface is the author’s own; one in the AI’s was\nwritten by the AI. Once a card is open, move slowly down the spine and the cards follow, so you can\nread the outline section by section.\n\n(Picture: The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts. Caption: Move slowly down the spine and the card follows, one section at a time.)\n\n**Click to go there.** A click lands at the start of that section. On a touchscreen, the first tap\nopens the card and the second goes there, because most sections are too thin to tap blind. With the\npointer over the spine, <kbd>↑</kbd> and <kbd>↓</kbd> move one part at a time."
++  "body": "The spine is the thin strip down the left edge: the whole article squeezed to the height of your\nwindow. It is **proportional** — a part that fills half the piece fills half the spine — so it is a\npicture of the article’s shape, not a list of headings. At a glance it shows how far through you\nare, how big each part is, and where the things you are looking for sit.\n\nWhat each mark means:\n\n- **Tinted blocks, stacked top to bottom: the parts.** Each is as tall as that part is long, with a\n  thin line between one and the next. A short part can be a sliver too thin to see.\n- **One block a little brighter: the part you are in.**\n- **The strongest fill: the section you are in**, inside the brighter part. It does not appear when\n  a part has no sections.\n- **Short hairlines inside a part: where its sections begin**, even where there is no room to name\n  them.\n- **Very faint blocks near the bottom: endnotes, references and other back matter.** Dimmed so you\n  can see where the argument ends, but kept at their true size. If the spine says you are 60%\n  through and the rest is faint, you have nearly finished the article itself.\n- **A box with orange top and bottom edges: what is on your screen.** It moves as you scroll, and\n  its height shows how much of the article fits on one screen.\n- **A tinted area from the left edge, with a brighter line at its edge: where you have spent time\n  reading.** The further across the strip it reaches, the longer you spent there. A quick glance may\n  leave no shading. Use it to find where you had got to after jumping around. Only whoever added the\n  article sees it.\n- **One faint grey bar across the full width: where you jumped from.** It appears with the **↩ back\n  to …** button and goes when that does — see [Jumping around](/help/jumping-around).\n- **A thin purple strip down the left edge: the quotes**, in every mode, brighter for the stronger\n  ones.\n- **Coloured marks down the right edge: the passages the open mode points at.** In Search, each\n  search you have switched on gets its own narrow lane in its own colour, and the marks follow the\n  threshold as you move it. In Ideas and Timeline they are the passages of the idea or event you\n  pressed, and in Referee its passages. **Each mark is as tall as its paragraph**, so you can see\n  how a set of results is spread: bunched in one section, scattered evenly, or only in the notes. A\n  list of results cannot show you that.\n\n**Point at the spine to read it.** Every section has a card. It starts with a small outline of the\narticle showing where the section sits: the part it belongs to, the sections on either side, and its\nplace in the part (“3 of 7”) when the part is long. Under the section’s own name are a short gist\nand what is inside it. Then come how many words it has, how far in it starts, and how many search\nmatches it holds. A heading set in the author’s typeface is the author’s own; one in the AI’s was\nwritten by the AI. At the foot of every card is a small key to the colours on the spine at that\nmoment: only the marks it is drawing now, so it changes as you open a search or a mode. Once a card is open, move slowly down the spine and the cards follow, so you can\nread the outline section by section.\n\n(Picture: The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts. Caption: Move slowly down the spine and the card follows, one section at a time.)\n\n**Click to go there.** A click lands at the start of that section. On a touchscreen, the first tap\nopens the card and the second goes there, because most sections are too thin to tap blind. With the\npointer over the spine, <kbd>↑</kbd> and <kbd>↓</kbd> move one part at a time."
+  },
+  {
+   "anchor": "jumping-around",
+diff --git a/src/web/Spine.tsx b/src/web/Spine.tsx
+index 58251c410..47583ba65 100644
+--- a/src/web/Spine.tsx
++++ b/src/web/Spine.tsx
+@@ -118,6 +118,13 @@ import type { ReadReach } from "./reading-time.js";
+ import { useJumpOrigin } from "./router.js";
+ import { Tooltip, TooltipGroup } from "./Tooltip.js";
+ import { WhereCard } from "./WhereCard.js";
++import {
++  type RailMarks,
++  SEARCH_RAIL_MARKS,
++  SpineKey,
++  type SpineKeyItem,
++  spineKeyItems,
++} from "./spine-key.js";
+ import { spineLabel, type WhereRow, whereForBand } from "./where.js";
+ import { useRenderCount } from "./perf.js";
+ import { onFontsChanged } from "./fonts.js";
+@@ -280,6 +287,12 @@ interface Props {
+    * has to know this feature exists.
+    */
+   matches?: Map<BlockId, BlockMatch> | undefined;
++  /**
++   * What the `matches` lanes are, in the open mode's words — for the card's
++   * key, its count and each band's accessible name. reader/passages.ts §
++   * `railMarks`. Defaults to Search's, which is what the lanes were built for.
++   */
++  marksWords?: RailMarks | undefined;
+   /**
+    * How long the reader has spent on each block, as a reach in sixteenths of
+    * the rail — `useReadingTime`'s `reach`, reading-time.ts § `readReach`.
+@@ -518,6 +531,7 @@ function SpineInner({
+   outline,
+   layoutKey,
+   matches = NO_MATCHES,
++  marksWords = SEARCH_RAIL_MARKS,
+   reading = NO_READING,
+   quotes = NO_QUOTES,
+   onJump,
+@@ -963,6 +977,27 @@ function SpineInner({
+     [metrics, quotes],
+   );
+ 
++  /**
++   * **The card's key: what the rail is drawing now** — spine-key.tsx, Greg's
++   * `spya-ah5ws6`. Built from the very values the marks below are drawn from,
++   * so the key cannot list a mark that is not on the rail or miss one that is.
++   * One swatch per lane that drew something, in lane order, because a lane
++   * whose search matched nothing on this page takes no room either.
++   */
++  const keyItems = useMemo(() => {
++    const byLane = new Map<number, string>();
++    for (const m of marks) if (!byLane.has(m.lane)) byLane.set(m.lane, m.rgb);
++    return spineKeyItems({
++      /* Only a back-matter band the rail actually gives height to. */
++      supplement: metrics?.l1.some((b) => b.entry.supplement && b.height > 0) ?? false,
++      reading: readPaths !== null,
++      from: from !== null,
++      quotes: quoteStrip.length > 0,
++      laneColours: [...byLane.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c),
++      marksLabel: marksWords.label,
++    });
++  }, [metrics, readPaths, from, quoteStrip, marks, marksWords]);
++
+   /**
+    * How many matches fall inside each hoverable band, by its node id.
+    *
+@@ -1390,6 +1425,7 @@ function SpineInner({
+                   position={Math.round((b.top / docHeight) * 100)}
+                   matches={bandCounts.get(b.entry.node.id) ?? 0}
+                   here={hereHitId === b.entry.node.id}
++                  keyItems={keyItems}
+                   /* Only when a finger opened it. A mouse reader hovering the
+                      rail is one click from anywhere and does not need telling;
+                      saying "tap again" to somebody holding a mouse is noise. */
+@@ -1412,7 +1448,7 @@ function SpineInner({
+                    description is what a screen reader can be configured not to
+                    read. "Four matches here" is the whole reason somebody using
+                    the rail during a search would press this one. */
+-                aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0)}
++                aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0, marksWords)}
+                 /* **The same fact the card puts in words, in the one place a
+                    screen reader will find it.** `you are here` in the card is
+                    the tooltip's *description*, which a screen reader can be
+@@ -1552,12 +1588,14 @@ function bandLabel(band: Band): { text: string; voice: Voice } {
+ }
+ 
+ /** The band's name for a screen reader, with the matches in it if there are any. */
+-function ariaFor(band: Band, matches: number): string {
++function ariaFor(band: Band, matches: number, words: RailMarks): string {
+   const name = band.parent
+     ? `${band.parent.title} › ${bandLabel(band).text}`
+     : bandLabel(band).text;
+   if (matches === 0) return name;
+-  return `${name} — ${matches} search ${matches === 1 ? "match" : "matches"}`;
++  /* In the open mode's words: the lanes are Ideas' or Timeline's passages as
++     often as Search's, and "3 search matches" in Ideas was simply wrong. */
++  return `${name} — ${matches} ${matches === 1 ? words.one : words.many}`;
+ }
+ 
+ function BandCard({
+@@ -1566,9 +1604,12 @@ function BandCard({
+   position,
+   matches,
+   here = false,
++  keyItems,
+   showTapHint = false,
+ }: {
+   band: Band;
++  /** What the rail is drawing now, keyed under the foot — spine-key.tsx. */
++  keyItems: readonly SpineKeyItem[];
+   /** The band's place in the outline — `whereForBand`. */
+   where: readonly WhereRow[];
+   position: number;
+@@ -1671,6 +1712,11 @@ function BandCard({
+             two are a few pixels apart. */}
+         {here && <span className="tip-here">you are here</span>}
+       </div>
++      {/* **What the spine is, and what its colours mean** — Greg, 2026-10-19,
++          `spya-ah5ws6`. Under the section's own facts, because those are what
++          the reader pointed for; above the tap hint, which is about the next
++          tap and has to stay last. */}
++      <SpineKey items={keyItems} />
+       {/* **Said out loud, because a tap that does nothing visible reads as a
+           broken control.** On a touch device the first tap opens this card and
+           does not move the article — which is the right behaviour on a rail of
+diff --git a/src/web/help/pages/spine.md b/src/web/help/pages/spine.md
+index 75dfcf59a..63c0d67c9 100644
+--- a/src/web/help/pages/spine.md
++++ b/src/web/help/pages/spine.md
+@@ -30,18 +30,22 @@ What each mark means:
+   article sees it.
+ - **One faint grey bar across the full width: where you jumped from.** It appears with the **↩ back
+   to …** button and goes when that does — see [Jumping around](/help/jumping-around).
++- **A thin purple strip down the left edge: the quotes**, in every mode, brighter for the stronger
++  ones.
+ - **Coloured marks down the right edge: the passages the open mode points at.** In Search, each
+-  search you have switched on gets its own narrow lane in its own colour; in Quotes, Ideas, Skim and
+-  the other modes that point at passages, the marks are those passages. **Each mark is as tall as
+-  its paragraph**, so you can see how a set of results is spread: bunched in one section, scattered
+-  evenly, or only in the notes. A list of results cannot show you that.
++  search you have switched on gets its own narrow lane in its own colour, and the marks follow the
++  threshold as you move it. In Ideas and Timeline they are the passages of the idea or event you
++  pressed, and in Referee its passages. **Each mark is as tall as its paragraph**, so you can see
++  how a set of results is spread: bunched in one section, scattered evenly, or only in the notes. A
++  list of results cannot show you that.
+ 
+ **Point at the spine to read it.** Every section has a card. It starts with a small outline of the
+ article showing where the section sits: the part it belongs to, the sections on either side, and its
+ place in the part (“3 of 7”) when the part is long. Under the section’s own name are a short gist
+ and what is inside it. Then come how many words it has, how far in it starts, and how many search
+ matches it holds. A heading set in the author’s typeface is the author’s own; one in the AI’s was
+-written by the AI. Once a card is open, move slowly down the spine and the cards follow, so you can
++written by the AI. At the foot of every card is a small key to the colours on the spine at that
++moment: only the marks it is drawing now, so it changes as you open a search or a mode. Once a card is open, move slowly down the spine and the cards follow, so you can
+ read the outline section by section.
+ 
+ ![The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts](images/spine-walk.gif "Move slowly down the spine and the card follows, one section at a time.")
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index e1a395bb1..ed2b1b28f 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -235,7 +235,7 @@ import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-conte
+ import { useWindowWidth, useRootFontPx } from "./measure.js";
+ import { useReadingPosition } from "./useReadingPosition.js";
+ import { useModeFlashOwnership } from "./mode-flash.js";
+-import { proseFound, railFound, selectPassages } from "./passages.js";
++import { proseFound, railFound, railMarks, selectPassages } from "./passages.js";
+ import { quoteAlphaByBlock } from "../spine-marks.js";
+ import { stepQuote } from "../QuotesPanel.js";
+ import { stepByKey } from "../list-step.js";
+@@ -4342,6 +4342,7 @@ export function Reader({
+           outline={outline}
+           layoutKey={layoutKey}
+           matches={hitBlocks}
++          marksWords={railMarks(mode)}
+           reading={owner?.readingTime.reach}
+           quotes={quoteRail}
+           onJump={jumpTo}
+diff --git a/src/web/reader/passages.ts b/src/web/reader/passages.ts
+index 79b3a85ec..f801b0d05 100644
+--- a/src/web/reader/passages.ts
++++ b/src/web/reader/passages.ts
+@@ -45,6 +45,7 @@
+  */
+ import type { BandMode } from "../../modes.js";
+ import type { Found } from "../search-hits.js";
++import { GENERIC_RAIL_MARKS, type RailMarks, SEARCH_RAIL_MARKS } from "../spine-key.js";
+ 
+ /**
+  * One producer's pair: the passages it has published, and which of them the
+@@ -175,6 +176,67 @@ export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot
+   }
+ }
+ 
++/* Module constants, not literals in the switch: `Spine` is memoised and this is
++   called on every `Reader` render, so a fresh object each time would redraw the
++   rail on every scroll tick (Spine.tsx § memo). */
++const IDEA_RAIL_MARKS: RailMarks = {
++  label: "this idea",
++  one: "passage of this idea",
++  many: "passages of this idea",
++};
++const EVENT_RAIL_MARKS: RailMarks = {
++  label: "this event",
++  one: "passage of this event",
++  many: "passages of this event",
++};
++const REFEREE_RAIL_MARKS: RailMarks = {
++  label: "referee passages",
++  one: "referee passage",
++  many: "referee passages",
++};
++
++/**
++ * **What the spine's lane marks are, in the open mode's words** — the label the
++ * spine card's key puts beside their swatches (src/web/spine-key.tsx; plan
++ * 261020e). Total over `BandMode` for `selectPassages`' reason: a mode that
++ * starts publishing passages has to say here what its marks are, or the key
++ * would call them something else's. **What that does not catch** (GPT Sol, plan
++ * review F4): a mode already listed below that starts publishing passages
++ * keeps its generic words until somebody comes here — so a mode added to
++ * `selectPassages`' passage arms should be moved to a named arm here too.
++ *
++ * Only the modes whose slot can reach the lane need a real answer: Quotes' and
++ * Skim's passages are quotes, which `railFound` sends to their own strip.
++ */
++export function railMarks(mode: BandMode): RailMarks {
++  switch (mode) {
++    case "search":
++      return SEARCH_RAIL_MARKS;
++    case "ideas":
++      return IDEA_RAIL_MARKS;
++    case "timeline":
++      return EVENT_RAIL_MARKS;
++    case "referee":
++      return REFEREE_RAIL_MARKS;
++    case "quotes":
++    case "skim":
++    case "plain":
++    case "chat":
++    case "glossary":
++    case "summary":
++    case "diagram":
++    case "learn":
++    case "structure":
++    case "sources":
++    case "faq":
++      return GENERIC_RAIL_MARKS;
++    default: {
++      const unhandled: never = mode;
++      return unhandled;
++    }
++  }
++}
++
+ /**
+  * **What the PROSE is marked with: the open mode's passages, plus the quotes,
+  * which are marked in every mode.**
+diff --git a/src/web/spine-key.tsx b/src/web/spine-key.tsx
+new file mode 100644
+index 000000000..2e968ebd0
+--- /dev/null
++++ b/src/web/spine-key.tsx
+@@ -0,0 +1,143 @@
++/**
++ * **The key at the foot of every spine card**: what the spine is, and what the
++ * colours on it right now mean.
++ *
++ * > In the tooltip for the Spine, also explain to the user what the Spine
++ * > means/how it works/what all the colours etc connote.
++ * >
++ * > — Greg, 2026-10-19, `spya-ah5ws6`
++ *
++ * **Only the marks the rail is drawing now**, not the full legend. The full one
++ * is nine kinds of mark on a card that cannot scroll (where.ts §
++ * `SPINE_LIMITS`), most of them absent at any moment; the question a reader is
++ * actually asking is "what is *that* purple?", about something in front of them.
++ * The full legend stays on `/help/spine`, and is not even named here: the
++ * spine's cards do not take the pointer (Tooltip.tsx), so a link in one could
++ * never be clicked, and a line that looks like one costs height on a card that
++ * has none to spare (GPT Sol, plan review F6).
++ *
++ * Each swatch wears the mark's own token, so the key cannot drift from the
++ * rail's colours by being restated — styles/tooltip.css § the spine's key.
++ * docs/plans/261020e-spine-card-explains-the-spine-and-keys-its-colours.md.
++ */
++
++/**
++ * What the spine's lane marks are, in the open mode's words: `label` for the
++ * key's chip, `one` / `many` for a count of them — the card's footer and each
++ * band button's accessible name. reader/passages.ts § `railMarks` picks it.
++ */
++export interface RailMarks {
++  label: string;
++  one: string;
++  many: string;
++}
++
++/** Search's words, which is what the lanes were built for and the default. */
++export const SEARCH_RAIL_MARKS: RailMarks = {
++  label: "search matches",
++  one: "search match",
++  many: "search matches",
++};
++
++/** For a mode whose slot never reaches the lane — never shown, but total. */
++export const GENERIC_RAIL_MARKS: RailMarks = {
++  label: "marked passages",
++  one: "marked passage",
++  many: "marked passages",
++};
++
++/** One kind of mark, keyed. `swatch` picks the CSS that draws it like the mark. */
++export type SpineKeyItem =
++  | { kind: "here" }
++  | { kind: "screen" }
++  | { kind: "supplement" }
++  | { kind: "reading" }
++  | { kind: "from" }
++  | { kind: "quotes" }
++  /** The lane marks, one swatch per lane in that lane's colour (`laneColour`). */
++  | { kind: "lanes"; label: string; colours: readonly string[] };
++
++/** What `Spine` already knows about what it is drawing. */
++export interface SpineKeyInput {
++  supplement: boolean;
++  reading: boolean;
++  from: boolean;
++  quotes: boolean;
++  /** Each drawn lane's colour, in lane order; empty when the lane draws nothing. */
++  laneColours: readonly string[];
++  /** What the lane marks are, in the open mode's words — `railMarksLabel`. */
++  marksLabel: string;
++}
++
++/**
++ * The key's chips, in the rail's own left-to-right, back-to-front order of
++ * importance: where you are first, then the optional marks.
++ *
++ * *you are here* and *on screen* are always drawn while the rail is (the
++ * viewport box always; the brighter part always, the section fill when the part
++ * has sections), so they are always keyed.
++ */
++export function spineKeyItems(input: SpineKeyInput): SpineKeyItem[] {
++  const items: SpineKeyItem[] = [{ kind: "here" }, { kind: "screen" }];
++  if (input.laneColours.length > 0) {
++    items.push({ kind: "lanes", label: input.marksLabel, colours: input.laneColours });
++  }
++  if (input.quotes) items.push({ kind: "quotes" });
++  if (input.reading) items.push({ kind: "reading" });
++  if (input.from) items.push({ kind: "from" });
++  if (input.supplement) items.push({ kind: "supplement" });
++  return items;
++}
++
++/* `here` is the brighter part and the stronger section fill inside it, which
++   the swatch draws at the section fill's strength — the sentence above says
++   what the paler tint is. */
++const WORDS: Record<Exclude<SpineKeyItem["kind"], "lanes">, string> = {
++  here: "where you are",
++  screen: "on screen",
++  supplement: "notes & references",
++  reading: "time spent reading",
++  from: "where you jumped from",
++  quotes: "quotes",
++};
++
++/**
++ * The key itself. `aria-hidden`, because the card is each band button's
++ * *description* (useRole wires it as `aria-describedby`): unhidden, a screen
++ * reader would read the same legend after every one of fifty band names. The
++ * facts it carries for a sighted reader are colours, which say nothing aloud.
++ */
++export function SpineKey({ items }: { items: readonly SpineKeyItem[] }) {
++  return (
++    <div className="tip-key" aria-hidden="true">
++      <p className="tip-key-what">
++        The spine is the whole article, top to bottom, to scale: each tinted band a part, each
++        hairline a section. Point to read one; click to go there.
++      </p>
++      <ul className="tip-key-items">
++        {items.map((item) => (
++          <li key={item.kind} data-key={item.kind}>
++            {item.kind === "lanes" ? (
++              <>
++                {item.colours.map((c, i) => (
++                  <span
++                    // biome-ignore lint/suspicious/noArrayIndexKey: one swatch per lane, in lane order; the position is the lane.
++                    key={i}
++                    className="tip-key-swatch tip-key-lanes"
++                    style={{ background: `rgb(${c})` }}
++                  />
++                ))}
++                {item.label}
++              </>
++            ) : (
++              <>
++                <span className={`tip-key-swatch tip-key-${item.kind}`} />
++                {WORDS[item.kind]}
++              </>
++            )}
++          </li>
++        ))}
++      </ul>
++    </div>
++  );
++}
+diff --git a/src/web/styles/tooltip.css b/src/web/styles/tooltip.css
+index 939d216e8..5a99dc6f6 100644
+--- a/src/web/styles/tooltip.css
++++ b/src/web/styles/tooltip.css
+@@ -198,6 +198,67 @@
+   font-style: italic;
+ }
+ 
++/* **The spine's key** — spine-key.tsx, Greg's `spya-ah5ws6`: what the spine is
++   and what the colours on it now mean. Ruled off under the footer and set in
++   the footer's faint small voice, because it is the part of the card a reader
++   who knows the spine reads past. Each swatch wears its mark's own token and
++   opacity from styles/spine.css, so the key says the colour the rail draws
++   rather than a restatement of it; a lane's swatch is coloured inline from the
++   lane itself (`laneColour`). */
++.tip-key {
++  margin-top: 0.45rem;
++  padding-top: 0.4rem;
++  border-top: 1px solid var(--rule);
++  font-size: 0.66rem;
++  line-height: 1.35;
++  color: var(--ink-faint);
++}
++.tip-key p { margin: 0; }
++.tip-key-items {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 0.15rem 0.7rem;
++  margin: 0.3rem 0;
++  padding: 0;
++  list-style: none;
++}
++.tip-key-items li { display: inline-flex; align-items: center; gap: 0.25rem; }
++.tip-key-swatch {
++  display: inline-block;
++  flex: none;
++  box-sizing: border-box;
++  width: 0.4rem;
++  height: 0.7rem;
++}
++/* Two lanes' swatches touch, the way two lanes do on the rail. */
++.tip-key-lanes + .tip-key-lanes { margin-left: -0.2rem; }
++.tip-key-here { background: var(--depth-1); opacity: 0.8; }
++/* The two palest marks are drawn a little stronger than on the rail, where
++   they sit over a band and a reader sees them in context; at 6px on a card's
++   ground the rail's own 12% and 0.1 left nothing to see in light mode (browser
++   pass, plan 261020e). Still their own tokens. */
++.tip-key-screen {
++  border: 1px solid var(--highlight);
++  background: color-mix(in oklab, var(--highlight) 20%, transparent);
++}
++.tip-key-supplement {
++  background: color-mix(in oklab, var(--depth-1) 25%, transparent);
++  border: 1px solid color-mix(in oklab, var(--depth-1) 45%, transparent);
++}
++.tip-key-reading {
++  background: color-mix(in oklab, var(--read-time) 35%, transparent);
++  border-right: 1px solid var(--read-time);
++}
++.tip-key-from { background: var(--ink-faint); opacity: 0.55; }
++.tip-key-quotes { background: rgb(var(--quote-rgb) / 0.95); }
++/* **Not in a short window.** The card cannot scroll, and in a 400px-tall window
++   the band's own row, its footer and the tap hint already need all of it
++   (`.where-detail` above). The section is what the reader pointed for; the key
++   is the part that can go. */
++@media (max-height: 600px) {
++  .tip-key { display: none; }
++}
++
+ /* **The shelf table's row card** — library-columns.tsx § RowCard, plan 260928a.
+ 
+    Defined by subtraction like Structure's, so it has no title line: the title
+diff --git a/tests/spine-card.test.tsx b/tests/spine-card.test.tsx
+index 02d124d24..a5109e9f7 100644
+--- a/tests/spine-card.test.tsx
++++ b/tests/spine-card.test.tsx
+@@ -45,6 +45,8 @@ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import { Spine } from "../src/web/Spine.js";
+ import type { OutlineEntry } from "../src/web/tree.js";
++import type { BlockMatch } from "../src/web/search-hits.js";
++import { SEARCH_RAIL_MARKS } from "../src/web/spine-key.js";
+ import type { BlockId, NodeId, TreeNode } from "../src/types.js";
+ 
+ class FakeResizeObserver {
+@@ -668,3 +670,104 @@ describe("a bullet that would repeat a row of the outline", () => {
+     expect(kidText(card)).toEqual(["Stimulus timing", "Participants", "Results", "Procedure"]);
+   });
+ });
++
++/**
++ * **The key under the foot: what the spine is, and what is on it now** — plan
++ * 261020e, Greg's `spya-ah5ws6`. The assertions that matter are the negative
++ * ones: a key that listed every mark whatever the rail drew would pass every
++ * "it says search matches" test and be the full legend this plan passed over.
++ */
++describe("the key", () => {
++  const keyed = (card: HTMLElement) =>
++    [...card.querySelectorAll<HTMLElement>(".tip-key-items li")].map((li) => li.dataset.key);
++
++  function mountWith(props: Partial<Parameters<typeof Spine>[0]>) {
++    act(() => {
++      root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} {...props} />);
++    });
++    act(() => {
++      vi.advanceTimersByTime(50);
++    });
++  }
++
++  it("says what the spine is, and keys only the two marks that are always drawn", () => {
++    mountSpine();
++    const card = openCard(S1);
++    expect(card.querySelector(".tip-key-what")?.textContent).toContain("whole article");
++    expect(keyed(card)).toEqual(["here", "screen"]);
++  });
++
++  it("keys the lanes when, and only when, they draw something — one swatch per lane", () => {
++    mountWith({
++      matches: new Map<BlockId, BlockMatch>([
++        ["b1" as BlockId, { searches: [{ runId: "r1", slot: 0 }, { runId: "r2", slot: 3 }], count: 2 }],
++        ["b2" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
++      ]),
++      marksWords: SEARCH_RAIL_MARKS,
++    });
++    const card = openCard(S1);
++    expect(keyed(card)).toEqual(["here", "screen", "lanes"]);
++    const lanes = card.querySelector<HTMLElement>('[data-key="lanes"]')!;
++    expect(lanes.textContent).toBe("search matches");
++    expect(
++      [...lanes.querySelectorAll<HTMLElement>(".tip-key-swatch")].map((s) => s.style.background),
++    ).toEqual(["rgb(var(--cat-0-rgb))", "rgb(var(--cat-3-rgb))"]);
++  });
++
++  it("does not key a lane for a match on a block the page does not have", () => {
++    mountWith({
++      matches: new Map<BlockId, BlockMatch>([
++        ["gone" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
++      ]),
++    });
++    expect(keyed(openCard(S1))).toEqual(["here", "screen"]);
++  });
++
++  it("keys the quote strip when there are quotes, in the open mode's words for the lanes", () => {
++    mountWith({
++      quotes: new Map<BlockId, number>([["b3" as BlockId, 0.9]]),
++      matches: new Map<BlockId, BlockMatch>([
++        ["b1" as BlockId, { searches: [{ runId: "i1", slot: 0 }], count: 1 }],
++      ]),
++      marksWords: { label: "this idea", one: "passage of this idea", many: "passages of this idea" },
++    });
++    const card = openCard(S1);
++    expect(keyed(card)).toEqual(["here", "screen", "lanes", "quotes"]);
++    expect(card.querySelector('[data-key="lanes"]')?.textContent).toBe("this idea");
++  });
++
++  it("is hidden from a screen reader, which hears the card as every band's description", () => {
++    mountSpine();
++    expect(openCard(S1).querySelector(".tip-key")?.getAttribute("aria-hidden")).toBe("true");
++  });
++});
++
++describe("a band's accessible name counts the lane marks in the open mode's words", () => {
++  function mountWith(props: Partial<Parameters<typeof Spine>[0]>) {
++    act(() => {
++      root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} {...props} />);
++    });
++    act(() => {
++      vi.advanceTimersByTime(50);
++    });
++  }
++  const MATCH = new Map<BlockId, BlockMatch>([
++    ["b0" as BlockId, { searches: [{ runId: "r1", slot: 0 }], count: 1 }],
++  ]);
++  const names = () =>
++    [...host.querySelectorAll(".spine-hit")].map((b) => b.getAttribute("aria-label") ?? "");
++
++  it("says search matches by default", () => {
++    mountWith({ matches: MATCH });
++    expect(names().some((n) => n.endsWith("— 1 search match"))).toBe(true);
++  });
++
++  it("and not search matches in Ideas, where the lane is an idea's passages", () => {
++    mountWith({
++      matches: MATCH,
++      marksWords: { label: "this idea", one: "passage of this idea", many: "passages of this idea" },
++    });
++    expect(names().some((n) => n.endsWith("— 1 passage of this idea"))).toBe(true);
++    expect(names().some((n) => n.includes("search"))).toBe(false);
++  });
++});

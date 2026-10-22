@@ -236,3 +236,22 @@ export const PUBLIC_ROUTE_NAMES: readonly PublicRouteName[] = [
    */
   publicAsset("asset"),
 ];
+
+/**
+ * **The one write in the closed room**: a signed-out visitor opened a private
+ * link. `POST /api/public/private-link-opened/<slug>?key=<key>`, answered 204
+ * with no body whatever happened. Greg, 2026-10-20 (reply `spya-xug3kf` to
+ * q-agbc89, option C: *a count of signed-out opens*).
+ * docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md § 4.
+ *
+ * **Not in `PUBLIC_ROUTE_NAMES`**, and that is the point: that list is the read
+ * routes, every one of which refuses every method but GET and HEAD, and the
+ * sweeps drive off it. This route is the opposite — POST only — so it has its
+ * own name, its own branch in `servePublicApi` and its own method check, and
+ * no sweep can mistake it for a read.
+ */
+export const PRIVATE_LINK_OPENED = {
+  name: "private-link-opened",
+  pattern: new RegExp(`^/api/public/private-link-opened/(${SLUG_CHARS})$`),
+  path: (slug: string) => `/api/public/private-link-opened/${slug}`,
+} as const;

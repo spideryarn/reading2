@@ -14,7 +14,8 @@
  *
  * The rule for a test author: **ask for the set you mean, never for a file.**
  * `readerCss()` is what "the hand-written reading-view rules" means today and
- * will go on meaning after the next split.
+ * will go on meaning after the next split. It returns the resolved contents,
+ * not the import statements whose targets the walker has already inserted.
  *
  * The order matters and is preserved — but only because the graph is kept
  * **flat**, and `walk()` below now enforces that rather than assuming it. See
@@ -35,6 +36,14 @@ const ROOT = path.resolve(import.meta.dirname, "..", "..");
 /** The one file `main.tsx` imports. Everything else hangs off it. */
 export const ENTRY = "src/web/tailwind.css";
 
+/**
+ * **The one hand-written sheet in a layer above the utilities**, imported from
+ * `ENTRY` as `layer(tone)` rather than from `styles.css` (plan 261020z; the
+ * note above its import in tailwind.css). It is part of the reading view's
+ * cascade, and the last of it.
+ */
+export const TONE_SHEET = "src/web/button-tone.css";
+
 /** The former contents of `styles.css`, rooted at the file that still names them. */
 const READER_ROOT = "src/web/styles.css";
 
@@ -53,12 +62,12 @@ export interface Sheet {
  * `--color-…` match something nobody in this repo wrote.
  *
  * The `layer(...)`/`prefix(...)`/`source(...)` suffixes are ignored rather than
- * parsed. **One relative import does carry one** — `tailwind.css`'s
+ * parsed. **Two relative imports do carry one**, both in `tailwind.css`:
  * `@import "./styles.css" layer(app)`, which is the whole mechanism that puts
- * the reading-view rules in `@layer app` (see that file's header). A second one
- * anywhere would be the bug, and
- * `tests/styles-entry-is-imports-only.test.ts` is what refuses it, in the only
- * file that could grow one.
+ * the reading-view rules in `@layer app` (see that file's header), and
+ * `@import "./button-tone.css" layer(tone)`, the one sheet above the utilities.
+ * A third anywhere would be the bug, and
+ * `tests/styles-entry-is-imports-only.test.ts` is what refuses it.
  */
 /**
  * **Both spellings, because CSS has two and the ban is only worth what it
@@ -182,8 +191,8 @@ function walk(start: string): Sheet[] {
 }
 
 /**
- * **Every sheet the client loads**, in cascade order: `tailwind.css`, the
- * reading-view sheets beneath it, and the two under `styles/`.
+ * **Every sheet the client loads**, in cascade order: the two under `styles/`,
+ * the reading-view sheets, the tone sheet and `tailwind.css`.
  *
  * For a test that asks a question about *all* the CSS — that no sheet reads a
  * custom property nothing defines, say. `tests/css-tokens.test.ts` is the
@@ -205,13 +214,20 @@ export function allSheets(): Sheet[] {
  * was introduced to avoid.
  */
 export function readerSheets(): Sheet[] {
-  return walk(READER_ROOT).filter((s) => s.path.startsWith("src/web/"));
+  return [...walk(READER_ROOT), ...walk(TONE_SHEET)].filter((s) => s.path.startsWith("src/web/"));
 }
 
 /** `readerSheets()` concatenated, in cascade order. */
 export function readerCss(): string {
   return readerSheets()
-    .map((s) => s.css)
+    /* `walk()` has already resolved these edges. Leaving the written imports
+       in the concatenation is not merely redundant: an imports-only sheet
+       immediately before a rule makes a naive `selector { … }` scanner read
+       all of its `@import` text as part of that selector. Several tests use
+       exactly that deliberately small scanner. The built CSS contains the
+       imported rules here, not the import statements, so remove them once in
+       the shared helper instead of teaching every consumer the same repair. */
+    .map((s) => s.css.replace(/^\s*@import\s+[^;]+;\s*$/gm, ""))
     .join("\n");
 }
 

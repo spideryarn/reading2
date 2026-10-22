@@ -492,10 +492,13 @@ describe("every article lookup names an owner", () => {
    * - `ai-calls-spend-pg.ts` is the per-owner spend aggregate, added 2026-09-02.
    *   It has the same shape and the same justification: `/admin/users` reads it
    *   through that same gate, and `npm run cost -- --owners` reads it from a CLI
-   *   Greg runs on his own machine. It returns **money and an owner id and
-   *   nothing else** — no title, no URL, no slug, no sentence of anybody's
-   *   reading — which is the rule admin.md states for the page and the reason
-   *   this second entry is a widening rather than a hole.
+   *   Greg runs on his own machine. It returns **spend totals and counts, an
+   *   owner id and an opaque article id** (the article id since 2026-10-05,
+   *   for `/admin/costs` and later `/admin/articles`' Total cost column) — no
+   *   title, no URL, no other owner's slug, no sentence of anybody's reading.
+   *   That is the rule admin.md states for the page and the reason this second
+   *   entry is a widening rather than a hole; the file's own header has the
+   *   full list.
    *
    * Adding a third is a decision about who may see across owners, which is why
    * it is a list here rather than a per-file opt-out somewhere quieter.
@@ -632,8 +635,8 @@ describe("the one query that lists articles for nobody in particular", () => {
     source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
   /**
-   * **The two queries in the whole public surface that may name `articles`**,
-   * and what makes each one safe.
+   * **The queries in the whole public surface that may name `articles`**, and
+   * what makes each one safe.
    *
    * - `public-reader.ts` → `publicCurrentRevisionQuery`, whose `where` is
    *   `publicSlug(slug)` — slug **and** visibility, section 2's second
@@ -641,9 +644,9 @@ describe("the one query that lists articles for nobody in particular", () => {
    * - `public-library.ts` → `publicLibraryQuery`, the listing, whose `where` is
    *   visibility **and** the readability bar, and whose SQL is read below.
    *
-   * A third entry here is a decision about what a stranger may enumerate, which
-   * is why it is a list in a test rather than a comment in whichever file grew
-   * the query.
+   * Another entry here is a decision about what a stranger may read or write,
+   * which is why this is a list in a test rather than a comment in whichever
+   * file grew the query.
    */
   const LISTING = { file: "src/store/public-library.ts", fn: "publicLibraryQuery" };
   /**
@@ -696,6 +699,14 @@ describe("the one query that lists articles for nobody in particular", () => {
       ],
     },
     { file: LISTING.file, fns: [LISTING.fn] },
+    /* **Added 2026-10-21: the one public write.** A signed-out visitor opened
+       a private link, so its count goes up (Greg's reply `spya-xug3kf` to
+       q-agbc89, option C). It names `articles` only as the source of an
+       `insert … select`, by `privateLinkWhere` — slug, key and private — in
+       its own `where`; it selects the article's id into the count's row and
+       returns nothing to the caller. No owner is bound or selected.
+       docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md § 4. */
+    { file: "src/store/private-link-signed-out-opens.ts", fns: ["countSignedOutOpen"] },
   ];
 
   /**
@@ -781,7 +792,7 @@ describe("the one query that lists articles for nobody in particular", () => {
    * too, naming both the alias and the table it aliases; the regex this replaced
    * was green on exactly that.
    */
-  it("names the articles table in exactly two places, each inside its own function", async () => {
+  it("names the articles table in exactly the permitted files, each inside its own functions", async () => {
     const offenders: string[] = [];
     const permittedFiles = PERMITTED.map((one) => one.file);
 
@@ -790,7 +801,7 @@ describe("the one query that lists articles for nobody in particular", () => {
       if (uses.length === 0) continue;
       if (!permittedFiles.includes(file)) {
         offenders.push(
-          `${file} names the articles table and is not one of the two permitted: ` +
+          `${file} names the articles table and is not one of the permitted files: ` +
             uses.map((u) => `line ${u.line} (${u.how}) ${u.text}`).join("; "),
         );
       }

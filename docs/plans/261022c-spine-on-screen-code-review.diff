@@ -1,0 +1,545 @@
+diff --git a/docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md b/docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md
+new file mode 100644
+index 000000000..fc2814b83
+--- /dev/null
++++ b/docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md
+@@ -0,0 +1,119 @@
++# The spine shows clearly which stretch of the article is on screen
++
++Report `spya-wzssyu` (#672), Greg's, filed 2026-10-21 on the Rovelli article with Summary open:
++
++> Make it a bit clearer in the spine which bits are visible on the screen.
++
++Up: [reading-view-overview.md](../project/reading-view-overview.md) · the rail is
++[`src/web/Spine.tsx`](../../src/web/Spine.tsx), its look
++[`src/web/styles/spine.css`](../../src/web/styles/spine.css).
++
++## The problem
++
++The rail is 12px wide and nearly all one colour family. The parts are a tint of `--depth-1`
++(orange-brown, hue ~52), the section you are in is the same tint at 0.8, and the on-screen band
++(`.spine-viewport`) is the brand orange (`--highlight`, hue ~58): two 1px lines and a 12% wash.
++The section fill is usually *inside* the band and brighter than the band's wash, so the only thing
++that says "this is on screen" is two hairlines of a colour very close to everything around them.
++The before screenshots below show it.
++
++## What changes
++
++**A lens.** The rail outside the on-screen stretch is veiled toward the panel colour; the stretch
++that is on screen keeps its full strength. The orange edges stay where they are (on top of
++everything — `--highlight` still means *where you are looking*). The 12% orange wash goes, because
++the lit stretch is now the signal and the change adds no colour next to the prose: it takes some
++away from the rest of the rail instead. That is how it stays quiet.
++
++- **The veil is a second moving element, below the marks.** A veil on the band itself (the band
++  is the last child of the track) would dim the search marks, the quote strip and the jump-origin
++  mark everywhere off screen — and "where else in the article" is exactly what those are for.
++  So a new `.spine-veil-track` sits in the track after the parts, the reading chart,
++  the section fill and the hairlines, and before `.spine-from`, the quotes, the search marks and
++  the hit targets. The scroll effect writes the same `translateY(%)` to both wrappers in the same
++  frame. Two compositor-only transform writes instead of one; no layout, no paint, no re-render
++  (Spine.tsx § scroll position still holds).
++- **The veil is the wrapper's two pseudo-elements**, each a track-height rectangle of
++  `color-mix(in oklab, var(--panel) N%, transparent)`: `::before` ends where the band starts,
++  `::after` starts where it ends (`max(var(--view-h), 2px)`, the band's own height and floor, set
++  inline as a custom property). The overhang is clipped by `.spine { overflow: hidden }`. N was set
++  by eye on the browser pass: **50% dark, 40% light** (the light panel swallows more of a tint).
++  *Changed on GPT Sol's plan review:* the first version was a `box-shadow` with a 200vh spread,
++  whose layer cost was a claim rather than a measurement; two bounded rectangles make the layer
++  three rails tall and no more, and are no harder to read.
++- **High-contrast settings.** Under `forced-colors: active` the veil is `display: none` (a forced
++  palette would repaint it as an opaque system colour) and the band's edges, and the card key's,
++  are drawn in `Highlight`. `prefers-contrast: more` gets a stronger veil (65% / 60%) and 2px edges.
++- **The key on the spine's card** (`.tip-key-screen`, plan 261020e) is redrawn to match: no orange
++  wash, orange top and bottom edges round an unveiled part's tint.
++- **Help says it**: `/help/spine`'s line about the band now describes the lit stretch. The
++  `spine-walk.gif` on that page was not re-recorded: it is about the hover card following the
++  pointer, and the band in it is incidental and a few pixels tall.
++
++## A bug found on the way: the rail ran under the bottom bar
++
++The browser pass at the very end of an article found no band at all. `.spine` ended at
++`bottom: var(--safe-bottom)`, and the dock (z-index 96, over the rail's 45) covered its last ~40px
++— on every page, the end of every article, and the on-screen band whenever the reader was there.
++Fixed by giving the rail the bottom edge the mode band already has,
++`calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now))`, which follows the bar down
++when it slides away on a small device; everything inside the track is a percentage of its height,
++so nothing has to be re-measured. Measured after: rail 44–860 on a 900px window (was 44–900, with
++860–900 under the bar), and the band visible at the foot at the end of the article.
++`tests/spine-bottom.test.ts`, seen red against the old rule.
++
++## The simpler option passed over
++
++**Just turn the band up** — 2px edges, a 20–25% wash. One line of CSS, but it fights orange with
++more orange, on a rail beside the prose, and the result is louder without being much clearer: the
++section fill under it is still the brightest thing in the stretch. Contrast in lightness does the
++job with no added colour. Second opinion from Opus, which also proposed the veil-under-the-marks
++layering.
++
++**One moving element instead of two** (put the whole band below the marks): simpler by one div,
++but then the orange edges disappear under any search lane that crosses them, and the jump-origin
++mark — usually off screen — would be veiled. Rejected for that.
++
++## What it costs
++
++- Off screen, the part tints and the reading-time chart are dimmed by the veil. The chart is
++  already faint; the browser pass checks it is still legible off screen in both themes, and the
++  strength is chosen with that in view.
++
++## Verification
++
++- Before and after screenshots at desktop (1440×900), iPad portrait (820×1180) and phone
++  (390×844), light and dark, with a crop of the rail — below.
++- `npm test`, `npm run typecheck`. The paint-order tests pin the veil's slot: over the parts, the
++  section fill and the hairlines (`spine-here.test.ts`), over the reading chart
++  (`spine-reading.test.ts`), under the origin mark (`spine-jump-origin.test.ts`), the quotes
++  (`spine-quote-strip.test.ts`), the search marks and the hits. `spine-scroll.test.ts` checks the
++  two wrappers carry the same transform, and the veil's gap the band's height, at first placement,
++  across a section boundary, within a section, and after a window resize, body resize, font swap
++  and mode switch — seen red with the veil's write disabled. `spine-card.test.tsx` pins the key's
++  swatch (no orange wash; `Highlight` under forced colours).
++
++## Review
++
++GPT Sol on the plan: [261022c-spine-on-screen-plan-review-sol.md](261022c-spine-on-screen-plan-review-sol.md)
++(approve with changes). Taken: bounded rectangles instead of the spread shadow (1), the 2px floor
++shared with the band (2), equality checked on every placement path (3), forced colours explicit
++and the key included (5), the owning tests, Help, the corpus and this doc's line in
++granularity-zoom.md (6). Its point 2 also asks what happens at the article's very end, where the
++band's 2px floor can overhang the rail's foot: the veil uses the same floor, so they overhang
++together, as the band alone already did; the browser pass checks it.
++
++## Screenshots
++
++The article is `noema-mythology-of-conscious-ai`, scrolled 35% in (a chat panel happened to be
++open; it does not touch the rail).
++
++[261022c-before-after-rail-zoom.png](261022c-before-after-rail-zoom.png) is the rail around the
++band, 4× and nearest-neighbour, twelve strips in pairs (before, after): desktop light, desktop
++dark, iPad light, iPad dark, phone light, phone dark. Before, the band is a slightly darker patch
++inside the equally orange section fill; after, the stretch on screen is the one bright piece of
++the rail, and the reading chart (teal) and the hairlines still read through the veil off screen.
++
++The full-height rail crops are `261022c-{before,after}-{desktop,ipad,phone}-{light,dark}-spine.png`,
++and one whole window each side for context: `261022c-before-desktop-light.png`,
++`261022c-after-desktop-light.png`.
+diff --git a/docs/project/granularity-zoom.md b/docs/project/granularity-zoom.md
+index 978f0f76a..36546b2b6 100644
+--- a/docs/project/granularity-zoom.md
++++ b/docs/project/granularity-zoom.md
+@@ -588,6 +588,12 @@ Four decisions worth keeping:
+   in front of them. Hidden from screen readers (the card is every band's description) and in windows
+   600px tall or shorter. [`spine-key.tsx`](../../src/web/spine-key.tsx);
+   [261020e](../plans/261020e-spine-card-explains-the-spine-and-keys-its-colours.md).
++- **What is on screen is said by lightness, not by more orange** (since 2026-10-22, Greg's
++  `spya-wzssyu`: *"Make it a bit clearer in the spine which bits are visible on the screen."*). The
++  rail off screen is veiled toward the panel, and the stretch on screen keeps its full strength
++  between the two orange edges. The veil sits under the marks a reader asked for (search, quotes,
++  where you jumped from), so they keep their colour wherever they are.
++  [261022c](../plans/261022c-spine-shows-clearly-what-is-on-screen.md).
+ - **There is one rail, and it is the collapsed one** — 12px of bands, ticks and marks, at every
+   window width. Halved from 24px on 2026-08-28, and the names it can no longer hold were already in
+   the hover card — [260828ay-spine-rail.md](../plans/260828ay-spine-rail.md).
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index 0815df369..e27119d8b 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -77,7 +77,7 @@
+   "summary": "What each mark on the strip down the left edge means, and how to point at it and click it to get around.",
+   "keywords": "rail strip map overview where am i position progress ticks lines heat coloured marks colours orange box results visuals legend meaning",
+   "experimental": false,
+-  "body": "The spine is the thin strip down the left edge: the whole article squeezed to the height of your\nwindow. It is **proportional** — a part that fills half the piece fills half the spine — so it is a\npicture of the article’s shape, not a list of headings. At a glance it shows how far through you\nare, how big each part is, and where the things you are looking for sit.\n\nWhat each mark means:\n\n- **Tinted blocks, stacked top to bottom: the parts.** Each is as tall as that part is long, with a\n  thin line between one and the next. A short part can be a sliver too thin to see.\n- **One block a little brighter: the part you are in.**\n- **The strongest fill: the section you are in**, inside the brighter part. It does not appear when\n  a part has no sections.\n- **Short hairlines inside a part: where its sections begin**, even where there is no room to name\n  them.\n- **Very faint blocks near the bottom: endnotes, references and other back matter.** Dimmed so you\n  can see where the argument ends, but kept at their true size. If the spine says you are 60%\n  through and the rest is faint, you have nearly finished the article itself.\n- **A box with orange top and bottom edges: what is on your screen.** It moves as you scroll, and\n  its height shows how much of the article fits on one screen.\n- **A tinted area from the left edge, with a brighter line at its edge: where you have spent time\n  reading.** The further across the strip it reaches, the longer you spent there. A quick glance may\n  leave no shading. Use it to find where you had got to after jumping around. Only whoever added the\n  article sees it.\n- **One faint grey bar across the full width: where you jumped from.** It appears with the **↩ back\n  to …** button and goes when that does — see [Jumping around](/help/jumping-around).\n- **A thin purple strip down the left edge: the quotes**, in every mode, brighter for the stronger\n  ones.\n- **Coloured marks down the right edge: the passages the open mode points at.** In Search, each\n  search you have switched on gets its own narrow lane in its own colour, and the marks follow the\n  threshold as you move it. In Ideas and Timeline they are the passages of the idea or event you\n  pressed, and in Referee its passages. **Each mark is as tall as its paragraph**, so you can see\n  how a set of results is spread: bunched in one section, scattered evenly, or only in the notes. A\n  list of results cannot show you that.\n\n**Point at the spine to read it.** Every section has a card. It starts with a small outline of the\narticle showing where the section sits: the part it belongs to, the sections on either side, and its\nplace in the part (“3 of 7”) when the part is long. Under the section’s own name are a short gist\nand what is inside it. Then come how many words it has, how far in it starts, and how many search\nmatches it holds (or, in Ideas, Timeline and Referee, how many of that mode's passages). A heading\nset in the author’s typeface is the author’s own; one in the AI’s was written by the AI. In all but\nthe shortest windows, the foot of every card has a small key to the colours on the spine at that moment: only the marks it is drawing now, so it\nchanges as you open a search or a mode. Once a card is open, move slowly down the spine and the cards\nfollow, so you can read the outline section by section.\n\n(Picture: The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts. Caption: Move slowly down the spine and the card follows, one section at a time.)\n\n**Click to go there.** A click lands at the start of that section. On a touchscreen, the first tap\nopens the card and the second goes there, because most sections are too thin to tap blind. With the\npointer over the spine, <kbd>↑</kbd> and <kbd>↓</kbd> move one part at a time."
++  "body": "The spine is the thin strip down the left edge: the whole article squeezed to the height of your\nwindow. It is **proportional** — a part that fills half the piece fills half the spine — so it is a\npicture of the article’s shape, not a list of headings. At a glance it shows how far through you\nare, how big each part is, and where the things you are looking for sit.\n\nWhat each mark means:\n\n- **Tinted blocks, stacked top to bottom: the parts.** Each is as tall as that part is long, with a\n  thin line between one and the next. A short part can be a sliver too thin to see.\n- **One block a little brighter: the part you are in.**\n- **The strongest fill: the section you are in**, inside the brighter part. It does not appear when\n  a part has no sections.\n- **Short hairlines inside a part: where its sections begin**, even where there is no room to name\n  them.\n- **Very faint blocks near the bottom: endnotes, references and other back matter.** Dimmed so you\n  can see where the argument ends, but kept at their true size. If the spine says you are 60%\n  through and the rest is faint, you have nearly finished the article itself.\n- **The stretch at full strength, between two orange edges: what is on your screen.** The rest of\n  the spine is a little dimmer. It moves as you scroll, and its height shows how much of the article\n  fits on one screen.\n- **A tinted area from the left edge, with a brighter line at its edge: where you have spent time\n  reading.** The further across the strip it reaches, the longer you spent there. A quick glance may\n  leave no shading. Use it to find where you had got to after jumping around. Only whoever added the\n  article sees it.\n- **One faint grey bar across the full width: where you jumped from.** It appears with the **↩ back\n  to …** button and goes when that does — see [Jumping around](/help/jumping-around).\n- **A thin purple strip down the left edge: the quotes**, in every mode, brighter for the stronger\n  ones.\n- **Coloured marks down the right edge: the passages the open mode points at.** In Search, each\n  search you have switched on gets its own narrow lane in its own colour, and the marks follow the\n  threshold as you move it. In Ideas and Timeline they are the passages of the idea or event you\n  pressed, and in Referee its passages. **Each mark is as tall as its paragraph**, so you can see\n  how a set of results is spread: bunched in one section, scattered evenly, or only in the notes. A\n  list of results cannot show you that.\n\n**Point at the spine to read it.** Every section has a card. It starts with a small outline of the\narticle showing where the section sits: the part it belongs to, the sections on either side, and its\nplace in the part (“3 of 7”) when the part is long. Under the section’s own name are a short gist\nand what is inside it. Then come how many words it has, how far in it starts, and how many search\nmatches it holds (or, in Ideas, Timeline and Referee, how many of that mode's passages). A heading\nset in the author’s typeface is the author’s own; one in the AI’s was written by the AI. In all but\nthe shortest windows, the foot of every card has a small key to the colours on the spine at that moment: only the marks it is drawing now, so it\nchanges as you open a search or a mode. Once a card is open, move slowly down the spine and the cards\nfollow, so you can read the outline section by section.\n\n(Picture: The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts. Caption: Move slowly down the spine and the card follows, one section at a time.)\n\n**Click to go there.** A click lands at the start of that section. On a touchscreen, the first tap\nopens the card and the second goes there, because most sections are too thin to tap blind. With the\npointer over the spine, <kbd>↑</kbd> and <kbd>↓</kbd> move one part at a time."
+  },
+  {
+   "anchor": "jumping-around",
+diff --git a/src/web/Spine.tsx b/src/web/Spine.tsx
+index 330399a08..4580a1bae 100644
+--- a/src/web/Spine.tsx
++++ b/src/web/Spine.tsx
+@@ -604,6 +604,10 @@ function SpineInner({
+   /** The track-height wrapper the viewport band rides in, moved directly by
+       `transform` rather than re-rendered (§ scroll position). */
+   const viewportMover = useRef<HTMLDivElement>(null);
++  /** Its twin under the marks, carrying the veil over everything off screen —
++      moved by the same write in the same frame (§ scroll position, and the
++      render beside `.spine-from`). */
++  const veilMover = useRef<HTMLDivElement>(null);
+   /**
+    * The presses begun on the rail whose clicks have not arrived yet, oldest
+    * first — see `bandClick`. A queue rather than one slot because clicks may
+@@ -739,8 +743,11 @@ function SpineInner({
+       raf = 0;
+       const sy = window.scrollY;
+ 
++      const at = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
+       const mover = viewportMover.current;
+-      if (mover) mover.style.transform = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
++      if (mover) mover.style.transform = at;
++      const veil = veilMover.current;
++      if (veil) veil.style.transform = at;
+ 
+       const pos = sy + viewportH * READING_LINE - docTop;
+       const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
+@@ -1245,6 +1252,34 @@ function SpineInner({
+           />
+         ))}
+ 
++        {/* **The veil: everything off screen, a little dimmer.** Greg,
++            2026-10-21 (spya-wzssyu): *"Make it a bit clearer in the spine which
++            bits are visible on the screen."* The band's orange edges sat on an
++            orange-brown rail, inside a section fill brighter than its own wash,
++            so the stretch on screen is now said by lightness instead of by more
++            orange: the rail outside it is veiled toward the panel, and the
++            stretch itself is left at full strength.
++
++            **Its own moving wrapper, here, rather than a shadow on the band.**
++            The band is the last child, over everything, and a veil there would
++            dim the origin mark, the quotes and the search marks wherever they
++            are off screen — which is where they are most needed. So this twin
++            sits after the parts, the reading chart, the section fill and the
++            hairlines, and before those marks; the scroll effect writes the same
++            transform to both wrappers in the same frame
++            (docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md). */}
++        <div
++          ref={veilMover}
++          className="spine-veil-track"
++          aria-hidden="true"
++          /* The band's height as a custom property, not a `height`: the veil
++             is the wrapper's two pseudo-elements, one above the band and one
++             from its foot down, and the stylesheet floors this at the band's
++             2px with a `max()` that jsdom's CSSOM would mangle inline (the
++             reason `--here-top` is a custom property too). */
++          style={{ "--view-h": pct(viewportH) } as CSSProperties}
++        />
++
+         {/* **Where the reader jumped from**, while the chip offering the way
+             back is up — Stage C of
+             docs/plans/260906g-back-to-where-you-jumped-from.md. The chip names
+diff --git a/src/web/help/pages/spine.md b/src/web/help/pages/spine.md
+index dff5da643..69b584112 100644
+--- a/src/web/help/pages/spine.md
++++ b/src/web/help/pages/spine.md
+@@ -22,8 +22,9 @@ What each mark means:
+ - **Very faint blocks near the bottom: endnotes, references and other back matter.** Dimmed so you
+   can see where the argument ends, but kept at their true size. If the spine says you are 60%
+   through and the rest is faint, you have nearly finished the article itself.
+-- **A box with orange top and bottom edges: what is on your screen.** It moves as you scroll, and
+-  its height shows how much of the article fits on one screen.
++- **The stretch at full strength, between two orange edges: what is on your screen.** The rest of
++  the spine is a little dimmer. It moves as you scroll, and its height shows how much of the article
++  fits on one screen.
+ - **A tinted area from the left edge, with a brighter line at its edge: where you have spent time
+   reading.** The further across the strip it reaches, the longer you spent there. A quick glance may
+   leave no shading. Use it to find where you had got to after jumping around. Only whoever added the
+diff --git a/src/web/styles/spine.css b/src/web/styles/spine.css
+index 8094a6cc1..fe88f5592 100644
+--- a/src/web/styles/spine.css
++++ b/src/web/styles/spine.css
+@@ -19,8 +19,18 @@
+   left: var(--safe-left);
+   top: var(--bar-bottom);
+   /* Its bands are press targets (Spine.tsx § bandPress), so the rail stops at
+-     the home indicator rather than continuing behind it. */
+-  bottom: var(--safe-bottom);
++     the home indicator rather than continuing behind it.
++
++     **And at the bottom bar, which it ran behind until 2026-10-22.** It read
++     `bottom: var(--safe-bottom)` alone, and the dock (z-index 96) sat over the
++     rail's last 40-odd pixels — the end of every article, and the on-screen
++     band whenever the reader was there, drawn where nobody could see them.
++     Found on the browser pass for spya-wzssyu ("which bits are visible on the
++     screen"), plan 261022c. The same edge the mode band stops at
++     (mode-band.css, which says why each term is there): it follows the bar
++     down when the bar slides away on a small device, and the percentages
++     inside the track follow the new height with nothing measured. */
++  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now));
+   width: var(--spine-w);
+   /* How much of the rail's width the search lanes may take, and how wide one
+      lane may get when there are few of them — see § search marks below.
+@@ -424,5 +434,71 @@
+   pointer-events: none;
+   border-top: 1px solid var(--highlight);
+   border-bottom: 1px solid var(--highlight);
+-  background: color-mix(in oklab, var(--highlight) 12%, transparent);
++  /* No wash any more. It was a 12% orange over a section fill brighter than
++     it, which is why the band was hard to see (spya-wzssyu); the lit stretch
++     under `.spine-veil` below is what says *on screen* now, and the edges say
++     exactly where it stops. */
++}
++
++/* **Everything off screen, veiled toward the panel** — the lens that makes the
++   band readable. Greg, 2026-10-21 (spya-wzssyu): *"Make it a bit clearer in
++   the spine which bits are visible on the screen."*
++   docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md.
++
++   Lightness rather than more orange: the rail is orange-brown throughout, and
++   turning the band up would have fought it with the same hue, beside the
++   prose. The veil adds no colour; it takes a little from the rest of the rail.
++
++   The same geometry as the band, in its own wrapper that Spine.tsx moves with
++   the same transform in the same frame, and for the same battery reason
++   (`.spine-viewport-track` above). It sits lower in the track than the band —
++   over the parts, the reading chart, the section fill and the hairlines, under
++   the origin mark, the quotes, the search marks and the hits — because those
++   marks say *where else*, and dimming them off screen would undo them.
++
++   The veil is two track-height rectangles on the wrapper: `::before` ends
++   where the band starts (the wrapper's top, which the transform puts at the
++   band's top), `::after` starts where the band ends. Each is as tall as the
++   track, so whatever the scroll position, the rail above and below the band
++   is covered and the overhang is clipped by `.spine { overflow: hidden }`.
++   Bounded rather than a spread `box-shadow`, so the layer is three rails tall
++   and no more (GPT Sol, plan review). `--view-h` is the band's own percentage,
++   set inline; the floor is the band's 2px, so a view that small on a very long
++   article is still a lit gap exactly where the orange box is. */
++.spine-veil-track {
++  position: absolute;
++  inset: 0;
++  pointer-events: none;
++  will-change: transform;
++}
++.spine-veil-track::before,
++.spine-veil-track::after {
++  content: "";
++  position: absolute;
++  left: 0;
++  right: 0;
++  height: 100%;
++  background: color-mix(in oklab, var(--panel) var(--spine-veil), transparent);
++}
++.spine-veil-track::before { bottom: 100%; }
++.spine-veil-track::after { top: max(var(--view-h), 2px); }
++/* How much of the panel the veil mixes in: by eye in both appearances, so
++   that the lit stretch is plain at a glance and the reading chart's faint area
++   still reads through it off screen. The dark panel swallows less of a tint
++   than the light one, so it needs more. */
++.spine { --spine-veil: 50%; }
++:root[data-theme="light"] .spine { --spine-veil: 40%; }
++
++@media (prefers-contrast: more) {
++  .spine { --spine-veil: 65%; }
++  :root[data-theme="light"] .spine { --spine-veil: 60%; }
++  .spine-viewport { border-width: 2px; }
++}
++
++/* A forced palette would repaint the veil as an opaque system colour over the
++   whole rail, so it goes, and the edges are what is left: in the system's own
++   highlight colour (and on the card's key, tooltip.css § `.tip-key-screen`). */
++@media (forced-colors: active) {
++  .spine-veil-track { display: none; }
++  .spine-viewport { border-color: Highlight; }
+ }
+diff --git a/src/web/styles/tooltip.css b/src/web/styles/tooltip.css
+index 35e672c3b..f03267f04 100644
+--- a/src/web/styles/tooltip.css
++++ b/src/web/styles/tooltip.css
+@@ -233,13 +233,18 @@
+ /* Two lanes' swatches touch, the way two lanes do on the rail. */
+ .tip-key-lanes + .tip-key-lanes { margin-left: -0.2rem; }
+ .tip-key-here { background: var(--depth-1); opacity: 0.8; }
+-/* The two palest marks are drawn a little stronger than on the rail, where
+-   they sit over a band and a reader sees them in context; at 6px on a card's
+-   ground the rail's own 12% and 0.1 left nothing to see in light mode (browser
+-   pass, plan 261020e). Still their own tokens. */
++/* *On screen* is the rail's lit stretch between two orange edges (spine.css §
++   `.spine-veil`), so the swatch is that: the edges, round an unveiled part's
++   tint. The supplement's mark is drawn a little stronger than on the rail,
++   where it sits over a band and a reader sees it in context; at 6px on a
++   card's ground the rail's own 0.1 left nothing to see in light mode (browser
++   pass, plan 261020e). */
+ .tip-key-screen {
+-  border: 1px solid var(--highlight);
+-  background: color-mix(in oklab, var(--highlight) 20%, transparent);
++  border-block: 1px solid var(--highlight);
++  background: color-mix(in oklab, var(--depth-1) 45%, transparent);
++}
++@media (forced-colors: active) {
++  .tip-key-screen { border-color: Highlight; }
+ }
+ .tip-key-supplement {
+   background: color-mix(in oklab, var(--depth-1) 25%, transparent);
+diff --git a/tests/spine-bottom.test.ts b/tests/spine-bottom.test.ts
+new file mode 100644
+index 000000000..6a081c6e0
+--- /dev/null
++++ b/tests/spine-bottom.test.ts
+@@ -0,0 +1,33 @@
++/**
++ * **The rail stops at the bottom bar, not behind it.**
++ *
++ * Until 2026-10-22 `.spine` ended at `--safe-bottom` alone, and the dock
++ * (z-index 96, over the rail's 45) covered its last 40-odd pixels: the end of
++ * every article, and the on-screen band whenever the reader was there
++ * (plan 261022c, found on the browser pass for spya-wzssyu). jsdom does no
++ * layout, so what this can pin is that the rail's bottom edge is the one the
++ * mode band already stops at — the shared formula that follows the bar down
++ * when it slides away — rather than a number of its own.
++ */
++import { readFileSync } from "node:fs";
++import { describe, expect, it } from "vitest";
++
++const BAR_EDGE = "calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now))";
++
++function bottomOf(file: string, selector: string): string | undefined {
++  const css = readFileSync(file, "utf8");
++  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++  const rule = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? "";
++  // The last `bottom:` declaration in the rule, comments stripped.
++  const decls = rule.replace(/\/\*[\s\S]*?\*\//g, "").match(/(?:^|[;\s])bottom:\s*([^;]+);/g) ?? [];
++  return decls.at(-1)?.replace(/^[;\s]*bottom:\s*/, "").replace(/;$/, "").trim();
++}
++
++describe("the rail's foot", () => {
++  it("is the mode band's: clear of the bottom bar, following it when it hides", () => {
++    expect(bottomOf("src/web/styles/mode-band.css", ".mode-band"), "the formula this mirrors").toBe(
++      BAR_EDGE,
++    );
++    expect(bottomOf("src/web/styles/spine.css", ".spine")).toBe(BAR_EDGE);
++  });
++});
+diff --git a/tests/spine-card.test.tsx b/tests/spine-card.test.tsx
+index fc6a8aef9..3a66da8cb 100644
+--- a/tests/spine-card.test.tsx
++++ b/tests/spine-card.test.tsx
+@@ -794,6 +794,13 @@ describe("the key", () => {
+     expect(css).toMatch(/@media \(max-height: 600px\)\s*{\s*\.tip-key\s*{\s*display: none;/);
+     expect(css).toMatch(/\.tip-key-here\s*{[^}]*var\(--depth-1\)/);
+     expect(css).toMatch(/\.tip-key-screen\s*{[^}]*var\(--highlight\)/);
++    /* *On screen* is the lit stretch between two orange edges since plan
++       261022c, not an orange wash: a swatch still washed in orange would key a
++       band the rail no longer draws. */
++    expect(css).not.toMatch(/\.tip-key-screen\s*{[^}]*color-mix\(in oklab, var\(--highlight\)/);
++    expect(css).toMatch(
++      /@media \(forced-colors: active\)\s*{\s*\.tip-key-screen\s*{\s*border-color: Highlight;/,
++    );
+     expect(css).toMatch(/\.tip-key-supplement\s*{[^}]*var\(--depth-1\)/);
+     expect(css).toMatch(/\.tip-key-reading\s*{[^}]*var\(--read-time\)/);
+     expect(css).toMatch(/\.tip-key-from\s*{[^}]*var\(--ink-faint\)/);
+diff --git a/tests/spine-here.test.ts b/tests/spine-here.test.ts
+index 67a57b525..d8be75698 100644
+--- a/tests/spine-here.test.ts
++++ b/tests/spine-here.test.ts
+@@ -315,6 +315,14 @@ describe("the current section in the spine", () => {
+     expect(ringAt, "under the search marks").toBeLessThan(first("spine-matches"));
+     expect(ringAt, "under the hit targets").toBeLessThan(first("spine-hit"));
+     expect(ringAt, "under the viewport band").toBeLessThan(first("spine-viewport-track"));
++    /* And under the veil, with the hairlines: off screen, the section fill is
++       part of the field the lit stretch stands out from (plan 261022c). */
++    const veilAt = first("spine-veil-track");
++    expect(veilAt, "the fixture should render the veil").toBeGreaterThanOrEqual(0);
++    expect(ringAt, "under the off-screen veil").toBeLessThan(veilAt);
++    expect(last("spine-tick"), "the hairlines under the veil too").toBeLessThan(veilAt);
++    expect(veilAt, "the veil under the search marks").toBeLessThan(first("spine-matches"));
++    expect(veilAt, "the veil under the hit targets").toBeLessThan(first("spine-hit"));
+   });
+ 
+   it("is decorative — the accessible name is already on the button", async () => {
+diff --git a/tests/spine-jump-origin.test.ts b/tests/spine-jump-origin.test.ts
+index 124d12e8f..9a5c6174c 100644
+--- a/tests/spine-jump-origin.test.ts
++++ b/tests/spine-jump-origin.test.ts
+@@ -458,6 +458,9 @@ describe("the mark for where the reader jumped from", () => {
+       first("spine-hit"),
+     );
+     expect(markAt, "under the viewport band").toBeLessThan(first("spine-viewport-track"));
++    /* The origin is nearly always off screen, which is where the veil is: a
++       mark under it would be dimmed exactly when it is shown (plan 261022c). */
++    expect(markAt, "over the off-screen veil").toBeGreaterThan(last("spine-veil-track"));
+   });
+ 
+   it("is decorative — the chip beside it says the same thing in words", async () => {
+diff --git a/tests/spine-quote-strip.test.ts b/tests/spine-quote-strip.test.ts
+index cd721a101..30e4f73d1 100644
+--- a/tests/spine-quote-strip.test.ts
++++ b/tests/spine-quote-strip.test.ts
+@@ -101,4 +101,14 @@ describe("the strip's paint contract", () => {
+     expect(origin).toBeLessThan(quotes);
+     expect(quotes).toBeLessThan(matches);
+   });
++
++  it("paints over the off-screen veil, so a quote off screen keeps its colour", () => {
++    // Plan 261022c: the veil dims the field, never the marks a reader asked for.
++    const veil = spineSource.indexOf('className="spine-veil-track"');
++    const origin = spineSource.indexOf('className="spine-from"');
++    const quotes = spineSource.indexOf('className="spine-quotes"');
++    expect(veil).toBeGreaterThanOrEqual(0);
++    expect(veil).toBeLessThan(origin);
++    expect(veil).toBeLessThan(quotes);
++  });
+ });
+diff --git a/tests/spine-reading.test.ts b/tests/spine-reading.test.ts
+index 11d8267b6..993e01c06 100644
+--- a/tests/spine-reading.test.ts
++++ b/tests/spine-reading.test.ts
+@@ -450,6 +450,12 @@ describe("the reading layer in the spine", () => {
+     expect(first("spine-read-line"), "over the section fill").toBeGreaterThan(last("spine-here"));
+     expect(last("spine-read-line"), "under the hairlines").toBeLessThan(first("spine-tick"));
+     expect(last("spine-read-line"), "under the search marks").toBeLessThan(first("spine-matches"));
++
++    /* The veil goes over the whole chart: off screen, reading time is part of
++       the field the lit stretch stands out from (plan 261022c). */
++    expect(last("spine-read-line"), "under the off-screen veil").toBeLessThan(
++      first("spine-veil-track"),
++    );
+   });
+ });
+ 
+diff --git a/tests/spine-scroll.test.ts b/tests/spine-scroll.test.ts
+index 1250bdc36..596d33ce3 100644
+--- a/tests/spine-scroll.test.ts
++++ b/tests/spine-scroll.test.ts
+@@ -239,6 +239,24 @@ async function mount(layoutKey = "x"): Promise<HTMLElement> {
+ /** The wrapper the viewport band rides in — the element that actually moves. */
+ const mover = () => host.querySelector<HTMLElement>(".spine-viewport-track");
+ 
++/**
++ * Its twin under the marks, the veil over everything off screen
++ * (docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md). The two are
++ * written separately, so the claim worth pinning is that they never disagree:
++ * a veil a frame or a resize behind the band is a lit stretch beside the orange
++ * box instead of inside it. Checked wherever the band's own placement is.
++ */
++function expectVeilWithBand() {
++  const veil = host.querySelector<HTMLElement>(".spine-veil-track");
++  const band = host.querySelector<HTMLElement>(".spine-viewport");
++  expect(veil, "the veil rides in its own track-height wrapper").not.toBeNull();
++  expect(veil?.style.transform, "the veil moves with the band").toBe(mover()?.style.transform);
++  expect(veil?.style.getPropertyValue("--view-h"), "the veil's gap is the band's height").toBe(
++    band?.style.height,
++  );
++  expect(veil?.style.top, "an inline `top` would repaint on every frame").toBe("");
++}
++
+ describe("the spine during a scroll", () => {
+   it("moves the viewport band without re-rendering", async () => {
+     await mount();
+@@ -288,6 +306,7 @@ describe("the spine during a scroll", () => {
+ 
+     // Initial placement, before any scroll: (0 − 300) / 2000 = −15%.
+     expect(m?.style.transform).toBe("translateY(-15%)");
++    expectVeilWithBand();
+ 
+     // (800 − 300) / 2000 = 25%. The reading line is 800 + 175 − 300 = 675,
+     // which crosses from no section into a2 (500–1000): a boundary render.
+@@ -297,10 +316,12 @@ describe("the spine during a scroll", () => {
+     expect(m?.style.transform, "the boundary's re-render must not clobber it").toBe(
+       "translateY(25%)",
+     );
++    expectVeilWithBand();
+ 
+     // (1100 − 300) / 2000 = 40%, still inside a2: no render, just the move.
+     await scrollTo(1100);
+     expect(m?.style.transform).toBe("translateY(40%)");
++    expectVeilWithBand();
+ 
+     for (const el of [m, band]) {
+       expect(el?.style.top, "an inline `top` would repaint on every frame").toBe("");
+@@ -338,6 +359,7 @@ describe("the spine during a scroll", () => {
+       expect(mover()?.style.transform).toBe("translateY(15%)"); // (800 − 200) / 4000
+       const band = host.querySelector<HTMLElement>(".spine-viewport");
+       expect(band?.style.height).toBe(change === "window resize" ? "18.75%" : "12.5%");
++      expectVeilWithBand();
+     },
+   );
+ 

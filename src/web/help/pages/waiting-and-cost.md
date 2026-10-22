@@ -20,6 +20,7 @@ What sets one off:
 - **Chat, Search and the margin’s ?** work when you ask, and answers appear as they are written.
 - **When you add an article**, leaving **Generate the main modes as soon as it opens** ticked
   prepares the modes named beneath the tick-box, plus the links between passages, in the background.
+  Summary’s Thread is not among them: if it has not been prepared, opening it writes it.
 
 The work runs while a Spideryarn tab is open; close them all and it pauses until you come back. On
 someone else’s shared article you see whatever has already been made, but you cannot start anything
@@ -27,6 +28,8 @@ new.
 
 **None of this uses up your allowance** — opening, generating, chatting and re-running are included.
 For a difficult piece, **High-powered AI** uses a stronger model (Claude Opus) for work done after
-you switch it on. Tick it while the article is being added to use it for the work still to come; or
-switch it on later from the article’s Metadata page and use **Run it again** there to redo a mode
-with it. That switch is the one thing besides adding that counts — see [Plans](/help/plans).
+you switch it on. Chat and Summary’s plain-words version already use Opus for every article, so the
+switch does not change them. Tick it while the article is being added to use it for the other work
+still to come; or switch it on later from the article’s Metadata page and use **Run it again** there
+to redo a mode with it. That switch is the one thing besides adding that counts — see
+[Plans](/help/plans).

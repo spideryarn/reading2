@@ -252,8 +252,9 @@ export function JobProgress({
    * A second while a job is on screen, a minute otherwise.
    *
    * The band has to tick by itself for the same reason the card does: a step's
-   * `detail` is written in memory and never persisted (src/jobs.ts §
-   * `report`), so a job halfway through a long step sends back an identical
+   * `detail` is written in memory and persisted only beside a counted
+   * `progress` (src/jobs.ts § `stepNotes`), so a job halfway through a long
+   * step sends back an identical
    * record on every poll and `sameJobs` correctly suppresses the re-render.
    * Without this the elapsed time would freeze at whatever it read when the
    * step began. `useNow` stops while the tab is hidden and catches up on
@@ -411,7 +412,7 @@ function Band({
           band this narrow, and the detail is progress text rather than
           something the reader acts on, so it is the one that gives way. */}
       {current?.detail && (
-        <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
+        <span className="tw:w-full tw:font-mono tw:text-[length:max(var(--text-min),0.7rem)] tw:text-ink-faint">
           {current.detail}
         </span>
       )}

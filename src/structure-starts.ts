@@ -8,11 +8,13 @@
  * `ModelNode.range` therefore remains a required `[string, string]` everywhere
  * downstream.
  *
- * This is a conversion seam, not an id trust seam. Every proposed start is still
- * resolved against the body. An invented id refuses with `buildTree`'s existing
- * message, while a wrong-but-real id remains possible exactly as it is for the
- * ranged answer. The live `toc/11` path calls this module at its parse boundary;
- * the frozen `toc/10` eval arm deliberately keeps the old ranged parser.
+ * This is a conversion seam, not a trust seam. Every proposed number is first
+ * mapped against the exact body the prompt numbered, then resolved by the
+ * shared kernel. An out-of-range number or legacy invented id refuses unless
+ * the caller passes `unresolved` (src/start-ranges.ts § `UnresolvedStarts`),
+ * while an in-range but wrong number remains a possible wrong-but-real boundary.
+ * The live `toc/13` path calls this module at its parse boundary; the frozen
+ * `toc/10` eval arm deliberately keeps the old ranged parser.
  */
 import { nameValue } from "./ids.js";
 import type { BuildReport, ModelNode } from "./structure.js";
@@ -20,6 +22,7 @@ import {
   deriveStartRanges,
   WHOLE_DOCUMENT_START_POLICY,
   type DerivedStartRange,
+  type UnresolvedStarts,
 } from "./start-ranges.js";
 import type { Block } from "./types.js";
 
@@ -31,7 +34,8 @@ interface StartsOnlyFields {
 }
 
 export interface StartsOnlyNode extends StartsOnlyFields {
-  start: string;
+  /** The block's number in the prompt since `toc/13`; its id in an older stored answer. */
+  start: number | string;
   children?: StartsOnlyNode[];
 }
 
@@ -52,11 +56,37 @@ function fieldsOf(node: StartsOnlyFields): Omit<ModelNode, "range" | "children">
   };
 }
 
+/**
+ * **How many unresolvable starts an answer may lose before it is refused anyway**: one in ten of
+ * the non-first starts in the sibling sets actually built, and always at least one. Past that the
+ * answer is more fiction than tree, and storing it would store mostly the sections before the
+ * losses, stretched. docs/plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md.
+ */
+export function droppedStartBudget(nonFirstStarts: number): number {
+  return Math.max(1, Math.floor(nonFirstStarts / 10));
+}
+
+/**
+ * **The id a start names.** A number is the `[i]` that `renderBlocks` printed
+ * before the block, so it indexes exactly the array the prompt was rendered
+ * from — which is why every caller parses against the array it asked about
+ * (the body, or one slice of it). A number that is not an integer in range is
+ * returned unchanged, so it reaches the kernel as a start that names no block
+ * and is refused or dropped like any other. A string — an id, from an answer
+ * stored before `toc/13` — passes through as before.
+ */
+export function startAsId(start: unknown, blocks: readonly Block[]): unknown {
+  if (typeof start !== "number") return start;
+  return Number.isInteger(start) ? (blocks[start]?.id ?? start) : start;
+}
+
 /** Convert one starts-only answer without changing it or any of its descendants. */
 export function modelNodeFromStarts(
   answer: StartsOnlyWholeDocumentAnswer,
   blocks: readonly Block[],
   report?: BuildReport,
+  /** `refuse` unless a whole-document caller says otherwise — src/start-ranges.ts § `UnresolvedStarts`. */
+  unresolved: UnresolvedStarts = "refuse",
 ): ModelNode {
   const first = blocks[0];
   const last = blocks.at(-1);
@@ -67,11 +97,14 @@ export function modelNodeFromStarts(
   const built = report ?? {
     repairs: [],
     droppedChildren: [],
+    unresolvedStarts: [],
     rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],
   };
+  let nonFirstStarts = 0;
+  const drops: { where: string; start: unknown }[] = [];
 
   const convertChildren = (
     children: readonly StartsOnlyNode[] | undefined,
@@ -79,13 +112,15 @@ export function modelNodeFromStarts(
     where: string,
   ): ModelNode[] | undefined => {
     if (children === undefined || children.length === 0) return undefined;
+    const named = children.map((child) => ({ ...child, start: startAsId(child.start, blocks) as string }));
     const planned = deriveStartRanges({
-      children,
+      children: named,
       parent,
       blocks,
       index,
       where,
       policy: WHOLE_DOCUMENT_START_POLICY,
+      unresolved,
     });
     if (!planned.ok) {
       /* The whole-document policy clamps outside starts and accepts any child
@@ -104,6 +139,11 @@ export function modelNodeFromStarts(
     }
     built.repairs.push(...planned.repairs);
     built.droppedChildren.push(...planned.droppedChildren);
+    built.unresolvedStarts.push(...planned.unresolvedStarts);
+    nonFirstStarts += children.length - 1;
+    for (const u of planned.unresolvedStarts) {
+      if (u.outcome === "dropped") drops.push({ where: u.where, start: children[u.childIndex]?.start });
+    }
     return planned.children.map((child) => convertChild(child, `${where} > child ${child.childIndex + 1}`));
   };
 
@@ -120,6 +160,13 @@ export function modelNodeFromStarts(
   };
 
   const rootChildren = convertChildren(answer.root.children, [0, blocks.length - 1], "root");
+  const lost = drops[0];
+  if (lost !== undefined && drops.length > droppedStartBudget(nonFirstStarts)) {
+    throw new Error(
+      `Node range not in blocks.json — at ${lost.where}: start ${nameValue(lost.start)} ` +
+        `(${drops.length} of ${nonFirstStarts} starts named no block, past the ${droppedStartBudget(nonFirstStarts)} an answer may lose)`,
+    );
+  }
   const root: ModelNode = {
     ...fieldsOf(answer.root),
     range: [first.id, last.id],

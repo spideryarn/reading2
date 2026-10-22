@@ -384,6 +384,7 @@ function ResetConfirm({
           ref={yesRef}
           variant="outline"
           size="sm"
+          className="tone-positive"
           disabled={busy}
           /* The whole panel, so a reader who reaches Yes by keyboard hears what
              it is agreeing to — `RerunRow`'s F13, Metadata.tsx. */
@@ -392,7 +393,7 @@ function ResetConfirm({
         >
           {busy ? "Starting…" : retry ? "Yes, try again" : "Yes, start again"}
         </Button>
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
+        <Button type="button" variant="ghost" size="sm" className="tone-negative" disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
       </div>

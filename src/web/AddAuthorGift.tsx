@@ -71,7 +71,9 @@ export function AddAuthorGift({
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <Button
               type="button"
+              variant="outline"
               size="sm"
+              className="tone-positive"
               disabled={!state.rights}
               onClick={() => {
                 if (gift.confirm()) highPower.want(true);
@@ -79,7 +81,7 @@ export function AddAuthorGift({
             >
               {AUTHOR_GIFT_AT_ADD_CONFIRM}
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => gift.cancel()}>
+            <Button type="button" variant="ghost" size="sm" className="tone-negative" onClick={() => gift.cancel()}>
               Cancel
             </Button>
           </div>

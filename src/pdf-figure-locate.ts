@@ -323,9 +323,128 @@ export interface LocatePage {
  * JSON, for `judgeLocatedBox` to doubt.
  */
 export type FigureLocator = (
-  request: { caption: string; pages: readonly LocatePage[] },
+  request: { subject: LocateSubject; pages: readonly LocatePage[] },
   signal: AbortSignal,
 ) => Promise<{ ok: true; answer: unknown } | { ok: false }>;
+
+/**
+ * **What the model is asked to find**: a figure by its caption, or a figure the
+ * article prints no caption for, by the prose either side of it.
+ * docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md.
+ */
+export type LocateSubject = { kind: "caption"; caption: string } | ({ kind: "neighbours" } & FigureNeighbours);
+
+/**
+ * **The prose either side of an uncaptioned figure**, as the stored blocks have
+ * it — `pdfFigureNeighboursIn`, src/collect-assets.ts.
+ *
+ * `before` is the end of the nearest text before the figure, `after` the start
+ * of the nearest text after it — what the model is shown. **`before` is a hint,
+ * not a position**: when a paragraph runs round a figure the renderer keeps the
+ * paragraph whole, in front of it (src/pdf-read.ts § `renderHtml`), so the end
+ * of `before` may be printed *below* the picture. Its start cannot be — the
+ * paragraph's first piece precedes the figure in the transcript — so
+ * `beforeStart` is the one anchor `judgeNeighbourOrder` may use on that side.
+ * `after` is after the figure either way. `run` places the figure among
+ * adjacent uncaptioned figures that share these neighbours. Its `key` is the
+ * first marker ref in that exact run: prose can repeat elsewhere in a document,
+ * so the neighbour strings are not an identity.
+ */
+export interface FigureNeighbours {
+  before: string;
+  beforeStart: string;
+  after: string;
+  run: { index: number; of: number; key: string };
+}
+
+/** A located picture's verdict against the prose either side of it. */
+export type NeighbourOrder = "consistent" | "out-of-order";
+
+/**
+ * **A veto on the model's answer for an uncaptioned figure, from where the
+ * prose either side of it is printed.**
+ *
+ * `judgeLocatedBox` proves the answer points at one clean picture, never that
+ * it is the right one — and a model asked by position in the reading order can
+ * pick the neighbouring diagram, which is a clean picture too. So when the
+ * start of the text before the figure is printed on the chosen page, the
+ * picture must lie below it; when the start of the text after is, above it.
+ * An anchor that is not on the page, or is there twice, adds no veto: absence
+ * is not evidence of a wrong answer. GPT Sol, plan review of 261019j, finding 1.
+ *
+ * **Only an anchor across from the picture counts** — one whose line overlaps
+ * it left to right. Text set *beside* a picture, as a book wraps a paragraph
+ * round a photograph, is neither above nor below it, and on Rovelli's p18 and
+ * p25 a veto that ignored this refused the right photograph twice (measured
+ * 2026-10-19). Nor does a line in the other column of a two-column page say
+ * anything about order down this one.
+ *
+ * Page coordinates, y up. `SLACK_PT` allows a baseline that sits inside the
+ * picture's top or bottom margin.
+ */
+export function judgeNeighbourOrder(input: {
+  picture: PageBox;
+  before: PageBox | null;
+  after: PageBox | null;
+}): NeighbourOrder {
+  const { picture } = input;
+  const across = (line: PageBox | null) =>
+    line !== null && Math.min(line.x1, picture.x1) - Math.max(line.x0, picture.x0) > SLACK_PT ? line : null;
+  const before = across(input.before);
+  const after = across(input.after);
+  if (before && picture.y1 > before.y0 + SLACK_PT) return "out-of-order";
+  if (after && picture.y0 < after.y1 - SLACK_PT) return "out-of-order";
+  return "consistent";
+}
+
+/** How far, in points, a picture may overlap the line it must be above or below. */
+export const SLACK_PT = 4;
+
+/**
+ * Which run of adjacent uncaptioned figures a subject belongs to, or `null` for
+ * a figure on its own or a captioned one. The key comes from the first marker
+ * ref, rather than from prose which may repeat in two separate runs.
+ */
+export function runKey(subject: LocateSubject): string | null {
+  return subject.kind === "neighbours" && subject.run.of > 1 ? subject.run.key : null;
+}
+
+/**
+ * **The runs whose chosen pictures do not come down the pages in the run's
+ * order** — and so none of whose pictures may be kept. A run shares one pair
+ * of neighbours, so order is the only thing telling its figures apart, and
+ * the order check above cannot see between them. A member whose picture has no
+ * box cannot be placed and spoils its run. GPT Sol, plan review of 261019j,
+ * finding 1.
+ */
+export function disorderedRuns(
+  choices: readonly { subject: LocateSubject; page: number; box: PageBox | null }[],
+): Set<string> {
+  const runs = new Map<string, { index: number; of: number; page: number; box: PageBox | null }[]>();
+  for (const { subject, page, box } of choices) {
+    const key = runKey(subject);
+    if (key === null || subject.kind !== "neighbours") continue;
+    runs.set(key, [...(runs.get(key) ?? []), { index: subject.run.index, of: subject.run.of, page, box }]);
+  }
+  const disordered = new Set<string>();
+  for (const [key, members] of runs) {
+    members.sort((a, b) => a.index - b.index);
+    const expected = members[0]?.of;
+    const complete =
+      expected !== undefined &&
+      members.length === expected &&
+      members.every((member, index) => member.of === expected && member.index === index + 1);
+    const inOrder = complete && members.every((m, k) => {
+      const next = members[k + 1];
+      if (!m.box) return false;
+      if (!next) return true;
+      if (!next.box) return false;
+      return m.page < next.page || (m.page === next.page && m.box.y0 >= next.box.y1 - SLACK_PT);
+    });
+    if (!inOrder) disordered.add(key);
+  }
+  return disordered;
+}
 
 /** The answer's shape, enforced by the provider (`strict`) and checked again by `judgeLocatedBox`, which is the one that counts. */
 export const LOCATE_SCHEMA = {
@@ -339,14 +458,26 @@ export const LOCATE_SCHEMA = {
 } as const;
 
 /**
- * What the model is asked — the test run's wording, unchanged, because that is
- * what the 30 calls in the plan measured.
- *
- * The caption is the article's own figcaption, text a stranger chose. It can
- * ask for anything; what it can get is a page number and four integers, which
- * `judgeLocatedBox` holds to the pictures actually on the pages we sent.
+ * What the model is asked. Either way the words in it are the article's, text a
+ * stranger chose. They can ask for anything; what they can get is a page
+ * number and four integers, which `judgeLocatedBox` holds to the pictures
+ * actually on the pages we sent.
  */
-export function locatePrompt(caption: string, pages: readonly { page: number }[]): string {
+export function locatePrompt(subject: LocateSubject, pages: readonly { page: number }[]): string {
+  switch (subject.kind) {
+    case "caption":
+      return captionPrompt(subject.caption, pages);
+    case "neighbours":
+      return neighboursPrompt(subject, pages);
+    default: {
+      const never: never = subject;
+      throw new Error(`pdf-figure-locate: unknown subject ${JSON.stringify(never)}`);
+    }
+  }
+}
+
+/** By caption — the test run's wording, unchanged, because that is what the 30 calls in 260924e measured. */
+function captionPrompt(caption: string, pages: readonly { page: number }[]): string {
   return (
     `These are ${pages.length} consecutive pages of a PDF: ` +
     `${pages.map((p, i) => `image ${i + 1} is page ${p.page}`).join(", ")}.\n` +
@@ -356,6 +487,32 @@ export function locatePrompt(caption: string, pages: readonly { page: number }[]
     "normalised 0-1000 on that page's image, around the figure's picture only: include any title or labels drawn " +
     "inside the picture, exclude the prose around it and any separately printed caption. " +
     'If no figure on these pages has this caption or title, answer {"page": null, "box_2d": null}.'
+  );
+}
+
+/**
+ * By the prose either side — for a figure with no caption, where it sits in
+ * the reading order. Measured on Rovelli's *The Order of Time*:
+ * docs/investigations/261019a-uncaptioned-pdf-figures-located-on-rovelli.md.
+ */
+function neighboursPrompt(subject: FigureNeighbours, pages: readonly { page: number }[]): string {
+  const where = [
+    subject.before ? `In the text it comes after the passage ending: "${subject.before}"\n` : "",
+    subject.after ? `It comes before the passage starting: "${subject.after}"\n` : "",
+    subject.run.of > 1
+      ? `${subject.run.of} figures stand in a row between those passages, and this is number ${subject.run.index} of them in reading order.\n`
+      : "",
+  ].join("");
+  return (
+    `These are ${pages.length} consecutive pages of a PDF: ` +
+    `${pages.map((p, i) => `image ${i + 1} is page ${p.page}`).join(", ")}.\n` +
+    "A figure in this document has no caption.\n" +
+    where +
+    "A paragraph may continue around the figure, and the figure may sit at the top of the page after the passage that introduces it.\n" +
+    "Find that one figure on these pages. Give its page, and box_2d as [ymin, xmin, ymax, xmax] " +
+    "normalised 0-1000 on that page's image, around the figure's picture only: include any labels drawn " +
+    "inside the picture, exclude the prose around it. " +
+    'If no figure on these pages sits there, answer {"page": null, "box_2d": null}.'
   );
 }
 
@@ -371,7 +528,7 @@ export const openRouterFigureLocator: FigureLocator = async (request, signal) =>
           {
             role: "user",
             content: [
-              { type: "text", text: locatePrompt(request.caption, request.pages) },
+              { type: "text", text: locatePrompt(request.subject, request.pages) },
               ...request.pages.map((p) => ({
                 type: "image_url",
                 image_url: { url: `data:image/png;base64,${Buffer.from(p.png).toString("base64")}` },
@@ -384,10 +541,10 @@ export const openRouterFigureLocator: FigureLocator = async (request, signal) =>
           json_schema: { name: "figure_location", strict: true, schema: LOCATE_SCHEMA },
         },
       },
-      /* `retryTransport: false`: `MAX_LOCATE_CALLS` in src/collect-pdf-figures.ts
-         promises at most eight model calls an article and counts asks. A hidden
-         retry would make that twenty-four requests. A blip leaves the figure
-         refused, as it always has. */
+      /* `retryTransport: false`: `MAX_LOCATE_CALLS` and
+         `MAX_UNCAPTIONED_LOCATE_CALLS` in src/collect-pdf-figures.ts promise a
+         number of model calls an article and count asks. A hidden retry would
+         triple it. A blip leaves the figure refused, as it always has. */
       { signal, retryTransport: false },
     );
     json = call.json;

@@ -1353,6 +1353,16 @@ export interface ChatStore {
   setGist(slug: string, threadId: string, gist: string, basedOn: ChatThread): Promise<boolean>;
 
   /**
+   * **Claim a guide conversation's one automatic start of a mode** (plan
+   * docs/plans/261019p-guide-chat-plainer.md § Stage 2b). Stamps
+   * `mode_prepared_at` only where it is still null and the thread is a guide
+   * thread on this reader's article, in one statement, so of two presses only
+   * one is `true`. `false` means already claimed, or no such guide thread.
+   * Does not touch `updated_at`.
+   */
+  claimModePreparation(slug: string, threadId: string): Promise<boolean>;
+
+  /**
    * **The reader pressed Hint under a Recall answer.** Stamps
    * `hint_opened_at` once; a second press answers with the first time.
    *
@@ -2127,8 +2137,8 @@ export interface AdminStore {
    * an ordinary account holder can add rows to.
    */
   /**
-   * `from` is `"readers"` to leave out the administrators' own reports
-   * (`FeedbackFrom` in src/types.ts); the cursor carries no filter, so a caller
+   * `from` is `"readers"` to leave out the administrators' own reports, or
+   * `"admins"` for only those (`FeedbackFrom` in src/types.ts); the cursor carries no filter, so a caller
    * paging under one passes it on every page.
    */
   listFeedbackAcrossOwners(
@@ -2175,6 +2185,29 @@ export interface AdminStore {
     id: string,
     ignored: boolean,
   ): Promise<AdminFeedbackReport | null>;
+  /**
+   * **The reports agents' questions name, whoever filed them** — for the
+   * threads in the admin's *Needs a decision* (plan 261020p). A question file
+   * names a report by id alone, which is unique per owner and not globally,
+   * so this is the one lookup here not keyed on the pair, and it makes up for
+   * that by **answering only for an id exactly one row holds, across every
+   * owner the admin's own included**. An id two rows share is in `ambiguous`
+   * and resolves to nothing, never to a guess at whose it is.
+   */
+  questionReportsAcrossOwners(ids: readonly string[]): Promise<QuestionReportsAcrossOwners>;
+}
+
+/** One report a question names, with whose it is. */
+export interface QuestionReportAcrossOwners extends LinkedFeedbackReport {
+  ownerId: string;
+  /** The address the reader held when they wrote, as `/admin/feedback` shows it. */
+  reporterEmail: string;
+}
+
+/** `questionReportsAcrossOwners`' answer: the ids one row holds, and the ids more than one does. */
+export interface QuestionReportsAcrossOwners {
+  found: QuestionReportAcrossOwners[];
+  ambiguous: string[];
 }
 
 
@@ -2620,6 +2653,7 @@ export type {
   FeedbackKind,
 } from "../types.js";
 import type { FeedbackEnding } from "../feedback-ending-values.js";
+import type { PublishedFeedbackQuestion } from "../feedback-question-values.js";
 import type { AdminFeedbackAddendum, EarlierFeedback, EarlierFeedbackStatus } from "../types.js";
 
 /** One earlier report as the store reads it: the wire's fields bar `shipped`, which the route adds. */
@@ -3104,6 +3138,14 @@ export interface FeedbackStore {
    * 261010h).
    */
   answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  /**
+   * **Every question published to `feedback_questions`**, open and answered,
+   * in one read (plan 261021h): src/feedback-question.ts builds one
+   * request's view of them from it, so one response cannot mix two versions.
+   * Not owner-scoped: a question is asked of every admin, and only admin
+   * routes call this. Unvalidated; the caller checks each row.
+   */
+  publishedQuestions(): Promise<PublishedFeedbackQuestion[]>;
   /**
    * **This owner's deferral of each of these questions**, where there is a
    * row: deferred (a time) or brought back (null). Owner-scoped.

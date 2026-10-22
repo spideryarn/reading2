@@ -11,7 +11,7 @@
  * Geometry is for the browser; this pins that the rule no longer floats.
  */
 import { describe, expect, it } from "vitest";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
 
 const CSS = readerCssNoComments();
 
@@ -19,8 +19,12 @@ describe("the jump-to-latest pill", () => {
   const rules = [...CSS.matchAll(/\.chat-to-bottom\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
   /* The declarations have to live on the shared rule. Finding `flex` in a
      Learn-only rule and `align-self` in a dialog-only rule would leave both
-     places half-fixed while a joined search stayed green. */
-  const shared = [...CSS.matchAll(/(?:^|})\s*\.chat-to-bottom\s*\{([^}]*)\}/g)].map((m) => m[1] ?? "");
+     places half-fixed while a joined search stayed green. Shared means outside
+     any at-rule too: the coarse-pointer 40px floor (plan 261021c) is a rule of
+     its own inside `@media (any-pointer: coarse)`. */
+  const shared = [...CSS.matchAll(/(?:^|})\s*\.chat-to-bottom\s*\{([^}]*)\}/g)]
+    .filter((m) => enclosing(CSS, (m.index ?? 0) + m[0].indexOf(".chat-to-bottom")).length === 0)
+    .map((m) => m[1] ?? "");
 
   it("has a rule to check", () => {
     expect(rules.length).toBeGreaterThan(0);

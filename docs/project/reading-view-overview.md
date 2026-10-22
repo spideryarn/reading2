@@ -73,6 +73,10 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   or saying what you want and an *interface model* choosing the command — Jev first, a capable model
   when unsure, the bar's own rows as its tools, the Help as what it knows — and the main Chat doing
   the same. Open it before giving any model a way to act for the reader: it proposes the line.
+- **[explain-this-vision.md](explain-this-vision.md)** — **not decided**: the glossary, citations and
+  names referred to but not cited as one continuum of *explain this*, and later a hard sentence.
+  What the evidence says about underlines, waiting and obscure names, and the next steps, simplest
+  first. Open it before adding a new kind of mark to the prose or a new card.
 - **[web-client.md](web-client.md)** — where the client code lives, how the middle became a slot,
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
 - **[mode.md](mode.md)** — the one checklist for adding a mode: the tables the compiler
@@ -259,12 +263,13 @@ right instead, beside a band or without one.
 - **[learn-mode.md](learn-mode.md)** — the other direction: the reader says what they took from
   the piece and the model shows them where it comes apart, then nudges them to remember more. One
   adaptive voice (four stances until 2026-10-02), a prompt rewritten after a cross-family review said
-  not to ship the first one, and the one mode that cannot be used to avoid reading.
+  not to ship the first one, and since Recall took Tutorial in (2026-10-20), a reader who has not
+  read it started from zero and sent into each cited passage rather than told the piece instead.
 - **[quiz.md](quiz.md)** — the other half of Learn, where the questions come the other way: a
   dozen short-answer questions cached per article, easy ones first and central ones within that, and
   a marker told outright that the article outranks its own reference answer.
-- **[learning-vision.md](learning-vision.md)** — where Learn is going: Recall, Tutorial and
-  Quiz as three directions of one exchange, Explore as the one about the reader's own thinking, what
+- **[learning-vision.md](learning-vision.md)** — where Learn is going: Recall (which took
+  Tutorial in on 2026-10-20) and Quiz as two directions of one exchange, Explore as the one about the reader's own thinking, what
   they share (brief, block links, hints that make success likely), and the ideas not built yet. Read
   it before adding a fifth.
 
@@ -445,6 +450,14 @@ Export button uses ([`src/web/export-download.ts`](../../src/web/export-download
 that fails keeps the bar open with the sentence, and both are offered only where there is a shelf
 row to act on — not on the fixture. Words in
 [`src/web/article-commands.ts`](../../src/web/article-commands.ts).
+
+**_Open the original_ (`original`, `view original`, `source page`), since 2026-10-19**, opens the
+article's web address in a new tab, or the owner's uploaded PDF through the fetch Metadata's
+*View the original* makes; no row when there is neither (`originalOf` in
+[`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx)). Outside a gesture — a dictation's late
+Enter — it opens nothing and asks to be chosen again, since a tab opened then is a silently blocked popup.
+Plain no longer answers to `original`: that nickname is what Greg found instead
+([261019f](../plans/261019f-open-the-original-from-the-command-bar.md)).
 
 **`find <words>` searches the article** — also `search`, `search for`, `does it mention` and Greg's
 own *"do they talk about X?"*. It offers *Find “X” in this article*, which opens Search in

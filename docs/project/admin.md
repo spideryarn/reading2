@@ -28,11 +28,14 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
 - [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
 - [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
+- [§ Whose article it is](#whose-article-it-is-on-its-details-page) — the owner's address and who opened its private link, for an article the admin can already read
 - [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
 - [§ The page itself](#the-page-itself) — the `/admin` index and its layout
+  - [Engagement](#engagement-active-days-reading-time-failed-imports) — active days, reading time, failed imports, and the columns that start hidden
 - [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
 - [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
 - [§ `/admin/articles`](#adminarticles-moving-an-article-to-another-account) — moving an article to another account
+- [§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only) — *view as*: the second cross-owner read, and everything that keeps it read-only
 - [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
 - [§ See also](#see-also) — neighbouring docs
 
@@ -45,6 +48,10 @@ anything — [auth.md § Whose data is it](auth.md#whose-data-is-it) is the whol
 so the interesting question is not what it shows but **how narrow the exception is**.
 
 One route. One prefix. One address.
+
+**Since 2026-10-20 there is a second, wider one**, *view as*: the administrator sees one reader's
+whole app, read-only, after a reason, for thirty minutes. It has its own gate rather than this
+page's, and its own section: [§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only).
 
 ## The three refusals, and only one of them is a gate
 
@@ -204,7 +211,10 @@ place.
 
 **Limited account metadata, counts, and dates — and, on `/admin/feedback` only, the support
 report a reader chose to send us. Never a title, a URL, a filename, or a sentence of anybody's
-reading.**
+reading — except through *view as*: one reader at a time, after a reason, read-only, for thirty
+minutes, and recorded**
+([§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only)). The tables themselves
+still show none of it; the button is the only way in.
 
 ### The second clause, added 2026-09-02, and why it is not a widening
 
@@ -248,6 +258,12 @@ Earlier tab, read through the owner-scoped `feedbackStore`, never `adminStore`. 
 namespace because it carries what no other reader is sent: that a report was ignored, whether its
 note says declined or awaiting, its stored number, and the note's comment
 ([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
+**Its one cross-owner read**, since 2026-10-20: the report each open question names, whoever filed
+it, so Greg can judge a reader's suggestion beside the question about it (`spya-y43ha0`). It goes
+through `adminStore` (`questionReportsAcrossOwners`), answers only for an id exactly one account
+holds, and returns the report's words, number and the address it was filed under, which is what
+`/admin/feedback` already shows the same administrator
+([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)).
 The same answer carries the questions agents have put to the administrator, and
 **`POST /api/admin/feedback/answers`** stores a reply to one: a row in `feedback_question_answers`
 under the signed-in administrator's own id, again through `feedbackStore`. It is the second write
@@ -294,6 +310,24 @@ kind of rule that gets eroded a column at a time by people who never saw it.
 
 Email addresses are shown, because a list of accounts that cannot name them is not a list of
 accounts.
+
+### The third clause, added 2026-10-21: an article the administrator can already read
+
+On the details page of an article the administrator can already open — their own, a public one,
+or a private one whose link they hold — they are told **whose it is** and **who opened its private
+link**. Greg chose both when asked (question q-agbc89, options 1B and 2C):
+
+> As an admin, I want to be able to see anything. Because after all, I've got access to the
+> database anyway. And it may be useful for debugging. And yes, I'm interested to know and store
+> which users open which articles.
+>
+> — Greg, 2026-10-20 (reply `spya-xug3kf`)
+
+His reply is the authority for exactly that, and nothing wider. The identifier is still not
+followed into an article: the route takes a slug and, for somebody else's private article, the
+link's key, and without the key it answers the same 404 as no article, so it cannot be used to
+learn whose a slug is. It returns addresses, counts and dates, never a title, slug or key.
+§ [Whose article it is](#whose-article-it-is-on-its-details-page) is the route.
 
 ## The accounts come from the Auth service, not from a query
 
@@ -628,11 +662,52 @@ that on 2026-10-04 for `/admin/costs`, which shows other accounts' articles by o
 ([admin-costs.md](admin-costs.md)); this route, which takes a slug, still answers only for the
 administrator's own ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
 
+## Whose article it is, on its details page
+
+Since 2026-10-20 (`spya-cf30ac`, [261020j](../plans/261020j-say-who-owns-an-article-on-its-details-page.md))
+every reader gets *You own this article* or *You don't own this article* on the details page, which
+needs nothing from these pages. Since 2026-10-21
+([261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md)) the
+administrator also gets, from one route:
+
+```
+GET /api/admin/articles/:slug/access[?key=<the private link's key>]
+  → { ownerId, ownerEmail, emailsAvailable, mine, privateLink,
+      openers: [{ readerId, email, opens, firstOpenedAt, lastOpenedAt }],
+      signedOut: { opens, firstOpenedAt, lastOpenedAt } | null }
+```
+
+- **On a visitor's page** (somebody else's article): *Admin: it belongs to &lt;address&gt;*, for a
+  public article and, since this route, for one read through its private link, asked with the
+  address's key. Then who opened its private link, when a link is on or any open is recorded.
+- **On the owner's card**, when the owner is the administrator: who opened its private link. A
+  non-admin owner is not shown who opened their link; that is a separate decision nobody has made.
+
+**It answers only for an article the administrator can already read**: `ownedSlug` *or*
+`publicAccessWhere(slug, accessFor(key))`, the same predicate a visitor's read uses
+(`articleAccessForAdmin` in
+[`src/store/pg-private-link-openers.ts`](../../src/store/pg-private-link-openers.ts)). Somebody
+else's private article without its key, with a wrong one, or after its link is turned off, is the
+404 an unknown slug gets. Under the namespace gate, so every other account is a 403 with or
+without a key. `share_token` is never selected; `privateLink` is `share_token_at is not null`.
+Addresses come from the same Auth listing `/api/admin/articles` uses, and a failed listing costs
+the addresses, not the answer.
+
+Who opened it is recorded by the visitor's page: a signed-in visitor's account in
+`private_link_openers`, a signed-out visitor only as a count in `private_link_signed_out_opens`
+([privacy.md § Who opens one](privacy.md#who-opens-one-since-2026-10-21)). The signed-out count is
+approximate ([security-risks.md § R31](security-risks.md#r31)) and the page says *roughly*.
+Neither is counted in Active days. Tests: `tests/private-link-opens-pg.test.ts` (the route and both
+writes, against Postgres) and `tests/article-ownership.test.tsx` (the lines).
+
 ## The plan and ingest columns
 
 Added 2026-09-03 beside spend, because "who is paying" and "who is expensive" are two halves of one
 question. **Plan** is the tier id or `free`, with Stripe's own status underneath; **Ingests** is
 `4 / 20` against the allowance. [billing.md](billing.md) is where the quota itself is explained.
+Since plan 261020b the cell is **priced from slot sums and printed from counts**: a long PDF is one
+article added and up to eight slots of the allowance
+([billing.md § A long document costs a slot per 50 pages](billing.md#a-long-document-costs-a-slot-per-50-pages)).
 
 Three things keep them honest, and each is a way the column could have been quietly wrong:
 
@@ -690,6 +765,12 @@ lives in the address bar like every other view state ([url-state.md](url-state.m
 `dir` parser with the shelf and having a `by` default of its own — newest sign-up first, because a
 list of accounts is a list of things that arrived.
 
+**`?user=<id>` marks one account** in the whole table, rather than filtering to it, so it can still
+be compared with everyone else: the row is highlighted (`aria-current`), scrolled to once when the
+list arrives, and named above the table with a *Clear*; an id not in the list says so. It is what
+the links on `/admin/vouchers` point at, and `/admin/costs` uses the same name for the same id
+([261019k](../plans/261019k-admin-vouchers-links-each-account-to-admin-users-with-a-usage-card.md)).
+
 Dates read as *"3 days ago"* with the exact timestamp on hover, through
 [`relative-time.ts`](../../src/web/relative-time.ts) — the same function the shelf uses, so the two
 pages cannot come to disagree about what "yesterday" means. That is the "human-readable format"
@@ -698,6 +779,38 @@ asked for.
 There are two date columns and they are not the same question: a session lasts weeks, so **a recent
 sign-in is not evidence anybody has read anything**. `Last read` is the most recent open across
 their own articles.
+
+### Engagement: active days, reading time, failed imports
+
+> So I'm trying to get a kind of overall measure of engagement. I suppose the best one would be number
+> of unique days on which they have used the app […] Really what I most care about is number of
+> articles, total time spent reading, number of unique days on which they've used it.
+>
+> — Greg, 2026-10-19 (`spya-shf45w`, `spya-g8bw5j`)
+
+Three columns since 2026-10-20
+([261020c](../plans/261020c-admin-users-engagement-active-days-reading-time-failed-imports-fewer-default-columns.md)):
+
+- **Active days**: distinct UTC days with recorded activity, and how many fell in the last 30. What
+  counts is listed on `activitySources` in [`pg-admin.ts`](../../src/store/pg-admin.ts), and the
+  plan says why `job_step` calls and `reader_arrivals` are left out. **Since 2026-10-20 it includes
+  each article open**, from `article_open_times` — the time, at most once per account per UTC
+  half-hour, not which article
+  ([261020y](../plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md), Greg's answer
+  to [q-xcc7xq](../user-feedback/questions/q-xcc7xq.md); the
+  [privacy page](privacy.md#article-open-times) says we keep it). It was not backfilled, so **days
+  before then still undercount**: a day spent only reading is counted only while it is some
+  article's latest open, and the cell says so.
+- **Reading**: the [reading-time](reading-time.md) totals summed over their own articles.
+- **Failed imports**: failed `import_records` *attempts*, with the newest ten on the card. Each
+  shows when, at which step, and what kind of failure (a `FailureKind`, which is not a severity).
+  The address and the error sentence stay off the wire under § What it deliberately does not show;
+  `scripts/import-records.ts` is where a developer reads them.
+
+**Five counts start hidden**: Archived, Uploads, Comments, Chats and Searches. They are behind the
+same **Columns** menu as the shelf's table, remembered per browser under `spya.admin.users.*`
+(`useHiddenColumns` in [`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts)). They are
+hidden rather than removed, because Greg offered *"or make it easy to … have them default hidden"*.
 
 ### The count above the table counts the table
 
@@ -826,7 +939,7 @@ checks for each of them:
 | Route | Does |
 |---|---|
 | `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`), free usage and `starter: { slug, title } \| null` (never its link) — `private, no-store` |
-| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName?, starterSlug? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id`. A starter must be one of the administrator's own articles (400 otherwise), published, and public or with its private link on (409 otherwise); the route reads the link, never makes one ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)) |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName?, starterSlug?, highPower? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id`. A starter must be one of the administrator's own articles (400 otherwise), published, and public or with its private link on (409 otherwise); the route reads the link, never makes one ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)). With a starter, its main modes are queued; `highPower: true` switches it to Opus first ([261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md)) |
 | `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued, whatever has happened to the starter since; a different body under that id → 409 |
 | `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, recipientName, email, revoked }`, never the starter; the address only while unclaimed (409 after). A real change of address answers `email: "queued"`, and for a voucher with a starter `starter: "kept"` or `"dropped"` (no longer linkable, so the new email went without it) |
 | `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
@@ -841,7 +954,27 @@ restores it.
 **The page** is [`AdminVouchersPage.tsx`](../../src/web/AdminVouchersPage.tsx) over
 [`useAdminVouchers.ts`](../../src/web/useAdminVouchers.ts), lazy-loaded like the others and linked
 from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a page without a
-loader is a compile error). A create form — address, articles (20 by default), private note, and a
+loader is a compile error). **It has three tabs** since
+[261020ab](../plans/261020ab-admin-vouchers-tabs-one-gift-form-and-finished-gifts-folded.md)
+(Greg, 2026-10-20, `spya-vyddks`: *"This page is now quite long and messy"*): **Give** (the
+default), **Drafts** (the author gifts, counted while any wait on you: `draft` or `sending`) and
+**Given** (the voucher table, counted). The tab is `?tab=drafts|given` through nuqs, replacing
+rather than pushing, and an unknown value reads as Give; `?gift=<id>` without a tab opens Drafts,
+and a tab chosen by hand drops `?gift=`. All three panels stay mounted, the hidden ones `hidden`,
+so a half-typed form survives a switch and the lookup poll keeps going. The row is the Feedback
+dialog's (`.fb-tabs`, roving `tabIndex`, arrow keys).
+
+Give opens with three short paragraphs saying what a voucher, a starter
+article and an author gift each are: one kind of gift and a shortcut to it, not two separate gifts
+([261019i](../plans/261019i-starter-article-and-author-gift-cost-nothing-and-explained.md)). Then
+**one *New gift* form** (Greg, `spya-vusqvg`: *"we could provide a tick box"*). Unticked it is the
+voucher form below; ticked — *For the author of one of my articles* — the voucher's fields are
+hidden (not cleared) and it asks only for the article and the private link's rights, posts
+`POST /api/admin/author-gifts`, and opens Drafts on the new or existing gift. The two starter rules
+stay apart: a voucher's starter must already be linkable, while drafting makes a missing link, so
+any article on the shelf will do once the rights are ticked. The chosen article carries across the
+tick. Unticked, the create
+form — address, articles (20 by default), private note, and a
 note to them that goes in their email, with a sketch of that email beside it showing where the note
 lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md);
 the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body), and
@@ -854,7 +987,13 @@ no link, *Make one on its page* to its Access & sharing card. Create waits while
 could not be linked, and the page never asks for the key
 ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md); the table shows the
 starter's title under the address, and a readdress whose new email had to go without it says so) — over
-a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
+the *Given* table. Since 2026-10-21 that is a [`DataTable`](../../src/web/lib/DataTable.tsx) whose
+rows the page draws itself (`renderRow`), because each row turns into a form and keeps its state in
+the row: every column but the claimant's usage and Actions sorts from its header or a chip, newest
+first by default, the sort in `?by=&dir=` beside `?tab=`; Status ranks claimed, waiting, then
+revoked (a revoked claim counts as revoked); any column but Email and Actions can be hidden — Actions
+holds the edit form the other cells' inputs belong to
+([261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md)). Each
 row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.
 Edit offers the address only while the voucher waits, and a save sends only the fields that changed.
@@ -871,6 +1010,19 @@ row. The wire shape is [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), a
 module shared by the store and the client because the browser may not import `pg-vouchers.ts`, even
 for a type. `tests/admin-vouchers-page.test.tsx` mounts it.
 
+**Each account on the page links to `/admin/users?user=<id>`**, with a card on the link summarising
+its usage — Greg, 2026-10-19 (`spya-qdd2vc`): *"create link from each user to /admin/users , with a
+tooltip summarising their usage"*. A claimed voucher's link is its claimant's current address in
+Status, found by id; a waiting one's is the address in the first column, when exactly one account
+already holds it (two accounts can share an address, and a guess would name the wrong one). A revoked
+voucher nobody claimed, or an address nobody has signed up with, is plain text. The card's facts are
+read off the same `GET /api/admin/users` rows `/admin/users` draws, so it shows nothing that page
+does not; when that read fails the page says what is missing, keeps last-read usage on id-based
+claimed links with a warning, and removes address-matched waiting links until a fresh account list
+arrives. *Refresh* reads both lists. The link and card are
+[`AdminUserCard.tsx`](../../src/web/AdminUserCard.tsx), which knows nothing about
+vouchers ([261019k](../plans/261019k-admin-vouchers-links-each-account-to-admin-users-with-a-usage-card.md)).
+
 **Each voucher sends two emails, and the Status cell says what became of each**: *Email to them*
 (the gift, sent when the voucher is made and again when its address is corrected) and *Email to you*
 (the creator, when it is claimed) — sent, not sent and why, failed and why, waiting, or sending, with
@@ -880,9 +1032,16 @@ a Retry where the server allows one. How they are kept to once each is
 
 ### Author gifts — a draft voucher for an article's author
 
-Since 2026-10-10 the page has a second section above the voucher table, **Author gifts**: a gift
+Since 2026-10-10 the page has a second section, **Author gifts** — since 261020ab the *Drafts*
+tab, drafted from Give's form with its box ticked: a gift
 voucher drafted for the author of one of the administrator's own articles, saved and **never sent
-until the administrator presses Send**. Greg's request and the marketing reason are
+until the administrator presses Send**. The ones still waiting come first, as full cards; **a
+finished gift — sent or discarded — is one line, shut**, below them: its title, its status, *Show*
+and, on a discarded one, *Restore*. What a Send or a Discard just said stays on that line. It is
+open while *Show* says so, or while the address or a draft just made points at it (Greg,
+2026-10-20, `spya-vcnmrd`, of a discarded gift still drawn in full: *"At the very least collapse
+it"*). Deleting a finished gift was weighed and not built: it would take *Restore* and the lookups'
+record with it, for one line saved. Greg's request and the marketing reason are
 [marketing-author-gifts.md](marketing-author-gifts.md); the plan, its two reviews and every
 decision are [261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).
 
@@ -895,8 +1054,9 @@ is how the section reads each lookup's cost from the ledger.
 
 | Route | Does |
 |---|---|
-| `POST /api/admin/author-gifts` | `{ slug, rightsConfirmed: true }`. A new gift: the private link if the article has neither one nor public visibility (`keepExisting`), the row, and its first lookup, which runs after the response → `202`. An article that already has a gift → `200` and nothing touched, so a late replay cannot turn a link back on or buy another search. The article must be the administrator's own (400) and published (409). Since [261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md), MCP's `draft_author_gift`: `makeLink: false` in place of the tick (never makes a link; since [261010r](../plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md) a link-less private article is drafted anyway, and *Send* makes the link), `lookup: false` (no lookup row, → `201` with `lookupId: null`), and `draft: { email, recipientName, recipientNote, articles, notes }`, written by the insert only, under the PATCH's field rules |
+| `POST /api/admin/author-gifts` | `{ slug, rightsConfirmed: true, highPower? }`. A new gift: the private link if the article has neither one nor public visibility (`keepExisting`), the row, its main modes queued, Opus switched on first when `highPower: true`, and its first lookup, which runs after the response → `202`. An article that already has a gift → `200` and nothing touched, so a late replay cannot turn a link back on or buy another search. The article must be the administrator's own (400) and published (409). Since [261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md), MCP's `draft_author_gift`: `makeLink: false` in place of the tick (never makes a link; since [261010r](../plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md) a link-less private article is drafted anyway, and *Send* makes the link), `lookup: false` (no lookup row, → `201` with `lookupId: null`), and `draft: { email, recipientName, recipientNote, articles, notes }`, written by the insert only, under the PATCH's field rules |
 | `POST /api/admin/author-gifts/:id/lookups` | *Look up again* on a draft → `202`; `409` while one runs (five minutes, then it counts as stale) or once the gift is not a draft |
+| `POST /api/admin/author-gifts/:id/high-power` | a draft card's *Switch on*: switches its article to Opus and queues its main modes → `200`; `409` after Send/Discard, or if the article is no longer the gift creator's published article |
 | `GET /api/admin/author-gifts` | every gift with its derived status (draft, sending, sent, discarded), fields, notes, each field's source lookup, and every lookup with its cost — `private, no-store` |
 | `PATCH /api/admin/author-gifts/:id` | `{ email, recipientName, recipientNote, articles, notes, discarded }`, the voucher's own field rules; once *Send* has started only `notes`. Editing the address or name clears its lookup as the source |
 | `POST /api/admin/author-gifts/:id/send` | freezes the draft under an attempt token, then `createVoucher`; the gift email is scheduled after a create *or* a replay, and a starter that cannot be linked now unfreezes only that attempt (409). The page sends `{ expected: { email, recipientName, recipientNote, articles } }`, what its confirmation showed, and a gift that no longer matches (an agent edited it meanwhile) is a 409 with nothing made (261010i). `rightsConfirmed: true` is the confirmation's tick, shown when the list says `starter.linkable: false`: only a fresh create's `link-off`, never a replay, may make the article's private link before retrying `createVoucher`. The link write locks the slug and rechecks the gift's article id, attempt and absent voucher; a slug since taken by another is `absent` (261010r) |
@@ -913,6 +1073,19 @@ stranger's article; that residual risk is accepted and written up in the plan's 
 
 The add page's half is [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
 
+**A gift's article gets its main modes, and Opus if asked** (since 2026-10-21, Greg, `spya-s902kr`:
+*"by default, any articles that we share as part of this should automatically get their main modes
+generated as well"*). A new gift, and a new voucher with a starter, queue the article's main-mode
+jobs — the import's own list, `AUTO_MODE_STEPS` — in the transaction that makes it, whatever the
+administrator's own *Generate the main modes* setting says. Unforced, so a mode already made is a
+skipped step at no cost. The Give form's *High-powered AI* box (on by default) and the draft card's
+*Switch on* (`POST /api/admin/author-gifts/:id/high-power`) switch the article to Opus first, in the
+same transaction: **Opus for what is made from now on; nothing already made is redone**, Structure
+included. Whether it should remake the Sonnet-made modes is asked of Greg in `q-trk64h`. One cost of
+queuing: the claim moves a starter to its recipient only when nothing is queued or running on it, so
+a send-now voucher claimed within the minutes the modes take stays the administrator's, to move
+below. [261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md).
+
 ## `/admin/articles` — moving an article to another account
 
 > And more generally, we want a /admin/articles page, which includes a way for me to transfer
@@ -924,13 +1097,29 @@ The add page's half is [ingest-queue.md § The add page](ingest-queue.md#the-add
 > — Greg, 2026-10-11 (`spya-wqvxjv`)
 
 **The second page here that writes across owners**, after the voucher claim's account binding: it
-changes whose an article is. Every article, newest first, with its owner's address, the short id
+changes whose an article is. Every article, newest first unless sorted otherwise, with its owner's address, the short id
 (the article id for one made before short ids), the date, visibility and processing — and **a title
 only for the administrator's own articles and public ones**, never another reader's slug, which
 carries the title's words. A row per article does show how many each reader has and when, which
 `/admin/users` already shows as counts; *which* articles stays in their session. Showing every
 title would be a decision about [§ What it deliberately does not show](#what-it-deliberately-does-not-show),
 and a one-line change in `listArticlesAcrossOwners`.
+
+**Each row's Total cost** is every model call the ledger ties to the article by its id, over its
+whole life and whoever made it (`spendByArticle` in
+[`ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts)): `/admin/costs`' rule and
+formatting, a `+` when it is a floor, and only the spend and call counts that `/admin/costs` already
+shows by opaque article id. Greg, 2026-10-19
+(`spya-vjyev3`): *"Also show Total Cost per article"* —
+[261020s](../plans/261020s-total-cost-column-on-admin-articles.md).
+
+**The table is `/admin/users`' [`DataTable`](../../src/web/lib/DataTable.tsx)** since 2026-10-21:
+every column but Actions sorts from its header or a chip, the sort in `?by=&dir=`; any but Article
+and Actions can be hidden from the Columns menu, remembered in this browser; Article is held while
+the rest scroll. A dash in Total cost (no call priced) sorts last either way; equal costs read
+newest first, highest first (the tiebreak turns round with the arrow). The filter narrows the list before the table sees it. Greg, 2026-10-21
+(`spya-k8mka5`): *"the /users one, I think perhaps it was more functional?"* —
+[261021i](../plans/261021i-admin-tables-share-one-sortable-hideable-table.md).
 
 | Route | Does |
 |---|---|
@@ -959,6 +1148,52 @@ recorded in the plan with its fix
 
 The voucher claim moves a gift's starter article the same way, when it safely can
 ([billing.md § Gift vouchers](billing.md#gift-vouchers-extra-free-articles-given-by-email)).
+
+## Viewing the app as a reader, read-only
+
+**Since 2026-10-20**, Greg's answer A to question q-kyhvkm:
+
+> A
+>
+> — Greg, 2026-10-20 (reply `spya-kpzvrk`), choosing *"View as": a button on /admin/users opens
+> the app exactly as that reader sees it, strictly read-only, with a coloured bar at the top*
+
+A **View as** button on `/admin/users` (and **View as owner** on `/admin/articles`, for a row that
+is not the administrator's own) asks for a one-line reason and opens a new tab showing the shelf,
+an article with its modes, notes and chats, and the metadata page, as that reader sees them. A bar
+across the top says whose they are, the minutes left, and Stop. This is the second request that
+reads across owners, and it is much wider than the first, so it is built as a gate of its own rather
+than as one more admin route. Plan
+[261019n § Part 3](../plans/261019n-admin-sees-other-users-articles-and-views-as-them.md#part-3-built-view-as-greg-chose-a-2026-10-20);
+research [261019a](../research/261019a-admin-impersonation-best-practice.md).
+
+**What it is not: a login.** The administrator's own Supabase session is untouched and no token is
+minted for the reader, so nothing changes in their sign-in history. The tab sends the
+administrator's own token and a header, `X-Spideryarn-View-As`, carrying a nonce the server issued.
+Either alone is useless.
+
+**The session row is the audit.** `POST /api/admin/view-as` writes a row in `view_as_sessions`:
+who, whom, why, when it started, an absolute expiry thirty minutes later, and when it was stopped.
+Only a hash of the nonce is stored. Nothing deletes a row except the deletion of either account.
+Request log lines on view-as requests carry both ids, never an address.
+
+**Every request is checked four times, every time** (`serveViewingAs` in
+[`src/routes.ts`](../../src/routes.ts)): the caller is an administrator now; the nonce is live and
+was issued to this caller; the reader is still not an administrator; and the route is a GET row
+marked `viewAs: "read"`. Anything else is refused, and a refused panel says *Hidden while viewing
+as another reader* rather than drawing an empty state, which would read as "she has none". The
+allowlist, the backstops under it and what is not covered are in
+[security.md § Viewing the app as a reader](security.md#view-as).
+
+**Administrators cannot be viewed.** That stops a second administrator's view becoming a way to act
+with the first one's reach.
+
+**What it cannot do.** Anything in the application that writes, spends, fetches an outside page,
+sends email, exports, or hands out a private link's key. The administrator's Supabase auth key is
+the browser-storage exception: a refresh is shared with their ordinary tabs, never attributed to
+the reader. So a bug that only shows when the reader presses something is still reproduced in the
+administrator's own account. The reader is not emailed each time; the privacy page says it can
+happen ([privacy.md](privacy.md)).
 
 ## What it cannot do, and what is not built
 

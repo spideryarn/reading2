@@ -482,7 +482,7 @@ describe("the kind of conversation it creates", () => {
   });
 
   it("refuses a kind a live session cannot have, and a word that is not a kind", async () => {
-    for (const kind of ["tutorial", "explore", "candidates", "review", 7]) {
+    for (const kind of ["explore", "candidates", "review", 7]) {
       const out = await post("spya-vaaacc", exchange({ kind }));
       expect(out.status, String(kind)).toBe(400);
     }
@@ -503,7 +503,6 @@ describe("the kind of conversation it creates", () => {
 
   it.each([
     ["explore", "spya-vaaacf"],
-    ["tutorial", "spya-vaaacg"],
   ] as const)("refuses a spoken append to a stored %s thread when kind is omitted", async (kind, threadId) => {
     const begun = await asTestOwner(() => chatStore.begin(SLUG, {
       threadId,

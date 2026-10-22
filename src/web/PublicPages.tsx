@@ -36,10 +36,15 @@ import { hostOf } from "../urls.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice } from "./PublicChrome.js";
+import { AdminOwnerLine, Ownership } from "./Ownership.js";
+import type { ShareKey } from "../share-key.js";
+import { useSession } from "./useSession.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { markedModes, NOUN } from "./visitor.js";
 import { useExperimental } from "./useExperimental.js";
 import { articleTitleVoice, withVoice } from "./voice.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { useViewAsSubject } from "./view-as-session.js";
 
 /**
  * The link out to the publisher, the source page found for an upload, or
@@ -134,21 +139,41 @@ export function PublicMetadataPage({
   article,
   available,
   signedIn,
+  readerId = null,
   sessionUnconfirmed,
   sharedBy,
+  shareKey = null,
 }: {
   slug: string;
   article: Article;
   available: PublicArtefacts;
   /** For the call to action only — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /**
+   * Who access was resolved for, for the *Access* section only: the account
+   * address beside "You don't own this article", and the administrator's line
+   * (Ownership.tsx). Optional for tests that mount this page alone.
+   */
+  readerId?: string | null;
   /** For the notice below only — reader-capability.ts § sessionUnconfirmed. */
   sessionUnconfirmed: boolean;
   /** For the notice below only — reader-capability.ts § sharedBy. */
   sharedBy: PublicSharedBy;
+  /**
+   * The address's private-link key, for the administrator's line only: the
+   * admin route answers for a private article only when named with its key
+   * (Ownership.tsx, plan 261021d). Optional for tests that mount this page alone.
+   */
+  shareKey?: ShareKey | null;
 }) {
   const { meta } = article;
   const stats = articleStats(article);
+  const { user } = useSession();
+  const viewAsSubject = useViewAsSubject();
+  /* `readerId` is the account for which the access result below was resolved.
+     A session event can reach this hook before it reaches App and changes that
+     prop, so do not make a claim — or an admin request — during that crossing. */
+  const sessionMatchesReader = readerId !== null && user?.id === readerId;
   useDocumentTitle(pageTitle({ kind: "read", title: meta.title, view: "metadata" }));
 
   /* **Where and when it was published, for a visitor too.** Greg, 2026-10-04:
@@ -210,6 +235,25 @@ export function PublicMetadataPage({
           sharedBy={sharedBy}
           copyFrom={webSource(meta)}
         />
+
+        {/* **Whose it is**, Greg's spya-cf30ac: said only to a reader whose
+            session the server confirmed, since that is the one case where
+            "not yours" is known rather than guessed (Ownership.tsx). */}
+        {signedIn && !sessionUnconfirmed && sessionMatchesReader && (
+          <section data-access className="tw:mt-8">
+            <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">Access</h2>
+            {/* In a tab viewing as a reader, theirs is the address, and the
+                administrator's own lines are not part of what they see (plan
+                261019n § Part 3). */}
+            <Ownership
+              whose="not-yours"
+              email={viewAsNonce() !== null ? (viewAsSubject?.subjectEmail ?? null) : (user.email ?? null)}
+            />
+            {viewAsNonce() === null && (
+              <AdminOwnerLine key={`${slug} ${readerId ?? ""}`} slug={slug} readerId={readerId} shareKey={shareKey} />
+            )}
+          </section>
+        )}
 
         <section className="tw:mt-8">
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>

@@ -380,7 +380,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
  * screen to say why. `replace`, like `?debatethread=`: it narrows a list
  * rather than moving to a new view.
  *
- * `learn` is one word for Recall, Tutorial and Explore together. Which
+ * `learn` is one word for Recall and Explore together. Which
  * conversation belongs to which word is `chatFrom` in thread-source.ts; the
  * words are here so this eager file does not import that one. It was
  * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
@@ -1370,26 +1370,27 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* ----------------------------------------------- Learn's four sub-modes --
+/* ---------------------------------------------- Learn's three sub-modes --
    docs/plans/260831al-review-quiz-sub-mode.md. The key was `?remember=` until
    2026-10-06 and is not aliased: an old link opens Learn at Recall
    (docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md;
    last-view.ts § `NEVER_REMEMBERED` keeps such a link a link). */
 
 /** Free recall, or the questions the piece asks you back. */
-/* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
-   docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
-   Explore (since 2026-10-03,
+/* In the order the chips are drawn: Recall, Explore (since 2026-10-03,
    docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md),
-   Quiz. The three conversations sit together and the one that is not a
-   conversation comes last. */
-export const LEARN_VIEWS = ["recall", "tutorial", "explore", "quiz"] as const;
+   Quiz. The two conversations sit together and the one that is not a
+   conversation comes last. Tutorial sat between Recall and Explore from
+   2026-10-02 until 2026-10-20, when Recall absorbed it; an old
+   `?learn=tutorial` is lifted to Recall before anything reads it (router.ts §
+   `liftLegacyLearnTutorial`), and would read as Recall here anyway.
+   docs/plans/261020m-recall-and-tutorial-become-one-recall.md. */
+export const LEARN_VIEWS = ["recall", "explore", "quiz"] as const;
 export type LearnView = (typeof LEARN_VIEWS)[number];
 
 /**
- * Which part of Learn is open — `recall` (the default, omitted), `tutorial`,
- * `explore` or `quiz`. Tutorial and Explore are conversations like Recall, each
- * with its own one thread, so `?thread=` follows them exactly as it follows
+ * Which part of Learn is open — `recall` (the default, omitted), `explore` or
+ * `quiz`. Explore is a conversation like Recall, with its own one thread, so `?thread=` follows them exactly as it follows
  * Recall; only Quiz clears it.
  *
  * **This does not break url-state.md's rule the way `?stance=` would have.** A
@@ -1444,7 +1445,7 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' five sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' six sub-modes the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
@@ -1456,7 +1457,9 @@ export function learnInSearch(search: string): LearnView {
  * `links` is the web addresses in the article's own markup;
  * `reception` is what others have written about the piece itself; `claims` is
  * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
- * § 2), with an older search's claim sources under it. The last two were
+ * § 2), with an older search's claim sources under it; `investigate` is the owner's
+ * launcher of questions for Chat (since 2026-10-20, plan 261020n Stage 2).
+ * Reception and Claims were
  * Debate's `?debate=` from 2026-10-03, which this replaced: an old
  * `?mode=debate&debate=claims` is lifted to `?mode=sources&sources=claims`
  * before anything reads it (router.ts § `liftLegacySources`). *Which thing, within this
@@ -1473,30 +1476,39 @@ export function learnInSearch(search: string): LearnView {
  * (activation.ts § `activationForSources`). Links, the article's own
  * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
  * off the blocks in the browser. Not cited arms nothing either: its search is
- * the panel's own button, because it sends the piece's words to OpenAlex. Back,
- * a pasted link and a last-view restore arrive here and buy nothing.
+ * the panel's own button, because it sends the piece's words to OpenAlex. Investigate
+ * arms nothing: each of its rows is one press that sends one chat question.
+ * Back, a pasted link and a last-view restore arrive here and buy nothing.
  */
-export const SOURCES_VIEWS = ["bibliography", "not-cited", "links", "reception", "claims"] as const;
+export const SOURCES_VIEWS = ["bibliography", "not-cited", "links", "reception", "claims", "investigate"] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
- * **The sub-modes a visitor's band draws**: all but Not cited, which is the
- * owner's (its route is owner-only, and a visitor's search would spend our
- * OpenAlex allowance — plan 261011ac § Who sees it).
+ * **The sub-modes a visitor's band draws**: all but Not cited and Investigate, which
+ * are the owner's. Not cited's route is owner-only, and a visitor's search
+ * would spend our OpenAlex allowance (plan 261011ac § Who sees it); Investigate's
+ * every row hands a question to Chat, and a visitor has no chat (plan
+ * 261020n § Visitors).
  */
-export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter((v) => v !== "not-cited");
+export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter(
+  (v) => v !== "not-cited" && v !== "investigate",
+);
 /**
  * **What a visitor's band draws for `?sources=`**: the view it names, or
  * Bibliography for one the visitor does not have, so a shared
- * `?sources=not-cited` link opens the default list rather than an empty band.
+ * `?sources=not-cited` or `?sources=investigate` link opens the default list rather
+ * than an empty band.
  */
 export function visitorSourcesView(view: SourcesView): SourcesView {
   return VISITOR_SOURCES_VIEWS.includes(view) ? view : "bibliography";
 }
 /**
  * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
- * Bibliography, Not cited and Links have a panel each.
+ * Bibliography, Not cited, Links and Investigate have a panel each. A positive union
+ * rather than Sources' views minus the others, so a new sub-mode cannot widen
+ * it by being added (GPT Sol's F5 on plan 261020n): both SourcesMode
+ * controllers route each view with an exhaustive `switch`.
  */
-export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography" | "not-cited" | "links">;
+export type ReceptionAndClaimsView = "reception" | "claims";
 
 export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),
@@ -1705,7 +1717,9 @@ export const libraryQueryParam = createParser<string>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /**
- * Which keys the shelf is ordered by, coarsest first — `by=length,title`.
+ * **A `?by=` parser, for one sortable table with its own default.**
+ *
+ * Which keys a table is ordered by, coarsest first — `by=length,title`.
  *
  * **A list rather than one value**, because since the move to TanStack Table a
  * shift-click adds a second key, and a compound order that the URL cannot carry
@@ -1714,23 +1728,38 @@ export const libraryQueryParam = createParser<string>({
  *
  * The vocabulary is validated against the columns themselves rather than a list
  * repeated here — `sortingFromUrl` drops any id the table does not have, so a
- * mangled link degrades to the ordinary homepage rather than to an empty sort
+ * mangled link degrades to the ordinary page rather than to an empty sort
  * that looks deliberate. This parser only has to get the *shape* right.
  *
  * `eq` is written out because `===` on two arrays is always false, and without
  * it nuqs never recognises the default and stamps `?by=added&dir=desc` onto
  * every link to the homepage.
+ *
+ * **One factory, because the default is the only page-specific half.** The
+ * shelf's and the admin users list's were two copies of the same eleven lines
+ * until 2026-10-21, and `/admin/articles` would have been the third (plan
+ * 261021i § Stage 1). The default sits beside each call, in this eager file,
+ * as a bare constant — never imported from a column module, for the reason
+ * `ADMIN_DEFAULT_BY` gives below.
  */
-export const libraryByParam = createParser<string[]>({
-  parse: (v) => {
-    const ids = v.split(",").filter((s) => s !== "");
-    return ids.length ? ids : null;
-  },
-  serialize: (v) => v.join(","),
-  eq: sameList,
-})
-  .withDefault(DEFAULT_BY)
-  .withOptions({ history: "push" });
+export function byParam(defaults: string[]) {
+  return createParser<string[]>({
+    parse: (v) => {
+      const ids = v.split(",").filter((s) => s !== "");
+      return ids.length ? ids : null;
+    },
+    serialize: (v) => v.join(","),
+    eq: sameList,
+  })
+    .withDefault(defaults)
+    .withOptions({ history: "push" });
+}
+
+/** What `byParam` makes — the shape lib/useUrlSortedTable.ts takes. */
+export type ByParam = ReturnType<typeof byParam>;
+
+/** The shelf's — what you last opened, first (library-columns.tsx § DEFAULT_BY). */
+export const libraryByParam = byParam(DEFAULT_BY);
 
 /**
  * Which way round each key goes — `dir=desc,asc`, paired with `by` by position.
@@ -1750,8 +1779,8 @@ export const libraryByParam = createParser<string[]>({
  * out itself when `isAllNatural` says it would add nothing. Found by a
  * cross-family review, 2026-08-26.
  *
- * **Named for the job rather than for the shelf**, and read by both pages that
- * have a sortable table — the shelf and the admin users list. There is nothing
+ * **Named for the job rather than for the shelf**, and read by every page that
+ * has a sortable table — the shelf and the admin lists. There is nothing
  * page-specific in it: unlike `by`, whose default names a column, this one is
  * the same three lines whatever the columns are, and two copies of it would be
  * two places for the paragraph above to be forgotten. It was `libraryDirParam`
@@ -1791,25 +1820,29 @@ export const sortDirParam = createParser<("asc" | "desc")[]>({
  */
 export const ADMIN_DEFAULT_BY = ["signedUp"];
 
+/** What the admin users table is sorted by — `?by=signedUp`. */
+export const adminByParam = byParam(ADMIN_DEFAULT_BY);
+
 /**
- * What the admin users table is sorted by — `?by=signedUp`.
- *
- * Its own parser rather than `libraryByParam` because the *default* is the
- * page-specific half: the shelf rests on what you last opened, and a list of
- * accounts rests on who arrived most recently. Everything else about the two —
- * the comma-separated shape, the `eq`, the `push` history — is identical, and
- * the direction parser above is genuinely shared.
+ * The admin articles table's default sort: **added most recently, first** —
+ * the order the page had before it could be sorted at all, and the same
+ * "what arrived" question as the users list. Here, not beside its columns,
+ * for `ADMIN_DEFAULT_BY`'s reason above.
  */
-export const adminByParam = createParser<string[]>({
-  parse: (v) => {
-    const ids = v.split(",").filter((s) => s !== "");
-    return ids.length ? ids : null;
-  },
-  serialize: (v) => v.join(","),
-  eq: sameList,
-})
-  .withDefault(ADMIN_DEFAULT_BY)
-  .withOptions({ history: "push" });
+export const ADMIN_ARTICLES_DEFAULT_BY = ["added"];
+
+/** What the admin articles table is sorted by — `?by=cost`. */
+export const adminArticlesByParam = byParam(ADMIN_ARTICLES_DEFAULT_BY);
+
+/**
+ * The *Given* table's default sort on `/admin/vouchers`: **created most
+ * recently, first** — the order the server sends and the table had before it
+ * could be sorted. Here for `ADMIN_DEFAULT_BY`'s reason above.
+ */
+export const ADMIN_VOUCHERS_DEFAULT_BY = ["created"];
+
+/** What the *Given* table is sorted by — `?tab=given&by=status`. */
+export const adminVouchersByParam = byParam(ADMIN_VOUCHERS_DEFAULT_BY);
 
 /**
  * Cards or the dense table — `view=table`.

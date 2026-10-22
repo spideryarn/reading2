@@ -4,8 +4,8 @@
  * Greg, `spya-mtsf0y` and his reframing of it (both 2026-10-03, quoted in
  * docs/project/learn-mode.md § Explore): a conversation that is about what
  * the *reader* thinks, started from what they marked and discussed, and free
- * to look outside the article. One thread per article like Recall's and
- * Tutorial's, its own system prompt, and the one kind whose final message
+ * to look outside the article. One thread per article like Recall's,
+ * its own system prompt, and the one kind whose final message
  * carries the reader's notes on every turn.
  *
  * These are the pure halves. What the route sends is
@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import { ChatConflict, withSpokenTurn, withTurn } from "../src/chat.js";
 import { CHAT_TOOLS, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, webSearchTool } from "../src/converse.js";
+import { PROFILE_RULES } from "../src/profile.js";
 import { readerNotesDigest } from "../src/reader-notes.js";
 import type { Block, ChatMessage, ChatThread, Comment, Meta, ThreadKind } from "../src/types.js";
 import { isSingleThreadKind, isThreadKind, SINGLE_THREAD_KINDS, THREAD_KINDS } from "../src/types.js";
@@ -63,10 +64,10 @@ const systemOf = (kind: ThreadKind) => String(build(kind)[0]?.content);
 const lastOf = (messages: ReturnType<typeof buildConverseMessages>) => String(messages.at(-1)?.content);
 
 describe("the kind itself", () => {
-  it("is a thread kind, and a single-thread one like Recall and Tutorial", () => {
+  it("is a thread kind, and a single-thread one like Recall", () => {
     expect(isThreadKind("explore")).toBe(true);
     expect(THREAD_KINDS).toContain("explore");
-    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "tutorial", "explore", "guide"]);
+    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "explore", "guide"]);
     expect(isSingleThreadKind("explore")).toBe(true);
   });
 
@@ -76,28 +77,54 @@ describe("the kind itself", () => {
     expect(webSearchTool("explore")).toEqual(webSearchTool("chat"));
   });
 
-  /* PR-3 and plan 261011w: the two typed-only tools go to Chat and Explore. */
-  it("is offered the shared tools plus reader_notes and read_cited_work", () => {
+  /* PR-3, plan 261011w and plan 261020o: the three typed-only tools go to Chat and Explore. */
+  it("is offered the shared tools plus reader_notes, read_cited_work and offer_to_save", () => {
     const names = toolsFor("explore").map((t) => t.function.name);
-    expect(names).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes", "read_cited_work"]);
+    expect(names).toEqual([
+      ...CHAT_TOOLS.map((t) => t.function.name),
+      "reader_notes",
+      "read_cited_work",
+      "offer_to_save",
+    ]);
     expect(toolsFor("explore")).toBe(toolsFor("chat"));
   });
 });
 
 describe("Explore's prompt", () => {
-  it("is its own system prompt, not chat's, Recall's or Tutorial's", () => {
+  it("is its own system prompt, not chat's or Recall's", () => {
     const explore = systemOf("explore");
-    for (const other of ["chat", "learn", "tutorial", "candidates"] as const) {
+    for (const other of ["chat", "learn", "candidates"] as const) {
       expect(explore).not.toEqual(systemOf(other));
     }
     expect(explore).toContain("thinking partner");
+  });
+
+  /* Plan 261020o: one shared section, after PROFILE_RULES so its two narrow
+     exceptions win, and no accidental reach into the other conversation kinds. */
+  it("shares Chat's offer rules after the profile rules, and resolves their two exceptions", () => {
+    const heading = "REMEMBERING HOW THEY WANT TO BE ANSWERED";
+    for (const kind of ["chat", "explore"] as const) {
+      const system = systemOf(kind);
+      expect(system.split(heading)).toHaveLength(2);
+      expect(system.indexOf(heading)).toBeGreaterThan(system.indexOf(PROFILE_RULES));
+      expect(system).toMatch(/Only the reader's latest message may lead to an offer/);
+      expect(system).toMatch(/This section adds two exceptions/);
+      expect(system).toMatch(/offer_to_save may carry what they told us because it stays inside Spideryarn/);
+      expect(system).toMatch(/button may address the reader and need not be\s+about the article/);
+      expect(system).toMatch(/any exceptions stated immediately\s+above this section/);
+    }
+    expect(systemOf("explore").indexOf("Two of those rules are different in this conversation")).toBeLessThan(
+      systemOf("explore").indexOf(heading),
+    );
+    for (const kind of ["learn", "candidates", "guide"] as const) {
+      expect(systemOf(kind), kind).not.toContain(heading);
+    }
   });
 
   it("greets the reader as the one who is about to think, below the breakpoint", () => {
     const greeting = String(build("explore")[2]?.content);
     expect(greeting).toMatch(/think/i);
     expect(greeting).not.toEqual(String(build("chat")[2]?.content));
-    expect(greeting).not.toEqual(String(build("tutorial")[2]?.content));
   });
 
   /* The shared rules, by interpolation, so a fix to one is a fix to all. */
@@ -157,7 +184,7 @@ describe("Explore's prompt", () => {
     }
   });
 
-  it("offers no command buttons, like Recall and Tutorial", () => {
+  it("offers no command buttons, like Recall", () => {
     expect(systemOf("explore")).not.toContain("[cmd:");
     expect(systemOf("explore")).not.toContain("OFFERING AN ACTION");
   });
@@ -201,8 +228,7 @@ describe("Explore's prompt", () => {
     /* A doubt held in the notes is not permission to drag every later turn
        back to fault-finding after the reader has moved on. */
     expect(testing).toMatch(/on later turns[\s\S]*latest message/i);
-    /* Tutorial and Recall are not given the move. */
-    expect(systemOf("tutorial")).not.toContain("TESTING THE PIECE");
+    /* Recall is not given the move. */
     expect(systemOf("learn")).not.toContain("TESTING THE PIECE");
     /* The mode's name, where the prompt says it (it was "the rest of Remember"). */
     expect(explore).toMatch(/like the rest of Learn/);
@@ -266,8 +292,8 @@ describe("the reader's notes in an Explore turn (PR-1)", () => {
 
   /* The route builds one for Explore only; the builder refuses to carry one for
      anybody else, so a caller's mistake cannot put a reader's notes into a
-     Recall, Tutorial or Candidates turn. */
-  it.each(["chat", "learn", "tutorial", "candidates"] as const)(
+     Recall or Candidates turn. */
+  it.each(["chat", "learn", "candidates"] as const)(
     "is never carried by a %s turn, even when one is handed in",
     (kind) => {
       const messages = build(kind, { notes: digest });
@@ -322,15 +348,13 @@ describe("one Explore thread per article", () => {
     expect(JSON.stringify(explore.threads)).toBe(before);
   });
 
-  it("appends a second Explore turn to the existing one, never to Recall's or Tutorial's", () => {
+  it("appends a second Explore turn to the existing one, never to Recall's", () => {
     const recall = withTurn([], { threadId: "spya-recab4", question: "what I took", kind: "learn" }, AT);
-    const tutorial = withTurn(recall.threads, { threadId: "spya-tutar4", question: "not read it", kind: "tutorial" }, AT);
-    const explore = withTurn(tutorial.threads, { threadId: "spya-expar4", question: "what do I think", kind: "explore" }, AT);
+    const explore = withTurn(recall.threads, { threadId: "spya-expar4", question: "what do I think", kind: "explore" }, AT);
     const again = withTurn(explore.threads, { threadId: "spya-expar5", question: "and again", kind: "explore" }, AT);
     expect(again.thread.id).toBe("spya-expar4");
     expect(again.threads.filter((t) => t.kind === "explore")).toHaveLength(1);
     expect(again.threads.find((t) => t.kind === "learn")?.messages).toHaveLength(2);
-    expect(again.threads.find((t) => t.kind === "tutorial")?.messages).toHaveLength(2);
   });
 });
 
@@ -358,7 +382,7 @@ describe("the profile reminder beside the question", () => {
   });
 
   it("is unchanged for the other kinds", () => {
-    for (const kind of ["chat", "learn", "tutorial", "candidates"] as const) {
+    for (const kind of ["chat", "learn", "candidates"] as const) {
       const last = lastOf(build(kind, { profile }));
       expect(last).toContain("Do not address\nthe reader and do not mention this.");
     }

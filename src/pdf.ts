@@ -25,6 +25,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { controlsAsSpaces } from "./control-characters.js";
 import { isMain } from "./is-main.js";
 /**
  * **pdf.js is loaded on demand, and that is not a performance tweak.**
@@ -739,7 +740,7 @@ export async function firstPagesText(
       let text = "";
       for (const item of content.items) {
         if (!("str" in item) || isSideways(item.transform)) continue;
-        text += item.str + (item.hasEOL ? "\n" : "");
+        text += itemText(item.str) + (item.hasEOL ? "\n" : "");
         if (chars + text.length >= opts.maxChars) break;
       }
       const tidied = text.replace(/[ \t]+/g, " ").trim();
@@ -781,7 +782,7 @@ export function frontPageRecord(page: number, items: readonly unknown[]): { page
   for (const item of items) {
     if (typeof item !== "object" || item === null || !("str" in item) || typeof item.str !== "string") continue;
     const transform = "transform" in item && Array.isArray(item.transform) ? (item.transform as number[]) : [];
-    const run = item.str + ("hasEOL" in item && item.hasEOL ? "\n" : "");
+    const run = itemText(item.str) + ("hasEOL" in item && item.hasEOL ? "\n" : "");
     if (isSideways(transform)) {
       const width = "width" in item && typeof item.width === "number" ? item.width : NaN;
       let adjacent = false;
@@ -955,7 +956,7 @@ export async function pass0(
   let metaTitle: string | null = null;
   try {
     const info = (await doc.getMetadata().catch(() => null))?.info as { Title?: string } | undefined;
-    metaTitle = info?.Title?.trim() || null;
+    metaTitle = (info?.Title === undefined ? "" : itemText(info.Title)).trim() || null;
     let chars = 0;
     let textItems = 0;
     const lastPage = opts.firstPages === undefined ? doc.numPages : Math.min(doc.numPages, opts.firstPages);
@@ -973,21 +974,23 @@ export async function pass0(
           throw new TooManyTextItems(textItems, opts.maxItems);
         }
         if (!("str" in item)) continue;
+        const str = itemText(item.str);
         if (isSideways(item.transform)) {
           /* Counted, not silently dropped — see `isSideways`. */
-          sideways += item.str.trim() ? item.str.trim().split(/\s+/).length : 0;
+          sideways += str.trim() ? str.trim().split(/\s+/).length : 0;
           continue;
         }
+        /* The raw length: this cap is on what pdf.js made us hold, not on what we kept. */
         chars += item.str.length;
         if (opts.maxChars !== undefined && chars > opts.maxChars) throw new TooManyCharacters(chars, opts.maxChars);
         if (opts.retainItems !== false) {
           items.push({
             x: Math.round(item.transform[4]!),
             y: Math.round(item.transform[5]!),
-            text: item.str,
+            text: str,
           });
         }
-        text += item.str + (item.hasEOL ? "\n" : "");
+        text += str + (item.hasEOL ? "\n" : "");
       }
       const trimmed = text.replace(/[ \t]+/g, " ").trim();
       pages.push({
@@ -1035,6 +1038,16 @@ export async function pass0(
     isScan: withText.length <= 1 && pages.length > 1,
     furniture: repeatedLines(pages),
   };
+}
+
+/**
+ * A pdf.js text run, or its Info title, with its control characters as spaces —
+ * src/control-characters.ts says why. Every stage-2 or metadata reader of
+ * `item.str` goes through this; the later figure-recovery stage reads its own
+ * text layer only for layout and caption matching, and stores none of it.
+ */
+export function itemText(str: string): string {
+  return controlsAsSpaces(str);
 }
 
 /**

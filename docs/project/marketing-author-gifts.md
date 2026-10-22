@@ -73,3 +73,9 @@ recipient signs in and opens the private link, the article moves to their accoun
 so they can use chat and every mode on it as its owner. It moves by itself only if Greg left none
 of his own notes or chats on it; otherwise he moves it on `/admin/articles`
 ([261011n](../plans/261011n-author-gift-link-and-article-ownership-transfer.md)).
+
+**Since 2026-10-21 every gifted article gets its main modes**, so the author opens one that is ready,
+and the Give form offers High-powered AI for it, on by default
+([261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md)). For the whole
+article on Opus, tick High-powered AI when importing it: switching on later changes only what is
+still to be made.

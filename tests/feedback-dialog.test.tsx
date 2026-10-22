@@ -216,6 +216,18 @@ function ok(status: number): () => Promise<Response> {
   return async () => new Response(JSON.stringify({ id: "x" }), { status });
 }
 
+/**
+ * A Feedback action gets exactly one tone. (A `tw:` utility beside it no longer
+ * matters: button-tone.css is in the `tone` layer, above the utilities, since
+ * plan 261020z.)
+ */
+function expectTone(button: HTMLButtonElement, tone: "tone-positive" | "tone-negative"): void {
+  expect(
+    [...button.classList].filter((name) => name.startsWith("tone-")),
+    button.textContent ?? tone,
+  ).toEqual([tone]);
+}
+
 function show(open: boolean) {
   act(() => {
     root.render(
@@ -1177,21 +1189,28 @@ describe("the feedback dialog", () => {
    * put the spinner and "Sending" under the `opacity: 0.45` every disabled Send
    * gets, which is also our leading iPad suspect for a button that paints
    * nothing (plan 260912c). The busy rule must outweigh the dimming one.
+   *
+   * Both are `.tone-positive` since plan 261020f, which owns the dimming and
+   * the working exception; feedback-dialog-styles.test.ts holds the rules.
    */
   it("draws a working Send, and a working Send reply, at full opacity", () => {
     /* This file's shared cleanup unmounts its normal fixture, so this CSS-only
        assertion still mounts one and remains independently runnable with `-t`. */
     mount();
+    expectTone(host.querySelector<HTMLButtonElement>("button.fb-send")!, "tone-positive");
     const css = readerCssNoComments();
     for (const [dimmed, working] of [
-      [".fb-send:disabled", ".fb-send[data-working]:disabled"],
-      [".fb-reply-send:disabled", ".fb-reply-send[data-working]:disabled"],
+      [".tone-positive:disabled", ".tone-positive[data-working]:disabled"],
+      [".tone-negative:disabled", ".tone-negative[data-working]:disabled"],
     ] as const) {
-      expect(css).toMatch(new RegExp(`${dimmed.replace(/[.[\]]/g, "\\$&")}\\s*\\{[^}]*opacity:\\s*0\\.45`));
-      const escaped = working.replace(/[.[\]]/g, "\\$&");
-      const found = [...css.matchAll(new RegExp(`(?:^|[}\\s])${escaped}\\s*\\{([^}]*)\\}`, "g"))];
-      expect(found, `one rule for ${working}`).toHaveLength(1);
-      expect(found[0]?.[1]).toMatch(/opacity:\s*1\s*;/);
+      const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+      const bodyOf = (selector: string) =>
+        rules.filter((r) => r[1]!.split(",").map((s) => s.trim()).includes(selector)).map((r) => r[2]!);
+      expect(bodyOf(dimmed).join(";")).toMatch(/opacity:\s*0\.45/);
+      expect(bodyOf(working), `one rule for ${working}`).toHaveLength(1);
+      expect(bodyOf(working)[0]).toMatch(/opacity:\s*1\s*;/);
+      /* Later than the dimming, at higher weight: the busy rule wins. */
+      expect(css.indexOf(working)).toBeGreaterThan(css.indexOf(dimmed));
     }
   });
 });
@@ -1954,13 +1973,13 @@ describe("the Earlier tab", () => {
   /* docs/plans/261007d-…: for an admin the tab says what became of each report,
      numbers them, and carries the note's one-line comment. Reshaped by
      docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md:
-     the read asks for threads (`questions=3`), an admin's dialog reads Needs a
+     the read asks for threads (`questions=4`, since 261020p), an admin's dialog reads Needs a
      decision as soon as it opens, and Earlier opens there when a thread waits. */
   describe("for an admin", () => {
     const ADMIN_PATH = "/api/admin/feedback/earlier";
-    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010h). */
+    /** The admin route for one filter, as the client asks it: `show` first, then `questions=4` (F3, 261010h, 261020p). */
     const url = (which?: string) =>
-      which === undefined ? `${ADMIN_PATH}?questions=3` : `${ADMIN_PATH}?show=${which}&questions=3`;
+      which === undefined ? `${ADMIN_PATH}?questions=4` : `${ADMIN_PATH}?show=${which}&questions=4`;
     const ALL_URL = url();
     const WAITING_URL = url("waiting");
     const ADMIN_COUNTS = { all: 5, open: 1, waiting: 1, aside: 2, shipped: 1 };
@@ -2290,12 +2309,16 @@ describe("the Earlier tab", () => {
         ]);
         /* Shut until pressed. */
         expect(panelOf("Earlier").querySelector(".fb-addendum-box")).toBeNull();
-        /* Opened, its Send stays neutral: the green is a thread's (plan 261011h). */
+        /* Opened: green to send, red to cancel (spya-as0et6, plan 261020f); the
+           button that opened it commits nothing, so stays neutral. */
+        expect(button(item(214), "Add to this report").className).not.toMatch(/tone-/);
         click(button(item(214), "Add to this report"));
-        const addBox = item(214).querySelector(".fb-addendum-box");
+        const addBox = item(214).querySelector<HTMLElement>(".fb-addendum-box");
         expect(addBox).not.toBeNull();
         expect(addBox?.classList.contains("fb-reply-thread")).toBe(false);
         expect(addBox?.querySelector(".fb-defer")).toBeNull();
+        expectTone(button(addBox!, "Send addendum"), "tone-positive");
+        expectTone(button(addBox!, "Cancel"), "tone-negative");
       });
 
       it("draws each report's addenda under its words, oldest first, timed, as text with its lines, on any status", async () => {
@@ -2590,13 +2613,13 @@ describe("the Earlier tab", () => {
     describe("questions an agent has asked", () => {
       const ANSWERS_PATH = "/api/admin/feedback/answers";
       const DEFERRALS_PATH = "/api/admin/feedback/deferrals";
-      /** A question as the server sends it when asked `questions=3` (src/types.ts § AdminFeedbackQuestion). */
+      /** A question as the server sends it when asked `questions=4` (src/types.ts § AdminFeedbackQuestion). */
       const Q1 = {
         id: "q-aaaaaa",
         title: "One switch or two?",
         body: "Background first.\n\nA. One <b>switch</b>.\nB. Two.",
         asked: "2026-10-05",
-        report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?", body: "One switch or two?\nI keep <b>pressing</b> both." },
+        report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?", body: "One switch or two?\nI keep <b>pressing</b> both.", whose: "yours", from: null as string | null },
         answers: [] as unknown[],
         olderAnswers: 0,
         actedAnswers: [] as unknown[],
@@ -3082,6 +3105,19 @@ describe("the Earlier tab", () => {
           }
         });
 
+        /* spya-as0et6 (plan 261020f): green to send, red to leave; the pager
+           moves you, so neither. The header's ✕ is the app's one shared cross. */
+        it("colours the footers' buttons by what they do", async () => {
+          await openThread();
+          expectTone(button(foot(), "Close"), "tone-negative");
+          expect([...button(foot(), "‹ Previous").classList].filter((c) => c.startsWith("tone-"))).toEqual([]);
+          expect([...button(foot(), "Next ›").classList].filter((c) => c.startsWith("tone-"))).toEqual([]);
+          click(tab("Write"));
+          expectTone(button(foot(), "Cancel"), "tone-negative");
+          expectTone(button(foot(), "Send"), "tone-positive");
+          expect(host.querySelector(".fb-close")?.className).not.toMatch(/tone-/);
+        });
+
         /* F4: the footer's pager and the thread are drawn on the same condition,
            including while a reopened dialog's read is still out. */
         it("shows the footer's pager exactly when the thread itself shows", async () => {
@@ -3301,12 +3337,15 @@ describe("the Earlier tab", () => {
         });
 
         it("reads a server from before 261010h, whose threads have no acted replies", async () => {
-          const { actedAnswers: _a, olderActedAnswers: _o, ...v2 } = Q1;
+          const oldReport = (({ whose: _whose, from: _from, ...report }) => report)(Q1.report);
+          const { actedAnswers: _a, olderActedAnswers: _o, ...currentV2 } = Q1;
+          const v2 = { ...currentV2, report: oldReport };
           const { actedAnswers: _b, olderActedAnswers: _p, ...v2b } = Q2;
           await openWaiting({ ...ADMIN_REPORTS, questions: [v2, v2b] }, { ...WAITING, questions: [v2, v2b] });
           expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
           expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
           click(row("q-aaaaaa"));
+          expect(thread().querySelector('details[data-whose="yours"] summary')?.textContent).toBe("Your report #214");
           expect(thread().querySelector('[data-acted="true"]')).toBeNull();
           expect(thread().querySelector(".fb-earlier-meta")?.textContent).not.toContain("again");
         });
@@ -3316,6 +3355,54 @@ describe("the Earlier tab", () => {
           await openWaiting({ ...ADMIN_REPORTS, questions: [both, Q2] }, { ...WAITING, questions: [both, Q2] });
           expect(panelOf("Earlier").textContent).toContain("[fb-list]");
         });
+      });
+
+      /* **Another reader's report, marked as theirs** (spya-y43ha0, 261020p):
+         Greg, "it should be highlighted clearly as such". In the contents and
+         the thread, before its number, and on its shut text with the address
+         it was filed under. Its words are text, never markup. */
+      it("marks a reader's report as theirs in the contents and the thread, with their address, as text", async () => {
+        const theirs = {
+          ...Q1,
+          report: {
+            id: "spya-r3d4e5",
+            number: 650,
+            firstLine: "Please build this",
+            body: "Please build <b>this</b>.",
+            whose: "reader",
+            from: "reader@example.invalid",
+          },
+        };
+        await openWaiting({ ...ADMIN_REPORTS, questions: [theirs, Q2] }, { ...WAITING, questions: [theirs, Q2] });
+        expect(row("q-aaaaaa").querySelector(".fb-question-whose")?.textContent?.trim()).toBe("a reader's");
+        expect(row("q-aaaaaa").textContent).toContain("#650");
+        expect(row("q-bbbbbb").querySelector(".fb-question-whose")).toBeNull();
+        click(row("q-aaaaaa"));
+        const shut = thread().querySelector<HTMLElement>('details.fb-question-more[data-whose="reader"]');
+        expect(shut?.querySelector("summary")?.textContent).toBe("A reader's report #650 · from reader@example.invalid");
+        expect(shut?.querySelector(".fb-earlier-body")?.textContent).toBe("Please build <b>this</b>.");
+        expect(shut?.querySelector("b")).toBeNull();
+        expect(thread().textContent).not.toContain("Your report");
+      });
+
+      it("says another admin's report is another admin's, and your own is yours", async () => {
+        const other = { ...Q1, report: { ...Q1.report, whose: "admin", from: "colleague@example.invalid" } };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [other, Q2] }, { ...WAITING, questions: [other, Q2] });
+        expect(thread().querySelector(".fb-question-whose")?.textContent?.trim()).toBe("another admin's");
+        expect(thread().querySelector('details[data-whose="admin"] summary')?.textContent).toBe(
+          "Another admin's report #214 · from colleague@example.invalid",
+        );
+      });
+
+      /* A server from before 261020p answers `questions=4` in shape 3: the
+         same keys, and a report without `whose`, which only ever was the
+         admin's own. */
+      it("reads an older server's shape-3 report as your own", async () => {
+        const v3 = { ...Q1, report: (({ whose: _w, from: _f, ...rest }) => rest)(Q1.report) };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [v3, Q2] }, { ...WAITING, questions: [v3, Q2] });
+        expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
+        expect(thread().querySelector('details[data-whose="yours"] summary')?.textContent).toBe("Your report #214");
+        expect(thread().querySelector(".fb-question-whose")).toBeNull();
       });
 
       /* F3, the other direction: a server from before 261008i ignores
@@ -3579,6 +3666,12 @@ describe("the Earlier tab", () => {
         expect(posts).toHaveLength(1);
         /* In flight: drawn at full strength, not dimmed (plan 261019c). */
         expect(thread().querySelector(".fb-reply-send")?.hasAttribute("data-working")).toBe(true);
+        /* Defer is unavailable because the reply owns the thread, rather than
+           working itself: disabled, no working exception, therefore dimmed. */
+        const deferButton = button(thread(), "Defer for now");
+        expectTone(deferButton, "tone-negative");
+        expect(deferButton.disabled).toBe(true);
+        expect(deferButton.hasAttribute("data-working")).toBe(false);
         await act(async () => gate.release?.());
         await settle();
         expect(thread().querySelector(".fb-question-answer")).not.toBeNull();
@@ -3587,9 +3680,12 @@ describe("the Earlier tab", () => {
       /* Decision 3 (spya-t6nmxt): "not now", reversible, a timestamp. */
       it("defers a thread, and brings it back, with exactly the question and whether", async () => {
         await openThread();
-        /* Green to send and red to defer, by these classes (spya-zjsqe6, plan 261011h). */
+        /* Green to send and red to defer (spya-zjsqe6, plan 261011h; one shared
+           pair since 261020f). */
         expect(button(thread(), "Send reply").closest(".fb-reply")?.classList.contains("fb-reply-thread")).toBe(true);
+        expectTone(button(thread(), "Send reply"), "tone-positive");
         expect(button(thread(), "Defer for now").classList.contains("fb-defer")).toBe(true);
+        expectTone(button(thread(), "Defer for now"), "tone-negative");
         answer = deferral();
         click(button(thread(), "Defer for now"));
         await settle();
@@ -3604,6 +3700,7 @@ describe("the Earlier tab", () => {
         expect(hasButton(thread(), "Defer for now")).toBe(false);
         /* Bring back undoes a deferral, so it is not drawn as one. */
         expect(button(thread(), "Bring back").classList.contains("fb-defer")).toBe(false);
+        expect(button(thread(), "Bring back").className).not.toMatch(/tone-/);
         click(button(thread(), "‹ All threads"));
         expect(inGroup("deferred")).toEqual(["q-aaaaaa"]);
         expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
@@ -3670,6 +3767,12 @@ describe("the Earlier tab", () => {
           );
         };
         click(button(thread(), "Defer for now"));
+        const deferButton = button(thread(), "Defer for now");
+        expectTone(deferButton, "tone-negative");
+        expect(deferButton.disabled).toBe(true);
+        expect(deferButton.hasAttribute("data-working")).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").hasAttribute("data-working")).toBe(false);
         act(() => {
           replyBoxes()[0]?.dispatchEvent(
             new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
@@ -3777,6 +3880,43 @@ describe("the Earlier tab", () => {
         expect(found?.getAttribute("aria-pressed")).toBe("false");
       });
 
+      /* Greg, spya-yf6vmy: the shortcut "seems to appear a few seconds after
+         the dialog opens … can we add a loading spinner there". It is drawn at
+         once with no number, a spinner takes the number's place after 600ms
+         (loading-spinner.md), and the number replaces it when the read lands. */
+      it("draws the shortcut at once while its count loads, with a spinner after 600ms", async () => {
+        asAdmin = true;
+        const all = [Q1, Q2, Q3, Q4];
+        const gate: { release?: () => void } = {};
+        listAnswer = (input) =>
+          input === WAITING_URL
+            ? new Promise((resolve) => {
+                gate.release = () =>
+                  resolve(new Response(JSON.stringify({ ...WAITING, questions: all }), { status: 200 }));
+              })
+            : answerBy({ all: { ...ADMIN_REPORTS, questions: all } })(input);
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        try {
+          mount();
+          await act(async () => {});
+          const text = () => shortcut()?.textContent?.replace(/\s+/g, " ").trim();
+          expect(shortcut()).not.toBeNull();
+          expect(text()).toBe("Needs a decision");
+          expect(shortcut()?.querySelector(".cmt-spinner"), "not before 600ms").toBeNull();
+          await act(async () => {
+            vi.advanceTimersByTime(600);
+          });
+          expect(shortcut()?.querySelector(".cmt-spinner")).not.toBeNull();
+          expect(shortcut()?.getAttribute("data-tip")).toBe("Looking for questions waiting on you…");
+          await act(async () => gate.release?.());
+          await settle();
+          expect(shortcut()?.querySelector(".cmt-spinner")).toBeNull();
+          expect(text()).toBe("Needs a decision 2");
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
       it("does not restore the shortcut from a retained draft before the next opening read lands", async () => {
         await openThread();
         typeReply("a decision in progress");
@@ -3792,7 +3932,8 @@ describe("the Earlier tab", () => {
         show(true);
 
         expect(gate.release).toBeTypeOf("function");
-        expect(shortcut()).toBeNull();
+        /* Drawn, loading, but with no number: not the retained draft's. */
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision");
         await act(async () => gate.release?.());
         await settle();
         expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
@@ -4033,6 +4174,12 @@ describe("the Earlier tab", () => {
         ["a date that is not one", { ...WAITING, questions: [{ ...Q1, asked: "last week" }] }],
         ["a linked report without a number", { ...WAITING, questions: [{ ...Q1, report: { id: "spya-a2b2c3", firstLine: "x", body: "x" } }] }],
         ["a linked report with no body key", { ...WAITING, questions: [{ ...Q1, report: { id: "spya-a2b2c3", number: 214, firstLine: "x" } }] }],
+        /* 261020p: whose it is, and an address exactly when it is not yours. */
+        ["a report whose it does not know", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, whose: "stranger", from: "r@example.invalid" } }] }],
+        ["a reader's report with no address", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, whose: "reader", from: null } }] }],
+        ["your own report with an address", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, from: "greg@example.invalid" } }] }],
+        ["a report with whose and no from", { ...WAITING, questions: [{ ...Q1, report: (({ from: _f, ...rest }) => rest)(Q1.report) }] }],
+        ["a report with a field more", { ...WAITING, questions: [{ ...Q1, report: { ...Q1.report, environment: "production" } }] }],
         ["a reply that is not text", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: 7, createdAt: "2026-10-06T18:30:00.000Z" }] }] }],
         ["a reply with no time", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: "x", createdAt: "soon" }] }] }],
         ["a reply with a field more", { ...WAITING, questions: [{ ...Q1, answers: [{ ...REPLIED, environment: "production" }] }] }],

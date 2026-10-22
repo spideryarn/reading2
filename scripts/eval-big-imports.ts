@@ -1174,7 +1174,7 @@ async function measureFigures(which: PdfCase): Promise<Record<string, unknown>> 
     const blobs = memoryBlobs();
     const t = performance.now();
     try {
-      const run = await collectPdfFigures({
+      const run = await collectPdfFigures({ neighbours: new Map(),
         markers,
         pdf,
         captions: new Map(markers.map((m) => [m.ref, captionFor(m.page)])),

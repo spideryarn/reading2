@@ -53,7 +53,7 @@ describe("the kind itself", () => {
     expect(THREAD_KINDS).toContain("guide");
     expect(SINGLE_THREAD_KINDS).toContain("guide");
     expect(isSingleThreadKind("guide")).toBe(true);
-    expect(LEARN_KINDS).toEqual(["learn", "tutorial", "explore"]);
+    expect(LEARN_KINDS).toEqual(["learn", "explore"]);
     expect(isLearnKind("guide")).toBe(false);
     expect(isLearnKind("chat")).toBe(false);
     for (const kind of LEARN_KINDS) expect(isLearnKind(kind)).toBe(true);
@@ -93,7 +93,7 @@ describe("one guide per article", () => {
 describe("the guide's prompt", () => {
   it("is its own system prompt, not any other kind's", () => {
     const guide = systemOf("guide");
-    for (const other of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const other of ["chat", "learn", "explore", "candidates"] as const) {
       expect(guide).not.toEqual(systemOf(other));
     }
     expect(guide).toContain("guide to reading one article well");
@@ -102,8 +102,11 @@ describe("the guide's prompt", () => {
   it("holds the anti-goal: about the reading, never a summary in place of it", () => {
     const guide = systemOf("guide");
     expect(guide).toMatch(/Never summarise the\s+piece/);
-    expect(guide).toMatch(/not a conversation about what the piece says/);
-    expect(lastOf(build("guide"))).toContain("not a summary of the piece");
+    expect(guide).toMatch(/When they ask what the whole piece is about, or for its gist, do not give its\s+argument or findings/);
+    expect(guide).toMatch(/Do not assume they have read it/);
+    expect(guide).toMatch(/Unless they tell you\s+otherwise/);
+    expect(guide).not.toMatch(/never as\s+something they already know/);
+    expect(lastOf(build("guide"))).toContain("Never a summary of the piece");
   });
 
   it("repeats the current 60-word limit beside the question, not the old one", () => {
@@ -112,15 +115,38 @@ describe("the guide's prompt", () => {
     expect(last).not.toContain("under 100 words");
   });
 
-  it("asks why they are reading when they have not said, and invites About you once", () => {
+  /* Plan 261019p (Greg, spya-p4uqye and spya-ptjk63): a suggestion first, a
+     question only as a guess and at most once more, and never about the reader
+     themselves. The old "ask that first" and "invite About you once" are gone. */
+  it("suggests before it asks, and does not nag about why they read or who they are", () => {
     const guide = systemOf("guide");
-    expect(guide).toMatch(/If they still have not said why they are reading it, ask that first/);
+    expect(guide).toMatch(/never hold it back until they answer/);
+    expect(guide).toMatch(/Ask about their reading at most once more/);
+    expect(guide).toMatch(/Never ask about the reader themselves/);
+    expect(guide).not.toMatch(/ask that first/);
+    expect(guide).not.toMatch(/invite it once/);
     /* Plan 261009i: the greeting asks in the conversation, so the model is told
        it did, and that the box is gone. */
     expect(guide).toMatch(/opens with a fixed greeting of ours/);
     expect(guide).not.toMatch(/a box for it/);
-    expect(guide).toMatch(/invite it once, lightly/);
-    expect(guide).toMatch(/Ask one question at a time/);
+    expect(lastOf(build("guide"))).toContain("never a question about who they are");
+  });
+
+  /* GPT Sol's C9 on 261019p: SAVING WHAT THEY TELL YOU asks for the reader's
+     words in offer_to_save, and the profile rule forbade any tool argument. */
+  it("lets offer_to_save carry the reader's words, and no other tool", () => {
+    const guide = systemOf("guide");
+    expect(guide).toMatch(/offer_to_save may carry their own words/);
+    expect(guide).toMatch(/nothing\s+they told you in any other tool argument/);
+    expect(guide).not.toMatch(/and nothing they told you in a tool argument\./);
+  });
+
+  it("answers a question about a passage briefly, cited, then offers Chat (plan 261019p)", () => {
+    const guide = systemOf("guide");
+    expect(guide).toMatch(/answer\s+it, briefly: at most three short sentences/);
+    expect(guide).toMatch(/Every sentence about the piece carries the block id/);
+    expect(guide).not.toMatch(/do not answer it here/);
+    expect(guide).toMatch(/copied exactly, their spelling and wording included/);
   });
 
   it("applies the shared plain-words rule to the questions it writes", () => {
@@ -158,7 +184,7 @@ describe("our words for the modes", () => {
   it("is in the guide's system prompt, and in no other kind's", () => {
     const section = modeWordsSection();
     expect(systemOf("guide")).toContain(section);
-    for (const other of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const other of ["chat", "learn", "explore", "candidates"] as const) {
       expect(systemOf(other)).not.toContain("WHAT SPIDERYARN CAN SHOW THEM");
     }
   });
@@ -174,7 +200,7 @@ describe("our words for the modes", () => {
       from = at;
     }
     expect(section).toContain("- Learn: ");
-    expect(section).toContain("  - Learn › Tutorial: ");
+    expect(section).toContain("  - Learn › Explore: ");
   });
 
   it("marks an experimental mode as one, and an ordinary one not", () => {
@@ -246,7 +272,7 @@ describe("how much the reader has used Spideryarn", () => {
   });
 
   it("is carried for the guide only, whatever a caller passes", () => {
-    for (const kind of ["chat", "learn", "tutorial", "explore", "candidates"] as const) {
+    for (const kind of ["chat", "learn", "explore", "candidates"] as const) {
       expect(lastOf(build(kind, { experience: "many" }))).not.toContain("HOW MUCH THEY HAVE USED SPIDERYARN");
     }
   });

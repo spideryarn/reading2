@@ -100,6 +100,7 @@ const SLUG = `event-times-${RUN}`;
 /** A second article, so the High-powered AI cases start from a clean row. */
 const POWER_ID = randomUUID();
 const POWER_SLUG = `event-times-power-${RUN}`;
+const POWER_REVISION_ID = randomUUID();
 const ADMIN_ARTICLE_ID = randomUUID();
 const ADMIN_SLUG = `event-times-admin-${RUN}`;
 const BLOCK = mintId();
@@ -204,6 +205,11 @@ beforeAll(async () => {
     gistable: true,
   });
   await db.update(articles).set({ currentRevisionId: REVISION_ID }).where(eq(articles.id, ARTICLE_ID));
+  /* The High-powered article is published too: one with no charged ingest and
+     no published revision is an import that died before publishing, and the
+     charged switch waits for its Retry (plan 261020b, Sol's C3-F1). */
+  await db.insert(articleRevisions).values({ id: POWER_REVISION_ID, articleId: POWER_ID, status: "published" });
+  await db.update(articles).set({ currentRevisionId: POWER_REVISION_ID }).where(eq(articles.id, POWER_ID));
 }, 60_000);
 
 afterAll(async () => {

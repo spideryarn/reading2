@@ -50,6 +50,7 @@ import { checkpointKey, hashBlocks, structureHash } from "./source-hash.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, type BlockSplit, splitBlocks } from "./supplement.js";
 import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
+import type { UnresolvedStart, UnresolvedStarts } from "./start-ranges.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, TooLongForOnePass } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
@@ -232,8 +233,14 @@ blocks, and a node's children exactly partition its range — no gaps, no
 overlaps, no reordering. The first child starts where its parent starts; the
 last child ends where its parent ends.`;
 
+/* **`start` is the block's number since `toc/13`** (2026-10-20), not its id:
+   copying `[582] spya-xcf0dz` the model wrote `spya-582xcf0dz`, and constrained
+   to the id's own pattern it landed on a neighbour's id instead. Asked for the
+   number, it started Part VI at its heading in 20 answers of 20.
+   docs/plans/261020aa-structure-answers-the-block-number-not-its-id.md. */
 const TOC11_STRUCTURE = `Produce a tree of INTERNAL nodes only. The root covers the whole input and has no
-"start". Give each child one "start": the id of the first block it covers. Do
+"start". Give each child one "start": the number in square brackets of the first block it
+covers — for the line "[582] spya-xcf0dz <h1>: …" that is 582, an integer. Do
 not give an end — ends are computed from the next child's start, and the last
 child ends where its parent ends. The first child must start where its parent
 starts. List children in document order; after the first child, each "start"
@@ -247,7 +254,7 @@ const TOC10_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "..."
 const TOC11_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "...",
           "sourceHeading": "...", "children": [
             {"title": "...", "gist": "...", "question": "...",
-             "start": "<firstBlockId>", "children": [ ... ]}
+             "start": <firstBlockNumber>, "children": [ ... ]}
           ]}}`;
 
 function replacePromptBlock(prompt: string, before: string, after: string): string {
@@ -263,6 +270,10 @@ export const SYSTEM = replacePromptBlock(
 );
 
 const stringSchema = { type: "string" } as const;
+/* A block's number in the prompt (`renderBlocks`' `[i]`). Anthropic's subset has
+   no `minimum`/`maximum`, so the range is checked where it is resolved:
+   src/structure-starts.ts § `startAsId`. */
+const blockNumberSchema = { type: "integer" } as const;
 const nonEmptyArrayOf = (items: Readonly<Record<string, unknown>>) => ({ type: "array", items, minItems: 1 }) as const;
 const objectSchema = (
   properties: Readonly<Record<string, unknown>>,
@@ -273,7 +284,7 @@ const depth2Schema = objectSchema(
   {
     title: stringSchema,
     gist: stringSchema,
-    start: stringSchema,
+    start: blockNumberSchema,
     sourceHeading: stringSchema,
   },
   ["title", "gist", "start"],
@@ -284,7 +295,7 @@ const depth1Schema = objectSchema(
     title: stringSchema,
     gist: stringSchema,
     question: stringSchema,
-    start: stringSchema,
+    start: blockNumberSchema,
     sourceHeading: stringSchema,
     /* **Optional, unlike the root's.** A chapter with no sections is an answer
        the model gives often — 184 of 882 chapters across the 70 measured
@@ -856,7 +867,10 @@ function usableWholeDocument(value: unknown, fingerprint: string, blocks: readon
    * different fact from "the answer still builds".
    */
   try {
-    parseWholeDocumentAnswer(entry.answer, blocks);
+    /* `recover-or-drop`, as `treeFrom` reads a stored answer: an answer that
+       built only by dropping an unresolved start would otherwise be refused
+       here and bought again on every run. ⟨GPT Sol, plan review r2, finding 2⟩ */
+    parseWholeDocumentAnswer(entry.answer, blocks, undefined, "recover-or-drop");
   } catch {
     return null;
   }
@@ -987,9 +1001,11 @@ export function parseWholeDocumentAnswer(
   raw: string,
   blocks: readonly Block[],
   report?: BuildReport,
+  /** `refuse` unless `generateStructure` says otherwise — src/start-ranges.ts § `UnresolvedStarts`. */
+  unresolved: UnresolvedStarts = "refuse",
 ): { root: ModelNode } {
   const answer = parseJsonAnswer<StartsOnlyWholeDocumentAnswer>(raw, "the table-of-contents response");
-  return { root: modelNodeFromStarts(answer, blocks, report) };
+  return { root: modelNodeFromStarts(answer, blocks, report, unresolved) };
 }
 
 /**
@@ -1117,6 +1133,17 @@ export interface BuildReport {
    * exactly the sort of thing nobody notices unless it is printed.
    */
   droppedChildren: string[];
+  /**
+   * **Starts that named no block and did not refuse the answer** — dropped,
+   * and so in `droppedChildren` too.
+   * Only a whole-document answer read with `unresolved` other than `refuse` can
+   * add one; src/start-ranges.ts § `UnresolvedStarts`.
+   *
+   * Counted because a prompt that drifted into naming blocks that do not exist
+   * would otherwise look healthy for ever: every last answer would build.
+   * docs/postmortems/261019d-a-line-number-spliced-into-a-block-id-cost-the-whole-tree.md.
+   */
+  unresolvedStarts: UnresolvedStart[];
   /**
    * **Children that stated no range at all**, by position in the model's
    * proposal — derived like a child whose start says nothing (`planChildRanges`
@@ -2358,6 +2385,11 @@ export interface StructureRun {
    * proposed. src/structure.ts § `BuildReport.droppedChildren`.
    */
   droppedChildren: number;
+  /**
+   * **Starts that named no block**, dropped (and so in `droppedChildren`
+   * as well). Normally 0. src/structure.ts § `BuildReport.unresolvedStarts`.
+   */
+  startsDropped: number;
   droppedHeadings: number;
   /**
    * **Socratic questions the model wrote that the tree did not keep** — too
@@ -2789,8 +2821,21 @@ export async function generateStructure(opts: {
    * guarantee about the file. `checkTree` is pure and takes microseconds.
    * docs/postmortems/260830a-the-article-with-one-heading.md.
   */
-  const treeFrom = (answer: string): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
-    const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  /**
+   * `unresolved` is how hard a start that names no block may be argued with —
+   * src/start-ranges.ts § `UnresolvedStarts`. A first fresh answer gets
+   * `recover`, so any non-first start that names no block buys the re-ask
+   * below; the re-ask is the last answer this step will get, so it may
+   * also drop a child rather than cost the reader the whole tree. A stored
+   * answer is read the same way as the re-ask: only an answer that built is
+   * ever stored, so it builds again identically.
+   * docs/plans/261019l-structure-recovers-a-start-that-splices-the-line-number-into-the-id.md.
+   */
+  const treeFrom = (
+    answer: string,
+    unresolved: UnresolvedStarts,
+  ): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
+    const built: BuildReport = { repairs: [], droppedChildren: [], unresolvedStarts: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
     let tree: Tree;
     /**
      * **The tree before the apparatus is appended**, kept because the deepening
@@ -2805,7 +2850,7 @@ export async function generateStructure(opts: {
      */
     let bodyTree: Tree;
     try {
-      const { root } = parseWholeDocumentAnswer(answer, body, built);
+      const { root } = parseWholeDocumentAnswer(answer, body, built, unresolved);
       bodyTree = buildTree(root, {}, body, slug, built);
       tree = appendSupplement(bodyTree, groups);
     } catch (err) {
@@ -2816,10 +2861,10 @@ export async function generateStructure(opts: {
        * look at it. GPT Sol, finding 7.
        *
        * No tiling fault reaches here any more (`planChildRanges` derives the
-       * partition rather than checking it). What can still throw is an invented
+       * partition rather than checking it). What can still throw is an unresolved
        * start during the starts-only conversion or an invalid derived tree. The
        * repair figures are still worth attaching: a node whose siblings were
-       * all mended and which then failed on an invented id is a different story
+       * all mended and which then failed on another start is a different story
        * from one that failed on its own.
        *
        * `where`, `kind`, `at` and `size` are all derived from the shape of the
@@ -2828,14 +2873,24 @@ export async function generateStructure(opts: {
        * `nameValue` above for the rule and why this file has to keep restating
        * it.
        */
-      if (built.repairs.length === 0) throw err;
+      if (built.repairs.length === 0 && built.unresolvedStarts.length === 0) throw err;
       const spent = [...new Set(built.repairs.map((r) => r.at))].length;
-      throw new Error(
-        `${err instanceof Error ? err.message : String(err)}\n` +
-          `  Before this it mended ${spent} boundary(ies), moving ` +
+      /* A start dropped and then a fatal one elsewhere: without this the
+         earlier fault vanishes into the re-ask. ⟨GPT Sol, plan review, finding 6⟩ */
+      const unresolvedEvidence = built.unresolvedStarts.length === 0
+        ? ""
+        : `  It had also read ${built.unresolvedStarts.length} start(s) that named no block: ` +
+          `${built.unresolvedStarts.map((u) => `${u.where} (${u.outcome})`).join("; ")}.\n`;
+      const repairEvidence = built.repairs.length === 0
+        ? ""
+        : `  Before this it mended ${spent} boundary(ies), moving ` +
           `${repairedBlockCount(built.repairs)} block(s): ` +
           `${built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`).join("; ")}. ` +
-          `This line is the only place those numbers are visible on a run that failed.`,
+          `This line is the only place those numbers are visible on a run that failed.`;
+      throw new Error(
+        `${err instanceof Error ? err.message : String(err)}\n` +
+          unresolvedEvidence +
+          repairEvidence,
       );
       /* No `cause`, for the reason the label stage gives at the same shape:
          src/log.ts follows cause chains and would write the original message into
@@ -2908,7 +2963,7 @@ export async function generateStructure(opts: {
   let cached: { tree: Tree; bodyTree: Tree; built: BuildReport } | null = null;
   if (raw !== null) {
     try {
-      cached = treeFrom(raw);
+      cached = treeFrom(raw, "recover-or-drop");
     } catch (err) {
       log("pipeline").warn(
         { slug, key: wholeDocumentFingerprint, err },
@@ -3037,23 +3092,35 @@ export async function generateStructure(opts: {
     wholeDocumentUsage = first.usage;
     raw = first.answer;
     try {
-      wave1 = treeFrom(raw);
+      wave1 = treeFrom(raw, "recover");
     } catch (err) {
       const left = opts.deadlineAt === undefined ? Infinity : opts.deadlineAt - Date.now();
-      if (opts.signal?.aborted || left < reaskReserveMs(first.ms)) throw err;
-      log("pipeline").warn(
-        { slug, err, firstCallMs: first.ms, leftMs: Number.isFinite(left) ? left : null },
-        "the table of contents did not become a tree; asking for it once more",
-      );
-      opts.onProgress?.("the first table of contents did not hold together; asking again");
-      const second = await askForWholeDocument("asking again: ");
-      wholeDocumentCalls = 2;
-      wholeDocumentUsage = {
-        input_tokens: first.usage.input_tokens + second.usage.input_tokens,
-        output_tokens: first.usage.output_tokens + second.usage.output_tokens,
-      };
-      raw = second.answer;
-      wave1 = treeFrom(raw);
+      if (opts.signal?.aborted) throw err;
+      if (left < reaskReserveMs(first.ms)) {
+        /* **No room to ask again makes this the last answer**, so it is read
+           the way the re-ask would be — one more parse of the bytes already
+           bought, no call. If that refuses too, the first refusal is the one
+           reported. ⟨GPT Sol, plan review r2, finding 3⟩ */
+        try {
+          wave1 = treeFrom(raw, "recover-or-drop");
+        } catch {
+          throw err;
+        }
+      } else {
+        log("pipeline").warn(
+          { slug, err, firstCallMs: first.ms, leftMs: Number.isFinite(left) ? left : null },
+          "the table of contents did not become a tree; asking for it once more",
+        );
+        opts.onProgress?.("the first table of contents did not hold together; asking again");
+        const second = await askForWholeDocument("asking again: ");
+        wholeDocumentCalls = 2;
+        wholeDocumentUsage = {
+          input_tokens: first.usage.input_tokens + second.usage.input_tokens,
+          output_tokens: first.usage.output_tokens + second.usage.output_tokens,
+        };
+        raw = second.answer;
+        wave1 = treeFrom(raw, "recover-or-drop");
+      }
     }
   }
   let structure = wave1.tree;
@@ -3167,6 +3234,7 @@ export async function generateStructure(opts: {
           rangelessChildren: [],
           droppedHeadings: [],
           collapsedRungs: [],
+          unresolvedStarts: [],
           droppedQuestions: [],
         };
         const deeper = appendSupplement(
@@ -3178,6 +3246,7 @@ export async function generateStructure(opts: {
         for (const from of [deepened.report, rebuilt]) {
           built.repairs.push(...from.repairs);
           built.droppedChildren.push(...from.droppedChildren);
+          built.unresolvedStarts.push(...from.unresolvedStarts);
           built.rangelessChildren.push(...from.rangelessChildren);
           built.droppedHeadings.push(...from.droppedHeadings);
           built.collapsedRungs.push(...from.collapsedRungs);
@@ -3231,6 +3300,7 @@ const emptyBuildReport = (): BuildReport => ({
   rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
+  unresolvedStarts: [],
   droppedQuestions: [],
 });
 
@@ -3489,6 +3559,7 @@ function finishStructureRun(
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedChildren: built.droppedChildren.length,
+    startsDropped: built.unresolvedStarts.length,
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
     droppedQuestions: built.droppedQuestions.length,

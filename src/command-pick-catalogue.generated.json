@@ -9,7 +9,6 @@
    "reading",
    "just the article",
    "prose",
-   "original",
    "no mode",
    "no panel"
   ],
@@ -332,7 +331,7 @@
  {
   "id": "mode:learn",
   "label": "Learn",
-  "description": "Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
+  "description": "Take the piece in and think it through: Recall what it says (read it yet or not), a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
   "aliases": [
    "recall",
    "remember",
@@ -708,6 +707,32 @@
   ]
  },
  {
+  "id": "submode:sources:investigate",
+  "label": "Investigate",
+  "description": "Questions about this piece and what others say: suggested ones or your own, answered in Chat with a web search",
+  "aliases": [
+   "Sources",
+   "Investigate Sources",
+   "Sources Investigate",
+   "Investigate mode",
+   "inquiry",
+   "research",
+   "ask the web",
+   "what do others say",
+   "sources chat",
+   "dig deeper"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:referee:criteria",
   "label": "Criteria",
   "description": "Your own reviewing criteria, run over the piece",
@@ -824,36 +849,15 @@
  {
   "id": "submode:learn:recall",
   "label": "Recall",
-  "description": "Say what you took from the piece, and find out where it holds up",
+  "description": "Say what you took from the piece, and find out where it holds up. Not read it yet? It takes you through it a piece at a time",
   "aliases": [
    "Learn",
    "Recall Learn",
    "Learn Recall",
    "Recall mode",
    "Recall Remember",
-   "Remember Recall"
-  ],
-  "kind": "submode",
-  "generates": false,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "submode:learn:tutorial",
-  "label": "Tutorial",
-  "description": "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
-  "aliases": [
-   "Learn",
-   "Tutorial Learn",
-   "Learn Tutorial",
-   "Tutorial mode",
-   "Tutorial Remember",
-   "Remember Tutorial"
+   "Remember Recall",
+   "tutorial"
   ],
   "kind": "submode",
   "generates": false,
@@ -1027,6 +1031,28 @@
    "make private",
    "who can read",
    "visibility"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:original",
+  "label": "Open the original",
+  "description": "The web page or the PDF this article was made from, in a new tab.",
+  "aliases": [
+   "view the original",
+   "view original",
+   "open original",
+   "original page",
+   "original pdf",
+   "source page"
   ],
   "kind": "action",
   "generates": false,

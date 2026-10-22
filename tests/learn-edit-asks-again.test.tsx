@@ -17,7 +17,7 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
 
-const calls: { method: string; body: Record<string, unknown> | undefined }[] = [];
+const calls: { method: string; url: string; body: Record<string, unknown> | undefined }[] = [];
 let stored: ChatThread[] = [];
 let answer: ReadableStreamDefaultController<Uint8Array> | null = null;
 function frame(event: string, data: unknown): void {
@@ -30,12 +30,21 @@ vi.mock("../src/web/lib/api.js", async () => {
   );
   return {
     ...real,
-    apiFetch: (_url: string, init?: RequestInit) => {
+    apiFetch: (url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
       calls.push({
         method,
+        url,
         body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined,
       });
+      if (method === "POST" && url.endsWith("/stop")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ stopped: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
       if (method === "POST") {
         const body = new ReadableStream<Uint8Array>({
           start(controller) {
@@ -168,7 +177,10 @@ function type(box: HTMLTextAreaElement, text: string): void {
   box.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-const posted = () => calls.filter((c) => c.method === "POST").map((c) => c.body ?? {});
+/** The turns asked: sends, retries and edits, not stops. */
+const posted = () =>
+  calls.filter((c) => c.method === "POST" && !c.url.endsWith("/stop")).map((c) => c.body ?? {});
+const stops = () => calls.filter((c) => c.method === "POST" && c.url.endsWith("/stop")).map((c) => c.body ?? {});
 
 async function rewrite(which: number, text: string): Promise<void> {
   const pencils = [...host.querySelectorAll<HTMLButtonElement>('button[data-tip="Rewrite this question"]')];
@@ -179,6 +191,9 @@ async function rewrite(which: number, text: string): Promise<void> {
   await act(async () => type(box as HTMLTextAreaElement, text));
   const ask = host.querySelector<HTMLButtonElement>('button[data-tip="Ask again (Enter)"]');
   expect(ask, "Ask again is offered").not.toBeNull();
+  /* Plan 261020z: the tick is green, the cross red. */
+  expect(ask?.classList.contains("tone-positive")).toBe(true);
+  expect(host.querySelector('.chat-turn.editing button[aria-label="Cancel"]')?.classList.contains("tone-negative")).toBe(true);
   await act(async () => ask?.click());
   await settle();
 }
@@ -259,61 +274,22 @@ describe("rewriting a question in Recall", () => {
   });
 });
 
-/* The one weakness the investigation of spya-f3b6ab found: an editor already
-   open when an answer starts arriving cannot ask again until it finishes, and
-   used to decline without a word — Enter did nothing, the tick was greyed out.
-   docs/postmortems/261002g-a-refusal-with-no-voice.md names the class. */
-describe("an editor that cannot ask again yet says why", () => {
-  async function editorOpenWhileAnswering(): Promise<HTMLTextAreaElement> {
+/* Report spya-yur0eq (Greg, 2026-10-19): *"Allow the user to edit user inputs
+   in Chat while it's thinking, rather than having to stop it first and then
+   click the Edit button."* Ask again while an answer is arriving stops that
+   answer through the ordinary Stop, and asks the rewrite once it has settled.
+   Until then an open editor held its Ask again with a sentence (spya-f3b6ab,
+   docs/postmortems/261002g-a-refusal-with-no-voice.md) and the pencil was
+   withdrawn. docs/plans/261020i-edit-your-question-while-chat-is-answering.md. */
+describe("rewriting a question while an answer is arriving", () => {
+  /** A question asked from the composer, its answer begun and still arriving. */
+  async function answering(): Promise<void> {
     await mount();
-    const pencils = host.querySelectorAll<HTMLButtonElement>('button[data-tip="Rewrite this question"]');
-    await act(async () => pencils[0]?.click());
-    const editor = host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box");
-    expect(editor, "the editor opened").not.toBeNull();
-    await act(async () => type(editor as HTMLTextAreaElement, "What I meant to say"));
-    // Something else asked from the composer, so an answer is now arriving.
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
     await act(async () => type(box as HTMLTextAreaElement, "And another thing"));
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')?.click());
     await settle();
     expect(posted(), "the composer's question went out").toHaveLength(1);
-    return host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box") as HTMLTextAreaElement;
-  }
-
-  const said = () => host.querySelector(".chat-edit-held")?.textContent ?? "";
-
-  it("on Enter: says so beside the editor, sends nothing, keeps the text", async () => {
-    const editor = await editorOpenWhileAnswering();
-    expect(said()).toBe("");
-    await act(async () => {
-      editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
-    await settle();
-    expect(posted()).toHaveLength(1);
-    expect(said()).toMatch(/still arriving/);
-    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box")?.value).toBe(
-      "What I meant to say",
-    );
-  });
-
-  it("on the tick: the same", async () => {
-    await editorOpenWhileAnswering();
-    await act(async () =>
-      host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click(),
-    );
-    await settle();
-    expect(posted()).toHaveLength(1);
-    expect(said()).toMatch(/still arriving/);
-    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box")?.value).toBe(
-      "What I meant to say",
-    );
-  });
-
-  it("and stops saying it once the answer has finished, when the tick asks again", async () => {
-    await editorOpenWhileAnswering();
-    await act(async () =>
-      host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click(),
-    );
     await act(async () => {
       frame("begin", {
         threadId: LEARN.id,
@@ -322,14 +298,164 @@ describe("an editor that cannot ask again yet says why", () => {
         questionId: "spya-q3q3q3",
         attempt: "an-attempt",
       });
-      frame("done", { text: "Done", status: "done", citations: [], searches: 0, model: "m" });
+      frame("delta", { text: "Half an ans" });
+    });
+    await settle();
+  }
+
+  async function openAndType(which: number, text: string): Promise<HTMLTextAreaElement> {
+    const pencils = [...host.querySelectorAll<HTMLButtonElement>('button[data-tip="Rewrite this question"]')];
+    expect(pencils.length, "a pencil on each question, though an answer is arriving").toBe(3);
+    await act(async () => pencils[which]?.click());
+    const editor = host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box");
+    expect(editor, "the editor opened").not.toBeNull();
+    await act(async () => type(editor as HTMLTextAreaElement, text));
+    return editor as HTMLTextAreaElement;
+  }
+
+  const said = () => host.querySelector(".chat-edit-held")?.textContent ?? "";
+  const editorText = () => host.querySelector<HTMLTextAreaElement>("textarea.chat-edit-box")?.value;
+
+  async function finishStopped(): Promise<void> {
+    await act(async () => {
+      frame("done", { text: "Half an ans", status: "done", stopped: true, citations: [], searches: 0, model: "m" });
       answer?.close();
     });
     await settle();
-    expect(said()).toBe("");
-    await act(async () => host.querySelector<HTMLButtonElement>('button[data-tip="Ask again (Enter)"]')?.click());
+  }
+
+  it("on Enter: stops the answer, keeps the editor open, and asks nothing yet", async () => {
+    await answering();
+    const editor = await openAndType(0, "What I meant to say");
+    await act(async () => {
+      editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
     await settle();
+    expect(stops()).toEqual([{ messageId: "spya-a3a3a3", attempt: "an-attempt" }]);
+    expect(posted(), "no edit until the answer has stopped").toHaveLength(1);
+    expect(editorText()).toBe("What I meant to say");
+    expect(said()).toMatch(/Stopping/);
+    await act(async () => host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click());
+    await settle();
+    expect(stops(), "a second Ask press does not send a second Stop").toHaveLength(1);
+    expect(posted(), "a second Ask press still does not send the edit early").toHaveLength(1);
+  });
+
+  it("then asks the rewrite once the stopped answer has settled, against that answer as the tail", async () => {
+    await answering();
+    await openAndType(0, "What I meant to say");
+    await act(async () => host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click());
+    await settle();
+    expect(stops()).toHaveLength(1);
+    await finishStopped();
     expect(posted()).toHaveLength(2);
-    expect(posted()[1]).toMatchObject({ edit: "spya-q1q1q1", question: "What I meant to say" });
+    expect(posted()[1]).toEqual({
+      threadId: LEARN.id,
+      edit: "spya-q1q1q1",
+      question: "What I meant to say",
+      at: null,
+      expectedTailId: "spya-a3a3a3",
+    });
+    expect(host.querySelector("textarea.chat-edit-box"), "the editor closed").toBeNull();
+    expect(
+      (document.activeElement as HTMLElement | null)?.getAttribute("data-tip"),
+      "focus returned to its pencil",
+    ).toBe("Rewrite this question");
+  });
+
+  it("does not ask an unchanged rewrite typed while the answer is stopping", async () => {
+    await answering();
+    const editor = await openAndType(0, "What I meant to say");
+    await act(async () => host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click());
+    await settle();
+    await act(async () => type(editor, "  What I first said "));
+    await finishStopped();
+    expect(posted(), "the now-unchanged rewrite was not sent").toHaveLength(1);
+    expect(host.querySelector("textarea.chat-edit-box"), "closed, as an unchanged edit always has").toBeNull();
+  });
+
+  /* GPT Sol's plan review F1: the question just asked carries an id this tab
+     invented until `begin` swaps in the server's, and the editor's row is keyed
+     by it. Rewriting that question while its answer has not begun is the case
+     the report is most about. */
+  it("rewriting the question being answered, before its answer has begun, survives the rename", async () => {
+    await mount();
+    const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
+    await act(async () => type(box as HTMLTextAreaElement, "And another thing"));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')?.click());
+    await settle();
+    const editor = await openAndType(2, "And another thing, properly");
+    await act(async () => {
+      editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+    expect(stops(), "the stop waits for the answer's name").toHaveLength(0);
+    await act(async () => {
+      frame("begin", {
+        threadId: LEARN.id,
+        title: LEARN.title,
+        messageId: "spya-a3a3a3",
+        questionId: "spya-q3q3q3",
+        attempt: "an-attempt",
+      });
+    });
+    await settle();
+    expect(stops()).toEqual([{ messageId: "spya-a3a3a3", attempt: "an-attempt" }]);
+    expect(editorText(), "the editor and its text outlived the rename").toBe("And another thing, properly");
+    expect(document.activeElement, "the remounted editor kept the caret").toBe(
+      host.querySelector("textarea.chat-edit-box"),
+    );
+    expect(said()).toMatch(/Stopping/);
+    await finishStopped();
+    expect(posted()).toHaveLength(2);
+    expect(posted()[1]).toEqual({
+      threadId: LEARN.id,
+      edit: "spya-q3q3q3",
+      question: "And another thing, properly",
+      at: null,
+      expectedTailId: "spya-a3a3a3",
+    });
+  });
+
+  it("an unchanged rewrite stops nothing (Sol F2)", async () => {
+    await answering();
+    const editor = await openAndType(0, "  What I first said ");
+    await act(async () => {
+      editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+    expect(stops()).toHaveLength(0);
+    expect(posted()).toHaveLength(1);
+    expect(host.querySelector("textarea.chat-edit-box"), "closed, as an unchanged edit always has").toBeNull();
+  });
+
+  it("an answer that fails before it begins: the rewrite is kept, not asked against rows the server never had", async () => {
+    await mount();
+    const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
+    await act(async () => type(box as HTMLTextAreaElement, "And another thing"));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')?.click());
+    await settle();
+    await openAndType(0, "What I meant to say");
+    await act(async () => host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click());
+    await settle();
+    await act(async () => {
+      frame("error", { error: "The model is unavailable." });
+      answer?.close();
+    });
+    await settle();
+    expect(posted(), "no edit went").toHaveLength(1);
+    expect(editorText()).toBe("What I meant to say");
+    expect(said(), "no longer claims to be stopping").toBe("");
+  });
+
+  it("Cancel while it is stopping: the rewrite is never asked", async () => {
+    await answering();
+    await openAndType(1, "Never mind");
+    await act(async () => host.querySelector<HTMLButtonElement>(".chat-turn.editing .chat-actions button")?.click());
+    await settle();
+    await act(async () => host.querySelector<HTMLButtonElement>('.chat-turn.editing button[aria-label="Cancel"]')?.click());
+    await finishStopped();
+    expect(stops()).toHaveLength(1);
+    expect(posted()).toHaveLength(1);
   });
 });

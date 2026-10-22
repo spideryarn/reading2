@@ -69,7 +69,7 @@ const BLOCKS: Block[] = [
   block("spya-ffffff", "A closing paragraph"),
 ];
 
-const report = (): BuildReport => ({ repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] });
+const report = (): BuildReport => ({ repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] });
 
 /** Every leaf's block, in tree order — what the reader can actually reach. */
 function leafBlocks(tree: ReturnType<typeof buildTree>): string[] {

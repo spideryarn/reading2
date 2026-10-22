@@ -130,7 +130,7 @@ const OUTLINE = renderFrozenOutline({
 } satisfies ModelNode);
 
 function emptyReport(): BuildReport {
-  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  return { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] };
 }
 
 /** `{"sections": [{"section": 1, "children": [...]}]}`, for the cases that need one. */
@@ -367,8 +367,8 @@ describe("the constants a scoped call is made with", () => {
    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
    */
-  it("stamps toc/12+expand/8, both halves named", () => {
-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/12+expand/8");
+  it("stamps toc/13+expand/8, both halves named", () => {
+    expect(EXPANSION_PROMPT_STAMP).toBe("toc/13+expand/8");
   });
 
   /**

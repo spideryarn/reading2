@@ -3,8 +3,10 @@
    Greg, 2026-10-01 (SPIDERYARN-READING2-7C): "Courier for all AI-generated
    text … a serif font for the author-text … Arial or something like that for
    user-generated … Perhaps try a v1 of this and I'll see how I feel about it."
-   The v1 was docs/plans/261001d-typeface-per-voice.md; the model's face is now
-   IBM Plex Mono rather than Courier, and the trawl that widened these lists is
+   The v1 was docs/plans/261001d-typeface-per-voice.md; the model's face was
+   IBM Plex Mono rather than Courier from 2026-10-02 and iA Writer Quattro from
+   2026-10-21 (docs/plans/261021f-nicer-ai-face-and-no-reader-font-setting.md),
+   and the trawl that widened these lists is
    docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md. The rule,
    and how to voice a new element, is docs/project/fonts.md.
 
@@ -159,9 +161,12 @@
     /* Hidden text: Opus's reason under a row; the verdict before it is ours */
     .ref-scan-opinion-reason,
     .rcp-ai,
-    /* not the fixed "Key sources" thread */
+    /* not the fixed "Key sources" thread: Claims' filter buttons, and
+       Reception's sections (plan 261020n) */
     .rcp-thread:not(.rcp-thread-key) .rcp-thread-name,
     .rcp-thread-gist,
+    .rcp-section-theme .rcp-section-name,
+    .rcp-section-gist,
     .rcp-key-why,
     /* the headline only when it is the model's reading of the page */
     .rcp-title-ai,
@@ -239,6 +244,17 @@
     font-family: var(--font-ai);
 }
 
+/* The same code, on one width. It stays in the list above, so that rule's
+   specificity is unchanged; this one ties with it and comes later. Quattro
+   gives letters four widths, which knocks the columns of code out of line, so
+   code takes iA Writer Mono: the same letters, every one as wide (261021f). */
+:root :is(
+    .chat-turn.model :is(.fmt-code, .fmt-pre code),
+    .cnd-answer :is(.fmt-code, .fmt-pre code)
+) {
+    font-family: var(--font-ai-code);
+}
+
 /* ---- the reader: what they typed ----------------------------------------- */
 :root :is(
     /* whatever computed its voice and found the reader's: a renamed title
@@ -295,7 +311,7 @@
     .fb-addendum-body,
     .ill-steer-input,
     .cmdbar-input,
-    /* About you or the reason, quoted back in the guide's greeting (261009i) */
+    /* the reason quoted back in the guide's greeting (261009i, 261019p) */
     .guide-greeting-reader
 ) {
     font-family: var(--font-reader);

@@ -53,10 +53,12 @@ import {
   feedbackAddenda as addendaTable,
   feedbackQuestionAnswers as answersTable,
   feedbackQuestionDeferrals as deferralsTable,
+  feedbackQuestions as questionsTable,
 } from "../db/schema.js";
 import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
+import type { FeedbackQuestionStatus, PublishedFeedbackQuestion } from "../feedback-question-values.js";
 import {
   ADDENDUM_STATUSES,
   EARLIER_FEEDBACK_STATUSES,
@@ -317,8 +319,12 @@ function toDeferral(row: { questionId: string; deferredAt: Date | null; updatedA
 /** As much of a report's first line as fits beside a question's title. */
 const FIRST_LINE_CHARS = 140;
 
-/** The first line with anything on it, cut at `FIRST_LINE_CHARS` with a mark that it was. */
-function firstLineOf(body: string): string {
+/**
+ * The first line with anything on it, cut at `FIRST_LINE_CHARS` with a mark
+ * that it was. Also pg-admin-feedback.ts's, for another reader's report in a
+ * thread, so the two first lines cannot be cut differently.
+ */
+export function firstLineOf(body: string): string {
   const line = body.split(/\r\n|[\n\r]/).find((one) => one.trim() !== "")?.trim() ?? "";
   return line.length > FIRST_LINE_CHARS ? `${line.slice(0, FIRST_LINE_CHARS).trimEnd()}…` : line;
 }
@@ -719,6 +725,25 @@ const rawPgFeedbackStore: FeedbackStore = {
       .where(and(eq(answersTable.ownerId, currentOwnerId()), inArray(answersTable.questionId, [...questionIds])))
       .orderBy(asc(answersTable.createdAt), asc(answersTable.id));
     return rows.map(toAnswer);
+  },
+
+  async publishedQuestions(): Promise<PublishedFeedbackQuestion[]> {
+    const rows = await getDb()
+      .select({
+        id: questionsTable.id,
+        title: questionsTable.title,
+        report: questionsTable.report,
+        repeats: questionsTable.repeats,
+        asked: questionsTable.asked,
+        body: questionsTable.body,
+        status: questionsTable.status,
+        acted: questionsTable.acted,
+      })
+      .from(questionsTable)
+      .orderBy(asc(questionsTable.id));
+    /* The status is checked by the caller with every other rule (F7); the
+       cast only names what the check constraint already holds it to. */
+    return rows.map((row) => ({ ...row, status: row.status as FeedbackQuestionStatus }));
   },
 
   async deferrals(questionIds: readonly string[]): Promise<StoredFeedbackDeferral[]> {

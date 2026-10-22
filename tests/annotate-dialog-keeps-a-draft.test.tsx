@@ -217,6 +217,10 @@ describe("the box ends in Discard, Ask AI and Save", () => {
     expect(button("Ask AI").type).toBe("button");
     expect(button("Save").type).toBe("submit");
     expect(host.querySelectorAll('button[type="submit"]')).toHaveLength(1);
+    /* Plan 261020z: Save green, Discard red; Ask AI stays neutral. */
+    expect(button("Save").classList.contains("tone-positive")).toBe(true);
+    expect(button("Discard").classList.contains("tone-negative")).toBe(true);
+    expect(button("Ask AI").className).not.toMatch(/tone-/);
   });
 
   it("Save stores the draft against its passage, once, without asking", () => {

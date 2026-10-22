@@ -102,11 +102,11 @@ describe("threadSource", () => {
     expect(threadSource({ kind: "chat" })).toBeNull();
   });
 
-  it("says a lens conversation was started from an angle in Sources' Reception, with the reader's words", () => {
+  it("says a lens conversation was started from a question in Sources › Investigate, with the reader's words", () => {
     expect(threadSource({ kind: "chat", origin: LENS })).toEqual({
       from: "sources",
       mode: "sources",
-      label: "Started from an angle in Sources › Reception",
+      label: "Started from a question in Sources › Investigate",
       quote: "how it relates to Smith 2019",
       voice: "reader",
     });
@@ -231,7 +231,7 @@ describe("originName", () => {
 });
 
 describe("lensThreads", () => {
-  it("lists the chats started from an angle, newest first, and nothing else", () => {
+  it("lists the chats started from a question or an older angle, newest first, and nothing else", () => {
     const list = [
       summary({ id: "spya-aaa222" }),
       summary({ id: "spya-aaa333", origin: CLAIM }),
@@ -250,7 +250,7 @@ describe("lensThreads", () => {
     ]);
   });
 
-  it("keeps two chats started from the same angle as two lines", () => {
+  it("keeps two chats started from the same question as two lines", () => {
     const list = [summary({ id: "spya-aaa444", origin: LENS }), summary({ id: "spya-aaa555", origin: LENS })];
     expect(lensThreads(list)).toHaveLength(2);
   });

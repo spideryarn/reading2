@@ -311,9 +311,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           <Portrait shot={SHOTS.learn} title="Learn." mode="learn">
             Type or talk about what you remember of the piece. Short replies correct what comes apart
             from it, link the passage, and usually nudge you to remember a little more — filling the
-            gap when you are stuck rather than making you fail. Written not to be annoying,
-            patronising or superior. Or choose Tutorial: short turns that teach a little of the piece
-            at a time and ask you to put it in your own words. Or Explore, which starts from what you
+            gap when you are stuck rather than making you fail. Not read it yet? It takes you through
+            the piece a little at a time and asks you to put each part in your own words. Written not
+            to be annoying, patronising or superior. Or choose Explore, which starts from what you
             have marked and helps you work out what you think.
           </Portrait>
           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
@@ -448,9 +448,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               in money. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md. */}
           <p className="tw:mt-6 tw:max-w-[62ch] tw:leading-relaxed">
             <strong className="tw:text-foreground">High-powered AI.</strong> Claude Opus instead of
-            Sonnet for one article, when the reading is hard (plain-words summaries are on Opus
-            already). Switching it on counts as one more
-            article against your allowance, half of one while it is public.
+            Sonnet for one article, when the reading is hard (plain-words summaries and chat are on
+            Opus already). Switching it on counts that article against your allowance again, at
+            the same number of slots, half as much while it is public.
           </p>
           <p className="tw:mt-6 tw:text-sm">
             <Link

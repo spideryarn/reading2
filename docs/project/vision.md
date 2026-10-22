@@ -214,7 +214,9 @@ these, each to be judged against the principles above:
 - **Author's glossary** — the terms this piece uses in a non-obvious way, defined from the piece
   itself. **Built**, as of 2026-08-25: a mode in the band beside the prose. Since 2026-08-26 every
   term is underlined wherever the article uses it, in every mode, and pointing at one shows its entry
-  without opening the band. See [glossary.md](glossary.md).
+  without opening the band. See [glossary.md](glossary.md). Where it might widen, to names,
+  citations and hard sentences as one *explain this*: [explain-this-vision.md](explain-this-vision.md)
+  (not decided).
 - **Ideas** — the propositions a piece needs you to hold: the ones it *assumes* without stating, and
   the ones it *introduces*. **Built**, as of 2026-08-27, and the sibling of the glossary rather than a
   widening of it — a term is a word you look up, an idea is a claim you hold. See

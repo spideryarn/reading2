@@ -62,7 +62,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { AdminHome, AdminUsersPage } = await import("../src/web/AdminPage.js");
+const { ADMIN_USERS_COLUMN_KEYS, AdminHome, AdminUsersPage } = await import("../src/web/AdminPage.js");
 
 /* The page's sort lives in the address bar through nuqs, which needs its
    adapter above it — src/web/main.tsx wraps the whole app in the same one, and
@@ -94,6 +94,15 @@ const ALICE: AdminUser = {
   chats: 5,
   searches: 7,
   opens: 99,
+  activeDays: 6,
+  activeDays30: 3,
+  lastActiveAt: "2026-08-27T09:00:00.000Z",
+  readingSeconds: 12_000,
+  importFailures: 2,
+  recentImportFailures: [
+    { at: "2026-08-25T09:00:00.000Z", step: "fetch", kind: "bug" },
+    { at: "2026-08-20T09:00:00.000Z", kind: "retry" },
+  ],
   lastReadAt: "2026-08-27T09:00:00.000Z",
   spendNanos: 1_234_500_000,
   spendCalls: 42,
@@ -128,6 +137,11 @@ const BOB: AdminUser = {
   chats: 0,
   searches: 0,
   opens: 0,
+  activeDays: 0,
+  activeDays30: 0,
+  readingSeconds: 0,
+  importFailures: 0,
+  recentImportFailures: [],
   spendNanos: 0,
   spendCalls: 0,
   spendUnpricedCalls: 0,
@@ -168,9 +182,25 @@ const jsonOk = (body: unknown) =>
 
 let host: HTMLDivElement;
 let root: Root;
+let stored: Map<string, string>;
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  /* Node's own `localStorage` shadows jsdom's and is `undefined` in this lane.
+     Give this page the same real round-trip store as the shelf visibility
+     suite, so revealing a default-hidden column can prove the admin key. */
+  stored = new Map();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+      clear: () => stored.clear(),
+      key: () => null,
+      length: 0,
+    },
+  });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -256,7 +286,68 @@ describe("the users page", () => {
     // Alice's numbers, all of them, in the row rather than anywhere on the page.
     const alice = table.find((r) => r[0]?.includes("alice@example.test")) ?? [];
     expect(alice.join("|")).toContain("12");
-    expect(alice.join("|")).toContain("40");
+    // The engagement three (plan 261020c): active days, reading time, failures.
+    expect(alice.join("|")).toContain("6 · 3 in 30d");
+    expect(alice.join("|")).toContain("3h 20m");
+  });
+
+  /* Greg, 2026-10-19: "archived, uploads, searches, chats, comments … default
+     hidden". Hidden, not gone: the Columns menu is drawn and says how many. */
+  it("starts with the five rarely-wanted counts hidden, and reveals one from Columns", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    const headers = [...el.querySelectorAll("thead th")].map((th) => th.textContent ?? "");
+    for (const gone of ["Archived", "Uploads", "Comments", "Chats", "Searches"]) {
+      expect(headers.some((h) => h.includes(gone)), `${gone} is shown`).toBe(false);
+    }
+    for (const kept of ["Active days", "Reading", "Articles", "Failed imports", "Opens"]) {
+      expect(headers.some((h) => h.includes(kept)), `${kept} is missing`).toBe(true);
+    }
+    const menu = [...el.querySelectorAll("button")].find((b) =>
+      (b.getAttribute("aria-label") ?? "").startsWith("Columns"),
+    );
+    expect(menu?.getAttribute("aria-label")).toBe("Columns, 5 hidden — choose which the table shows");
+
+    const press = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(press, "pointerType", { value: "mouse" });
+    act(() => menu?.dispatchEvent(press));
+    const archived = [...document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')].find(
+      (item) => (item.textContent ?? "").trim() === "Archived",
+    );
+    expect(archived, "Archived is not offered in Columns").toBeDefined();
+    act(() => archived?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+
+    const revealed = [...el.querySelectorAll("thead th")].map((th) => th.textContent ?? "");
+    expect(revealed.some((h) => h.includes("Archived"))).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem(ADMIN_USERS_COLUMN_KEYS.shown) ?? "null")).toEqual([
+      "archived",
+    ]);
+  });
+
+  /* The card behind the count: when, which step, what kind — and nothing that
+     names what they were reading, because nothing of the kind is on the wire. */
+  it("lists each failed import's time, step and kind on the count", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    const tips = [...el.querySelectorAll<HTMLElement>("[data-tip]")].map((t) => t.dataset.tip ?? "");
+    const card = tips.find((t) => t.startsWith("2 failed import attempts"));
+    expect(card, "no failed-imports card").toBeDefined();
+    expect(card).toContain("at fetch · defect here, ours to fix");
+    expect(card).toContain("outside a step · transient, a retry may help");
+    expect(tips.some((t) => t.startsWith("No failed imports")), "Bob's zero has no card").toBe(true);
+  });
+
+  it("keeps fractional seconds exact in the reading-time detail", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [{ ...ALICE, readingSeconds: 12_000.5 }] })));
+    const el = await show();
+
+    const tip = [...el.querySelectorAll<HTMLElement>("[data-tip]")]
+      .map((node) => node.dataset.tip ?? "")
+      .find((text) => text.includes("with their own articles on screen"));
+    expect(tip).toContain("12000.5 seconds");
+    expect(tip).not.toContain("12001 seconds");
   });
 
   /**
@@ -267,6 +358,17 @@ describe("the users page", () => {
    * wrong question — the fraction stops being a fraction the moment the count
    * passes the allowance, whichever way it got there. GPT Sol, 2026-09-05.
    */
+  /* Plan 261019o, spya-t45cfc: "keep the first column, which shows the name,
+     frozen/visible the whole time". */
+  it("pins the Account column while the table scrolls sideways", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    const pinned = [...el.querySelectorAll("table tr")].map((tr) =>
+      [...tr.children].flatMap((cell, i) => (cell.classList.contains("tw:sticky") ? [i] : [])),
+    );
+    expect(pinned).toEqual([[0], [0], [0]]);
+  });
+
   it("shows points when the count is over the allowance, even with nothing public", async () => {
     const unshared: AdminUser = { ...BOB, ingests: 6, ingestsShared: 0, ingestLimit: 3 };
     vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [unshared] })));
@@ -275,6 +377,30 @@ describe("the users page", () => {
     const row = (rows(el)[0] ?? []).join("|");
     expect(row).toContain("1200 / 600 pts");
     expect(row).not.toContain("6 / 3");
+  });
+
+  /* A 150-page PDF is one article added and three slots, charged three more
+     when switched to High-powered (plan 261020b): the cell prices the slots,
+     so `1 / 3` would be the wall looking failed. */
+  it("prices a long PDF and its High-powered upgrade by slots, not rows", async () => {
+    const long: AdminUser = {
+      ...BOB,
+      ingests: 1,
+      ingestsShared: 0,
+      ingestSlots: 3,
+      highPower: 1,
+      highPowerShared: 0,
+      highPowerSlots: 3,
+      ingestLimit: 3,
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [long] })));
+    const el = await show();
+
+    const row = (rows(el)[0] ?? []).join("|");
+    expect(row).toContain("1200 / 600 pts");
+    expect(row).not.toContain("1 / 3");
+    const usage = el.querySelector<HTMLElement>('span[data-tip*="switched to High-powered AI"]');
+    expect(usage?.getAttribute("data-tip")).toContain("counts each article's slots again");
   });
 
   it("includes public pricing and High-powered AI in a stale account's lifetime usage", async () => {
@@ -526,6 +652,126 @@ describe("the users page", () => {
     expect(rows(el).map((r) => r[0])).not.toEqual(before);
     expect(rows(el)[0]?.[0]).toContain("alice@example.test");
     expect(location.search).toContain("by=articles");
+  });
+});
+
+/**
+ * `?user=<id>` — the link each account on /admin/vouchers carries (plan
+ * 261019k). The whole table, with that one row marked and named above it.
+ */
+describe("the users page, pointed at one account", () => {
+  const marked = (el: HTMLElement) => [...el.querySelectorAll("tbody tr[aria-current='true']")];
+  /* jsdom draws no layout and has no `scrollIntoView`; the page calls it on the marked row. */
+  let scrolled: Element[];
+  beforeEach(() => {
+    scrolled = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+  });
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it("marks that account's row, and names it above the table", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    expect(rows(el)).toHaveLength(2);
+    const rowsMarked = marked(el);
+    expect(rowsMarked).toHaveLength(1);
+    expect(rowsMarked[0]?.textContent).toContain("alice@example.test");
+    const line = el.querySelector("[data-pointed-at]");
+    expect(line?.textContent).toContain("alice@example.test");
+    /* Once, onto that row, however many renders followed. */
+    expect(scrolled).toEqual([rowsMarked[0]]);
+  });
+
+  it("scrolls once the list arrives, not before", async () => {
+    history.replaceState(null, "", `/admin/users?user=${BOB.id}`);
+    let answer: (r: Response) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((go) => (answer = go))));
+    const el = await show();
+    expect(scrolled).toHaveLength(0);
+    await act(async () => answer(jsonOk({ users: [ALICE, BOB] })));
+    await settle();
+    expect(scrolled).toHaveLength(1);
+    expect(scrolled[0]?.textContent).toContain("bob@example.test");
+    expect(marked(el)).toHaveLength(1);
+  });
+
+  it("scrolls once again when the address points at a different account", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    expect(scrolled.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("alice@example.test"),
+    ]);
+
+    await act(async () => history.pushState(null, "", `/admin/users?user=${BOB.id}`));
+    await settle();
+
+    expect(marked(el)).toHaveLength(1);
+    expect(marked(el)[0]?.textContent).toContain("bob@example.test");
+    expect(scrolled.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("alice@example.test"),
+      expect.stringContaining("bob@example.test"),
+    ]);
+  });
+
+  it("keeps the pointed-at account marked, in the URL, and does not scroll again after sorting", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    expect(rows(el)[0]?.[0]).toContain("bob@example.test");
+    expect(scrolled).toHaveLength(1);
+
+    const articles = [...el.querySelectorAll("button")].find((b) =>
+      b.getAttribute("aria-label")?.startsWith("Articles"),
+    );
+    await act(async () => articles?.click());
+    await settle();
+    await waitFor("the pointed-at account moved to the first row", () =>
+      rows(el)[0]?.[0]?.includes("alice@example.test") === true,
+    );
+
+    expect(new URLSearchParams(location.search).get("user")).toBe(ALICE.id);
+    expect(new URLSearchParams(location.search).get("by")).toBe("articles");
+    expect(marked(el)).toHaveLength(1);
+    expect(marked(el)[0]?.textContent).toContain("alice@example.test");
+    expect(scrolled).toHaveLength(1);
+  });
+
+  it("clears the mark when Clear is pressed", async () => {
+    history.replaceState(null, "", `/admin/users?user=${ALICE.id}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    const clear = [...el.querySelectorAll("[data-pointed-at] button")].find((b) => b.textContent?.trim() === "Clear");
+    expect(clear, "a Clear button").toBeTruthy();
+    await act(async () => (clear as HTMLButtonElement).click());
+    await settle();
+    await waitFor("the mark went", () => marked(el).length === 0);
+    expect(location.search).not.toContain("user=");
+    expect(el.querySelector("[data-pointed-at]")).toBeNull();
+  });
+
+  it("says so when the account is not in the list, rather than marking nothing quietly", async () => {
+    history.replaceState(null, "", `/admin/users?user=${OTHER_ACCOUNT}`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+
+    expect(marked(el)).toHaveLength(0);
+    expect(scrolled).toHaveLength(0);
+    expect(el.querySelector("[data-pointed-at]")?.textContent).toContain("not in this list");
+  });
+
+  it("marks nothing without the parameter", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB] })));
+    const el = await show();
+    expect(marked(el)).toHaveLength(0);
+    expect(el.querySelector("[data-pointed-at]")).toBeNull();
   });
 });
 

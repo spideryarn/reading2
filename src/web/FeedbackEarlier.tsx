@@ -108,6 +108,8 @@ import {
   type AdminEarlierFeedback,
   type AdminEarlierFeedbackPage,
   type AdminEarlierFeedbackShow,
+  FEEDBACK_QUESTION_REPORT_WHOSE,
+  type FeedbackQuestionReportWhose,
   type EarlierFeedback as EarlierReport,
   type EarlierFeedbackPage,
   type EarlierFeedbackShow,
@@ -361,13 +363,33 @@ export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions" | "rep
   reports: AdminRowReport[];
 };
 
+/** A report as a server before 261020p sends it, with no `whose` or `from`. */
+const V3_REPORT_KEYS = "body,firstLine,id,number";
+/** A report as a server before 261008i sends it, with no text either. */
+const V1_REPORT_KEYS = "firstLine,id,number";
+
+/**
+ * **A report from an older server is the admin's own**: until 261020p a
+ * server sent only that, so it is marked `yours`, with no address. Only a
+ * report with exactly the old keys is mapped; anything else is left to fail
+ * the strict check.
+ */
+function asTheirOwn(report: unknown, keys: string): unknown {
+  if (typeof report !== "object" || report === null) return report;
+  if (Object.keys(report).sort().join() !== keys) return report;
+  return { body: null, ...report, whose: "yours", from: null };
+}
+
 /**
  * **A server from before 261008i answers in the six-key shape** — a rollback,
  * or the minutes of a deploy (F3). Each such question becomes a thread before
  * the strict check: its newest reply as the only one, *being considered* if
  * there is one, never deferred, no report text. **A server from before
  * 261010h answers threads without the acted replies**, which become none.
- * Only a question with exactly the old keys of either is mapped; anything
+ * **A server from before 261020p** sends only the admin's own report, without
+ * `whose` (`asTheirOwn`); such a server answers this client's `questions=4`
+ * in its own newest shape, whichever of the three that is.
+ * Only a question with exactly the old keys of one of them is mapped; anything
  * else reaches the check as it came, and fails there.
  */
 function withLegacyQuestions(value: unknown): unknown {
@@ -380,12 +402,15 @@ function withLegacyQuestions(value: unknown): unknown {
       if (typeof question !== "object" || question === null) return question;
       const old = question as Record<string, unknown>;
       const keys = Object.keys(old).sort().join();
-      if (keys === V2_QUESTION_KEYS.join()) return { ...old, actedAnswers: [], olderActedAnswers: 0 };
+      if (keys === QUESTION_KEYS.join()) return { ...old, report: asTheirOwn(old.report, V3_REPORT_KEYS) };
+      if (keys === V2_QUESTION_KEYS.join()) {
+        return { ...old, report: asTheirOwn(old.report, V3_REPORT_KEYS), actedAnswers: [], olderActedAnswers: 0 };
+      }
       if (keys !== LEGACY_QUESTION_KEYS.join()) return question;
       const { answer: newest, report, ...rest } = old;
       return {
         ...rest,
-        report: typeof report === "object" && report !== null ? { ...report, body: null } : report,
+        report: asTheirOwn(report, V1_REPORT_KEYS),
         answers: newest === null ? [] : [newest],
         olderAnswers: 0,
         actedAnswers: [],
@@ -414,18 +439,27 @@ function areQuestions(value: unknown): value is ThreadQuestion[] {
 const isTextWithin = (value: unknown, cap: number): value is string =>
   typeof value === "string" && value !== "" && value.length <= cap;
 
-/** The report a question is about, as its thread shows it: an id, a number, a first line, its text. */
+/**
+ * The report a question is about, as its thread shows it: an id, a number, a
+ * first line, its text, whose it is, and for somebody else's the address it
+ * was filed under (261020p). An address exactly when it is not the admin's own.
+ */
 function isLinkedReport(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const linked = value as Record<string, unknown>;
   return (
-    Object.keys(linked).sort().join() === "body,firstLine,id,number" &&
+    Object.keys(linked).sort().join() === "body,firstLine,from,id,number,whose" &&
     typeof linked.id === "string" && isSpideryarnId(linked.id) &&
     Number.isSafeInteger(linked.number) && (linked.number as number) > 0 &&
     typeof linked.firstLine === "string" &&
-    (linked.body === null || typeof linked.body === "string")
+    (linked.body === null || typeof linked.body === "string") &&
+    FEEDBACK_QUESTION_REPORT_WHOSE.some((whose) => whose === linked.whose) &&
+    (linked.whose === "yours" ? linked.from === null : isTextWithin(linked.from, MAX_REPORTER_ADDRESS_CHARS))
   );
 }
+
+/** Longer than any address an inbox takes (RFC 5321 says 254); a sanity bound, not a rule. */
+const MAX_REPORTER_ADDRESS_CHARS = 320;
 
 function isQuestion(value: unknown): value is ThreadQuestion {
   if (typeof value !== "object" || value === null) return false;
@@ -512,6 +546,12 @@ export interface EarlierFeedback {
   liveQuestions: ThreadQuestion[] | null;
   /** How many of the server's threads wait on a decision, without a remembered no-longer-open question: the pill's and the shortcut's number. */
   waitingQuestionCount: number | null;
+  /**
+   * An admin's opening read of Needs a decision is still in the air, so the
+   * shortcut is drawn with a spinner where its number goes (spya-yf6vmy).
+   * False once it lands, and false when it failed: then there is no shortcut.
+   */
+  questionsLoading: boolean;
   replies: QuestionReplies;
   /** The admin's addenda to their own reports, in progress and just sent (FeedbackAddendum.tsx). */
   addenda: ReportAddenda;
@@ -829,13 +869,13 @@ type ReadAnswer = { detail: "plain"; page: EarlierFeedbackPage } | { detail: "ad
  * One read of one filter of one list: the answer checked, or why there is
  * none. `absent` is the admin route answering 404, and only that: a server
  * from before the route (a rollback, or the minutes of a deploy). The admin
- * route is asked for threads with acted replies (`questions=3`); a server
- * that ignores that answers in an older shape, which `withLegacyQuestions`
- * maps (F3).
+ * route is asked for threads whose report says whose it is (`questions=4`);
+ * a server that does not know that answers in an older shape, which
+ * `withLegacyQuestions` maps (F3; 261020p).
  */
 async function read(ask: EarlierAsk): Promise<ReadAnswer | "failed" | "absent"> {
   if (ask.detail === "admin") {
-    const query = new URLSearchParams(ask.show === "all" ? { questions: "3" } : { show: ask.show, questions: "3" });
+    const query = new URLSearchParams(ask.show === "all" ? { questions: "4" } : { show: ask.show, questions: "4" });
     const res = await apiFetch(`${ADMIN_PATH}?${query}`);
     if (res.status === 404) return "absent";
     if (!res.ok) return "failed";
@@ -1005,6 +1045,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
     questions,
     liveQuestions: currentQuestions,
     waitingQuestionCount: currentQuestions === null ? null : waitingThreads(currentQuestions),
+    questionsLoading: open && detail === "admin" && currentQuestions === null && waitingRead.kind !== "failed",
     replies,
     addenda,
   };
@@ -1402,8 +1443,11 @@ function ReplyBox({
           and it tells agents not to chase it (plan 261008i, decision 3). */}
       <button
         type="button"
-        className={deferred ? "fb-copy" : "fb-copy fb-defer"}
+        /* Red to put off; Bring back undoes a deferral, so neutral
+           (button-tone.css, plans 261011h and 261020f). */
+        className={deferred ? "fb-copy" : "fb-copy fb-defer tone-negative"}
         disabled={sending || deferring}
+        data-working={deferring ? "" : undefined}
         onClick={() => void replies.defer(question.id, !deferred)}
       >
         {deferring ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
@@ -1459,12 +1503,34 @@ function ThreadIds({ question }: { question: ThreadQuestion }) {
       {question.report === null ? null : (
         <>
           {" · about "}
+          {question.report.whose === "yours" ? null : (
+            <span className="fb-question-whose" data-whose={question.report.whose}>
+              {WHOSE_WORD[question.report.whose]}{" "}
+            </span>
+          )}
           <span className="fb-earlier-number">#{question.report.number}</span>{" "}
           <code className="fb-question-id">({question.report.id})</code>
         </>
       )}
     </>
   );
+}
+
+/**
+ * **Somebody else's report, said so** (`spya-y43ha0`, plan 261020p): Greg,
+ * *"it should be highlighted clearly as such"*. The words before its number,
+ * in the contents and the thread, and the heading of its shut text.
+ */
+const WHOSE_WORD: Record<Exclude<FeedbackQuestionReportWhose, "yours">, string> = {
+  reader: "a reader's",
+  admin: "another admin's",
+};
+
+/** The shut report's heading: *Your report #301*, or *A reader's report #650 · from …*. */
+function reportHeading(report: NonNullable<ThreadQuestion["report"]>): string {
+  if (report.whose === "yours") return `Your report #${report.number}`;
+  const word = WHOSE_WORD[report.whose];
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)} report #${report.number}${report.from === null ? "" : ` · from ${report.from}`}`;
 }
 
 /**
@@ -1727,10 +1793,11 @@ function ThreadView({
           </details>
         )}
         {question.report === null || question.report.body === null ? null : (
-          /* His own words, shut (spya-za2tse: "perhaps default-collapsed
-             expandable"). Text, and whole. */
-          <details className="fb-question-more">
-            <summary>Your report #{question.report.number}</summary>
+          /* The report's words, shut (spya-za2tse: "perhaps default-collapsed
+             expandable"). Text, and whole. Somebody else's is marked as theirs
+             on its heading and its edge (261020p). */
+          <details className="fb-question-more" data-whose={question.report.whose}>
+            <summary>{reportHeading(question.report)}</summary>
             <p className="fb-earlier-body">{question.report.body}</p>
           </details>
         )}

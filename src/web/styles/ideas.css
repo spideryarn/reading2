@@ -89,7 +89,7 @@
 .ideas-blurb {
   margin: 0.15rem 0 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   line-height: 1.35;
 }
 
@@ -357,7 +357,7 @@
   margin: 0;
   padding: 0.15rem 0.75rem 0.3rem;
   font-family: var(--font-ui);
-  font-size: 10.5px;
+  font-size: max(var(--text-min), 0.65625rem); /* 10.5px, in rem so it follows the reader's text size */
   line-height: 1.35;
   color: var(--ink-faint);
 }
@@ -387,7 +387,7 @@
   margin: 0.3rem 0 0;
   padding: 0;
   list-style: none;
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   line-height: 1.45;
   color: var(--ink-faint);
 }

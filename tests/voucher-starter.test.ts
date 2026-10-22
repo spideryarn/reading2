@@ -190,6 +190,8 @@ async function deleteArticle(id: string): Promise<void> {
 }
 
 async function sweep(): Promise<void> {
+  /* A voucher with a starter queues the article's main modes (plan 261021j); nothing here drives them. */
+  await pool.query("delete from spideryarn.jobs where slug like $1", ["test-voucher-starter-%"]);
   await pool.query("delete from spideryarn.billing_vouchers where email like $1", [`vstart-${STEM}%`]);
   for (const id of seeded.splice(0)) await deleteArticle(id);
 }

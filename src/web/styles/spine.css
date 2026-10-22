@@ -19,8 +19,18 @@
   left: var(--safe-left);
   top: var(--bar-bottom);
   /* Its bands are press targets (Spine.tsx § bandPress), so the rail stops at
-     the home indicator rather than continuing behind it. */
-  bottom: var(--safe-bottom);
+     the home indicator rather than continuing behind it.
+
+     **And at the bottom bar, which it ran behind until 2026-10-22.** It read
+     `bottom: var(--safe-bottom)` alone, and the dock (z-index 96) sat over the
+     rail's last 40-odd pixels — the end of every article, and the on-screen
+     band whenever the reader was there, drawn where nobody could see them.
+     Found on the browser pass for spya-wzssyu ("which bits are visible on the
+     screen"), plan 261022c. The same edge the mode band stops at
+     (mode-band.css, which says why each term is there): it follows the bar
+     down when the bar slides away on a small device, and the percentages
+     inside the track follow the new height with nothing measured. */
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now));
   width: var(--spine-w);
   /* How much of the rail's width the search lanes may take, and how wide one
      lane may get when there are few of them — see § search marks below.
@@ -53,6 +63,10 @@
      search panel still lists every one of them. GPT Sol, 2026-08-28. */
   --spine-gutter: 10px;
   --lane-max: 5px;
+  /* The viewport's smallest used height, shared with the veil's opening. The
+     two 1px block borders fit in 2px under the global border-box reset;
+     prefers-contrast below raises both borders and this floor together. */
+  --spine-view-floor: 2px;
   z-index: 45;
   background: var(--panel);
   border-right: 1px solid var(--rule-strong);
@@ -420,9 +434,80 @@
   top: 0;
   left: 0;
   right: 0;
-  min-height: 2px;
+  min-height: var(--spine-view-floor);
   pointer-events: none;
   border-top: 1px solid var(--highlight);
   border-bottom: 1px solid var(--highlight);
-  background: color-mix(in oklab, var(--highlight) 12%, transparent);
+  /* No wash any more. It was a 12% orange over a section fill brighter than
+     it, which is why the band was hard to see (spya-wzssyu); the lit stretch
+     under `.spine-veil-track` below is what says *on screen* now, and the edges
+     say exactly where it stops. */
+}
+
+/* **Everything off screen, veiled toward the panel** — the lens that makes the
+   band readable. Greg, 2026-10-21 (spya-wzssyu): *"Make it a bit clearer in
+   the spine which bits are visible on the screen."*
+   docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md.
+
+   Lightness rather than more orange: the rail is orange-brown throughout, and
+   turning the band up would have fought it with the same hue, beside the
+   prose. The veil adds no colour; it takes a little from the rest of the rail.
+
+   The same geometry as the band, in its own wrapper that Spine.tsx moves with
+   the same transform in the same frame, and for the same battery reason
+   (`.spine-viewport-track` above). It sits lower in the track than the band —
+   over the parts, the reading chart, the section fill and the hairlines, under
+   the origin mark, the quotes, the search marks and the hits — because those
+   marks say *where else*, and dimming them off screen would undo them.
+
+   The veil is two track-height rectangles on the wrapper: `::before` ends
+   where the band starts (the wrapper's top, which the transform puts at the
+   band's top), `::after` starts where the band ends. Each is as tall as the
+   track, so whatever the scroll position, the rail above and below the band
+   is covered and the overhang is clipped by `.spine { overflow: hidden }`.
+   Bounded rather than a spread `box-shadow`, so the layer is three rails tall
+   and no more (GPT Sol, plan review). `--view-h` is the band's own percentage,
+   set inline; the floor is the band's 2px, so a view that small on a very long
+   article is still a lit gap exactly where the orange box is. Under increased
+   contrast the two 2px borders need 4px between them, so the shared floor is
+   raised with the border width below. */
+.spine-veil-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.spine-veil-track::before,
+.spine-veil-track::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: color-mix(in oklab, var(--panel) var(--spine-veil), transparent);
+}
+.spine-veil-track::before { bottom: 100%; }
+.spine-veil-track::after { top: max(var(--view-h), var(--spine-view-floor)); }
+/* How much of the panel the veil mixes in: by eye in both appearances, so
+   that the lit stretch is plain at a glance and the reading chart's faint area
+   still reads through it off screen. The dark panel swallows less of a tint
+   than the light one, so it needs more. */
+.spine { --spine-veil: 50%; }
+:root[data-theme="light"] .spine { --spine-veil: 40%; }
+
+@media (prefers-contrast: more) {
+  .spine {
+    --spine-veil: 65%;
+    --spine-view-floor: 4px;
+  }
+  :root[data-theme="light"] .spine { --spine-veil: 60%; }
+  .spine-viewport { border-width: 2px; }
+}
+
+/* A forced palette would repaint the veil as an opaque system colour over the
+   whole rail, so it goes, and the edges are what is left: in the system's own
+   highlight colour (and on the card's key, tooltip.css § `.tip-key-screen`). */
+@media (forced-colors: active) {
+  .spine-veil-track { display: none; }
+  .spine-viewport { border-color: Highlight; }
 }

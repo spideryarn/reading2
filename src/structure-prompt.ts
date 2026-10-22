@@ -114,7 +114,10 @@ import type { Block } from "./types.js";
    the reference list, and a node that is only the front abstract gets the
    paperwork node's label and no question (Greg, spya-abs6bj). New articles
    only, as before. docs/plans/261003c-summary-and-structure-skip-the-front-matter.md. */
-export const PROMPT_VERSION = "toc/12";
+/* **`toc/13`, 2026-10-20**: each child's `start` is the block's number, `[582]`,
+   and the schema types it as an integer; the id is no longer copied. Existing
+   trees stay as they are. docs/plans/261020aa-structure-answers-the-block-number-not-its-id.md. */
+export const PROMPT_VERSION = "toc/13";
 
 /**
  * How hard the model thinks before it starts writing.

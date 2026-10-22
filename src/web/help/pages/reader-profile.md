@@ -1,7 +1,7 @@
 ---
 title: Your reader profile
 summary: What telling the AI about yourself, and why you are reading, changes in what it writes for you.
-keywords: about me background expertise interests who i am personalise tailored why reading purpose written for you older
+keywords: about me background expertise interests who i am personalise tailored why reading purpose written for you older brightness dim dark night text size font bigger zoom appearance
 related: ai-words, faq-older-profile, faq-shared-personalised
 ---
 
@@ -24,3 +24,8 @@ history” is what helps — the quiz, for one, aims more of its questions at wh
   to do here](/help/keyboard).
 - The article’s parts and sections are never personalised, so they are the same for everyone.
 - To stop the AI using a profile at all, empty both boxes.
+
+The same page's **Settings** also holds how the app looks on this device: **Appearance** (light or
+dark), **Brightness**, which dims the whole page below your screen's own lowest setting for reading
+in the dark, and **Text size**, which makes everything bigger, as zooming in would — useful where
+there is no zoom, such as Spideryarn added to an iPad's home screen.

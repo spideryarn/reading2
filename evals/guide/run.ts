@@ -20,8 +20,9 @@
  *
  * ## The cases (eight per article, each run `--runs` times)
  *
- *  - **first** — experience none, no profile, no reason, "hi". Wants: asks why
- *    they are reading; a brief introduction to the app; no summary.
+ *  - **first** — experience none, no profile, no reason, "hi". Wants: a way in
+ *    (a cited place or a button) or a question why (plan 261019p); a brief
+ *    introduction to the app; no summary.
  *  - **expert** — About you and a reason given, experience a few. Wants: a
  *    place to start in the piece, at least one valid button, short, no
  *    "why are you reading" question (they said).
@@ -355,7 +356,8 @@ function verdict(c: Case, s: Omit<Scored, "pass" | "why">): string[] {
   if (s.offersToAct) wrong.push("offers to open it itself");
   switch (c.kind) {
     case "first":
-      if (!s.asksWhy) wrong.push("did not ask why");
+      /* Plan 261019p: a way in may come before, or instead of, asking why. */
+      if (!s.asksWhy && s.cited === 0 && s.chips.length === 0) wrong.push("neither a way in nor a question");
       if (!s.tour && !/\bmode/i.test(`${s.chips.join(" ")} `)) wrong.push("no introduction to the app");
       break;
     case "expert":

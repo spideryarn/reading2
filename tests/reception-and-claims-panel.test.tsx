@@ -32,9 +32,9 @@
  *  6. **The excerpt is a slice of a stranger's page and is rendered as text.**
  *  7. **`searchedAt` is displayed provenance, not staleness**, and the two say
  *     different things on screen.
- *  8. **Every row saying what it is** — the chip on a row about the piece is
- *     its *strongest* signal rather than its first, and each foot line names
- *     which search it counts.
+ *  8. **Every row saying what it is** — a row about the piece flags the
+ *     title-only exception while closed and gives its strongest identification
+ *     evidence when opened; each foot line names which search it counts.
  *  9. **Two sub-modes, one per search** — since 2026-10-03 (plan 261003o).
  *     Reception draws no claim row and Claims no reception row; each segment's
  *     count is its own list; a page that only *names* the piece is on screen
@@ -57,6 +57,8 @@ import type {
   ReceptionLean,
   ReceptionLosses,
   ReceptionSynthesis,
+  SourcesClaimCheck,
+  ListedClaim,
   Citer,
   CitersResult,
   DirectReceptionRow,
@@ -67,6 +69,7 @@ import type { ReceptionAndClaimsChats } from "../src/web/ReceptionAndClaimsPanel
 import type { UseReception } from "../src/web/useReception.js";
 import type { PublicReception, PublicSourcesClaimList } from "../src/public-types.js";
 import type { UseSourcesClaims } from "../src/web/useSourcesClaims.js";
+import type { UseSourcesClaimChecks } from "../src/web/useSourcesClaimChecks.js";
 import { claimListOf, checksOwner, claimListOwner } from "./helpers/sources-claims-owner.js";
 import { sourcesHead } from "./helpers/sources-head.js";
 import { type CitedInParagraph, workShortName, worksCitedIn } from "../src/web/cited-in-paragraph.js";
@@ -97,7 +100,10 @@ import {
   SOURCES_CLAIMS_LIST_AGAIN,
   SOURCES_CLAIMS_NOT_SEARCHED_SHARED,
   RECEPTION_EXTRACTS_ONLY,
+  RECEPTION_AI_FRAME,
+  RECEPTION_EVERY_PAGE,
   RECEPTION_TITLE_ONLY,
+  RECEPTION_TITLE_ONLY_FLAG,
   RECEPTION_UNDATED,
   RECEPTION_RESPONSES_NONE,
   RECEPTION_RESPONSES_NONE_SHARED,
@@ -113,6 +119,7 @@ const {
   LEAN_APPEARANCE,
   headCount,
   identificationEvidence,
+  bylineAuthors,
   keptNote,
   sourcesNote,
 } = await import("../src/web/ReceptionAndClaimsPanel.js");
@@ -233,7 +240,7 @@ const threaded: (string | null)[] = [];
 const retried: string[] = [];
 const NO_DOI: CitersResult = { kind: "no-doi" };
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS: ReceptionAndClaimsChats = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS: ReceptionAndClaimsChats = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
 /** The article's own title, which the panel is handed for the Scholar link. */
 const ARTICLE_TITLE = "Notes on my sourdough starter, week 3";
@@ -256,6 +263,8 @@ function paint(
     citers?: CitersResult | null;
     /** Claims' list hook. Nobody has pressed Claims unless a test says otherwise. */
     claimList?: UseSourcesClaims;
+    /** Claims' completed web checks, when a test needs their rows on screen. */
+    checks?: UseSourcesClaimChecks;
     /** Chats already started from claims in the list. */
     claimChats?: ReceptionAndClaimsChats;
     /** Bibliography's works, for Claims' *Cited in this paragraph* (plan 261009l § C1). */
@@ -264,7 +273,7 @@ function paint(
 ) {
   const result = "citers" in extra ? (extra.citers ?? null) : NO_DOI;
   const claimList = extra.claimList ?? claimListOwner();
-  const checks = checksOwner();
+  const checks = extra.checks ?? checksOwner();
   act(() => {
     root.render(
       createElement(ReceptionAndClaimsPanel, {
@@ -423,7 +432,7 @@ describe("Reception and Claims, each drawing its own search", () => {
     );
     const group = host.querySelector(".rcp-views");
     expect(group?.getAttribute("role")).toBe("radiogroup");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2", "Investigate"]);
     const [, , , reception, claims] = [...(group?.querySelectorAll("[role='radio']") ?? [])];
     expect(reception?.getAttribute("aria-checked")).toBe("true");
     expect(claims?.getAttribute("aria-checked")).toBe("false");
@@ -498,7 +507,7 @@ describe("Reception and Claims, each drawing its own search", () => {
     });
     for (const view of ["reception", "claims"] as const) {
       paint(owner({ reception }), view, "prioritised", new Map(), { relevance: "partly" });
-      expect(segments(), view).toEqual(["Bibliography", "Not cited", "Links0", "Reception2", "Claims2"]);
+      expect(segments(), view).toEqual(["Bibliography", "Not cited", "Links0", "Reception2", "Claims2", "Investigate"]);
       expect(host.querySelectorAll(".rcp-item"), view).toHaveLength(2);
     }
   });
@@ -533,13 +542,14 @@ describe("a page that only names this piece", () => {
       ],
       ...over,
     });
-  const titleOnlyHead = () => host.querySelector("section.rcp-title-only > h3")?.textContent;
+  /* The heading's words, without the count after them. */
+  const titleOnlyHead = () => host.querySelector("section.rcp-title-only > h3")?.firstChild?.textContent;
 
   it("is on screen when the reader has touched nothing, under the title-only heading", () => {
     paint(owner());
     expect(host.querySelectorAll(".rcp-item")).toHaveLength(1);
-    expect(text()).toContain("Names this piece");
-    expect(RECEPTION_TITLE_ONLY).toBe("Names this piece by its title only");
+    expect(text()).toContain(RECEPTION_TITLE_ONLY_FLAG);
+    expect(RECEPTION_TITLE_ONLY).toBe("Mentions its title only — may be another piece");
     expect(titleOnlyHead()).toBe(RECEPTION_TITLE_ONLY);
     expect(host.querySelectorAll("section.rcp-title-only .rcp-item")).toHaveLength(1);
     expect(text()).not.toContain("hidden. Drag left");
@@ -573,8 +583,9 @@ describe("a page that only names this piece", () => {
     const [first, second] = [...host.querySelectorAll(".rcp-item")];
     expect(first?.closest("section.rcp-title-only")).toBeNull();
     expect(second?.closest("section.rcp-title-only")).not.toBeNull();
-    expect(host.querySelectorAll(".rcp-mark-quoted")).toHaveLength(1);
-    expect(host.querySelectorAll(".rcp-mark-named")).toHaveLength(1);
+    /* Only the exception is flagged on the row itself (plan 261020n). */
+    expect(first?.querySelector(".rcp-flag")).toBeNull();
+    expect(second?.querySelector(".rcp-flag")?.textContent).toBe(RECEPTION_TITLE_ONLY_FLAG);
   });
 
   it("draws no title-only heading when every row links or quotes the piece", () => {
@@ -618,9 +629,9 @@ describe("a page that only names this piece", () => {
     expect(titleOnlyHead()).toBe(RECEPTION_TITLE_ONLY);
   });
 
-  it("counts every row on screen in the head count, title-only ones included", () => {
+  it("counts every stored row in the (i), title-only ones included", () => {
     paint(owner());
-    expect(card()).toContain("1 excerpt on screen.");
+    expect(card()).toContain("1 source found; Every page lists it.");
   });
 
   it("says kept, and counts the pages behind both groups", () => {
@@ -903,7 +914,7 @@ describe("the empty states are different sentences, in each sub-mode", () => {
       },
     });
     paint(owner({ reception }), "reception", "prioritised", new Map(), { relevance: "directly", thread: "key" });
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0", "Investigate"]);
     expect(handoff()?.textContent).toBe("See the 2 sources on what it claims");
     press(handoff());
     expect(relevanced).toEqual([null]);
@@ -1012,10 +1023,11 @@ describe("the Scholar link under Reception", () => {
  * the Scholar link stays under all of them.
  */
 describe("Cited by, under Reception", () => {
-  const section = () => host.querySelector("section.rcp-citers");
+  /* A closed `<details>` since plan 261020n; its content is drawn either way. */
+  const section = () => host.querySelector("details.rcp-citers");
   const said = () => section()?.textContent ?? "";
   const titles = () => [...host.querySelectorAll(".rcp-citer-title")].map((a) => a.textContent ?? "");
-  const scholar = () => host.querySelector<HTMLAnchorElement>("section.rcp-citers a.rcp-scholar");
+  const scholar = () => host.querySelector<HTMLAnchorElement>("details.rcp-citers a.rcp-scholar");
   const tryAgain = () =>
     [...(section()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Try again") ?? null;
   const showAll = () =>
@@ -1255,12 +1267,16 @@ describe("Cited by, under Reception", () => {
 });
 
 describe("each row saying what it is", () => {
-  it("labels a row about this piece by its strongest signal, and a claim row with no chip at all", () => {
+  /* Since plan 261020n the level is said in the open row in plain words, and
+     the closed row flags only a title-only one; there is no chip. */
+  it("says a row about this piece's strongest signal in words, and nothing of the kind on a claim row", () => {
     paint(owner());
-    const marks = [...host.querySelectorAll(".rcp-mark")].map((m) => m.textContent ?? "");
-    expect(marks).toEqual(["Names this piece"]);
+    const levels = [...host.querySelectorAll(".rcp-identifies-level")].map((m) => m.textContent ?? "");
+    expect(levels).toEqual(["Mentions its title only"]);
+    expect(host.querySelector(".rcp-mark")).toBeNull();
     paint(owner(), "claims");
-    expect(host.querySelectorAll(".rcp-mark")).toHaveLength(0);
+    expect(host.querySelectorAll(".rcp-identifies")).toHaveLength(0);
+    expect(host.querySelector(".rcp-flag")).toBeNull();
     /* The pill said the same thing on every claim row; the claim itself says it now. */
     expect(text()).not.toContain("On what it claims");
   });
@@ -1285,14 +1301,15 @@ describe("each row saying what it is", () => {
         }),
       }),
     );
-    expect(host.querySelector(".rcp-mark")?.textContent).toBe("Links this piece");
+    expect(host.querySelector(".rcp-identifies-level")?.textContent).toBe("Links to this article");
+    expect(host.querySelector(".rcp-flag")).toBeNull();
   });
 
   /* Greg asked for this tooltip by name: *"a tooltip for each showing the
      reasons"*. It is the evidence itself — the address that matched, the words
      found in the page's extract — and not a gloss on it, so what it must never
      do is summarise several signals into one line. */
-  it("lists every signal in the tooltip, one line each, with the evidence in it", () => {
+  it("lists every signal in the open row, one line each, with the evidence in it", () => {
     const lines = identificationEvidence(
       direct({
         identifies: [
@@ -1335,11 +1352,12 @@ describe("each row saying what it is", () => {
   /* An artefact written before 2026-09-06 has no `identifies` key at all.
      `identifiesOf` reads it as `named` on the witness that kept it, so nothing
      needs re-running — and the panel must not blank the chip or throw. */
-  it("draws a chip for a row stored before the field existed", () => {
+  it("says how a row stored before the field existed identifies the piece", () => {
     const old = direct();
     delete (old as { identifies?: unknown }).identifies;
     paint(owner({ reception: artefact({ direct: { rows: [old], counts: counts() } }) }));
-    expect(host.querySelector(".rcp-mark")?.textContent).toBe("Names this piece");
+    expect(host.querySelector(".rcp-identifies-level")?.textContent).toBe("Mentions its title only");
+    expect(host.querySelector(".rcp-flag")?.textContent).toBe(RECEPTION_TITLE_ONLY_FLAG);
     expect(identificationEvidence(old)[0]).toContain("Notes on my sourdough starter, week 3");
   });
 });
@@ -1425,9 +1443,12 @@ describe("what the model read, and what we located", () => {
   it("leads the row with the title as the link out, and the site under it", () => {
     paint(owner());
     const item = host.querySelector(".rcp-item");
-    const first = item?.firstElementChild;
-    expect(first?.matches("a.rcp-title")).toBe(true);
-    expect(first?.textContent).toContain("A reply to the piece");
+    /* The toggle first, so the toggles line up down the list; then the head
+       line, whose link is the title. */
+    expect(item?.firstElementChild?.matches("button.rcp-more")).toBe(true);
+    const head = item?.querySelector(":scope > .rcp-row-head");
+    expect(head?.previousElementSibling?.matches("button.rcp-more")).toBe(true);
+    expect(head?.querySelector("a.rcp-title")?.textContent).toContain("A reply to the piece");
     expect(item?.querySelector(".rcp-meta .rcp-site")?.textContent).toBe("example.org");
   });
 
@@ -1839,9 +1860,10 @@ describe("the head count", () => {
       "claims",
     );
     expect(card()).toContain("2 excerpts from 1 page on screen.");
-    /* The sub-mode on screen, not the whole debate. */
+    /* The sub-mode on screen, not the whole debate; Reception's is the rows
+       found, since a row may be drawn in several sections (plan 261020n, F3). */
     paint(owner());
-    expect(card()).toContain("1 excerpt on screen.");
+    expect(card()).toContain("1 source found; Every page lists it.");
   });
 });
 
@@ -2092,16 +2114,19 @@ describe("the work: title, authors and year", () => {
       },
     });
 
-  it("draws authors · year · site under the title, with et al. past three", () => {
+  /* Two lines until opened (plan 261020n): the authors moved into the open
+     row, and the closed one keeps the site and the year. */
+  it("draws site · year under the title, and no authors until the row is opened", () => {
     paint(owner({ reception: authored(["Maingret", "Girardeau", "Todorova", "Goutierre"]) }), "claims");
-    expect(host.querySelector(".rcp-byline")?.textContent).toBe("Maingret, Girardeau et al. · 2016");
     const meta = host.querySelector(".rcp-meta")?.textContent ?? "";
-    expect(meta.indexOf("2016")).toBeLessThan(meta.indexOf("nature.com"));
+    expect(meta.indexOf("nature.com")).toBeLessThan(meta.indexOf("2016"));
+    expect(meta).not.toContain("Maingret");
+    expect(host.querySelector(".rcp-detail .rcp-authors")?.textContent).toContain("Maingret");
   });
 
-  it("names all of them up to three", () => {
-    paint(owner({ reception: authored(["Maingret", "Girardeau", "Todorova"]) }), "claims");
-    expect(host.querySelector(".rcp-byline")?.textContent).toBe("Maingret, Girardeau, Todorova · 2016");
+  it("shortens a long author list to et al. where one is drawn, and names all of them up to three", () => {
+    expect(bylineAuthors(["Maingret", "Girardeau", "Todorova", "Goutierre"])).toBe("Maingret, Girardeau et al.");
+    expect(bylineAuthors(["Maingret", "Girardeau", "Todorova"])).toBe("Maingret, Girardeau, Todorova");
   });
 
   it("puts every author in more, and says whose reading they are", () => {
@@ -2114,8 +2139,10 @@ describe("the work: title, authors and year", () => {
     expect(detail?.querySelector(".rcp-work-note")?.textContent).toBe(
       "Authors and year as the AI read them off the page; each was found in the page's extract.",
     );
-    /* Drawn as a reading, not a record: its own quiet class with the caveat on hover. */
-    expect(host.querySelector(".rcp-byline")?.getAttribute("data-tip")).toContain("As the AI read it");
+    /* The year on the closed row is drawn as a reading, not a record: the caveat on hover. */
+    expect(host.querySelector(".rcp-meta .rcp-year")?.getAttribute("data-tip")).toBe(
+      "Year as the AI read it off the page; it was found in the page's extract.",
+    );
   });
 
   it("keeps the engine's title when it is whole, even beside a workTitle", () => {
@@ -2171,7 +2198,7 @@ describe("the work: title, authors and year", () => {
 
   it("says nothing about the AI's reading on a row with none of the three", () => {
     paint(owner());
-    expect(host.querySelector(".rcp-byline")).toBeNull();
+    expect(host.querySelector(".rcp-year")).toBeNull();
     expect(host.querySelector(".rcp-work-note")).toBeNull();
     expect(host.querySelector(".rcp-authors")).toBeNull();
   });
@@ -2258,7 +2285,7 @@ describe("Claims, and the relevance bar", () => {
     );
     /* The claim's own count is the rows under it, and so is the segment's. */
     expect(host.querySelector(".rcp-group-count")?.textContent).toBe("2");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2", "Investigate"]);
     expect(card()).toContain("2 excerpts on screen.");
     /* The foot counts pages behind the rows drawn, not the ones hidden. */
     expect(card()).toContain("returned evidence from 4 pages; 2 contribute to the rows shown");
@@ -2437,8 +2464,10 @@ describe("ReceptionAndClaimsPanel — threads", () => {
     paint(owner({ reception: withSynthesis(made) }), "claims", "prioritised");
     const lines = [...host.querySelectorAll(".rcp-key-line")];
     expect(lines).toHaveLength(1);
-    expect(lines[0]?.textContent).toContain("Key source · takes a different view");
+    expect(lines[0]?.textContent).toContain("AI's key source:");
     expect(lines[0]?.textContent).toContain("It takes the other side.");
+    /* The role word went in plan 261020n: two readers found it opaque. */
+    expect(lines[0]?.textContent).not.toContain("takes a different view");
   });
 
   it("narrows the list to the thread the address names, and says how to undo it", () => {
@@ -2545,7 +2574,9 @@ describe("ReceptionAndClaimsPanel — threads", () => {
       } as Partial<Reception>);
     const labels = () => [...host.querySelectorAll(".rcp-thread .rcp-thread-name")].map((b) => b.textContent);
 
-    it("offers only orders that change the Reception rows left by a thread", () => {
+    /* Since plan 261020n a thread narrows nothing in Reception, so the orders
+       are asked of Every page, which holds every row. */
+    it("offers the orders that change Every page, whatever thread the address names", () => {
       const supportive = direct({ id: "spya-d2w4r2", title: "Supportive", lean: "leans-for" });
       const critical = direct({ id: "spya-d2w4r3", title: "Critical", publishedYear: 2024 });
       const reception = artefact({
@@ -2556,10 +2587,14 @@ describe("ReceptionAndClaimsPanel — threads", () => {
         },
       });
       paint(owner({ reception }), "reception", "date", new Map(), { thread: "key" });
-      expect(rowTitles()).toEqual(["Supportive"]);
-      expect(host.querySelector(".gloss-sort")).toBeNull();
-      expect(host.querySelector(".rcp-gap")).toBeNull();
+      const every = () =>
+        [...(host.querySelector("details.rcp-every")?.querySelectorAll(".rcp-item a.rcp-title") ?? [])].map(
+          (a) => a.textContent,
+        );
+      expect(every()).toEqual(["Critical", "Supportive"]);
+      expect(host.querySelector(".gloss-sort")).not.toBeNull();
       paint(owner({ reception }), "reception");
+      expect(every()).toEqual(["Supportive", "Critical"]);
       expect(host.querySelector(".gloss-sort")).not.toBeNull();
     });
 
@@ -2576,9 +2611,13 @@ describe("ReceptionAndClaimsPanel — threads", () => {
         themes: [{ id: "spya-thm002", label: "replication", gist: "Both retest it.", rowIds: [rowA.id, reply.id] }],
         key: [{ rowId: rowC.id, role: "dissents", why: "It takes the other side." }],
       };
+      /* Reception's are sections since plan 261020n, counted the same way. */
       paint(owner({ reception: mixed(both) }));
-      expect(labels()).toEqual(["replication"]);
-      expect(host.querySelector(".rcp-thread-count")?.textContent).toBe("1");
+      expect([...host.querySelectorAll(".rcp-sections-ai .rcp-section-name")].map((n) => n.textContent)).toEqual([
+        "replication",
+      ]);
+      expect(host.querySelector(".rcp-sections-ai .rcp-section-count")?.textContent).toBe("1");
+      expect(labels()).toEqual([]);
       paint(owner({ reception: mixed(both) }), "claims");
       expect(labels()).toEqual(["Key sources", "replication"]);
     });
@@ -2588,7 +2627,7 @@ describe("ReceptionAndClaimsPanel — threads", () => {
       expect(titles()).toEqual(["A reply"]);
       expect(host.querySelector(".rcp-thread.on")).toBeNull();
       expect(host.querySelector(".rcp-thread-showing")).toBeNull();
-      expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1"]);
+      expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1", "Investigate"]);
       /* The positive control: the same address narrows Claims, and says so. */
       paint(owner({ reception: mixed(made) }), "claims", "prioritised", new Map(), { thread: "key" });
       expect(titles()).toEqual(["Three"]);
@@ -2619,7 +2658,7 @@ describe("Claims' list of the article's claims", () => {
 
   it("is reachable before any search is stored: the control is drawn and Claims offers List its claims", () => {
     paint(owner({ status: "none", reception: null }), "claims");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0", "Investigate"]);
     expect(text()).toContain(SOURCES_CLAIMS_LIST_NONE);
     expect(buttonsNamed(SOURCES_CLAIMS_LIST_RUN)).toHaveLength(1);
     /* Reception's pre-search screen is Reception's, not Claims'. */
@@ -2678,7 +2717,6 @@ describe("Claims' list of the article's claims", () => {
           origin: { mode: "sources-claims", blockId: KNOWN, quote: LISTED[0]!.quote },
         }],
         onCheck: () => {},
-        onLens: () => {},
         onOpen: (id) => opened.push(id),
       },
     });
@@ -2763,9 +2801,9 @@ describe("Claims' list of the article's claims", () => {
   it("counts the listed claims on the segment when there is a list, and an older search's rows when not", () => {
     /* The default debate carries one legacy claim row. */
     paint(owner(), "claims");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1", "Investigate"]);
     paint(owner(), "claims", "prioritised", new Map(), { claimList: ready() });
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2"]);
+    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2", "Investigate"]);
     expect(host.querySelector(".rcp-views [role='radio'][aria-checked='true']")?.getAttribute("aria-label")).toBe(
       "Claims, 2 claims",
     );
@@ -2826,5 +2864,453 @@ describe("Claims' list of the article's claims", () => {
     paintShared(null, "claims", "prioritised", { claimList: { claims: LISTED } });
     expect(listedQuotes()).toHaveLength(2);
     expect(segments()).toEqual(["Bibliography", "Links0", "Reception0", "Claims2"]);
+  });
+});
+
+/* ------------------------------------------- Reception: default-collapsed -- */
+
+/**
+ * **Reception as sections** — plan 261020n, Stage 1 (spya-dk4tfq). Greg found
+ * the old Reception "bewildering": a box of filter buttons that looked like a
+ * table of contents and gathered nothing, over a strip of identical, fully
+ * open rows. Now the AI's key sources and themes are collapsed sections inside
+ * one AI-labelled frame, *Every page* under them is open and holds every row,
+ * and *Cited by* is a collapsed section of its own.
+ *
+ * The rule that must not regress is postmortem 261003h's: **with nothing
+ * pressed, every stored row is drawn**, title-only ones included (GPT Sol's F1
+ * on the plan, which is why *Every page* is the one section open by default).
+ */
+describe("Reception's sections", () => {
+  const critique = direct({
+    id: "spya-rsec01",
+    url: "https://www.blog.example.org/critique",
+    title: "A critique of the piece",
+    relation: "disputes",
+    lean: "leans-against",
+    identifies: [{ kind: "quoted", quote: "a starter needs cool water", blockId: KNOWN, coverage: 0.04, density: 0.13 }],
+  });
+  const extension = direct3({
+    id: "spya-rsec02",
+    url: "https://opinion.example.com/further",
+    title: "Taking it further",
+    relation: "extends",
+    lean: "leans-for",
+    publishedYear: 2026,
+    identifies: [{ kind: "linked", url: "https://example.com/the-piece" }],
+  });
+  const interview = direct({
+    id: "spya-rsec03",
+    url: "https://podcast.example.fm/interview",
+    title: "An interview",
+    relation: "corroborates",
+    lean: "neither",
+  });
+  const older = claim({ id: "spya-rsec04", title: "An older claim row" });
+  /* A theme needs two works (reception-synthesis.ts § settleSynthesis). */
+  const older2 = claim({ id: "spya-rsec05", url: "https://other.example.net/x", title: "Another older claim row" });
+  const seeming = {
+    id: "spya-thm0a2",
+    label: "Seeming versus being",
+    gist: "Two sources pick up the seeming point.",
+    rowIds: [critique.id, interview.id],
+  };
+  const synthesis: ReceptionSynthesis = {
+    kind: "made",
+    themes: [
+      seeming,
+      {
+        id: "spya-thm0b3",
+        label: "Where the line is drawn",
+        gist: "Two sources say the line is drawn late.",
+        rowIds: [critique.id, extension.id],
+      },
+      /* Made only of an older search's claim rows: Claims', never Reception's (F4). */
+      { id: "spya-thm0c4", label: "Only about claims", gist: "Claim rows only.", rowIds: [older.id, older2.id] },
+    ],
+    key: [{ rowId: extension.id, role: "advances", why: "Takes the seeming point further than the essay does." }],
+  };
+  const reception = artefact({
+    direct: {
+      rows: [critique, extension, interview],
+      counts: counts({ returnedSources: 3, reportedRows: 3, keptRows: 3 }),
+    },
+    claims: { rows: [older, older2], counts: counts() },
+    synthesis,
+  } as Partial<Reception>);
+
+  const frame = () => host.querySelector(".rcp-sections-ai");
+  const sections = () => [...host.querySelectorAll<HTMLDetailsElement>(".rcp-sections-ai details.rcp-section")];
+  const section = (id: string) => sections().find((d) => d.dataset.receptionSection === id) ?? null;
+  const every = () => host.querySelector<HTMLDetailsElement>("details.rcp-every");
+  const citedBy = () => host.querySelector<HTMLDetailsElement>("details.rcp-citers");
+  const titlesIn = (el: Element | null) =>
+    [...(el?.querySelectorAll(".rcp-item a.rcp-title") ?? [])].map((a) => a.textContent ?? "");
+  const summaryOf = (d: Element | null) => ({
+    name: d?.querySelector(":scope > summary .rcp-section-name")?.textContent ?? "",
+    count: d?.querySelector(":scope > summary .rcp-section-count")?.textContent ?? "",
+    gist: d?.querySelector(":scope > summary .rcp-section-gist")?.textContent ?? null,
+  });
+  /* The browser's own toggle, as a press on the summary makes it. */
+  const toggle = (d: HTMLDetailsElement | null, open = true) =>
+    act(() => {
+      if (d === null) return;
+      d.open = open;
+      d.dispatchEvent(new Event("toggle"));
+    });
+
+  it("draws the key sources and Reception's own themes inside one AI-labelled frame, each with its count", () => {
+    paint(owner({ reception }));
+    expect(frame()?.querySelector(".rcp-sections-ai-head")?.textContent).toBe(`AI${RECEPTION_AI_FRAME}`);
+    expect(frame()?.querySelector(".rcp-sections-ai-head .rcp-ai-tag")?.textContent).toBe("AI");
+    expect(sections().map(summaryOf)).toEqual([
+      { name: "Key sources", count: "1", gist: null },
+      { name: "Seeming versus being", count: "2", gist: "Two sources pick up the seeming point." },
+      { name: "Where the line is drawn", count: "2", gist: "Two sources say the line is drawn late." },
+    ]);
+    /* F4: a theme of claim rows only is not Reception's. */
+    expect(text()).not.toContain("Only about claims");
+    /* The old filter box is Claims' alone now. */
+    expect(host.querySelector(".rcp-threads")).toBeNull();
+    expect(summaryOf(every())).toMatchObject({ name: RECEPTION_EVERY_PAGE, count: "3" });
+    /* The positive control for F4: the same theme is Claims'. */
+    paint(owner({ reception }), "claims");
+    expect(host.querySelector(".rcp-threads")?.textContent).toContain("Only about claims");
+  });
+
+  it("opens Every page and only it, with every stored row drawn before any press", () => {
+    paint(owner({ reception }), "reception", "prioritised", new Map(), { citers: { kind: "no-doi" } });
+    expect(every()?.open).toBe(true);
+    expect(sections()).toHaveLength(3);
+    expect(sections().every((d) => !d.open)).toBe(true);
+    expect(citedBy()?.open).toBe(false);
+    /* Every row, the title-only one included, and the confirmed ones first. */
+    expect(titlesIn(every())).toEqual(["A critique of the piece", "Taking it further", "An interview"]);
+    expect(every()?.querySelector("section.rcp-title-only h3")?.textContent).toContain(RECEPTION_TITLE_ONLY);
+    expect(RECEPTION_TITLE_ONLY).toBe("Mentions its title only — may be another piece");
+    /* A closed AI section draws none of its rows: they are all in Every page. */
+    expect(host.querySelectorAll(".rcp-item")).toHaveLength(3);
+  });
+
+  it("draws a row in every section that names it", () => {
+    paint(owner({ reception }));
+    toggle(section("spya-thm0a2"));
+    toggle(section("spya-thm0b3"));
+    expect(titlesIn(section("spya-thm0a2"))).toEqual(["A critique of the piece", "An interview"]);
+    expect(titlesIn(section("spya-thm0b3"))).toEqual(["A critique of the piece", "Taking it further"]);
+    expect(titlesIn(every())).toContain("A critique of the piece");
+    /* And it folds away again. */
+    toggle(section("spya-thm0a2"), false);
+    expect(titlesIn(section("spya-thm0a2"))).toEqual([]);
+  });
+
+  it("flags a title-only row in every section, and sorts it after the rows that link the piece", () => {
+    const swapped = artefact({
+      ...reception,
+      synthesis: { ...synthesis, themes: [{ ...seeming, rowIds: [interview.id, critique.id] }] },
+    } as Partial<Reception>);
+    paint(owner({ reception: swapped }));
+    toggle(section("spya-thm0a2"));
+    expect(titlesIn(section("spya-thm0a2"))).toEqual(["A critique of the piece", "An interview"]);
+    const flagged = (el: Element | null) =>
+      [...(el?.querySelectorAll(".rcp-item") ?? [])]
+        .filter((item) => item.querySelector(".rcp-flag")?.textContent?.includes(RECEPTION_TITLE_ONLY_FLAG))
+        .map((item) => item.querySelector("a.rcp-title")?.textContent);
+    expect(flagged(section("spya-thm0a2"))).toEqual(["An interview"]);
+    expect(flagged(every())).toEqual(["An interview"]);
+  });
+
+  it("no longer filters on ?receptionthread=, and counts every stored row on the chip", () => {
+    paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "spya-thm0a2" });
+    expect(titlesIn(every())).toHaveLength(3);
+    expect(segments()[3]).toBe("Reception3");
+    expect(card()).toContain("3 sources found; Every page lists all of them.");
+    expect(card()).not.toContain("on screen.");
+  });
+
+  describe("?receptionthread= opens its section and scrolls the list to it", () => {
+    let scrollIntoView: ReturnType<typeof vi.fn>;
+    let scrollTo: ReturnType<typeof vi.fn>;
+    const rect = Element.prototype.getBoundingClientRect;
+    const pageScroll = window.scrollTo;
+    beforeEach(() => {
+      scrollIntoView = vi.fn();
+      scrollTo = vi.fn();
+      (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView = scrollIntoView;
+      window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+      /* The scroller's top at 100, key's section 200 below it and the second
+         theme's 600, less whatever the scroller has already scrolled. */
+      Element.prototype.getBoundingClientRect = function (this: Element) {
+        const scroller = this.closest(".rcp-scroll") as HTMLElement | null;
+        const scrolled = scroller?.scrollTop ?? 0;
+        const id = (this as HTMLElement).dataset?.receptionSection;
+        if (this.classList.contains("rcp-scroll")) return { top: 100 } as DOMRect;
+        if (id === "key") return { top: 300 - scrolled } as DOMRect;
+        if (id === "spya-thm0b3") return { top: 700 - scrolled } as DOMRect;
+        return { top: 0 } as DOMRect;
+      };
+    });
+    afterEach(() => {
+      Element.prototype.getBoundingClientRect = rect;
+      window.scrollTo = pageScroll;
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    });
+    const scroller = () => host.querySelector<HTMLElement>(".rcp-scroll");
+
+    it("on arrival, for key, within the list's own scroller and never the page", () => {
+      paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "key" });
+      expect(section("key")?.open).toBe(true);
+      expect(section("spya-thm0b3")?.open).toBe(false);
+      expect(titlesIn(section("key"))).toEqual(["Taking it further"]);
+      expect(scroller()?.scrollTop).toBe(200);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+
+    it("on a later change of the parameter, for a theme", () => {
+      paint(owner({ reception }));
+      expect(sections().every((d) => !d.open)).toBe(true);
+      expect(scroller()?.scrollTop).toBe(0);
+      paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "spya-thm0b3" });
+      expect(section("spya-thm0b3")?.open).toBe(true);
+      expect(scroller()?.scrollTop).toBe(600);
+      /* A re-render with the same address does not drag the reader back. */
+      act(() => {
+        const el = scroller();
+        if (el) el.scrollTop = 50;
+      });
+      paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "spya-thm0b3" });
+      expect(scroller()?.scrollTop).toBe(50);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+
+      /* A stale value does nothing, but it is still a parameter change. Going
+         back to the valid value must apply it again rather than being mistaken
+         for the earlier visit. */
+      toggle(section("spya-thm0b3"), false);
+      paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "spya-gone00" });
+      expect(section("spya-thm0b3")?.open).toBe(false);
+      expect(scroller()?.scrollTop).toBe(50);
+      paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "spya-thm0b3" });
+      expect(section("spya-thm0b3")?.open).toBe(true);
+      expect(scroller()?.scrollTop).toBe(600);
+    });
+
+    it("when the search arrives after the address", () => {
+      paint(owner({ status: "loading", reception: null }), "reception", "prioritised", new Map(), { thread: "key" });
+      paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "key" });
+      expect(section("key")?.open).toBe(true);
+      expect(scroller()?.scrollTop).toBe(200);
+    });
+
+    it("does nothing for an id this search does not have, or one that is Claims' only", () => {
+      for (const stale of ["spya-gone00", "spya-thm0c4"]) {
+        paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: stale });
+        expect(sections().some((d) => d.open), stale).toBe(false);
+        expect(every()?.open, stale).toBe(true);
+        expect(scroller()?.scrollTop, stale).toBe(0);
+      }
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
+  });
+
+  it("gives a visitor the same sections, no Cited by, and the Scholar link as the last line", () => {
+    paintShared(
+      shared({
+        direct: { rows: [critique, extension, interview], sourceNotPublishable: 0 },
+        synthesis,
+      } as Partial<PublicReception>),
+    );
+    expect(sections().map((d) => summaryOf(d).name)).toEqual([
+      "Key sources",
+      "Seeming versus being",
+      "Where the line is drawn",
+    ]);
+    expect(every()?.open).toBe(true);
+    expect(titlesIn(every())).toHaveLength(3);
+    expect(citedBy()).toBeNull();
+    const last = host.querySelector(".rcp-scroll")?.lastElementChild;
+    expect(last?.matches("a.rcp-scholar")).toBe(true);
+  });
+
+  it("closes Cited by, and puts its count in the summary once its read answers", () => {
+    paint(owner({ reception }), "reception", "prioritised", new Map(), { citers: null });
+    expect(citedBy()?.open).toBe(false);
+    expect(summaryOf(citedBy())).toMatchObject({ name: CITERS_HEADING, count: "" });
+    const four: CitersResult = {
+      kind: "found",
+      via: "doi",
+      target: { openalexId: "W4399223951", title: "The piece itself" },
+      count: 4,
+      returned: 4,
+      dropped: 0,
+      capped: false,
+      citers: [0, 1, 2, 3].map((n) => ({
+        openalexId: `W${8000 + n}`,
+        title: `Citing ${n}`,
+        authors: [],
+        authorCount: 0,
+        citedByCount: 1,
+      })),
+      fetchedAt: "2026-10-04T09:30:00.000Z",
+    };
+    paint(owner({ reception }), "reception", "prioritised", new Map(), { citers: four });
+    expect(summaryOf(citedBy())).toMatchObject({ name: CITERS_HEADING, count: "4" });
+    /* Its caveats are inside it, and still said. */
+    expect(citedBy()?.textContent).toContain(CITERS_UNREAD);
+  });
+});
+
+/**
+ * **A row is two lines until opened** (plan 261020n): the lean's icon, the key
+ * star and the title; then the site, the year, the title-only flag and one
+ * AI-tagged word. Everything else, the quotation first, is behind the toggle.
+ */
+describe("a two-line row", () => {
+  const keyed = artefact({
+    direct: {
+      rows: [
+        direct3({ publishedYear: 2024 }),
+        direct({
+          id: "spya-d2w4r7",
+          url: "https://linked.example/x",
+          title: "Links it",
+          relation: "extends",
+          lean: "leans-for",
+          identifies: [{ kind: "linked", url: "https://example.com/the-piece" }],
+        }),
+      ],
+      counts: counts({ reportedRows: 2, keptRows: 2 }),
+    },
+    synthesis: { kind: "made", themes: [], key: [{ rowId: "spya-d2w4r7", role: "dissents", why: "It takes the other side." }] },
+  } as Partial<Reception>);
+  const item = (title: string) =>
+    [...(host.querySelector("details.rcp-every")?.querySelectorAll(".rcp-item") ?? [])].find(
+      (i) => i.querySelector("a.rcp-title")?.textContent === title,
+    ) ?? null;
+
+  it("says the site, the year and the AI's relation word on its second line, and no chip", () => {
+    paint(owner({ reception: keyed }));
+    const row = item("A reply to the piece");
+    const meta = row?.querySelector(".rcp-meta")?.textContent ?? "";
+    expect(meta).toContain("example.org");
+    expect(meta).toContain("2024");
+    expect(meta).toContain(RECEPTION_TITLE_ONLY_FLAG);
+    expect(meta.indexOf("example.org")).toBeLessThan(meta.indexOf("2024"));
+    expect(row?.querySelector(".rcp-meta .rcp-ai-tag")?.textContent).toBe("AI");
+    expect(row?.querySelector(".rcp-meta .rcp-relation")?.textContent).toBe("disputes it");
+    expect(item("Links it")?.querySelector(".rcp-meta .rcp-relation")?.textContent).toBe("extends it");
+    expect(item("Links it")?.querySelector(".rcp-flag")).toBeNull();
+    expect(host.querySelector(".rcp-mark")).toBeNull();
+  });
+
+  it("keeps a closed title to one painted line, with the metadata as the second", () => {
+    const css = readerCssNoComments();
+    const rule = /\.rcp-title\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toMatch(/-webkit-line-clamp:\s*1\s*;/);
+    expect(rule).toMatch(/line-clamp:\s*1\s*;/);
+  });
+
+  it("maps an unknown stored relation to the fixed honest unknown in both row states", () => {
+    const unknown = direct({ relation: "model wrote arbitrary words" as DirectReceptionRow["relation"] });
+    paint(owner({ reception: artefact({ direct: { rows: [unknown], counts: counts() } }) }));
+    const row = item("A reply to the piece");
+    expect(row?.querySelector(".rcp-meta .rcp-relation")?.textContent).toBe("unclear");
+    press(row?.querySelector("button.rcp-more"));
+    expect(row?.querySelector(".rcp-detail .rcp-relation")?.textContent).toBe("unclear");
+    expect(row?.textContent).not.toContain("model wrote arbitrary words");
+  });
+
+  it("leads with the lean's icon, named for a screen reader, and the key star", () => {
+    paint(owner({ reception: keyed }));
+    const lean = item("A reply to the piece")?.querySelector(".rcp-row-head .rcp-lean-mark");
+    expect(lean?.getAttribute("aria-label")).toBe(`AI: ${LEAN_APPEARANCE["leans-against"].label}`);
+    expect(item("A reply to the piece")?.querySelector(".rcp-row-head .rcp-key-star")).toBeNull();
+    expect(item("Links it")?.querySelector(".rcp-row-head .rcp-key-star")).not.toBeNull();
+  });
+
+  it("keeps the quotation, the key reason and the full AI line behind the toggle, quotation first", () => {
+    paint(owner({ reception: keyed }));
+    const row = item("Links it");
+    const button = row?.querySelector<HTMLButtonElement>("button.rcp-more");
+    const detail = document.getElementById(button?.getAttribute("aria-controls") ?? "");
+    expect(detail?.hidden).toBe(true);
+    expect(row?.querySelector(".rcp-quote")?.closest(".rcp-detail")).toBe(detail);
+    press(button);
+    expect(detail?.hidden).toBe(false);
+    const key = detail?.querySelector(".rcp-key-line")?.textContent ?? "";
+    expect(key).toContain("AI's key source:");
+    expect(key).toContain("It takes the other side.");
+    /* The role word went: two readers found it opaque. */
+    expect(key).not.toContain("takes a different view");
+    const order = ["rcp-key-line", "rcp-quote", "rcp-ai-line", "rcp-ai"].map((c) =>
+      [...(detail?.children ?? [])].findIndex((el) => el.classList.contains(c)),
+    );
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(detail?.querySelector(".rcp-ai-line")?.textContent).toContain("extends");
+    expect(detail?.querySelector(".rcp-ai-line")?.textContent).toContain(LEAN_APPEARANCE["leans-for"].label);
+  });
+
+  it("says in plain words how the page identifies the piece, with the evidence the chip's tooltip held", () => {
+    paint(owner({ reception: keyed }));
+    press(item("Links it")?.querySelector("button.rcp-more"));
+    const ident = item("Links it")?.querySelector(".rcp-identifies")?.textContent ?? "";
+    expect(ident).toContain("Links to this article");
+    expect(ident).toContain("https://example.com/the-piece");
+    press(item("A reply to the piece")?.querySelector("button.rcp-more"));
+    expect(item("A reply to the piece")?.querySelector(".rcp-identifies")?.textContent).toContain(
+      "Mentions its title only",
+    );
+  });
+
+  it("uses the bears word on a claim row's second line", () => {
+    paint(
+      owner({
+        reception: artefact({
+          claims: {
+            rows: [claim3({ bears: "partly" }), claim({ id: "spya-c7w2d3", url: "https://u.example/x" })],
+            counts: counts(),
+          },
+        }),
+      }),
+      "claims",
+    );
+    const words = [...host.querySelectorAll(".rcp-item .rcp-meta .rcp-bears")].map((w) => w.textContent);
+    expect(words).toEqual(["bears partly", "Not judged for relevance by the AI"]);
+    expect(host.querySelector(".rcp-item .rcp-meta .rcp-relation")).toBeNull();
+  });
+
+  it("uses the bears word on a claim-check finding's second line too", () => {
+    const listed: ListedClaim = {
+      id: "spya-cdm2a4",
+      blockId: KNOWN,
+      quote: "a starter needs cool water",
+      statement: "Cool water suits a starter.",
+    };
+    const check: SourcesClaimCheck = {
+      id: "spya-chk234",
+      status: "done",
+      listSourceHash: "hash",
+      promptVersion: "debate-check/1",
+      digFurther: false,
+      targets: [{ kind: "listed", claimId: listed.id, blockId: listed.blockId, quote: listed.quote, statement: listed.statement }],
+      results: [
+        {
+          claimId: listed.id,
+          outcome: "answered",
+          rows: [claim3({ id: "spya-fnd234", title: "Checked finding", bears: "directly" })],
+        },
+      ],
+      createdAt: "2026-10-20T09:00:00.000Z",
+    };
+    paint(owner({ status: "none", reception: null }), "claims", "prioritised", new Map(), {
+      claimList: claimListOwner({ status: "ready", claimList: claimListOf([listed]) }),
+      checks: checksOwner({ checks: [check] }),
+    });
+    const found = host.querySelector(`[data-claim="${listed.id}"] .rcp-item`);
+    expect(found?.querySelector(".rcp-meta .rcp-bears")?.textContent).toBe("bears directly");
+    expect(found?.querySelector(".rcp-meta .rcp-relation")).toBeNull();
+    press(found?.querySelector("button.rcp-more"));
+    expect(found?.querySelector(".rcp-detail .rcp-ai-line")?.textContent).toContain("bears directly");
   });
 });

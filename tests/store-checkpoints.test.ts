@@ -419,6 +419,22 @@ describe("the checkpoint store, in Postgres", () => {
     );
   });
 
+  it("refuses a NUL as jsonb does, and stores the six characters that spell one", async () => {
+    /* The memory fake shares `checkpointJson`, so it now refuses what Postgres
+       refuses; before, a NUL passed every test and failed only in production
+       (job spya-k0ytd8, docs/plans/261019h). */
+    for (const [i, text] of ["a\u0000b", "a\\\u0000b", "a\\\\\u0000b"].entries()) {
+      await expect(
+        store().write(SLUG, "structure-labels", `aabb00112233ff0${i + 1}`, { text }),
+      ).rejects.toThrow(/U\+0000/);
+    }
+    const spelled = { text: "C:\\u0000 and \\\\u0000" };
+    await store().write(SLUG, "structure-labels", "aabb00112233ff04", spelled);
+    expect(await store().read(SLUG, "structure-labels", ["aabb00112233ff04"])).toEqual(
+      new Map([["aabb00112233ff04", spelled]]),
+    );
+  });
+
   it("a hit stamps last_used_at", async () => {
     const { schema } = mod;
     const key = "aabbccddeeff0011";

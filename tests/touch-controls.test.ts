@@ -171,7 +171,9 @@ describe("a control a finger has to hit", () => {
      `:hover`, no `:active` and no floor until 2026-10-07; their rules are in
      search.css, under their own class, and the same checks hold them. */
   const BARS = [".gloss-sort-btn", ".srch-sort-btn"] as const;
-  const FLOOR_REM = 2.5; // 40px — these rows' retained floor.
+  /* 40px — these rows' retained floor, written `max(40px, 2.5rem)` since plan
+     261021g: a bare 2.5rem is 38.4px at the measured iPhone's 15.36px root. */
+  const FLOOR_REM = 2.5;
 
   it("keeps the dock's raised 44px coarse-pointer width floor", () => {
     const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
@@ -187,7 +189,7 @@ describe("a control a finger has to hit", () => {
         selectors(r.selector).includes(cls),
       );
       expect(rule, `${cls} has no rule inside a coarse-pointer block`).toBeDefined();
-      const min = /min-height:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
+      const min = /min-height:\s*max\(\s*40px\s*,\s*([\d.]+)rem\s*\)/.exec(rule?.decls ?? "");
       expect(min, `${cls} sets no min-height on a coarse pointer`).not.toBeNull();
       expect(Number(min?.[1])).toBeGreaterThanOrEqual(FLOOR_REM);
     });
@@ -233,20 +235,20 @@ describe("a control a finger has to hit", () => {
     });
   }
 
-  /* **The band's corner is its own floor, 2rem, not the order rows' 2.5rem.**
-     The badge took the rows' 40px while it sat in one, and that made it a
-     ringed circle beside a 24px (i) on a phone (spya-hf4svm). In the corner
-     both buttons are 32px — over WCAG 2.5.8's 24, with no neighbour to be hit
-     by mistake — and the rule above still floors a badge outside it (Sketch's
-     bar). Plan 261002e. */
+  /* **The band's corner is its own token, not the order rows' ringed floor.**
+     The badge took the rows' 40px ring while it sat in one, and that made it a
+     ringed circle beside a 24px (i) on a phone (spya-hf4svm), so both buttons
+     take one box from `--band-corner-btn` (plan 261002e). That box was 32px
+     until plan 261021g made it the house 40 (`max(40px, 2.5rem)`, so a
+     15.36px root cannot make it 38.4); the rule above still floors a badge
+     outside the corner (Sketch's bar). tests/touch-targets-261021g.test.tsx
+     holds the gap between the two. */
   it("sizes both corner buttons from one finger-sized token", () => {
     const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
       selectors(candidate.selector).includes(".mode-band.has-about"),
     );
     expect(rule, "no coarse-pointer size for the band's corner").toBeDefined();
-    const size = /--band-corner-btn:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
-    expect(Number(size?.[1]), "the corner is under 24px for a finger").toBeGreaterThanOrEqual(1.5);
-    expect(Number(size?.[1])).toBe(2);
+    expect(rule?.decls ?? "").toMatch(/--band-corner-btn:\s*max\(\s*40px\s*,\s*2\.5rem\s*\)/);
   });
 
   it("keeps Glossary's icon-only profile badge large enough for a finger", () => {
@@ -255,8 +257,8 @@ describe("a control a finger has to hit", () => {
       selectors(candidate.selector).includes(selector),
     );
     expect(rule, `${selector} has no rule inside a coarse-pointer block`).toBeDefined();
-    const width = /min-width:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
-    const height = /min-height:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
+    const width = /min-width:\s*max\(\s*40px\s*,\s*([\d.]+)rem\s*\)/.exec(rule?.decls ?? "");
+    const height = /min-height:\s*max\(\s*40px\s*,\s*([\d.]+)rem\s*\)/.exec(rule?.decls ?? "");
     expect(Number(width?.[1]), `${selector} has no usable width floor`).toBeGreaterThanOrEqual(
       FLOOR_REM,
     );

@@ -605,6 +605,67 @@ export const articleShareLinkEvents = spideryarn.table(
 );
 
 /**
+ * **Who opened a private link, among the signed-in** — one row per article
+ * and account, with how many times and when first and last. Greg, 2026-10-20
+ * (reply `spya-xug3kf` to q-agbc89): *"I'm interested to know and store which
+ * users open which articles."* Seen only by the administrator
+ * (`GET /api/admin/articles/:slug/access`); the owner is not shown it.
+ *
+ * Written by `POST /api/private-link-opens/:slug?key=`, from the visitor's
+ * page, only when the key matches and the article is private
+ * (src/store/pg-private-link-openers.ts). Never reachable from the public
+ * namespace: tests/public-imports.test.ts forbids this table there.
+ *
+ * Both keys cascade: a record of an open is worth nothing once the article or
+ * the account is gone. `reader_id`'s key to `auth.users` is by hand in the
+ * migration, as every owner key. Not exported with the article — the openers
+ * are not the owner's to take away — and kept with the article on a transfer.
+ * docs/plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md.
+ */
+export const privateLinkOpeners = spideryarn.table(
+  "private_link_openers",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `auth.users(id)`, ON DELETE CASCADE, by hand in the migration. */
+    readerId: uuid("reader_id").notNull(),
+    opens: integer("opens").notNull().default(1),
+    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }).notNull().defaultNow(),
+    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.readerId] }),
+    check("private_link_openers_opens", sql`${t.opens} >= 1`),
+  ],
+);
+
+/**
+ * **How often a private link was opened by somebody signed out** — one row per
+ * article, a count and when first and last. The other half of Greg's 2C: the
+ * signed-out cannot be told apart, so they are counted, not recorded.
+ *
+ * The one table the public namespace may write
+ * (`POST /api/public/private-link-opened/:slug?key=`,
+ * src/store/private-link-signed-out-opens.ts). Anybody holding the link can
+ * call that, so the count is **approximate and inflatable**: the upsert adds
+ * at most one per article per two seconds and saturates rather than
+ * overflowing. docs/project/security-risks.md § R31.
+ */
+export const privateLinkSignedOutOpens = spideryarn.table(
+  "private_link_signed_out_opens",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    opens: integer("opens").notNull().default(1),
+    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }).notNull().defaultNow(),
+    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("private_link_signed_out_opens_opens", sql`${t.opens} >= 1`)],
+);
+
+/**
  * **The reader's own tags on an article** — one row per (article, tag).
  *
  * Reader state, so keyed on `articles` and not on a revision: a re-extraction
@@ -895,6 +956,18 @@ export const articleRevisions = spideryarn.table(
      * manifest never recorded it.
      */
     rawByteCount: integer("raw_byte_count"),
+    /**
+     * **How many pages the stored PDF has, as stage 1 counted it** —
+     * `RawManifest.pages`. A fact about the raw source, owned by the raw write
+     * and carried with it, which is what lets a re-run that fetches again
+     * compare against the document it replaces, and stage 2 ask whether a long
+     * PDF was priced (plan 261020b, rule 4 and the assertion).
+     *
+     * **Not `pages` below**, which is stage 2's metadata about the
+     * transcription. Null for anything that is not a PDF and for every
+     * revision written before 2026-10-20 — the grandfathered case.
+     */
+    rawPages: integer("raw_pages"),
     /**
      * **The reader's own name for an uploaded file** — `RawManifest.filename`.
      *
@@ -1550,6 +1623,7 @@ export const articleRevisions = spideryarn.table(
   },
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
+    check("article_revisions_raw_pages", sql`${t.rawPages} is null or ${t.rawPages} > 0`),
     /* The five levels of `DifficultyLevel` (src/reading-time.ts). A null level
        is NULL here and passes, which is wanted: most rows are unrated. */
     check("article_revisions_reading_language", sql`${t.readingLanguage} between 1 and 5`),
@@ -4456,6 +4530,16 @@ export const chatThreads = spideryarn.table(
     gist: text("gist"),
     /** When `gist` was written. Store when it happened. */
     gistAt: timestamp("gist_at", { withTimezone: true }),
+    /**
+     * **When this guide conversation started a mode by itself**, the one time it
+     * may (plan docs/plans/261019p-guide-chat-plainer.md § Stage 2b, Greg's
+     * reply to q-y4p2ct). Claimed atomically at the press, `… WHERE
+     * mode_prepared_at IS NULL`, so two tabs, a retry or an edit cannot start a
+     * second (src/store/pg-chat.ts § `claimModePreparation`). Null: none yet, or
+     * any other kind of conversation. A reader's own press of *Get … ready*
+     * claims nothing.
+     */
+    modePreparedAt: timestamp("mode_prepared_at", { withTimezone: true }),
 
     /**
      * **The passage this conversation was started from**, as three columns.
@@ -4593,7 +4677,9 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','tutorial','explore','guide')`),
+    /* `tutorial` until 2026-10-20, when Tutorial was folded into Recall:
+       drizzle/20261020063618_fold_tutorial_into_recall.sql. */
+    check("chat_threads_kind", sql`${t.kind} in ('chat','learn','candidates','explore','guide')`),
     /* The origin's shapes, the same ones `ThreadOrigin` allows. The list of
        modes is wider than the union on purpose: the later callers are named
        in the plan, and widening a CHECK is a migration each time. Necessary
@@ -4674,20 +4760,17 @@ export const chatThreads = spideryarn.table(
      *
      * `chat_threads_one_remember`, over `kind = 'remember'`, until 2026-10-06:
      * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql.
+     *
+     * `chat_threads_one_tutorial` guarded the Tutorial thread the same way
+     * until 2026-10-20, when Tutorial was folded into Recall and its threads
+     * into this one: drizzle/20261020063618_fold_tutorial_into_recall.sql,
+     * docs/plans/261020m-recall-and-tutorial-become-one-recall.md.
      */
     uniqueIndex("chat_threads_one_learn")
       .on(t.articleId)
       .where(sql`${t.kind} = 'learn'`),
     /**
-     * **One Tutorial thread per article**, for the same reason and with the
-     * same fallback (`targetOf`). No fold was needed when it was added: no
-     * Tutorial thread existed before the index. docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md.
-     */
-    uniqueIndex("chat_threads_one_tutorial")
-      .on(t.articleId)
-      .where(sql`${t.kind} = 'tutorial'`),
-    /**
-     * **One Explore thread per article**, Learn's fourth sub-mode: the same
+     * **One Explore thread per article**, one of Learn's sub-modes: the same
      * reason, the same fallback, and again no fold, because no Explore thread
      * existed before the index. docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md.
      */
@@ -6152,6 +6235,78 @@ export const readerArrivals = spideryarn.table("reader_arrivals", {
   firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * **When each account opened an article, at most once per UTC half-hour** —
+ * what lets Active days on /admin/users count a day spent only reading.
+ * docs/plans/261020y-record-article-opens-with-a-timestamp-for-active-days.md.
+ *
+ * - **Keyed on the account, not the article.** An open is something the
+ *   account did at a moment, which stays true after the article is deleted or
+ *   transferred; hung off the article, either would shrink the old owner's
+ *   days after the fact (GPT Sol's plan review, finding 2).
+ * - **Not which article.** The count needs only when, and which-article-when
+ *   is a reading history, which /privacy does not promise to keep.
+ * - **The primary key is the throttle.** `slot` is the UTC half-hour the open
+ *   fell in, and the insert is `on conflict do nothing`, so a reload or a run
+ *   through several articles makes one row, two tabs at once cannot make two,
+ *   and a slot never crosses a UTC midnight (src/store/pg-shelf.ts §
+ *   `recordOpen`).
+ */
+export const articleOpenTimes = spideryarn.table(
+  "article_open_times",
+  {
+    /** `auth.users(id)`, ON DELETE CASCADE. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    slot: timestamp("slot", { withTimezone: true }).notNull(),
+    /** The first open in the slot. */
+    openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.slot] })],
+);
+
+/**
+ * **One row per time the administrator viewed the app as another reader**,
+ * read-only — docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+ * § Part 3. Written only by the three `/api/admin/view-as` routes
+ * (src/store/pg-view-as.ts) and never deleted by the app, so it is the audit:
+ * who looked, at whom, when, for how long and why.
+ *
+ * - **`nonce_hash`, never the nonce.** The nonce is a bearer half-credential
+ *   (useless without the admin's own token, but still one); a sha256 of it is
+ *   all a lookup needs, and a leaked table then names nobody's live session.
+ * - **`expires_at` is absolute**, `started_at + 30 min`, and nothing extends it.
+ * - **Both ids reference `auth.users`, ON DELETE CASCADE**, by hand in the
+ *   migration (the header says why Drizzle must not learn about `auth.users`).
+ *   CASCADE as `reader_arrivals` and `rate_limit_events` are: this is
+ *   bookkeeping about an account, and a RESTRICT would stop a reader who was
+ *   once viewed from ever erasing their account.
+ */
+export const viewAsSessions = spideryarn.table(
+  "view_as_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** sha256 of the nonce, lower-case hex. */
+    nonceHash: text("nonce_hash").notNull().unique(),
+    /** The administrator. `auth.users(id)`, FK in the migration by hand. */
+    actorId: uuid("actor_id").notNull(),
+    /** The reader whose app was viewed. `auth.users(id)`, FK in the migration by hand. */
+    subjectId: uuid("subject_id").notNull(),
+    /** Why, in the administrator's words, asked for before the session starts. */
+    reason: text("reason").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Stop pressed. Null while live or after it simply expired. */
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("view_as_sessions_reason", sql`char_length(${t.reason}) between 1 and 300`),
+    /* Viewing yourself as yourself is not a session; it would also make the
+       gate's "the subject is not an admin" check the only thing between the
+       admin and a self-session, and one check is not enough. */
+    check("view_as_sessions_not_self", sql`${t.actorId} <> ${t.subjectId}`),
+  ],
+);
+
 /* -------------------------------------------------------------- feedback -- */
 
 /**
@@ -6684,6 +6839,68 @@ export const feedbackQuestionDeferrals = spideryarn.table(
       "feedback_question_deferrals_environment",
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
+  ],
+);
+
+/**
+ * **The questions an agent has put to an admin, as the dialog serves them** —
+ * one row a question, written only by `scripts/feedback-questions.ts
+ * --publish`, read by the admin's *Needs a decision* and by the routes that
+ * take a reply or a deferral. docs/plans/261021h-agent-questions-reach-needs-a-decision-without-a-deploy.md.
+ *
+ * > I guess I had assumed that the Needs Input sections are being stored and
+ * > surfaced from the database. […] that way then you can always be sure that
+ * > anything you've submitted there is going to be live to me immediately.
+ * >
+ * > — Greg, 2026-10-21
+ *
+ * **A published copy of a file** under `docs/user-feedback/questions/`, which
+ * stays the one place a question is written: nobody edits a row, and publishing
+ * overwrites it from the file. `refs:` is never here, because it is for agents
+ * and nothing in this table may be unfit for a browser. No owner: a question is
+ * asked of every admin. The checks repeat the file's rules
+ * (src/feedback-question-values.ts) so a row written any other way cannot be
+ * bigger or stranger than a file could be; Postgres counts code points where
+ * the file's rule counts UTF-16 units, so a file within its limit always fits.
+ */
+export const feedbackQuestions = spideryarn.table(
+  "feedback_questions",
+  {
+    /** `q-k3m9qt`, the file's name. */
+    id: text("id").primaryKey(),
+    /** One line, at most `MAX_FEEDBACK_QUESTION_TITLE_CHARS`. */
+    title: text("title").notNull(),
+    /** The `spya-` id of the report it is about, or null (`report: none`). */
+    report: text("report"),
+    /** `repeats:`, the reports folded into `report`'s note. Empty when `report` is null. */
+    repeats: text("repeats").array().notNull().default(sql`'{}'::text[]`),
+    /** `yyyy-mm-dd`, the file's `asked:`. Text, as the file has it: it is shown, never compared. */
+    asked: text("asked").notNull(),
+    /** Plain text, at most `MAX_FEEDBACK_QUESTION_BODY_CHARS`. Never rendered as markup. */
+    body: text("body").notNull(),
+    /** `open` or `answered`. Publishing never moves an answered row back to open. */
+    status: text("status").notNull(),
+    /** `acted:`, the replies an agent has acted on. Publishing never drops one. */
+    acted: text("acted").array().notNull().default(sql`'{}'::text[]`),
+    /** When it was first published. */
+    createdAt: createdAt(),
+    /** When a publish last changed it. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      "feedback_questions_id_format",
+      sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX.replace(ID_PREFIX, "q-")}'`)}`,
+    ),
+    check(
+      "feedback_questions_report_format",
+      sql`${t.report} is null or ${t.report} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    check("feedback_questions_repeats_need_report", sql`${t.report} is not null or cardinality(${t.repeats}) = 0`),
+    check("feedback_questions_title_shape", sql`length(btrim(${t.title})) > 0 and length(${t.title}) <= 120`),
+    check("feedback_questions_body_shape", sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 6000`),
+    check("feedback_questions_asked_format", sql`${t.asked} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`),
+    check("feedback_questions_status", sql`${t.status} in ('open', 'answered')`),
   ],
 );
 
@@ -7666,12 +7883,12 @@ export const ingestEvents = spideryarn.table(
      * authors and abstract read, at a hundredth of an ingest whatever its
      * visibility (`supersededBy` below).
      *
-     * An upgrade is one more article's worth, priced exactly like an ingest of
-     * the same article (200 points private, 100 public, live; frozen on delete),
+     * An upgrade costs the article's slots again, priced exactly like the ingest
+     * of the same article (200 points private, 100 public, live; frozen on delete),
      * so the article costs double — Greg, 2026-09-30: *"it should double the
      * processing cost per-article"*. It is inserted already settled, in the
      * transaction that switches the article on, and never refunded
-     * (`chargeHighPower`, src/store/pg-billing.ts).
+     * (`switchOnHighPower`, src/store/pg-billing.ts).
      *
      * **The wall adds both kinds; every sentence that says "added" counts only
      * ingests.** `Usage` in pg-billing.ts splits them, which is what stops one
@@ -7803,8 +8020,31 @@ export const ingestEvents = spideryarn.table(
      * support conversation about "which article was that" has an answer.
      */
     slug: text("slug"),
+    /**
+     * **How many articles' worth this row is** — 1 for everything but a long
+     * PDF, which costs one slot per 50 pages, rounded up (`slotsForPages` in
+     * src/uploads.ts; Greg, 2026-10-20). Every price the usage query puts on an
+     * `'ingest'` or `'high_power'` row is multiplied by it; a `'minimal'` row is
+     * priced by its kind and its `slots` means nothing.
+     *
+     * An ingest is reserved at 1 at the route and **repriced in stage 1** once
+     * the pages are counted, before anything paid runs (`priceFetchedPdf`).
+     * Every row written before 2026-10-20 is 1, which grandfathers it by name —
+     * docs/plans/261020b-longer-documents-up-to-400-pages-cost-a-slot-per-100-pages.md.
+     */
+    slots: smallint("slots").notNull().default(1),
+    /**
+     * **The PDF's page count**, once stage 1 has counted it — the fact `slots`
+     * came from, and the one *Read this* needs from a minimal row because it
+     * never fetches again. Null for anything that is not a PDF and for every
+     * row written before 2026-10-20.
+     */
+    pages: integer("pages"),
   },
   (t) => [
+    /* A long PDF is at most eight slots: 400 pages at 50 a slot. */
+    check("ingest_events_slots", sql`${t.slots} between 1 and 8`),
+    check("ingest_events_pages", sql`${t.pages} is null or ${t.pages} > 0`),
     /* A reservation settles once, and only one way. `num_nonnulls` rather than
        a pair of `is null` disjunctions because it says the rule rather than
        encoding it — GPT Sol, 2026-09-02. In the database rather than in

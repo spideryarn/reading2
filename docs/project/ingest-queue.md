@@ -196,6 +196,16 @@ The record takes a static reason and the job takes the sentence with the number 
 [content-extraction.md](content-extraction.md) and
 [260903k](../plans/260903k-pdf-page-cap-refused-with-no-reason-given.md) § Stage 4.
 
+**And the same count prices it, still before the promotion — for a pasted PDF too, before
+`writeRaw`.** One slot per 50 pages: `priceTheDocument` in [`src/pipeline.ts`](../../src/pipeline.ts)
+reprices the job's one-slot reservation, so a document whose slots are not there fails in stage 1,
+before any transcription is paid for, with `[pay-pages]`. Unlike the page cap this leaves the upload
+`claimed`, not `rejected`, because it is about the allowance and not the file: Retry promotes it once
+the allowance grows. A PDF that fits and is over 50 pages carries on, and the fetch step's stored
+detail ends with the warning Greg asked for (*This PDF is 150 pages, so it uses 3 of your articles*),
+which the job card shows. The rules, the race and the re-run rule are
+[billing.md § A long document costs a slot per 50 pages](billing.md#a-long-document-costs-a-slot-per-50-pages).
+
 **An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
 prove two addresses are one piece. An upload has no address, so there is nothing that could make
 two of them one article — two files called `paper.pdf` get two, per
@@ -425,9 +435,10 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
   padding for exactly that reason**, because a title that promises more target than exists sends a
   near-miss through to the browser, which opens the PDF over the page. Measured before and after in
   [260903g](../plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md#stage-3-the-two-layout-jobs).
-- **Both caps are stated before the file is chosen** — *PDF, up to 50 MB and 250 pages* — from
+- **Both caps are stated before the file is chosen**, with what a long PDF costs — *… up to 50 MB.
+  PDFs up to 250 pages; every 50 pages counts as one article.* — from
   `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), which builds the sentence out of
-  `MAX_UPLOAD_BYTES` and `MAX_PAGES`, so it cannot promise a limit that is not the one enforced. It
+  `MAX_UPLOAD_BYTES`, `MAX_PAGES` and `PAGES_PER_SLOT`, so it cannot promise a limit that is not the one enforced. It
   sits in the slot the chosen-file row takes, so it costs no height once a reader has acted on it.
   The **page** cap is the reason this exists: a file manager shows you a size and never a page
   count, so until 2026-09-04 the only way to discover it was to upload a book and be refused at the
@@ -613,8 +624,10 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
 it.** When an import's first full publication commits, the same transaction queues one job per main
-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
-cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
+mode's step: Summary's plain-words levels, Glossary, Quotes, Ideas, Sources' Bibliography and the
+cross-reference links, then Skim, which carries Quotes and Ideas in front of it. Not Summary's
+thread since 2026-10-22: it is written when its owner first opens it
+([261022b](../plans/261022b-summary-thread-writes-only-when-pressed.md)). They are ordinary
 mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
 reader's profile as it stood at publication.
 
@@ -665,8 +678,10 @@ Three things, all in the browser, in
 - **The owner's early visit.** `/read/<slug>` before the import has published used to tell its own
   owner *Not shared*. `OwnerNotShared`
   ([`src/web/article/StillBeingAdded.tsx`](../../src/web/article/StillBeingAdded.tsx)) asks the job
-  engine for a fresh list, and if a live import job has that slug it draws the job's card and
-  re-reads the article when the job is done. It does not send the reader to the add page, because
+  engine for a fresh list and reads the newest import job with that slug: queued, running, failed
+  or stopped, it draws the job's card; done, it re-reads the article. A failed one counts since
+  2026-10-19, when an import that had failed before the page opened still said *Not shared*
+  ([261019n](../plans/261019n-admin-sees-other-users-articles-and-views-as-them.md)). It does not send the reader to the add page, because
   arriving there posts an import.
 - **A *Sharing* section, shut by default**, holding *Make it public* and, since 2026-10-06,
   *Create a private link*. Since 2026-10-09 the link comes first, both are buttons, and the row
@@ -1682,8 +1697,8 @@ The trap that measurement fell into three times in one day is in [261007g-ingest
 a guess, so past it the reader is told the step *has been running for a while* — not that it is
 longer than usual, which would be a statistical claim from no statistics.
 
-**The card runs its own clock.** `ctx.report` writes `step.detail` in memory and never persists it,
-so a job six minutes into `structure` returns a byte-identical record on every poll and `sameJobs`
+**The card runs its own clock.** `ctx.report` writes `step.detail` in memory and persists it only
+beside a counted `progress` (below), so a job six minutes into `structure` returns a byte-identical record on every poll and `sameJobs`
 correctly suppresses the re-render — the elapsed time would freeze at whatever it read when the step
 began. Both surfaces use `useNow(1000)` while busy and `null` — off — otherwise. It
 said *a day* and called it a timer that never fires; it fired, once a day, per card.
@@ -1798,9 +1813,20 @@ as the reader's import; it matches `job.upload.id` now, which is the thing it me
 
 Once per shelf, only while something is importing, and on the add page under its card. Until there is
 a real background runner this is simply true, and calling the thing a queue without saying it
-over-promises. **No determinate progress bar**, ever, for the same reason: response size and provider
-latency are both unknown, so a percentage would be a number we invented —
+over-promises. **No bar of time, and no percentage**, for the same reason: response size and provider
+latency are both unknown, so a time left or a percentage would be a number we invented —
 [silent-success.md](../reusable/silent-success.md) with a decimal point.
+
+**A bar of a count is allowed, since 2026-10-20.** Greg asked for *"a loading bar with some kind of
+estimation of how long it will take (especially that extraction step)"* (`spya-skq3fg`). A step that
+counts real units passes them as `ctx.report(detail, { done, total, unit })`: PDF `extract` its
+chunks, `assets` its images. That `progress` is saved to the row at most every five seconds
+(`REPORT_SAVE_EVERY_MS`, `stepNotes` in [`src/jobs.ts`](../../src/jobs.ts)), dropped when the step
+ends however it ends (`settledSteps` in [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), and
+drawn under the running step as a `<progress>` and *23 of 69 sections of the file done*. A report
+with no count stays in memory, as every report did before. The estimate of time Greg asked for was
+measured and declined for now: eleven imports, and URL extraction ranging 3–122 s with no relation
+to length — [plan 261020a § Part B](../plans/261020a-add-page-asks-why-higher-and-about-you-says-when-it-is-ready-and-shows-import-progress.md#part-b-how-far-the-import-has-got).
 
 The sentences themselves live in `src/job-state.ts` rather than `src/messages.ts`, and carry no
 bracketed codes, because none of them is a failure — [copy.md](copy.md).

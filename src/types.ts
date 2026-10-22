@@ -3397,18 +3397,20 @@ export interface ToolRun {
   /** Milliseconds. Absent while running. */
   ms?: number;
   /**
-   * **Words the guide offers to save for the reader**, drawn under its answer
-   * as a card with a button they press (`offer_to_save` in src/chat-tools.ts,
-   * src/web/GuideSaveOffer.tsx). Nothing is saved by the tool: the reader's
-   * press is the write. The guide's runs only. Plan
-   * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+   * **Words a conversation offers to save for the reader**, drawn under its
+   * answer as a card with a button they press (`offer_to_save` in
+   * src/chat-tools.ts, src/web/GuideSaveOffer.tsx). Nothing is saved by the
+   * tool: the reader's press is ordinarily the write. The guide may offer both
+   * fields and has two narrow save-at-once routes; Chat and Explore may offer
+   * About you only and are always press-only. Plans 261009q and 261020o.
    */
   offer?: SaveOffer;
   /**
    * **The guide's next steps**, at most three, drawn as a row of buttons under
    * its latest answer (`offer_next_steps` in src/chat-tools.ts,
-   * src/web/GuideNextSteps.tsx). Each is a press; the tool runs none of them.
-   * Plan docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+   * src/web/GuideNextSteps.tsx). The tool runs none of them. The reader presses
+   * each one except a `prepare` step marked `now`, which the page presses after
+   * a typed guide answer (plan 261019p § Stage 2b).
    */
   steps?: NextStep[];
 }
@@ -3420,7 +3422,12 @@ export type NextStep =
   | { kind: "mode"; mode: string }
   | { kind: "search"; words: string }
   | { kind: "share" }
-  | { kind: "archive" };
+  | { kind: "archive" }
+  /* A mode to get ready in the background, never opened: a key from
+     `PREPARABLE` (src/preparable-modes.ts). `now` is the guide's choice to
+     start it without a press; the page makes that press itself, once
+     (plan 261019p § Stage 2b). */
+  | { kind: "prepare"; mode: string; now: boolean };
 
 /**
  * **One offer to save**: which of the reader's two profile fields, and the
@@ -3432,7 +3439,7 @@ export interface SaveOffer {
   field: "purpose" | "profile";
   text: string;
   /**
-   * What the field held when the guide made the offer (`null`: empty). The
+   * What the field held when the conversation made the offer (`null`: empty). The
    * tool makes no offer when that turn could not read it: without a basis the
    * card could not distinguish an empty field from one it was about to
    * overwrite. The card saves only while the field still holds this, so a
@@ -3823,8 +3830,20 @@ export interface JobStep {
   /** Present tense, naming the actual thing — "Fetching the page", never "Loading". */
   label: string;
   status: StepStatus;
-  /** A short line about how it went, or how it is going. Not persisted while running. */
+  /**
+   * A short line about how it went, or how it is going. While the step runs
+   * it is in memory, and reaches the row only beside a `progress` (src/jobs.ts
+   * § `stepNotes`) or a preview; a store settlement of a running step drops it.
+   */
   detail?: string;
+  /**
+   * **How many of the units it is counting the step has finished**, while it
+   * runs: PDF `extract`'s chunks, `assets`' images. Only a step that counts
+   * real units sets it, so a fraction drawn from it is counted, not estimated.
+   * Saved at most every `REPORT_SAVE_EVERY_MS`, and gone when the step ends,
+   * however it ends (`stepNotes`, `settledSteps`). Plan 261020a § B1.
+   */
+  progress?: StepProgress;
   error?: string;
   startedAt?: string;
   finishedAt?: string;
@@ -3846,6 +3865,18 @@ export interface JobStep {
    * logged. docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2.
    */
   preview?: StepPreview;
+}
+
+/**
+ * A counted fraction: `done` of `total` units, and what a unit is, so the card
+ * can name it. "Done" means finished with, not succeeded: PDF extract counts a
+ * chunk whose check failed, and assets an image it could not fetch (GPT Sol's
+ * plan review of 261020a, finding 6).
+ */
+export interface StepProgress {
+  done: number;
+  total: number;
+  unit: "chunk" | "image";
 }
 
 /**
@@ -4346,8 +4377,15 @@ export const LEARN_STANCES: readonly LearnStance[] = [
  * (`GUIDE_TOOLS`, src/chat-tools.ts), its own web search (`search_web`) and typed
  * page read (`read_web_page`), no `visible` blocks.
  * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
+ *
+ * **`tutorial` until 2026-10-20**, Learn's teaching sub-mode, when Recall
+ * absorbed it: the migration folded each article's Tutorial thread into its
+ * Recall thread and renamed the rest, so the word is retired
+ * (`RETIRED_THREAD_KINDS` below) rather than renamed.
+ * drizzle/20261020063618_fold_tutorial_into_recall.sql,
+ * docs/plans/261020m-recall-and-tutorial-become-one-recall.md.
  */
-export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore" | "guide";
+export type ThreadKind = "chat" | "learn" | "candidates" | "explore" | "guide";
 
 /**
  * The thread kinds, as a value, and the predicate both ends validate with.
@@ -4366,39 +4404,43 @@ export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore
  * fixture-file reader, `kindFromFile` in src/chat.ts: it supplies `"chat"` only
  * for an absent kind, and reads `RETIRED_THREAD_KINDS` below.
  */
-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates", "tutorial", "explore", "guide"];
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates", "explore", "guide"];
 
 /**
  * **Words a thread kind used to be, and what each became.** The database
  * renamed them by migration — `review` → `remember` in
  * drizzle/0048_rename_review_thread_kind.sql, `remember` → `learn` in
- * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql — but
- * database migrations do not update `chat.json` on disk, so a file reader
- * needs the same map.
- * A rename of a kind adds its old word here, pointing at the final one.
+ * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql — and
+ * retired `tutorial` into `learn` in
+ * drizzle/20261020063618_fold_tutorial_into_recall.sql, but database
+ * migrations do not update `chat.json` on disk, so a file reader needs the
+ * same map. A rename of a kind adds its old word here, pointing at the final
+ * one. `tutorial` is the one retirement that is also a fold: a file holding
+ * both a Tutorial and a Recall thread gets the second's messages appended to
+ * the first, as the migration does (`foldRetiredTutorial` in src/chat.ts).
  * docs/postmortems/261007a-a-renamed-enum-word-read-by-a-lenient-reader-becomes-its-default.md.
  */
 export const RETIRED_THREAD_KINDS = {
   review: "learn",
   remember: "learn",
+  tutorial: "learn",
 } as const satisfies Record<string, ThreadKind>;
 
 /**
- * **The kinds an article has at most one of** — Learn's Recall, Tutorial and
- * Explore, each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
- * Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md,
+ * **The kinds an article has at most one of** — Learn's Recall and Explore,
+ * each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
  * and Explore since docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md),
  * and the guide since docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
  * A partial unique index per kind holds it in the database
- * (`chat_threads_one_learn`, `chat_threads_one_tutorial`,
- * `chat_threads_one_explore`, `chat_threads_one_guide`); this is the list
+ * (`chat_threads_one_learn`, `chat_threads_one_explore`,
+ * `chat_threads_one_guide`); this is the list
  * `targetOf` in src/chat.ts reads, so the two ends agree.
  *
  * Single-thread is ONE property. It does not say what a kind is called, what
  * its empty box says, whether it offers Live, or whether Learn draws it — those
  * are decided per kind, and the last by `LearnKind` below.
  */
-export const SINGLE_THREAD_KINDS = ["learn", "tutorial", "explore", "guide"] as const satisfies readonly ThreadKind[];
+export const SINGLE_THREAD_KINDS = ["learn", "explore", "guide"] as const satisfies readonly ThreadKind[];
 export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
 
 export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {
@@ -4406,14 +4448,14 @@ export function isSingleThreadKind(kind: ThreadKind | undefined): kind is Single
 }
 
 /**
- * **The kinds Learn draws** — Recall, Tutorial and Explore: Learn's layout,
+ * **The kinds Learn draws** — Recall and Explore: Learn's layout,
  * its sub-mode switch, its drafts. Every one is single-thread, but not every
  * single-thread kind is Learn's: the guide is one per article and lives in the
  * Chat band. Kept apart from `SINGLE_THREAD_KINDS` so a guide is never drawn
  * as a Learn view by accident (GPT Sol's F2 on
  * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md).
  */
-export const LEARN_KINDS = ["learn", "tutorial", "explore"] as const satisfies readonly SingleThreadKind[];
+export const LEARN_KINDS = ["learn", "explore"] as const satisfies readonly SingleThreadKind[];
 export type LearnKind = (typeof LEARN_KINDS)[number];
 
 export function isLearnKind(kind: ThreadKind | undefined): kind is LearnKind {
@@ -4552,9 +4594,11 @@ export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | Bibliogra
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
 
 /**
- * An angle the reader asked to see the debate from: their own words, trimmed
- * and non-empty, at most `MAX_LENS_CHARS`. No block and no quote. Two chats
- * may share one lens; they are then two lines in Reception's *Your angles*.
+ * A question asked in Sources › Investigate, typed or suggested (plan 261020n), or an
+ * angle from Reception's box before that plan moved it, or the command bar's
+ * suggested lens: the words, trimmed and non-empty, at most `MAX_LENS_CHARS`.
+ * No block and no quote. Two chats may share one lens; they are then two
+ * lines in Investigate's *Your questions*.
  */
 export type LensOrigin = { mode: "reception"; lens: string };
 
@@ -8257,7 +8301,7 @@ export type SourcesClaimListFound = SourcesClaimListResponse;
 /** The most claims one press may search: pass B's shape, one call over a few claims. */
 export const MAX_CHECK_TARGETS = 4;
 
-/** A typed claim's ceiling, the angle box's: refused when over, never cut. */
+/** A typed claim's ceiling, Investigate's question box's too: refused when over, never cut. */
 export const MAX_OWN_CLAIM_CHARS = MAX_PURPOSE_CHARS;
 
 /**
@@ -8603,7 +8647,7 @@ export interface AdminFeedbackQuestionAnswer {
 
 /**
  * **One open question an agent has put to the admin, as a thread** — part of
- * `GET /api/admin/feedback/earlier?questions=3`. An agent wrote `title` and
+ * `GET /api/admin/feedback/earlier?questions=4`. An agent wrote `title` and
  * `body` (a file under docs/user-feedback/questions/, compiled into the
  * server): plain text, to be drawn as text with its line breaks kept. The
  * file's `refs` line is for agents and is never here; its `repeats` reach only
@@ -8619,11 +8663,15 @@ export interface AdminFeedbackQuestion {
   /** `yyyy-mm-dd`: the day it was asked. */
   asked: string;
   /**
-   * The report it is about, when it names one **and that report is this
-   * admin's own**, with its whole text (shown shut); otherwise null, and the
-   * body has to stand without it.
+   * The report it is about, with its whole text (shown shut), and **whose it
+   * is**. The admin's own when it names one of theirs; otherwise the one other
+   * account's report under that id, marked as a reader's or another admin's
+   * and with the address it was filed under, so a thread about somebody else's
+   * suggestion is told apart at a glance (`spya-y43ha0`, plan 261020p). Null
+   * when it names none, none is found, or two accounts hold that id
+   * (report ids are unique per owner only): then the body stands alone.
    */
-  report: { id: string; number: number; firstLine: string; body: string } | null;
+  report: FeedbackQuestionReport | null;
   /**
    * This admin's replies **no agent has acted on yet**, oldest first. One that
    * has been acted on is in `actedAnswers` instead.
@@ -8650,7 +8698,7 @@ export interface AdminFeedbackQuestion {
 
 /**
  * **A question as a server before 261008i sends it**, and as the new server
- * still sends it to a request without `questions=2` or `questions=3`, so a
+ * still sends it to a request without `questions=2`, `3` or `4`, so a
  * tab from before the deploy keeps working after it (F3). Six keys, the newest
  * reply only.
  */
@@ -8688,18 +8736,54 @@ export interface AdminEarlierFeedbackPage {
 }
 
 /**
+ * **Whose report a question is about** (plan 261020p): the signed-in admin's
+ * own, a reader's, or another admin's. `isAdmin` decides the last two.
+ */
+export const FEEDBACK_QUESTION_REPORT_WHOSE = ["yours", "reader", "admin"] as const;
+export type FeedbackQuestionReportWhose = (typeof FEEDBACK_QUESTION_REPORT_WHOSE)[number];
+
+/**
+ * The report a thread is about, as shape 4 sends it. `from` is the address the
+ * report was filed under, `reporterEmail` on `/admin/feedback`, for somebody
+ * else's; null for the admin's own, who knows who they are.
+ */
+export interface FeedbackQuestionReport {
+  id: string;
+  number: number;
+  firstLine: string;
+  body: string;
+  whose: FeedbackQuestionReportWhose;
+  from: string | null;
+}
+
+/**
+ * **A question as a server before 261020p sends it**, and as the new server
+ * still sends it to `questions=3`, so a tab from before that deploy keeps
+ * working after it: the report only when it is the admin's own, and without
+ * `whose` or `from`, because that tab checks the report's keys exactly.
+ */
+export type AdminFeedbackQuestionV3 = Omit<AdminFeedbackQuestion, "report"> & {
+  report: { id: string; number: number; firstLine: string; body: string } | null;
+};
+
+/** The same answer to `questions=3`: the shape before 261020p. */
+export interface AdminEarlierFeedbackPageV3 extends Omit<AdminEarlierFeedbackPage, "questions"> {
+  questions: AdminFeedbackQuestionV3[];
+}
+
+/**
  * **A question as a server before 261010h sends it**, and as the new server
  * still sends it to `questions=2`, so a tab from before that deploy keeps
  * working after it: no acted replies.
  */
-export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestion, "actedAnswers" | "olderActedAnswers">;
+export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestionV3, "actedAnswers" | "olderActedAnswers">;
 
 /** The same answer to `questions=2`: the shape before 261010h. */
 export interface AdminEarlierFeedbackPageV2 extends Omit<AdminEarlierFeedbackPage, "questions"> {
   questions: AdminFeedbackQuestionV2[];
 }
 
-/** The same answer to a request without `questions=2` or `3`: the shape before 261008i (F3). */
+/** The same answer to a request without `questions=2`, `3` or `4`: the shape before 261008i (F3). */
 export interface AdminEarlierFeedbackPageV1 extends Omit<AdminEarlierFeedbackPage, "questions"> {
   questions: AdminFeedbackQuestionV1[];
 }
@@ -9063,22 +9147,24 @@ export function decodeFeedbackCursor(
 }
 
 /**
- * **Whose reports the inbox shows** — everyone's, or only the readers', which
- * is everyone who is not an administrator (src/admin.ts § `ADMIN_USER_IDS`, the
- * list `isAdmin` reads). Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"provide a
- * filter to show only non-admin suggestions (i.e. suggestions from people other
- * than me)."* docs/plans/261001l-….
+ * **Whose reports the inbox shows** — everyone's, only the readers', which is
+ * everyone who is not an administrator (src/admin.ts § `ADMIN_USER_IDS`, the
+ * list `isAdmin` reads), or only the administrators'. Greg, 2026-10-01
+ * (SPIDERYARN-READING2-87): *"provide a filter to show only non-admin
+ * suggestions (i.e. suggestions from people other than me)."*
+ * docs/plans/261001l-…. And 2026-10-19 (`spya-kmqd7n`): *"And also show a
+ * filter for admins only on this page."* docs/plans/261020p-….
  *
  * Applied by the store, not the browser: the inbox is paged, and a page of
  * Greg's own reports filtered away in the browser would read *no reports,
  * there are older ones*.
  */
-export const FEEDBACK_FROM = ["everyone", "readers"] as const;
+export const FEEDBACK_FROM = ["everyone", "readers", "admins"] as const;
 export type FeedbackFrom = (typeof FEEDBACK_FROM)[number];
 
 /**
  * `?from=` read back: absent is `"everyone"`, and anything else that is not one of
- * the two is `"malformed"`, which the route turns into a 400 — never a quiet
+ * the three is `"malformed"`, which the route turns into a 400 — never a quiet
  * *everyone*, which would show Greg his own reports under a filter that says it
  * hides them. The same three-answer shape as `decodeFeedbackCursor`.
  */
@@ -9252,3 +9338,38 @@ export interface PublicShelfTopicsStatus {
 export interface PublicCopyFound {
   publicCopy: { slug: string; title: string };
 }
+
+/**
+ * **The header a view-as tab sends with every API request**: the nonce of the
+ * administrator's live view-as session. Lower-case, because Node lower-cases
+ * incoming header names. Read by `serveViewingAs` in src/routes.ts and the three
+ * `/api/admin/view-as` routes; sent by the client's view-as tab.
+ * docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md § Part 3.
+ */
+export const VIEW_AS_HEADER = "x-spideryarn-view-as";
+
+/** The control routes a view-as tab may call besides the allowlisted GETs. */
+export const VIEW_AS_START_PATH = "/api/admin/view-as";
+export const VIEW_AS_CURRENT_PATH = "/api/admin/view-as/current";
+export const VIEW_AS_END_PATH = "/api/admin/view-as/end";
+
+/** `POST /api/admin/view-as`'s answer. `expiresAt` is ISO 8601. */
+export interface ViewAsStarted {
+  nonce: string;
+  subjectId: string;
+  /** Asked of the Auth service before the session starts; no answer, no session. */
+  subjectEmail: string;
+  expiresAt: string;
+}
+
+/** `GET /api/admin/view-as/current`'s answer for a live session. */
+export interface ViewAsCurrent {
+  subjectId: string;
+  /** Null when the Auth service could not be asked just now; the session is still live. */
+  subjectEmail: string | null;
+  expiresAt: string;
+}
+
+/** The sentence every refused view-as request carries, and the panel shows. */
+export const VIEW_AS_READ_ONLY_MESSAGE =
+  "Hidden while viewing as another reader: this would change something or cost something. [view-as-read-only]";

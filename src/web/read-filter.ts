@@ -13,8 +13,7 @@
  * argument for each rule here.
  */
 import type { BlockId, QuizQuestion } from "../types.js";
-import type { ReadLevel } from "./reading-time.js";
-import type { ReadingTimeStatus } from "./useReadingTime.js";
+import type { ReadingTimeStatus, ReadLevel } from "./reading-time.js";
 
 /**
  * What the quiz is handed about the reader's reading: the levels, whether they

@@ -97,7 +97,7 @@ describe("Tweets' copy buttons", () => {
       expect(visibleText(b)).toBe("");
       expect(b.querySelector("svg")).not.toBeNull();
       expect(b.classList.contains("tw:size-6")).toBe(true);
-      expect(b.classList.contains("tw:pointer-coarse:size-10")).toBe(true);
+      expect(b.classList.contains("tw:any-pointer-coarse:size-[40px]")).toBe(true);
       const status = b.parentElement?.querySelector("[aria-live]");
       expect(status?.textContent).toBe("");
       expect(status?.getAttribute("aria-live")).toBe("polite");

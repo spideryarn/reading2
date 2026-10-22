@@ -71,13 +71,11 @@ import {
   articleRevisions,
   articles,
   jobs,
-  readerProfiles,
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
 import { isReservedSlug, shortIdInSlug } from "../ingest.js";
 import { isAdmin } from "../admin.js";
-import { autoModePosts } from "../auto-mode-steps.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import {
@@ -88,7 +86,6 @@ import {
   type ReaderFacingFailure,
 } from "../messages.js";
 import { currentOwnerId } from "../owner.js";
-import { renderProfile } from "../profile.js";
 import { hashBlocks } from "../source-hash.js";
 import { currentStepName, withRetiredSpellings } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
@@ -120,6 +117,7 @@ import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, structureCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
 import { enqueueSuccessorIn, type SuccessorOutcome } from "./pg-successor.js";
+import { autoModeJobs, enqueueMainModesIn, readerProfileOf } from "./pg-main-modes.js";
 import { matterSettled } from "../matter-step.js";
 
 const logger = log("store");
@@ -256,6 +254,9 @@ export const REVISION_CARRY_POLICY: Record<
      inherited the reference and lost the byte count would describe an object it
      could no longer size. */
   rawByteCount: "carry",
+  /* The page count the source was priced from (plan 261020b): a fact about
+     the stored bytes, so it travels with them, like the byte count. */
+  rawPages: "carry",
   rawFilename: "carry",
   /* Where an uploaded page says it was saved from: a fact about the stored
      bytes, like the filename, so a force-extract keeps it. A new upload
@@ -1218,6 +1219,22 @@ export const STEP_RUN_CARRIED_COLUMNS = [
   "started_at", "finished_at",
 ] as const;
 
+/**
+ * **An article's first draft, copied from nothing: three columns, by name.**
+ *
+ * Not `tx.insert(articleRevisions).values({…})`, because drizzle's insert lists
+ * every column `schema.ts` declares and writes `default` into the rest. A
+ * column that is declared and then dropped by a migration, as an expand and
+ * contract rename does, would make every new article fail in the minutes the
+ * code deployed before that migration is still serving
+ * (docs/plans/261011ae-sources-rename-contract.md). Every other write to this
+ * table already names only what it sets.
+ */
+export function firstDraftInsert(revisionId: string, articleId: string): SQL {
+  return sql`insert into ${articleRevisions} (${sql.identifier(articleRevisions.id.name)}, ${sql.identifier(articleRevisions.articleId.name)}, ${sql.identifier(articleRevisions.status.name)})
+    values (${revisionId}::uuid, ${articleId}::uuid, 'draft')`;
+}
+
 async function beginDraftIn(
   tx: Tx,
   opts: BeginRevisionOptions,
@@ -1258,9 +1275,7 @@ async function beginDraftIn(
     } else {
       /* No `basedOnRevisionId`: this is the article's first draft, copied from
          nothing, and null is the honest answer rather than a missing one. */
-      await tx
-        .insert(articleRevisions)
-        .values({ id: revisionId, articleId: article.id, status: "draft" });
+      await tx.execute(firstDraftInsert(revisionId, article.id));
     }
 
     /* **The blocks carry too, and the three-column reading of this design
@@ -2828,20 +2843,11 @@ async function revisionAwaitsStructure(tx: Tx, revisionId: string): Promise<bool
 }
 
 /**
- * The main-mode jobs in the order they are queued: the ones that read nothing,
- * then the rest (`autoModePosts`, src/auto-mode-steps.ts). One function so the
- * insert loop and the log line index the same list.
- */
-function autoModeJobs(): StepName[][] {
-  const { together, after } = autoModePosts();
-  return [...together, ...after];
-}
-
-/**
  * Queue the main-mode jobs for `article`, unless its owner has switched them
  * off. `publishRevisionIn` decides *whether this publication is one that
- * queues them* and says why at the call; this is the reader's choice, the
- * profile and the inserts.
+ * queues them* and says why at the call; this is the reader's choice. The
+ * profile and the inserts are `enqueueMainModesIn` (src/store/pg-main-modes.ts),
+ * which a new gift shares (plan 261021j § D2).
  *
  * `labels` is what became of the labels successor, if this publication needed
  * one: the modes are stamped after the job that holds it.
@@ -2851,28 +2857,9 @@ async function queueMainModesIn(
   article: typeof articles.$inferSelect,
   labels: SuccessorOutcome | null,
 ): Promise<SuccessorOutcome[]> {
-  const [reader] = await tx
-    .select({ profile: readerProfiles.profile, autoModesOffAt: readerProfiles.autoModesOffAt })
-    .from(readerProfiles)
-    .where(eq(readerProfiles.ownerId, article.ownerId))
-    .limit(1);
+  const reader = await readerProfileOf(tx, article.ownerId);
   if (reader?.autoModesOffAt) return [];
-
-  const profile = renderProfile({ profile: reader?.profile ?? null, purpose: article.purpose });
-  const queued: SuccessorOutcome[] = [];
-  for (const [i, steps] of autoModeJobs().entries()) {
-    queued.push(
-      await enqueueSuccessorIn(tx, {
-        ownerId: article.ownerId as OwnerId,
-        slug: article.slug,
-        steps,
-        ...(profile ? { profile } : {}),
-        after: i + 1,
-        ...(labels ? { notBefore: labels.jobId } : {}),
-      }),
-    );
-  }
-  return queued;
+  return await enqueueMainModesIn(tx, article, reader?.profile ?? null, labels?.jobId);
 }
 
 /**

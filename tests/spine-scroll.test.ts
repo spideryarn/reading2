@@ -239,6 +239,24 @@ async function mount(layoutKey = "x"): Promise<HTMLElement> {
 /** The wrapper the viewport band rides in — the element that actually moves. */
 const mover = () => host.querySelector<HTMLElement>(".spine-viewport-track");
 
+/**
+ * Its twin under the marks, the veil over everything off screen
+ * (docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md). The two are
+ * written separately, so the claim worth pinning is that they never disagree:
+ * a veil a frame or a resize behind the band is a lit stretch beside the orange
+ * box instead of inside it. Checked wherever the band's own placement is.
+ */
+function expectVeilWithBand() {
+  const veil = host.querySelector<HTMLElement>(".spine-veil-track");
+  const band = host.querySelector<HTMLElement>(".spine-viewport");
+  expect(veil, "the veil rides in its own track-height wrapper").not.toBeNull();
+  expect(veil?.style.transform, "the veil moves with the band").toBe(mover()?.style.transform);
+  expect(veil?.style.getPropertyValue("--view-h"), "the veil's gap is the band's height").toBe(
+    band?.style.height,
+  );
+  expect(veil?.style.top, "an inline `top` would repaint on every frame").toBe("");
+}
+
 describe("the spine during a scroll", () => {
   it("moves the viewport band without re-rendering", async () => {
     await mount();
@@ -288,6 +306,7 @@ describe("the spine during a scroll", () => {
 
     // Initial placement, before any scroll: (0 − 300) / 2000 = −15%.
     expect(m?.style.transform).toBe("translateY(-15%)");
+    expectVeilWithBand();
 
     // (800 − 300) / 2000 = 25%. The reading line is 800 + 175 − 300 = 675,
     // which crosses from no section into a2 (500–1000): a boundary render.
@@ -297,10 +316,12 @@ describe("the spine during a scroll", () => {
     expect(m?.style.transform, "the boundary's re-render must not clobber it").toBe(
       "translateY(25%)",
     );
+    expectVeilWithBand();
 
     // (1100 − 300) / 2000 = 40%, still inside a2: no render, just the move.
     await scrollTo(1100);
     expect(m?.style.transform).toBe("translateY(40%)");
+    expectVeilWithBand();
 
     for (const el of [m, band]) {
       expect(el?.style.top, "an inline `top` would repaint on every frame").toBe("");
@@ -338,6 +359,7 @@ describe("the spine during a scroll", () => {
       expect(mover()?.style.transform).toBe("translateY(15%)"); // (800 − 200) / 4000
       const band = host.querySelector<HTMLElement>(".spine-viewport");
       expect(band?.style.height).toBe(change === "window resize" ? "18.75%" : "12.5%");
+      expectVeilWithBand();
     },
   );
 

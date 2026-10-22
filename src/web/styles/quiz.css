@@ -1,5 +1,5 @@
 /* quiz.css — the Quiz sub-mode of Learn (QuizPanel.tsx), and the
-   Recall | Tutorial | Explore | Quiz switch that sits at the left of the
+   Recall | Explore | Quiz switch that sits at the left of the
    band's head.
 
    Its structural classes are the glossary band's rather than a second
@@ -18,7 +18,7 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Tutorial | Explore | Quiz, at the left of the band's head: the
+/* Recall | Explore | Quiz, at the left of the band's head: the
    part-switcher every mode shares, `.summ-views` / `.summ-view-btn`
    (mode-band.css § the part-switcher; plan 261007h § F2), so its look is not
    here. Toggle buttons with `aria-pressed`, and the pressed one is filled. It
@@ -29,29 +29,36 @@
    than wrap, as every part-switcher does: the bin and the Written-for-you
    badge after it are pushed to the row's right end, and give up nothing. */
 .band-head > .learn-submode { margin-right: auto; }
-/* **Four chips (every owner since 2026-10-11; only with the Experimental switch
-   on before that) tighten their side padding, and
-   only in a narrow head**; anywhere else they take the bar's own (0.6rem, 0.8rem
+/* **Three or more chips tighten their side padding, and only in a narrow
+   head**; anywhere else they take the bar's own (0.6rem, 0.8rem
    under a finger), as every other part-switcher does. Until 2026-10-07 they were
    tight at every width, 4px a side even at 1440 where the head has 490px, and
    looked cramped beside every other mode's bar (the designer's review of plan
    261007h § F2).
 
    The narrow head is an iPad's: its band is 288px, so the head row has 226px
-   of content under a finger (the (i) keeps the right 49.6px). Four chips are
-   about 264px at 0.8rem and 196px at 0.25rem, and the bin Recall, Tutorial and
-   Explore add beside them is 22px plus a 7px gap: 225px fits, 293px would
-   scroll. A phone's head is 317px and a 1024px window's 346px, so both have
-   the room. The line is 19rem (304px), between the two; below it the bar would
-   still scroll sideways and fade at the edge rather than break, so the line
-   is about comfort, not correctness. Measured 2026-10-07; plan 261005h item B
-   measured the first version.
+   of content under a finger (the (i) keeps the right 49.6px). Four chips
+   (Recall, Tutorial, Explore, Quiz) were about 264px at 0.8rem and 196px at
+   0.25rem, and the bin Recall and Explore add beside them is 22px plus a 7px
+   gap: 225px fits, 293px would scroll. A phone's head is 317px and a 1024px
+   window's 346px, so both have the room. The line is 19rem (304px), between
+   the two; below it the bar would still scroll sideways and fade at the edge
+   rather than break, so the line is about comfort, not correctness. Measured
+   2026-10-07; plan 261005h item B measured the first version.
+
+   **Three chips since 2026-10-20**, when Tutorial was folded into Recall
+   (plan 261020m). Without Tutorial's chip the three should come to roughly
+   190px at 0.8rem, which with the bin would just fit the iPad's 226px — an
+   estimate from the numbers above, not a measurement. So the rule now starts
+   at three, which keeps the iPad safe at the cost of tighter chips there; if
+   a measurement shows three fit at full padding, it can go back to four (a
+   rule for a fourth part, should one come).
 
    `container` on the head, not the bar: the bar shrinks to what it holds, and
-   it is the head's width that decides whether four wide chips fit. */
+   it is the head's width that decides whether the chips fit. */
 .band-head:has(> .learn-submode) { container: learn-head / inline-size; }
 @container learn-head (max-width: 19rem) {
-  .learn-submode:has(> .learn-submode-btn:nth-child(4)) > .learn-submode-btn {
+  .learn-submode:has(> .learn-submode-btn:nth-child(3)) > .learn-submode-btn {
     padding-inline: 0.25rem;
   }
 }
@@ -145,6 +152,14 @@
   color: var(--primary-foreground);
 }
 .chat-send.quiz-go:not([aria-disabled="true"]):hover { filter: brightness(1.1); }
+/* **40 under a finger**, as chat's own Send is (mode-band.css § the composer,
+   plan 261021c): Answer sat at 36 beside a 40px microphone (plan 261021g). */
+@media (any-pointer: coarse) {
+  /* The answer button loses `.quiz-go` after a mark but remains pressable: it
+     can submit an edited answer. Size the row's Send-shaped button, not the
+     transient fill class. */
+  .quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
+}
 
 .quiz-actions {
   display: flex;
@@ -174,7 +189,7 @@
   gap: 0.3rem;
 }
 .quiz-mic-label {
-  font-size: 0.81rem;
+  font-size: max(var(--text-min), 0.81rem);
   color: var(--ink-faint);
 }
 
@@ -187,7 +202,7 @@
   background: transparent;
   padding: 0;
   font: inherit;
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   color: var(--ink-faint);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -223,7 +238,7 @@
   margin: 0.45rem 0 0;
 }
 .quiz-evidence-label {
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   color: var(--ink-faint);
 }
 
@@ -244,7 +259,7 @@
 }
 .quiz-look-again-head {
   margin: 0 0 0.3rem;
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   color: var(--ink-faint);
 }
 .quiz-look-again ul {
@@ -317,7 +332,7 @@
   white-space: normal;
   vertical-align: baseline;
 }
-.quiz-reply .cite-chips .block-ref { font-size: 0.74rem; }
+.quiz-reply .cite-chips .block-ref { font-size: max(var(--text-min), 0.74rem); }
 
 /* Status-only since plan 260929b: progress, Stop and failures stay pinned even
    though the idle redo button moved to Metadata. */
@@ -334,7 +349,7 @@
    reads as a note in the margin and cannot be taken for the author's words.
    The whole line is the button — a real target on touch, no hover needed. */
 /* **On the prose's own measure and axis**, not the cell's: `.prose` is a
-   centred 65ch box inside a wider cell whenever a band is open (prose.css §
+   centred measure-wide box inside a wider cell whenever a band is open (prose.css §
    `.prose`), so a line drawn against the cell hung 36px left of the text, under
    the gutter's icons — the 260930i browser check. The same `max-width` and
    `margin-inline: auto`, and the prose's face, size **and weight** so that `ch`
@@ -364,7 +379,7 @@ td.text .quiz-in-prose-q {
   border: 0;
   background: transparent;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   font-style: italic;
   font-weight: 400;
   line-height: 1.4;
@@ -422,4 +437,18 @@ td.text .quiz-in-prose-icon {
   align-items: center;
   gap: 0.5rem;
   white-space: nowrap;
+}
+/* **Under a finger, the tick-box's label and the pie are 40px** (plan 261021g
+   § Stage 2; controls.md § The numbers): the label was 22px tall and the pie
+   24px, pulled 5px into its gap by the margin above. The pie drops that margin
+   so 8px stays between the two boxes, and the row grows instead. The label is
+   the target, not the 13px box inside it, so it is the label that grows. */
+@media (any-pointer: coarse) {
+  .quiz-only-read label { min-height: 40px; }
+  .share-pie {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+  }
+  .quiz-only-read-what { gap: 8px; }
 }

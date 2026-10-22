@@ -748,7 +748,7 @@ function mountReception(view: "reception" | "claims"): ReactNode {
       claimList,
       checks: checksOwner(),
       citers: { result: { kind: "no-doi" }, retry: noop },
-      claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
+      claimChats: { summaries: [], onCheck: noop, onOpen: noop },
     },
     onJump: noop,
     view,

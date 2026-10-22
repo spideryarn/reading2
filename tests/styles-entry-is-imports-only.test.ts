@@ -221,9 +221,9 @@ const MANIFEST = [
      Shares no element with the sheet below. The per-voice faces, for everyone
      since 2026-10-02 — docs/project/fonts.md. */
   "voices.css",
-  /* **Last, and the position is the point.** The wordmark's hover animations
+  /* **Late, and the position is the point.** The wordmark's hover animations
      have to beat `.logo`, `.logo-home` and `.dock-home`, which are set in
-     dock.css and dock-fit.css far above — so loading last is what lets a
+     dock.css and dock-fit.css far above — so loading this late is what lets a
      one-class animation rule win against them without an `!important` or a
      specificity war.
 
@@ -234,6 +234,14 @@ const MANIFEST = [
      left the corner for as long as a reader pointed at it. The rule is now
      `.spya-anim:not(.logo-home)`. docs/project/design-logo.md § The traps. */
   "logo-animations.css",
+  /* Last so these document-wide attributes win over component sheets: the
+     root size is the baseline for all rem type, and a top-layer dialog needs
+     its dimming rule after the dialog's own appearance. Plan 261019g. */
+  "reading-comfort.css",
+  /* The bar a view-as tab draws, and the `--safe-top` it adds. Its own
+     selectors (`.view-as-bar`, `:root[data-view-as]`) are named nowhere
+     else, so its place in this list is free. Plan 261019n § Part 3. */
+  "view-as.css",
 ];
 
 /**
@@ -317,6 +325,29 @@ describe("the stylesheet entry point is an import manifest", () => {
       "every .css under src/web/styles/ must be named by MANIFEST exactly once — an " +
         "unimported sheet is dead, and an import with no file behind it fails the build",
     ).toEqual(present);
+  });
+});
+
+/**
+ * **tailwind.css's own local imports: exactly two, each in its own layer.**
+ *
+ * `styles.css` into `app`, and `button-tone.css` into `tone`, the one layer
+ * declared after `utilities` (plan 261020z). A rule in `tone` beats every `tw:`
+ * utility on whatever it matches, so a third sheet slipped in there, or `tone`
+ * moved before `utilities`, would change the whole app's cascade from one line.
+ */
+describe("tailwind.css layers the reading view under the utilities, and the tone over them", () => {
+  const tailwind = readFileSync("src/web/tailwind.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("declares the layers in the order the cascade needs", () => {
+    expect(tailwind.match(/^@layer [^{;]+;/gm)).toEqual(["@layer theme, base, app, utilities, tone;"]);
+  });
+
+  it("imports exactly styles.css into app and button-tone.css into tone", () => {
+    expect(tailwind.match(/^@import "\.[^"]*"[^;]*;/gm)).toEqual([
+      '@import "./styles.css" layer(app);',
+      '@import "./button-tone.css" layer(tone);',
+    ]);
   });
 });
 

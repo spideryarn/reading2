@@ -943,7 +943,7 @@ Five callers pass it:
 | `pdf` (`src/pdf-read.ts`) | Its own loop retries through a width gate the gateway cannot see. That loop asks `worthAskingAgain` about a refusal, so it retries an unpriced 5xx and never a priced one. For any other thrown error it is older and wider than the rule above: it asks again after any non-abort throw, including a `200` whose body broke. |
 | `embeddings` (`embedBatch`) | Its own loop gives five goes and honours `Retry-After`. It asks `worthAskingAgain` about a thrown error, so a dropped connection is retried and a broken `200` is not, and it does not retry a priced 5xx. |
 | `shelf-topics` (every call in `src/shelf-terms/model-topics.ts`) | Naming a level and the filing pass are each already run once more on any failure. |
-| `pdf-figure-locate` | `MAX_LOCATE_CALLS` promises at most eight model calls an article and counts asks. A hidden retry would make that twenty-four requests. |
+| `pdf-figure-locate` | `MAX_LOCATE_CALLS` and `MAX_UNCAPTIONED_LOCATE_CALLS` promise at most eight model calls an article for captioned figures and forty for uncaptioned ones, and count asks. A hidden retry would triple that. |
 | `command-pick`, `command-pick-words` | The two calls share one five-second deadline, and a failure already falls back to the bar's own list. |
 
 Two trade-offs, both taken on purpose:
@@ -1250,7 +1250,8 @@ The research is
 ## The box's key has a monthly limit, and it runs out
 
 The OpenRouter key in the box's `.env.local`, which every local call and every eval spends, has a
-monthly limit that Greg sets in OpenRouter's dashboard: $300 until 2026-10-05, $400 since. On
+monthly limit that Greg sets in OpenRouter's dashboard: $600 since 2026-10-20. It was raised from
+$500 after running out again that day (`usage_monthly` $500.03, `limit_remaining` 0). On
 2026-10-05 it was spent by the 5th of the month, and stayed at nothing for five hours until Greg
 raised it.
 

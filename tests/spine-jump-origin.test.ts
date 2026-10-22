@@ -458,6 +458,9 @@ describe("the mark for where the reader jumped from", () => {
       first("spine-hit"),
     );
     expect(markAt, "under the viewport band").toBeLessThan(first("spine-viewport-track"));
+    /* The origin is nearly always off screen, which is where the veil is: a
+       mark under it would be dimmed exactly when it is shown (plan 261022c). */
+    expect(markAt, "over the off-screen veil").toBeGreaterThan(last("spine-veil-track"));
   });
 
   it("is decorative — the chip beside it says the same thing in words", async () => {

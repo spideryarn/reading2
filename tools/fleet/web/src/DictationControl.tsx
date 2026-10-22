@@ -175,16 +175,16 @@ function isInsecureContext(): boolean {
 /**
  * What the reader is told, in the order the states actually happen.
  *
- * There is a **measured 1.1-second gap** between pressing the button and the
- * microphone opening, and it used to be invisible — so somebody pressed, said a
- * word into nothing, and concluded the feature was broken. "Opening the
- * microphone…" is that gap made visible.
+ * Before `getUserMedia` returns there is no track and anything said is lost, so
+ * the words tell somebody to wait as well as making the permission/opening gap
+ * visible. Once the track is ours, the shared hook records immediately; it no
+ * longer waits for Chromium's later `audiostart` (plan 261019m).
  */
 function statusLine(d: UseDictation): string | null {
   if (d.error !== null) return null; // The error has its own line, louder.
   if (d.transcribing) return "Writing down what you said…";
   if (!d.armed) return null;
-  if (d.startedAt === null) return "Opening the microphone…";
+  if (d.startedAt === null) return "Wait — opening the microphone…";
   if (!d.liveText) return "Listening. The words arrive when you stop.";
   return "Listening.";
 }

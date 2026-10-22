@@ -1339,14 +1339,25 @@ describe("the way back from a chat to its item", () => {
     expect(param("bears"), "and Back puts the address back as it was").toBe("directly");
   });
 
-  it("goes back to an angle in Debate: Reception, where the angles are", async () => {
+  /* Reception's angle box until plan 261020n, which moved it and its list to
+     Sources › Investigate: an angle chat made before then lands there too. */
+  it("goes back to a question in Sources: Investigate, where Your questions lists it", async () => {
     const line = await openChatFrom({ mode: "reception", lens: "how it relates to Nagel" });
-    expect(line.textContent).toBe("Back to your angle in Reception");
+    expect(line.textContent).toBe("Back to your question in Investigate");
+    const came = param("thread");
+    expect(came).not.toBeNull();
     await act(async () => line.click());
     await until(() => param("mode") === "sources", "Sources");
     /* Named since 2026-10-09: Bibliography is Sources' default. */
-    expect(param("sources"), "Reception, where the angles are").toBe("reception");
-    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
+    expect(param("sources"), "Investigate, where the questions are").toBe("investigate");
+    await until(
+      () => [...document.querySelectorAll(".mode-band .investigate-yours-words")].some((w) => w.textContent === "how it relates to Nagel"),
+      "the question listed under Your questions",
+    );
+    /* Unlike an item's way back, a question's keeps its chat open beside
+       Investigate: the conversation is what Investigate takes you back to
+       (Greg, 2026-10-20, spya-nhwy3d; plan 261021b). */
+    expect(param("thread"), "the conversation it came from stays open beside Investigate").toBe(came);
     expect(scrolled).toEqual([]);
   });
 

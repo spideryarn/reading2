@@ -48,7 +48,7 @@ const OUT = path.resolve("evals/results/long-documents-2026-10-05");
 const POWER = "standard" as const;
 const FAT = 60;
 
-const emptyReport = (): BuildReport => ({ repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] });
+const emptyReport = (): BuildReport => ({ repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], unresolvedStarts: [], droppedQuestions: [] });
 const save = (name: string, value: unknown) => writeFileSync(path.join(OUT, name), `${JSON.stringify(value, null, 1)}\n`);
 
 loadEnvLocal();

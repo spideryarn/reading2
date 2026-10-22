@@ -413,6 +413,47 @@ export function adminOnly(route: Route): boolean {
 }
 
 /**
+ * **Which pages a tab viewing as another reader may draw** — the shelf, an
+ * article in any of its modes, and its metadata page (a `read` route's
+ * `view`), and nothing else. docs/plans/261019n-admin-sees-other-users-articles-and-views-as-them.md
+ * § round 1, F3: the other pages make writes that do not all come through
+ * `apiFetch` (a consent form, a password change, a live session, an upload's
+ * own transfer), so the client's "no write leaves" rule could not reach them.
+ * App.tsx § `SignedIn` reads this once, above every branch, and draws
+ * `NotWhileViewingAs` for a `false`.
+ *
+ * **Exhaustive, like `ADMIN_ONLY`**: a new route kind does not compile until
+ * somebody has answered whether it is safe here. `false` is the safe answer.
+ */
+const VIEW_AS_ALLOWED: Record<Route["kind"], boolean> = {
+  library: true,
+  read: true,
+  "public-library": false,
+  add: false,
+  "add-upload": false,
+  design: false,
+  profile: false,
+  login: false,
+  admin: false,
+  privacy: false,
+  features: false,
+  "public-sharing": false,
+  pricing: false,
+  contact: false,
+  changelog: false,
+  help: false,
+  opensource: false,
+  callback: false,
+  "oauth-consent": false,
+  "not-found": false,
+};
+
+/** May a view-as tab draw this page? See `VIEW_AS_ALLOWED` above. */
+export function allowedWhileViewingAs(route: Route): boolean {
+  return VIEW_AS_ALLOWED[route.kind];
+}
+
+/**
  * The path segment for each view. `article` has none — the reading view is the
  * article's own address, not a page beside it.
  *
@@ -1118,6 +1159,7 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacyDebateBy(at);
   at = liftLegacySources(at);
   at = liftLegacyRefereeClaims(at);
+  at = liftLegacyLearnTutorial(at);
   at = liftLegacyAbout(at);
   /* `liftStrandedText` stood here from 2026-09-05 to 2026-09-29, rewriting
      `?mode=hierarchy&text=0` to Structure and dropping every `text=0`. Both
@@ -1540,16 +1582,50 @@ function liftLegacyRefereeClaims(at: Address): Address {
 }
 
 /**
+ * **Learn's Tutorial, folded into Recall on 2026-10-20**: `?learn=tutorial` →
+ * Recall, which is Learn's default and so has no pair of its own — the
+ * `learn` pair is dropped, the first one only (as `get("learn")` reads it),
+ * and every other pair is kept exactly as written. A `?thread=` beside it is
+ * kept for Recall to settle: a Tutorial thread folded into the Recall thread
+ * no longer exists, and Recall overrules a stale thread as it always has.
+ *
+ * `LEARN_VIEWS` (params.ts) would read the old word as unknown and open
+ * Recall anyway; this is what puts the address right, so it does not go on
+ * carrying a word nothing reads. Behind every arrival, as
+ * `liftLegacyRefereeClaims` is, the remembered last view included (GPT Sol's
+ * F6 on docs/plans/261020m-recall-and-tutorial-become-one-recall.md).
+ * tests/learn-tutorial-old-addresses.test.ts.
+ */
+function liftLegacyLearnTutorial(at: Address): Address {
+  const pairs = queryPairs(at.search);
+  const first = pairs.findIndex((pair) => hasKey(pair, "learn"));
+  const pair = pairs[first];
+  if (pair === undefined || !pair.includes("=")) return at;
+  let value = pair.slice(pair.indexOf("=") + 1);
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return at;
+  }
+  if (value !== "tutorial") return at;
+  const kept = pairs.filter((_, i) => i !== first);
+  return { pathname: at.pathname, search: kept.length > 0 ? `?${kept.join("&")}` : "", hash: at.hash };
+}
+
+/**
  * **Every old spelling `settleAddress` lifts that can also arrive after
  * boot** — `liftedTweetsHref`'s job, for the thread's old addresses, Debate's
  * old order, the old mode words of Citations, Debate and Peer review
- * together, and Referee's old `?referee=claims`. `navigate()`
+ * together, Referee's old `?referee=claims`, and Learn's old
+ * `?learn=tutorial`. `navigate()`
  * and Back/Forward (`useRoute`) ask this, so a tab open across a deploy lands
  * where a fresh load would. `null` when the address carries none of them.
  */
 export function liftedLegacyHref(href: string): string | null {
   const at = splitHref(href);
-  const lifted = liftLegacyRefereeClaims(liftLegacySources(liftLegacyDebateBy(liftLegacyTweets(at))));
+  const lifted = liftLegacyLearnTutorial(
+    liftLegacyRefereeClaims(liftLegacySources(liftLegacyDebateBy(liftLegacyTweets(at)))),
+  );
   return lifted === at ? null : `${lifted.pathname}${lifted.search}${lifted.hash}`;
 }
 
@@ -1557,11 +1633,13 @@ export function liftedLegacyHref(href: string): string | null {
  * **The same lifts for a bare query string** — a remembered last view, which
  * last-view.ts § `restoredHref` puts on the address after `settleAddress` has
  * run (GPT Sol's F1 on plan 261009l). Debate's old order first, then the
- * Sources words, then Referee's, as `settleAddress` orders them. The thread's old word is
+ * Sources words, then Referee's, then Learn's, as `settleAddress` orders them. The thread's old word is
  * last-view's own business (`opensTheThread` drops it).
  */
 export function liftedLegacySearch(search: string): string {
-  return liftLegacyRefereeClaims(liftLegacySources(liftLegacyDebateBy({ pathname: "", search, hash: "" }))).search;
+  return liftLegacyLearnTutorial(
+    liftLegacyRefereeClaims(liftLegacySources(liftLegacyDebateBy({ pathname: "", search, hash: "" }))),
+  ).search;
 }
 
 /**

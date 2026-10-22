@@ -140,6 +140,7 @@ import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
+import { useSlow } from "./useSlow.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 import { dictationReporter } from "./dictation-report.js";
 
@@ -885,11 +886,9 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, choice, setShow, retry, questions, liveQuestions, waitingQuestionCount, replies, addenda } = useEarlierFeedback(
-    open,
-    view === "earlier",
-    admin,
-  );
+  const { earlier, choice, setShow, retry, questions, liveQuestions, waitingQuestionCount, questionsLoading, replies, addenda } =
+    useEarlierFeedback(open, view === "earlier", admin);
+  const questionsSlow = useSlow(questionsLoading);
   /* One thread on its own, in Needs a decision: nothing else in the panel. */
   const threadOpen = choice.show === "waiting" && threadShowing(questions, replies);
   /* A half-written reply to a question is a draft too (261007d), and so is a
@@ -1291,21 +1290,27 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
               `spya-t6nmxt`). A button, not a third tab (GPT Sol's plan review,
               F7): it opens the Earlier tab on that filter, which is what the
               pill inside does too, so there are still two tabs and two panels.
-              Its count is the threads waiting on a decision; it is drawn once
-              the opening's read has said. */}
-          {choice.detail === "admin" && liveQuestions !== null ? (
+              Its count is the threads waiting on a decision, once the
+              opening's read has said; until then it is drawn with no number,
+              and a spinner after 600ms (Greg, spya-yf6vmy). */}
+          {choice.detail === "admin" && (liveQuestions !== null || questionsLoading) ? (
             <button
               type="button"
               className="fb-tab fb-tab-shortcut"
               aria-pressed={view === "earlier" && choice.show === "waiting"}
-              data-tip={shortcutTitle(liveQuestions)}
+              data-tip={liveQuestions === null ? "Looking for questions waiting on you…" : shortcutTitle(liveQuestions)}
               onClick={() => {
                 setShow("waiting");
                 replies.close();
                 choose("earlier");
               }}
             >
-              Needs a decision <span className="fb-show-count">{waitingQuestionCount}</span>
+              Needs a decision{" "}
+              {liveQuestions !== null ? (
+                <span className="fb-show-count">{waitingQuestionCount}</span>
+              ) : questionsSlow ? (
+                <LoaderCircle className="cmt-spinner fb-tab-spinner" size={13} aria-hidden="true" />
+              ) : null}
             </button>
           ) : null}
         </div>
@@ -1552,7 +1557,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>
-          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
+          <button type="button" className="fb-cancel tone-negative tap-target" onClick={onClose}>
             Close
           </button>
           {/* With a thread showing, Previous and Next again, where the reader
@@ -1569,12 +1574,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
         </div>
 
         <div className="fb-actions" hidden={view !== "write"}>
-          <button type="button" className="fb-cancel tap-target" onClick={onClose}>
+          <button type="button" className="fb-cancel tone-negative tap-target" onClick={onClose}>
             Cancel
           </button>
           <button
             type="submit"
-            className="fb-send tap-target"
+            className="fb-send tone-positive tap-target"
             /* **Live while the microphone is involved**: pressing it then stops
                the microphone and sends once the words land (`send`). Plan
                261010f; it used to be disabled here while still reading Send. */

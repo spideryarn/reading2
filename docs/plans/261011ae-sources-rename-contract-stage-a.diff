@@ -1,0 +1,61 @@
+diff --git a/src/store/pg-revisions.ts b/src/store/pg-revisions.ts
+index 21c2d6a2f..78710c206 100644
+--- a/src/store/pg-revisions.ts
++++ b/src/store/pg-revisions.ts
+@@ -1186,6 +1186,22 @@ export const STEP_RUN_CARRIED_COLUMNS = [
+   "started_at", "finished_at",
+ ] as const;
+ 
++/**
++ * **An article's first draft, copied from nothing: three columns, by name.**
++ *
++ * Not `tx.insert(articleRevisions).values({…})`, because drizzle's insert lists
++ * every column `schema.ts` declares and writes `default` into the rest. A
++ * column that is declared and then dropped by a migration, as an expand and
++ * contract rename does, would make every new article fail in the minutes the
++ * code deployed before that migration is still serving
++ * (docs/plans/261011ae-sources-rename-contract.md). Every other write to this
++ * table already names only what it sets.
++ */
++export function firstDraftInsert(revisionId: string, articleId: string): SQL {
++  return sql`insert into ${articleRevisions} (${sql.identifier(articleRevisions.id.name)}, ${sql.identifier(articleRevisions.articleId.name)}, ${sql.identifier(articleRevisions.status.name)})
++    values (${revisionId}::uuid, ${articleId}::uuid, 'draft')`;
++}
++
+ async function beginDraftIn(
+   tx: Tx,
+   opts: BeginRevisionOptions,
+@@ -1226,9 +1242,7 @@ async function beginDraftIn(
+     } else {
+       /* No `basedOnRevisionId`: this is the article's first draft, copied from
+          nothing, and null is the honest answer rather than a missing one. */
+-      await tx
+-        .insert(articleRevisions)
+-        .values({ id: revisionId, articleId: article.id, status: "draft" });
++      await tx.execute(firstDraftInsert(revisionId, article.id));
+     }
+ 
+     /* **The blocks carry too, and the three-column reading of this design
+/**
+ * **An article's first draft names only the columns it writes.**
+ *
+ * drizzle's `insert(table).values({…})` lists *every* declared column, writing
+ * `default` for the ones left out. So while `src/db/schema.ts` still declared
+ * the retired `citations`, `debate` and `debate_claims` (plan 261009w's expand),
+ * the first-draft insert named them, and the code deployed before the contract
+ * migration would have failed to start every new article for the minutes
+ * between that migration dropping them and Vercel going live. The insert
+ * names its own three columns instead, so it keeps working whichever columns
+ * the table has beyond them. docs/plans/261011ae-sources-rename-contract.md.
+ */
+import { PgDialect } from "drizzle-orm/pg-core";
+import { describe, expect, it } from "vitest";
+import { firstDraftInsert } from "../src/store/pg-revisions.js";
+
+describe("firstDraftInsert", () => {
+  it("names id, article_id and status, and no other column", () => {
+    const query = new PgDialect().sqlToQuery(firstDraftInsert("r", "a"));
+    const columns = /\(([^)]*)\)\s*values/i.exec(query.sql)?.[1];
+    expect(columns?.split(",").map((c) => c.trim())).toEqual(['"id"', '"article_id"', '"status"']);
+  });
+});

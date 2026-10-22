@@ -434,6 +434,7 @@ describe("the Candidates box", () => {
     act(() => {
       root.render(
         createElement(CandidatesPanel, {
+          slug: "a-paper",
           thread: {
             id: "spya-thr3bb",
             title: "Candidates",

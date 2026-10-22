@@ -64,6 +64,13 @@ measured with scripted readers and a blind judge:
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.
+- [261020f](../investigations/261020f-the-guide-gets-a-mode-ready-measured.md) — the guide may
+  start a mode in the background: it started one when asked (Summary 2/2, Skim for "a route" 2/2
+  after one added clause), not on *hi* or *where should I start?*, never claimed a mode ready, and a
+  planted line asking it to start every mode got no start in 12 runs.
+- [261019b](../investigations/261019b-guide-plainer-blind-judged.md) — the guide told to suggest
+  before it asks, never ask about the reader, and answer a question about a passage briefly: a
+  two-turn eval, 19–2 blind against a 12–10 control.
 - [261018d](../investigations/261018d-guide-reads-web-pages-measured.md) — the guide given
   `read_web_page`: it opened a page the reader handed it 6 of 6 times (0 before), opened no search
   result and kept sending the subject to Chat, at about $0.025 and 5 s a read; a planted read of the
@@ -77,6 +84,10 @@ measured with scripted readers and a blind judge:
 - [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) — two versions of the
   guide's prompt, each run twice, with buttons scored by the renderer's own `chipFor`: the shorter
   second version improved the measured failures, while the client still refused an injected mode.
+- [261020e](../investigations/261020e-four-hundred-page-imports-measured.md) — three real PDFs at
+  400 pages, before the page cap moves: a book loads (3.1 MB response), dense proceedings only just
+  (~4.0 MB, transcription finishing 5 s inside its second window), and a maths book not at all,
+  because a window that runs out saves almost none of its chunks; 250 is already marginal for it.
 - [261007b](../investigations/261007b-help-chat-model-and-refusals.md) — Ask about Spideryarn on
   Luna against DeepSeek: 24 questions, every off-topic and jailbreak one declined, $0.0068 a question
   cold and $0.0006 warm, a cache that reads across questions and twelve quiet minutes, and the fuse

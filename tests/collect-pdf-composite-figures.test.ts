@@ -140,11 +140,11 @@ describe("a composite figure the model boxed", () => {
     const pdf = await photosPdf();
     const captions = new Map([[m.ref, PHOTOS_CAPTION]]);
 
-    const before = await collectPdfFigures({ locate: null, captions, markers: [m], pdf, blobs: fakeBlobs() });
+    const before = await collectPdfFigures({ neighbours: new Map(), locate: null, captions, markers: [m], pdf, blobs: fakeBlobs() });
     expect(before.entries[0]).toMatchObject({ status: "failed", reason: "ambiguous" });
 
     const { locate, asked } = scripted({ page: 1, box_2d: box2d(95, 495, 365, 612) });
-    const run = await collectPdfFigures({ locate, captions, markers: [m], pdf, blobs: fakeBlobs() });
+    const run = await collectPdfFigures({ neighbours: new Map(), locate, captions, markers: [m], pdf, blobs: fakeBlobs() });
     expect(asked).toEqual([[1]]);
     const entry = run.entries[0]!;
     expect(entry).toMatchObject({ status: "stored" });
@@ -158,11 +158,11 @@ describe("a composite figure the model boxed", () => {
     const pdf = await chartsPdf();
     const captions = new Map([[m.ref, CHARTS_CAPTION]]);
 
-    const before = await collectPdfFigures({ locate: null, captions, markers: [m], pdf, blobs: fakeBlobs() });
+    const before = await collectPdfFigures({ neighbours: new Map(), locate: null, captions, markers: [m], pdf, blobs: fakeBlobs() });
     expect(before.entries[0]?.status).toBe("failed");
 
     const { locate, asked } = scripted({ page: 1, box_2d: box2d(95, 490, 455, 645) });
-    const run = await collectPdfFigures({ locate, captions, markers: [m], pdf, blobs: fakeBlobs() });
+    const run = await collectPdfFigures({ neighbours: new Map(), locate, captions, markers: [m], pdf, blobs: fakeBlobs() });
     expect(asked).toHaveLength(1);
     expect(run.entries[0]).toMatchObject({ status: "stored" });
     expect(run.located).toBe(1);
@@ -173,7 +173,7 @@ describe("a composite figure the model boxed", () => {
     const pdf = await photosPdf();
     const { locate } = scripted({ page: 1, box_2d: box2d(55, 340, 540, 395) });
     const layoutReads: number[][] = [];
-    const run = await collectPdfFigures({
+    const run = await collectPdfFigures({ neighbours: new Map(),
       locate,
       captions: new Map([[m.ref, PHOTOS_CAPTION]]),
       markers: [m],
@@ -200,11 +200,12 @@ describe("a composite figure the model boxed", () => {
     const pdf = await repeatedChartsPdf();
     const asked: string[] = [];
     const locate: FigureLocator = async (request) => {
-      asked.push(request.caption);
-      const page = request.caption.startsWith("Fig 1") ? 1 : 2;
+      const caption = request.subject.kind === "caption" ? request.subject.caption : "";
+      asked.push(caption);
+      const page = caption.startsWith("Fig 1") ? 1 : 2;
       return { ok: true, answer: { page, box_2d: box2d(95, 500, 455, 645) } };
     };
-    const run = await collectPdfFigures({ locate, captions, markers: [one, two], pdf, blobs: fakeBlobs() });
+    const run = await collectPdfFigures({ neighbours: new Map(), locate, captions, markers: [one, two], pdf, blobs: fakeBlobs() });
     expect(asked).toHaveLength(2);
     expect(run.entries.map((entry) => entry.status)).toEqual(["failed", "failed"]);
     expect(run.located).toBe(0);
@@ -219,7 +220,7 @@ describe("a composite figure the model boxed", () => {
       calls += 1;
       return { ok: true, answer: { page: null, box_2d: null } };
     };
-    const run = await collectPdfFigures({
+    const run = await collectPdfFigures({ neighbours: new Map(),
       locate,
       maxLocateCalls: MAX_LOCATE_CALLS + 100,
       captions,

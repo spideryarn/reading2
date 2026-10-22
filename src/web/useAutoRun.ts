@@ -103,6 +103,7 @@ import {
   subscribeActivations,
 } from "./activation.js";
 import { jobEngine } from "./jobEngine.js";
+import { viewAsNonce } from "./lib/view-as.js";
 
 /** The four states every one of every read hook that calls this reports. */
 export type ArtefactStatus = "loading" | "none" | "ready" | "error";
@@ -154,6 +155,10 @@ export function useAutoRun(
   useEffect(() => {
     /* Nothing pressed. */
     if (nonce === null) return;
+    /* A tab viewing as another reader starts nothing by itself (plan 261019n
+       § Part 3, Client 3); the band's own button still asks, and is told why
+       not. */
+    if (viewAsNonce() !== null) return;
     /* **Whose press is this?** Before the status is even looked at, because a
        press left behind by a mount that is gone must be retired rather than
        waited on. Claiming is idempotent, so `<StrictMode>` running this twice
@@ -262,6 +267,8 @@ export function useAutoRunOnArrival(
 
   useEffect(() => {
     if (status === "loading" || status === "ready") return;
+    /* As above: nothing starts by itself while viewing as another reader. */
+    if (viewAsNonce() !== null) return;
     if (status === "error") {
       if (rereadFor.current === slug) return;
       rereadFor.current = slug;

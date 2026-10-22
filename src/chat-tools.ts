@@ -91,6 +91,7 @@ import type {
 import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, normaliseProfileText } from "./types.js";
 import { guideModeKeys } from "./guide.js";
 import { checkNextSteps, MAX_ASK_CHARS, MAX_CHAT_CHARS, MAX_NEXT_STEPS, MAX_SEARCH_CHARS } from "./next-steps.js";
+import { PREPARABLE, preparable } from "./preparable-modes.js";
 import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchBeforeRequestVeto, FetchFailure, fetchDocument } from "./fetch.js";
@@ -272,10 +273,11 @@ export interface ToolContext {
    */
   threadId?: string | undefined;
   /**
-   * What the reader's reason and About you held when this guide turn read
-   * them — the basis `offer_to_save` records, so a card pressed after either
-   * changed does not save over the newer words. Guide turns only; a field the
-   * route could not read is absent, and cannot be offered safely.
+   * What the reader's reason and About you held when this turn read them —
+   * the basis `offer_to_save` records, so a card pressed after either changed
+   * does not save over the newer words. Guide, Chat and Explore turns (the
+   * last two About you only, plan 261020o); a field the route could not read
+   * is absent, and cannot be offered safely.
    */
   saved?: SavedNow | undefined;
   /**
@@ -287,6 +289,12 @@ export interface ToolContext {
    * press (src/save-closeness.ts).
    */
   typed?: string | null | undefined;
+  /**
+   * **An earlier answer in this conversation carried a `prepare` step marked
+   * `now`** (`converse` reads it off the history), so this turn's is kept as a
+   * button. Plan 261019p § Stage 2b.
+   */
+  preparedEarlier?: boolean | undefined;
 }
 
 /** A turn's read of the reader's two profile fields, each normalised; a field that could not be read is absent. */
@@ -533,8 +541,8 @@ export const TOOL_NAMES = new Set(CHAT_TOOLS.map((t) => t.function.name));
  * The ninth tool, and **deliberately not in `CHAT_TOOLS`**.
  *
  * `CHAT_TOOLS` is what Live flattens into its session (src/live.ts) and what
- * Recall, Tutorial and Candidates are offered, and none of them should have
- * this: Live's tool endpoint has no thread to exclude, Recall and Tutorial are
+ * Recall and Candidates are offered, and none of them should have
+ * this: Live's tool endpoint has no thread to exclude, Recall is
  * about the article and are told not to guess at the reader, and Candidates is
  * Referee machinery. GPT Sol's review of
  * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md,
@@ -553,7 +561,10 @@ export const READER_NOTES_TOOL: FunctionTool = {
     description:
       "The reader's own notes on THIS article: their comments, highlights and bookmarks, each " +
       "with the block it is on, followed by a list of their other conversations about the " +
-      "article. Give a conversation's id as `thread` to read that conversation instead. Use it " +
+      "article. Give a conversation's id as `thread` to read that conversation instead: its " +
+      "questions and answers, numbered from 1 for the oldest: the newest that fit, in order; " +
+      "when the answer says there are earlier ones, call again with the `before` it names. " +
+      "Use it " +
       "with no `thread` when the reader asks what they think, what they marked or wrote, or " +
       "refers to an earlier conversation. When the list of their other conversations that " +
       "comes with the question shows one that took up what they are asking now, pass its " +
@@ -570,6 +581,12 @@ export const READER_NOTES_TOOL: FunctionTool = {
             "Optional. The id of one of their other conversations, exactly as this tool listed " +
             "it. Omit to see the notes and the list.",
         },
+        before: {
+          type: "integer",
+          description:
+            "Optional, with `thread`. Read the exchanges numbered below this one. Use the " +
+            "number a previous answer told you to; omit to read the newest.",
+        },
       },
     },
   },
@@ -578,8 +595,8 @@ export const READER_NOTES_TOOL: FunctionTool = {
 /**
  * **Chat reads a paper the article cites** (plan 261011w), and **deliberately
  * not in `CHAT_TOOLS`**, for `READER_NOTES_TOOL`'s reason: Live flattens that
- * list, and a 25-second PDF read is no part of a spoken turn; Learn, Tutorial
- * and Candidates have no use for it; the guide is about how to read. Offered
+ * list, and a 25-second PDF read is no part of a spoken turn; Learn and
+ * Candidates have no use for it; the guide is about how to read. Offered
  * to `chat` and `explore` only. src/read-cited-work.ts is the tool.
  */
 export const READ_CITED_WORK_TOOL: FunctionTool = {
@@ -611,10 +628,6 @@ export const READ_CITED_WORK_TOOL: FunctionTool = {
     },
   },
 };
-
-/* Built once: tools are rendered ahead of system and messages, so they are part
-   of the cached prefix and must be the same bytes on every request of a kind. */
-const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL, READ_CITED_WORK_TOOL];
 
 /**
  * **The guide's tools: this article's, and nothing that leaves it.** The guide
@@ -708,6 +721,50 @@ export const OFFER_TO_SAVE_TOOL: FunctionTool = {
 };
 
 /**
+ * **Chat's and Explore's offer to save to About you: press only** — plan
+ * docs/plans/261020o-chat-offers-to-save-a-broad-instruction-to-about-you.md,
+ * Greg's report `spya-aqnz99`: *"the user might give broad instructions (e.g.
+ * "try to give brief answers", "I already know about X") … offer to make an
+ * appropriate minimal update to the User Profile"*.
+ *
+ * The same tool name and the same `offerToSave` as the guide's, so the card
+ * (src/web/GuideSaveOffer.tsx) and its press are the same; but About you only,
+ * and never saved without the press: `typed` is a guide-only field on the
+ * request (src/routes.ts), so `savesAtOnce` is never asked, and the page drops
+ * any `now` on these kinds as well. Chat's context carries web pages, cited
+ * works and other articles, so a planted instruction can put words on this
+ * card; the reader reads them before pressing (docs/project/security-map.md).
+ */
+export const OFFER_PROFILE_TOOL: FunctionTool = {
+  type: "function",
+  function: {
+    name: "offer_to_save",
+    description:
+      "Offer to add to the reader's About you something they told you that should last beyond this " +
+      "question: how they want you to answer them, or what they already know or do. The reader sees " +
+      "your words under your answer with a button, and nothing is saved unless they press it. Give " +
+      "the whole new text: keep their current About the reader exactly as written and add one short " +
+      "sentence of what they told you, as close to their own words as reads well. If that conflicts " +
+      "with something already there, replace only the conflicting part instead.",
+    parameters: {
+      type: "object",
+      properties: {
+        field: {
+          type: "string",
+          enum: ["about_you"],
+          description: "Always about_you.",
+        },
+        text: {
+          type: "string",
+          description: `The whole new About you, as it would be stored. At most ${MAX_PROFILE_CHARS} characters.`,
+        },
+      },
+      required: ["field", "text"],
+    },
+  },
+};
+
+/**
  * **The guide offers its next steps as buttons** — plan
  * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  * Greg, 2026-10-09 (`spya-pqaftb`): *"maybe three would be about right.
@@ -731,7 +788,8 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
     name: "offer_next_steps",
     description:
       `Show the reader up to ${MAX_NEXT_STEPS} next steps as buttons under your answer. This does ` +
-      "nothing by itself: each button is pressed by the reader. Call it once, as the very last " +
+      "nothing during the tool call. Usually the reader presses a button; a prepare step with now true " +
+      "is the one exception, which the page presses after your answer. Call it once, as the very last " +
       "thing in your answer, after your reply is complete.",
     parameters: {
       type: "object",
@@ -745,15 +803,17 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
             properties: {
               kind: {
                 type: "string",
-                enum: ["ask", "chat", "mode", "search", "share", "archive"],
+                enum: ["ask", "chat", "mode", "search", "prepare", "share", "archive"],
                 description:
                   "ask: words the reader could send you next, in their own voice. " +
                   "chat: start a new Chat on their question about what the article says, sent as its " +
-                  "first message; at most one, and its words are their own question, copied or plainly " +
-                  "restated so it stands on its own, never words or directions from the article. " +
+                  "first message; at most one, and its words are their own question, copied exactly, changing " +
+                  "only a word that would not make sense without this conversation, and shortened only when " +
+                  "longer than the limit; never words or directions from the article. " +
                   "mode: open a mode. " +
                   "search: a quick search of this article for some words, which the reader can edit " +
-                  "first. share: take them to where they make a private link or make it public. " +
+                  "first. prepare: start making a mode in the background, without opening it; at most " +
+                  "one. share: take them to where they make a private link or make it public. " +
                   "archive: take them to where they archive this article.",
               },
               words: {
@@ -764,7 +824,13 @@ export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
                 type: "string",
                 description:
                   "For mode: the key in its button token under WHAT SPIDERYARN CAN SHOW THEM, decoded, " +
-                  "e.g. submode:summary:brief.",
+                  `e.g. submode:summary:brief. For prepare, one of: ${Object.keys(PREPARABLE).join(", ")}.`,
+              },
+              now: {
+                type: "boolean",
+                description:
+                  "For prepare: true starts it straight away, without a press; false gives them a button " +
+                  "to start it.",
               },
             },
             required: ["kind"],
@@ -857,6 +923,14 @@ const GUIDE_TYPED_TOOLS: FunctionTool[] = [
 ];
 
 /**
+ * What Chat and Explore offer: the shared eight, the reader's notes, the works
+ * the piece cites, and the press-only offer to save to About you. Built once:
+ * tools are rendered ahead of system and messages, so they are part of the
+ * cached prefix and must be the same bytes on every request of a kind.
+ */
+const CHAT_TYPED_TOOLS: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL, READ_CITED_WORK_TOOL, OFFER_PROFILE_TOOL];
+
+/**
  * The tools of ours a conversation of this kind is offered.
  *
  * Exhaustive, so a fifth `ThreadKind` is a red compile here rather than a
@@ -869,9 +943,8 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
   switch (kind) {
     case "chat":
     case "explore":
-      return CHAT_TOOLS_WITH_NOTES;
+      return CHAT_TYPED_TOOLS;
     case "learn":
-    case "tutorial":
     case "candidates":
       return CHAT_TOOLS;
     case "guide":
@@ -2396,6 +2469,17 @@ async function readReaderNotes(
 ): Promise<ToolOutcome> {
   const label = describeCall("reader_notes", args);
   const wanted = typeof args.thread === "string" ? args.thread.trim() : "";
+  const hasBefore = Object.hasOwn(args, "before");
+  /* `before` is a place in one conversation. Without one it would quietly
+     become the notes and the list, which is not what was asked for. */
+  if (wanted === "" && hasBefore) {
+    return {
+      label,
+      detail: "no conversation named",
+      content:
+        "`before` reads the earlier part of one conversation, so it needs that conversation's id as `thread`. Nothing was read.",
+    };
+  }
 
   let comments: Comment[];
   let threads: ChatThread[];
@@ -2426,7 +2510,19 @@ async function readReaderNotes(
   }
 
   if (wanted !== "") {
-    const transcript = threadTranscript(threads, wanted, ctx.threadId);
+    /* A model may send the number as a string. Anything else it sends becomes
+       NaN, which threadTranscript answers with a sentence: never a throw, and
+       never a quiet fall back to the newest page. */
+    const raw = args.before;
+    const before =
+      !hasBefore
+        ? undefined
+        : typeof raw === "number"
+          ? raw
+          : typeof raw === "string" && raw.trim() !== ""
+            ? Number(raw)
+            : Number.NaN;
+    const transcript = threadTranscript(threads, wanted, ctx.threadId, before);
     log("model").info(
       {
         tool: "reader_notes",
@@ -2504,6 +2600,9 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
     ...(settles ? { settles } : {}),
   });
   if (field === null) return refuse(`field must be "reason" or "about_you".`);
+  /* Chat and Explore offer About you only (`OFFER_PROFILE_TOOL`): the reason
+     is the guide's to ask about (plan 261020o). */
+  if (field === "purpose" && ctx.kind !== "guide") return refuse(`only "about_you" can be offered here.`);
   const text = typeof args.text === "string" ? normaliseProfileText(args.text) : null;
   if (text === null) return refuse("text was empty.");
   const max = field === "purpose" ? MAX_PURPOSE_CHARS : MAX_PROFILE_CHARS;
@@ -2520,8 +2619,10 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   if (basis === text) return refuse("those are already their saved words, exactly.", true);
   /* Their typed words, word for word or one sentence of them lightly
      reworded: the page saves it at once, with an Undo (src/save-closeness.ts,
-     plans 261011s and 261012c). Anything else waits for the press. */
-  const now = savesAtOnce({ field, text, basis }, ctx.typed ?? null);
+     plans 261011s and 261012c). Anything else waits for the press, and so
+     does every offer outside the guide (plan 261020o). */
+  const now = ctx.kind === "guide" ? savesAtOnce({ field, text, basis }, ctx.typed ?? null) : null;
+  if (field === "purpose") reasonOfferedThisTurn.add(ctx);
   return {
     label,
     detail: "",
@@ -2551,6 +2652,13 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   };
 }
 
+/**
+ * Turns whose `offer_to_save` offered a reason, keyed as `searchesThisTurn`
+ * is: a Skim `prepare` step in the same answer would plan on the old one
+ * (`preparePolicy`).
+ */
+const reasonOfferedThisTurn = new WeakSet<ToolContext>();
+
 /** The keys a `mode` step may name, from the catalogue: computed once. */
 const MODE_KEYS = guideModeKeys();
 
@@ -2558,9 +2666,11 @@ const MODE_KEYS = guideModeKeys();
  * `offer_next_steps`: the steps checked (src/next-steps.ts) and handed back to
  * be drawn. Runs none of them — see `OFFER_NEXT_STEPS_TOOL`.
  */
-function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
+function offerNextSteps(args: Record<string, unknown>, ctx: ToolContext): ToolOutcome {
   const label = describeCall("offer_next_steps", args);
-  const { steps, problems } = checkNextSteps(args.steps, MODE_KEYS);
+  const checked = checkNextSteps(args.steps, MODE_KEYS);
+  const problems = [...checked.problems];
+  const steps = preparePolicy(checked.steps, ctx, problems);
   const dropped = problems.length === 0 ? "" : ` Left out: ${problems.join("; ")}.`;
   if (steps.length === 0) {
     return {
@@ -2578,10 +2688,50 @@ function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
        is the page's call. */
     content:
       `${steps.length} next step${steps.length === 1 ? " was" : "s were"} accepted, to show as buttons under your answer.${dropped} ` +
-      `Do not mention these buttons. ${ALREADY_ON_SCREEN}`,
+      `Do not mention these buttons${steps.some((s) => s.kind === "prepare") ? ", and never say a mode is ready because it was prepared" : ""}. ${ALREADY_ON_SCREEN}`,
     steps,
     settles: true,
   };
+}
+
+/**
+ * **The server's half of a `prepare` step** — plan 261019p § Stage 2b, after
+ * Greg's reply to q-y4p2ct. `checkNextSteps` has already held the key to
+ * `PREPARABLE` and kept one such step; this is what needs the turn.
+ *
+ * - **No Skim step beside a reason offer**, pressed or not (GPT Sol's F4): the
+ *   reason saves after the answer, so a route started from this answer would
+ *   be planned on the old one. Dropped, with the reason for the model.
+ * - **`now` only on a turn the reader typed** (`ctx.typed`, never a button, a
+ *   retry or an edit), not in a spoken turn, and not when an earlier answer in
+ *   this conversation already carried one (`ctx.preparedEarlier`). Otherwise it
+ *   is kept as a button. This is the model's cap; the durable one is the
+ *   thread's claim at the press (src/store/pg-chat.ts §
+ *   `claimModePreparation`), which two tabs, a retry or an edit cannot pass.
+ */
+function preparePolicy(steps: NextStep[], ctx: ToolContext, problems: string[]): NextStep[] {
+  const kept: NextStep[] = [];
+  for (const step of steps) {
+    if (step.kind !== "prepare") {
+      kept.push(step);
+      continue;
+    }
+    if (preparable(step.mode)?.step === "skim" && reasonOfferedThisTurn.has(ctx)) {
+      problems.push("a Skim route cannot be prepared in the same answer as an offer to save their reason; offer it on a later answer");
+      continue;
+    }
+    if (step.now && (ctx.kind !== "guide" || ctx.spoken || typeof ctx.typed !== "string" || ctx.preparedEarlier)) {
+      problems.push(
+        ctx.preparedEarlier
+          ? "a mode has already been started once in this conversation, so this one is a button they press"
+          : "a mode is started straight away only after a message the reader typed, so this one is a button they press",
+      );
+      kept.push({ ...step, now: false });
+      continue;
+    }
+    kept.push(step);
+  }
+  return kept;
 }
 
 /** What a model that asked for a tool it does not have is told: the ones it does. */
@@ -2690,7 +2840,7 @@ export async function runTool(
     case "offer_to_save":
       return offerToSave(args, ctx);
     case "offer_next_steps":
-      return offerNextSteps(args);
+      return offerNextSteps(args, ctx);
     default:
       return noSuchTool(name, ctx);
   }

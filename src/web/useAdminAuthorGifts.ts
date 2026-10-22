@@ -22,6 +22,7 @@ import {
   type AdminAuthorLookup,
   AUTHOR_LOOKUP_STALE_MINUTES,
   type AuthorGiftEnsured,
+  type AuthorGiftHighPowered,
   type AuthorGiftSendExpected,
   type AuthorGiftSent,
 } from "../admin-author-gifts.js";
@@ -79,10 +80,16 @@ export interface UseAdminAuthorGifts {
   /** Re-reading on a timer because a lookup is running. */
   watching: boolean;
   reload: () => Promise<void>;
-  /** All four never reject. */
-  ensure: (slug: string) => Promise<EnsureAnswer>;
+  /** All five never reject. */
+  /**
+   * `highPower`: switch the article to Opus as the gift is made (plan 261021j
+   * § D4). Ignored by the server when the article already has a gift.
+   */
+  ensure: (slug: string, options?: { readonly highPower?: boolean }) => Promise<EnsureAnswer>;
   lookUpAgain: (id: string) => Promise<string | null>;
   patch: (id: string, patch: AuthorGiftPatchInput) => Promise<string | null>;
+  /** A draft's *Switch on*: its article to Opus, and its main modes queued (plan 261021j § D4). */
+  switchOnHighPower: (id: string) => Promise<string | null>;
   /** Sends the gift as drawn: refused if it has changed since. */
   /** `rightsConfirmed`: the person ticked the rights box, so Send may make the private link (261010r). */
   send: (gift: AdminAuthorGift, options?: { readonly rightsConfirmed?: boolean }) => Promise<SendAnswer>;
@@ -181,9 +188,13 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
   }, []);
 
   const ensure = useCallback(
-    async (slug: string): Promise<EnsureAnswer> => {
+    async (slug: string, options: { readonly highPower?: boolean } = {}): Promise<EnsureAnswer> => {
       lookupStarted();
-      const written = await write(PATH, "POST", { slug, rightsConfirmed: true });
+      const written = await write(PATH, "POST", {
+        slug,
+        rightsConfirmed: true,
+        ...(options.highPower === undefined ? {} : { highPower: options.highPower }),
+      });
       if (!written.ok) return { kind: "refused", message: written.message };
       const answer = written.body as Partial<AuthorGiftEnsured>;
       if (typeof answer.id !== "string") return { kind: "refused", message: "The server's answer had no gift in it." };
@@ -213,6 +224,18 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
     async (id: string, change: AuthorGiftPatchInput) => {
       const written = await write(`${PATH}/${encodeURIComponent(id)}`, "PATCH", change);
       return written.ok ? null : written.message;
+    },
+    [write],
+  );
+
+  const switchOnHighPower = useCallback(
+    async (id: string) => {
+      const written = await write(`${PATH}/${encodeURIComponent(id)}/high-power`, "POST");
+      if (!written.ok) return written.message;
+      const answer = written.body as Partial<AuthorGiftHighPowered>;
+      return answer.highPower === true
+        ? null
+        : "The server's answer was incomplete. Refresh to check whether High-powered AI is on.";
     },
     [write],
   );
@@ -248,5 +271,5 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
     [write],
   );
 
-  return { gifts, error, loading, watching, reload, ensure, lookUpAgain, patch, send };
+  return { gifts, error, loading, watching, reload, ensure, lookUpAgain, patch, switchOnHighPower, send };
 }

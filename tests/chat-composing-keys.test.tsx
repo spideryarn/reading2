@@ -205,6 +205,8 @@ describe("renaming a conversation", () => {
     click('button[data-tip="Rename this conversation"]');
     const box = renameBox();
     if (!box) throw new Error("the rename box did not open");
+    expect(host.querySelector('button[aria-label="Save"]')?.classList.contains("tone-positive")).toBe(true);
+    expect(host.querySelector('button[aria-label="Cancel"]')?.classList.contains("tone-negative")).toBe(true);
     type(box, "骨相");
     return box;
   }

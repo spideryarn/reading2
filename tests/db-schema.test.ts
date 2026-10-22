@@ -1011,7 +1011,7 @@ describe("the schema keeps the promises the plan makes", () => {
       const { rows } = await c.query(
         `select conname from pg_constraint
           where connamespace = 'spideryarn'::regnamespace
-            and conname in ('articles_owner_fk','comments_owner_fk','jobs_owner_fk',
+            and conname in ('article_open_times_owner_fk','articles_owner_fk','comments_owner_fk','jobs_owner_fk',
                             'articles_current_revision_fk','reader_profiles_owner_fk',
                             'uploads_owner_fk','feedback_owner_fk',
                             'feedback_addenda_owner_fk',
@@ -1022,10 +1022,14 @@ describe("the schema keeps the promises the plan makes", () => {
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
                             'shelf_topic_scores_owner_fk','reader_arrivals_owner_fk',
-                            'shelf_topic_sets_owner_fk')
+                            'shelf_topic_sets_owner_fk','private_link_openers_reader_fk',
+                            'view_as_sessions_actor_fk','view_as_sessions_subject_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
+        /* drizzle/20261020164021, CASCADE as `reader_arrivals_owner_fk` is:
+           when an account opened articles, worth nothing once it is gone. */
+        "article_open_times_owner_fk",
         "articles_current_revision_fk",
         "articles_owner_fk",
         /* Both owner keys from drizzle/20260902163433. The second matters most:
@@ -1063,6 +1067,10 @@ describe("the schema keeps the promises the plan makes", () => {
            a delete on it would mean an account could not be removed until its
            last hover expired. */
         "link_summaries_owner_fk",
+        /* drizzle/20261021013453, appended by hand. CASCADE, as
+           `article_open_times_owner_fk`: that an account opened somebody's
+           private link is worth nothing once the account is gone. */
+        "private_link_openers_reader_fk",
         /* drizzle/20260905172650, and the first CASCADE. Bookkeeping: one row
            per outbound fetch a pointer caused, deleted by the limiter itself as
            soon as it falls out of the rolling window. It arrived with stage 2 of
@@ -1087,6 +1095,10 @@ describe("the schema keeps the promises the plan makes", () => {
            CASCADE, for the same reason: the model's topic set is a cache. */
         "shelf_topic_sets_owner_fk",
         "uploads_owner_fk",
+        /* drizzle/20261021154507, appended by hand. CASCADE on both, for
+           `reader_arrivals`' reason: bookkeeping about two accounts. */
+        "view_as_sessions_actor_fk",
+        "view_as_sessions_subject_fk",
       ]);
     });
   });

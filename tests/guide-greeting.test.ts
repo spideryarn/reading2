@@ -24,18 +24,24 @@ describe("guideGreeting", () => {
     }
   });
 
-  it("asks why, and who they are, when neither is stored", () => {
-    const g = guideGreeting({ state: "ready", purpose: null, purposeFailed: false, profile: null }, "A Piece");
-    expect(text(g)).toContain("Why are you reading it?");
-    expect(text(g)).toContain("tell me a little about yourself");
+  /* Plan 261019p: one question, and a way past it; nothing about who they are. */
+  it("asks only why, with a way past it, when no reason is stored, About you or not", () => {
+    for (const profile of [null, "A cognitive neuroscientist who studies memory"]) {
+      const g = guideGreeting({ state: "ready", purpose: null, purposeFailed: false, profile }, "A Piece");
+      expect(text(g)).toContain("Why are you reading it? A few words is plenty.");
+      expect(text(g)).toContain("Or just ask me something about it.");
+      expect(text(g)).not.toMatch(/about yourself|About you|still right/);
+      expect(g?.paragraphs.flat().some((r) => r.voice === "reader")).toBe(false);
+      expect(g?.invitesProfile).toBe(false);
+      expect(g?.paragraphs[0]?.find((r) => r.voice === "title")?.text).toBe("A Piece");
+    }
   });
 
-  it("quotes a short span of About you, and the title in its own voice", () => {
-    const long = `A neuroscientist ${"who studies memory ".repeat(20)}`;
-    const g = guideGreeting({ state: "ready", purpose: null, purposeFailed: false, profile: long }, "A Piece");
-    const quote = g?.paragraphs.flat().find((r) => r.voice === "reader")?.text ?? "";
-    expect([...quote].length).toBeLessThanOrEqual(120 + 3);
-    expect(g?.paragraphs[0]?.find((r) => r.voice === "title")?.text).toBe("A Piece");
+  it("quotes a stored reason back and offers to answer questions", () => {
+    const g = guideGreeting({ state: "ready", purpose: "For my journal club", purposeFailed: false, profile: null }, "A Piece");
+    expect(text(g)).toContain("You said you're reading it because “For my journal club”.");
+    expect(text(g)).toContain("or you can ask me something about it.");
+    expect(g?.invitesProfile).toBe(true);
   });
 
   it("falls back to 'this piece' with no title", () => {

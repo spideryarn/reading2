@@ -489,6 +489,14 @@ account metadata (the id, the email address, the sign-in providers), counts and 
 title, a URL, a filename, or a sentence of anybody's reading. [admin.md](admin.md) is the whole of it, including which of its three refusals is a gate
 and which two are courtesies.
 
+**And since 2026-10-20 a second one, which reads everything of one reader's**: the administrator's
+read-only *view as*. It does not change whose token is checked: the request carries the
+administrator's own, and the server runs an allowlisted GET with the owner box set to the reader,
+after checking a live, recorded session. No session is minted for the reader. In the browser,
+`NotThisReader` still fences every request against the administrator, and the tab keeps nothing in
+the storage the administrator's other tabs read. [admin.md § Viewing the app as a reader](admin.md#viewing-the-app-as-a-reader-read-only),
+[security.md § Viewing the app as a reader](security.md#view-as).
+
 ### What is still shared, and what is still open
 
 - **`articles.slug` is globally unique**, deliberately, because it is the URL contract. Two people

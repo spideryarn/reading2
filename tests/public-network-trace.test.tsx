@@ -618,6 +618,9 @@ const { addHref } = await import("../src/web/router.js");
 const { resetForTests: resetExperimental, snapshot: experimentalSnapshot } = await import(
   "../src/web/experimental-store.js"
 );
+/* The same kind of singleton: which private-link visit this page load has
+   already noted (src/web/usePrivateLinkOpen.ts). */
+const { forgetNotedPrivateLinkOpen } = await import("../src/web/usePrivateLinkOpen.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -656,6 +659,7 @@ beforeEach(() => {
      `SIGNED_IN` that `open()` fires is then real news.
      src/web/experimental-store.ts § Forget everything. */
   resetExperimental();
+  forgetNotedPrivateLinkOpen();
   /* Reads `served` at call time, so a case may still swap the payload without
      also having to restate how the route answers. */
   publicArticle = () => json(served);
@@ -1567,6 +1571,55 @@ describe("a signed-out browser on a shared document", () => {
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
 
+  /**
+   * **And so is Investigate** (plan 261020n § Visitors): every one of its rows hands a
+   * question to Chat, and a visitor has no chat. A shared `?sources=investigate`
+   * draws Bibliography, with no Investigate chip, no question box and no question
+   * row, and asks nothing but the public payload.
+   */
+  it("reads a shared ?sources=investigate as Bibliography, with no Investigate chip and no senders, asking nothing", async () => {
+    await remount();
+    served = {
+      ...ARTICLE,
+      bibliography: {
+        citations: [
+          {
+            id: "w1",
+            title: PUBLIC_WORK,
+            authors: "Tononi",
+            year: "2004",
+            why: "The theory the piece argues against.",
+            relevance: 0.9,
+            mentions: [],
+            citedAt: [],
+            firstCited: "spya-cccccc",
+            citedInBody: false,
+            url: "https://doi.org/10.1186/1471-2202-5-42",
+            linkFrom: "doi",
+          },
+        ],
+        capped: false,
+      },
+    };
+    await open("?mode=sources&sources=investigate");
+
+    const band = host.querySelector(".mode-band");
+    expect(band, "a band is open").not.toBeNull();
+    expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    expect(readable(band as Element)).toContain(PUBLIC_WORK);
+    const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".rcp-views [role='radio']") ?? [])];
+    expect(chips.map((chip) => chip.textContent?.replace(/\d+$/, ""))).toEqual([
+      "Bibliography",
+      "Links",
+      "Reception",
+      "Claims",
+    ]);
+    expect(chips[0]?.getAttribute("aria-checked"), "Bibliography is the one drawn").toBe("true");
+    expect(host.querySelector(".investigate-box, .investigate-q, .investigate-section"), "no sender is mounted").toBeNull();
+    expect(host.textContent).not.toContain("How has this piece been received");
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
+  });
+
   it("draws a stored debate from the payload, asking nothing", async () => {
     await remount();
     served = {
@@ -1621,6 +1674,10 @@ describe("a signed-out browser on a shared document", () => {
     const band = host.querySelector(".mode-band");
     expect(band, "a band is open").not.toBeNull();
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
+    /* A row is two lines until opened (plan 261020n): the quotation is one
+       press away, and the press asks the server nothing. */
+    expect(readable(band as Element)).not.toContain(PUBLIC_RECEPTION_QUOTE);
+    await act(async () => band?.querySelector<HTMLButtonElement>(".rcp-item > button.rcp-more")?.click());
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_RECEPTION_QUOTE);
     /* Reception draws the search about the piece; the other search's row is in
@@ -1637,7 +1694,7 @@ describe("a signed-out browser on a shared document", () => {
     const claims = chips.find((chip) => chip.textContent?.startsWith("Claims"));
     expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
     await act(async () => claims?.click());
-    await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
+    await until(() => band?.querySelector('a[href="https://answers.example.org/on-claims"]') != null);
     expect(new URLSearchParams(location.search).get("sources")).toBe("claims");
     expect(readable(band as Element)).not.toContain(PUBLIC_RECEPTION_QUOTE);
     /* The row the boundary withheld is said, not silently missing — in the
@@ -2258,12 +2315,14 @@ describe("a signed-out browser on a shared document", () => {
       /* Sources in each of its sub-modes, and the two old words. Links
          (plan 261011d) is read off the blocks and must ask nothing at all;
          Not cited (plan 261011ac) is the owner's, and a visitor's band reads
-         it as Bibliography, never asking `/api/related-work`. */
+         it as Bibliography, never asking `/api/related-work`; Investigate (plan
+         261020n) likewise, never posting to Chat. */
       "sources",
       "sources&sources=not-cited",
       "sources&sources=links",
       "sources&sources=reception",
       "sources&sources=claims",
+      "sources&sources=investigate",
       "citations",
       "reception",
     ]) {
@@ -3932,8 +3991,12 @@ describe("an owner's reading view, left alone", () => {
  * **A private link**: `/read/<slug>?key=<key>` on an article that is not
  * public. docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
  *
- * The acceptance rule of this file holds unchanged: one public request, no
- * POST, no `Authorization`. What is new is that the request carries the key,
+ * The acceptance rule of this file holds with one named exception: one public
+ * read, no `Authorization`, and no POST but one. Since plan 261021d (Greg's
+ * reply `spya-xug3kf` to q-agbc89, 2026-10-20) a private link's page notes that
+ * it was opened, once per visit: signed out, through the one public write;
+ * signed in, through the authenticated route. A public article sends neither.
+ * What is new besides is that the request carries the key,
  * that the key stays in the address while the reader moves about the article,
  * that it is kept nowhere else, and that the notice says which way in this is.
  *
@@ -3947,6 +4010,7 @@ describe("a visitor holding a private link", () => {
   const LINKED: PublicArticle = { ...ARTICLE, sharedBy: "link" };
   const PROSE = "The first paragraph of the piece.";
   const withKey = `/api/public/article/${SLUG}?key=${KEY}`;
+  const opened = `/api/public/private-link-opened/${SLUG}?key=${KEY}`;
 
   /* This suite's jsdom has no `localStorage`, so the rest of this file never
      meets the remembered view. These cases are about what is written there, so
@@ -3992,13 +4056,13 @@ describe("a visitor holding a private link", () => {
     expect(host.textContent).not.toContain(PROSE);
   });
 
-  it("makes one public request, with the key, no POST and no Authorization", async () => {
+  it("makes one public read with the key, one public note that it was opened, and no Authorization", async () => {
     await open(`?key=${KEY}`);
 
     expect(host.textContent).toContain(PROSE);
     expect(host.textContent).toContain("View only");
-    expect(trace.map((r) => r.url)).toEqual([withKey]);
-    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(trace.map((r) => r.url)).toEqual([withKey, opened]);
+    expect(trace.filter((r) => r.method !== "GET").map((r) => `${r.method} ${r.url}`)).toEqual([`POST ${opened}`]);
     expect(trace.filter((r) => r.auth !== null)).toEqual([]);
   });
 
@@ -4011,6 +4075,7 @@ describe("a visitor holding a private link", () => {
     await open(`?key=${KEY}`, "/metadata");
     expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
     expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    /* The same visit, so it is not noted a second time. */
     expect(trace.map((r) => r.url)).toEqual([withKey]);
   });
 
@@ -4048,18 +4113,23 @@ describe("a visitor holding a private link", () => {
     const asked = trace.filter((r) => r.url.includes(SLUG));
     /* Twice: after the first read, the page asks once whether this reader's
        gift claim just made the article theirs, and reads again owner-first
-       whatever the answer (src/web/article/useClaimSharedArticle.ts, 261011n). */
+       whatever the answer (src/web/article/useClaimSharedArticle.ts, 261011n).
+       The open is noted once, on the authenticated route, although the page
+       mounts twice: a ref in the hook counted it twice until 2026-10-21. */
     expect(asked.map((r) => `${r.method} ${r.url}`)).toEqual([
       `GET /api/article/${SLUG}`,
       `GET ${withKey}`,
+      `POST /api/private-link-opens/${SLUG}?key=${KEY}`,
       `GET /api/article/${SLUG}`,
       `GET ${withKey}`,
     ]);
-    for (const r of asked.filter((r) => r.url.includes("key="))) {
+    for (const r of asked.filter((r) => r.url.startsWith("/api/public/"))) {
       expect(r.auth, "the public request carries no token").toBeNull();
     }
     expect(trace.filter((r) => r.url.startsWith("/api/billing/usage"))).toHaveLength(1);
-    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET").map((r) => r.url)).toEqual([
+      `/api/private-link-opens/${SLUG}?key=${KEY}`,
+    ]);
   });
 
   it.each([
@@ -4142,6 +4212,7 @@ describe("a visitor holding a private link", () => {
     trace.length = 0;
     await act(async () => navigate(`/read/${SLUG}?key=${KEY}`));
     await settle();
+    /* Back to a visit this page load has noted: the read, and no second note. */
     expect(trace.map((r) => r.url)).toEqual([withKey]);
     expect(host.textContent).toContain(PROSE);
   });

@@ -148,8 +148,6 @@ function paintOwner(summaries: ThreadSummary[] = []): void {
           claimChats: {
             summaries,
             onCheck: (origin: ThreadOrigin) => checked.push(origin),
-            /* The angle box is tests/reception-lens.test.tsx's. */
-            onLens: () => {},
             onOpen: (id: string) => opened.push(id),
           },
         },

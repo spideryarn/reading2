@@ -41,6 +41,7 @@ import { settleFirstOpen } from "../first-open-purpose.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
+import { viewAsNonce } from "../lib/view-as.js";
 import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
 import { ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
@@ -55,6 +56,8 @@ import {
   STRUCTURE_BUILDING,
   type StructureArrival,
 } from "../modes/structure/StructureArriving.js";
+import type { ShareKey } from "../../share-key.js";
+import { usePrivateLinkOpen } from "../usePrivateLinkOpen.js";
 import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
 import { OwnerNotShared } from "./StillBeingAdded.js";
@@ -266,7 +269,7 @@ export function ArticlePage({
   return (
     <>
       {access.kind === "owned" ? (
-        <OwnedArticle key={slug} slug={slug} article={access.article} view={view} />
+        <OwnedArticle key={slug} slug={slug} article={access.article} view={view} readerId={readerId} />
       ) : (
         <VisitorArticle
           key={slug}
@@ -278,8 +281,10 @@ export function ArticlePage({
           searches={access.searches}
           crossrefs={access.crossrefs}
           signedIn={signedIn}
+          readerId={readerId}
           sessionUnconfirmed={access.sessionUnconfirmed}
           sharedBy={access.sharedBy}
+          shareKey={shareKey}
           view={view}
         />
       )}
@@ -302,10 +307,13 @@ function OwnedArticle({
   slug,
   article: fetched,
   view,
+  readerId,
 }: {
   slug: string;
   article: Article;
   view: ArticleView;
+  /** The account for which the owned read answered. */
+  readerId: string | null;
 }) {
   /**
    * The title the reader has just given this article, if they have.
@@ -457,7 +465,9 @@ function OwnedArticle({
    * **And not from a visitor at all**, which is why it is in this component
    * rather than in `ArticlePage`. There is no shelf row to count against, the
    * POST would be refused, and the acceptance test for public reading is that a
-   * signed-out browser issues no POST whatever.
+   * signed-out browser issues no POST whatever. (A private link is the one
+   * exception, since plan 261021d: its visitor's page sends one POST saying the
+   * link was opened — `usePrivateLinkOpen` in `VisitorArticle`.)
    *
    * **The ref is not belt-and-braces; without it the number is simply wrong.**
    * `<StrictMode>` is on (main.tsx), and in development React deliberately runs
@@ -472,6 +482,9 @@ function OwnedArticle({
    */
   const counted = useRef<string | null>(null);
   useEffect(() => {
+    /* Not counted while viewing as another reader: it is a write, and the
+       subject did not open it (plan 261019n § Part 3, Client 3). */
+    if (viewAsNonce() !== null) return;
     if (counted.current === slug) return;
     counted.current = slug;
     void apiFetch(`/api/library/${encodeURIComponent(slug)}/open`, { method: "POST" }).catch(
@@ -484,6 +497,7 @@ function OwnedArticle({
       <Metadata
         slug={slug}
         article={article}
+        readerId={readerId}
         onRenamed={renameTo}
         onVisibility={sharedTo}
         onPrivateLink={linkedTo}
@@ -738,14 +752,18 @@ function VisitorArticle({
   searches,
   crossrefs,
   signedIn,
+  readerId,
   sessionUnconfirmed,
   sharedBy,
+  shareKey,
   view,
 }: {
   slug: string;
   article: Article;
   /** Public, or by a private link. For the notice, on both views. */
   sharedBy: PublicSharedBy;
+  /** The address's private-link key: for recording the open, and for the details page's admin line. */
+  shareKey: ShareKey | null;
   /** The artefacts the payload carried. reader-capability.ts § artefacts. */
   artefacts: PublicArtefactSet;
   available: PublicArtefacts;
@@ -757,6 +775,12 @@ function VisitorArticle({
   crossrefs: readonly Crossref[] | null;
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /**
+   * **The identity access was resolved for**, for the details page's
+   * administrator line only (Ownership.tsx, plan 261020j): its request is
+   * keyed on this id rather than on a session read afresh below.
+   */
+  readerId: string | null;
   /**
    * **Only for what the chrome says**, and it goes to both views rather
    * than to the reading view alone: the other is one click away and carries
@@ -771,13 +795,16 @@ function VisitorArticle({
   useEffect(() => {
     settleFirstOpen(slug, null, "unknown");
   }, [slug]);
+  usePrivateLinkOpen(slug, sharedBy, shareKey, readerId, sessionUnconfirmed);
   if (view === "metadata")
     return (
       <PublicMetadataPage
+        shareKey={shareKey}
         slug={slug}
         article={article}
         available={available}
         signedIn={signedIn}
+        readerId={readerId}
         sessionUnconfirmed={sessionUnconfirmed}
         sharedBy={sharedBy}
       />

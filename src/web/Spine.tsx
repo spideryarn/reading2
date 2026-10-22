@@ -118,6 +118,13 @@ import type { ReadReach } from "./reading-time.js";
 import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { WhereCard } from "./WhereCard.js";
+import {
+  type RailMarks,
+  SEARCH_RAIL_MARKS,
+  SpineKey,
+  type SpineKeyItem,
+  spineKeyItems,
+} from "./spine-key.js";
 import { spineLabel, type WhereRow, whereForBand } from "./where.js";
 import { useRenderCount } from "./perf.js";
 import { onFontsChanged } from "./fonts.js";
@@ -280,6 +287,12 @@ interface Props {
    * has to know this feature exists.
    */
   matches?: Map<BlockId, BlockMatch> | undefined;
+  /**
+   * What the `matches` lanes are, in the open mode's words — for the card's
+   * key, its count and each band's accessible name. reader/passages.ts §
+   * `railMarks`. Defaults to Search's, which is what the lanes were built for.
+   */
+  marksWords?: RailMarks | undefined;
   /**
    * How long the reader has spent on each block, as a reach in sixteenths of
    * the rail — `useReadingTime`'s `reach`, reading-time.ts § `readReach`.
@@ -518,6 +531,7 @@ function SpineInner({
   outline,
   layoutKey,
   matches = NO_MATCHES,
+  marksWords = SEARCH_RAIL_MARKS,
   reading = NO_READING,
   quotes = NO_QUOTES,
   onJump,
@@ -590,6 +604,10 @@ function SpineInner({
   /** The track-height wrapper the viewport band rides in, moved directly by
       `transform` rather than re-rendered (§ scroll position). */
   const viewportMover = useRef<HTMLDivElement>(null);
+  /** Its twin under the marks, carrying the veil over everything off screen —
+      moved by the same write in the same frame (§ scroll position, and the
+      render beside `.spine-from`). */
+  const veilMover = useRef<HTMLDivElement>(null);
   /**
    * The presses begun on the rail whose clicks have not arrived yet, oldest
    * first — see `bandClick`. A queue rather than one slot because clicks may
@@ -725,8 +743,11 @@ function SpineInner({
       raf = 0;
       const sy = window.scrollY;
 
+      const at = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
       const mover = viewportMover.current;
-      if (mover) mover.style.transform = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
+      if (mover) mover.style.transform = at;
+      const veil = veilMover.current;
+      if (veil) veil.style.transform = at;
 
       const pos = sy + viewportH * READING_LINE - docTop;
       const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
@@ -962,6 +983,27 @@ function SpineInner({
     () => (metrics && quotes.size > 0 ? quoteRailMarks(metrics.rows, quotes) : []),
     [metrics, quotes],
   );
+
+  /**
+   * **The card's key: what the rail is drawing now** — spine-key.tsx, Greg's
+   * `spya-ah5ws6`. Built from the very values the marks below are drawn from,
+   * so the key cannot list a mark that is not on the rail or miss one that is.
+   * One swatch per lane that drew something, in lane order, because a lane
+   * whose search matched nothing on this page takes no room either.
+   */
+  const keyItems = useMemo(() => {
+    const byLane = new Map<number, string>();
+    for (const m of marks) if (!byLane.has(m.lane)) byLane.set(m.lane, m.rgb);
+    return spineKeyItems({
+      /* Only a back-matter band the rail actually gives height to. */
+      supplement: metrics?.l1.some((b) => b.entry.supplement && b.height > 0) ?? false,
+      reading: readPaths !== null,
+      from: from !== null,
+      quotes: quoteStrip.length > 0,
+      laneColours: [...byLane.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c),
+      marksLabel: marksWords.label,
+    });
+  }, [metrics, readPaths, from, quoteStrip, marks, marksWords]);
 
   /**
    * How many matches fall inside each hoverable band, by its node id.
@@ -1210,6 +1252,35 @@ function SpineInner({
           />
         ))}
 
+        {/* **The veil: everything off screen, a little dimmer.** Greg,
+            2026-10-21 (spya-wzssyu): *"Make it a bit clearer in the spine which
+            bits are visible on the screen."* The band's orange edges sat on an
+            orange-brown rail, inside a section fill brighter than its own wash,
+            so the stretch on screen is now said by lightness instead of by more
+            orange: the rail outside it is veiled toward the panel, and the
+            stretch itself is left at full strength.
+
+            **Its own moving wrapper, here, rather than a shadow on the band.**
+            The band is the last child, over everything, and a veil there would
+            dim the origin mark, the quotes and the search marks wherever they
+            are off screen — which is where they are most needed. So this twin
+            sits after the parts, the reading chart, the section fill and the
+            hairlines, and before those marks; the scroll effect writes the same
+            transform to both wrappers in the same frame
+            (docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md). */}
+        <div
+          ref={veilMover}
+          className="spine-veil-track"
+          aria-hidden="true"
+          /* The band's height as a custom property, not a `height`: the veil
+             is the wrapper's two pseudo-elements, one above the band and one
+             from its foot down, and the stylesheet floors both at the same
+             value (2px normally, 4px around two 2px increased-contrast edges)
+             with a `max()` that jsdom's CSSOM would mangle inline (the reason
+             `--here-top` is a custom property too). */
+          style={{ "--view-h": pct(viewportH) } as CSSProperties}
+        />
+
         {/* **Where the reader jumped from**, while the chip offering the way
             back is up — Stage C of
             docs/plans/260906g-back-to-where-you-jumped-from.md. The chip names
@@ -1389,7 +1460,9 @@ function SpineInner({
                   where={whereByBand.get(b.entry.node.id) ?? []}
                   position={Math.round((b.top / docHeight) * 100)}
                   matches={bandCounts.get(b.entry.node.id) ?? 0}
+                  marksWords={marksWords}
                   here={hereHitId === b.entry.node.id}
+                  keyItems={keyItems}
                   /* Only when a finger opened it. A mouse reader hovering the
                      rail is one click from anywhere and does not need telling;
                      saying "tap again" to somebody holding a mouse is noise. */
@@ -1412,7 +1485,7 @@ function SpineInner({
                    description is what a screen reader can be configured not to
                    read. "Four matches here" is the whole reason somebody using
                    the rail during a search would press this one. */
-                aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0)}
+                aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0, marksWords)}
                 /* **The same fact the card puts in words, in the one place a
                    screen reader will find it.** `you are here` in the card is
                    the tooltip's *description*, which a screen reader can be
@@ -1552,12 +1625,14 @@ function bandLabel(band: Band): { text: string; voice: Voice } {
 }
 
 /** The band's name for a screen reader, with the matches in it if there are any. */
-function ariaFor(band: Band, matches: number): string {
+function ariaFor(band: Band, matches: number, words: RailMarks): string {
   const name = band.parent
     ? `${band.parent.title} › ${bandLabel(band).text}`
     : bandLabel(band).text;
   if (matches === 0) return name;
-  return `${name} — ${matches} search ${matches === 1 ? "match" : "matches"}`;
+  /* In the open mode's words: the lanes are Ideas' or Timeline's passages as
+     often as Search's, and "3 search matches" in Ideas was simply wrong. */
+  return `${name} — ${matches} ${matches === 1 ? words.one : words.many}`;
 }
 
 function BandCard({
@@ -1565,14 +1640,20 @@ function BandCard({
   where,
   position,
   matches,
+  marksWords,
   here = false,
+  keyItems,
   showTapHint = false,
 }: {
   band: Band;
+  /** What the rail is drawing now, keyed under the foot — spine-key.tsx. */
+  keyItems: readonly SpineKeyItem[];
   /** The band's place in the outline — `whereForBand`. */
   where: readonly WhereRow[];
   position: number;
   matches: number;
+  /** The open mode's words for the visible count, shared with the button. */
+  marksWords: RailMarks;
   /** The reading line is inside this band — see `hereHit` in `Spine`. */
   here?: boolean;
   showTapHint?: boolean;
@@ -1660,7 +1741,7 @@ function BandCard({
             a mark already says it. */}
         {matches > 0 && (
           <span className="tip-matches">
-            {matches} {matches === 1 ? "match" : "matches"}
+            {matches} {matches === 1 ? marksWords.one : marksWords.many}
           </span>
         )}
         <span>{position}% in</span>
@@ -1671,6 +1752,11 @@ function BandCard({
             two are a few pixels apart. */}
         {here && <span className="tip-here">you are here</span>}
       </div>
+      {/* **What the spine is, and what its colours mean** — Greg, 2026-10-19,
+          `spya-ah5ws6`. Under the section's own facts, because those are what
+          the reader pointed for; above the tap hint, which is about the next
+          tap and has to stay last. */}
+      <SpineKey items={keyItems} />
       {/* **Said out loud, because a tap that does nothing visible reads as a
           broken control.** On a touch device the first tap opens this card and
           does not move the article — which is the right behaviour on a rail of

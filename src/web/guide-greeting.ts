@@ -30,12 +30,10 @@ export type GreetingRun =
 export interface Greeting {
   /** Paragraphs, each a list of runs. */
   readonly paragraphs: readonly (readonly GreetingRun[])[];
-  /** About you is definitively empty, so the line pointing at the profile page is drawn. */
+  /** A reason is stored and About you is definitively empty, so the line pointing at the profile page is drawn. */
   readonly invitesProfile: boolean;
 }
 
-/** How much of *About you* is quoted back: enough to recognise, not the whole of it (Opus on the plan). */
-export const PROFILE_QUOTE_CHARS = 120;
 /** How much of a stored reason is quoted back. */
 export const PURPOSE_QUOTE_CHARS = 160;
 
@@ -74,28 +72,20 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
     return {
       paragraphs: [
         [...hello, ours(" You said you're reading it because "), quoted(read.purpose, PURPOSE_QUOTE_CHARS), ours(".")],
-        [ours("I can suggest where to start, what to read closely, and which modes would help.")],
+        [ours("I can suggest where to start and what to read closely, or you can ask me something about it.")],
       ],
       invitesProfile: profile === null,
     };
   }
 
-  const tell = ours("Tell me below, and I'll suggest where to start and which modes would help.");
-  if (profile === null) {
-    return {
-      paragraphs: [
-        [...hello, ours(" Why are you reading it?")],
-        [tell],
-        [ours("If you like, tell me a little about yourself too: what you do, and how much you already know about this subject.")],
-      ],
-      invitesProfile: false,
-    };
-  }
+  /* Plan 261019p (Greg, `spya-p4uqye`: *"shouldn't nag them tooooo much for
+     more information"*): one question, why they are reading, and a way past
+     it. About you is neither asked for nor quoted back for checking; the guide
+     uses it silently. */
   return {
     paragraphs: [
-      hello,
-      [ours("In About you, you wrote "), quoted(profile, PROFILE_QUOTE_CHARS), ours(". Is that still right?")],
-      [ours("More importantly, why are you reading this one? "), tell],
+      [...hello, ours(" Why are you reading it? A few words is plenty.")],
+      [ours("I'll suggest where to start. Or just ask me something about it.")],
     ],
     invitesProfile: false,
   };

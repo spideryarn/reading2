@@ -89,7 +89,7 @@ describe("the article on its own is centred", () => {
        because `toContain` on the two names separately was satisfied by the rule
        that was wrong. */
     expect(r).toContain("var(--text-pad-r) - var(--text-pad-l)");
-    /* `65ch` counts the chrome's zeroes without this — the same line, and the
+    /* The measure counts the chrome's zeroes without this — the same line, and the
        same reason, as the sibling rule and `.blk-gutter` both carry. */
     expect(r).toContain("font-size: var(--reading-size)");
   });
@@ -111,6 +111,14 @@ describe("the article on its own is centred", () => {
     expect(css).toContain("--text-pad-l: 1.4rem");
   });
 
+  /* `--reading-measure` is 56ch of Source Serif 4 at 17px: 494px, ≈31rem at a
+     16px root (counted by scripts/measure-line-length.ts, plan 261022d). 46 until
+     2026-10-22, which was 65ch of Geist. */
+  const MEASURE_REM = 31;
+  // The plain pad is the left one, and the gutter's the right, since 261003c.
+  const padL = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
+  const padR = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
+
   it("and the cap in layout.ts is wide enough to hold them plus the measure", () => {
     /* **The one arithmetic tie between this stylesheet and layout.ts, and it
        goes stale silently.** The cap is documented as the measure plus these two
@@ -128,16 +136,19 @@ describe("the article on its own is centred", () => {
        floor makes it *wider* in rem, so one number cannot be right everywhere.
        Given a fact one home; what is left here is the default root, so this
        file's own story stays readable. */
-    const MEASURE_REM = 46;
-    // The plain pad is the left one, and the gutter's the right, since 261003c.
-    const padL = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
-    const padR = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
     expect(padL).toBe(1.4);
     expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeGreaterThanOrEqual(
       (MEASURE_REM + padL + padR) * DEFAULT_ROOT_PX,
     );
-    // And not so generous that the column stops looking capped at all: the
-    // rounding runs upwards by design, but by under a rem.
+  });
+
+  /* **Known loose, and waiting on Greg** (q-z3j0ep, plan 261022d § Stage 2): the
+     cap was built for 65ch of Geist, ≈46rem, and the measure is now ~31rem, so
+     it is ~15rem wider than the column it holds. Bringing it down widens bands
+     on iPad-landscape windows, which is his call. This goes red the day the cap
+     comes down; then drop the `.fails`. */
+  it.fails("is not so generous that the column stops looking capped (under a rem of slack)", () => {
+    expect(padL).toBe(1.4);
     expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeLessThan(
       (MEASURE_REM + padL + padR + 1) * DEFAULT_ROOT_PX,
     );

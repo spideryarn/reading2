@@ -3,11 +3,11 @@
  * **`useDictation` — the three phases, and the promise that stopping saves.**
  *
  * This is the regression test for what Greg reported on 2026-08-27: he pressed
- * the microphone and *"nothing seemed to happen"*. Nothing was broken. The
- * device does not open until about **1.1 seconds** after the press, and the old
- * hook set `listening` on the line straight after `r.start()` — so the button
- * claimed to be listening a full second before it could hear anything, and
- * whatever was said into that second was gone without a sign.
+ * the microphone and *"nothing seemed to happen"*. The original hook claimed
+ * `listening` before the device opened; a later version waited for Chromium's
+ * `audiostart`, about **1.1 seconds** after its owned track was already live,
+ * and lost whatever was said in that gap. `opening` is now only the time before
+ * the track exists, and `listening` begins with the tape.
  *
  * So the property under test is that **the phase tracks the microphone rather
  * than the intention**: armed and deaf is a state with a name, and it is not
@@ -75,6 +75,8 @@ let releaseEnumeration: (() => void) | null = null;
 let tracksStopped = 0;
 /** `ended` handlers the hook installed on the track it opened. */
 let endedListeners: Array<() => void> = [];
+/** Every `MediaRecorder` the hook has built, newest last — "is a tape running". */
+let recorders: FakeRecorder[] = [];
 
 class FakeRecognition {
   continuous = false;
@@ -130,6 +132,9 @@ class FakeRecognition {
  * dictation-recording.test.ts.
  */
 class FakeRecorder {
+  constructor() {
+    recorders.push(this);
+  }
   static isTypeSupported(t: string) {
     return t.startsWith("audio/webm");
   }
@@ -488,6 +493,7 @@ beforeEach(() => {
   tracksStopped = 0;
   tracksHandedOut = [];
   endedListeners = [];
+  recorders = [];
   vi.stubGlobal("requestAnimationFrame", () => 1);
   vi.stubGlobal("cancelAnimationFrame", () => {});
   install(ChromiumRecognition);
@@ -508,35 +514,42 @@ describe("the three phases", () => {
 
   it("is `opening`, not `listening`, until the device actually opens", async () => {
     /* The bug, exactly. The old hook went to its listening state on the line
-       after `r.start()` — a measured 1.1 seconds before `audiostart`. */
+       after `r.start()` — a measured 1.1 seconds before `audiostart`.
+
+       Until plan 261019m this looked *after* the capture settled, because
+       `listening` waited for the recogniser's `audiostart`. That wait was the
+       bug that lost the first second of speech: the track is delivering audio,
+       and recorded, from the moment it is ours. So `opening` now means the
+       device is not open yet, and that is the window this looks at. */
     const h = drive();
     act(() => h.get().toggle());
-    await settleCapture();
     expect(h.get().phase).toBe("opening");
     expect(h.get().armed).toBe(true);
+    await settleCapture();
     h.unmount();
   });
 
-  it("becomes `listening` on audiostart", async () => {
+  it("becomes `listening` when the track is ours, without waiting for audiostart", async () => {
+    // Was "becomes `listening` on audiostart" until plan 261019m.
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
-    act(() => latest().onaudiostart?.());
     expect(h.get().phase).toBe("listening");
     h.unmount();
   });
 
-  it("drops back to `opening` when Safari restarts it mid-session", async () => {
-    // Between `onend` and the next `audiostart` the microphone genuinely is
-    // deaf again, so claiming otherwise would be the original bug returning by
-    // a side door.
+  it("stays `listening` when Safari restarts the recogniser mid-session", async () => {
+    /* The reverse of the test it replaces ("drops back to `opening`"). Between
+       `onend` and the next `audiostart` the *recogniser* is deaf, but since plan
+       261019m the tape is recording on our track throughout, so the microphone
+       is listening and saying otherwise would be the false "not listening". */
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
     act(() => latest().onaudiostart?.());
     expect(h.get().phase).toBe("listening");
     act(() => latest().onend?.());
-    expect(h.get().phase).toBe("opening");
+    expect(h.get().phase).toBe("listening");
     expect(h.get().armed).toBe(true);
     h.unmount();
   });
@@ -549,6 +562,103 @@ describe("the three phases", () => {
     const startsBefore = r.started.length;
     act(() => r.onend?.());
     expect(r.started.length).toBe(startsBefore + 1);
+    h.unmount();
+  });
+});
+
+/**
+ * **The tape starts when the track does** — plan 261019m.
+ *
+ * Until 2026-10-19 the recording on Chromium waited for the recogniser's
+ * `audiostart`, a measured 1.1 seconds after our track was already live and
+ * delivering audio, so the first second of every dictation was in the track
+ * and went nowhere. Now the tape, the timer and `listening` all start on the
+ * line that takes ownership of the track, on every browser, and `audiostart`
+ * is only the live words catching up.
+ */
+describe("the tape starts with the track", () => {
+  it("is recording, and `listening`, before the recogniser's audiostart on Chromium", async () => {
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(latest().started[0], "not the shared-track path this test is about").not.toBeNull();
+    expect(recorders.map((r) => r.state)).toEqual(["recording"]);
+    expect(h.get().phase).toBe("listening");
+    expect(h.get().startedAt).not.toBeNull();
+    /* And audiostart, when it does come, changes nothing and builds no second tape. */
+    act(() => latest().onaudiostart?.());
+    expect(recorders).toHaveLength(1);
+    expect(h.get().phase).toBe("listening");
+    h.unmount();
+  });
+
+  it("stays `listening` across a recogniser restart, because the tape never stopped", async () => {
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => latest().onaudiostart?.());
+    act(() => latest().onend?.());
+    expect(h.get().phase).toBe("listening");
+    expect(h.get().armed).toBe(true);
+    expect(recorders.map((r) => r.state)).toEqual(["recording"]);
+    h.unmount();
+  });
+
+  it("does not let a late audiostart after Stop put `transcribing` back to `listening`", async () => {
+    /* GPT Sol's plan review of 261019m, F4: Stop sets `transcribing` while the
+       session is still current and unfinished, waiting for `onend`. */
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    talkFor(3000);
+    act(() => h.get().toggle());
+    expect(h.get().phase).toBe("transcribing");
+    act(() => latest().onaudiostart?.());
+    expect(h.get().phase).toBe("transcribing");
+    expect(h.get().armed).toBe(false);
+    h.unmount();
+  });
+
+  it("is already recording while a remembered microphone that did not open is checked, and stops cleanly there", async () => {
+    /* F3 of the same review: on Safari a remembered device that was not
+       honoured awaits `listInputs()` after the track opens, and the tape used
+       to arm only after that. Hold the listing and look. */
+    useSafari();
+    const map = new Map(
+      Object.entries({
+        "spya.dictation.deviceId": "airpods-yesterday",
+        "spya.dictation.deviceLabel": "AirPods Pro",
+      }),
+    );
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => void map.set(k, v),
+      removeItem: (k: string) => void map.delete(k),
+    });
+    inputs = [{ deviceId: "airpods-today", label: "AirPods Pro" }];
+    defaultInput = inputs[0] ?? null;
+    /* The first listing finds the choice missing (261008d), the second picks
+       the system-default route; the third is the one after the track opened. */
+    holdEnumerationAt = 3;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(releaseEnumeration, "the post-capture device check never began").not.toBeNull();
+    expect(recorders.map((r) => r.state)).toEqual(["recording"]);
+    expect(h.get().phase).toBe("listening");
+    expect(h.get().startedAt).not.toBeNull();
+    expect(h.get().meter).toBe("measured");
+    expect(h.get().deviceLabel, "the track's name waited on fallback metadata").toBe("AirPods Pro");
+
+    talkFor(4000);
+    act(() => h.get().toggle());
+    releaseEnumeration?.();
+    await drain();
+    await drain();
+    expect(tracksStopped).toBe(1);
+    expect(h.transcripts).toEqual(["THE SERVER SAID THIS"]);
+    expect(h.get().phase).toBe("idle");
+    expect(h.get().deviceUnavailable, "a stale continuation landed after Stop").toBe(false);
     h.unmount();
   });
 });
@@ -1058,14 +1168,11 @@ describe("the meter's source", () => {
     h.unmount();
   });
 
-  it("has no samples to show during the opening second, and says `detected` there", async () => {
-    /* **What is left of the fallback.** It used to be the whole of Safari;
-       since the track is ours everywhere it is the measured ~1.1 seconds
-       between the press and the microphone actually opening, when there is a
-       phase to draw and nothing yet to draw it from. `soundstart` and
-       `soundend` still drive the bars through it, which is real observation
-       rather than an invented animation — the property that made showing a
-       binary signal in the same bars defensible in the first place. */
+  it("has no samples to show before the track opens, and uses the detected fallback there", async () => {
+    /* Before capture settles there is a phase to draw and no track to measure.
+       The fake drives the binary events to pin the fallback's source; a real
+       recogniser cannot emit them until its track has opened, when the measured
+       meter normally takes over. */
     const h = drive();
     act(() => h.get().toggle());
     expect(h.get().phase).toBe("opening");
@@ -1079,6 +1186,13 @@ describe("the meter's source", () => {
   });
 });
 
+/* **Several tests below `await drain()` before they look at the ending**, and
+   until plan 261019m they did not need to. They stop without ever firing
+   `audiostart`, which used to mean no tape had started, so `finish` took its
+   synchronous no-tape path. Now the tape starts with the track, so every one of
+   these endings drains a recorder first (its `onstop` is deferred, like a real
+   one) and only then stops the track and fires `onEnd`. The properties under
+   test are unchanged; only when they become true has moved. */
 describe("ending, and the promise that it saves", () => {
   it("acknowledges the press at once, by going to `transcribing` rather than idle", async () => {
     /* The reader's press must be acknowledged now, not whenever the recogniser
@@ -1117,6 +1231,7 @@ describe("ending, and the promise that it saves", () => {
     );
     expect(h.text).toContain("the last thing I said");
     act(() => r.onend?.());
+    await drain();
     expect(h.ends).toHaveLength(1);
     expect(h.text).toContain("the last thing I said");
     h.unmount();
@@ -1130,6 +1245,7 @@ describe("ending, and the promise that it saves", () => {
     act(() => h.get().toggle());
     act(() => r.onend?.());
     act(() => r.onend?.());
+    await drain();
     expect(h.ends).toHaveLength(1);
     h.unmount();
   });
@@ -1143,6 +1259,7 @@ describe("ending, and the promise that it saves", () => {
       throw new Error("gone");
     };
     act(() => h.get().toggle());
+    await drain();
     expect(h.ends).toHaveLength(1);
     h.unmount();
   });
@@ -1163,8 +1280,10 @@ describe("ending, and the promise that it saves", () => {
     await settleCapture();
     /* The device walked out of the room a moment before the recogniser noticed
        anything. `readyState` is what `r.onerror` consults. */
+    talkFor(3000); // a real tape, so the ending is not "too short" (plan 261019m)
     for (const t of tracksHandedOut) Object.assign(t, { readyState: "ended" });
     act(() => latest().onerror?.({ error: "network" }));
+    await drain();
     expect(h.ends).toHaveLength(1);
     expect(h.get().phase).toBe("idle");
     /* **The microphone, not the connection.** Both events fire on an unplugged
@@ -1177,14 +1296,11 @@ describe("ending, and the promise that it saves", () => {
     h.unmount();
   });
 
-  it("takes over the timer and the tape when the recogniser dies before it ever opened", async () => {
-    /* **The case GPT Sol's plan review caught (F6).** `audiostart` is the zero
-       for the timer, for the word "listening" and for the recorder — so a
-       version that merely declined to end the session would have left it armed
-       in `opening`, recording nothing, for as long as the reader kept talking.
-       That is worse than the ending it replaced. Our track is open; the
-       recogniser is simply not part of this dictation any more, which is
-       exactly Firefox's situation, and this is Firefox's code path. */
+  it("keeps the timer and tape when the recogniser dies before audiostart", async () => {
+    /* The give-up path used to take over all three because `audiostart` was
+       their zero (GPT Sol's earlier F6). Since plan 261019m the track has
+       already started them; giving up only removes the live words, and the
+       idempotent `armTape` call must not build a second recorder. */
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
@@ -1192,6 +1308,7 @@ describe("ending, and the promise that it saves", () => {
     expect(h.get().phase).toBe("listening");
     expect(h.get().startedAt).not.toBeNull();
     expect(h.get().error).toBeNull();
+    expect(recorders).toHaveLength(1);
     talkFor(4000);
     act(() => h.get().toggle());
     await drain();
@@ -1288,6 +1405,7 @@ describe("ending, and the promise that it saves", () => {
     await settleCapture();
     for (const t of tracksHandedOut) Object.assign(t, { readyState: "ended" });
     act(() => latest().onerror?.({ error: "aborted" }));
+    await drain();
     expect(h.get().phase).toBe("idle");
     expect(h.get().error).not.toBeNull();
     h.ends.length = 0;
@@ -1299,9 +1417,11 @@ describe("ending, and the promise that it saves", () => {
     act(() => h.get().toggle());
     await settleCapture();
     const r = latest();
+    talkFor(3000); // a real tape, so the ending is not "too short" (plan 261019m)
     act(() => h.get().toggle()); // marks the session stop-requested
     act(() => r.onerror?.({ error: "aborted" }));
     act(() => r.onend?.());
+    await drain();
     expect(h.get().error).toBeNull();
     expect(h.ends).toHaveLength(1);
     h.unmount();
@@ -1336,22 +1456,41 @@ describe("ending, and the promise that it saves", () => {
     const before = tracksStopped;
     act(() => h.get().toggle());
     act(() => latest().onend?.());
+    await drain();
     expect(tracksStopped).toBeGreaterThan(before);
     h.unmount();
   });
 
-  it("ends the session when the microphone is unplugged under it", async () => {
+  it("keeps the unplugged error when the track ends before the tape is long enough to keep", async () => {
     /* An externally ended track otherwise leaves a meter measuring nothing and
-       a button claiming to listen. GPT Sol's code review, item 6. */
+       a button claiming to listen. Since plan 261019m even this brief capture
+       has a tape; its later "too short" ending must not replace the specific
+       reason the dictation stopped. GPT Sol's code review, item 6. */
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
     act(() => {
       for (const fn of endedListeners) fn();
     });
+    await drain();
     expect(h.get().phase).toBe("idle");
-    expect(h.get().error).toMatch(/disconnected/i);
+    expect(h.get().error).toMatch(/\[mic-unplugged\]$/);
+    expect(h.get().error).not.toContain("[mic-empty]");
     expect(h.ends).toHaveLength(1);
+    h.unmount();
+  });
+
+  it("still calls an ordinary accidental start-and-stop empty", async () => {
+    /* The precedence guard above is not a blanket suppression. With no earlier
+       terminal failure, a sub-600 ms recording is still the established
+       accidental-press case and should say so. */
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    act(() => h.get().toggle());
+    act(() => latest().onend?.());
+    await drain();
+    expect(h.get().error).toMatch(/\[mic-empty\]$/);
     h.unmount();
   });
 
@@ -1606,6 +1745,11 @@ describe("the remembered microphone", () => {
     expect(tracksStopped).toBe(0);
 
     act(() => h.get().toggle());
+    /* Since plan 261019m a tape is already running in this gap, and `finish`
+       drains it before stopping the track (the tail of the file), so the stop
+       is a deferred `onstop` away rather than synchronous. Still inside the
+       held enumeration, which is the property. */
+    await drain();
     expect(tracksStopped).toBe(1);
 
     releaseEnumeration?.();

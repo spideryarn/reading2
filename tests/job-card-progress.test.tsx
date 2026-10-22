@@ -178,7 +178,8 @@ it("says how long the running step has been going, beside what it is doing", () 
 /**
  * **The card has to keep its own time**, and nothing in this file used to check
  * that past the first paint. `report` writes a step's `detail` in memory and
- * never persists it (src/jobs.ts), so a job halfway through a long step sends
+ * persists it only beside a counted `progress` (src/jobs.ts § `stepNotes`, plan
+ * 261020a), so a job halfway through a long uncounted step sends
  * back a byte-identical record on every poll and `sameJobs` correctly
  * suppresses the re-render. Without `useNow`'s interval the duration would
  * freeze at whatever it read when the step began — which is the exact lie this
@@ -411,4 +412,33 @@ it("does not mention tabs when nothing is importing", () => {
     "An import in progress",
   );
   expect(host.textContent).not.toContain(KEEP_A_TAB_OPEN);
+});
+
+/**
+ * **A bar, only where the step is counting** — Greg, 2026-10-19
+ * (spya-skq3fg); plan 261020a § B1. A count, never a guess at time.
+ */
+it("draws a counted bar under a running step that has progress, naming its unit", () => {
+  card(
+    job({
+      steps: [
+        { name: "fetch", label: "Fetching the page", status: "done", detail: "42 KB" },
+        running({
+          name: "extract",
+          label: "Reading the PDF",
+          detail: "23/69 chunks, pages 40–41",
+          progress: { done: 23, total: 69, unit: "chunk" },
+        }),
+      ],
+    }),
+  );
+  const bar = row("Reading the PDF")?.querySelector("progress");
+  expect(bar?.value).toBe(23);
+  expect(bar?.max).toBe(69);
+  expect(row("Reading the PDF")?.textContent).toContain("23 of 69 sections of the file done");
+});
+
+it("draws no bar for a step that is not counting", () => {
+  card(job());
+  expect(row("Building the structure")?.querySelector("progress")).toBeNull();
 });

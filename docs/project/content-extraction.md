@@ -231,9 +231,13 @@ The differences that matter to a reader:
   now drawn from the page itself on the narrow kind of page
   [article-images.md](article-images.md) describes —
   [260912a](../plans/260912a-figure-2-vector-figures-from-a-pdf.md).
-- **A figure with no caption produces no element at all.** `renderHtml` returns early on empty text,
-  before it builds the `<figure>` — so there is no block to mark and no picture to recover. Worth
-  knowing before assuming every image in the PDF has somewhere to land.
+- **A figure with no caption is an empty marked `<figure>`**, since 2026-10-19. Until then
+  `renderHtml` dropped it with every other empty record, and a book that prints no captions lost
+  27 of its 33 figures without a word (report spya-x9gn3d). Its picture is recovered in `assets`
+  by asking the figure locator by the prose either side of it, and where that fails the reader is
+  told it is missing: [article-images.md](article-images.md),
+  [261019e](../plans/261019e-uncaptioned-pdf-figures-are-kept.md) and
+  [261019j](../plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md).
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
   as two records and used to render as "dis patcher". `mendSeamHyphens` in
@@ -277,11 +281,16 @@ The differences that matter to a reader:
 - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
   table was a caption over nothing, though the cells were transcribed and scored all
-  along (report spya-pawfwx). Rows are split on newlines and cells on `|`, which is what
-  the model writes rather than anything the prompt promises, so a literal `|` in a cell
-  splits it. The cells are gated by the check like prose (`CHECKED` in
-  [`src/pdf.ts`](../../src/pdf.ts)), unlike footnotes. Forward-only: an article changes
-  on re-extraction, and its table blocks get new ids then —
+  along (report spya-pawfwx). Rows are split on newlines, and cells on tabs, which rule 7 of
+  the prompt has asked for since `pdf-v5` (2026-10-20). Before that the prompt named no
+  separator and the renderer split on the `|` the model mostly wrote; in a third of the PDFs
+  with tables the model wrote tabs or runs of spaces, and a row came out as one cell
+  (report spya-xn4597, [261020h](../plans/261020h-pdf-table-cells-split-on-tabs-and-the-prompt-names-the-separator.md)).
+  A line with no tab is still split on `|`, for chunks read before `pdf-v5`. The cells are gated by
+  the check like prose (`CHECKED` in [`src/pdf.ts`](../../src/pdf.ts)), unlike footnotes.
+  Forward-only: an article changes on re-extraction. Splitting the same cells differently preserves
+  a table block's text and id, though the new model reading may change either for the ordinary
+  reasons any re-extraction can —
   [261001q](../plans/261001q-pdf-tables-and-composite-figures.md).
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in

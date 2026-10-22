@@ -1,0 +1,13 @@
+1. **blocker — [src/pdf-read.ts](/var/tmp/spideryarn-worktrees/fbxn4597-sentience-figures/src/pdf-read.ts:2217)** — The Markdown-row heuristic deleted legitimate printed `---` missing-data rows. Removed the ambiguous skip; Rule 7 still forbids invented Markdown rows. Added coverage for ASCII and em dashes.
+
+2. **should-fix — [src/pdf-read.ts](/var/tmp/spideryarn-worktrees/fbxn4597-sentience-figures/src/pdf-read.ts:2234)** — Splitting one cell into adjacent `<td>` elements glued browser `textContent`, potentially moving comment, search, and cross-reference anchors despite stable block IDs. Added intentional whitespace nodes between cells and rows and verified rendered-text equivalence.
+
+3. **should-fix — [tests/pdf-tables.test.ts](/var/tmp/spideryarn-worktrees/fbxn4597-sentience-figures/tests/pdf-tables.test.ts:190), [tests/pdf-tex.test.ts](/var/tmp/spideryarn-worktrees/fbxn4597-sentience-figures/tests/pdf-tex.test.ts:213)** — The promised contract coverage was incomplete. Added CRLF, blank tab rows, mixed bars/tabs, pipe-edge behavior, page/record accumulation, uncertainty, JSON-to-`<td>`, exact Rule 7, stable ID, and `hashBlocks` assertions. Every added change-specific test fails with the old parser or prompt.
+
+4. **nit — [content-extraction.md](/var/tmp/spideryarn-worktrees/fbxn4597-sentience-figures/docs/project/content-extraction.md:272), [plan](/var/tmp/spideryarn-worktrees/fbxn4597-sentience-figures/docs/plans/261020h-pdf-table-cells-split-on-tabs-and-the-prompt-names-the-separator.md:55), [postmortem](/var/tmp/spideryarn-worktrees/fbxn4597-sentience-figures/docs/postmortems/261020a-a-table-parser-relied-on-a-separator-the-prompt-never-named.md:18)** — Corrected stale cache/ID claims, historical present tense, the dash-row decision, and a duplicated portrait item.
+
+The tab survives the complete path: JSON escape → `JSON.parse` → `parseRecords` → integrity validation—whose control filter deliberately excludes tab/LF/CR—→ scoring/dedup → `tableRows` → `<td>`. No remaining downstream consumer depends on the collapsed one-cell shape; Skim/table detection uses markup and captions, while search, quotes, exports, IDs, and fingerprints retain the intended text.
+
+Checks: requested Vitest set passed, 104/104. Typechecking passed through the equivalent `node --import tsx scripts/typecheck.ts`; the exact npm wrapper was blocked by sandbox IPC permissions. The extra full `npm test` could not start because local Postgres was unavailable, and I did not start or touch the database as instructed.
+
+SHIP AFTER MY FIXES

@@ -51,6 +51,7 @@ const emptyReport = (): BuildReport => ({
   rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
+  unresolvedStarts: [],
   droppedQuestions: [],
 });
 

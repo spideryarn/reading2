@@ -101,6 +101,11 @@ export interface FeedbackDevice {
       all three facts for. `null` on reports from before 2026-10-03. */
   appearance: string | null;
   theme: string | null;
+  /** The reader's Brightness and Text size on /profile (src/web/reading-comfort.ts):
+      a dimmed or enlarged page is what a "too dark" or "doesn't fit" report
+      needs to know first. `null` on reports from before 2026-10-19. */
+  brightness: string | null;
+  textSize: string | null;
   reducedMotion: boolean | null;
 }
 
@@ -187,6 +192,9 @@ const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
    file is the server's, and the client module pulls in React. */
 const APPEARANCES = ["system", "light", "dark"] as const;
 const THEMES = ["light", "dark"] as const;
+/* src/web/reading-comfort.ts's two lists, copied for the same reason. */
+const BRIGHTNESSES = ["full", "dim", "dimmer", "dimmest"] as const;
+const TEXT_SIZES = ["default", "large", "larger", "largest"] as const;
 
 /**
  * `STEP_ORDER` in src/step-order.ts, copied. See the header for why it is copied
@@ -502,6 +510,8 @@ function device(value: unknown): FeedbackDevice | null {
     colorScheme: oneOf(source.colorScheme, COLOUR_SCHEMES),
     appearance: oneOf(source.appearance, APPEARANCES),
     theme: oneOf(source.theme, THEMES),
+    brightness: oneOf(source.brightness, BRIGHTNESSES),
+    textSize: oneOf(source.textSize, TEXT_SIZES),
     reducedMotion: bool(source.reducedMotion),
   };
 }
@@ -602,7 +612,10 @@ function job(value: unknown): FeedbackJobState | null {
  * bounds is separately capped by shape, so the headroom cannot be spent.
  */
 const WORST_BYTES_PER_CHAR = 6;
-const DEVICE_BYTES = (300 + 35 + 64 + 16 + 200) * WORST_BYTES_PER_CHAR;
+const DEVICE_VOCAB_CHARS = [COLOUR_SCHEMES, APPEARANCES, THEMES, BRIGHTNESSES, TEXT_SIZES]
+  .map((values) => Math.max(...values.map((value) => value.length)))
+  .reduce((sum, length) => sum + length, 0);
+const DEVICE_BYTES = (300 + 35 + 64 + DEVICE_VOCAB_CHARS + 200) * WORST_BYTES_PER_CHAR;
 const API_CALL_BYTES = (10 + 200 + 8 + 12 + 80 + 24 + 120) * WORST_BYTES_PER_CHAR;
 const ERROR_BYTES = (64 + 24 + 40) * WORST_BYTES_PER_CHAR;
 const ARTICLE_BYTES =

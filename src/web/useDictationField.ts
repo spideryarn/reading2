@@ -237,6 +237,43 @@ export function useDictationField<C>({
    * see where it went — which is the safe way round to be wrong.
    */
   const valueAtEnd = useRef<string | null>(null);
+  /**
+   * **The rough words a failed dictation left in the box**, as its `span` was
+   * when it ended — so that a retry's transcript replaces them, as the first
+   * try's would have, instead of landing beside them and putting the sentence
+   * in the box twice (qi-qxkryezr). Only an ending that delivered nothing sets
+   * it, and only a retry's transcript reads it.
+   *
+   * Proved before use, like `span`: at its old offsets if the box is unchanged
+   * since the end; otherwise at one unique occurrence only while the old text
+   * around it still anchors it, or when the rough phrase itself is a
+   * distinctive multi-word phrase. A bare `yes` appearing once elsewhere is
+   * not proof: it may be text the reader wrote after deleting the rough word.
+   * Words the reader has corrected are theirs now, and the transcript goes in
+   * at the caret beside them, which is the safe way round to be wrong.
+   */
+  const spent = useRef<{ from: number; to: number; text: string } | null>(null);
+  const findSpent = useCallback(
+    (current: string, stale: boolean): { from: number; to: number } | null => {
+      const s = spent.current;
+      if (!s?.text) return null;
+      if (!stale && current.slice(s.from, s.to) === s.text) return s;
+      const i = current.indexOf(s.text);
+      if (i < 0 || current.indexOf(s.text, i + 1) >= 0) return null;
+      const ended = valueAtEnd.current;
+      if (ended === null) return null;
+      const prefix = ended.slice(0, s.from);
+      const suffix = ended.slice(s.to);
+      const before = current.slice(0, i);
+      const after = current.slice(i + s.text.length);
+      const contextMatches = before.endsWith(prefix) && after.startsWith(suffix);
+      const trimmed = s.text.trim();
+      const distinctive = trimmed.length >= 12 && trimmed.split(/\s+/).length >= 2;
+      if (!contextMatches || (prefix.length === 0 && suffix.length === 0 && !distinctive)) return null;
+      return { from: i, to: i + s.text.length };
+    },
+    [],
+  );
 
   /**
    * **A double press on Stop**, in three small facts. `held` is a Stop press
@@ -342,12 +379,16 @@ export function useDictationField<C>({
          second case — see `valueAtEnd`. */
       const stale = valueAtEnd.current !== null && valueAtEnd.current !== current;
       const remembered = stale ? null : pressedAt.current;
+      /* A retry's transcript replaces the failed session's rough words, if
+         they are still there. See `spent`. */
+      const rough = !held && replaceSpan ? findSpent(current, stale) : null;
       const at = held
         ? replaceSpan
           ? held.from
           : held.to
-        : (remembered ?? el?.selectionStart ?? current.length);
-      const until = held && replaceSpan ? held.to : at;
+        : (rough?.from ?? remembered ?? el?.selectionStart ?? current.length);
+      const until = held && replaceSpan ? held.to : (rough?.to ?? at);
+      spent.current = null;
 
       /* A space between phrases, unless we are at the very start or there is
          already whitespace there. The recogniser hands back "the evidence" with
@@ -371,7 +412,7 @@ export function useDictationField<C>({
       });
       return true;
     },
-    [box],
+    [box, findSpent],
   );
 
   const dictation = useDictation({
@@ -393,6 +434,8 @@ export function useDictationField<C>({
         delivered.current &&
         wish.key === key.current &&
         wish.generation === keyGeneration.current;
+      /* Rough words with no transcript over them: a retry's to replace. */
+      spent.current = delivered.current ? null : span.current;
       wantSend.current = null;
       delivered.current = false;
       setSendingAfter(false);
@@ -534,6 +577,9 @@ export function useDictationField<C>({
        only what the new session contributes. The stale session never reaches
        `onEnd`, so this boundary has to be made at the press itself. */
     span.current = null;
+    /* Nor may its transcript replace the failed one's words: those are the
+       reader's now, and the retry that could have replaced them has gone. */
+    spent.current = null;
     pressedAt.current = box.current?.selectionStart ?? null;
     /* A new press: there is no ended dictation to be stale relative to. */
     valueAtEnd.current = null;
@@ -549,13 +595,29 @@ export function useDictationField<C>({
      `opening`, including the one the hook starts by itself when the reader
      picks another microphone, which ends the old session without an `onEnd`
      to clear the wish. GPT Sol's plan review of 261010f, F6. A held Stop is
-     deliberately not cleared here: see `held`. */
+     deliberately not cleared here: see `held`. Nor do another session's
+     words replace the failed one's rough words (`spent`). */
   const phase = dictation.phase;
   useEffect(() => {
     if (phase !== "opening") return;
+    spent.current = null;
     wantSend.current = null;
     setSendingAfter(false);
   }, [phase]);
+  /* `spent`, the old caret and its value proof belong to the retry offer, not
+     merely to this mounted field. Discarding that offer — or ending without a
+     retryable failure — makes the visible rough words ordinary reader text.
+     Clear the three together once the hook is idle with no offer. During a
+     retry `canRetry` is false too, but its `transcribing` phase keeps the proof
+     alive until the answer arrives. This also prevents a recovered tape from
+     an earlier page borrowing the discarded session's replacement span. */
+  const canRetry = dictation.canRetry;
+  useEffect(() => {
+    if (phase !== "idle" || canRetry) return;
+    spent.current = null;
+    pressedAt.current = null;
+    valueAtEnd.current = null;
+  }, [canRetry, phase]);
   return {
     dictation,
     readOnly,

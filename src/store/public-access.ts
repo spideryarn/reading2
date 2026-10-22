@@ -31,8 +31,9 @@
  * tests/public-imports.test.ts holds that.
  */
 
-import { or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
+import { articles } from "../db/schema.js";
 import type { ShareKey } from "../share-key.js";
 import { linkSharedSlug } from "./link-shared-slug.js";
 import { publicSlug } from "./public-slug.js";
@@ -50,6 +51,21 @@ export const PUBLIC_ONLY: PublicAccess = { kind: "public" };
 /** The access a request with this `?key=` has. `null` is no usable key. */
 export function accessFor(key: ShareKey | null): PublicAccess {
   return key === null ? PUBLIC_ONLY : { kind: "link", key };
+}
+
+/**
+ * **Private, and this key opens it** — the one predicate for *a private link
+ * was used*, not *a visitor may read this*. For recording an open of a private
+ * link (src/store/private-link-signed-out-opens.ts, pg-private-link-openers.ts;
+ * plan 261021d). A public article read with a key is a public read, so it
+ * matches nothing here, which `publicAccessWhere`'s *public or this key* would
+ * not say.
+ *
+ * In this file because this is the one file that may import the link leaf
+ * (tests/owner-isolation.test.ts), and it writes nothing: the callers do.
+ */
+export function privateLinkWhere(slug: string, key: ShareKey) {
+  return and(linkSharedSlug(slug, key), eq(articles.visibility, "private"));
 }
 
 export function publicAccessWhere(slug: string, access: PublicAccess) {

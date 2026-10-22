@@ -47,7 +47,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   cursor: pointer;
 }
 /* `--ink-faint` at rest and `--highlight` on hover. It is chrome offering to
@@ -195,7 +195,7 @@
   background: none;
   color: var(--ink-soft);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   cursor: pointer;
 }
 .fb-tab:hover { color: var(--ink); }
@@ -209,6 +209,8 @@
    at the far end, and pressed rather than selected, because it is a shortcut
    into the Earlier panel and not a panel of its own. */
 .fb-tab-shortcut { margin-left: auto; display: inline-flex; align-items: baseline; gap: 0.3rem; }
+/* Where the number goes while it loads (spya-yf6vmy); an icon has no baseline. */
+.fb-tab-spinner { align-self: center; }
 .fb-tab-shortcut[aria-pressed="true"] {
   color: var(--ink);
   font-weight: 600;
@@ -231,7 +233,7 @@
 .fb-earlier-item:last-child { border-bottom: 0; }
 .fb-earlier-meta {
   margin: 0 0 0.25rem;
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
   color: var(--ink-faint);
 }
 /* The page a report was filed from: a path with no spaces in it, so it has to
@@ -254,7 +256,7 @@ a.fb-earlier-page:focus-visible {
    from pushing the panel sideways on a phone. */
 .fb-earlier-body {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   line-height: 1.5;
   color: var(--ink);
   white-space: pre-wrap;
@@ -265,7 +267,7 @@ a.fb-earlier-page:focus-visible {
   align-items: center;
   gap: 0.4rem;
   margin: 0;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   color: var(--ink-soft);
 }
 /* All · Shipped · Not shipped sits in a `.fb-kind` fieldset, and its
@@ -307,7 +309,7 @@ a.fb-earlier-page:focus-visible {
   margin: 0.35rem 0 0;
   padding-left: 0.6rem;
   border-left: 2px solid var(--rule-strong);
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   line-height: 1.5;
   color: var(--ink-soft);
   overflow-wrap: anywhere;
@@ -330,7 +332,7 @@ a.fb-earlier-page:focus-visible {
 .fb-questions[hidden] { display: none; }
 .fb-questions-heading {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   font-weight: 600;
   color: var(--ink);
 }
@@ -348,7 +350,7 @@ a.fb-earlier-page:focus-visible {
 .fb-question .fb-earlier-meta { margin: 0; }
 .fb-question-title {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   font-weight: 700;
   line-height: 1.4;
   color: var(--ink);
@@ -357,7 +359,7 @@ a.fb-earlier-page:focus-visible {
 /* Plain text with its own line breaks: the options are one a line. */
 .fb-question-text {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   line-height: 1.55;
   color: var(--ink);
   white-space: pre-wrap;
@@ -371,7 +373,7 @@ a.fb-earlier-page:focus-visible {
 }
 .fb-question-answer-body {
   margin: 0.15rem 0 0;
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   line-height: 1.5;
   color: var(--ink);
   white-space: pre-wrap;
@@ -389,27 +391,11 @@ a.fb-earlier-page:focus-visible {
   align-items: center;
   gap: 0.5rem;
 }
-.fb-reply-send:disabled { opacity: 0.45; cursor: default; }
-/* Sending: disabled, but working, so not dimmed — as `.fb-send` below. */
-.fb-reply-send[data-working]:disabled { opacity: 1; cursor: progress; }
-/* **Green to send, red to put off**, in a Needs-a-decision thread only — Greg,
-   2026-10-11 (`spya-zjsqe6`). The words carry the meaning and the colour is a
-   shortcut, as colour-scales.md asks of a red/green pair. The addendum box
-   shares the send box and stays neutral; so does Bring back, which undoes a
-   deferral and should not look like one. Plan 261011h. The thread wrapper plus
-   the shared-shape class make each rule outweigh the later `.fb-copy` rest,
-   hover and `aria-disabled` rules; the last is not used here today, but must
-   not silently neutralise the colour if these controls adopt it.
-   **No wash behind**: a tint of the same colour takes the light theme under
-   the 4.5:1 the two tokens are measured at (GPT Sol, plan review 1). */
-.fb-reply-thread .fb-copy.fb-reply-send,
-.fb-reply-thread .fb-copy.fb-reply-send:hover,
-.fb-reply-thread .fb-copy.fb-defer,
-.fb-reply-thread .fb-copy.fb-defer:hover { border-color: currentColor; }
-.fb-reply-thread .fb-copy.fb-reply-send,
-.fb-reply-thread .fb-copy.fb-reply-send:hover { color: var(--positive); }
-.fb-reply-thread .fb-copy.fb-defer,
-.fb-reply-thread .fb-copy.fb-defer:hover { color: var(--danger); }
+/* **Green to send, red to put off or back out**: `.tone-positive` and
+   `.tone-negative`, src/web/button-tone.css, which also dims either when it
+   cannot be pressed. Send reply and Send addendum are green by construction
+   (FeedbackSendBox.tsx); Defer for now and Cancel red; Bring back neutral,
+   because it undoes a deferral (261011h, 261020f). */
 /* **As tall as its words, never a scroller of its own** (useFitTextarea.ts):
    the panel is the one scroller, which is what lets iOS keep the caret in
    view with the keyboard up (spya-za2tse). */
@@ -425,7 +411,7 @@ a.fb-earlier-page:focus-visible {
 .fb-addendum + .fb-addendum { margin-top: 0.4rem; }
 .fb-addendum-body {
   margin: 0.15rem 0 0;
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   line-height: 1.5;
   color: var(--ink);
   white-space: pre-wrap;
@@ -456,7 +442,7 @@ details.fb-threads-group > summary { cursor: pointer; }
 }
 .fb-thread-row:hover { background: var(--page); }
 .fb-thread-row:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: -1px; }
-.fb-thread-title { font-size: 0.82rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.fb-thread-title { font-size: max(var(--text-min), 0.82rem); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .fb-thread-row .fb-earlier-meta { margin: 0; }
 /* One thread on its own: the way back and the pager above it. */
 .fb-thread { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -467,18 +453,30 @@ details.fb-threads-group > summary { cursor: pointer; }
 @media (any-pointer: coarse) {
   .fb-thread-nav { row-gap: max(0.4rem, 18px); }
 }
-.fb-thread-place { margin-inline: auto; font-size: 0.76rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.fb-thread-place { margin-inline: auto; font-size: max(var(--text-min), 0.76rem); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 /* Said when an end is pressed anyway: a phone has no hover to show the title. */
-.fb-thread-end { flex-basis: 100%; margin: 0; text-align: end; font-size: 0.76rem; color: var(--ink-soft); }
+.fb-thread-end { flex-basis: 100%; margin: 0; text-align: end; font-size: max(var(--text-min), 0.76rem); color: var(--ink-soft); }
 /* Empty, it is out of the flow rather than hidden: the row's gap would otherwise
    open under it, and `display: none` would take the live region away. */
 .fb-thread-end:empty { position: absolute; }
 /* The ids Greg reads off to a terminal (spya-krvuc9): selectable whole. */
-.fb-question-id { font-size: 0.72rem; user-select: all; overflow-wrap: anywhere; }
+.fb-question-id { font-size: max(var(--text-min), 0.72rem); user-select: all; overflow-wrap: anywhere; }
 /* Details, and his own report: shut until opened. */
 .fb-question-more { align-self: stretch; }
-.fb-question-more > summary { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); }
+.fb-question-more > summary { cursor: pointer; font-size: max(var(--text-min), 0.78rem); font-weight: 600; color: var(--ink-soft); }
 .fb-question-more > p { margin-top: 0.35rem; }
+/* **Somebody else's report, marked as such** (spya-y43ha0, 261020p): the words
+   before its number in the orange text colour, and its shut text with an orange
+   rule down its left, so a reader's suggestion is told apart from Greg's own at
+   a glance. `--highlight-text` is the theme's readable orange. */
+.fb-question-whose { color: var(--highlight-text); font-weight: 600; }
+.fb-question-more[data-whose="reader"],
+.fb-question-more[data-whose="admin"] {
+  border-inline-start: 3px solid var(--highlight-text);
+  padding-inline-start: 0.6rem;
+}
+.fb-question-more[data-whose="reader"] > summary,
+.fb-question-more[data-whose="admin"] > summary { color: var(--highlight-text); overflow-wrap: anywhere; }
 .fb-question-answer-one + .fb-question-answer-one { margin-top: 0.4rem; }
 /* Waiting reports no question has been written for (spya-u6h6q8). */
 .fb-orphans { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -513,12 +511,12 @@ details.fb-threads-group > summary { cursor: pointer; }
    docs/plans/261001j-…. */
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
-.fb-label { font-size: 0.78rem; font-weight: 600; }
+.fb-label { font-size: max(var(--text-min), 0.78rem); font-weight: 600; }
 /* The three things we ask a bug report for, under the label and above the one
    box — FeedbackDialog.tsx § KindHint says why they are not hidden behind a
    disclosure, and why they change with the toggle. */
 .fb-hint {
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   font-weight: 400;
   line-height: 1.5;
   color: var(--ink-faint);
@@ -548,12 +546,12 @@ details.fb-threads-group > summary { cursor: pointer; }
   background: var(--page);
   color: var(--ink);
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   line-height: 1.5;
   resize: vertical;
 }
 .fb-input:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: -1px; }
-.fb-over { font-size: 0.72rem; color: var(--highlight-text); }
+.fb-over { font-size: max(var(--text-min), 0.72rem); color: var(--highlight-text); }
 
 /* One box now, so it gets the height the three used to have between them.
    docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md. */
@@ -565,7 +563,7 @@ details.fb-threads-group > summary { cursor: pointer; }
 .fb-thanks {
   margin: 0;
   color: var(--ink);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
   line-height: 1.5;
 }
 
@@ -587,7 +585,7 @@ details.fb-threads-group > summary { cursor: pointer; }
   float: left;
   padding: 0 0.4rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   line-height: 1.9;
 }
 .fb-kind-button,
@@ -601,7 +599,7 @@ details.fb-threads-group > summary { cursor: pointer; }
   background: none;
   color: var(--ink-soft);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   cursor: pointer;
 }
 .fb-kind-button:hover,
@@ -633,7 +631,7 @@ details.fb-threads-group > summary { cursor: pointer; }
 }
 
 .fb-shot { display: flex; flex-direction: column; gap: 0.3rem; }
-.fb-shot-label { font-size: 0.78rem; font-weight: 600; }
+.fb-shot-label { font-size: max(var(--text-min), 0.78rem); font-weight: 600; }
 /* **`--rule-strong`, not `--rule`, and the reason is worth writing down because
    it will catch the next dialog too.** `--rule` is `oklch(0.27 0 0)` and this
    panel's ground is `--surface-raised` at `oklch(0.26 0 0)` — one hundredth of a
@@ -654,10 +652,10 @@ details.fb-threads-group > summary { cursor: pointer; }
   padding: 0.5rem 0.6rem;
   border: 1px dashed var(--rule-strong);
   border-radius: 6px;
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   color: var(--ink-faint);
 }
-.fb-shot-pick input { font-size: 0.72rem; color: var(--ink-soft); }
+.fb-shot-pick input { font-size: max(var(--text-min), 0.72rem); color: var(--ink-soft); }
 .fb-shot-have { display: flex; align-items: center; gap: 0.6rem; }
 .fb-shot-thumb {
   width: 4rem;
@@ -666,7 +664,7 @@ details.fb-threads-group > summary { cursor: pointer; }
   border: 1px solid var(--rule-strong);
   border-radius: 4px;
 }
-.fb-shot-facts { font-size: 0.74rem; color: var(--ink-faint); }
+.fb-shot-facts { font-size: max(var(--text-min), 0.74rem); color: var(--ink-faint); }
 .fb-shot-drop {
   padding: 0.2rem 0.45rem;
   border: 1px solid var(--rule-strong);
@@ -674,10 +672,10 @@ details.fb-threads-group > summary { cursor: pointer; }
   background: none;
   color: var(--ink-soft);
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
   cursor: pointer;
 }
-.fb-shot-problem { margin: 0; font-size: 0.74rem; color: var(--ink-soft); }
+.fb-shot-problem { margin: 0; font-size: max(var(--text-min), 0.74rem); color: var(--ink-soft); }
 
 /* The tick-box is default-off and its label says in the reader's own words what
    ticking it sends — docs/project/copy.md § Who is reading this. The `Never`
@@ -689,7 +687,7 @@ details.fb-threads-group > summary { cursor: pointer; }
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--rule-strong);
   border-radius: 6px;
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   line-height: 1.5;
   color: var(--ink-soft);
 }
@@ -703,7 +701,7 @@ details.fb-threads-group > summary { cursor: pointer; }
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--rule-strong);
   border-radius: 6px;
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   line-height: 1.5;
 }
 .fb-failed p { margin: 0; }
@@ -722,7 +720,7 @@ details.fb-threads-group > summary { cursor: pointer; }
   background: none;
   color: var(--ink);
   font-family: inherit;
-  font-size: 0.76rem;
+  font-size: max(var(--text-min), 0.76rem);
   text-decoration: none;
   cursor: pointer;
 }
@@ -763,24 +761,16 @@ details.fb-threads-group > summary { cursor: pointer; }
   border-radius: 6px;
   background: none;
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   cursor: pointer;
 }
-/* **Send is green, Cancel and Close grey** (spya-bvzavw, plan 261017c): the
-   bottom-right sends on Write but on Earlier was Close, which shuts. Green is
-   `--positive`, as *Send reply* is in a thread (261011h), because both send
-   what you wrote to us; the words still say which is which. The border takes
-   the green too and keeps it on hover, as Send reply's does. */
-.fb-cancel { color: var(--ink-soft); }
-.fb-send { color: var(--positive); border-color: currentColor; }
-.fb-send:disabled { opacity: 0.45; cursor: default; }
-/* **Working is not "cannot be pressed".** Sending, Adding the picture: the
-   button is disabled, but its spinner and word are the only sign anything is
-   happening, and those states were coded at 0.45 when Greg saw neither on an
-   iPad (spya-an90k0) — where a disabled button at `opacity < 1` is also our
-   leading suspect for one that paints nothing (plan 260912c). Plan 261019c. */
-.fb-send[data-working]:disabled { opacity: 1; cursor: progress; }
-.fb-send:not(:disabled):hover { color: var(--positive); border-color: currentColor; }
+/* **Send is green; Cancel and Close are red** — src/web/button-tone.css, which
+   paints them and dims an unpressable one. Send went green first (spya-bvzavw,
+   plan 261017c), because the bottom-right sent on Write but shut on Earlier;
+   Cancel and Close stayed grey until Greg asked for them red too (spya-as0et6,
+   plan 261020f). **Working is not "cannot be pressed"**: Sending and Adding
+   the picture carry `data-working` and stay at full strength (spya-an90k0,
+   plan 261019c). */
 /* The thread pager again, in Earlier's footer beside Close, kept to the right. */
 .fb-foot-pager { justify-content: flex-end; }
 

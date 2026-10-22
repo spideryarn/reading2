@@ -105,6 +105,7 @@ import {
 import { isUuid } from "../ids.js";
 import { log } from "../log.js";
 import { publicSourceUrl } from "../urls.js";
+import { spendByArticle } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 
@@ -177,6 +178,9 @@ export const ARTICLE_TABLES = {
   /** Takedown evidence; a transfer that unshares writes a row of its own (step 3). */
   article_visibility_changes: "history",
   article_share_link_events: "history",
+  /** Who opened the old private link, and how often signed out: the administrator's record (plan 261021d). */
+  private_link_openers: "history",
+  private_link_signed_out_opens: "history",
   /** Live-conversation sessions, with the ledger. */
   realtime_sessions: "history",
   /** `starter_article_id`: the voucher that named it, whoever owns it now. */
@@ -643,21 +647,7 @@ export async function transferBetween(input: TransferInput): Promise<TransferAns
  * from the Auth service.
  */
 export async function listArticlesAcrossOwners(adminId: string): Promise<Omit<AdminArticle, "ownerEmail">[]> {
-  const rows = await getDb()
-    .select({
-      id: articles.id,
-      shortId: articles.shortId,
-      ownerId: articles.ownerId,
-      createdAt: articles.createdAt,
-      visibility: articles.visibility,
-      processing: articles.processing,
-      slug: articles.slug,
-      titleOverride: articles.titleOverride,
-      title: articleRevisions.title,
-    })
-    .from(articles)
-    .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .orderBy(desc(articles.createdAt), articles.id);
+  const [rows, spend] = await Promise.all([listRows(), spendByArticle()]);
   return rows.map((r) => {
     const mine = r.ownerId === adminId;
     const visibility = r.visibility === "public" ? "public" : "private";
@@ -674,8 +664,31 @@ export async function listArticlesAcrossOwners(adminId: string): Promise<Omit<Ad
       processing: r.processing === "minimal" ? "minimal" : "full",
       title: shown ? ((mine ? r.titleOverride : null) ?? r.title ?? null) : null,
       slug: shown ? r.slug : null,
+      published: shown ? r.currentRevisionId !== null : null,
+      /* Spend and call counts, tied only to the opaque id for a private row;
+         /admin/costs already shows the same across owners. */
+      cost: spend.get(r.id) ?? { nanos: 0, calls: 0, unpricedCalls: 0 },
     };
   });
+}
+
+function listRows() {
+  return getDb()
+    .select({
+      id: articles.id,
+      shortId: articles.shortId,
+      ownerId: articles.ownerId,
+      createdAt: articles.createdAt,
+      visibility: articles.visibility,
+      processing: articles.processing,
+      slug: articles.slug,
+      titleOverride: articles.titleOverride,
+      title: articleRevisions.title,
+      currentRevisionId: articles.currentRevisionId,
+    })
+    .from(articles)
+    .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    .orderBy(desc(articles.createdAt), articles.id);
 }
 
 /* ------------------------------------------------------------------ body -- */

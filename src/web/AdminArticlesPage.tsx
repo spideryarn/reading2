@@ -8,9 +8,13 @@
  * >
  * > — Greg, 2026-10-11 (`spya-wqvxjv`)
  *
- * A plain table, for AdminVouchersPage.tsx's reason: one order, a few columns,
- * and a filter by address or id. Another reader's private article is a row of
- * dates and an owner — the server sends no title or slug for it (D4).
+ * The users page's table since 2026-10-21 (plan 261021i § Stage 1): sorted
+ * from the headers and the chips, the sort in `?by=&dir=`, columns hidden from
+ * the Columns menu and remembered in this browser — the columns are
+ * [admin-articles-columns.tsx](admin-articles-columns.tsx). Before that it was
+ * hand-drawn with two orders in a `<select>`. A filter by address or id sits
+ * in front of it. Another reader's private article is a row of dates and an
+ * owner — the server sends no title or slug for it (D4).
  *
  * **The confirmation is the whole safety of the press.** It names the article
  * and both owners, says it will be made private, lists what of the old owner's
@@ -20,7 +24,7 @@
  * owner the confirmation showed (`expectedFrom`), so a change of owner in the
  * last moment is the server's 409, in its own words.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
 import {
@@ -30,20 +34,28 @@ import {
   type TransferDone,
   type TransferPreview,
 } from "../admin-articles.js";
-import { readableDate } from "../billing-plan.js";
+import { ADMIN_ARTICLES_CHIP_ORDER, adminArticlesColumns, ArticleCell, ownerLabel } from "./admin-articles-columns.js";
 import { Shell } from "./AdminPage.js";
 import { BUTTON, INPUT, Refusal } from "./admin-vouchers-parts.js";
-import { Link } from "./Link.js";
-import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
+import { ColumnsMenu, DataTable, SortChips } from "./lib/DataTable.js";
+import { useUrlSortedTable } from "./lib/useUrlSortedTable.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { exactly } from "./relative-time.js";
-import { ADMIN_HREF, readHref } from "./router.js";
+import { adminArticlesByParam } from "./params.js";
+import { ADMIN_HREF } from "./router.js";
+import type { HiddenColumnKeys } from "./shelf-hidden-columns.js";
 import { type AccountChoice, useAdminArticles } from "./useAdminArticles.js";
-import { voiceClass } from "./voice.js";
+import { ViewAsStart } from "./ViewAsStart.js";
 
-const CAPTION = "Every article, newest first";
-const CELL = "tw:px-3 tw:py-2 tw:align-top tw:first:pl-4 tw:last:pr-4";
-const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-medium tw:text-muted-foreground`;
+export { NOT_PUBLISHED_YET } from "./admin-articles-columns.js";
+
+/** Where this table's hidden columns are remembered — the users table's mechanism, under keys of its own. */
+export const ADMIN_ARTICLES_COLUMN_KEYS: HiddenColumnKeys = {
+  hidden: "spya.admin.articles.hiddenColumns",
+  shown: "spya.admin.articles.shownColumns",
+};
+
+/** Module scope — lib/useUrlSortedTable.ts § The identity contract. */
+const idOf = (a: AdminArticle) => a.id;
 
 /** What the table's filter matches: the owner's address, the article's id or short id. */
 export function matchesFilter(article: AdminArticle, filter: string): boolean {
@@ -52,15 +64,6 @@ export function matchesFilter(article: AdminArticle, filter: string): boolean {
   return [article.ownerEmail, article.ownerId, article.id, article.shortId].some(
     (field) => field?.toLowerCase().includes(q) === true,
   );
-}
-
-/** The handle a row is known by: its short id, or its id when it has none (Sol F9). */
-function handleOf(article: AdminArticle): string {
-  return article.shortId ?? article.id;
-}
-
-function ownerLabel(article: AdminArticle): string {
-  return article.ownerEmail ?? article.ownerId;
 }
 
 /** "questions and notes 3, chats 1" — the kinds with any rows, in READER_STATE's order. */
@@ -82,29 +85,6 @@ function samePreview(a: TransferPreview, b: TransferPreview): boolean {
     a.visibility === b.visibility &&
     a.privateLink === b.privateLink &&
     READER_STATE.every((k) => a.counts[k.table] === b.counts[k.table])
-  );
-}
-
-function ArticleCell({ article }: { article: AdminArticle }) {
-  if (article.title === null && article.slug === null) {
-    return (
-      <span className="tw:text-muted-foreground">
-        Another reader's private article · <code className="tw:text-xs">{handleOf(article)}</code>
-      </span>
-    );
-  }
-  const title = article.title ?? "Untitled";
-  return (
-    <span>
-      {article.slug ? (
-        <Link href={readHref(article.slug)} className={voiceClass("author")}>
-          {title}
-        </Link>
-      ) : (
-        <span className={voiceClass("author")}>{title}</span>
-      )}{" "}
-      <code className="tw:text-xs tw:text-muted-foreground">{handleOf(article)}</code>
-    </span>
   );
 }
 
@@ -265,12 +245,34 @@ export function AdminArticlesPage() {
   const { list, error, loading, reload, preview, transfer, accounts } = useAdminArticles();
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<AdminArticle | null>(null);
+  /* The row whose owner *View as owner* was pressed for (ViewAsStart.tsx). */
+  const [viewing, setViewing] = useState<AdminArticle | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  const rows = useMemo(
-    () => (list?.articles ?? []).filter((a) => matchesFilter(a, filter)),
+  /* Stable, so the columns below are built once (the hook's identity
+     contract): a `useState` setter, and this. */
+  const onTransfer = useCallback((article: AdminArticle) => {
+    setDone(null);
+    setOpen(article);
+  }, []);
+  const columns = useMemo(() => adminArticlesColumns({ onTransfer, onViewAs: setViewing }), [onTransfer]);
+
+  /* Filtered **before** the table sees it, and memoised: a fresh array per
+     render would rebuild TanStack's row models every render (the shelf's
+     render loop, docs/postmortems/260827e-shelf-render-loop.md). `null` is
+     still loading. */
+  const matching = useMemo(
+    () => (list === null ? null : list.articles.filter((a) => matchesFilter(a, filter))),
     [list, filter],
   );
+  /* `rows` is what the table draws — sorted, the untitled and unpriced sunk. */
+  const { table, rows } = useUrlSortedTable({
+    data: matching,
+    columns,
+    rowId: idOf,
+    byParam: adminArticlesByParam,
+    hiddenColumnKeys: ADMIN_ARTICLES_COLUMN_KEYS,
+  });
 
   return (
     <Shell title="Articles" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
@@ -284,6 +286,15 @@ export function AdminArticlesPage() {
         <p role="status" className="tw:mb-4 tw:text-sm">
           {done}
         </p>
+      )}
+
+      {viewing && (
+        <ViewAsStart
+          key={viewing.id}
+          subjectId={viewing.ownerId}
+          label={ownerLabel(viewing)}
+          onCancel={() => setViewing(null)}
+        />
       )}
 
       {open && (
@@ -318,78 +329,43 @@ export function AdminArticlesPage() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
-        <span className="tw:text-xs tw:text-muted-foreground">
-          {list === null ? "" : `${rows.length} of ${list.articles.length}`}
-        </span>
-        <button
-          type="button"
-          onClick={() => void reload()}
-          disabled={loading}
-          aria-label="Refresh the articles"
-          data-tip="Refresh the articles"
-          data-tip-describes="off"
-          className={BUTTON}
-        >
-          <RefreshCw size={12} />
-          {loading ? "Loading…" : "Refresh"}
-        </button>
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+          {/* Always drawn, like /admin/users': it is the only way back to a
+              hidden column. */}
+          <ColumnsMenu table={table} />
+          {/* Counted off `rows`, the list the table is drawn from, for
+              /admin/users' reason (AdminPage.tsx, where its count is drawn). */}
+          <span className="tw:text-xs tw:text-muted-foreground">
+            {list === null ? "" : `${rows.length} of ${list.articles.length}`}
+          </span>
+          <button
+            type="button"
+            onClick={() => void reload()}
+            disabled={loading}
+            aria-label="Refresh the articles"
+            data-tip="Refresh the articles"
+            data-tip-describes="off"
+            className={BUTTON}
+          >
+            <RefreshCw size={12} />
+            {loading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
       </div>
+      {/* The chips on a row of their own: the filter, count and Refresh above
+          already fill one at 390px. */}
+      {list && list.articles.length > 0 && (
+        <div className="tw:mb-3">
+          <SortChips table={table} order={ADMIN_ARTICLES_CHIP_ORDER} />
+        </div>
+      )}
 
       {list === null ? null : rows.length === 0 ? (
         <p className="tw:text-sm tw:text-muted-foreground">
           {list.articles.length === 0 ? "No articles yet." : "Nothing matches that filter."}
         </p>
       ) : (
-        /* `relative` for the vouchers table's reason: the sr-only caption and
-           header must be clipped by this box, not laid out against the page. */
-        <SidewaysScrollBox label={CAPTION} cue={false}>
-          <table className="tw:w-full tw:border-collapse tw:text-sm">
-            <caption className="tw:sr-only">{CAPTION}</caption>
-            <thead>
-              <tr className="tw:border-b tw:border-border">
-                <th className={HEAD}>Article</th>
-                <th className={HEAD}>Owner</th>
-                <th className={HEAD}>Added</th>
-                <th className={HEAD}>Visibility</th>
-                <th className={HEAD}>Read</th>
-                <th className={HEAD}>
-                  <span className="tw:sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((a) => (
-                <tr key={a.id} className="tw:border-b tw:border-border">
-                  <td className={`${CELL} tw:min-w-56`}>
-                    <ArticleCell article={a} />
-                  </td>
-                  <td className={`${CELL} tw:min-w-48`}>
-                    {ownerLabel(a)}
-                    {a.mine ? " (you)" : ""}
-                  </td>
-                  <td className={`${CELL} tw:whitespace-nowrap`} data-tip={exactly(a.createdAt)}>
-                    {readableDate(a.createdAt) ?? a.createdAt}
-                    <span className="tw:sr-only"> ({exactly(a.createdAt)})</span>
-                  </td>
-                  <td className={CELL}>{a.visibility === "public" ? "Public" : "Private"}</td>
-                  <td className={CELL}>{a.processing === "minimal" ? "Abstract only" : "In full"}</td>
-                  <td className={CELL}>
-                    <button
-                      type="button"
-                      className={BUTTON}
-                      onClick={() => {
-                        setDone(null);
-                        setOpen(a);
-                      }}
-                    >
-                      Transfer…
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </SidewaysScrollBox>
+        <DataTable table={table} rows={rows} caption="Every article" pinFirst />
       )}
     </Shell>
   );

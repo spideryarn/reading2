@@ -94,11 +94,12 @@ import {
   PRIVATE_INGEST_COST,
   PUBLIC_INGEST_COST,
   admitsHighPower,
-  admitsIngest,
+  admitsIngestOf,
   admitsMinimal,
   admitsUpgrade,
   articles as inArticles,
   budgetFor,
+  ingestHeadroom,
   minimalHeadroom,
   points,
 } from "../billing/points.js";
@@ -114,9 +115,13 @@ import {
 } from "../billing/tiers.js";
 import type { Entitlement, TierRow } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
-import { articles as articleRows, billingAccounts, ingestEvents } from "../db/schema.js";
+import { articles as articleRows, billingAccounts, ingestEvents, jobs as jobRows } from "../db/schema.js";
 import { log } from "../log.js";
 import type { OwnerId } from "../owner.js";
+import { isAdmin } from "../admin.js";
+import { PAGES_PER_SLOT, slotsForPages } from "../uploads.js";
+import { liveAttempt } from "./job-fence.js";
+import { StaleAttemptError } from "./jobs.js";
 import { ownedSlug } from "./owned-slug.js";
 import { allTiers } from "./pg-tiers.js";
 
@@ -291,7 +296,7 @@ export interface Usage {
   readonly minimalCharged: number;
   /**
    * **High-powered AI upgrades** inside the current period whose article is not
-   * currently public — one more article's worth each, {@link PRIVATE_INGEST_COST}.
+   * currently public — each row's slots at {@link PRIVATE_INGEST_COST}.
    *
    * Counted apart from the ingests above because every sentence that says
    * *added* is about ingests: folded into `chargedFullPrice`, one high-powered
@@ -301,6 +306,24 @@ export interface Usage {
    */
   readonly highPowerFullPrice: number;
   /** The same, for an article that is public right now — {@link PUBLIC_INGEST_COST}. */
+  readonly highPowerHalfPrice: number;
+  /**
+   * **The same five priced counts, as sums of `ingest_events.slots`** — what
+   * the rows cost, where the counts above say how many there are. A long PDF
+   * is one row of up to eight slots (one per 50 pages, plan 261020b), so *1
+   * article added* and *3 slots used* are both true of it. `wallUsed` prices
+   * these; `ingestsUsed` and every sentence that says *added* count rows.
+   * Equal to the counts for every account with no long document.
+   */
+  readonly slots: SlotSums;
+}
+
+/** Sums of `slots` over the rows each `Usage` count counts. See `Usage.slots`. */
+export interface SlotSums {
+  readonly chargedFullPrice: number;
+  readonly chargedHalfPrice: number;
+  readonly inFlightIngest: number;
+  readonly highPowerFullPrice: number;
   readonly highPowerHalfPrice: number;
 }
 
@@ -312,14 +335,18 @@ export interface Usage {
  * minimal paper, which is never priced by visibility.
  */
 export function wallUsed(usage: Usage): Points {
+  /* **The slot sums, not the row counts**, for everything priced by visibility:
+     a 150-page PDF is one row and three articles' worth (plan 261020b). A
+     minimal row is priced by its kind, so it stays a count. */
+  const { slots } = usage;
   return points(
-    usage.chargedFullPrice * PRIVATE_INGEST_COST +
-      usage.chargedHalfPrice * PUBLIC_INGEST_COST +
-      usage.inFlightIngest * PRIVATE_INGEST_COST +
+    slots.chargedFullPrice * PRIVATE_INGEST_COST +
+      slots.chargedHalfPrice * PUBLIC_INGEST_COST +
+      slots.inFlightIngest * PRIVATE_INGEST_COST +
       usage.minimalCharged * MINIMAL_COST +
       usage.inFlightMinimal * MINIMAL_COST +
-      usage.highPowerFullPrice * PRIVATE_INGEST_COST +
-      usage.highPowerHalfPrice * PUBLIC_INGEST_COST,
+      slots.highPowerFullPrice * PRIVATE_INGEST_COST +
+      slots.highPowerHalfPrice * PUBLIC_INGEST_COST,
   );
 }
 
@@ -330,6 +357,15 @@ export function wallUsed(usage: Usage): Points {
  */
 export function ingestsUsed(usage: Usage): number {
   return usage.chargedFullPrice + usage.chargedHalfPrice + usage.inFlightIngest;
+}
+
+/**
+ * **The articles' worth those ingests take** — the slot sums beside
+ * `ingestsUsed`'s rows. One 150-page PDF is 1 there and 3 here (plan 261020b).
+ * A whole number from the ledger, so a surface may print it beside the count.
+ */
+export function ingestSlotsUsed(usage: Usage): number {
+  return usage.slots.chargedFullPrice + usage.slots.chargedHalfPrice + usage.slots.inFlightIngest;
 }
 
 /**
@@ -506,7 +542,12 @@ export function usageSql(ownerId: string, entitlement: Entitlement) {
       count(*) filter (where e.kind = 'minimal' and e.succeeded_at is null and e.released_at is null)::int as in_flight_minimal,
       count(*) filter (where e.kind = 'minimal' and ${chargedIn(entitlement)} and e.superseded_by is null)::int as minimal_charged,
       count(*) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC} is false)::int as high_power_full_price,
-      count(*) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC})::int as high_power_half_price
+      count(*) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC})::int as high_power_half_price,
+      coalesce(sum(e.slots) filter (where e.kind = 'ingest' and ${chargedIn(entitlement)} and ${IS_PUBLIC} is false), 0)::int as full_price_slots,
+      coalesce(sum(e.slots) filter (where e.kind = 'ingest' and ${chargedIn(entitlement)} and ${IS_PUBLIC}), 0)::int as half_price_slots,
+      coalesce(sum(e.slots) filter (where e.kind <> 'minimal' and e.succeeded_at is null and e.released_at is null), 0)::int as in_flight_ingest_slots,
+      coalesce(sum(e.slots) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC} is false), 0)::int as high_power_full_price_slots,
+      coalesce(sum(e.slots) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC}), 0)::int as high_power_half_price_slots
     from spideryarn.ingest_events e
     ${VISIBILITY_JOIN}
     where e.owner_id = ${ownerId}::uuid`;
@@ -596,6 +637,13 @@ function usageOf(result: unknown): Usage {
     minimalCharged: cell("minimal_charged"),
     highPowerFullPrice: cell("high_power_full_price"),
     highPowerHalfPrice: cell("high_power_half_price"),
+    slots: {
+      chargedFullPrice: cell("full_price_slots"),
+      chargedHalfPrice: cell("half_price_slots"),
+      inFlightIngest: cell("in_flight_ingest_slots"),
+      highPowerFullPrice: cell("high_power_full_price_slots"),
+      highPowerHalfPrice: cell("high_power_half_price_slots"),
+    },
   };
 }
 
@@ -670,8 +718,9 @@ function refusalFor(
   entitlement: Entitlement,
   usage: Usage,
   row: BillingRow | undefined,
+  slots = 1,
 ): Refused | null {
-  if (admitsIngest(wallUsed(usage), budgetFor(entitlement.limit))) return null;
+  if (admitsIngestOf(wallUsed(usage), budgetFor(entitlement.limit), slots)) return null;
   /* Read off the row rather than inferred from `used > limit`; see `lapsed`. */
   const lapsed = hasLapsed(row);
   return {
@@ -749,7 +798,13 @@ export async function ingestEligibility(
      same thing to somebody about to transfer 11 MB. Unlocked, like everything
      else here: this is not the gate, and a number that moves between the two is
      a number that was going to move anyway. */
-  const shareToMakeRoom = await articlesToShare(getDb(), ownerId, entitlement, usage);
+  const shareToMakeRoom = await articlesToShare(
+    getDb(),
+    ownerId,
+    entitlement,
+    wallUsed(usage),
+    ingestWall(entitlement, 1),
+  );
   return shareToMakeRoom === undefined ? refused : { ...refused, shareToMakeRoom };
 }
 
@@ -873,13 +928,13 @@ async function articlesToShare(
   tx: HasExecute,
   ownerId: string,
   entitlement: Entitlement,
-  usage: Usage,
+  used: Points,
+  /** The predicate that refused the request, asked again with each article shared. */
+  admits: (used: Points) => boolean,
 ): Promise<readonly [ShareCandidate, ...ShareCandidate[]] | undefined> {
-  const budget = budgetFor(entitlement.limit);
-  const used = wallUsed(usage);
   const rows = rowsOf(
     await tx.execute(sql`
-      select count(*)::int as charged_rows,
+      select coalesce(sum(e.slots), 0)::int as charged_rows,
              a.slug as slug,
              coalesce(a.title_override, r.title, a.slug) as title
         from spideryarn.ingest_events e
@@ -890,7 +945,7 @@ async function articlesToShare(
          and ${chargedIn(entitlement)}
          and not (${IS_PUBLIC})
        group by e.article_id, a.slug, a.title_override, r.title
-       order by count(*) desc, a.slug asc`),
+       order by sum(e.slots) desc, a.slug asc`),
   );
 
   let freed = 0;
@@ -901,7 +956,9 @@ async function articlesToShare(
   const rest: ShareCandidate[] = [];
   for (const row of rows) {
     const cells = row as Record<string, unknown>;
-    /* Each charged row goes from 200 to 100 when its article is shared. */
+    /* Each charged slot goes from 200 to 100 when its article is shared. A
+       long PDF's row is several slots (plan 261020b), so this is the sum of
+       `slots`, and the candidates are ordered by the points sharing frees. */
     const chargedRows = Number(cells.charged_rows);
     if (!Number.isInteger(chargedRows) || chargedRows <= 0) continue;
     /* The coalesce cannot return null and a slug is never empty, so this is a
@@ -912,7 +969,7 @@ async function articlesToShare(
     const candidate: ShareCandidate = { title };
     if (head === undefined) head = candidate;
     else rest.push(candidate);
-    if (admitsIngest(points(used - freed), budget)) return [head, ...rest];
+    if (admits(points(used - freed))) return [head, ...rest];
   }
   return undefined;
 }
@@ -935,7 +992,26 @@ export async function sharingWouldMakeRoom(
   entitlement: Entitlement,
   usage: Usage,
 ): Promise<boolean> {
-  return (await articlesToShare(getDb(), ownerId, entitlement, usage)) !== undefined;
+  const offer = await articlesToShare(
+    getDb(),
+    ownerId,
+    entitlement,
+    wallUsed(usage),
+    ingestWall(entitlement, 1),
+  );
+  return offer !== undefined;
+}
+
+/**
+ * **The ingest wall for a request of `slots` articles' worth, less `credit`**,
+ * as the predicate the sharing offer stops on — the same one that refused the
+ * request, so the offer never names an article whose sharing still leaves the
+ * request refused (Sol's R2-F3 on plan 261020b).
+ */
+function ingestWall(entitlement: Entitlement, slots: number, credit: UpgradeCredit = 0) {
+  const budget = budgetFor(entitlement.limit);
+  return (used: Points): boolean =>
+    credit === 0 ? admitsIngestOf(used, budget, slots) : admitsUpgrade(used, budget, credit, slots);
 }
 
 /**
@@ -992,6 +1068,13 @@ export async function reserveIngest(
   ownerId: string,
   slug?: string,
   tiers?: readonly TierRow[],
+  /**
+   * What the reservation weighs. 1 for a new import, which stage 1 reprices
+   * once it has counted the pages (`priceFetchedPdf`); a retry carries the old
+   * row's weight (`reservationShapeOf`), because a retry of a job that failed
+   * after fetch never fetches again. Plan 261020b, path 1.
+   */
+  slots = 1,
 ): Promise<Admission> {
   /* Read before the transaction opens, never inside it: this is a second query
      and the rule for the locked section is that nothing else runs in it. */
@@ -1009,16 +1092,22 @@ export async function reserveIngest(
       if ("kind" in entitlement) return entitlement; // stale
 
       const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
-      const refused = refusalFor(entitlement, usage, row);
+      const refused = refusalFor(entitlement, usage, row, slots);
       if (refused) {
         /* Only on the way out, so an ordinary admission pays nothing for it. */
-        const shareToMakeRoom = await articlesToShare(tx, ownerId, entitlement, usage);
+        const shareToMakeRoom = await articlesToShare(
+          tx,
+          ownerId,
+          entitlement,
+          wallUsed(usage),
+          ingestWall(entitlement, slots),
+        );
         return shareToMakeRoom === undefined ? refused : { ...refused, shareToMakeRoom };
       }
 
       const [reservation] = await tx
         .insert(ingestEvents)
-        .values({ ownerId, ...(slug ? { slug } : {}) })
+        .values({ ownerId, slots, ...(slug ? { slug } : {}) })
         .returning({ id: ingestEvents.id });
       if (!reservation) throw new Error("reserving an ingest slot returned no row");
       return { kind: "admitted", reservationId: reservation.id, entitlement } satisfies Admitted;
@@ -1174,10 +1263,10 @@ async function upgradeCredit(
   ownerId: string,
   articleId: string,
   entitlement: Entitlement,
-): Promise<UpgradeCredit | undefined> {
+): Promise<{ readonly credit: UpgradeCredit; readonly pages: number | null } | undefined> {
   const rows = rowsOf(
     await tx.execute(sql`
-      select (${chargedIn(entitlement)}) as credited
+      select (${chargedIn(entitlement)}) as credited, e.pages as pages
         from spideryarn.ingest_events e
        where e.owner_id = ${ownerId}::uuid
          and e.article_id = ${articleId}::uuid
@@ -1192,7 +1281,17 @@ async function upgradeCredit(
       `article ${articleId} has ${rows.length} live minimal charges; one paper has one, so Read this is refused`,
     );
   }
-  return rows[0]?.credited === true ? MINIMAL_CREDIT : 0;
+  /* The page count stage 1 recorded on the minimal row (plan 261020b): *Read
+     this* never fetches again, so this is the only place the paper's length is
+     known. Null for a paper added before 2026-10-20 — one slot, grandfathered. */
+  const pages = rows[0]?.pages;
+  if (pages !== null && pages !== undefined && (!Number.isInteger(Number(pages)) || Number(pages) < 1)) {
+    throw new Error(`article ${articleId}'s minimal row records ${String(pages)} pages`);
+  }
+  return {
+    credit: rows[0]?.credited === true ? MINIMAL_CREDIT : 0,
+    pages: pages === null || pages === undefined ? null : Number(pages),
+  };
 }
 
 /** Postgres's `unique_violation`, on the one index this insert can meet. */
@@ -1265,9 +1364,12 @@ export async function reserveUpgrade(
         if (busy.length > 0) return { kind: "in-flight" };
 
         const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
-        const credit = await upgradeCredit(tx, ownerId, articleId, entitlement);
-        if (credit === undefined) return { kind: "not-found" };
-        if (!admitsUpgrade(wallUsed(usage), budgetFor(entitlement.limit), credit)) {
+        const paper = await upgradeCredit(tx, ownerId, articleId, entitlement);
+        if (paper === undefined) return { kind: "not-found" };
+        const { credit } = paper;
+        /* A long paper is its slots' worth once read, less the same credit. */
+        const slots = paper.pages === null ? 1 : slotsForPages(paper.pages);
+        if (!admitsUpgrade(wallUsed(usage), budgetFor(entitlement.limit), credit, slots)) {
           const lapsed = hasLapsed(row);
           const refused: Refused = {
             kind: "refused",
@@ -1276,13 +1378,26 @@ export async function reserveUpgrade(
             ...(entitlement.tier === "paid" ? { resetAt: entitlement.periodEnd } : {}),
             ...(lapsed ? { lapsed: true as const } : {}),
           };
-          const shareToMakeRoom = await articlesToShare(tx, ownerId, entitlement, usage);
+          const shareToMakeRoom = await articlesToShare(
+            tx,
+            ownerId,
+            entitlement,
+            wallUsed(usage),
+            ingestWall(entitlement, slots, credit),
+          );
           return shareToMakeRoom === undefined ? refused : { ...refused, shareToMakeRoom };
         }
 
         const [reservation] = await tx
           .insert(ingestEvents)
-          .values({ ownerId, kind: "ingest", articleId, slug: article.slug })
+          .values({
+            ownerId,
+            kind: "ingest",
+            articleId,
+            slug: article.slug,
+            slots,
+            ...(paper.pages === null ? {} : { pages: paper.pages }),
+          })
           .returning({ id: ingestEvents.id });
         if (!reservation) throw new Error("reserving Read this returned no row");
         return { kind: "admitted", reservationId: reservation.id, entitlement } satisfies Admitted;
@@ -1308,7 +1423,12 @@ export async function reserveUpgrade(
  * nothing else. Undefined when the row is not this owner's or is not there.
  */
 export type ReservationShape =
-  | { readonly kind: "ingest" }
+  /**
+   * `slots` is the old row's weight, which stage 1 repriced to the document's
+   * page count: a retry reserves it again rather than one, because a retry of
+   * a job that failed after fetch does not fetch again (plan 261020b, path 1).
+   */
+  | { readonly kind: "ingest"; readonly slots: number }
   | { readonly kind: "minimal" }
   | { readonly kind: "upgrade"; readonly articleId: string };
 
@@ -1321,6 +1441,7 @@ export async function reservationShapeOf(
       kind: ingestEvents.kind,
       articleId: ingestEvents.articleId,
       succeededAt: ingestEvents.succeededAt,
+      slots: ingestEvents.slots,
     })
     .from(ingestEvents)
     .where(and(eq(ingestEvents.id, ingestEventId), eq(ingestEvents.ownerId, ownerId)))
@@ -1330,7 +1451,7 @@ export async function reservationShapeOf(
   if (row.kind === "ingest" && row.articleId !== null && row.succeededAt === null) {
     return { kind: "upgrade", articleId: row.articleId };
   }
-  return { kind: "ingest" };
+  return { kind: "ingest", slots: row.slots };
 }
 
 /**
@@ -1385,6 +1506,8 @@ export type HighPowerSwitch =
   | { readonly kind: "on"; readonly highPowerSince: Date; readonly charged: boolean }
   /** Not this owner's article, or no such article. The route's 404. */
   | { readonly kind: "not-found" }
+  /** The article exists, but Fetch has not established its final slot count. The route's 409. */
+  | { readonly kind: "pending" }
   /**
    * Too little allowance left for the upgrade to fit whole. Nothing written.
    * `publicNow` is the price's reason, for the sentence (`highPowerNoRoom`).
@@ -1397,15 +1520,81 @@ export type HighPowerSwitch =
   | Stale;
 
 /**
+ * **Lock this article's live, paid imports and read the weight Fetch settled
+ * on.** The caller already holds billing and the article; this is deliberately
+ * job then reservation, the same nested order as `priceFetchedPdf`.
+ *
+ * **Alive is "its reservation is unsettled", not `status = 'running'`** (Sol's
+ * C2-F1). A deadline hand-back puts a job back to `queued` with its
+ * reservation and fetch kept, and a retry's fresh job is `queued` against an
+ * article that already exists; matching only `running` read both as nothing in
+ * flight and charged High-powered one slot for ever. Every terminal ending
+ * settles or releases the reservation in its own transaction, so an unsettled
+ * one names a job still alive. With no status in the predicate, a claim moving
+ * `queued` to `running` concurrently is simply waited for by the `for update`.
+ *
+ * **More than one can match** — an article holds a line of jobs, and nothing
+ * stops two of them each carrying a reservation (a *Read this* beside a
+ * re-add, say). So every match is locked, in id order so two callers cannot
+ * deadlock on each other, and the answer fails safe: not ready if any of them
+ * has not fetched, and the largest weight among them otherwise. A reservation
+ * that settled while this waited for its job is skipped — the charged row is
+ * then the durable answer, through `chargedSlotsOf`.
+ */
+async function activeImportPrice(
+  tx: BillingTx,
+  ownerId: OwnerId,
+  slug: string,
+): Promise<{ readonly ready: boolean; readonly slots: number | null }> {
+  const live = await tx
+    .select({ steps: jobRows.steps, ingestEventId: jobRows.ingestEventId })
+    .from(jobRows)
+    .where(
+      and(
+        eq(jobRows.ownerId, ownerId),
+        eq(jobRows.slug, slug),
+        sql`${jobRows.ingestEventId} in (
+          select e.id from spideryarn.ingest_events e
+           where e.succeeded_at is null and e.released_at is null)`,
+      ),
+    )
+    .orderBy(jobRows.id)
+    .for("update");
+
+  let ready = true;
+  let slots: number | null = null;
+  for (const job of live) {
+    if (!job.ingestEventId) continue;
+    const [reservation] = await tx
+      .select({
+        kind: ingestEvents.kind,
+        slots: ingestEvents.slots,
+        succeededAt: ingestEvents.succeededAt,
+        releasedAt: ingestEvents.releasedAt,
+      })
+      .from(ingestEvents)
+      .where(eq(ingestEvents.id, job.ingestEventId))
+      .for("update")
+      .limit(1);
+    /* Rechecked under its own lock: it may have settled while this waited. */
+    if (!reservation || reservation.succeededAt !== null || reservation.releasedAt !== null) continue;
+    const fetch = job.steps.find((step) => step.name === "fetch");
+    if (!(fetch?.status === "done" || fetch?.status === "skipped")) ready = false;
+    if (reservation.kind === "ingest") slots = Math.max(slots ?? 1, reservation.slots);
+  }
+  return { ready, slots };
+}
+
+/**
  * **Switch one article to High-powered AI, charging for it once** —
  * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
  *
  * Greg, 2026-09-30: *"it should double the processing cost per-article"*. So the
  * switch writes one more charged `ingest_events` row for the article, of `kind`
- * `'high_power'`, priced exactly like an ingest of it — 200 points while the
- * article is private, 100 while it is public, recomputed live and frozen on delete
- * by the same rules and the same trigger. With the ingest, a private article
- * costs two articles and a public one costs one.
+ * `'high_power'`, with the ingest's slot count and price — 200 points per slot
+ * while the article is private, 100 while it is public, recomputed live and
+ * frozen on delete by the same rules and the same trigger. With the ingest, any
+ * private article costs twice its ingest and a public one does too.
  *
  * **Once per article, for ever.** Switching off refunds nothing — the Opus calls
  * were spent — and switching on again charges nothing: the row is looked for
@@ -1423,13 +1612,17 @@ export type HighPowerSwitch =
  *
  * ## One transaction, in the house lock order
  *
- * `billing_accounts` first (`lockBillingAccount`), then the article `for update`
- * — the order `pg-visibility.ts` and admission take, so an unshare cannot land
- * between the price read and the charge, and two switch-ons serialise here: the
- * second finds the first's row and charges nothing. Admitting, charging and
- * setting `high_power_since` commit together or not at all. Nothing that opens
- * its own transaction or touches the network runs inside it; a `stale` answer
- * goes back to the caller, which resyncs from Stripe after this has committed.
+ * `billing_accounts` first (`lockBillingAccount`), then the article `for
+ * update`, then an active import's job and reservation. Article before job is
+ * settlement's order (pg-session.ts); job before reservation is PDF
+ * repricing's; and together they make High-powered-at-add wait for a
+ * concurrent reprice or settlement rather than reading the reservation as a
+ * one-slot article. The article is after billing, as in `pg-visibility.ts`, so
+ * an unshare cannot land between the price read and the charge. Two switch-ons serialise here: the second finds the first's row and
+ * charges nothing. Admitting, charging and setting `high_power_since` commit
+ * together or not at all. Nothing that opens its own transaction or touches
+ * the network runs inside it; a `stale` answer goes back to the caller, which
+ * resyncs from Stripe after this has committed.
  *
  * The administrator never comes here — `chargeAndSwitchOnHighPower` in
  * src/billing/admission.ts sends them to the uncharged store method, as ingests
@@ -1456,18 +1649,34 @@ export async function switchOnHighPower(
   return await db.transaction(
     async (tx): Promise<HighPowerSwitch> => {
       const row = await lockBillingAccount(tx, ownerId);
+
       const [article] = await tx
         .select({
           id: articleRows.id,
           slug: articleRows.slug,
           visibility: articleRows.visibility,
           highPowerSince: articleRows.highPowerSince,
+          currentRevisionId: articleRows.currentRevisionId,
         })
         .from(articleRows)
         .where(ownedSlug(slug, ownerId))
         .for("update")
         .limit(1);
       if (!article) return { kind: "not-found" };
+
+      /* **High-powered while adding can arrive before publication.** The
+         article draft already exists then, but its ingest row is deliberately
+         still unsettled and therefore invisible to `chargedSlotsOf`. Lock the
+         running job and its reservation — **after the article**, because
+         settlement takes article, then job, then reservation (`lockArticleFor`
+         in pg-session.ts), and the reverse here would deadlock with it — and
+         carry the reservation's final weight into this charge. A fetch still
+         running has not established whether the source is a long PDF: answer
+         the same transient 409 the add-page controller already retries.
+         Waiting inside this transaction would deadlock, because pricing needs
+         the billing lock held here. Missing fetch state also fails closed; once
+         the import settles, its charged row is the durable answer. */
+      const active = await activeImportPrice(tx, ownerId, slug);
 
       /* One post-lock database instant decides both which Stripe period is live
          and where the charge lands. A JavaScript clock read here paired with
@@ -1493,11 +1702,37 @@ export async function switchOnHighPower(
         .where(and(eq(ingestEvents.kind, "high_power"), eq(ingestEvents.articleId, article.id)))
         .limit(1);
 
+      /* A repeat switch is free and does not need the current import's price.
+         A first switch must wait until fetch has either priced a PDF or proved
+         that it is not one. `pending` is intentionally retried by
+         HighPowerIntent for as long as this job is alive. */
+      if (!already && !active.ready) return { kind: "pending" };
+
+      /* **An import that died before it published is not a legacy article**
+         (Sol's C3-F1). A long PDF stopped after fetch has its reservation
+         released and nothing charged, so the fallback below would read it as
+         one slot — and the Retry that reserves its five would then run on Opus
+         for one. With no charged ingest, nothing in flight and no published
+         revision, the price is not known yet: wait, as the add page does for a
+         dead job, and the Retry's live reservation is what gets charged. A
+         published article with no charged row — added before billing, before
+         `article_id`, or by the administrator — keeps its one-slot fallback. */
+      const charged = already ? null : await chargedSlotsOf(tx, article.id);
+      if (!already && charged === null && active.slots === null && article.currentRevisionId === null) {
+        return { kind: "pending" };
+      }
+
       if (!already) {
         const publicNow = article.visibility === "public";
         const cost = publicNow ? PUBLIC_INGEST_COST : PRIVATE_INGEST_COST;
+        /* **A long article is charged its slots again** (Greg, 2026-10-20,
+           answer 2 to plan 261020b): the largest weight among the article's
+           charged ingest rows, since a re-add before 2026-10-07 could leave
+           several. None — added before billing, before `article_id`, or by the
+           administrator — is one slot, as before. */
+        const slots = Math.max(charged ?? 1, active.slots ?? 1);
         const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
-        if (!admitsHighPower(wallUsed(usage), budgetFor(entitlement.limit), cost)) {
+        if (!admitsHighPower(wallUsed(usage), budgetFor(entitlement.limit), cost, slots)) {
           return { kind: "no-room", publicNow, entitlement };
         }
         /* The same database timestamp in both columns: the shape check wants
@@ -1505,9 +1740,9 @@ export async function switchOnHighPower(
            selected the entitlement above. */
         await tx.execute(sql`
           insert into spideryarn.ingest_events
-            (owner_id, kind, reserved_at, succeeded_at, article_id, slug)
+            (owner_id, kind, reserved_at, succeeded_at, article_id, slug, slots)
           values (${ownerId}::uuid, 'high_power', ${chargedAt}, ${chargedAt},
-                  ${article.id}::uuid, ${article.slug})`);
+                  ${article.id}::uuid, ${article.slug}, ${slots})`);
       }
 
       if (article.highPowerSince) {
@@ -1529,6 +1764,240 @@ export async function switchOnHighPower(
     /* Pinned, for the reason `reserveIngest` gives. */
     { isolationLevel: "read committed" },
   );
+}
+
+/* --------------------------------------------- a long PDF, in stage 1 -- */
+
+/**
+ * What stage 1's reprice came to. See `priceFetchedPdf`.
+ *
+ * `refused` and `refused-rerun` are the two refusals the fetch step turns into
+ * sentences (`longPdfQuotaReached` and `LONG_PDF_RERUN` in src/messages.ts).
+ */
+export type PdfPricing =
+  /** Nothing to price: the administrator, or a re-run the article's slots already cover. */
+  | { readonly kind: "unpriced" }
+  /** A minimal paper: its pages were recorded, and it stays at a hundredth. */
+  | { readonly kind: "minimal" }
+  /** The reservation now weighs `slots`. */
+  | { readonly kind: "priced"; readonly slots: number; readonly pages: number }
+  /** The slots are not there. Nothing written; the job fails in stage 1, before anything paid. */
+  | {
+      readonly kind: "refused";
+      readonly slots: number;
+      readonly pages: number;
+      /** How many more one-slot articles the account could add — `ingestHeadroom`, exact. */
+      readonly slotsLeft: number;
+      readonly refusal: Refused;
+    }
+  /**
+   * A re-run with no reservation fetched a document heavier than the article
+   * was ever paid for (rule 4 of plan 261020b). Nothing written.
+   */
+  | { readonly kind: "refused-rerun"; readonly slots: number; readonly paidSlots: number; readonly pages: number }
+  | Stale;
+
+/**
+ * **Price a PDF stage 1 has just counted, against the reservation its job
+ * holds** — plan 261020b § *The race between reserving and raising the
+ * charge*.
+ *
+ * The route reserved one slot before anything was fetched; nobody knew the
+ * page count then. This is where the reservation becomes `slotsForPages(pages)`,
+ * **before anything paid can start**: the fetch step calls it before `writeRaw`
+ * and before an upload is promoted to `verified`, and stage 2 cannot run
+ * without the raw manifest. A refusal writes nothing and the step throws.
+ *
+ * ## The lock order, and the one read that is not locked
+ *
+ * The owner is read **unlocked** first. Locking the job to find the owner and
+ * then asking for the billing row would reverse the house order and could join
+ * a three-way cycle with billing → article and article → job (Sol's R2-F5).
+ * Then, in one transaction: `lockBillingAccount`, the job `for update` under
+ * `liveAttempt` (a stale claimant throws `StaleAttemptError`, so it can neither
+ * lower the replacement's slots nor raise them), and the ingest row
+ * `for update`. Settlement takes job then ingest row too, so the two cannot
+ * deadlock, and a job cannot end or change hands between this fence check and
+ * its write. **Nothing that touches the network is inside**: the page count, and
+ * the previous source's, are computed by the caller before this is called.
+ *
+ * ## The outcomes
+ *
+ * - the administrator: `unpriced`, nothing written;
+ * - no reservation (a re-run — Rebuild, refresh): rule 4. The new count may not
+ *   exceed what the article has been: the larger of its charged ingest rows'
+ *   slots and `previousPages`'s (the raw source being replaced; null for none
+ *   or a web page). More is `refused-rerun`; equal or fewer runs free, as today;
+ * - a minimal row: records `pages`, `minimal`;
+ * - an unsettled `'ingest'` row of this owner: usage **without this row's
+ *   current weight**, the new weight through the same wall as any ingest
+ *   (`admitsIngestOf`, or `admitsUpgrade` for a *Read this*), `priced` or
+ *   `refused`. Fewer slots than reserved, or the same, needs no check;
+ * - anything else — settled, released, another owner's — throws: it is a
+ *   ledger contradiction, and pricing over it would hide one.
+ */
+export async function priceFetchedPdf(
+  jobId: string,
+  attempt: string,
+  pages: number,
+  previousPages: number | null,
+  tiers?: readonly TierRow[],
+): Promise<PdfPricing> {
+  const slots = slotsForPages(pages);
+  const db = getDb();
+  /* Unlocked — see the header. */
+  const [owner] = await db.select({ ownerId: jobRows.ownerId }).from(jobRows).where(eq(jobRows.id, jobId)).limit(1);
+  if (!owner) throw new StaleAttemptError(jobId);
+  const { ownerId } = owner;
+  if (isAdmin(ownerId)) return { kind: "unpriced" };
+  const sold = tiers ?? (await allTiers());
+
+  return await db.transaction(
+    async (tx): Promise<PdfPricing> => {
+      const billing = await lockBillingAccount(tx, ownerId);
+      const [job] = await tx
+        .select({ ownerId: jobRows.ownerId, slug: jobRows.slug, ingestEventId: jobRows.ingestEventId })
+        .from(jobRows)
+        .where(liveAttempt(jobId, attempt))
+        .for("update");
+      /* The owner cannot change, but a job that is not this claim's any more
+         may not be priced by it. */
+      if (!job || job.ownerId !== ownerId) throw new StaleAttemptError(jobId);
+
+      if (job.ingestEventId === null) {
+        /* Rule 4: a re-run is free only up to what the article already was. */
+        const [article] = await tx
+          .select({ id: articleRows.id })
+          .from(articleRows)
+          .where(ownedSlug(job.slug, ownerId as OwnerId))
+          .limit(1);
+        const charged = article ? await chargedSlotsOf(tx, article.id) : null;
+        /* Capped at eight rather than refused: a source counted under an
+           older, higher cap is still at most what a row can be. */
+        const previous = previousPages === null ? 1 : Math.min(8, Math.ceil(previousPages / PAGES_PER_SLOT));
+        const paidSlots = Math.max(charged ?? 1, previous);
+        if (slots > paidSlots) return { kind: "refused-rerun", slots, paidSlots, pages };
+        return { kind: "unpriced" };
+      }
+
+      const [row] = await tx
+        .select({
+          ownerId: ingestEvents.ownerId,
+          kind: ingestEvents.kind,
+          slots: ingestEvents.slots,
+          pages: ingestEvents.pages,
+          articleId: ingestEvents.articleId,
+          succeededAt: ingestEvents.succeededAt,
+          releasedAt: ingestEvents.releasedAt,
+        })
+        .from(ingestEvents)
+        .where(eq(ingestEvents.id, job.ingestEventId))
+        .for("update")
+        .limit(1);
+      if (!row || row.ownerId !== ownerId || row.succeededAt !== null || row.releasedAt !== null) {
+        throw new Error(
+          `job ${jobId}'s reservation ${job.ingestEventId} is missing, another owner's, or already ` +
+            "settled, so a long PDF cannot be priced against it",
+        );
+      }
+      if (row.kind === "minimal") {
+        /* A minimal paper stays at a hundredth whatever its length; its pages
+           are what *Read this* will reserve from, since that never fetches. */
+        if (row.pages !== pages) {
+          await tx.update(ingestEvents).set({ pages }).where(eq(ingestEvents.id, job.ingestEventId));
+        }
+        return { kind: "minimal" };
+      }
+      if (row.kind !== "ingest") {
+        throw new Error(`job ${jobId}'s reservation is a '${row.kind}' row, which no job runs on`);
+      }
+      /* The same count twice (a re-run fetch in the same job) is a no-op. */
+      if (row.slots === slots && row.pages === pages) return { kind: "priced", slots, pages };
+
+      if (slots > row.slots) {
+        const entitlement = entitlementFromRow(billing, sold, new Date());
+        if ("kind" in entitlement) return entitlement; // stale
+        const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
+        /* This row is in `usage` at its current weight, in flight; take it out
+           so it is not counted twice. */
+        const without = points(wallUsed(usage) - PRIVATE_INGEST_COST * row.slots);
+        const credit =
+          row.articleId === null
+            ? 0
+            : ((await upgradeCredit(tx, ownerId, row.articleId, entitlement))?.credit ?? 0);
+        const admits = ingestWall(entitlement, slots, credit);
+        if (!admits(without)) {
+          const lapsed = hasLapsed(billing);
+          const refused: Refused = {
+            kind: "refused",
+            used: ingestsUsed(usage),
+            limit: entitlement.limit,
+            ...(entitlement.tier === "paid" ? { resetAt: entitlement.periodEnd } : {}),
+            ...(lapsed ? { lapsed: true as const } : {}),
+          };
+          const shareToMakeRoom = await articlesToShare(tx, ownerId, entitlement, without, admits);
+          return {
+            kind: "refused",
+            slots,
+            pages,
+            slotsLeft: ingestHeadroom(without, budgetFor(entitlement.limit)),
+            refusal: shareToMakeRoom === undefined ? refused : { ...refused, shareToMakeRoom },
+          };
+        }
+      }
+      await tx.update(ingestEvents).set({ slots, pages }).where(eq(ingestEvents.id, job.ingestEventId));
+      return { kind: "priced", slots, pages };
+    },
+    /* Pinned, for the reason `reserveIngest` gives. */
+    { isolationLevel: "read committed" },
+  );
+}
+
+/**
+ * **Stage 2's belt: is this PDF priced?** One read-only question, asked before
+ * transcription for a PDF whose manifest carries `pages` (plan 261020b, R2-F4):
+ * does the job's unsettled reservation carry `slots >= slotsForPages(pages)`?
+ *
+ * `unasked` when the job holds no reservation — its raw is the one already paid
+ * for, or one rule 4 has just checked — and for a minimal paper's job, which
+ * transcribes nothing. Anything else that is not `priced` fails the step closed.
+ * Not a second charge: Sol showed a repricing call here covered none of the
+ * paths it claimed to.
+ */
+export async function pdfPricing(jobId: string, pages: number): Promise<"priced" | "unasked" | "underpriced"> {
+  const rows = rowsOf(
+    await getDb().execute(sql`
+      select e.kind, e.slots, e.succeeded_at is null and e.released_at is null as unsettled
+        from spideryarn.jobs j
+        join spideryarn.ingest_events e on e.id = j.ingest_event_id
+       where j.id = ${jobId}`),
+  );
+  const row = rows[0];
+  if (!row) return "unasked";
+  if (row.kind === "minimal") return "unasked";
+  if (row.unsettled !== true || row.kind !== "ingest") return "underpriced";
+  return Number(row.slots) >= slotsForPages(pages) ? "priced" : "underpriced";
+}
+
+/**
+ * **The most slots any charged `'ingest'` row of this article carries**, or
+ * `null` when it has none — what the article has been paid for as. Read by
+ * High-powered AI (which charges it again) and by a re-run that fetches again
+ * (rule 4 of plan 261020b, which may not exceed it for free).
+ */
+async function chargedSlotsOf(tx: HasExecute, articleId: string): Promise<number | null> {
+  const [row] = rowsOf(
+    await tx.execute(sql`
+      select max(slots)::int as slots from spideryarn.ingest_events
+       where article_id = ${articleId}::uuid and kind = 'ingest' and succeeded_at is not null`),
+  );
+  const value = row?.slots;
+  if (value === null || value === undefined) return null;
+  const slots = Number(value);
+  if (!Number.isInteger(slots) || slots < 1) {
+    throw new Error(`article ${articleId}'s charged slots came back as ${String(value)}`);
+  }
+  return slots;
 }
 
 /**

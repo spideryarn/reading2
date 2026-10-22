@@ -36,6 +36,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isPurchase } from "../billing-plan.js";
 import type { BillingSummary } from "../billing-plan.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { VIEW_AS_READ_ONLY, viewAsNonce } from "./lib/view-as.js";
 
 /** What the Checkout return said, once we have asked the server about it. */
 export type CheckoutReturn =
@@ -114,6 +115,14 @@ export function useBilling(): UseBilling {
   // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is not read in here — it IS the trigger. `reload` bumps it, and so does a confirmed Checkout, which is the whole of "the plan has just changed, read it again". Biome cannot see a dependency whose only job is to change; useExperimental.ts carries the same line for the same reason.
   useEffect(() => {
     const mine = ++generation.current;
+    /* `/api/billing/usage` claims vouchers as the caller and may email, so it
+       is refused while viewing as another reader (plan 261019n § The
+       allowlist), and not asked. The refusal's own sentence, without the
+       round trip. */
+    if (viewAsNonce() !== null) {
+      setError(VIEW_AS_READ_ONLY);
+      return;
+    }
     apiFetch("/api/billing/usage")
       .then((r) => readJson<unknown>(r))
       .then((body) => {

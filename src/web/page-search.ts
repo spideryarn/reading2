@@ -51,18 +51,18 @@
  * built from the typed section list by the Help page (help/HelpPage.tsx).
  */
 export interface SearchableSection {
-  id: string;
-  label: string;
+  readonly id: string;
+  readonly label: string;
   /** The page's own extra words for it (`data-keywords`). */
-  keywords: string;
+  readonly keywords: string;
   /** The heading's one-line answer, e.g. "$0.0123 · 12 calls". */
-  aside: string;
+  readonly aside: string;
   /**
    * The section's own words, as plain text — **only where a result is the
    * whole of what it names**, which today is a Help page. Metadata leaves it
    * out; the top of this file says why the two differ.
    */
-  body?: string;
+  readonly body?: string;
 }
 
 /**
@@ -121,6 +121,40 @@ function words(text: string): string[] {
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
     .map(searchStem);
+}
+
+/** A section's words, each field once: what `searchSections` compares a query against. */
+interface SectionWords {
+  readonly label: readonly string[];
+  readonly keywords: readonly string[];
+  readonly aside: readonly string[];
+  readonly body: readonly string[];
+}
+
+/**
+ * **Each section's words, worked out once per section object.** Help searches
+ * every page's text on every keystroke, and splitting and stemming 49 pages
+ * again each time cost ~15 ms a keystroke (GPT Sol, plan review of 261020x,
+ * measured). Help keeps one list of sections for the page's life, so it pays
+ * once; Metadata replaces an entry object when its DOM-derived words change,
+ * and is no worse off. `SearchableSection`'s fields are readonly because
+ * mutating a cached object would leave these words stale. A word kept once per
+ * field: whether a field has it is all `hit` asks.
+ */
+const SECTION_WORDS = new WeakMap<SearchableSection, SectionWords>();
+
+function sectionWords(section: SearchableSection): SectionWords {
+  const cached = SECTION_WORDS.get(section);
+  if (cached) return cached;
+  const once = (text: string) => [...new Set(words(text))];
+  const made: SectionWords = {
+    label: once(section.label),
+    keywords: once(section.keywords),
+    aside: once(section.aside),
+    body: section.body === undefined ? [] : once(section.body),
+  };
+  SECTION_WORDS.set(section, made);
+  return made;
 }
 
 /** Stemmed word → its stemmed group, for one table. */
@@ -242,17 +276,16 @@ export function searchSections(
   const content = all.filter(
     (t, i) => !STOPWORDS.has(t) && !(t === "get" && all[i + 1] === "rid"),
   );
-  const terms = content.length > 0 ? content : all;
+  /* Once each: a repeated word cannot narrow the set of answers. Treating the
+     query as a set also means copied or dictated repetition does not
+     accidentally give one term extra ranking weight. */
+  const terms = [...new Set(content.length > 0 ? content : all)];
   const groups = groupsOf(synonyms);
   const expanded = terms.map((t) => ({ term: t, synonyms: synonymsOf(t, groups) }));
   /* Each section's best score for each query word, 0 for a miss. */
   const rows = sections.map((section, order) => {
-    const fields: Record<Field, string[]> = {
-      label: words(section.label),
-      keywords: words(section.keywords),
-      aside: words(section.aside),
-    };
-    const body = section.body === undefined ? [] : words(section.body);
+    const fields = sectionWords(section);
+    const body = fields.body;
     /* Which query words only the body answered: § the last paragraph above. */
     const fromBody: boolean[] = [];
     const scores = expanded.map(({ term, synonyms }, i) => {

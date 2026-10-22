@@ -85,7 +85,7 @@ describe("the article on its own stops at the measure", () => {
   it("scales the cap with the root font size, because the measure does", () => {
     /* The regression this pins, and it is `SPINE_W`'s lesson from the other
        side: a px constant standing in for a rem-relative length is only right at
-       16px. A reader whose browser default is 20px has 65ch, `--reading-size`
+       16px. A reader whose browser default is 20px has the reading measure, `--reading-size`
        and both of the cell's pads 25% wider — so a fixed 800 would have clipped
        their measure to about 51ch, which is the one thing this cap must never
        do. Found by GPT Sol reviewing the built code, 2026-09-03. */
@@ -184,7 +184,7 @@ describe("a wide band", () => {
   });
 
   it("holds its invariants at every width, root and rail", () => {
-    for (const root of [9, 12, 16, 20]) {
+    for (const root of [9, 12, 16, 18, 20, 22]) {
       for (const spine of [null, false] as const) {
         for (let w = 320; w <= 2400; w++) {
           const f = wide(w, root, spine);
@@ -266,7 +266,7 @@ describe("a roomy band", () => {
   });
 
   it("holds its invariants at every width, root and rail", () => {
-    for (const root of [9, 12, 16, 20]) {
+    for (const root of [9, 12, 16, 18, 20, 22]) {
       for (const spine of [null, false] as const) {
         for (let w = 320; w <= 2400; w++) {
           const f = roomy(w, root, spine);
@@ -318,7 +318,7 @@ describe("a band past the prose's measure", () => {
 
   it("changes nothing until the prose cell is wider than the prose can use", () => {
     for (const shape of ["standard", "roomy"] as const) {
-      for (const root of [9, 12, 16, 20]) {
+      for (const root of [9, 12, 16, 18, 20, 22]) {
         for (const spine of [null, false] as const) {
           for (let w = 320; w <= 2400; w++) {
             const f = fitView({ windowWidth: w, modeBand: true, bandShape: shape, rootFontPx: root, showSpine: spine });

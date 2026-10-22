@@ -218,6 +218,7 @@ import {
   ExternalLink,
   FileArchive,
   FileText,
+  NotebookText,
   IdCard,
   FileQuestion,
   FileType,
@@ -259,7 +260,6 @@ import type {
   Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
-import { convertedFormatFromName } from "../uploads.js";
 /* The steps this page will re-run, from a leaf rather than from
    `src/pipeline.ts` — which is a server module the client may not import
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
@@ -272,7 +272,7 @@ import { Dock, withPanel } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
-import { cameOffADisk, journalBesideSite, SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, journalBesideSite, originalOf, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { TagEditor } from "./TagEditor.js";
@@ -284,7 +284,7 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
-import { downloadExport } from "./export-download.js";
+import { downloadExport, downloadYourWords, type ExportResult } from "./export-download.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
@@ -296,6 +296,9 @@ import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
 import { useSession } from "./useSession.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { useViewAsSubject } from "./view-as-session.js";
+import { AdminLinkOpens, Ownership } from "./Ownership.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
@@ -493,6 +496,7 @@ const READ_AGAIN_AFTER_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000];
 export function Metadata({
   slug,
   article,
+  readerId,
   onRenamed,
   onVisibility,
   onPrivateLink,
@@ -500,6 +504,8 @@ export function Metadata({
 }: {
   slug: string;
   article: Article;
+  /** The account for which the owned article read answered. Omitted only by focused tests. */
+  readerId?: string | null;
   /**
    * The reader renamed the article from the heading below.
    *
@@ -539,6 +545,7 @@ export function Metadata({
      courtesy only: the data comes from `/api/admin`, which refuses everyone
      else. ArticleCost.tsx. */
   const { user } = useSession();
+  const viewAsSubject = useViewAsSubject();
 
   /**
    * Which stages have run, and how many questions have been asked. Not in the
@@ -1179,7 +1186,7 @@ export function Metadata({
                 sure they never see it. */}
             <div className="tw:mt-4 tw:border-t tw:border-border tw:pt-3">
               <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-3">
-                <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
+                <span className="tw:text-[length:max(var(--text-min),0.7rem)] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
                   About you
                 </span>
                 <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight-text">
@@ -1336,6 +1343,25 @@ export function Metadata({
           onPrivateLink={onPrivateLink}
           slug={slug}
           title={meta.title}
+          /* A second session subscriber can hear an account change before the
+             owner branch above has been replaced. Never put B's address beside
+             an ownership result fetched for A. */
+          ownerEmail={
+            /* The subject's address in a tab viewing as them: the session's
+               user there is the administrator (plan 261019n § round 1, F1). */
+            viewAsNonce() !== null
+              ? (viewAsSubject?.subjectEmail ?? null)
+              : readerId != null && user?.id === readerId
+                ? (user.email ?? null)
+                : null
+          }
+          ownerId={
+            viewAsNonce() !== null
+              ? (viewAsSubject?.subjectId ?? null)
+              : readerId != null && user?.id === readerId
+                ? readerId
+                : null
+          }
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
              false for ever if it fails — so a failed metadata check removed the
              whole section rather than showing its "we could not check" state.
@@ -1400,7 +1426,8 @@ export function Metadata({
             for admin users, can you include a section that shows cost
             estimates"*. Beside the technical details it is one of, and above
             the controls. docs/plans/260930f-article-cost-on-the-metadata-page.md. */}
-        {isAdmin(user?.id) && <CostSection slug={slug} />}
+        {/* Not while viewing as a reader: it is the administrator's, and its route is refused there. */}
+        {isAdmin(user?.id) && viewAsNonce() === null && <CostSection slug={slug} />}
 
         {/* -------------------------------------------------- 9⅓. export it --
             Under the machinery since 2026-10-01 — Greg (SPIDERYARN-READING2-7H):
@@ -1505,6 +1532,9 @@ export function Metadata({
            `tags` is the editor's own save (`saveTags`), so a tag added from
            the bar is on the page at once (GPT Sol's F4 on plan 261003f). */
         shelfRow={showingFixture ? undefined : { archive, tags: { edit: saveTags } }}
+        /* The bar's *Open the original*, from the rule the origin line on this
+           page draws from (SourceLink.tsx § `originalOf`). */
+        original={showingFixture ? undefined : (originalOf(meta, true) ?? undefined)}
       />
     </>
   );
@@ -1531,6 +1561,8 @@ export function Metadata({
 function SharingSection({
   slug,
   title,
+  ownerEmail,
+  ownerId,
   offer,
   sharing,
   checking,
@@ -1539,6 +1571,9 @@ function SharingSection({
 }: {
   slug: string;
   title: string;
+  ownerEmail: string | null;
+  /** The signed-in owner's id, under the same guard as `ownerEmail`; for the administrator's openers line. */
+  ownerId: string | null;
   /** Straight through to the card — see `Metadata`'s prop of the same name. */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
   onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
@@ -1555,7 +1590,7 @@ function SharingSection({
   checking: boolean;
 }) {
   if (!offer) return null;
-  return <SharingCard slug={slug} title={title} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
+  return <SharingCard slug={slug} title={title} ownerEmail={ownerEmail} ownerId={ownerId} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
 }
 
 /**
@@ -1571,6 +1606,8 @@ function SharingSection({
 function SharingCard({
   slug,
   title,
+  ownerEmail,
+  ownerId,
   sharing,
   checking,
   onVisibility,
@@ -1578,6 +1615,8 @@ function SharingCard({
 }: {
   slug: string;
   title: string;
+  ownerEmail: string | null;
+  ownerId: string | null;
   sharing: ArticleSharing | undefined;
   checking: boolean;
   onVisibility: (slug: string, visibility: Visibility | null) => void;
@@ -1618,6 +1657,14 @@ function SharingCard({
           `${CARD} p-4`, matching the compact control cards elsewhere on the
           page rather than "In one sentence"'s `p-5`. */}
       <div className={`${CARD} tw:p-4`}>
+        {/* Whose it is, first: this page is drawn only for the owner
+            (Ownership.tsx). Greg, spya-cf30ac. */}
+        <div className="tw:mb-4 tw:border-b tw:border-rule tw:pb-4">
+          <Ownership whose="yours" email={ownerEmail} />
+          {/* The administrator's own article: who opened its private link
+              (plan 261021d § 5). Draws and asks nothing for anybody else. */}
+          <AdminLinkOpens slug={slug} readerId={ownerId} privateLink={linkOn} />
+        </div>
         <PrivateLink
           slug={slug}
           title={title}
@@ -1767,7 +1814,7 @@ function RerunSection({
         </p>
       )}
       {/* **High-powered AI**, for the owner of the article — switching it on counts
-          as one more article against their allowance (plan 260930k). First in
+          the article's slots against their allowance again (plan 261020b). First in
           the section, above the rows it changes the model for (all but
           Summary's Brief and Fuller):
           switching it re-runs nothing, and the rows below are how you ask. */}
@@ -2223,6 +2270,50 @@ function CostSection({ slug }: { slug: string }) {
  * to export, and a control whose only outcome is a 404 is worse than no control
  * because pressing it is how you find out.
  */
+/** The Export section's buttons: quiet at rest, tinted on hover. */
+const EXPORT_BUTTON =
+  "tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:text-muted-foreground tw:disabled:opacity-50 tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
+
+/**
+ * **One Export button's wait and failure.** The file is assembled on the
+ * server before a byte is sent, so this is a real wait — a second or two on a
+ * long article — and the button is disabled for it. Not only to say so: a
+ * second press would start a second assembly and hand the reader two copies of
+ * the same file. The request itself, and the guard that also covers the
+ * command bar's Export row, are export-download.ts's since 2026-10-02 (plan
+ * 261002c).
+ */
+function useDownload(start: () => Promise<ExportResult>): {
+  busy: boolean;
+  error: string | null;
+  run: () => Promise<void>;
+} {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    const result = await start();
+    /* `busy` is a bar press already building this file: that one will arrive,
+       so this press has nothing to say. */
+    if (result.kind === "failed") setError(result.message);
+    setBusy(false);
+  }
+  return { busy, error, run };
+}
+
+/** One download's own failure, beside the control that made it. */
+function DownloadError({ message }: { message: string | null }) {
+  return message ? (
+    <p
+      role="alert"
+      className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
+    >
+      <TriangleAlert size={12} /> {message}
+    </p>
+  ) : null;
+}
+
 function ExportSection({
   slug,
   offer,
@@ -2231,25 +2322,10 @@ function ExportSection({
   /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
   offer: boolean;
 }) {
-  /* The zip is assembled on the server before a byte is sent, so this is a real
-     wait — a second or two on a long article — and the button is disabled for
-     it. Not only to say so: a second press would start a second assembly and
-     hand the reader two copies of the same file. The request itself, and the
-     guard that also covers the command bar's Export row, are
-     export-download.ts's since 2026-10-02 (plan 261002c). */
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function download(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    const result = await downloadExport(slug);
-    /* `busy` is a bar press already building this zip: that one will arrive,
-       so this press has nothing to say. */
-    if (result.kind === "failed") setError(result.message);
-    setBusy(false);
-  }
-
+  const zip = useDownload(() => downloadExport(slug));
+  /* The reader's own words, as one Markdown file — plan 261020w. Its own
+     state, so the zip building does not hold this button, nor the reverse. */
+  const words = useDownload(() => downloadYourWords(slug));
   if (!offer) return null;
 
   return (
@@ -2266,14 +2342,14 @@ function ExportSection({
             destructive tint: nothing here changes the article. */}
         <button
           type="button"
-          onClick={() => void download()}
-          disabled={busy}
-          className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:text-muted-foreground tw:disabled:opacity-50 tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground"
+          onClick={() => void zip.run()}
+          disabled={zip.busy}
+          className={EXPORT_BUTTON}
         >
           {/* Not `Download`, which this page has already spent on the fetch
               stage (`STAGE_ICONS`) — two meanings on one glyph, on one page. */}
           <FileArchive size={14} />
-          {busy ? "Building the zip…" : "Export this article"}
+          {zip.busy ? "Building the zip…" : "Export this article"}
         </button>
 
         <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
@@ -2282,18 +2358,31 @@ function ExportSection({
           without Spideryarn. It does not include the original file or web page, or the image files
           themselves — those are listed rather than included.
         </p>
+        <DownloadError message={zip.error} />
 
-        {/* `role="alert"`, because the rest of a failed export is invisible: no
-            file arrives, and nothing else on the page moves. Same reason
-            SourceLink's arm carries one. */}
-        {error ? (
-          <p
-            role="alert"
-            className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-start tw:gap-1 tw:text-sm tw:text-danger"
-          >
-            <TriangleAlert size={12} /> {error}
-          </p>
-        ) : null}
+        {/* **Your own words, as one page** — Greg, 2026-10-19 (`spya-p88dcx`):
+            *"Provide a way to export the user's input/content from an
+            article."* The zip has them as JSON; this is the same words for a
+            person, or for pasting into another AI. src/store/your-words.ts. */}
+        <button
+          type="button"
+          onClick={() => void words.run()}
+          disabled={words.busy}
+          className={`${EXPORT_BUTTON} tw:mt-4`}
+        >
+          {/* Not `FileText`, which this page spends on the extract stage. */}
+          <NotebookText size={14} />
+          {words.busy ? "Gathering your words…" : "Download your notes and conversations"}
+        </button>
+
+        <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          Everything you wrote about this article — your comments and notes, quiz answers and every
+          conversation, with the AI's replies marked as its own — as one Markdown file to read, keep,
+          or paste into another AI.
+        </p>
+        {/* Each file keeps its own alert. If both fail, hiding one behind the
+            other's older error would make the second press fail silently. */}
+        <DownloadError message={words.error} />
       </div>
     </Section>
   );
@@ -2497,16 +2586,16 @@ function Origin({
               ? "The address recorded for this article is not one a browser can follow."
               : "No web address was recorded for this article."}
         </span>
-        {/* `GET /api/source/:slug` serves stage 1's canonical document. For a
-            text, Markdown or Word upload that is the HTML page we made, not the
-            original file kept beside it, so calling this control *View the
-            original* would be false. Withhold it until that original has its own
-            route. `slug` is the route's, never `meta.slug` — an address with no
-            article of its own is answered with the fixture's meta, and this link
-            must be about the address the reader is standing on. */}
+        {/* **Only what `GET /api/source/:slug` will serve, which is a PDF** —
+            `originalOf` says why, and the command bar's *Open the original*
+            asks it too, so the two cannot disagree. Until 2026-10-19 this
+            offered an uploaded web page as well, and that button could only
+            answer 404 (plan 261019f). `slug` is the route's, never `meta.slug` —
+            an address with no article of its own is answered with the
+            fixture's meta, and this link must be about the address the reader
+            is standing on. */}
         {uploaded &&
-          owner &&
-          (meta.source === "pdf" || convertedFormatFromName(meta.filename ?? "") === null) && (
+          originalOf(meta, owner)?.kind === "pdf" && (
             <span className="tw:text-highlight-text">
               <SourceLink slug={slug}>View the original</SourceLink>
             </span>
@@ -2632,7 +2721,7 @@ function SubHeading({ children }: { children: ReactNode }) {
      did to it" into the contents list in the margin as if it were a peer of
      "Your reading". `Section` is what `[data-section]` means. */
   return (
-    <h3 className="tw:mt-5 tw:mb-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+    <h3 className="tw:mt-5 tw:mb-2 tw:text-[length:max(var(--text-min),0.68rem)] tw:font-normal tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
       {children}
     </h3>
   );
@@ -2792,8 +2881,9 @@ function TechnicalDetails({
 }
 
 /** The quiet inline button this page uses for an act with a sentence beside it. */
+/* `min-h-[40px]` under a finger: these came out 34 tall on a phone (plan 261021g). */
 const QUIET_BUTTON =
-  "tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
+  "tw:inline-flex tw:items-center tw:gap-2 tw:any-pointer-coarse:min-h-[40px] tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
 
 /**
  * **Archive and Share…, under the title.** Greg, 2026-09-30
@@ -2981,7 +3071,7 @@ function ArchiveArticle({
         type="button"
         onClick={() => void set(!archived)}
         disabled={busy}
-        className={`tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
+        className={`tw:inline-flex tw:items-center tw:gap-2 tw:any-pointer-coarse:min-h-[40px] tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
           archived
             ? "tw:text-highlight-text tw:hover:bg-highlight/10 tw:focus-visible:bg-highlight/10"
             : /* Quiet at rest and tinted on hover — the shelf's own Archive
@@ -3738,7 +3828,7 @@ function Stat({
       >
         <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2">
           <Chip icon={Icon} />
-          <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+          <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
             {label}
           </span>
         </div>
@@ -3781,7 +3871,7 @@ function Row({
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:px-4 tw:py-3 tw:text-sm">
       <Chip icon={icon} />
-      <span className="tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+      <span className="tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
         {label}
       </span>
       <span className="tw:ml-auto tw:min-w-0 tw:text-right tw:text-ink-faint">{children}</span>
@@ -3843,7 +3933,7 @@ function StageRow({
             is what this app says "yes, and it is this one" with everywhere
             else. */}
         <span
-          className={`tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:px-2 tw:py-0.5 tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] ${
+          className={`tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:px-2 tw:py-0.5 tw:text-[length:max(var(--text-min),0.68rem)] tw:uppercase tw:tracking-[0.06em] ${
             done
               ? "tw:border-highlight/30 tw:bg-highlight-wash tw:text-highlight-ink"
               : "tw:border-border tw:text-muted-foreground"

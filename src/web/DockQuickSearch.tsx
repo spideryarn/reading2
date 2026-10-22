@@ -73,7 +73,7 @@
  */
 import { X, Zap } from "lucide-react";
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
-import { isImeComposing, isTyping } from "./key-chord.js";
+import { isImeComposing, isPlainKey } from "./key-chord.js";
 import { IDLE, PAUSE_MS, type QuickSession, stepQuickSession } from "./quick-session.js";
 import { type HandoffKind, searchDraftFor, useBandTyping, useDraftText } from "./search-draft.js";
 
@@ -85,11 +85,7 @@ export const QUICK_SEARCH_KEY = "/";
  * keys. Shift is allowed (see the module docblock); Ctrl, ⌘ and Alt are not.
  */
 export function isQuickSearchKey(e: KeyboardEvent): boolean {
-  if (e.key !== QUICK_SEARCH_KEY) return false;
-  if (e.altKey || e.ctrlKey || e.metaKey || e.repeat) return false;
-  if (e.isComposing || e.keyCode === 229) return false;
-  if (e.defaultPrevented || isTyping(e.target)) return false;
-  return document.querySelector("dialog[open]") === null;
+  return isPlainKey(e, QUICK_SEARCH_KEY, { shift: true });
 }
 
 export function DockQuickSearch({

@@ -1,12 +1,15 @@
 # Learning — where Learn mode is going
 
 Up: [reading-view-overview.md](reading-view-overview.md) · what is built:
-[learn-mode.md](learn-mode.md) (Recall, Tutorial, Explore) and [quiz.md](quiz.md) · the research:
+[learn-mode.md](learn-mode.md) (Recall and Explore) and [quiz.md](quiz.md) · the research:
 [261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md)
 
 **A direction, not a spec.** Started 2026-10-02 from Greg's reports `spya-c8x66d` and `spya-j0scgz`.
-What is built is in the two docs above; this is the reasoning that ties the four sub-modes together
-and the ideas that are not built yet.
+What is built is in the two docs above; this is the reasoning that ties the three sub-modes together
+and the ideas that are not built yet. There were four until 2026-10-20, when Recall took Tutorial
+in (Greg, `spya-gtzeqm`: *"Can we collapse Recall and Tutorial to get the best of both worlds (and
+reduce the number of sub-modes)?"*;
+[261020m](../plans/261020m-recall-and-tutorial-become-one-recall.md)).
 
 ## The point
 
@@ -31,16 +34,16 @@ the reader does the remembering and the model makes it likely to succeed.
 >
 > — Greg, `spya-j0scgz`, 2026-10-01
 
-## Four sub-modes: three directions of the same exchange, and one that faces the other way
+## Three sub-modes: two directions of the same exchange, and one that faces the other way
 
 ```
             who talks first      what the model does                    the research behind it
    Recall   the reader           corrects briefly, nudges them to       retrieval practice,
-                                 remember a little more, fills the      cued recall, a hint ladder
-                                 gap when they are stuck
-   Tutorial the reader, then     teaches a little, asks them to say it  one-to-one tutoring, self-
-            turn and turn about  back or use it, comes back to earlier  explanation, Bloom's levels,
-                                 points                                  spacing within a session
+                                 remember a little more; when they      cued recall, a hint ladder;
+                                 have not read it or are stuck,         and, from Tutorial,
+                                 teaches a small cited piece and asks   one-to-one tutoring, self-
+                                 them to say it back or use it; comes   explanation, Bloom's levels,
+                                 back to earlier points                 spacing within a session
    Explore  the reader           starts from what they marked and       none commissioned: built
                                  discussed; one move a turn (a          from Greg's two notes of
                                  question, a case of theirs, a          2026-10-03, and his third
@@ -49,12 +52,13 @@ the reader does the remembering and the model makes it likely to succeed.
    Quiz     the article          asks questions, marks the answers      the testing effect
 ```
 
-Recall is closest to testing: the reader brings what they have. Tutorial is closest to teaching:
-the model brings a little at a time and the reader turns it into their own words. Greg: *"it's a
-sort of balance between test-driven learning and kind of conversational teaching one-to-one."* Quiz
-is the article asking, with no conversation.
+Recall spans testing and teaching. Where the reader brings what they have, it is closest to
+testing; where they have nothing yet, it brings a little at a time and the reader turns it into
+their own words, which is what Tutorial did on its own chip from 2026-10-02 to 2026-10-20. Greg, of
+the two together: *"it's a sort of balance between test-driven learning and kind of conversational
+teaching one-to-one."* Quiz is the article asking, with no conversation.
 
-**Explore is the one that is about the reader's thinking rather than recall.** The other three ask
+**Explore is the one that is about the reader's thinking rather than recall.** The other two ask
 what the piece says and whether the reader has it; Explore asks what the reader makes of it. Greg,
 2026-10-03: *"helping me to think, explore & spark new ideas of my own and deepen my intuitions and
 apply to interesting cases of my own … and a bit less about remembering specifically what's in the
@@ -63,14 +67,15 @@ criticisms and concerns … deepening your thinking around the piece, whereas tu
 about understanding and internalizing what the piece says"* (learn-mode.md § Explore). He renamed the mode
 Learn in the same report. It sits under Learn because thinking with a piece is the other half of what
 vision.md calls internalising it, and because it grew out of Tutorial: when Tutorial was turned
-towards the author, the own-view turns it gave up needed somewhere to go. It is also the first
+towards the author, the own-view turns it gave up needed somewhere to go. Recall, which took
+Tutorial in, sends them there still. It is also the first
 sub-mode that knows what the reader did elsewhere on the article, which the last idea in § Not built
 yet asks of the others.
 
 ## What they share
 
-The first two are about remembering, so they hold for Recall, Tutorial and Quiz. The rest hold for
-Explore too.
+The first two are about remembering, so they hold for Recall and Quiz. The rest hold for Explore
+too.
 
 - **Hints that make success likely, without being a gimme.** A cue reinstates where in the piece
   something was and what the author was arguing, rather than supplying the answer.
@@ -88,9 +93,12 @@ Explore too.
 
 ## Not built yet, and worth building
 
-- **Live voice for Tutorial.** Short alternating turns are ideal spoken; Greg: *"I think this would
-  be ideal for the live real time voice. But that doesn't work very well at the moment."*
-  ([live-conversation.md](live-conversation.md)).
+- **Live voice tuned for teaching turns.** Short alternating turns are ideal spoken; Greg, of
+  Tutorial: *"I think this would be ideal for the live real time voice. But that doesn't work very
+  well at the moment."* Recall has Live, but Live uses its own prompts, not `LEARN_SYSTEM`, so a
+  spoken Recall does not yet teach a not-read reader the way the typed one does
+  ([live-conversation.md](live-conversation.md); deferred by
+  [261020m](../plans/261020m-recall-and-tutorial-become-one-recall.md)).
 - **A way to hand off to Chat.** When a reader needs a long explanation, the model should offer to
   start a chat on that one topic, already seeded (`spya-cjquu6`). Today it can only say so in words;
   there is no tool that starts a thread ([chat-tools.md](chat-tools.md)).
@@ -100,9 +108,9 @@ Explore too.
 - **Specialist interactions, sparingly.** Cloze (fill in the gap) is the one Greg is open to;
   multiple choice he is wary of, and finds both *"kind of artificial and annoying"*. Plain
   back-and-forth first.
-- **Recall and Tutorial knowing about each other and about Quiz** — a Tutorial that starts from what
-  the Quiz showed you missed, for instance. Explore is sent the reader's notes and a list of their
+- **Recall knowing about Quiz** — a Recall that starts from what the Quiz showed you missed, for
+  instance. Explore is sent the reader's notes and a list of their
   other conversations on every turn (learn-mode.md § The notes go with every turn); the Quiz's
   results and reading time are not in that yet.
-- **Live voice for Explore**, for Tutorial's reason, and with one more thing to solve first: a
+- **Live voice for Explore**, for the reason above, and with one more thing to solve first: a
   spoken turn carries no notes digest.

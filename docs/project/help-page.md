@@ -58,10 +58,14 @@ mode's body is `## In short`, required, then up to two more, `## When to use it`
 in that order (`help-markdown.tsx` § `helpModeSections`, the one parser the page and the corpus
 share). Links are site paths
 (`/help/spine`, `/pricing`), so a file reads the same on GitHub and to a model handed it raw. The only
-HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Four tokens stand for facts kept in code — `{{experimental-modes}}`,
-`{{public-shelf-label}}`, `{{whats-new-label}}` and `{{modes-table}}` — and `help-markdown.tsx` §
+HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Six tokens stand for facts kept in code — `{{experimental-modes}}`,
+`{{public-shelf-label}}`, `{{whats-new-label}}`, `{{max-pdf-pages}}`, `{{pages-per-article}}` and
+`{{modes-table}}` — and `help-markdown.tsx` §
 `expandHelpTokens` gives the plain text with them filled in, for anything that wants to read Help
-rather than draw it.
+rather than draw it. **A limit a reader can hit is a token, not a typed number**: the PDF page cap
+and the pages one article buys ([billing.md § A long document costs a slot per 50
+pages](billing.md#a-long-document-costs-a-slot-per-50-pages)) come from `src/uploads.ts`, so raising
+`MAX_PAGES` cannot leave `/help/plans` and `/help/adding-articles` promising the old one.
 
 The groups: Start here · Ways to read (the four guides: your first article, studying a topic,
 reviewing a paper, reading in your own field) · Reading an article · The modes · Your shelf and your
@@ -99,8 +103,8 @@ description in the catalog, and Help follows.
 
 ## Ask about Spideryarn <a id="ask-about-spideryarn"></a>
 
-**A box on every Help page that answers a question from the Help's own words** — in the column
-beside a page, and under the search on `/help` itself. Greg asked for it in `spya-ucftjt`, 2026-10-06:
+**A box on every Help page that answers a question from the Help's own words** — at the top of the
+column beside a page, and above the contents on `/help` itself. Greg asked for it in `spya-ucftjt`, 2026-10-06:
 
 > you can ask it stuff like, This is what I'm trying to achieve, or I'm stuck, or What does this do?
 > or Why is this parting that color? or whatever. What does this symbol mean? And it would be able to
@@ -108,6 +112,20 @@ beside a page, and under the search on `/help` itself. Greg asked for it in `spy
 > yeah, that's not what I'm here for.
 
 The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
+
+**It is also Help's search box, since 2026-10-20.** There used to be two boxes, *Search Help* and
+*Ask about Spideryarn*, from two reports a week apart. Greg, `spya-fzd5nq`, 2026-10-19:
+
+> Why do we have both "Search help" and "Ask about Spideryarn"? Can we combine to get the best of
+> both worlds?
+
+So there is one: **type, and the matching pages are listed under it** (free, instant, and on the
+reader's own device: nothing is sent); **press Ask, or Enter, and the same words go to the model**,
+whose answer appears between the box and the matches. Signed out there is nothing to ask, so the box
+is the one-line search it was, whose Enter goes to the best match, with a line under it saying to
+sign in to ask. Taking a match folds the list away until the box is next edited, and keeps the
+words, which may be a half-written question or a dictation landing. Plan, the options passed over
+and GPT Sol's review: [261020x](../plans/261020x-one-box-on-help-for-search-and-ask.md).
 
 - **It answers from these pages and nothing else.** Every page is copied, in contents order, into
   [`src/help-corpus.generated.json`](../../src/help-corpus.generated.json), which
@@ -140,15 +158,18 @@ The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
   characters the model typed.
 - **Signed in only, for now.** Every request a stranger can make today is a read, and this would be
   the first anonymous request that spends money: it would mean a door in front of the sign-in check
-  and an allowance for somebody with no account. Greg has the options in the plan's § For Greg; until
-  he picks, a stranger sees *Sign in to ask a question about Spideryarn* in the same place.
+  and an allowance for somebody with no account. Greg chose to keep it so for now (q-vvhb55,
+  2026-10-08: *"A for now"*), so a stranger gets the search and *Sign in to ask a question about
+  Spideryarn, as well as search* under it.
 - **Free, with its own allowance**: no article slot, nothing off the reader's articles. Each reader
   may ask 30 an hour and 100 a day, one at a time, and a fuse across everybody stops it for the day
   at 1,300 questions (`HELP_CHAT_RATE_POLICY` in `help-chat-call.ts`), sized from the cost of a
   question with nothing cached.
-- The box is [`HelpAsk.tsx`](../../src/web/help/HelpAsk.tsx); `HelpPage.tsx` holds its state, keyed
-  to the signed-in reader, so an answer on `/help` survives following one of its links to a page but
-  a reader switch clears it and aborts an answer still arriving.
+- The box is [`HelpAsk.tsx`](../../src/web/help/HelpAsk.tsx) § `HelpBox`; `HelpPage.tsx` holds its
+  state (the words, which it also searches, and the answer), keyed to the signed-in reader, so an
+  answer on `/help` survives following one of its links to a page but a reader switch clears it and
+  aborts an answer still arriving. Tests: `tests/help-one-box.test.tsx` signed in,
+  `tests/help-page.test.tsx` § the search box signed out.
 - **It has the microphone every box that sends has**, since 2026-10-09 (Greg, `spya-y5gfpf`: *"Add
   a voice dictate button to the help chat."*), wired as
   [dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box) says: vocabulary place

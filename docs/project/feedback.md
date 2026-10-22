@@ -387,20 +387,43 @@ changes and the commit carrying it is deployed.
 >
 > — Greg, 2026-10-06 (`spya-sshjd2`)
 
-**An agent asks by committing a file; the admin answers in the dialog; an agent reads the answer
-with a script.** Nothing an agent runs writes to production, and no route was added outside the
-sign-in gate. The price is that a question appears only after a deploy. How an agent writes one and
-acts on the reply is
+**An agent asks by writing a file and publishing it; the admin answers in the dialog; an agent
+reads the answer with a script.** No route was added outside the sign-in gate. How an agent writes
+one and acts on the reply is
 [feedback-reports.md § Asking Greg a question](feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer);
 this is what the app does with it.
 
+**Since 2026-10-21 a question is live once published, with no deploy.** Until then the questions
+were compiled into the build, so one about the thing blocking the deploy could never reach Greg.
+
+> I guess I had assumed that the Needs Input sections are being stored and surfaced from the
+> database. […] that way then you can always be sure that anything you've submitted there is going
+> to be live to me immediately. And that if there's something blocking the deploy, you can alert me
+> before the deploy has happened, and hopefully I can unblock it.
+>
+> — Greg, 2026-10-21
+
 ```
- docs/user-feedback/questions/q-….md ──▶ scripts/feedback-endings.ts ──▶ src/feedback-questions.generated.ts
-                                                                          (server only)
- GET  /api/admin/feedback/earlier  ──▶ questions: every open one, with the admin's newest reply
+ docs/user-feedback/questions/q-….md ──▶ scripts/feedback-questions.ts --publish ──▶ feedback_questions (production)
+ GET  /api/admin/feedback/earlier  ──▶ questions: every open row, with the admin's replies
  POST /api/admin/feedback/answers  ──▶ a row in feedback_question_answers
  scripts/feedback-questions.ts --answers  ◀── reads those rows from production, read-only
 ```
+
+- **The file is the source; the row is its published copy.** Nobody edits a row: publishing
+  overwrites it from the file, with every field the dialog needs and **never `refs:`**. The
+  server reads the table and nothing else, in one read a request, so one response cannot mix two
+  versions; a row that breaks the file's rules is a 500 and a log line, never a shorter list
+  (`readFeedbackQuestions` in [`src/feedback-question.ts`](../../src/feedback-question.ts)).
+  *Live* means the next time the dialog opens: it does not poll.
+- **The one write an agent makes to production** is that publish: one fixed upsert into
+  `feedback_questions`, in one transaction, nothing deleted, nothing written if any question file
+  does not parse, and a row never moved backwards (an answered one is not reopened, an `acted:` id
+  is not dropped) — [`scripts/feedback-questions-publish.ts`](../../scripts/feedback-questions-publish.ts).
+  That is what the code guarantees; the production credential itself could do more.
+- **A question nobody published is a question Greg cannot see**, so `--answers` ends by naming each
+  file whose row is missing or differs.
+  Plan [261021h](../plans/261021h-agent-questions-reach-needs-a-decision-without-a-deploy.md).
 
 **Since 2026-10-08 each question is a thread** — Greg's eight reports of that afternoon, the bug
 `spya-u6h6q8` first (*"there doesn't appear to be a reply button or input box"*), plan
@@ -409,7 +432,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 
 ```
  POST /api/admin/feedback/deferrals ──▶ a row in feedback_question_deferrals ("not now")
- GET  …/earlier?questions=3         ──▶ threads: replies (acted on and not), a state, the report's text
+ GET  …/earlier?questions=4         ──▶ threads: replies, a state, and the report's text and owner
 ```
 
 - **Where they show.** *Needs a decision* is the threads, not a list of reports. It opens on a
@@ -443,13 +466,29 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
   its title and text, which an agent wrote, in the model's face and as plain text with its line
   breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
-  *Details*; the report it is about, **only when it is the admin's own**, whole and shut, under
-  *Your report #301*; and the admin's replies, in the reader's face: first those **an agent has
+  *Details*; the report it is about, whole and shut, under *Your report #301*, **or, since
+  2026-10-20, a reader's** (below); and the admin's replies, in the reader's face: first those **an agent has
   acted on**, each marked *acted on*, with a line saying what happened next is written in the
   question; then those **no agent has acted on yet**. At most the newest five of each, with a count
-  of the rest. The file's `refs:` line is never compiled; `acted:` reaches the browser only as the
+  of the rest. The file's `refs:` line is never published; `acted:` reaches the browser only as the
   group and as which list each reply is in. A tab from before 261010h asks `questions=2` and gets
   threads without the acted list; one from before 261008i asks nothing and gets the six-key shape.
+- **A reader's report in its thread, marked as theirs** (since 2026-10-20). Greg, 2026-10-19
+  (`spya-y43ha0`): *"it's important that other users' feedback can show up in the needs input
+  section, and it should be highlighted clearly as such, and that I can respond to that. And so I
+  can basically be a gate, or a filter, or a judge, or a lens on what users are suggesting."* So a
+  question whose `report:` is somebody else's shows that report too: *a reader's #650* before its
+  number in the contents and the thread, in the orange text colour, and its words shut under *A
+  reader's report #650 · from* the address it was filed under, with an orange rule down their left
+  (*another admin's* for another admin's). The browser asks `questions=4`, whose report says
+  `whose` (`yours`, `reader` or `admin`) and `from`; a tab from before asks `questions=3` and gets
+  only the admin's own report, as it was built to check. The report is found **across owners**,
+  through `adminStore`, and **only when exactly one account holds that id**: report ids are unique
+  per owner, so an id two accounts share, the admin's own included, shows no report and logs a
+  warning rather than guess whose it is
+  ([261020p](../plans/261020p-greg-gates-readers-feedback-admins-filter-readers-reports-in-needs-a-decision.md);
+  `questionReportsAcrossOwners` in [`pg-admin-feedback.ts`](../../src/store/pg-admin-feedback.ts)).
+  What it shows is what `/admin/feedback` already shows the same admin.
 - **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
   thread keeps its words when you move to another. It grows with what is in it and never scrolls
   itself (`useFitTextarea`), so the panel is the one scroller: two scrollers under one finger with
@@ -460,7 +499,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 - **Where a reply goes.** `POST /api/admin/feedback/answers` with `{ id, question, body }` and
   nothing else. The `id` is minted by the browser, so a retry is safe: **201** for a new reply,
   **200** with the stored row for the same reply again, **409** when that id is already a different
-  reply. A question id this build has no file for is a 400. **A reply to a question already marked
+  reply. A question id nobody has published is a 400. **A reply to a question already marked
   answered is accepted**: it may have been typed in a tab opened before that deploy.
 - **Defer for now, and Bring back** (`spya-t6nmxt`). The alternative to replying, beside *Send
   reply*. `POST /api/admin/feedback/deferrals` with `{ question, deferred }`: a row in
@@ -486,17 +525,19 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   opens**. **Earlier opens on *Needs a decision***, and moves to All when that first read says no
   thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
   thread). Every other reader's dialog is unchanged.
-- **Two builds at once.** The browser asks `questions=3`. A tab from before 261010h asks
-  `questions=2` and gets the previous thread shape exactly; one from before 261008i asks nothing
-  and gets the six-key questions from then. In the other direction, this browser maps either older
-  shape into today's threads (with no acted replies). A 404 on a reply says to copy the words,
+- **Two builds at once.** The browser asks `questions=4`. A tab from before 261020p asks
+  `questions=3` and gets the previous report shape exactly; one from before 261010h asks
+  `questions=2` and gets threads without acted replies; one from before 261008i asks nothing and
+  gets the six-key questions from then. In the other direction, this browser maps all three older
+  shapes into today's threads, treating the report as the admin's own and adding whichever reply
+  lists the older shape lacked. A 404 on a reply says to copy the words,
   reload and reply again. If the questions are not what the browser expects, the whole list shows
   the ordinary "would not load" sentence, never some of them. If a later list no longer contains a
   question while its thread is open or its box has words, that question stays beside the draft
   until it is sent; it is not counted.
 
-A question leaves the dialog when an agent marks its file `status: answered` and that commit is
-deployed, unless the browser is still holding an unsent reply to it as above.
+A question leaves the dialog when an agent marks its file `status: answered` and publishes it,
+unless the browser is still holding an unsent reply to it as above.
 
 **The dialog is bigger on a big screen** (`spya-frpy22`, then `spya-tfp3zw`): from 1024px wide it
 is up to 46rem wide rather than 34rem, and on a window at least 760px tall at least
@@ -506,7 +547,8 @@ is up to 46rem wide rather than 34rem, and on a window at least 760px tall at le
 
 **In a thread, Send reply is green and Defer for now red** (`spya-zjsqe6`): `--positive` and
 `--danger`, on the text and border only, since a wash behind took Light under 4.5:1. Bring back and
-the addendum box's send stay neutral. `tests/feedback-dialog-styles.test.ts` holds the cascade.
+the addendum box's send stayed neutral until 2026-10-20 (below). `tests/feedback-dialog-styles.test.ts`
+holds the cascade.
 
 **The pager again at the foot, and Send told apart from Close** (`spya-bvzavw`, Greg, 2026-10-17:
 *"add Next/Previous buttons at the bottom of the box as well (since often that's where I am when I
@@ -516,8 +558,16 @@ Earlier's footer reads *Close · ‹ Previous · Next ›*: the same pager as th
 (`ThreadPager`, drawn twice, each copy saying its own end sentence), outside the scroller, so the
 bottom-right moves you on rather than shutting the dialog. Opening a thread, by any route, scrolls
 the panel to its top. Write's *Send* is `--positive` green like *Send reply*; *Cancel* and *Close*
-stay grey. The app's convention of the way out to the left of the action is kept
+stayed grey until 2026-10-20. The app's convention of the way out to the left of the action is kept
 ([261017c](../plans/261017c-feedback-needs-a-decision-pager-at-the-foot-and-send-vs-close.md)).
+
+**Green to send, red to back out, throughout the dialog** (`spya-as0et6`, Greg, 2026-10-19:
+*"color the buttons red and green, and for close as well"*). One shared pair, `.tone-positive`
+and `.tone-negative` in [`button-tone.css`](../../src/web/button-tone.css), replaces the
+Feedback-only rules: Send, Send addendum and Send reply green; Cancel (Write's and the addendum's),
+Close and Defer for now red. The pager, Bring back, *Add to this report* and the header's ✕ stay
+neutral. Red is a direction, not a warning: the addendum's Cancel still discards its own draft
+([261020f](../plans/261020f-feedback-buttons-coloured-positive-and-negative.md)).
 
 
 ### Adding to an earlier report, since 2026-10-10
@@ -756,10 +806,10 @@ which *is* the verified account id.
 | its Earlier tab: the reader's own reports | [`src/web/FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx), and `GET /api/feedback` in [`src/routes.ts`](../../src/routes.ts) |
 | whether each earlier report shipped | the notes' headers in [`docs/user-feedback/`](../user-feedback/), compiled by [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts); read in [`src/feedback-ending.ts`](../../src/feedback-ending.ts) |
 | an admin's Earlier tab: status, number, comment | `GET /api/admin/feedback/earlier` in [`src/routes.ts`](../../src/routes.ts); `listMineByStatus` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); the same `FeedbackEarlier.tsx` |
-| questions for an admin: the files, the compile, what the server reads | [`docs/user-feedback/questions/`](../user-feedback/questions/), [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts) § `parseQuestionFile`, [`src/feedback-question.ts`](../../src/feedback-question.ts), the rules in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts) |
+| questions for an admin: the files, the table, what the server reads | [`docs/user-feedback/questions/`](../user-feedback/questions/), [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts) § `parseQuestionFile`, `feedbackQuestions` in [`src/db/schema.ts`](../../src/db/schema.ts), [`src/feedback-question.ts`](../../src/feedback-question.ts), the rules in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts) |
 | replies to them: the route, the store, the table, the box | `POST /api/admin/feedback/answers` in [`src/routes.ts`](../../src/routes.ts); `submitAnswer` and `newestAnswers` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); `feedbackQuestionAnswers` in [`src/db/schema.ts`](../../src/db/schema.ts); `ReplyBox` in `FeedbackEarlier.tsx`, on the shared box in [`FeedbackSendBox.tsx`](../../src/web/FeedbackSendBox.tsx) |
 | an admin's addenda: the route, the store, the table, the box | `POST /api/admin/feedback/addenda` in [`src/routes.ts`](../../src/routes.ts); `submitAddendum` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); `feedbackAddenda` in [`src/db/schema.ts`](../../src/db/schema.ts); [`FeedbackAddendum.tsx`](../../src/web/FeedbackAddendum.tsx) |
-| listing questions and reading replies, for agents | [`scripts/feedback-questions.ts`](../../scripts/feedback-questions.ts) |
+| listing, publishing and reading replies, for agents | [`scripts/feedback-questions.ts`](../../scripts/feedback-questions.ts), [`scripts/feedback-questions-publish.ts`](../../scripts/feedback-questions-publish.ts) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
 | the client ring buffer the diagnostics read | [`src/web/log-buffer.ts`](../../src/web/log-buffer.ts) |
@@ -985,7 +1035,8 @@ with the same asymmetry in `AdminStore` and `VisibilityStore`.
 
 **[`/admin/feedback`](admin.md)**, since 2026-09-02 — every reader's reports, newest first, with
 the mirror state written as words. **Readers only** (since 2026-10-01) leaves out the
-administrators' own, by `src/admin.ts`'s list, on the server (`?from=readers`). `psql` against the `feedback` table
+administrators' own, by `src/admin.ts`'s list, on the server (`?from=readers`); **Admins only**
+(since 2026-10-20, `spya-kmqd7n`) shows only those (`?from=admins`). `psql` against the `feedback` table
 ([database.md](database.md)) still works, and Sentry
 ([sentry-error-monitoring.md](sentry-error-monitoring.md)) still has its copy.
 

@@ -267,6 +267,7 @@ async function articleRow(id: string): Promise<Record<string, unknown>> {
 
 async function deleteArticle(id: string): Promise<void> {
   await pool.query("delete from spideryarn.comments where article_id = $1", [id]);
+  await pool.query("delete from spideryarn.ai_calls where article_id = $1", [id]);
   await pool.query("update spideryarn.articles set current_revision_id = null where id = $1", [id]);
   await pool.query("delete from spideryarn.article_revisions where article_id = $1", [id]);
   await pool.query("delete from spideryarn.articles where id = $1", [id]);
@@ -620,15 +621,36 @@ describe("/api/admin/articles", () => {
     const theirs = await seed("private-theirs", { owner: ALICE });
     const open = await seed("public-theirs", { owner: BOB, visibility: "public" });
     const mine = await seed("mine", { owner: ADMIN });
+    /* One known amount and one unknown amount, both tied by opaque id. This
+       proves the list wires the aggregate onto another owner's private row;
+       an assertion on a zero default alone would pass if every row were
+       accidentally hard-coded to zero. */
+    await pool.query(
+      `insert into spideryarn.ai_calls
+         (id, run_id, scope_kind, owner_id, article_id, article_slug, wire, purpose, requested_model,
+          started_at, finished_at, duration_ms, outcome, provider_account, cost_source, credits_used_nanos, is_byok)
+       values
+         ($1, $2, 'request', $3, $4, $5, 'messages', 'chat', 'test/model', now(), now(), 1, 'ok', 'openrouter', 'provider', 420000000, false),
+         ($6, $7, 'request', $3, $4, $5, 'messages', 'chat', 'test/model', now(), now(), 1, 'ok', 'openrouter', 'none', null, false)`,
+      [randomUUID(), randomUUID(), ALICE, theirs.id, theirs.slug, randomUUID(), randomUUID()],
+    );
+    /* An import of the administrator's that never published (spya-zt7u0h). */
+    const failed = await seed("mine-failed", { owner: ADMIN });
+    await pool.query("update spideryarn.articles set current_revision_id = null where id = $1", [failed.id]);
     const reply = await drive("GET", "/api/admin/articles", null);
     expect(reply.status).toBe(200);
     expect(reply.headers["cache-control"]).toBe("private, no-store");
     expect(reply.body.emailsAvailable).toBe(true);
     const rows = reply.body.articles as AdminArticle[];
     const byId = new Map(rows.map((r) => [r.id, r]));
-    expect(byId.get(theirs.id)).toMatchObject({ ownerId: ALICE, ownerEmail: "alice@example.invalid", title: null, slug: null, mine: false });
-    expect(byId.get(open.id)).toMatchObject({ ownerId: BOB, title: open.title, slug: open.slug, visibility: "public" });
-    expect(byId.get(mine.id)).toMatchObject({ mine: true, title: mine.title, slug: mine.slug });
+    expect(byId.get(theirs.id)).toMatchObject({ ownerId: ALICE, ownerEmail: "alice@example.invalid", title: null, slug: null, mine: false, published: null });
+    expect(byId.get(open.id)).toMatchObject({ ownerId: BOB, title: open.title, slug: open.slug, visibility: "public", published: true });
+    expect(byId.get(mine.id)).toMatchObject({ mine: true, title: mine.title, slug: mine.slug, published: true });
+    expect(byId.get(failed.id)).toMatchObject({ mine: true, title: null, slug: failed.slug, published: false });
+    /* The other owner's private row carries money and counts, but still no
+       title or slug; an article with no ledger rows gets the zero default. */
+    expect(byId.get(theirs.id)?.cost).toEqual({ nanos: 420_000_000, calls: 2, unpricedCalls: 1 });
+    expect(byId.get(open.id)?.cost).toEqual({ nanos: 0, calls: 0, unpricedCalls: 0 });
     /* Nowhere on the wire, not merely not in its field. */
     const text = JSON.stringify(reply.body);
     expect(text).not.toContain(theirs.title);

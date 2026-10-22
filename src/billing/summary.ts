@@ -51,6 +51,7 @@ import {
   accountSnapshot,
   entitlementFromRow,
   hasLapsed,
+  ingestSlotsUsed,
   ingestsUsed,
   minimalUsed,
   sharingWouldMakeRoom,
@@ -230,8 +231,11 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
   const used = ingestsUsed(usage);
   const spent = wallUsed(usage);
   const budget = budgetFor(entitlement.limit);
+  /* Only when a long PDF makes it differ, so every other plan is the shape it was. */
+  const usedSlots = ingestSlotsUsed(usage);
   const counted = {
     used,
+    ...(usedSlots === used ? {} : { usedSlots }),
     sharedHalfPrice: usage.chargedHalfPrice,
     atLimit: !admitsIngest(spent, budget),
     /* Papers at a hundredth each, charged or in flight: a plain count, never a

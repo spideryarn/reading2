@@ -196,7 +196,7 @@
 .srch-all-tick {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
 }
 .srch-all-tick:hover { color: var(--ink-soft); }
 /* The native box, restyled rather than replaced. `accent-color` is the whole of
@@ -311,7 +311,7 @@
   align-items: center;
   gap: 0.25rem;
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
 }
 .srch-icon {
   display: inline-flex;
@@ -325,6 +325,11 @@
   cursor: pointer;
 }
 .srch-icon:hover { background: var(--surface-raised); color: var(--ink); }
+/* A saved search's icons were 29 wide at a 31px pitch under a finger; the
+   row is already 47 tall (plan 261021g). */
+@media (any-pointer: coarse) {
+  .srch-icon { min-width: 40px; min-height: 40px; }
+}
 .srch-icon.danger:hover { color: var(--destructive); }
 /* The warning sign on a search that failed in a way running it again cannot fix.
    It carries the same glyph as the retry button next to it, so without this it
@@ -443,7 +448,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: inherit;
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   text-align: center;
   cursor: pointer;
 }
@@ -494,7 +499,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -513,7 +518,7 @@
   border: 1px solid transparent;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
   /* A button's own default, which a span does not get: inheriting the row's
      made this box 2px taller than the button it stands in for. */
   line-height: normal;
@@ -550,7 +555,7 @@
   display: block;
   margin-top: 0.35rem;
   color: var(--ink-faint);
-  font-size: 0.84rem;
+  font-size: max(var(--text-min), 0.84rem);
 }
 
 /* ---- nothing to show, in its five flavours ---- */
@@ -603,7 +608,7 @@
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
   cursor: pointer;
 }
 /* **Behind `(hover: hover)`, with pressed feedback and a focus mark beside
@@ -627,12 +632,12 @@
    (narrow-window.css § a coarse pointer argues the number and `min-height`
    over padding). Here and not there because this sheet owns the class. The
    buttons were 22px tall on a phone. */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .srch-sort-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.5rem;
+    min-height: max(40px, 2.5rem);
   }
 }
 
@@ -749,7 +754,7 @@
   border-radius: 3px;
   background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.35));
   color: var(--ink);
-  font-size: 0.79rem;
+  font-size: max(var(--text-min), 0.79rem);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -811,7 +816,7 @@
   line-height: 1.4;
 }
 .srch-hit-why { color: var(--ink-faint); font-size: var(--type-body); line-height: 1.4; }
-.srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
+.srch-hit-whole { color: var(--ink-faint); font-size: max(var(--text-min), 0.79rem); font-style: italic; }
 
 /* The longer snippet, on hover. Wider than the band, because the whole point of
    it is to show more than the row could; and under the viewport cap the base
@@ -829,7 +834,7 @@
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
   color: var(--ink-faint);
-  font-size: 0.83rem;
+  font-size: max(var(--text-min), 0.83rem);
 }
 .tip-hit-meta b { color: var(--ink-soft); font-weight: 600; }
 .tip-hit-meta em { font-style: italic; }

@@ -138,18 +138,42 @@ stamped prompt it reaches, and measure first.
 
 `widerWorld({ search, origins?, placement })` in [`src/wider-world.ts`](../../src/wider-world.ts)
 is a third shared section. It goes in the prompts that answer or mark the reader and otherwise
-keep to the article: Chat, Recall, Tutorial and Quiz marking. It tells the model to speak up
+keep to the article: Chat, Recall and Quiz marking (and Tutorial, until it was folded into
+Recall on 2026-10-20). It tells the model to speak up
 unasked when a checkable fact in the piece is wrong, or when a consensus or a live dispute bears
 on a central claim, and at no other time. The three sources stay apart in the sentence: what the
 article says carries its block id, the model's own memory is said to be memory, and a search is
 linked. The outside view is never used against a reader who read the piece right. Where the note
-goes is each prompt's own `placement`, because Recall must still end on its nudge and Tutorial on
-its task. `tests/wider-world.test.ts` pins each variant and where it sits.
+goes is each prompt's own `placement`, because Recall must still end on its nudge and Quiz may
+not open with a verdict. `tests/wider-world.test.ts` pins each variant and where it sits.
 
 **Not for the prompts that represent the piece**: Summary, Glossary's `senseHere`, FAQ, Tweets.
 Outside knowledge filed under the article's label is the regression § Measuring warns about.
 Explore has its own, wider `THE WIDER WORLD`, since placing the piece is that mode's job. The
 evidence is [261018c](../investigations/261018c-modes-say-when-the-piece-is-wrong.md).
+
+## What every conversation is for: `CHAT_PRINCIPLES`
+
+> Do we have a system prompt (for Chats) (or something equivalent that all Chats share)? … We want
+> it to be concise. And probably framed in terms of broad principles, rather than a detailed list
+> of rules.
+>
+> — Greg, 2026-10-19 (`spya-u3yw2a`)
+
+`CHAT_PRINCIPLES` in [`src/chat-principles.ts`](../../src/chat-principles.ts) is a fourth shared
+section, for conversations only: Chat, Learn's Recall, Explore and the guide. Five principles —
+leave the reader sharper, not more dependent, and sooner; candid, not agreeable (recheck under push-back, then
+hold or revise, saying why); make it clear how you know each thing; do not assume they have read
+it; plain, pitched to them, and point at the part of Spideryarn that would serve them better. It
+sits **near the top**, after each prompt's opening description and before its first named rule
+section, framed as the spirit behind the rules below, so a prompt's own, more specific rules still
+win. Its broad intent deliberately overlaps the detailed sections above, but it does not copy their
+mechanics: each line leaves the how to `CLAIM_ORIGINS`, `widerWorld`, `plainWords` and
+`PROFILE_RULES`. `tests/chat-principles.test.ts` holds which kinds carry it (Referee's
+find-reviewers is exempt, with its reason) and keeps it under 200 words. Live's spoken prompts do
+not carry it yet. The plan and the measurement:
+[261020d](../plans/261020d-principles-every-chat-shares.md) and
+[261020a](../investigations/261020a-chat-principles-measured.md).
 
 ## What the model writes back
 
@@ -177,6 +201,12 @@ happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts
     force a mistyped prefix to finish as *some* real id, a wrong id let through silently. Ids are
     still resolved against the article after the parse, exactly as before — a schema makes the
     syntax right, not the id.
+  - **Where the prompt numbers its blocks, ask for the number, not the id.** A schema cannot make a
+    copied id right, and nor can a regex `pattern` on it. Structure copied `[582] spya-xcf0dz` as
+    `spya-582xcf0dz`. Held to the id's pattern, it wrote a real neighbour's id instead: a silent
+    wrong boundary in 10 of 20 answers. Asked for the integer, it was right 20 of 20, and cheaper.
+    [261020aa](../plans/261020aa-structure-answers-the-block-number-not-its-id.md). Most stages render
+    ids without numbers, so for them this is a measured change of its own.
   - **No recursion**: Anthropic refuses a self-referencing `$ref`. Unroll to the depth the prompt
     asks for (Structure's three levels).
   - **The chat adapter validates OpenAI's stricter subset too**: its root is an object and every

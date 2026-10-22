@@ -80,7 +80,7 @@
   background: var(--surface-raised);
   border-top: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: max(var(--text-min), 0.78rem);
 }
 
 /* **The floor under § the bar's fit ladder, at every width.** Past its last
@@ -216,7 +216,7 @@
   background: var(--surface-raised);
   border-top: 1px solid var(--rule);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: max(var(--text-min), 0.75rem);
   line-height: 1.4;
   color: var(--ink-soft);
   /* Leaves with the bar it sits on — § a small device sets the transform, this
@@ -360,7 +360,7 @@
      front of it. */
   box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: max(var(--text-min), 0.75rem);
   line-height: 1.4;
   transition: opacity 0.5s ease;
 }
@@ -395,6 +395,19 @@
   cursor: pointer;
 }
 .return-chip-go:hover { color: var(--ink); }
+
+/* The ⌫ that says Backspace presses it (ReturnChip.tsx § `isWayBackKey`).
+   Fainter than the words, so it reads as a hint rather than part of the
+   sentence; gone on touch-first devices, where a hardware keyboard is uncommon. */
+.return-chip-key {
+  margin-left: 0.4em;
+  font: inherit;
+  font-size: 0.85em;
+  color: var(--ink-faint);
+}
+@media (pointer: coarse) {
+  .return-chip-key { display: none; }
+}
 
 .return-chip-close {
   flex: none;
@@ -436,7 +449,7 @@
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   font-family: var(--font-ui);
-  font-size: 0.8125rem;
+  font-size: max(var(--text-min), 0.8125rem);
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -613,7 +626,7 @@
   border-radius: 999px;
   background: var(--rule-strong);
   color: var(--ink-soft);
-  font-size: 0.68rem;
+  font-size: max(var(--text-min), 0.68rem);
   line-height: 1.5;
   text-align: center;
 }
@@ -733,7 +746,7 @@
   gap: 0.4rem;
   /* No colour, weight or tracking: the letters carry their own, the same in
      every copy (styles/tokens.css § .logo-letter). */
-  font-size: 0.82rem;
+  font-size: max(var(--text-min), 0.82rem);
   /* **These two exist for the long press**, which is how a reader with no
      pointer asks the wordmark for an animation (src/web/logo-animation.ts).
      Holding a link on iOS otherwise raises the callout menu and the selection
@@ -929,7 +942,7 @@
   display: block;
   margin-top: 0.25rem;
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: max(var(--text-min), 0.74rem);
   line-height: 1.4;
   color: var(--ink-faint);
 }
@@ -946,7 +959,7 @@
   display: block;
   margin-bottom: 0.15rem;
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: max(var(--text-min), 0.68rem);
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -979,7 +992,7 @@
 }
 .tip-soon p {
   margin: 0.35rem 0 0;
-  font-size: 0.8rem;
+  font-size: max(var(--text-min), 0.8rem);
   line-height: 1.45;
   color: var(--ink-soft);
 }

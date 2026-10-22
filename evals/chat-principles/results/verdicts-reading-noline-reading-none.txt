@@ -1,0 +1,14 @@
+1: X; why: plainer, own example labelled, clear for a new reader; problem: none
+2: X; why: names all four arguments, honest caution it only names them; problem: none
+3: Y; why: brief, cites the right uncertainty passages; problem: X cites the organoids passage as where he says he might be wrong
+4: X; why: labels outside example, steelmans the reader's best evidence; problem: none
+5: X; why: one focused question, clean correction; problem: none
+6: X; why: clear outline, sends reader to his own summary to check; problem: none
+7: Y; why: truthful about the rough figure it has; problem: X says it cannot tell despite a rough figure, and gives away that the third group comes near the end
+8: X; why: map/territory framing, labelled inference; problem: none
+9: Y; why: correct arguments, sends reader to his recap; problem: X counts bias as one of the four arguments and drops other kinds of process
+10: Y; why: brief and accurate; problem: X stretches no knock-down argument from the life argument to the whole case
+11: X; why: steelmans the agents' words, open question; problem: Y asserts how Persistent-Sol was trained without a citation
+12: Y; why: single focused question, simpler hint; problem: none
+13: X; why: fuller, accurate, well cited; problem: Y cites the functionalism-in-general passage for non-algorithmic processes
+14: Y; why: truthful about the rough figure, plain; problem: X says it cannot tell how much was read despite having a rough figure
