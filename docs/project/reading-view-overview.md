@@ -73,6 +73,10 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   or saying what you want and an *interface model* choosing the command — Jev first, a capable model
   when unsure, the bar's own rows as its tools, the Help as what it knows — and the main Chat doing
   the same. Open it before giving any model a way to act for the reader: it proposes the line.
+- **[explain-this-vision.md](explain-this-vision.md)** — **not decided**: the glossary, citations and
+  names referred to but not cited as one continuum of *explain this*, and later a hard sentence.
+  What the evidence says about underlines, waiting and obscure names, and the next steps, simplest
+  first. Open it before adding a new kind of mark to the prose or a new card.
 - **[web-client.md](web-client.md)** — where the client code lives, how the middle became a slot,
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
 - **[mode.md](mode.md)** — the one checklist for adding a mode: the tables the compiler

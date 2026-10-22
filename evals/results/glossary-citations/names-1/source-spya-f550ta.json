@@ -1,0 +1,217 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "names-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "f50e0cfc3ec0a0b0292801bceef48a6af14e803eb0ce8d698991583aea7b31da",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "term",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A glowing ball seen during storms that lasts a few seconds and then vanishes, sometimes with a bang or leaving marks.",
+      "background": "Thousands of people have reported it, but there are almost no instrument recordings. No explanation is generally accepted."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist who published Sur le tonnerre in 1837. That work introduced the term ball lightning."
+    },
+    {
+      "name": "Martin A. Uman",
+      "kind": "person",
+      "aliases": [
+        "Uman",
+        "Rakov and Uman"
+      ],
+      "background": "American lightning researcher at the University of Florida. He co-wrote a major lightning handbook with Vladimir Rakov."
+    },
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov"
+      ],
+      "background": "Russian physics professor who keeps a database of Russian ball lightning reports. He contributed six cases to this compilation."
+    },
+    {
+      "name": "Stanley Singer",
+      "kind": "person",
+      "aliases": [
+        "Singer"
+      ],
+      "background": "Author of an early book on ball lightning (1971) that gathered reports from scientists."
+    },
+    {
+      "name": "Stenhoff",
+      "kind": "person",
+      "aliases": [
+        "Mark Stenhoff"
+      ],
+      "background": "Author of a 1999 book on ball lightning that cites about 2400 references and discusses scientist witnesses."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Ball lightning research is split among separate people who collect cases, build theories or run lab experiments, with little coordination."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "background": "Austria's national network of sensors that records the time, place and strength of lightning strokes."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "background": "Germany's lightning location network, which records when and where strokes occur and how strong they are."
+    },
+    {
+      "name": "positive lightning stroke",
+      "kind": "term",
+      "aliases": [
+        "positive strokes",
+        "positive cloud–ground lightning"
+      ],
+      "background": "A lightning stroke that carries positive electric charge to the ground. It is rarer than negative lightning and often has a higher peak current."
+    },
+    {
+      "name": "cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud–ground strokes",
+        "cloud–ground lightning",
+        "ground stroke"
+      ],
+      "background": "Lightning that travels between a cloud and the earth, as opposed to a discharge that stays between clouds."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "Austrian geologist and mineralogist who belonged to the Imperial Academy of Sciences in Vienna. He saw a fireball in 1868 and sketched it."
+    },
+    {
+      "name": "Axel D. Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann",
+        "Axel Wittmann"
+      ],
+      "background": "German astrophysicist at Göttingen. As a child in 1951 he saw a ball break into smaller spheres that melted asphalt."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "Yale palaeontologist and president of the US National Academy of Sciences. He saw a pink fireball explode on a yacht in 1878."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German physics professor at Tübingen, famed for the 1922 experiment showing that atomic spin takes only certain values in a magnetic field."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer and later physics professor at the University of Kent. He reported a glowing sphere drifting down an airliner aisle in 1963."
+    },
+    {
+      "name": "Anatoly Il'ich Nikitin",
+      "kind": "person",
+      "aliases": [
+        "Nikitin"
+      ],
+      "background": "Russian physics professor who recalled a childhood sighting and led the field investigation of the video-recorded Mitino case in Moscow in 2015."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "Baltic German physicist at the St Petersburg Academy who was killed in 1753 while experimenting with atmospheric electricity. The investigation showed ordinary lightning struck him through an ungrounded conductor."
+    },
+    {
+      "name": "Frankenstein",
+      "kind": "work",
+      "aliases": [
+        "Frankenstein's laboratory"
+      ],
+      "background": "Mary Shelley's 1818 novel about a scientist whose experiment ends in disaster."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician who founded modern neurology and taught at Paris and the Salpêtrière Hospital. Sigmund Freud was among his students."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Short-lived paralysis and other nerve effects caused by a lightning strike, which Charcot separated from lasting psychological after-effects."
+    },
+    {
+      "name": "Dorstone case",
+      "kind": "event",
+      "aliases": [
+        "Dorstone tub",
+        "Dorstone"
+      ],
+      "background": "A 1936 report from Herefordshire, England, of a red-hot ball that buried itself in a tub of water and made it boil. Researchers used it to estimate how much energy a ball contains."
+    },
+    {
+      "name": "Camp Blanding experiment",
+      "kind": "event",
+      "aliases": [
+        "Camp Blanding"
+      ],
+      "background": "Martin Uman's group triggered lightning with rockets at a Florida military base and aimed it at more than 100 ground materials. The materials produced glowing effects, but the group did not call them ball lightning."
+    },
+    {
+      "name": "Qinghai spectrum",
+      "kind": "event",
+      "aliases": [
+        "Cen",
+        "Qinghai Plateau"
+      ],
+      "background": "A ball lightning recorded in 2012 by video cameras fitted with spectrum-splitting gratings in China. It showed the chemical elements in the glowing object, including iron, silicon, nitrogen and oxygen."
+    },
+    {
+      "name": "Poughquag case",
+      "kind": "event",
+      "aliases": [
+        "Poughquag glass"
+      ],
+      "background": "A 2008 sighting at a house in Poughquag, New York, of a blue ball seen at a glass door. Later tests on the glass estimated the radiation the ball gave off."
+    }
+  ]
+}

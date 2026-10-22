@@ -829,8 +829,17 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      `POST /api/jobs` can. tests/jobs-lease-budget.test.ts derives the floor.
      docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
   tweets: 600_000,
-  /* GUESS. Fans out over the article; no wall-clock measurement recorded. */
-  glossary: 120_000,
+  /* **The full-token time, not a measurement**, since 2026-10-22. One call over
+     the whole article, and the job's window is its only clock, so the call
+     must not start with less left than one that used every token it was
+     allowed would take: `MAX_ENTRIES` in src/glossary.ts is sized to about
+     714 s at `STREAM_TOKENS_PER_SECOND`, and tests/glossary.test.ts pins
+     worst case ≤ this ≤ the window (GPT Sol, plan 261022f, C1). Measured
+     beside it: 30–44 s on a 38,000-word book asked for 80. A glossary is
+     queued on its own, so the number decides nothing there; after another
+     step it hands the job back for a fresh window rather than starting late.
+     It was a 120 s guess while the answer was at most twenty terms. */
+  glossary: 720_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
      effort, with a shorter answer than the glossary's because a quote is copied
      rather than composed. Never measured on its own.

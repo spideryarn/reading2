@@ -1,0 +1,197 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "names-final2-3",
+  "promptVersion": "glossary/10",
+  "sourceSha256": {
+    "glossary.ts": "3e3332d26fd55dc9851a9cea353fe69e831bae2782ea31ce34d92ca0c9df4cc9",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "Ex Machina",
+      "kind": "work",
+      "aliases": [
+        "Garland test"
+      ],
+      "background": "A 2014 film by Alex Garland in which a programmer, Caleb, is brought to judge whether the robot Ava is conscious. The \"Garland test\" asks whether a human still feels a machine is conscious even when told it is a machine."
+    },
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "A Google engineer who said in 2022 that the company's LaMDA chatbot was conscious and had feelings. Google dismissed him for breaching confidentiality."
+    },
+    {
+      "name": "artificial general intelligence",
+      "kind": "term",
+      "aliases": [
+        "AGI",
+        "artificial superintelligence",
+        "ASI"
+      ],
+      "senseHere": "AGI is AI that matches or exceeds human mental abilities across the board. ASI is AI that improves itself beyond human understanding and control."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [
+        "Nagel"
+      ],
+      "background": "American philosopher whose 1974 essay \"What Is It Like to Be a Bat?\" gave the standard way of describing consciousness: there is something it is like to be the creature."
+    },
+    {
+      "name": "anthropocentrism, human exceptionalism and anthropomorphism",
+      "kind": "concept",
+      "aliases": [
+        "anthropocentrism",
+        "human exceptionalism",
+        "anthropomorphism"
+      ],
+      "senseHere": "Three biases behind the urge to see consciousness in AI. Anthropocentrism takes the human case as the definition, exceptionalism puts humans above everything else, and anthropomorphism projects human qualities onto nonhuman things."
+    },
+    {
+      "name": "computational functionalism",
+      "kind": "concept",
+      "aliases": [
+        "functionalism-in-general"
+      ],
+      "senseHere": "The assumption that running the right kind of information processing, the step-by-step rule-following a computer does, is enough by itself to produce consciousness. The author calls it an assumption and doubts it.",
+      "background": "In philosophy, functionalism says mental states are defined by what they do, not by what they are made of."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation",
+        "Turing world"
+      ],
+      "senseHere": "An imaginary device that reads and writes symbols on an endless tape by fixed rules, standing for what an algorithm is. A universal one can imitate any other. The author uses \"Turing world\" for the view that only this kind of computation matters.",
+      "background": "Alan Turing described it in the 1930s. Laptops and AI servers are real-world approximations of it."
+    },
+    {
+      "name": "substrate independence",
+      "kind": "concept",
+      "aliases": [
+        "substrate flexible",
+        "substrate-flexible",
+        "substrate flexibility"
+      ],
+      "senseHere": "The idea that a computation does the same thing whatever material runs it, so software is cleanly separate from hardware. The author prefers \"substrate flexible\", since not every material, cheese for instance, can make a working computer."
+    },
+    {
+      "name": "autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "autopoietic"
+      ],
+      "senseHere": "The ongoing self-production by which a living cell keeps itself going and rebuilds what it is made of. The author treats it as a defining feature of living things.",
+      "background": "The word comes from Greek for \"self-making\"."
+    },
+    {
+      "name": "generative entrenchment",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The way a brain's levels, from molecules to whole networks, are so deeply interwoven that one part, such as a single neuron, cannot be swapped for a different material without changing what it does."
+    },
+    {
+      "name": "neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "background": "A thought experiment in which brain parts are replaced one at a time by silicon parts that behave identically. It asks whether consciousness would remain. David Chalmers is most associated with it."
+    },
+    {
+      "name": "mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Computation designed to be inseparable from its physical hardware, so it \"dies\" when that hardware ceases to exist. The promise is saving energy.",
+      "background": "Geoffrey Hinton introduced the idea."
+    },
+    {
+      "name": "neuromorphic computation",
+      "kind": "term",
+      "aliases": [
+        "neuromorphic computing"
+      ],
+      "background": "Computing hardware or methods modeled on the detailed workings of real neurons, such as the precise timing of their electrical spikes. Standard artificial neural networks use far cruder cartoons of neurons."
+    },
+    {
+      "name": "Watt governor",
+      "kind": "other",
+      "aliases": [
+        "governor of a steam engine"
+      ],
+      "background": "A steam-engine speed regulator in which spinning weighted balls swing outward and close a valve as the engine speeds up. It works by simple physics, with no calculation."
+    },
+    {
+      "name": "4E cognitive science",
+      "kind": "concept",
+      "aliases": [
+        "dynamical systems"
+      ],
+      "background": "Approaches that see mind as enactive, embodied, embedded and extended, arising from the body acting in its surroundings. Dynamical systems approaches describe mind with continuous change over time rather than step-by-step symbol manipulation."
+    },
+    {
+      "name": "biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive is probably necessary for consciousness, though perhaps not enough on its own.",
+      "background": "The label comes from the philosopher John Searle, who argued that consciousness is a biological process like digestion."
+    },
+    {
+      "name": "predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "prediction error",
+        "interoceptive inference",
+        "controlled hallucination"
+      ],
+      "senseHere": "The view that the brain constantly guesses the causes of its sensory signals and corrects the guesses by the mismatches. Perception is thus a \"controlled hallucination\", an inside-out guess checked by the senses. Guessing about the body's inner state underlies emotion and the feeling of being alive."
+    },
+    {
+      "name": "simulation is not instantiation",
+      "kind": "concept",
+      "aliases": [
+        "instantiation",
+        "instantiate"
+      ],
+      "senseHere": "A computer simulation of something does not create the real thing. A simulated rainstorm gets nothing wet, and a simulated brain is conscious only if consciousness is itself computation."
+    },
+    {
+      "name": "simulation hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "ancestor simulations",
+        "base reality"
+      ],
+      "background": "Nick Bostrom's argument that we may well be living inside a computer simulation run by descendants. Simulated worlds would outnumber the one original \"base reality\"."
+    },
+    {
+      "name": "cerebral organoids",
+      "kind": "term",
+      "aliases": [
+        "organoids"
+      ],
+      "background": "Small brain-like clumps of tissue grown in a lab, typically from human embryonic stem cells."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "other",
+      "aliases": [],
+      "background": "A visual illusion in which two lines of equal length look unequal because of arrow-like ends. It persists even after you measure them and know the truth."
+    },
+    {
+      "name": "Shannon Vallor",
+      "kind": "person",
+      "aliases": [
+        "Vallor"
+      ],
+      "background": "Philosopher who studies the ethics of technology and has described AI as a mirror of our past."
+    }
+  ]
+}

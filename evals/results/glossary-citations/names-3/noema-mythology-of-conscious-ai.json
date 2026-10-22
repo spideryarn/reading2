@@ -1,0 +1,185 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "names-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "b6d5d4e97e157383b52f6e85ace11459f0445b165ea9707c085c70174536ee91",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "Google engineer who said in 2022 that the company's LaMDA chatbot was conscious. Google dismissed him for breaking confidentiality rules."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [
+        "Hinton"
+      ],
+      "background": "AI pioneer and Nobel Prize winner who has argued that AI systems may already be conscious."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [
+        "Chalmers"
+      ],
+      "background": "Philosopher known for the \"hard problem\" of consciousness. He has suggested conscious machines may become possible in the fairly near future."
+    },
+    {
+      "name": "anthropocentrism, human exceptionalism and anthropomorphism",
+      "kind": "concept",
+      "aliases": [
+        "anthropocentrism",
+        "human exceptionalism",
+        "anthropomorphism"
+      ],
+      "senseHere": "Three biases behind the urge to see AI as conscious. Anthropocentrism takes the human case as the definition. Exceptionalism puts humans above everything. Anthropomorphism projects human traits onto nonhuman things."
+    },
+    {
+      "name": "computational functionalism",
+      "kind": "concept",
+      "aliases": [
+        "functionalism"
+      ],
+      "senseHere": "The assumption that running the right kind of information processing is enough, by itself, to produce consciousness, whatever the machine is made of. The author thinks this may be wrong.",
+      "background": "In philosophy, functionalism says mental states are defined by what they do, not by what they are made of. The computational version says what matters is computation."
+    },
+    {
+      "name": "Alan Turing",
+      "kind": "person",
+      "aliases": [
+        "Turing"
+      ],
+      "background": "British mathematician who defined computation with the Turing machine and proposed the Turing test for judging whether a machine can imitate a human in conversation. He helped found computer science and early AI."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation",
+        "Turing world",
+        "Turing glasses"
+      ],
+      "senseHere": "A simple imagined device that reads and writes symbols on an endless tape by fixed rules. The author says today's digital computers, and much of AI, follow this model, and calls its limited view of the world \"Turing world\".",
+      "background": "Alan Turing devised it in the 1930s to define what counts as an algorithm. A universal version can imitate any other such machine."
+    },
+    {
+      "name": "substrate independence",
+      "kind": "concept",
+      "aliases": [
+        "substrate independent",
+        "substrate flexible",
+        "substrate-flexible",
+        "substrate flexibility"
+      ],
+      "senseHere": "The idea that a computation does the same thing whatever physical material runs it. The author prefers \"substrate flexible\", since cheese could not run a computer."
+    },
+    {
+      "name": "autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "autopoietic"
+      ],
+      "senseHere": "Self-production: a living thing keeps rebuilding the conditions and materials that keep it alive. The author treats this as a defining feature of living systems.",
+      "background": "The word comes from Greek and was introduced to biology in the 1970s."
+    },
+    {
+      "name": "neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "background": "A thought experiment, associated with David Chalmers, in which brain parts are swapped one by one for silicon parts that behave identically, to ask whether consciousness would survive."
+    },
+    {
+      "name": "mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Computation whose programs are tied to their particular physical hardware, so they effectively die when it does. This could save energy.",
+      "background": "Idea introduced by Geoffrey Hinton."
+    },
+    {
+      "name": "neuromorphic computation",
+      "kind": "term",
+      "aliases": [
+        "neuromorphic computing"
+      ],
+      "senseHere": "Computing that copies more detailed features of real neurons, such as the exact timing of their electrical spikes, than standard artificial neural networks do."
+    },
+    {
+      "name": "4E cognitive science",
+      "kind": "concept",
+      "aliases": [
+        "dynamical systems"
+      ],
+      "senseHere": "Approaches holding that mind is enactive, embodied, embedded and extended, and best described with the mathematics of continuous change rather than step-by-step algorithms."
+    },
+    {
+      "name": "biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive is necessary for consciousness, though perhaps not enough on its own.",
+      "background": "Philosopher John Searle's name for his view that consciousness is a real biological process in brains, like digestion."
+    },
+    {
+      "name": "predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "prediction error",
+        "prediction error minimization",
+        "interoceptive inference",
+        "interoception"
+      ],
+      "senseHere": "The theory that the brain constantly guesses the causes of its sensory inputs and corrects those guesses by the mismatch. What we consciously perceive is the best guess, not a raw readout. Guesses about the body's inner state (interoceptive inference) underlie emotion and mood."
+    },
+    {
+      "name": "controlled hallucination",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The author's description of conscious experience as the brain's inside-out best guess about the world, held in check by incoming sensory signals."
+    },
+    {
+      "name": "simulation is not instantiation",
+      "kind": "concept",
+      "aliases": [
+        "instantiation",
+        "instantiate"
+      ],
+      "senseHere": "A computer simulation of something does not create the thing itself. A simulated rainstorm wets nothing. The exception is when the thing is itself a computation."
+    },
+    {
+      "name": "simulation hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "ancestor simulations"
+      ],
+      "background": "The idea, associated with philosopher Nick Bostrom, that we probably live inside a computer simulation run by advanced descendants, because simulated worlds would outnumber the original one."
+    },
+    {
+      "name": "cerebral organoids",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Brain-like structures typically grown from human embryonic stem cells, which the author fears might accidentally become conscious."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A visual illusion in which two equal lines look different in length because of the arrowheads at their ends. The illusion persists even when you know the truth."
+    },
+    {
+      "name": "Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A test, from the film Ex Machina, in which the question is whether a human still feels a machine is conscious after knowing it is a machine. It measures human persuasion, not machine consciousness."
+    }
+  ]
+}
