@@ -70,7 +70,7 @@ let tree = "";
 
 beforeAll(() => {
   tree = mkdtempSync(path.join(tmpdir(), "knip-without-build-"));
-  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0");
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0");
   for (const file of tracked) {
     if (!file || file.startsWith("docs/") || file.endsWith(".md")) continue;
     if (file.endsWith(".html") && file !== "index.html") continue;

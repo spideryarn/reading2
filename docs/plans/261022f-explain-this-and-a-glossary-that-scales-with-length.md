@@ -130,15 +130,19 @@ essays are `evals/glossary-citations.ts` arms against the local database.
   - A more specific line about authors named beside their book (`names-final2-1..3`) did no
     better: *Stenhoff* came back as a work, with the alias *Stenhoff (1999)*, in two of three. It was
     taken back out.
-  - **What shipped against it:** Sol's line, and a code guard, `aliasCitesByYear`, that drops any
-    alias ending in a bracketed year. An alias is underlined in the prose, so this one put a glossary
-    mark on a citation; the bare name still matches, so dropping it loses nothing. Red-first test
-    in `tests/glossary.test.ts`.
-  - **What is left, and accepted:** on a review whose subject is partly its own literature, some
-    runs give an entry to the author of a book it surveys, without the year. That is the line
-    between Greg's two asks, *a cited work is not a term* (2026-10-03) and *include stuff like
-    Torricelli* (2026-10-21), and the measured cost of the second is one or two such entries in some
-    runs on one paper out of four. *Hide* removes one. Queued as `qi-zyr6rsh4` for a second look,
+  - **What shipped against it:** Sol's line, and a code guard, `withoutBracketedYear`, that drops an
+    alias ending in a bracketed year when the same text without the year is already the name or
+    another alias. An alias is underlined in the prose, so "Stenhoff (1999)" put a glossary mark on
+    a citation, and with "Stenhoff" beside it dropping it loses nothing. The first version dropped
+    every such alias, "Apollo 11 (1969)" included; Sol's second round caught it. Red-first tests in
+    `tests/glossary.test.ts`. It removes the alias, not the entry.
+  - **What is left, and accepted for now:** on a review whose subject is partly its own
+    literature, runs give entries to the authors of the books it surveys. Counted from the files,
+    `names-final-1..3`: four such entries (*Stenhoff*, *Rakov and Uman*, *Walther Brand*, *Stanley
+    Singer*), none, and two (Brand, Singer), on one paper of the four, with the essay clean in all
+    three. That is the line between Greg's two asks, *a cited work is not a term* (2026-10-03) and
+    *include stuff like Torricelli* (2026-10-21). It is a regression against `glossary/9` (none in 15
+    runs), not a residual of it, and *Hide* removes one meanwhile. Queued as `qi-zyr6rsh4` for a second look,
     not closed.
   - People went up on the review (10–14 against 5–10), and the long pieces (`scaling-hypothesis`,
     `source-spya-f550ta`) now ask for more than 20 and give 22–32 entries against 7–20.
@@ -181,3 +185,23 @@ In short:
    [glossary.md § A long piece, and a name met once](../project/glossary.md#a-long-piece-and-a-name-met-once).
    GPT Sol's code review, then the push.
 3. **Bookkeeping:** the note, the queue entries for the deferred halves, and the Sentry status.
+
+### GPT Sol's code review, and how it ended
+
+Round 1 ([review](261022f-explain-this-code-review-sol.md)) rejected `7fd0c6b7a`: C1 (the
+ceiling could outlive the job), C2 (the citation regression above), C3 (the evidence is thin), C4
+(part by part keyed on the count) and C5 (an overbroad "unchanged" claim). All five were fixed or
+narrowed in `5db8c6b02`. Round 2 ([review](261022f-explain-this-code-review-2-sol.md), narrow)
+closed C4 and rejected on two points, settled here rather than in a third round:
+
+- **C1, the step's admission estimate.** A glossary after another step in one job could start with
+  about 120 s of the window left. `STEP_BUDGET_MS.glossary` is now 720 s, the full-token time, so the
+  queue hands the job back for a fresh window rather than start it late, as it does for `structure`
+  at 700 s. A test pins worst case ≤ budget ≤ window. A glossary is queued on its own, so this
+  changes nothing in the ordinary case.
+- **C2, the alias guard and the count.** The guard now keeps an alias with no bare form beside it,
+  and the residual is counted from the files (above). **Sol still objects that the entry-level
+  regression is open; overruled for now** because it is the trade-off between two of Greg's own
+  rules, measured on one citation-dense review out of four pieces, its remedy (*Hide*) exists, and
+  it is queued as `qi-zyr6rsh4` with the two options (a guard against the bibliography's authors,
+  or accept). It is said in the note's comment to Greg, so it is his to overrule.

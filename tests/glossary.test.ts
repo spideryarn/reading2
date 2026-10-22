@@ -41,7 +41,7 @@ import { formsOf, termPattern, termSpans } from "../src/term-match.js";
 import { articleFingerprint } from "../src/source-hash.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { STREAM_TOKENS_PER_SECOND, budgetFor } from "../src/token-budget.js";
-import { DEADLINE_MARGIN_MS, LEASE_MS } from "../src/jobs.js";
+import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
 import {
   GATE_STEP,
   PRIORITY_GATE,
@@ -432,15 +432,21 @@ describe("buildGlossary", () => {
       {
         entries: [
           { name: "Mark Stenhoff", kind: "person", aliases: ["Stenhoff (1999)", "Stenhoff"], background: "A ball-lightning researcher." },
-          { name: "Rakov and Uman", kind: "work", aliases: ["Rakov and Uman (2003)", "Brand (1923, 2010)"], background: "A lightning handbook." },
+          { name: "Walther Brand", kind: "person", aliases: ["Brand (1923, 2010)", "Brand"], background: "A school official." },
+          { name: "Rakov and Uman", kind: "work", aliases: ["Rakov and Uman (2003)"], background: "A lightning handbook." },
           { name: "Blade Runner", kind: "work", aliases: ["Blade Runner (1982)", "the 1982 film"], background: "A film." },
+          // No bare form beside it, so dropping it would lose the only way to find
+          // the entry: kept, whatever it looks like (GPT Sol, round 2, C2).
+          { name: "the first Moon landing", kind: "event", aliases: ["Apollo 11 (1969)", "1984 (1949)"], background: "A mission." },
         ],
       },
       opts,
     );
     expect(g.entries.find((e) => e.name === "Mark Stenhoff")?.aliases).toEqual(["Stenhoff"]);
+    expect(g.entries.find((e) => e.name === "Walther Brand")?.aliases).toEqual(["Brand"]);
     expect(g.entries.find((e) => e.name === "Rakov and Uman")?.aliases).toEqual([]);
     expect(g.entries.find((e) => e.name === "Blade Runner")?.aliases).toEqual(["the 1982 film"]);
+    expect(g.entries.find((e) => e.name === "the first Moon landing")?.aliases).toEqual(["Apollo 11 (1969)", "1984 (1949)"]);
   });
 
   it("fills in the occurrences itself", () => {
@@ -628,7 +634,9 @@ describe("suggestedCount", () => {
     // This call has no clock of its own: the job's self-abort is its deadline (GPT Sol C1).
     const maxTokens = budgetFor("glossary", 600 + MAX_ENTRIES * 340);
     const worstCaseMs = (maxTokens / STREAM_TOKENS_PER_SECOND) * 1000;
-    expect(worstCaseMs).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+    // And the queue only starts the step with that much of the window left (C1, round 2).
+    expect(worstCaseMs).toBeLessThanOrEqual(STEP_BUDGET_MS.glossary);
+    expect(STEP_BUDGET_MS.glossary).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
   });
 });
 

@@ -1,7 +1,7 @@
 ---
 reports: spya-e5t77w
 ending: shipped
-comment: Shipped the simplest step: a long piece's glossary follows its length and takes in names met once, like Torricelli. The rest of "explain this" is written up and queued: select-to-look-up, quieter underlines, two stages.
+comment: Shipped: a long piece's glossary follows its length and takes in names met once, like Torricelli. One question for you on authors of cited books in reviews. The rest of "explain this" is written up and queued.
 ---
 # Torricelli: the glossary missed a name, and "explain this" as one continuum
 
@@ -55,6 +55,12 @@ for $0.25. One *Find more* on his existing list takes it from 20 to 87. Section 
 [vision.md](../project/vision.md) and [interface-vision.md](../project/interface-vision.md). The
 evidence is [261022b](../research/261022b-explain-this-evidence.md), a web and literature search
 plus two Opus subagents prompted from opposite sides.
+
+**One question for Greg, `q-rymrtq`.** The names rule pulls against *a cited work is not a term*
+(2026-10-03). On one citation-dense review of the four pieces tested, some runs give the authors of
+the books it surveys entries of their own (0–4 a run; none in 15 runs before). Accepted for now,
+and queued as `qi-zyr6rsh4`; the question asks whether to keep it, guard it in code, or drop
+passing names.
 
 **Queued, not built:**
 

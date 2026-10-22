@@ -326,21 +326,25 @@ function text(value: unknown): string {
  * the plan accepts to make "Saha et al." impossible. Author-and-year names
  * ("Stenhoff (1999)") are left to the prompt: in code they cannot be told from
  * "Blade Runner (1982)". As an alias the same shape is dropped, by
- * `aliasCitesByYear` above, where it costs nothing. docs/project/glossary.md § A cited work is not a term.
+ * `withoutBracketedYear` above, where it costs nothing. docs/project/glossary.md § A cited work is not a term.
  */
 /**
- * Is this alias a name with a year in brackets, "Stenhoff (1999)" or
- * "Brand (1923, 2010)"? **Aliases only, never a name**, and that is what
- * makes it safe where `citesByEtAl`'s note above says the shape cannot be
- * judged: an alias is only another way to find the entry in the prose, and
- * every alias is underlined there, so this one put a glossary mark on a
- * citation. Dropping it loses nothing, because the bare name, or the
- * bare alias beside it, already matches, "Blade Runner (1982)" included.
- * Added with `glossary/10`, whose passing-name rule let these back in on a
+ * The alias without a trailing year in brackets, "Stenhoff (1999)" to
+ * "Stenhoff" and "Brand (1923, 2010)" to "Brand", or `null` when it has none.
+ *
+ * `toEntries` drops such an alias **only when that bare form is already the
+ * entry's name or another of its aliases**, and that is what makes it safe
+ * where `citesByEtAl`'s note above says the shape cannot be judged. Every alias
+ * is underlined in the prose, so "Stenhoff (1999)" put a glossary mark on a
+ * citation, and dropping it loses nothing because "Stenhoff" already matches.
+ * "Apollo 11 (1969)" with no bare form beside it is the only way to find its
+ * entry, so it stays, whatever it looks like (GPT Sol, round 2, C2). Added with
+ * `glossary/10`, whose passing-name rule let these back in on a
  * citation-dense review (plan 261022f § Results).
  */
-export function aliasCitesByYear(value: string): boolean {
-  return /\S\s*\(\s*\d{4}[a-z]?(?:\s*[,;–-]\s*\d{4}[a-z]?)*\s*\)\s*$/.test(value);
+export function withoutBracketedYear(value: string): string | null {
+  const match = /^(.*\S)\s*\(\s*\d{4}[a-z]?(?:\s*[,;–-]\s*\d{4}[a-z]?)*\s*\)\s*$/.exec(value);
+  return match?.[1] ?? null;
 }
 
 export function citesByEtAl(value: string): boolean {
@@ -406,10 +410,15 @@ function toEntries(
        key, kept in the model's own spelling. */
     const seen = new Set<string>([normaliseTerm(name)]);
     const aliases: string[] = [];
-    for (const alias of Array.isArray(item.aliases) ? item.aliases : []) {
-      const value = text(alias);
+    const given = (Array.isArray(item.aliases) ? item.aliases : []).map(text);
+    /* Every form the model gave, for `withoutBracketedYear`: the bare form may
+       come after the bracketed one in the list. */
+    const forms = new Set([name, ...given].map(normaliseTerm));
+    for (const value of given) {
       const key = normaliseTerm(value);
-      if (!key || seen.has(key) || citesByEtAl(value) || aliasCitesByYear(value)) continue;
+      const bare = withoutBracketedYear(value);
+      if (!key || seen.has(key) || citesByEtAl(value)) continue;
+      if (bare !== null && forms.has(normaliseTerm(bare))) continue;
       seen.add(key);
       aliases.push(value);
     }

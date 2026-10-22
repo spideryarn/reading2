@@ -733,7 +733,8 @@ entry or alias containing a word followed by "et al". That guarantees the report
 shape; a standalone entry named "et al." survives, but a longer real phrase containing it can be a
 false positive. Author-and-year *names* are left to the prompt: code cannot tell "Stenhoff (1999)"
 from "Blade Runner (1982)". An *alias* ending in a bracketed year is dropped in code since
-`glossary/10` (`aliasCitesByYear`), because there it costs nothing: the bare name still matches.
+`glossary/10` (`withoutBracketedYear`), but only when the same text without the year is already the
+name or another alias, so dropping it costs nothing; "Apollo 11 (1969)" alone survives.
 That arrived with the rule that lets a name met once earn an entry, which on a citation-dense review
 let some runs give entries to the authors of the books the review surveys; the measured rate, and
 why the rest is accepted for now, is in
