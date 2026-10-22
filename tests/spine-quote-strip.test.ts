@@ -101,4 +101,14 @@ describe("the strip's paint contract", () => {
     expect(origin).toBeLessThan(quotes);
     expect(quotes).toBeLessThan(matches);
   });
+
+  it("paints over the off-screen veil, so a quote off screen keeps its colour", () => {
+    // Plan 261022c: the veil dims the field, never the marks a reader asked for.
+    const veil = spineSource.indexOf('className="spine-veil-track"');
+    const origin = spineSource.indexOf('className="spine-from"');
+    const quotes = spineSource.indexOf('className="spine-quotes"');
+    expect(veil).toBeGreaterThanOrEqual(0);
+    expect(veil).toBeLessThan(origin);
+    expect(veil).toBeLessThan(quotes);
+  });
 });

@@ -450,6 +450,12 @@ describe("the reading layer in the spine", () => {
     expect(first("spine-read-line"), "over the section fill").toBeGreaterThan(last("spine-here"));
     expect(last("spine-read-line"), "under the hairlines").toBeLessThan(first("spine-tick"));
     expect(last("spine-read-line"), "under the search marks").toBeLessThan(first("spine-matches"));
+
+    /* The veil goes over the whole chart: off screen, reading time is part of
+       the field the lit stretch stands out from (plan 261022c). */
+    expect(last("spine-read-line"), "under the off-screen veil").toBeLessThan(
+      first("spine-veil-track"),
+    );
   });
 });
 

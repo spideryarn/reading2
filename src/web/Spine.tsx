@@ -604,6 +604,10 @@ function SpineInner({
   /** The track-height wrapper the viewport band rides in, moved directly by
       `transform` rather than re-rendered (§ scroll position). */
   const viewportMover = useRef<HTMLDivElement>(null);
+  /** Its twin under the marks, carrying the veil over everything off screen —
+      moved by the same write in the same frame (§ scroll position, and the
+      render beside `.spine-from`). */
+  const veilMover = useRef<HTMLDivElement>(null);
   /**
    * The presses begun on the rail whose clicks have not arrived yet, oldest
    * first — see `bandClick`. A queue rather than one slot because clicks may
@@ -739,8 +743,11 @@ function SpineInner({
       raf = 0;
       const sy = window.scrollY;
 
+      const at = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
       const mover = viewportMover.current;
-      if (mover) mover.style.transform = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
+      if (mover) mover.style.transform = at;
+      const veil = veilMover.current;
+      if (veil) veil.style.transform = at;
 
       const pos = sy + viewportH * READING_LINE - docTop;
       const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
@@ -1244,6 +1251,35 @@ function SpineInner({
             style={{ top: pct(b.top) }}
           />
         ))}
+
+        {/* **The veil: everything off screen, a little dimmer.** Greg,
+            2026-10-21 (spya-wzssyu): *"Make it a bit clearer in the spine which
+            bits are visible on the screen."* The band's orange edges sat on an
+            orange-brown rail, inside a section fill brighter than its own wash,
+            so the stretch on screen is now said by lightness instead of by more
+            orange: the rail outside it is veiled toward the panel, and the
+            stretch itself is left at full strength.
+
+            **Its own moving wrapper, here, rather than a shadow on the band.**
+            The band is the last child, over everything, and a veil there would
+            dim the origin mark, the quotes and the search marks wherever they
+            are off screen — which is where they are most needed. So this twin
+            sits after the parts, the reading chart, the section fill and the
+            hairlines, and before those marks; the scroll effect writes the same
+            transform to both wrappers in the same frame
+            (docs/plans/261022c-spine-shows-clearly-what-is-on-screen.md). */}
+        <div
+          ref={veilMover}
+          className="spine-veil-track"
+          aria-hidden="true"
+          /* The band's height as a custom property, not a `height`: the veil
+             is the wrapper's two pseudo-elements, one above the band and one
+             from its foot down, and the stylesheet floors both at the same
+             value (2px normally, 4px around two 2px increased-contrast edges)
+             with a `max()` that jsdom's CSSOM would mangle inline (the reason
+             `--here-top` is a custom property too). */
+          style={{ "--view-h": pct(viewportH) } as CSSProperties}
+        />
 
         {/* **Where the reader jumped from**, while the chip offering the way
             back is up — Stage C of

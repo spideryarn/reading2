@@ -5,10 +5,10 @@ keywords: rail strip map overview where am i position progress ticks lines heat 
 related: jumping-around, gutter, mode-structure
 ---
 
-The spine is the thin strip down the left edge: the whole article squeezed to the height of your
-window. It is **proportional** — a part that fills half the piece fills half the spine — so it is a
-picture of the article’s shape, not a list of headings. At a glance it shows how far through you
-are, how big each part is, and where the things you are looking for sit.
+The spine is the thin strip down the left edge: the whole article squeezed into the space between
+the top and bottom bars. It is **proportional** — a part that fills half the piece fills half the
+spine — so it is a picture of the article’s shape, not a list of headings. At a glance it shows how
+far through you are, how big each part is, and where the things you are looking for sit.
 
 What each mark means:
 
@@ -22,8 +22,9 @@ What each mark means:
 - **Very faint blocks near the bottom: endnotes, references and other back matter.** Dimmed so you
   can see where the argument ends, but kept at their true size. If the spine says you are 60%
   through and the rest is faint, you have nearly finished the article itself.
-- **A box with orange top and bottom edges: what is on your screen.** It moves as you scroll, and
-  its height shows how much of the article fits on one screen.
+- **The stretch at full strength, between two orange edges: what is on your screen.** The rest of
+  the spine is a little dimmer. It moves as you scroll, and its height shows how much of the article
+  fits on one screen.
 - **A tinted area from the left edge, with a brighter line at its edge: where you have spent time
   reading.** The further across the strip it reaches, the longer you spent there. A quick glance may
   leave no shading. Use it to find where you had got to after jumping around. Only whoever added the
