@@ -21,11 +21,12 @@ What was found, in plain words:
   and a mode marks the article for caching only when a sibling runs in the same job. That rule exists
   so that we never pay extra to store something nobody reads, and on these numbers it is roughly
   right.
-- **Only the import burst could gain, and it is worth very little.** The add page starts every main
-  mode at once, but only two pairs can share a cached article: tweets with ideas, and glossary with
-  quotes. Together they are worth about 2.6¢ an import. Collecting it would need coordination between
-  jobs, and there is no reliable signal for when the cache becomes readable. So it was dropped, on
-  GPT Sol's review and Greg's "sparingly, and for good reason".
+- **Only the import burst could gain, and it is worth very little.** At the time, the add page
+  started every main mode at once, but only two pairs could share a cached article: tweets with
+  ideas, and glossary with quotes. Together they were worth about 2.6¢ an import. Collecting it
+  would need coordination between jobs, and there is no reliable signal for when the cache becomes
+  readable. So it was dropped, on GPT Sol's review and Greg's "sparingly, and for good reason".
+  Since 2026-10-22 the thread is no longer in that import batch, leaving only glossary with quotes.
 
 What landed:
 
@@ -42,7 +43,7 @@ What landed:
 
 Spend: $0.77 of a $15 budget.
 
-**Awaiting nobody.** If the import pairs are to be cached anyway, the cheapest version is to post each
-pair as one job. That makes Quotes wait for Glossary, and Ideas wait for Tweets, on every import, to
-save about a dollar a month at today's volume. It is written up in the plan as declined, to be
+**Awaiting nobody.** If the remaining import pair is to be cached anyway, the cheapest version is to
+post it as one job. That makes Quotes wait for Glossary on every import, to save less than the dollar
+a month the two pairs were worth at this volume. It is written up in the plan as declined, to be
 revisited when real post-2026-09-30 data says otherwise.

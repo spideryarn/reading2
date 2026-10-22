@@ -147,11 +147,16 @@ describe("which steps are queued", () => {
        this line, and the price in the plan. `crossrefs` is no mode: it is
        added by hand (`AUTO_EXTRA_STEPS`), plan 260930f § 3.
 
-       **The whole list, on purpose.** `tweets` and `simple` are both Summary's
-       since 2026-10-03, when the thread became its third view and its press
-       became delegated — and `modeStep` answers `null` for a delegated mode,
-       so the derivation alone lost both (GPT Sol, F2 of the 261003l review;
-       watched red at five steps). auto-modes.ts § `DELEGATED_MODE_STEPS`. */
+       **The whole list, on purpose.** `simple` is Summary's since 2026-10-03,
+       when its press became delegated — and `modeStep` answers `null` for a
+       delegated mode, so the derivation alone lost it (GPT Sol, F2 of the
+       261003l review; watched red at five steps). auto-modes.ts §
+       `DELEGATED_MODE_STEPS`. */
+    /* **No `tweets`.** Summary's thread was queued here until 2026-10-22.
+       Greg: "I don't think we need to generate the thread submode by default.
+       I think we should generate that if someone presses on it, not until
+       then." Opening the Thread view writes it (src/web/useTweets.ts;
+       docs/plans/261022b-summary-thread-writes-only-when-pressed.md). */
     /* **No `relations`.** Marginalia is a main mode since 2026-10-05, and for
        part of that day its relation words were queued here. Greg: "generate
        linking words when Marginalia mode is opened" — so its row is delegated
@@ -159,7 +164,6 @@ describe("which steps are queued", () => {
        (tests/marginalia-relations-on-open.test.tsx;
        docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
     expect(derivedAutoModeSteps()).toEqual([
-      "tweets",
       "glossary",
       "quotes",
       "ideas",
@@ -178,6 +182,7 @@ describe("which steps are queued", () => {
     expect(AUTO_MODE_STEPS).not.toContain("sources-claims");
     expect(modeStep("marginalia")).toBeNull();
     expect(AUTO_MODE_STEPS).not.toContain("relations");
+    expect(AUTO_MODE_STEPS).not.toContain("tweets");
   });
 
   it("the written list the server queues from equals the derived one", () => {
@@ -208,10 +213,11 @@ describe("which steps are queued", () => {
   });
 
   it("names them to the reader", () => {
-    /* Summary once, though two of the steps are its own (its lengths and its
-       thread). It must not vanish with its `fixed` row (F2). */
+    /* Summary, for its lengths. It must not vanish with its `fixed` row (F2).
+       In `STEP_ORDER` of each mode's first step, so Summary (`simple`) sits
+       after Ideas since its thread left the list (plan 261022b). */
     expect(autoModesDetail()).toContain(
-      "Summary, Glossary, Quotes, Ideas, Skim and Sources’ Bibliography are prepared",
+      "Glossary, Quotes, Ideas, Summary, Skim and Sources’ Bibliography are prepared",
     );
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
@@ -226,7 +232,6 @@ describe("what each job asks for", () => {
        what keeps a job that lands first from refusing for want of Quotes (Sol
        P1). */
     expect(autoModeRequests()).toEqual([
-      ["tweets"],
       ["glossary"],
       ["quotes"],
       ["ideas"],
@@ -241,7 +246,7 @@ describe("what each job asks for", () => {
     /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
        goes before it. The publication stamps them in this order. */
     const { together, after } = autoModePosts();
-    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["bibliography"], ["crossrefs"]]);
+    expect(together).toEqual([["glossary"], ["quotes"], ["ideas"], ["simple"], ["bibliography"], ["crossrefs"]]);
     expect(after).toEqual([["quotes", "ideas", "skim"]]);
   });
 

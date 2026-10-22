@@ -870,6 +870,17 @@ Feedback draft itself is the next step, and is named in the plan.
    [copy.md](copy.md) is explicit that inviting a futile retry is the expensive mistake.
    `TranscriptionResult.retryable` in [`dictation-upload.ts`](../../src/web/dictation-upload.ts)
    carries it, read off the HTTP status rather than out of the sentence.
+   **On Chromium too, since 2026-10-22.** Until then a failure with the recogniser's rough words
+   already in the box offered the audio and no Try again, because the retry's transcript could only
+   land *beside* those words and the box would hold the sentence twice. The field now remembers the
+   failed session's words (`spent` in [`useDictationField.ts`](../../src/web/useDictationField.ts)),
+   and Try again replaces them as the first try would have — at their old place if the box is
+   unchanged, or at one unique occurrence if the old surrounding text still anchors it (or the
+   phrase is long and distinctive enough not to be a stray *yes*). Otherwise it lands at the caret,
+   preserving what the reader typed. Discarding the failed recording also discards that replacement
+   claim, so a recovered tape from an earlier page cannot borrow it. Greg, 2026-10-22,
+   `spya-pnmrkw`: *"if you're sure this is going to be better, then do it"*;
+   [`tests/dictation-retry-replaces-rough-words.test.tsx`](../../tests/dictation-retry-replaces-rough-words.test.tsx).
 7. **`http://localhost` and Chrome's permission.** `localhost` is a secure context by exception, so
    `getUserMedia` and `SpeechRecognition` both work there — but the grant is keyed to the full
    origin *including the port*, and Vite's port moves. A plausible share of why the microphone

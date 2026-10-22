@@ -18,7 +18,10 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  BATCH_SIZE,
+  FIND_MORE_FLOOR,
+  MAX_ENTRIES,
+  SYSTEM,
+  renderPrompt,
   buildGlossary,
   dedupe,
   findOccurrences,
@@ -37,6 +40,8 @@ import {
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
 import { articleFingerprint } from "../src/source-hash.js";
 import { CAPABLE_MODEL } from "../src/models.js";
+import { STREAM_TOKENS_PER_SECOND, budgetFor } from "../src/token-budget.js";
+import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
 import {
   GATE_STEP,
   PRIORITY_GATE,
@@ -417,6 +422,33 @@ describe("buildGlossary", () => {
     expect(g.entries.find((e) => e.name === "Metal alloy")?.aliases).toEqual(["et alia"]);
   });
 
+  it("drops an alias that is a name with a year in brackets, and keeps the name", () => {
+    // glossary/10 lets passing names in, and on a citation-dense review the
+    // model came back with "Stenhoff (1999)" and "Rakov and Uman (2003)" as
+    // aliases (plan 261022f § Results). An alias is underlined in the prose, so
+    // that put a glossary mark on a citation. The bare name is already matched,
+    // so dropping the bracketed form loses nothing, even for "Blade Runner (1982)".
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "Mark Stenhoff", kind: "person", aliases: ["Stenhoff (1999)", "Stenhoff"], background: "A ball-lightning researcher." },
+          { name: "Walther Brand", kind: "person", aliases: ["Brand (1923, 2010)", "Brand"], background: "A school official." },
+          { name: "Rakov and Uman", kind: "work", aliases: ["Rakov and Uman (2003)"], background: "A lightning handbook." },
+          { name: "Blade Runner", kind: "work", aliases: ["Blade Runner (1982)", "the 1982 film"], background: "A film." },
+          // No bare form beside it, so dropping it would lose the only way to find
+          // the entry: kept, whatever it looks like (GPT Sol, round 2, C2).
+          { name: "the first Moon landing", kind: "event", aliases: ["Apollo 11 (1969)", "1984 (1949)"], background: "A mission." },
+        ],
+      },
+      opts,
+    );
+    expect(g.entries.find((e) => e.name === "Mark Stenhoff")?.aliases).toEqual(["Stenhoff"]);
+    expect(g.entries.find((e) => e.name === "Walther Brand")?.aliases).toEqual(["Brand"]);
+    expect(g.entries.find((e) => e.name === "Rakov and Uman")?.aliases).toEqual([]);
+    expect(g.entries.find((e) => e.name === "Blade Runner")?.aliases).toEqual(["the 1982 film"]);
+    expect(g.entries.find((e) => e.name === "the first Moon landing")?.aliases).toEqual(["Apollo 11 (1969)", "1984 (1949)"]);
+  });
+
   it("fills in the occurrences itself", () => {
     const g = buildGlossary({ entries: [{ name: "Seth", gloss: "The author." }] }, opts);
     expect(g.entries[0]?.blocks).toEqual(["spya-aaaaaa"]);
@@ -557,12 +589,62 @@ describe("buildGlossary score accounting", () => {
 });
 
 describe("suggestedCount", () => {
-  it("scales with the article and never exceeds one batch", () => {
+  it("scales with the article, past twenty, up to one call's ceiling", () => {
     expect(suggestedCount(400)).toBe(6);
     expect(suggestedCount(4000)).toBe(10);
-    // The ceiling is the whole point: their extraction 504'd on OUTPUT tokens,
-    // because every entry carries two explanations.
-    expect(suggestedCount(100_000)).toBe(BATCH_SIZE);
+    // The book that missed Torricelli: 38,255 body words, which the old cap
+    // of twenty turned into one entry per 1,900 words (spya-e5t77w).
+    expect(suggestedCount(30_000)).toBe(75);
+    expect(suggestedCount(38_255)).toBe(MAX_ENTRIES);
+    // Still a ceiling: their extraction 504'd on OUTPUT tokens.
+    expect(suggestedCount(1_000_000)).toBe(MAX_ENTRIES);
+  });
+
+  it("asks a Find more on a piece at the old ceiling exactly what it always asked", () => {
+    expect(suggestedCount(4000, 10)).toBe(10);
+    expect(suggestedCount(8000, 20)).toBe(20);
+  });
+
+  it("asks a Find more on a long piece for the rest of its length, never fewer than twenty", () => {
+    // Greg's own list: written by the old rule, 20 entries on that book.
+    expect(suggestedCount(38_255, 20)).toBe(MAX_ENTRIES - 20);
+    expect(suggestedCount(38_255, 75)).toBe(FIND_MORE_FLOOR);
+    // The ceiling is on the whole list's target, so the rest of it is what is asked.
+    expect(suggestedCount(1_000_000, 10)).toBe(MAX_ENTRIES - 10);
+  });
+
+  const TREE = {
+    slug: "s",
+    rootId: "root",
+    nodes: {
+      root: { id: "root", depth: 0, parent: null, children: [], title: "root", gist: "g", range: ["spya-aaaaaa", "spya-bbbbbb"] },
+    },
+  } as unknown as Tree;
+  const LONG = "This is a long piece. Work through it part by part";
+
+  it("tells the model to go part by part only on a piece long enough to ask for more than twenty", () => {
+    expect(renderPrompt({ tree: TREE, count: 96, longPiece: true, existing: [], profile: null })).toContain(LONG);
+    // A Find more on a nearly full book asks for the floor, and still goes part by part (C4).
+    expect(renderPrompt({ tree: TREE, count: FIND_MORE_FLOOR, longPiece: true, existing: [], profile: null })).toContain(LONG);
+    // A shorter piece's request is the one it always was.
+    expect(renderPrompt({ tree: TREE, count: 10, longPiece: false, existing: [], profile: null })).not.toContain(LONG);
+  });
+
+  it("keeps a call that uses every token it was allowed inside the job's own deadline", () => {
+    // This call has no clock of its own: the job's self-abort is its deadline (GPT Sol C1).
+    const maxTokens = budgetFor("glossary", 600 + MAX_ENTRIES * 340);
+    const worstCaseMs = (maxTokens / STREAM_TOKENS_PER_SECOND) * 1000;
+    // And the queue only starts the step with that much of the window left (C1, round 2).
+    expect(worstCaseMs).toBeLessThanOrEqual(STEP_BUDGET_MS.glossary);
+    expect(STEP_BUDGET_MS.glossary).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+  });
+});
+
+describe("the prompt's passing-name rule", () => {
+  it("keeps citation-only people and works outside the passing-name rule", () => {
+    expect(SYSTEM.replace(/\s+/g, " ")).toContain(
+      "A person or work named only to say where a claim came from is still a citation",
+    );
   });
 });
 

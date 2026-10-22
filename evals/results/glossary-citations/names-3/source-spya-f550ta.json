@@ -1,0 +1,232 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "names-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "b6d5d4e97e157383b52f6e85ace11459f0445b165ea9707c085c70174536ee91",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A glowing ball seen during thunderstorms that lasts a few seconds and then vanishes, with or without a trace. It has no agreed explanation.",
+      "background": "Reported for centuries by thousands of eyewitnesses, but almost never captured by instruments, so scientists still debate whether and how it forms."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist whose 1837 work on thunder is where the term 'ball lightning' is traced to. He collected reports of such sightings."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "German school official who wrote 'Der Kugelblitz' (1923), a monograph on ball lightning and the only one in German."
+    },
+    {
+      "name": "Martin A. Uman",
+      "kind": "person",
+      "aliases": [
+        "Uman",
+        "Rakov and Uman"
+      ],
+      "background": "American lightning researcher at the University of Florida. He co-wrote a standard handbook on lightning and led rocket-triggered lightning experiments at Camp Blanding."
+    },
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov",
+        "Vladimir Bychkov"
+      ],
+      "background": "Russian physics professor who keeps a database of ball lightning cases and co-edited a book on the phenomenon."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "concept",
+      "aliases": [
+        "Turner"
+      ],
+      "senseHere": "A description of ball lightning research as scattered effort. Some people collect reports, some build theories, and others run lab tests, with little coordination."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "background": "The Austrian network of sensors that locates lightning strokes and records their strength and polarity."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "background": "The German lightning location service that detects where and when lightning strikes."
+    },
+    {
+      "name": "positive lightning stroke",
+      "kind": "concept",
+      "aliases": [
+        "positive strokes",
+        "positive cloud–ground lightning"
+      ],
+      "background": "A lightning discharge that carries positive electric charge to the ground. It is much rarer than the negative kind but often more powerful."
+    },
+    {
+      "name": "cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud–ground lightning",
+        "cloud–ground flashes"
+      ],
+      "background": "A lightning bolt that travels between a thundercloud and the ground, as opposed to one that stays between clouds."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "Austrian geologist and mineralogist and member of the Imperial Academy of Sciences in Vienna."
+    },
+    {
+      "name": "Axel D. Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Axel Wittmann",
+        "Wittmann"
+      ],
+      "background": "German astrophysicist at the Göttingen university observatory who reported a childhood ball lightning sighting to Nature."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "American palaeontologist at Yale, known for dinosaur fossil discoveries, and president of the US National Academy of Sciences."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German experimental physicist, famous for the 1922 Stern–Gerlach experiment showing that atoms' magnetic orientation comes in fixed steps."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer who later became a professor of physical electronics. He wrote a widely noticed account in Nature of a glowing sphere passing through an airliner cabin."
+    },
+    {
+      "name": "Pikes Peak",
+      "kind": "place",
+      "aliases": [],
+      "background": "A 4302 m summit in Colorado's Rocky Mountains where the Harvard College Observatory ran a weather station in the 1870s and 1880s."
+    },
+    {
+      "name": "Puy de Dôme",
+      "kind": "place",
+      "aliases": [],
+      "background": "A 1465 m extinct volcano in the Massif Central of France with a weather observatory on its summit."
+    },
+    {
+      "name": "Mt Sonnblick",
+      "kind": "place",
+      "aliases": [
+        "Sonnblick"
+      ],
+      "background": "A 3106 m peak in the Austrian province of Salzburg with a summit weather observatory."
+    },
+    {
+      "name": "Mt Fichtelberg",
+      "kind": "place",
+      "aliases": [
+        "Fichtelberg"
+      ],
+      "background": "A 1215 m mountain in Saxony, Germany with a meteorological observatory."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "Baltic German physicist at the St Petersburg Academy who was killed by lightning in 1753 while experimenting with atmospheric electricity."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Short-lived paralysis and numbness after a lightning strike or ball lightning encounter, which Charcot separated from lasting nervous trauma."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician who founded modern neurology and taught at the Salpêtrière Hospital in Paris. Sigmund Freud studied under him and translated his lectures."
+    },
+    {
+      "name": "Dorstone case",
+      "kind": "event",
+      "aliases": [
+        "Dorstone",
+        "Dorstone tub"
+      ],
+      "background": "A 1936 report from Herefordshire, England, of a red-hot ball that fell into a water tub and made it boil. It is used to estimate how much energy a ball holds."
+    },
+    {
+      "name": "Poughquag case",
+      "kind": "event",
+      "aliases": [
+        "Poughquag glass",
+        "Poughquag"
+      ],
+      "background": "A 2008 sighting in New York State of a blue ball seen through a glass porch door. Later measurements of the glass's glow estimated the ball's radiation output."
+    },
+    {
+      "name": "Camp Blanding experiment",
+      "kind": "event",
+      "aliases": [
+        "Camp Blanding"
+      ],
+      "background": "A 2008 field experiment in Florida in which rocket-launched wires triggered lightning onto more than 100 ground materials, which were then photographed and analysed."
+    },
+    {
+      "name": "Qinghai spectrum",
+      "kind": "event",
+      "aliases": [
+        "Qinghai Plateau",
+        "Xining"
+      ],
+      "background": "A 2012 recording on the Qinghai Plateau in China in which cameras with diffraction gratings captured the light spectrum of a ball lightning object."
+    },
+    {
+      "name": "Mitino incident",
+      "kind": "event",
+      "aliases": [
+        "Mitino"
+      ],
+      "background": "A 2015 Moscow event in which three people filmed a glowing object with mobile phones. Triangulating the films gave its height and speed."
+    }
+  ]
+}

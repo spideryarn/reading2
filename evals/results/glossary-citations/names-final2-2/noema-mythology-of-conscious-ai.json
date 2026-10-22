@@ -1,0 +1,184 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "names-final2-2",
+  "promptVersion": "glossary/10",
+  "sourceSha256": {
+    "glossary.ts": "3e3332d26fd55dc9851a9cea353fe69e831bae2782ea31ce34d92ca0c9df4cc9",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "Ex Machina",
+      "kind": "work",
+      "aliases": [
+        "Ava",
+        "Caleb",
+        "Nathan"
+      ],
+      "background": "A 2014 film, written and directed by Alex Garland, about a programmer asked to judge whether a humanlike robot called Ava is conscious."
+    },
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "Google engineer who said in 2022 that the company's chatbot LaMDA was conscious. Google dismissed him for breaching confidentiality."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [
+        "Chalmers"
+      ],
+      "background": "Australian philosopher known for the \"hard problem of consciousness\", the puzzle of why physical processes give rise to felt experience. He has argued that conscious machines may be possible."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [
+        "Hinton"
+      ],
+      "background": "A pioneer of artificial neural networks and Nobel Prize winner who has said AI may already be conscious."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [
+        "Nagel"
+      ],
+      "background": "American philosopher whose 1974 essay \"What Is It Like to Be a Bat?\" defined consciousness as there being something it is like to be a creature."
+    },
+    {
+      "name": "computational functionalism",
+      "kind": "concept",
+      "aliases": [
+        "functionalism"
+      ],
+      "senseHere": "The assumption that running the right kind of information processing, whatever it runs on, is enough to produce consciousness. The author treats it as a hidden assumption behind the idea of conscious AI, and doubts it.",
+      "background": "In philosophy, functionalism says mental states are defined by what they do, not what they are made of."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation",
+        "Turing world"
+      ],
+      "senseHere": "An imaginary device that reads and writes symbols on an endless tape by fixed rules, and so defines what counts as an algorithm. The author calls the world of such step-by-step symbol shuffling \"Turing world\"."
+    },
+    {
+      "name": "substrate independence",
+      "kind": "concept",
+      "aliases": [
+        "substrate flexible",
+        "substrate-flexible",
+        "substrate independent"
+      ],
+      "senseHere": "The idea that a computation does the same thing whatever material runs it. The author prefers \"substrate flexible\", since not every material, such as cheese, can build a working computer."
+    },
+    {
+      "name": "autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "autopoietic"
+      ],
+      "senseHere": "The way a living cell keeps making and repairing itself, maintaining the conditions for its own continued existence.",
+      "background": "The word comes from Greek for \"self-production\" and was coined by Chilean biologists Maturana and Varela."
+    },
+    {
+      "name": "neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "senseHere": "A thought experiment in which brain parts are swapped one by one for silicon parts that behave identically. It is meant to show consciousness would survive the change."
+    },
+    {
+      "name": "mortal computation",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Computing whose programs are bound to their particular hardware, so they effectively die when that hardware does. The payoff is saving energy."
+    },
+    {
+      "name": "neuromorphic computation",
+      "kind": "term",
+      "aliases": [
+        "neuromorphic computing"
+      ],
+      "senseHere": "Computing that copies finer details of real neurons, such as the exact timing of their spikes, instead of using simplified artificial neurons."
+    },
+    {
+      "name": "Watt Governor",
+      "kind": "concept",
+      "aliases": [
+        "governor of a steam engine"
+      ],
+      "background": "A steam-engine speed regulator: spinning weighted balls swing outward as speed rises and shut a valve. It works by pure mechanics, with no calculation."
+    },
+    {
+      "name": "4E cognitive science",
+      "kind": "concept",
+      "aliases": [
+        "dynamical systems"
+      ],
+      "senseHere": "Approaches that see mind as enactive, embodied, embedded and extended, and describe it with continuous changing processes rather than algorithms."
+    },
+    {
+      "name": "biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive is necessary, though perhaps not enough, for consciousness.",
+      "background": "The name comes from the philosopher John Searle, who held that consciousness is a biological process of the brain, like digestion."
+    },
+    {
+      "name": "predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "prediction error",
+        "interoceptive inference",
+        "controlled hallucination"
+      ],
+      "senseHere": "The theory that the brain constantly guesses the causes of its sensory input and corrects the guesses by the mismatch. The author calls conscious experience a \"controlled hallucination\", a guess kept in check by incoming signals. Guessing about the body's inner state is called interoceptive inference."
+    },
+    {
+      "name": "simulation is not instantiation",
+      "kind": "concept",
+      "aliases": [
+        "instantiation",
+        "instantiate"
+      ],
+      "senseHere": "A computer simulation of something does not produce the thing itself, unless the thing is itself just computation. A simulated rainstorm gets nothing wet."
+    },
+    {
+      "name": "Nick Bostrom",
+      "kind": "person",
+      "aliases": [
+        "Bostrom"
+      ],
+      "background": "Philosopher who argued we may well be living inside a computer simulation run by advanced descendants."
+    },
+    {
+      "name": "simulation hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "ancestor simulations"
+      ],
+      "background": "The idea that our whole universe may be a computer simulation. Its logic is that simulated worlds could vastly outnumber the original one."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A classic optical illusion in which two equal lines look unequal because of the arrowheads at their ends. It persists even when you know the truth."
+    },
+    {
+      "name": "Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A test, from the film Ex Machina, where you reveal that a being is a machine and see whether a human still feels it is conscious. It measures human persuadability, not machine consciousness."
+    }
+  ]
+}

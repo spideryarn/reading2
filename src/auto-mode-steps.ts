@@ -24,9 +24,9 @@ import type { StepName } from "./types.js";
 /**
  * The steps queued, in `STEP_ORDER`.
  *
- * `tweets` and `simple` are Summary's two artefacts (its thread and its
- * plain-words levels); `glossary`, `quotes`, `ideas` and `skim` are their own
- * modes'; `bibliography` is Sources' Bibliography since 2026-10-09 (not its
+ * `simple` is Summary's plain-words levels (Brief and Fuller); `glossary`,
+ * `quotes`, `ideas` and `skim` are their own modes'; `bibliography` is Sources'
+ * Bibliography since 2026-10-09 (not its
  * Reception search or its Claims list, which wait for their own chips — plan
  * 261009l § On import); `crossrefs` belongs to no mode — the links from a phrase in one
  * passage to the passage that backs it sit in the prose in every mode
@@ -37,9 +37,14 @@ import type { StepName } from "./types.js";
  * make the words the first time the column is shown rather than for every
  * import (src/web/useRelations.ts;
  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md).
+ *
+ * **Not `tweets`**, Summary's thread. It was on the list from 2026-09-30 to
+ * 2026-10-22; Greg took it off: "I don't think we need to generate the thread
+ * submode by default. I think we should generate that if someone presses on
+ * it". Opening the Thread view writes it (src/web/useTweets.ts;
+ * docs/plans/261022b-summary-thread-writes-only-when-pressed.md).
  */
 export const AUTO_MODE_STEPS: readonly StepName[] = [
-  "tweets",
   "glossary",
   "quotes",
   "ideas",

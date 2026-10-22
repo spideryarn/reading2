@@ -222,7 +222,13 @@ Three things learned making the rest of the app meet it (plan
   sources. Greg: *"as much about sort of line spacing or paragraph spacing being quite close as
   font size"* (2026-10-21).
 
-**Still under 40, on purpose or awaiting a decision:** the gutter bar and its at-rest marks
+- **A control drawn over text is not an exception.** Cover more of the text, or move the control;
+  do not shrink the target. The bar a tap raises above a paragraph on a phone is 40px slots for
+  this reason, though it now hides about a line and a half above instead of one (`--blk-bar-slot`;
+  Greg, 2026-10-21, `q-trbv2r`: *"use your judgment"*;
+  [261022e](../plans/261022e-phone-tap-bar-at-40px-and-a-wider-gap-between-paragraphs-of-model-answers.md)).
+
+**Still under 40, on purpose or awaiting a decision:** the gutter's at-rest marks
 (touch.md § The gutter), the shelf's sort and topic chips, Skim's place button, the fold toggle, a figure's zoom button,
 links inside a footnote card, Structure's rows in the prose, and the threshold slider in touch.md § How big (16px tall when last measured, and older than these plans). 261021g says why for the rest.
 

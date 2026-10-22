@@ -624,8 +624,10 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
 it.** When an import's first full publication commits, the same transaction queues one job per main
-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
-cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
+mode's step: Summary's plain-words levels, Glossary, Quotes, Ideas, Sources' Bibliography and the
+cross-reference links, then Skim, which carries Quotes and Ideas in front of it. Not Summary's
+thread since 2026-10-22: it is written when its owner first opens it
+([261022b](../plans/261022b-summary-thread-writes-only-when-pressed.md)). They are ordinary
 mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
 reader's profile as it stood at publication.
 

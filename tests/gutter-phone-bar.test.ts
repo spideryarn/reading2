@@ -90,6 +90,26 @@ describe("a no-hover screen: the gutter as a bar above the paragraph", () => {
     expect(mark).toContain("pointer-events: auto");
   });
 
+  /* A finger's 40, in both directions: plan 261022e, controls.md § The numbers.
+     The bar's row alone is not enough — `.blk-gutter > *` keeps a 24px
+     `min-height` and the controls are centred in the row. */
+  it("draws each control in the bar at least 40 × 40, at every root", () => {
+    const slot = /--blk-bar-slot:\s*max\(\s*([\d.]+)px\s*,\s*([\d.]+)rem\s*\)/.exec(css);
+    expect(slot, "`--blk-bar-slot` is not `max(<n>px, <n>rem)`").not.toBeNull();
+    for (const root of ROOTS) {
+      expect(Math.max(Number(slot?.[1]), Number(slot?.[2]) * root)).toBeGreaterThanOrEqual(40);
+    }
+    const bar = rule(block, BAR);
+    expect(bar).toContain("grid-template-rows: var(--blk-bar-slot)");
+    expect(bar).toContain("column-gap: 0");
+    const shown = rule(
+      block,
+      `${BAR} > :is(.blk-cmt, .blk-permalink, .block-chat, .blk-bookmark, .blk-help)`,
+    );
+    expect(shown).toContain("min-width: var(--blk-bar-slot)");
+    expect(shown).toContain("min-height: var(--blk-bar-slot)");
+  });
+
   it("hides the counts at rest and gives them back in the bar", () => {
     for (const count of [".blk-n", ".block-chat-n"]) {
       expect(rule(block, `.blk-gutter ${count}`)).toContain("display: none");

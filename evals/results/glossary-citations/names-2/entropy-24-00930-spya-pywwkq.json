@@ -1,0 +1,202 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "names-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "7f34cf5870b7a3939e43348d8c434e6c49680a4077d9ab267a7bb40e31facdfc",
+    "paperwork.ts": "315b00feb329ab16ef843bdc0f190d58de3ea0e1ccb9dbdda2505321eafbd59b",
+    "plain-words.ts": "c93cfe499cca3deaf53f7f44817b9f07d1e93925b3fe0e24177a6ffb4d4f74ec"
+  },
+  "entries": [
+    {
+      "name": "partial information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "PID"
+      ],
+      "senseHere": "A method that splits what several input neurons tell you about a target neuron into overlapping, unique, and combined-only parts. It lets researchers separate simple passing-on of signals from real processing."
+    },
+    {
+      "name": "rich club",
+      "kind": "concept",
+      "aliases": [
+        "rich clubs",
+        "rich club coefficient"
+      ],
+      "senseHere": "A small set of the best-connected neurons that are tightly linked to each other, and that together carry most of the information flow in the network."
+    },
+    {
+      "name": "multielectrode array",
+      "kind": "term",
+      "aliases": [
+        "512-channel multielectrode arrays",
+        "microelectrode array"
+      ],
+      "background": "A flat grid of many tiny electrodes that records electrical activity from many neurons at once."
+    },
+    {
+      "name": "mutual information",
+      "kind": "concept",
+      "aliases": [
+        "joint mutual information",
+        "marginal mutual information"
+      ],
+      "senseHere": "A measure of how much knowing one neuron's activity lets you guess another's. It is symmetric and has no direction, so it does not show flow from one neuron to another."
+    },
+    {
+      "name": "transfer entropy",
+      "kind": "concept",
+      "aliases": [
+        "TE",
+        "sorted local transfer entropy"
+      ],
+      "senseHere": "A measure of how much one neuron's past helps predict another neuron's next state, beyond what that neuron's own past already predicts. It gives a direction to the flow of information."
+    },
+    {
+      "name": "effective network",
+      "kind": "concept",
+      "aliases": [
+        "effective connectivity",
+        "functional connectivity"
+      ],
+      "senseHere": "A map of which neurons seem to influence which others, built from statistical analysis of their activity rather than from anatomy."
+    },
+    {
+      "name": "partial information atoms",
+      "kind": "term",
+      "aliases": [
+        "PI atoms",
+        "information atoms",
+        "atoms"
+      ],
+      "senseHere": "The smallest non-overlapping pieces into which the total information from inputs about a target is divided. Each piece is a distinct way the inputs share information."
+    },
+    {
+      "name": "synergy",
+      "kind": "concept",
+      "aliases": [
+        "synergistic information",
+        "synergistic integration",
+        "Syn"
+      ],
+      "senseHere": "Information about a target neuron that appears only when you look at several input neurons together, and not from any single one. The article treats it as a measure of computation."
+    },
+    {
+      "name": "redundancy",
+      "kind": "concept",
+      "aliases": [
+        "redundant information",
+        "Red"
+      ],
+      "senseHere": "Information about the target neuron that several input neurons each carry separately, so the same information is counted more than once."
+    },
+    {
+      "name": "unique information",
+      "kind": "concept",
+      "aliases": [
+        "Unq"
+      ],
+      "senseHere": "Information about the target neuron that only one particular input neuron provides, and the other inputs do not."
+    },
+    {
+      "name": "Williams and Beer",
+      "kind": "person",
+      "aliases": [
+        "Williams and Beer [1]"
+      ],
+      "background": "Paul Williams and Randall Beer, researchers who in 2010 introduced partial information decomposition. Their original redundancy formula is called Imin."
+    },
+    {
+      "name": "redundancy function",
+      "kind": "term",
+      "aliases": [
+        "redundancy measure",
+        "I∩",
+        "Imin",
+        "Isx",
+        "Iccs",
+        "IBROJA"
+      ],
+      "senseHere": "A formula that fixes how much information counts as shared by several inputs. No single formula is agreed on, and the choice changes the results, so each one has trade-offs."
+    },
+    {
+      "name": "computational triad",
+      "kind": "term",
+      "aliases": [
+        "triad",
+        "triads",
+        "computational triads"
+      ],
+      "senseHere": "A group of three neurons in which two source neurons both connect to one shared target neuron. It is the basic unit the authors analyze."
+    },
+    {
+      "name": "partial information lattice",
+      "kind": "concept",
+      "aliases": [
+        "PI lattice",
+        "lattice"
+      ],
+      "senseHere": "A layered diagram that arranges every possible way a group of input neurons can share information about a target. Each point on it is one separate piece of information."
+    },
+    {
+      "name": "organotypic cultures",
+      "kind": "term",
+      "aliases": [
+        "organotypic cortical cultures",
+        "cortical cultures"
+      ],
+      "background": "Thin slices of brain tissue kept alive in nutrient fluid in a dish. They regrow connections resembling those in an intact brain."
+    },
+    {
+      "name": "Discrete Information Theory toolbox",
+      "kind": "other",
+      "aliases": [
+        "DIT"
+      ],
+      "background": "A Python software package for information-theoretic calculations on discrete variables. It includes many redundancy functions."
+    },
+    {
+      "name": "IDTxl",
+      "kind": "other",
+      "aliases": [],
+      "background": "A Python software package for information-theoretic analysis of time series, including transfer entropy."
+    },
+    {
+      "name": "Dedekind number",
+      "kind": "concept",
+      "aliases": [
+        "Dedekind numbers"
+      ],
+      "background": "A sequence of integers that counts certain collections of subsets. It grows extremely fast, and only a few terms are known."
+    },
+    {
+      "name": "O-information",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A single-number summary of whether a group of neurons is dominated by redundancy or synergy. It is easier to compute for large groups but gives less detail than the full decomposition."
+    },
+    {
+      "name": "local PID",
+      "kind": "concept",
+      "aliases": [
+        "local mutual information",
+        "time-resolved local measures"
+      ],
+      "senseHere": "A version of the decomposition that is computed for each individual moment or configuration, instead of averaged over the whole recording. It gives an information time series."
+    },
+    {
+      "name": "neuronal avalanches",
+      "kind": "concept",
+      "aliases": [],
+      "background": "Cascades of neural firing that spread through a network in bursts of widely varying size. They are often taken as a sign that the brain operates near a critical point."
+    },
+    {
+      "name": "integrated information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of PID that handles several target variables, so it can split how the past constrains the future into redundant, unique, and synergistic parts."
+    }
+  ]
+}

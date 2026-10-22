@@ -96,7 +96,7 @@ const SLUG_RUBBLE = `${SLUG_PREFIX}%`;
 
 /** The main-mode jobs, written out again so the test does not read the code's list. */
 const MODES: StepName[][] = [
-  ["tweets"],
+  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b). */
   ["glossary"],
   ["quotes"],
   ["ideas"],

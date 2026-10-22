@@ -338,6 +338,7 @@ describe("the field stays out of the prompt", () => {
     const prompt = renderPrompt({
       tree,
       count: 6,
+      longPiece: false,
       existing: [entry({ id: "spya-keep01", name: "Seth", aliases: ["Anil Seth"], addedAt: MONDAY })],
       profile: null,
     });
