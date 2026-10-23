@@ -1,10 +1,11 @@
 ---
 id: q-qbfjje
 report: spya-rg5kk6
-status: open
+status: answered
 asked: 2026-10-23
 title: Re-read The Order of Time from its PDF, to put back the missing line, passage and notes?
 refs: SPIDERYARN-READING2-K5 · addendum spya-zdp62y · qi-h9gv4pf8 · qi-vq9rwkyy · docs/plans/261023b-endnotes-typed-as-references-are-kept-as-notes.md · docs/plans/261022h-a-line-at-the-top-of-a-chunk-is-not-lost-at-the-seam.md · docs/user-feedback/261019_0755-a-line-at-the-top-of-a-pdf-chunk-is-no-longer-lost-silently.md
+acted: spya-j4zg9m
 ---
 Your copy of The Order of Time is missing three things, and fixing them means re-reading the book from its PDF. Shall I leave that to you, once the fix is deployed?
 
@@ -31,3 +32,9 @@ Why a Refresh now re-reads the whole book. The earlier note said to delete one s
 Why after the deploy. The notes fix is in how the book is assembled from the model's reading. A Refresh before the deploy assembles with the old code, so notes 21 to 93 come back only if the model happens to label them right.
 
 The same Refresh also serves a queued check on this book's uncaptioned figures (qi-vq9rwkyy).
+
+Greg's reply, 2026-10-23 (spya-j4zg9m, in the Feedback dialog), choosing A with the Refresh done for him:
+
+> Please reread it for me.
+
+Acted on, 2026-10-23 12:52 to 12:59 UTC (queue item qi-2f92byjb): the book was re-read from its PDF in production, the same job as Refresh from source, on the deployed code. All three are back: the line at the top of page 43, the page 95 passage, and notes 21 to 93. The five "53" to "57" notes are gone, and against the PDF nothing but the copyright page, an advert and a few formula fragments is missing. It cost $0.84 over 111 calls. One thing this question got wrong: block ids were not all kept. 834 paragraphs kept theirs and 289 got new ones, so 5 of your 7 bookmarks and some reading time now point at paragraphs that have changed. Nothing was deleted. Whether to move them is asked in q-xns4gt.

@@ -2,7 +2,7 @@
 reports: spya-rg5kk6
 addenda: spya-zdp62y
 ending: shipped
-comment: The missing line is from the top of page 43, and future PDFs now catch it. Looking further found notes 21–93 dropped too (fixed on dev) and a passage on page 95. A Refresh after the deploy re-reads the whole book; nothing needs deleting.
+comment: Re-read in production on 23 October: the page 43 line, the page 95 passage and notes 21–93 are back. 5 of your 7 bookmarks now point at changed paragraphs; whether to move them is asked separately.
 ---
 # A line at the top of a PDF chunk is no longer lost silently
 
@@ -17,9 +17,9 @@ And his addendum `spya-zdp62y`, 2026-10-22, written before the fix below was dep
 > Any news on this? Inspect in production, see if you can figure out whether there's something about
 > the import that needs fixing/improving.
 
-**Ending: Shipped.** The seam check is deployed (2026-10-23 00:54); the notes fix is on `dev`, not
-deployed. Re-reading the existing book is Greg's call:
-[q-qbfjje](questions/q-qbfjje.md).
+**Ending: Shipped.** The seam check is deployed (2026-10-23 00:54), and so is the notes fix
+(db758ed8). Greg asked for the existing book to be re-read for him
+([q-qbfjje](questions/q-qbfjje.md), reply `spya-j4zg9m`), and it was on 2026-10-23 (below).
 
 A real loss. `spya-ucb0pc` ends *"…and the moment at which Einstein"*; the PDF finishes the
 sentence on the first line of page 43, *"realized that it was impossible to do so exactly."*, and
@@ -54,3 +54,37 @@ out of date, and the delete is unnecessary. The book was read with an older mode
 part of a stored reading's key, so the first successful Refresh finds none of them and re-reads all
 36 chunks (checked: today's code finds 0 of 36, the 2026-10-04 code 33). After the notes fix is
 deployed, that one Refresh should mend all three. It is a production write, so it is Greg's.
+
+## The re-read, 2026-10-23
+
+Greg's reply to [q-qbfjje](questions/q-qbfjje.md), `spya-j4zg9m`:
+
+> Please reread it for me.
+
+Done in production from 12:52 to 12:59 UTC: the shelf's Refresh from source (`{ slug, force:
+["extract"] }`), driven from the box on the deployed code, then its `matter` and `labels`
+successors. $0.84 over 111 calls. How it was run, and GPT Sol's two reviews of the driver, are in
+[261023c](../plans/261023c-re-read-the-order-of-time-from-its-pdf-in-production.md).
+
+What came back, checked read-only against production and the PDF's text layer:
+
+- **Page 43**: "realized that it was impossible to do so exactly." now ends the paragraph that
+  `spya-ucb0pc` was, which has the new id `spya-hfdd9j`.
+- **Page 95**: the 51-word passage, "It is the law announced by Clausius…".
+- **Notes 21–93**: there were 75 note blocks and are now 143. The five notes reading "53"–"57" are gone.
+- **No body text lost**: 6-word shingles of the PDF not found in the book fell from 3,490 words to
+  347, and what remains is the copyright page, a publisher's advert and formula fragments spelt
+  differently.
+- **Figures** (`qi-vq9rwkyy`): 30 of 40 shown, including the cones after "Those of Leonidas are shown
+  below" (p.33). 8 uncaptioned ones are refused safely (pp.14, 18, 30, 31, 42, 66, 67 ×2). The two on
+  p.57 are "ambiguous", because this reading made two body paragraphs into their captions, so that
+  text now shows as a caption.
+
+**What it cost the reader.** Ids are kept only for unchanged or nearly unchanged paragraphs
+([block-ids.md](../project/block-ids.md) § Two honest limits). This reading changed 289 paragraphs
+(lines gained, paragraphs joined or split at page seams, 24 headings and quotes whose tag changed),
+so 834 ids were kept and 289 minted. Greg's 7 bookmarks and 319 reading-time rows are unchanged
+row for row, but 5 bookmarks and 85 reading-time places now point at ids not in the current
+revision. The question said ids would be kept, and that was wrong; it was not measured before the
+run. Moving them is a write to his rows, so it is asked:
+[q-xns4gt](questions/q-xns4gt.md).
