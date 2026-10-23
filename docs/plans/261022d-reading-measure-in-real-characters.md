@@ -115,6 +115,10 @@ with a separate "bands widen from" number (B, recommended), or neither (C). The 
 value and its derivation are item 4 above; whichever of A or B is chosen, the two invariant fixes
 above go with it.
 
+**Answered 2026-10-22**: *"Maybe somewhere in the middle? Dunno. Take screenshots, use your
+judgment."* The cap came down to 42rem, with both invariant fixes:
+[261023a](261023a-reading-column-cap-a-middle-value.md).
+
 ## What is not changing, and why
 
 - **Phone margins.** At 390 wide on a touch screen the first glyph is 21.6px in (the 12px spine plus

@@ -1,7 +1,7 @@
 ---
 reports: spya-vywcpu
 ending: shipped
-comment: You counted right: 70. Now about 60 a line (at most ~65 on nine lines in ten) at every text size. Phone margins were already minimal. One follow-on question for you: q-z3j0ep, Marginalia's gap vs band widths.
+comment: You counted right: 70. Now about 60 a line (at most ~65 on nine lines in ten) at every text size. Phone margins were already minimal. Your middle for q-z3j0ep: Marginalia notes 56px closer, iPad-landscape band 400 → 486.
 ---
 # The reading measure, counted in real characters
 
@@ -38,6 +38,9 @@ Plain view, Rovelli's *The Order of Time*:
 - **Quotations and callouts** stay narrower than the body, whatever the measure.
 - **Corrected**: the "80 characters read 7% faster, 12% worse comprehension" figure we had been
   citing is not in the paper (Dyson & Kipping 1998).
-- **Held for Greg**: the layout's lone-column cap is now wider than the text. Bringing it down
-  moves Marginalia's notes ~120px closer, and it also widens mode bands on iPad-landscape windows:
-  [q-z3j0ep](questions/q-z3j0ep.md).
+- **The layout's lone-column cap**, which was wider than the text, was put to Greg as
+  [q-z3j0ep](questions/q-z3j0ep.md). He asked for "somewhere in the middle", so on 2026-10-23 it
+  came down from 49rem to 42, chosen from screenshots. Marginalia's notes are 56px closer to the
+  text (177 → 121), the standard band on an iPad in landscape goes 400 → 486 (still under Tweets'
+  496), and that band is unchanged at 1024px:
+  [261023a](../plans/261023a-reading-column-cap-a-middle-value.md).

@@ -142,15 +142,19 @@ describe("the article on its own is centred", () => {
     );
   });
 
-  /* **Known loose, and waiting on Greg** (q-z3j0ep, plan 261022d § Stage 2): the
-     cap was built for 65ch of Geist, ≈46rem, and the measure is now ~31rem, so
-     it is ~15rem wider than the column it holds. Bringing it down widens bands
-     on iPad-landscape windows, which is his call. This goes red the day the cap
-     comes down; then drop the `.fails`. */
-  it.fails("is not so generous that the column stops looking capped (under a rem of slack)", () => {
+  /* **Loose on purpose, and by no more than 10rem.** The cap was built for 65ch
+     of Geist, ≈46rem, and the measure is now ~31rem. The tight value would be
+     34rem, and that widens bands on an iPad in landscape past the width Greg
+     tuned there, so the cap is a middle: 42rem, 696px here against the
+     (31 + 1.4 + 2.2) × 16 = 553.6 the measure and its pads need, ≈8.9rem of
+     slack. Greg, 2026-10-22, q-z3j0ep: *"Maybe somewhere in the middle? Dunno.
+     Take screenshots, use your judgment."* — plan 261023a. This is here so the
+     cap cannot drift back to 49rem (808px, ≈15.9rem of slack) unnoticed;
+     `tests/gutter-target-size.test.ts` checks the same at five roots. */
+  it("is loose by a deliberate middle: no more than 10rem wider than the measure needs", () => {
     expect(padL).toBe(1.4);
     expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeLessThan(
-      (MEASURE_REM + padL + padR + 1) * DEFAULT_ROOT_PX,
+      (MEASURE_REM + padL + padR + 10) * DEFAULT_ROOT_PX,
     );
   });
 
