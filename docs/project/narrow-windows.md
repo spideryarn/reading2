@@ -139,7 +139,9 @@ Three things worth carrying to whatever is built next:
   one band that takes room the prose was defending), and Structure's, below.
   **Since 2026-10-02 a standard or roomy band also grows past its ideal on a wide window**, but only
   into what the prose cell holds beyond the width the prose can use (`proseAloneMaxPx`), and only to
-  34rem (`wideIdeal`) — from a 1220px window, reaching 544px at 1364; below that nothing moved.
+  34rem (`wideIdeal`) — from a 1109px window, reaching 544px at 1252; below that nothing moved. (It
+  was 1221 and 1364 until the cap came down from 49rem to 42 on 2026-10-23,
+  [261023a](../plans/261023a-reading-column-cap-a-middle-value.md).)
   Greg: *"if the window is really wide and there's space, the left-hand column should expand up to
   that sort of width"* (spya-xebdgz) — `spareBeyondTheMeasure` in layout.ts,
   [261002a](../plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md).

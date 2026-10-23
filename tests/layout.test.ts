@@ -16,6 +16,7 @@ import {
   MODE_IDEAL,
   MODE_MIN,
   MODE_PROSE_FLOOR,
+  PROSE_MIN,
   proseAloneMaxPx,
   SPINE_W,
   wideIdeal,
@@ -37,11 +38,14 @@ describe("hiding the spine", () => {
   });
 
   it("goes away when asked, and gives its width to a window-wide column", () => {
-    const on = fit({ windowWidth: 700 });
-    const off = fit({ windowWidth: 700, showSpine: false });
+    // 680 is under the lone column's cap (696 at a 16px root) with the rail or
+    // without, so both columns are the whole window: 668 and 680. It was 700
+    // until the cap came down to 42rem (plan 261023a), and 700 is now over it.
+    const on = fit({ windowWidth: 680 });
+    const off = fit({ windowWidth: 680, showSpine: false });
     expect(off.spine).toBe("off");
     expect(off.tableW).toBe(on.tableW + SPINE_W);
-    expect(off.minWidth).toBe(700);
+    expect(off.minWidth).toBe(680);
   });
 
   // Absent and `true` now agree, and the parameter still has three states
@@ -66,10 +70,11 @@ describe("the article on its own stops at the measure", () => {
 
   it("caps the lone reading column at proseAloneMaxPx", () => {
     const f = alone(1600);
-    // 49rem + the gutter's 24px, at the 16px default. It was 48px and the
-    // gutter two columns wide until 2026-09-05, when the bookmark moved into
-    // the line and the second column went — layout.ts § proseAloneMaxPx.
-    expect(f.widths).toEqual([808]);
+    // 42rem + the gutter's 24px, at the 16px default: 672 + 24. It was 49rem
+    // (808) until plan 261023a, and the gutter 48px and two columns wide until
+    // 2026-09-05, when the bookmark moved into the line and the second column
+    // went — layout.ts § proseAloneMaxPx.
+    expect(f.widths).toEqual([696]);
     /* Through the function rather than `PROSE_ALONE_MAX_REM * root`, because the
        cap stopped being one rem number on 2026-09-04: the gutter's slot is
        `max(1.5rem, 24px)`, so below a 16px root it stops shrinking and the cell's
@@ -89,23 +94,25 @@ describe("the article on its own stops at the measure", () => {
        and both of the cell's pads 25% wider — so a fixed 800 would have clipped
        their measure to about 51ch, which is the one thing this cap must never
        do. Found by GPT Sol reviewing the built code, 2026-09-03. */
-    expect(fit({ windowWidth: 1600, rootFontPx: 20 }).tableW).toBe(1010);
-    // 624 until 2026-09-04, and 624 was the bug: at a 12px root the gutter's
-    // px floor makes the left pad 2.7rem, not 2.2, and a rem constant could not
-    // follow it. GPT Sol's stage 1 review. 636 until 2026-09-05, when the
-    // gutter halved: one slot at every root, so this term is 24px here and 30
-    // at a 20px root rather than 48 and 60.
-    expect(fit({ windowWidth: 1600, rootFontPx: 12 }).tableW).toBe(612);
+    // 42 × 20 + 1.5 × 20 = 840 + 30. (1010 while the cap was 49rem.)
+    expect(fit({ windowWidth: 1600, rootFontPx: 20 }).tableW).toBe(870);
+    // 42 × 12 + the gutter's 24px floor = 504 + 24, not 42 × 12 + 1.5 × 12.
+    // At 49rem it was 624 until 2026-09-04, and 624 was the bug: at a 12px root
+    // the gutter's px floor makes the pad 2.7rem, not 2.2, and a rem constant
+    // could not follow it. GPT Sol's stage 1 review. 636 until 2026-09-05, when
+    // the gutter halved: one slot at every root, so this term is 24px here and
+    // 30 at a 20px root rather than 48 and 60. 612 until plan 261023a.
+    expect(fit({ windowWidth: 1600, rootFontPx: 12 }).tableW).toBe(528);
     // And it is still a cap, not a width: a window narrower than it wins.
     expect(fit({ windowWidth: 700, rootFontPx: 20 }).tableW).toBe(688);
   });
 
   it("takes the whole window below the cap, and never scrolls sideways", () => {
-    // 820 = `proseAloneMaxPx(16)` plus the spine, so the cap stops
+    // 708 = `proseAloneMaxPx(16)` plus the spine, 696 + 12, so the cap stops
     // biting one pixel below it. Under that the column is the whole window,
     // which is what every phone gets.
-    expect(alone(820).tableW).toBe(808);
-    expect(alone(819).tableW).toBe(807);
+    expect(alone(708).tableW).toBe(696);
+    expect(alone(707).tableW).toBe(695);
     expect(alone(390).tableW).toBe(378);
     for (let w = 0; w <= 2600; w += 7) {
       const f = alone(w);
@@ -166,8 +173,14 @@ describe("a wide band", () => {
     expect(wide(1440).modeW).toBe(544);
     // And the prose beside it keeps the rest of the window.
     expect(wide(1440).widths).toEqual([1440 - SPINE_W - 544]);
-    // Below the cap it is the share: 0.42 × 1268 = 533.
-    expect(wide(1280).modeW).toBe(533);
+    // Below the cap it is the share: 1200 − 12 = 1188, 0.42 × 1188 = 499, above
+    // the 1188 − 696 = 492 the standard band takes there.
+    expect(wide(1200).modeW).toBe(499);
+    /* And never narrower than the standard band, widened or not (plan 261023a):
+       at 1280 the share is 0.42 × 1268 = 533, but the standard band has
+       1268 − 696 = 572 past the measure, capped at 544, so this is 544 too. At
+       the 49rem cap it was the share, 533. */
+    expect(wide(1280).modeW).toBe(544);
   });
 
   it("caps with the root, because the posts are rem-sized type", () => {
@@ -216,10 +229,11 @@ describe("a wide band", () => {
       fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx });
     /* Past the prose's measure it grows to the same 34rem ceiling (plan
        261002a, § a band past the prose's measure below), but by what the prose
-       cannot use rather than by a share: 1440 − 12 − 808 = 620, capped at 544;
-       at a 20px root 1428 − 1010 = 418. */
+       cannot use rather than by a share: 1440 − 12 − 696 = 732, capped at 544;
+       at a 20px root 1428 − 870 = 558, under that root's 680. Below the measure
+       it is the ordinary band: 1100 − 12 − 696 = 392, under 400. */
     expect(standard(1440).modeW).toBe(544);
-    expect(standard(1440, 20).modeW).toBe(418);
+    expect(standard(1440, 20).modeW).toBe(558);
     expect(standard(1100).modeW).toBe(400);
     // The default shape is the standard one.
     expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(544);
@@ -260,8 +274,14 @@ describe("a roomy band", () => {
   });
 
   it("never comes out narrower than an ordinary band at a small root", () => {
-    // 28rem at a 12px root is 336, under `MODE_IDEAL`.
-    expect(roomy(1000, 12).modeW).toBe(MODE_IDEAL);
+    /* 28rem at a 13px root is 364, under `MODE_IDEAL`: 970 − 12 = 958 and
+       958 − 544 = 414, so the floor of 400 binds, and the spare past the
+       measure, 958 − 570 = 388, does not reach it. This was a 12px root at
+       1000px until plan 261023a, but there the spare now passes both:
+       988 − 544 = 444 (the cap, 528, is under `PROSE_MIN`), capped at 34rem,
+       408. */
+    expect(roomy(970, 13).modeW).toBe(MODE_IDEAL);
+    expect(roomy(1000, 12).modeW).toBe(408);
     expect(roomy(1440, 20).modeW).toBe(560);
   });
 
@@ -307,11 +327,15 @@ describe("a band past the prose's measure", () => {
 
   it("starts where the prose has its measure, and stops at 34rem", () => {
     const chat = (w: number) => fitView({ windowWidth: w, modeBand: true, bandShape: "standard" });
-    // 808 is `proseAloneMaxPx(16)`: 49rem and one gutter cell.
-    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBe(808);
-    expect(chat(1220).modeW).toBe(400);
-    expect(chat(1280).modeW).toBe(460);
-    expect(chat(1364).modeW).toBe(544);
+    // 696 is `proseAloneMaxPx(16)`: 42rem and one gutter cell, 672 + 24.
+    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBe(696);
+    // 1108 − 12 − 696 = 400, exactly the band, so the last width it is untouched.
+    expect(chat(1108).modeW).toBe(400);
+    expect(chat(1109).modeW).toBe(401);
+    // 1200 − 12 − 696 = 492; 1252 − 12 − 696 = 544, the 34rem ceiling.
+    expect(chat(1200).modeW).toBe(492);
+    expect(chat(1252).modeW).toBe(544);
+    // These were 1220, 1280 → 460 and 1364 at the 49rem cap.
     expect(chat(1920).modeW).toBe(544);
     expect(chat(1920).widths).toEqual([1920 - SPINE_W - 544]);
   });
@@ -325,7 +349,9 @@ describe("a band past the prose's measure", () => {
             if (f.modeW === 0) continue; // the covering band, untouched
             const avail = w - (spine === false ? 0 : SPINE_W);
             const old = before(avail, shape, root);
-            const measure = proseAloneMaxPx(root);
+            /* What the prose can use, and never less than what it is defended
+               at: at a 9px root the cap is 402, under `PROSE_MIN` (plan 261023a). */
+            const measure = Math.max(proseAloneMaxPx(root), PROSE_MIN);
             if (avail - old <= measure) {
               expect(f.modeW, `${shape} ${w}px @${root}`).toBe(old);
             } else {
@@ -340,11 +366,30 @@ describe("a band past the prose's measure", () => {
     }
   });
 
+  /* **The band widens only into prose the prose was not defending** — plan
+     261023a. At a small root the cap is under `PROSE_MIN` (402px at 9px, with
+     the cap at 42rem). At 844px the raw spare against that cap is 430px, but
+     `wideIdeal(9)` limits the band to 306px; that still leaves only 526px of
+     the 544 the standard band gives way to keep. */
+  it("never widens by taking the prose below PROSE_MIN", () => {
+    for (const shape of ["standard", "roomy"] as const) {
+      for (const root of [9, 10, 11, 12, 16, 20]) {
+        for (let w = 700; w <= 2400; w++) {
+          const f = fitView({ windowWidth: w, modeBand: true, bandShape: shape, rootFontPx: root });
+          if (f.modeW > before(w - SPINE_W, shape, root)) {
+            expect(f.widths[0], `${shape} ${w}px @${root}`).toBeGreaterThanOrEqual(PROSE_MIN);
+          }
+        }
+      }
+    }
+    expect(fitView({ windowWidth: 844, modeBand: true, rootFontPx: 9 }).modeW).toBe(MODE_MIN);
+  });
+
   it("is the same rule beside the marginalia column", () => {
     const both = fitView({ windowWidth: 1920, modeBand: true, margin: true });
-    // 1908 − 288 of notes = 1620 of rest; 1620 − 808 > 544, so the band is at its ceiling.
+    // 1908 − 288 of notes = 1620 of rest; 1620 − 696 > 544, so the band is at its ceiling.
     expect(both.modeW).toBe(544);
-    expect(both.widths[0]).toBe(808);
+    expect(both.widths[0]).toBe(696);
   });
 });
 

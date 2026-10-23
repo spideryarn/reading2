@@ -33,7 +33,7 @@ import {
 
 const WIDTHS = [...new Set([
   ...Array.from({ length: 300 }, (_, i) => 300 + i * 10), // 300 … 3290
-  599, 600, 611, 612, 731, 732, 1599, 1600, 1601, 2027, 2028, 2029,
+  599, 600, 611, 612, 731, 732, 1599, 1600, 1601, 1915, 1916, 1917,
 ])];
 const CASES = WIDTHS.flatMap((windowWidth) =>
   [null, false].flatMap((showSpine) =>
@@ -125,18 +125,19 @@ describe("the marginalia column", () => {
       expect(MARG_WIDE).toBe(384);
     });
 
-    it("grows into the room beside the centred prose: 310px at 1440, 384px at 1920 and 2560", () => {
-      expect(proseAloneMaxPx(16)).toBe(808);
-      /* (1440 − 12 of rail − 808 of prose) / 2. */
-      expect(fitView({ windowWidth: 1440, margin: true }).margW).toBe(310);
+    it("grows into the room beside the centred prose: 366px at 1440, 384px at 1920 and 2560", () => {
+      expect(proseAloneMaxPx(16)).toBe(696);
+      /* (1440 − 12 of rail − 696 of prose) / 2. It was 310 at the 49rem cap. */
+      expect(fitView({ windowWidth: 1440, margin: true }).margW).toBe(366);
       expect(fitView({ windowWidth: 1920, margin: true }).margW).toBe(MARG_WIDE);
       expect(fitView({ windowWidth: 2560, margin: true }).margW).toBe(MARG_WIDE);
     });
 
     it("is exactly what it was wherever that room is no more than the old column", () => {
-      /* 1396px with the rail at a 16px root: 12 + 808 + 2 × 288. */
-      expect(fitView({ windowWidth: 1396, margin: true }).margW).toBe(MARG_IDEAL);
-      expect(fitView({ windowWidth: 1398, margin: true }).margW).toBe(MARG_IDEAL + 1);
+      /* 1284px with the rail at a 16px root: 12 + 696 + 2 × 288 (1396 at the
+         49rem cap). */
+      expect(fitView({ windowWidth: 1284, margin: true }).margW).toBe(MARG_IDEAL);
+      expect(fitView({ windowWidth: 1286, margin: true }).margW).toBe(MARG_IDEAL + 1);
       let same = 0;
       let wider = 0;
       for (const c of CASES) {
@@ -202,46 +203,67 @@ describe("the marginalia column", () => {
         expect(PROSE_SHIFT_MAX).toBe(100);
       });
 
-      it("leaves 1440 and 1599 alone: centred prose, a 282px card at 1440", () => {
-        expect(at(1440)).toEqual({ left: 322, proseW: 808, margW: 310, card: 282 });
-        expect(at(1599)).toEqual({ left: 401.5, proseW: 808, margW: 384, card: 361.5 });
+      it("leaves 1440 and 1599 alone: centred prose, a 338px card at 1440", () => {
+        /* 12 + (1428 − 696) / 2 = 378, and 366 right of the prose, less the
+           20px gap and the 8px gutter. */
+        expect(at(1440)).toEqual({ left: 378, proseW: 696, margW: 366, card: 338 });
+        /* 12 + (1587 − 696) / 2 = 457.5; 445.5 right of it, less 28. */
+        expect(at(1599)).toEqual({ left: 457.5, proseW: 696, margW: 384, card: 417.5 });
       });
 
-      it("gives the card 100px at 1600 (362 to 462), the prose 100px further left", () => {
-        /* Centred: 12 + (1588 − 808) / 2 = 402. */
-        expect(at(1600)).toEqual({ left: 302, proseW: 808, margW: 384, card: 462 });
+      it("gives the card 100px at 1600 (418 to 518), the prose 100px further left", () => {
+        /* Centred: 12 + (1588 − 696) / 2 = 458, with 446 right of it. */
+        expect(at(1600)).toEqual({ left: 358, proseW: 696, margW: 384, card: 518 });
       });
 
-      it("moves only as far as the card can use: 54px at 1920, where it reaches 36rem", () => {
-        /* Centred it is 562 with 550 beside it; the card wants 576 + 20 + 8. */
-        expect(at(1920)).toEqual({ left: 508, proseW: 808, margW: 384, card: CHAT_CARD_MAX });
+      it("moves only as far as the card can use: 58px at 1800, where it reaches 36rem", () => {
+        /* Centred it is 12 + (1788 − 696) / 2 = 558 with 546 beside it; the card
+           wants 576 + 20 + 8 = 604. This was 54px at 1920 at the 49rem cap; at
+           1920 the centred prose now leaves 606, so it does not move. */
+        expect(at(1800)).toEqual({ left: 500, proseW: 696, margW: 384, card: CHAT_CARD_MAX });
+        expect(at(1920)).toEqual({ left: 618, proseW: 696, margW: 384, card: CHAT_CARD_MAX });
       });
 
       it("does not move the prose at 2560, where the card is already 36rem", () => {
-        expect(at(2560)).toEqual({ left: 882, proseW: 808, margW: 384, card: CHAT_CARD_MAX });
+        /* 12 + (2548 − 696) / 2. */
+        expect(at(2560)).toEqual({ left: 938, proseW: 696, margW: 384, card: CHAT_CARD_MAX });
         expect(fitView({ windowWidth: 2560, margin: true }).margReserve).toBe(0);
       });
 
-      it("keeps the rail clear at a 24px root, where only 44px can be given to the card", () => {
-        const fit = fitView({ windowWidth: 1600, rootFontPx: 24, margin: true });
-        expect(tableLeft(fit, 1600)).toBe(56);
-        expect(fit.tableW).toBe(1212);
-        expect(fit.margW).toBe(332);
-        expect(chatCard(fit, 1600, 24)).toBe(294);
+      /* At a 28px root the cap is 42 × 28 + 1.5 × 28 = 1218, the column pushes
+         the prose left by 2 × 288 + 1218 − 1588 = 206, and the prose has
+         (1588 − 206 − 1218) / 2 = 82 left of it: half of that, 41, is all it may
+         move. 12 + 41 = 53; 53 + 1218 = 1271; 1600 − 1271 = 329 for the column,
+         less 35 of gap and 8 of gutter for the card. This was a 24px root,
+         giving 44px, until the cap came down to 42rem (plan 261023a): at 24 the
+         cap is 1044, the prose now has 256 left of it, and the 100px limit binds
+         first. */
+      it("keeps the rail clear at a 28px root, where only 41px can be given to the card", () => {
+        const fit = fitView({ windowWidth: 1600, rootFontPx: 28, margin: true });
+        expect(tableLeft(fit, 1600)).toBe(53);
+        expect(fit.tableW).toBe(1218);
+        expect(fit.margW).toBe(329);
+        expect(chatCard(fit, 1600, 28)).toBe(286);
       });
 
       it("takes the rail's twelve pixels into account when it is turned off", () => {
+        /* (1600 − 696) / 2 = 452 either side, so the full 100px: the content
+           box is 1600 − 200, the prose starts (1400 − 696) / 2 = 352 in, ends
+           at 1048, and the card has 1600 − 1048 − 28. */
         const fit = fitView({ windowWidth: 1600, showSpine: false, margin: true });
-        expect(tableLeft(fit, 1600)).toBe(296);
-        expect(fit.margLeft).toBe(1104);
-        expect(chatCard(fit, 1600)).toBe(468);
+        expect(tableLeft(fit, 1600)).toBe(352);
+        expect(fit.margLeft).toBe(1048);
+        expect(chatCard(fit, 1600)).toBe(524);
       });
 
+      /* The card is full once the centred prose leaves 604 right of it:
+         12 + 696 + 2 × 604 = 1916 (2028 at the 49rem cap). Below that the prose
+         moves by what is short, and its left edge stays at 12 + 604 = 616. */
       it("rejoins the centred layout at the card's cap boundary", () => {
-        expect(at(2027).left).toBe(615);
-        expect(at(2028).left).toBe(616);
-        expect(at(2029).left).toBe(616.5);
-        expect(fitView({ windowWidth: 2028, margin: true }).margReserve).toBe(0);
+        expect(at(1915).left).toBe(615);
+        expect(at(1916).left).toBe(616);
+        expect(at(1917).left).toBe(616.5);
+        expect(fitView({ windowWidth: 1916, margin: true }).margReserve).toBe(0);
       });
 
       it("at every width and root: never more than 100px, never past what the card uses, never into the rail", () => {
@@ -297,11 +319,15 @@ describe("the marginalia column", () => {
           if (c.windowWidth < PROSE_SHIFT_FROM && fit.margReserve > 0) pushed++;
         }
         expect(pushed).toBeGreaterThan(100);
+        /* Rule 2: 2 × 288 + 696 − 1188 (196 at the 49rem cap). */
         const fit = fitView({ windowWidth: 1200, margin: true });
-        expect(fit.margReserve).toBe(196);
-        expect(margTitleReserve(fit)).toBe(196);
+        expect(fit.margReserve).toBe(84);
+        expect(margTitleReserve(fit)).toBe(84);
+        /* Twice the card's 100px shift. */
         expect(margTitleReserve(fitView({ windowWidth: 1600, margin: true }))).toBe(200);
-        expect(margTitleReserve(fitView({ windowWidth: 1600, rootFontPx: 24, margin: true }))).toBe(288);
+        /* 2 × 288 + 1044 − 1588 = 32 for the column, plus twice the 100px shift
+           (288 at the 49rem cap). */
+        expect(margTitleReserve(fitView({ windowWidth: 1600, rootFontPx: 24, margin: true }))).toBe(232);
       });
 
       it("leaves the title to the band's own rule beside a band, and at 0 with no column", () => {
@@ -343,10 +369,14 @@ describe("the marginalia column", () => {
         if (fit.margW > MARG_IDEAL) wider += 1;
       }
       expect(wider).toBeGreaterThan(100);
-      /* Greg's layout, a Structure band at 1440: no spare room, so no change. */
+      /* Greg's layout, a Structure band at 1440. The columns do not fit
+         (1428 − 288 − 544 = 596 is under their 609), so the band is 400, the
+         prose stops at its 696 cap, and 1428 − 400 − 696 = 332 is left right of
+         it: the column takes all of it. At the 49rem cap the prose took 740 and
+         left exactly 288, so there was no change. */
       expect(
         fitView({ windowWidth: 1440, modeBand: true, bandShape: "structure", margin: true }).margW,
-      ).toBe(MARG_IDEAL);
+      ).toBe(332);
     });
   });
 
@@ -470,8 +500,10 @@ describe("the chat panel's dock in the marginalia column", () => {
   it("docks in a full column beside a Structure band at 1440px", () => {
     const windowWidth = 1440;
     const fit = fitView({ windowWidth, modeBand: true, bandShape: "structure", margin: true });
-    expect(fit.margW).toBe(MARG_IDEAL);
-    expect(chatDock(fit, windowWidth)).toBe(MARG_IDEAL - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER);
+    /* 1428 − 400 of band − 696 of prose; it was exactly `MARG_IDEAL` at the
+       49rem cap, and a full column is still enough. */
+    expect(fit.margW).toBe(332);
+    expect(chatDock(fit, windowWidth)).toBe(332 - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER);
   });
 
   it("does not dock without a column, however much room there is", () => {
@@ -579,13 +611,15 @@ describe("the chat card in the marginalia column", () => {
   });
 
   /* Greg's layout, and GPT Sol's F2 on the plan: without the gap the card was
-     280px starting 20px past 1152, and ran 12px over a 1440px window. */
+     280px starting 20px past 1152, and ran 12px over a 1440px window. The cell
+     ends at 12 + 400 + 696 = 1108 since the cap came down to 42rem (1152 at
+     49rem, with 740 of prose). */
   it("fits the column's room beside a Structure band at 1440px, gap and gutter out", () => {
     const windowWidth = 1440;
     const fit = fitView({ windowWidth, modeBand: true, bandShape: "structure", margin: true });
-    expect(fit.margLeft).toBe(1152);
+    expect(fit.margLeft).toBe(1108);
     const width = chatCard(fit, windowWidth);
-    expect(width).toBe(1440 - 1152 - MARG_GAP_REM * 16 - CHAT_DOCK_GUTTER);
+    expect(width).toBe(1440 - 1108 - MARG_GAP_REM * 16 - CHAT_DOCK_GUTTER);
     expect(fit.margLeft + MARG_GAP_REM * 16 + (width ?? 0) + CHAT_DOCK_GUTTER).toBe(windowWidth);
   });
 

@@ -1,0 +1,879 @@
+diff --git a/docs/plans/261022d-reading-measure-in-real-characters.md b/docs/plans/261022d-reading-measure-in-real-characters.md
+index 1836b357a..d5701ef02 100644
+--- a/docs/plans/261022d-reading-measure-in-real-characters.md
++++ b/docs/plans/261022d-reading-measure-in-real-characters.md
+@@ -115,6 +115,10 @@ with a separate "bands widen from" number (B, recommended), or neither (C). The
+ value and its derivation are item 4 above; whichever of A or B is chosen, the two invariant fixes
+ above go with it.
+ 
++**Answered 2026-10-22**: *"Maybe somewhere in the middle? Dunno. Take screenshots, use your
++judgment."* The cap came down to 42rem, with both invariant fixes:
++[261023a](261023a-reading-column-cap-a-middle-value.md).
++
+ ## What is not changing, and why
+ 
+ - **Phone margins.** At 390 wide on a touch screen the first glyph is 21.6px in (the 12px spine plus
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index 01b4c397d..1f12be887 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -112,11 +112,11 @@ or floats in the corner. [comments.md § Where the chat panel sits](comments.md#
+ 
+ It is 288px at most wherever it has to take room from the prose or a band, as before. Where
+ the centred prose already leaves more than that to its right, the column grows into it, up to
+-384px. With a 16px root, the rail on and no band, it is 310px in a 1440px window and reaches
+-384px from about 1590px. Beside a band it grows only into room
++384px. With a 16px root, the rail on and no band, it is 366px in a 1440px window and reaches
++384px from 1476px (310 and about 1590 before the cap came down to 42rem on 2026-10-23). Beside a band it grows only into room
+ that was already spare right of the column. The prose and the band do not move or change width, and
+-below about 1400px nothing changes at that root size. The chat card's own width did not change:
+-it already took all the room right of the prose, up to 576px, so at 1440px it is still about 282px, and wider there would
++below about 1285px nothing changes at that root size. The chat card's own width did not change:
++it already took all the room right of the prose, up to 576px, so at 1440px it is about 338px (282 before 2026-10-23), and wider there would
+ mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/layout.ts);
+ [`layout-margin.test.ts`](../../tests/layout-margin.test.ts).
+ 
+@@ -129,8 +129,10 @@ mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/
+ B was offered as a small shift left from about 1600px, keeping the prose's width, so the margin
+ and the card get about 100px more. With the column on and no band, the prose moves up to 100px
+ further left from 1600px, whether or not a card is open. It moves only as far as the card can use, and the card
+-stops at 576px. With a 16px root and the rail on: 100px at 1600 (card 362 → 462), 54px at
+-1920 (522 → 576), and none from 2028px, where the prose is centred again. Larger type can leave
++stops at 576px. With a 16px root and the rail on: 100px at 1600 (card 418 → 518), 58px at
++1800 (518 → 576), and none from 1916px, where the prose is centred again. (Before the column's
++cap came down to 42rem on 2026-10-23 it was 362 → 462 at 1600 and centred from 2028:
++[261023a](../plans/261023a-reading-column-cap-a-middle-value.md).) Larger type can leave
+ less space on the left; the shift keeps at least half of it clear of the rail. The notes' cap
+ stays at 384px; at larger roots the notes can also grow into the new room, up to that cap.
+ Below 1600px the prose stays where it was, so it jumps as a window
+diff --git a/docs/project/narrow-windows.md b/docs/project/narrow-windows.md
+index 25abbd217..29a4cb7f2 100644
+--- a/docs/project/narrow-windows.md
++++ b/docs/project/narrow-windows.md
+@@ -139,7 +139,9 @@ Three things worth carrying to whatever is built next:
+   one band that takes room the prose was defending), and Structure's, below.
+   **Since 2026-10-02 a standard or roomy band also grows past its ideal on a wide window**, but only
+   into what the prose cell holds beyond the width the prose can use (`proseAloneMaxPx`), and only to
+-  34rem (`wideIdeal`) — from a 1220px window, reaching 544px at 1364; below that nothing moved.
++  34rem (`wideIdeal`) — from a 1109px window, reaching 544px at 1252; below that nothing moved. (It
++  was 1220 and 1364 until the cap came down from 49rem to 42 on 2026-10-23,
++  [261023a](../plans/261023a-reading-column-cap-a-middle-value.md).)
+   Greg: *"if the window is really wide and there's space, the left-hand column should expand up to
+   that sort of width"* (spya-xebdgz) — `spareBeyondTheMeasure` in layout.ts,
+   [261002a](../plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md).
+diff --git a/docs/project/typography.md b/docs/project/typography.md
+index 98d6bcaa1..0e0b4f93c 100644
+--- a/docs/project/typography.md
++++ b/docs/project/typography.md
+@@ -98,15 +98,18 @@ counts out at median 60, 90th percentile 64.
+ - **Change the measure only by counting it**, never by writing the number of characters you want as
+   `ch`: `scripts/measure-line-length.ts` counts the non-final lines of prose paragraphs at least
+   three lines long, in Playwright at Greg's iPad (725 wide, at Default, Large and Largest), an 820
+-  iPad, a 1440 desktop and two phones. It exits 1 when a column at the measure is below median 45,
++  iPad, a 1194 iPad in landscape, a 1440 desktop at all four text sizes, and two phones. It exits 1 when a column at the measure is below median 45,
+   over median 62, or over 66 at the 90th percentile. **Change the author's face and you have changed
+   the measure**, so run it then too.
+ - **`PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) was a copy of the measure** in
+   rem, for the layout's arithmetic, and must never be *narrower* than it: the script fails when a
+   window 1000px or wider has a column narrower than the measure, which is that copy clipping it.
+-  It is wider than the measure since 2026-10-02, because bringing it down also widens the mode
+-  bands on mid-sized windows. Whether to do that is Greg's question
+-  [q-z3j0ep](../user-feedback/questions/q-z3j0ep.md), so don't treat it as a stale number to fix.
++  It is deliberately looser than the measure: 42rem against the ~34 the measure and its pads need,
++  because bringing it down also widens the mode bands on mid-sized windows and brings Marginalia's
++  notes closer to the text. Greg, asked
++  ([q-z3j0ep](../user-feedback/questions/q-z3j0ep.md)): *"Maybe somewhere in the middle? Dunno.
++  Take screenshots, use your judgment."* (2026-10-22). So it is a middle chosen from screenshots
++  ([261023a](../plans/261023a-reading-column-cap-a-middle-value.md)), not a stale number to fix.
+ - **The text size keeps the count**, because `ch` grows with the type: Large holds the same ~60 in
+   a wider column, and only when the window runs out does a bigger size mean fewer characters.
+ - **Narrower things are written relative to it**: a quotation and a callout are
+diff --git a/docs/user-feedback/261021_2302-reading-measure-in-real-characters.md b/docs/user-feedback/261021_2302-reading-measure-in-real-characters.md
+index 682e95bdd..56be80c47 100644
+--- a/docs/user-feedback/261021_2302-reading-measure-in-real-characters.md
++++ b/docs/user-feedback/261021_2302-reading-measure-in-real-characters.md
+@@ -1,7 +1,7 @@
+ ---
+ reports: spya-vywcpu
+ ending: shipped
+-comment: You counted right: 70. Now about 60 a line (at most ~65 on nine lines in ten) at every text size. Phone margins were already minimal. One follow-on question for you: q-z3j0ep, Marginalia's gap vs band widths.
++comment: You counted right: 70. Now about 60 a line (at most ~65 on nine lines in ten) at every text size. Phone margins were already minimal. Your middle for q-z3j0ep: Marginalia notes 56px closer, iPad-landscape band 400 → 486.
+ ---
+ # The reading measure, counted in real characters
+ 
+@@ -38,6 +38,9 @@ Plain view, Rovelli's *The Order of Time*:
+ - **Quotations and callouts** stay narrower than the body, whatever the measure.
+ - **Corrected**: the "80 characters read 7% faster, 12% worse comprehension" figure we had been
+   citing is not in the paper (Dyson & Kipping 1998).
+-- **Held for Greg**: the layout's lone-column cap is now wider than the text. Bringing it down
+-  moves Marginalia's notes ~120px closer, and it also widens mode bands on iPad-landscape windows:
+-  [q-z3j0ep](questions/q-z3j0ep.md).
++- **The layout's lone-column cap**, which was wider than the text, was put to Greg as
++  [q-z3j0ep](questions/q-z3j0ep.md). He asked for "somewhere in the middle", so on 2026-10-23 it
++  came down from 49rem to 42, chosen from screenshots. Marginalia's notes are 56px closer to the
++  text (177 → 121), the standard band on an iPad in landscape goes 400 → 486 (still under Tweets'
++  496), and 1024px is unchanged:
++  [261023a](../plans/261023a-reading-column-cap-a-middle-value.md).
+diff --git a/docs/user-feedback/questions/q-z3j0ep.md b/docs/user-feedback/questions/q-z3j0ep.md
+index 9876c40d2..9efdf954f 100644
+--- a/docs/user-feedback/questions/q-z3j0ep.md
++++ b/docs/user-feedback/questions/q-z3j0ep.md
+@@ -1,10 +1,11 @@
+ ---
+ id: q-z3j0ep
+ report: spya-vywcpu
+-status: open
++status: answered
+ asked: 2026-10-22
+ title: Should the reading column's width cap come down with the measure, which makes bands wider on iPads and laptops?
+-refs: docs/plans/261022d-reading-measure-in-real-characters.md · docs/user-feedback/261021_2302-reading-measure-in-real-characters.md · spya-vywcpu · spya-xebdgz · SPIDERYARN-READING2-6G
++refs: docs/plans/261022d-reading-measure-in-real-characters.md · docs/user-feedback/261021_2302-reading-measure-in-real-characters.md · spya-vywcpu · spya-xebdgz · SPIDERYARN-READING2-6G · docs/plans/261023a-reading-column-cap-a-middle-value.md
++acted: spya-gf24w4
+ ---
+ The text column is now narrower (about 60 characters a line, as you asked in spya-vywcpu), but the box the layout reserves for it has not shrunk with it. Shrinking that box brings the Marginalia notes about 120px closer to the text, but it also makes every mode's left-hand band wider on mid-sized windows. Which do you want?
+ 
+@@ -33,3 +34,15 @@ The question is about a second number. The layout code keeps a box that is "as w
+ The text itself stays the same width in every option. Only the empty space around it moves.
+ 
+ What would decide it: whether wider bands on an iPad in landscape and on small laptops are welcome (A), or whether those layouts should stay as you tuned them (B).
++
++## Greg's answer, 2026-10-22 (in the Feedback dialog, reply `spya-gf24w4`)
++
++> Maybe somewhere in the middle? Dunno. Take screenshots, use your judgment.
++
++He picked no letter, so I chose a middle value from screenshots at 1024, 1194, 1280 and 1440, trying
++caps of 49, 44, 42 and 38. **42rem, used for both Marginalia and band widening**, so there is no
++second number. A 1024px window is unchanged. On an iPad in landscape the standard band goes from
++400px to 486px. That is still narrower than the 496px Tweets band, which stays as it was.
++Marginalia's notes sit 121px from the end of a line instead of 177px. Bands start widening at a
++1109px window instead of 1220px. Plan
++[261023a](../../plans/261023a-reading-column-cap-a-middle-value.md), 2026-10-23.
+diff --git a/scripts/measure-line-length.ts b/scripts/measure-line-length.ts
+index 6f1e408f7..07c85457e 100644
+--- a/scripts/measure-line-length.ts
++++ b/scripts/measure-line-length.ts
+@@ -64,7 +64,14 @@ const WINDOWS: Window[] = [
+   { name: "ipad-large", width: 725, height: 967, textSize: "large", touch: IPAD },
+   { name: "ipad-largest", width: 725, height: 967, textSize: "largest", touch: IPAD },
+   { name: "ipad-air", width: 820, height: 1180, textSize: "default", touch: IPAD },
++  { name: "ipad-landscape", width: 1194, height: 834, textSize: "default", touch: IPAD },
+   { name: "desktop", width: 1440, height: 900, textSize: "default", touch: null },
++  /* The text sizes again where the column is at its measure, not the window's
++     width: at 725 they are exempt, so only these can catch the cap clipping a
++     larger size (GPT Sol, plan 261023a). */
++  { name: "desktop-large", width: 1440, height: 900, textSize: "large", touch: null },
++  { name: "desktop-larger", width: 1440, height: 900, textSize: "larger", touch: null },
++  { name: "desktop-largest", width: 1440, height: 900, textSize: "largest", touch: null },
+   { name: "iphone", width: 390, height: 844, textSize: "default", touch: IPHONE },
+   { name: "iphone-se", width: 375, height: 667, textSize: "default", touch: IPHONE },
+ ];
+@@ -141,7 +148,16 @@ function count(): Count {
+ }
+ 
+ const { chromium } = await import("playwright-core");
+-const browser = await chromium.launch({ headless: true, executablePath: chromePath(), args: ["--no-sandbox"] });
++/* Classic scrollbars, as browser-testing-playwright.md says: with them hidden,
++   `scrollbar-gutter: stable` still holds 15px back while the root's
++   `clientWidth` reports the whole window, so the layout is fitted to a width
++   the page does not have (plan 261023a). */
++const browser = await chromium.launch({
++  headless: true,
++  executablePath: chromePath(),
++  args: ["--no-sandbox"],
++  ignoreDefaultArgs: ["--hide-scrollbars"],
++});
+ let failed = false;
+ try {
+   const first = await browser.newContext();
+diff --git a/src/web/layout.ts b/src/web/layout.ts
+index 69ba07578..be33b975b 100644
+--- a/src/web/layout.ts
++++ b/src/web/layout.ts
+@@ -143,26 +143,28 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
+  * **Everything in it except the gutter is rem, so it is not one number any
+  * more.** `proseAloneMaxPx` below is the cap; this is the rem part of it.
+  *
+- * 49rem was `--reading-measure` (65ch, ≈46rem in Geist, the reading face then),
+- * plus the cell's plain pad (1.4 — `--text-pad-l` since the gutter moved right in
+- * 261003c, `--text-pad-r` before; the sum is the same), plus the gutter's inset on each side (0.35 × 2)
+- * — 48.1, rounded up to something round, exactly as the old 50 rounded its own
+- * 49.5. The rounding runs upwards on purpose: `.prose` keeps its own clamp, so
+- * slack here is a few pixels of margin inside the column rather than a clipped
+- * measure. A whole number of rem is worth keeping — 51.6 was tried on the way
+- * here and left every width this derives fractional, so the tests had to round
+- * with it and stopped asserting anything checkable by hand.
+- *
+- * **It is no longer the measure plus its pads, and that is known and left.**
+- * The measure is 56ch of Source Serif since 2026-10-22 (≈30.9rem; 35.8rem as
+- * 65ch from 2026-10-02), so this cap is ~15rem wider than the column it holds.
+- * `.prose` keeps its own clamp, so the prose reads at the measure regardless;
+- * what the slack costs is distance — Marginalia sits that much further from its
+- * paragraphs — and what it buys is that bands do not widen until 1220px
+- * (`spareBeyondTheMeasure`). Bringing it to 34rem moves the band on an iPad in
+- * landscape from 400px to 544px, so it waits on Greg: plan 261022d § Stage 2,
+- * question q-z3j0ep. `scripts/measure-line-length.ts` fails if any change
+- * here clips the measure.
++ * **42rem is a middle, chosen by eye, not the measure plus its pads.** It was
++ * 49: `--reading-measure` as 65ch of Geist (≈46rem), plus the cell's plain pad
++ * (1.4 — `--text-pad-l`), plus the gutter's inset on each side (0.35 × 2),
++ * rounded up. The face became Source Serif on 2026-10-02 and the measure 56ch
++ * on 2026-10-22 (≈30.9rem), so the tight value would be 34rem. `.prose` keeps
++ * its own clamp, so the slack never changes a line; what it decides is
++ * distance. Marginalia's notes sit at the cell's right edge, so slack pushes
++ * them away from their paragraphs; and `spareBeyondTheMeasure` gives a band
++ * only what the cell cannot use, so slack delays when bands widen. 34 would
++ * have widened the band on an iPad in landscape (1194px) from 400 to 544, the
++ * width Greg called too wide there for Tweets on 2026-09-30. Asked
++ * (q-z3j0ep), he said *"Maybe somewhere in the middle? Dunno. Take
++ * screenshots, use your judgment."* (2026-10-22). 42 is the middle of 34 and
++ * 49, and the smallest whole value at which no band on his iPad in landscape
++ * is wider than the Tweets band he tuned there (486 against 496; 41 gives
++ * 502). Measured at 1194px: the notes 121px from the line's end instead of
++ * 177, and nothing changes below a 1109px window. Plan 261023a.
++ * `scripts/measure-line-length.ts` fails if any change here clips the measure.
++ *
++ * A whole number of rem is worth keeping: 51.6 was tried once and left every
++ * width this derives fractional, so the tests had to round with it and
++ * stopped asserting anything checkable by hand.
+  *
+  * **Rem, and this is the second time that has mattered in this file.** `SPINE_W`
+  * above records the same lesson from the other side: nothing in this app locks
+@@ -176,7 +178,7 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
+  * **And the gutter is the exception that proves it, which is why it left this
+  * constant.** See `proseAloneMaxPx`.
+  */
+-export const PROSE_ALONE_MAX_REM = 49;
++export const PROSE_ALONE_MAX_REM = 42;
+ 
+ /**
+  * **One cell of the prose gutter, in rem and in px — the two halves of
+@@ -216,7 +218,8 @@ export const BLK_SLOT_REM = 1.5;
+  * is `var(--blk-slot)` and this term halves with it: 808px at a 16px root, 1010
+  * at 20, 612 at 12. Greg asked for the margin back — *"especially on mobile we
+  * want the margins either side of the text to be minimal"* — and this is the
+- * half of that a stylesheet cannot state.
++ * half of that a stylesheet cannot state. With the cap at 42rem since
++ * 2026-10-23 those are 696, 870 and 528.
+  *
+  * `Math.round` because a fractional CSS pixel in a table width is a hairline
+  * seam, and because every number derived from this is asserted by hand in
+@@ -245,7 +248,9 @@ export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading a
+ 
+ /**
+  * **The widest a `"wide"` band goes: a prose column's measure** — a ceiling
+- * since 2026-09-30, reached from about 1307px at a 16px root (`WIDE_SHARE`). Tweets' posts
++ * since 2026-09-30, reached from 1252px at a 16px root (where the widened
++ * standard band reaches it, plan 261023a; by `WIDE_SHARE` alone it was about
++ * 1307). Tweets' posts
+  * are set in the prose face, so the width at which prose reads well is the width
+  * at which they do. Greg, 2026-09-29: *"It could be quite a wide left-hand
+  * column if that will help to make it be readable."*
+@@ -273,7 +278,8 @@ export function wideIdeal(rootFontPx: number): number {
+  * thread column perhaps could be slightly wider when I'm looking at it on my
+  * iPad in portrait mode, and slightly narrower when I'm looking at it on my
+  * iPad in landscape mode."* A share is one number for the relationship he was
+- * reacting to: 345 and 496 on those two, and 544 still from about 1307 up.
++ * reacting to: 345 and 496 on those two, and 544 from 1252 up (about 1307
++ * until the cap came down, 261023a).
+  *
+  * So in Tweets the prose gives up its `PROSE_MIN` defence (477 in portrait):
+  * the thread is what is being read there and the prose is where its links
+@@ -640,8 +646,9 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
+  *
+  * `left` and `right` are the page either side of the prose before the shift.
+  * Three limits: `PROSE_SHIFT_MAX`; what the card can use, since it stops at
+- * `CHAT_CARD_MAX` (so at 1920px the shift is 54px, and from about 2030px the
+- * prose is centred again); and half of `left`, which only binds at a large
++ * `CHAT_CARD_MAX` (so at 1800px the shift is 58px, and from 1916px the prose
++ * is centred again; 54px at 1920 and centred from about 2030 with the cap at
++ * 49rem, before 261023a); and half of `left`, which only binds at a large
+  * root and keeps the prose clear of the rail.
+  *
+  * **A step at `PROSE_SHIFT_FROM`**: the prose jumps 100px as a window is
+@@ -968,12 +975,14 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
+   if (bandShape === "standard") return Math.max(standard, spare);
+   /* Grows smoothly rather than jumping: the posts reflow at any width, unlike
+      Structure's two columns. A share of the room (`WIDE_SHARE`), never
+-     narrower than the standard band, never wider than its root-relative cap
+-     or than leaves the prose its floor. The last bound is what keeps
+-     `fitMode` from overflowing at the crossover: 0.42 × 688 is 289. */
++     narrower than the standard band — the widened one, since past the measure
++     the standard band can outgrow the share (from 1213px at a 16px root,
++     plan 261023a) — never wider than its root-relative cap or than leaves the
++     prose its floor. The last bound is what keeps `fitMode` from overflowing
++     at the crossover: 0.42 × 688 is 289. */
+   if (bandShape === "wide") {
+     const cap = Math.min(Math.max(MODE_IDEAL, wideIdeal(rootFontPx)), avail - MODE_PROSE_FLOOR);
+-    return clamp(Math.round(avail * WIDE_SHARE), standard, cap);
++    return clamp(Math.round(avail * WIDE_SHARE), Math.max(standard, spare), cap);
+   }
+   /* Structure whose columns do not fit: the ordinary band, and deliberately
+      not `spare` — its list face in a band past `MODE_IDEAL` is a look Greg has
+@@ -996,14 +1005,22 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
+  * band takes it, and stops at `wideIdeal`, which is already this file's name
+  * for a prose column's measure and Tweets' ceiling.
+  *
+- * **Narrow windows are untouched by construction**: this is negative until the
+- * cell is wider than the prose can use, which at a 16px root is a 1220px
+- * window for a standard band (1268 for Summary's roomy one), and below that the
+- * band is exactly what it was. It reaches 34rem at 1364 and stops.
++ * **Narrow windows are untouched by construction**: this is less than the
++ * band until the cell is wider than the prose can use, which at a 16px root is
++ * from a 1109px window for a standard band (1157 for Summary's roomy one), and
++ * below that the band is exactly what it was. It reaches 34rem at 1252 and
++ * stops. Those were 1220 and 1364 until the cap came down to 42rem (plan
++ * 261023a).
+  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
++ *
++ * **Never below `PROSE_MIN`.** At a small root the cap is narrower than the
++ * width the standard band gives way to defend (402px at a 9px root), and a
++ * spare taken against the cap alone took the prose back below it: 430 + 402 at
++ * an 844px window, where the standard band holds 288 + 544. GPT Sol, plan
++ * 261022d's stage 2 and plan 261023a.
+  */
+ function spareBeyondTheMeasure(avail: number, rootFontPx: number): number {
+-  return Math.min(avail - proseAloneMaxPx(rootFontPx), wideIdeal(rootFontPx));
++  return Math.min(avail - Math.max(proseAloneMaxPx(rootFontPx), PROSE_MIN), wideIdeal(rootFontPx));
+ }
+ 
+ /**
+diff --git a/tests/chat.test.ts b/tests/chat.test.ts
+index 5a617c931..189671c78 100644
+--- a/tests/chat.test.ts
++++ b/tests/chat.test.ts
+@@ -207,9 +207,12 @@ describe("fitView in a mode — the band beside the prose", () => {
+   const band = (windowWidth: number) =>
+     fitView({ modeBand: true, windowWidth });
+ 
+-  /* 1100 rather than 1600 since 2026-10-02: past about 1220 the band grows
+-     again into what the prose cannot use (layout.test.ts § a band past the
+-     prose's measure, plan 261002a), so 1600 no longer shows the ideal. */
++  /* 1100 rather than 1600 since 2026-10-02: once the prose has more than its
++     cap (696px at a 16px root), the band grows again into what the prose cannot
++     use (layout.test.ts § a band past the prose's measure, plan 261002a), so
++     1600 no longer shows the ideal. With the rail that is from a 1109px window,
++     12 + 696 + 400 + 1 (1221 while the cap was 49rem, plan 261023a); 1100
++     leaves the prose 1088 − 400 = 688, under the cap. */
+   it("1100px: the band at its ideal width, the rest to the prose", () => {
+     const f = band(1100);
+     expect(f.modeW).toBe(MODE_IDEAL);
+@@ -365,16 +368,19 @@ describe("fitView in a mode — the band beside the prose", () => {
+      it is the one thing that takes the rail away here — the mode band's own
+      rule is that the rail is unconditional. */
+   it("hides the rail in a mode too, when the reader has hidden it", () => {
++    /* 1080, not 1100 as above: without the rail 1100 − 696 of cap = 404, which
++       is past the band's 400, so the band would widen into it. Here 1080 − 400
++       = 680 of prose, under the cap. */
+     const f = fitView({
+       modeBand: true,
+-      windowWidth: 1100,
++      windowWidth: 1080,
+       showSpine: false,
+     });
+     expect(f.spine).toBe("off");
+     // The rail's 12px goes to the prose; the band keeps its ideal width.
+     expect(f.modeW).toBe(MODE_IDEAL);
+-    expect(f.widths).toEqual([700]);
+-    expect(f.minWidth).toBe(1100);
++    expect(f.widths).toEqual([680]);
++    expect(f.minWidth).toBe(1080);
+   });
+ 
+   it("takes no room for a band when there is none", () => {
+diff --git a/tests/gutter-target-size.test.ts b/tests/gutter-target-size.test.ts
+index e3b5c79c9..5758db9f1 100644
+--- a/tests/gutter-target-size.test.ts
++++ b/tests/gutter-target-size.test.ts
+@@ -785,13 +785,19 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
+     }
+   });
+ 
+-  /* **Known loose, and waiting on Greg** (q-z3j0ep, plan 261022d § Stage 2): the
+-     cap is ~15rem wider than the measure since it came down to 56ch, and taking
+-     it down widens bands on iPad-landscape windows, which is his call. This goes
+-     red the day the cap comes down; then drop the `.fails`. */
+-  it.fails("is not so generous that the column stops looking capped (under a rem of slack)", () => {
++  /* **Loose on purpose, and by no more than 10rem, at every root.** The measure
++     and its pads need 31 + 1.4 + 2 × 0.35 = 33.1rem plus a slot; the cap is
++     42rem plus the same slot, so the slack is 8.9rem wherever the slot falls.
++     The tight value, 34rem, widens bands on an iPad in landscape past the width
++     Greg tuned there, so the cap is a middle. Greg, 2026-10-22, q-z3j0ep:
++     *"Maybe somewhere in the middle? Dunno. Take screenshots, use your
++     judgment."* — plan 261023a. This is here so the cap cannot drift back to
++     49rem (15.9rem of slack) unnoticed. */
++  it("is loose by a deliberate middle: no more than 10rem wider than the measure needs", () => {
+     for (const root of ROOTS) {
+-      expect(proseAloneMaxPx(root), `the cap is loose at a ${root}px root`).toBeLessThan(needed(root) + root);
++      expect(proseAloneMaxPx(root), `the cap is too loose at a ${root}px root`).toBeLessThan(
++        needed(root) + 10 * root,
++      );
+     }
+   });
+ 
+@@ -799,11 +805,14 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
+     // Adding the gutter as its own term rather than raising the constant is
+     // what makes this follow the stylesheet: one slot at 16 and 12 where the px
+     // floor holds it at 24, and 30 at a 20px root where the rem wins.
+-    expect(proseAloneMaxPx(16)).toBe(808);
+-    expect(proseAloneMaxPx(20)).toBe(1010);
+-    // 624 before 2026-09-04, and 624 was the bug; 636 until 2026-09-05, when the
+-    // gutter went from two columns to one and every root lost a slot.
+-    expect(proseAloneMaxPx(12)).toBe(612);
++    // 42 × 16 + 24 and 42 × 20 + 30.
++    expect(proseAloneMaxPx(16)).toBe(696);
++    expect(proseAloneMaxPx(20)).toBe(870);
++    // 42 × 12 + 24, the floor rather than 1.5 × 12 = 18. At 49rem it was 624
++    // before 2026-09-04, and 624 was the bug; 636 until 2026-09-05, when the
++    // gutter went from two columns to one and every root lost a slot; 612 until
++    // the cap came down to 42rem (plan 261023a).
++    expect(proseAloneMaxPx(12)).toBe(528);
+   });
+ 
+   it("keeps the rem part a whole number of rem", () => {
+diff --git a/tests/layout-margin.test.ts b/tests/layout-margin.test.ts
+index 589469748..d8fb256c4 100644
+--- a/tests/layout-margin.test.ts
++++ b/tests/layout-margin.test.ts
+@@ -33,7 +33,7 @@ import {
+ 
+ const WIDTHS = [...new Set([
+   ...Array.from({ length: 300 }, (_, i) => 300 + i * 10), // 300 … 3290
+-  599, 600, 611, 612, 731, 732, 1599, 1600, 1601, 2027, 2028, 2029,
++  599, 600, 611, 612, 731, 732, 1599, 1600, 1601, 1915, 1916, 1917,
+ ])];
+ const CASES = WIDTHS.flatMap((windowWidth) =>
+   [null, false].flatMap((showSpine) =>
+@@ -125,18 +125,19 @@ describe("the marginalia column", () => {
+       expect(MARG_WIDE).toBe(384);
+     });
+ 
+-    it("grows into the room beside the centred prose: 310px at 1440, 384px at 1920 and 2560", () => {
+-      expect(proseAloneMaxPx(16)).toBe(808);
+-      /* (1440 − 12 of rail − 808 of prose) / 2. */
+-      expect(fitView({ windowWidth: 1440, margin: true }).margW).toBe(310);
++    it("grows into the room beside the centred prose: 366px at 1440, 384px at 1920 and 2560", () => {
++      expect(proseAloneMaxPx(16)).toBe(696);
++      /* (1440 − 12 of rail − 696 of prose) / 2. It was 310 at the 49rem cap. */
++      expect(fitView({ windowWidth: 1440, margin: true }).margW).toBe(366);
+       expect(fitView({ windowWidth: 1920, margin: true }).margW).toBe(MARG_WIDE);
+       expect(fitView({ windowWidth: 2560, margin: true }).margW).toBe(MARG_WIDE);
+     });
+ 
+     it("is exactly what it was wherever that room is no more than the old column", () => {
+-      /* 1396px with the rail at a 16px root: 12 + 808 + 2 × 288. */
+-      expect(fitView({ windowWidth: 1396, margin: true }).margW).toBe(MARG_IDEAL);
+-      expect(fitView({ windowWidth: 1398, margin: true }).margW).toBe(MARG_IDEAL + 1);
++      /* 1284px with the rail at a 16px root: 12 + 696 + 2 × 288 (1396 at the
++         49rem cap). */
++      expect(fitView({ windowWidth: 1284, margin: true }).margW).toBe(MARG_IDEAL);
++      expect(fitView({ windowWidth: 1286, margin: true }).margW).toBe(MARG_IDEAL + 1);
+       let same = 0;
+       let wider = 0;
+       for (const c of CASES) {
+@@ -202,46 +203,67 @@ describe("the marginalia column", () => {
+         expect(PROSE_SHIFT_MAX).toBe(100);
+       });
+ 
+-      it("leaves 1440 and 1599 alone: centred prose, a 282px card at 1440", () => {
+-        expect(at(1440)).toEqual({ left: 322, proseW: 808, margW: 310, card: 282 });
+-        expect(at(1599)).toEqual({ left: 401.5, proseW: 808, margW: 384, card: 361.5 });
++      it("leaves 1440 and 1599 alone: centred prose, a 338px card at 1440", () => {
++        /* 12 + (1428 − 696) / 2 = 378, and 366 right of the prose, less the
++           20px gap and the 8px gutter. */
++        expect(at(1440)).toEqual({ left: 378, proseW: 696, margW: 366, card: 338 });
++        /* 12 + (1587 − 696) / 2 = 457.5; 445.5 right of it, less 28. */
++        expect(at(1599)).toEqual({ left: 457.5, proseW: 696, margW: 384, card: 417.5 });
+       });
+ 
+-      it("gives the card 100px at 1600 (362 to 462), the prose 100px further left", () => {
+-        /* Centred: 12 + (1588 − 808) / 2 = 402. */
+-        expect(at(1600)).toEqual({ left: 302, proseW: 808, margW: 384, card: 462 });
++      it("gives the card 100px at 1600 (418 to 518), the prose 100px further left", () => {
++        /* Centred: 12 + (1588 − 696) / 2 = 458, with 446 right of it. */
++        expect(at(1600)).toEqual({ left: 358, proseW: 696, margW: 384, card: 518 });
+       });
+ 
+-      it("moves only as far as the card can use: 54px at 1920, where it reaches 36rem", () => {
+-        /* Centred it is 562 with 550 beside it; the card wants 576 + 20 + 8. */
+-        expect(at(1920)).toEqual({ left: 508, proseW: 808, margW: 384, card: CHAT_CARD_MAX });
++      it("moves only as far as the card can use: 58px at 1800, where it reaches 36rem", () => {
++        /* Centred it is 12 + (1788 − 696) / 2 = 558 with 546 beside it; the card
++           wants 576 + 20 + 8 = 604. This was 54px at 1920 at the 49rem cap; at
++           1920 the centred prose now leaves 606, so it does not move. */
++        expect(at(1800)).toEqual({ left: 500, proseW: 696, margW: 384, card: CHAT_CARD_MAX });
++        expect(at(1920)).toEqual({ left: 618, proseW: 696, margW: 384, card: CHAT_CARD_MAX });
+       });
+ 
+       it("does not move the prose at 2560, where the card is already 36rem", () => {
+-        expect(at(2560)).toEqual({ left: 882, proseW: 808, margW: 384, card: CHAT_CARD_MAX });
++        /* 12 + (2548 − 696) / 2. */
++        expect(at(2560)).toEqual({ left: 938, proseW: 696, margW: 384, card: CHAT_CARD_MAX });
+         expect(fitView({ windowWidth: 2560, margin: true }).margReserve).toBe(0);
+       });
+ 
+-      it("keeps the rail clear at a 24px root, where only 44px can be given to the card", () => {
+-        const fit = fitView({ windowWidth: 1600, rootFontPx: 24, margin: true });
+-        expect(tableLeft(fit, 1600)).toBe(56);
+-        expect(fit.tableW).toBe(1212);
+-        expect(fit.margW).toBe(332);
+-        expect(chatCard(fit, 1600, 24)).toBe(294);
++      /* At a 28px root the cap is 42 × 28 + 1.5 × 28 = 1218, the column pushes
++         the prose left by 2 × 288 + 1218 − 1588 = 206, and the prose has
++         (1588 − 206 − 1218) / 2 = 82 left of it: half of that, 41, is all it may
++         move. 12 + 41 = 53; 53 + 1218 = 1271; 1600 − 1271 = 329 for the column,
++         less 35 of gap and 8 of gutter for the card. This was a 24px root,
++         giving 44px, until the cap came down to 42rem (plan 261023a): at 24 the
++         cap is 1044, the prose now has 256 left of it, and the 100px limit binds
++         first. */
++      it("keeps the rail clear at a 28px root, where only 41px can be given to the card", () => {
++        const fit = fitView({ windowWidth: 1600, rootFontPx: 28, margin: true });
++        expect(tableLeft(fit, 1600)).toBe(53);
++        expect(fit.tableW).toBe(1218);
++        expect(fit.margW).toBe(329);
++        expect(chatCard(fit, 1600, 28)).toBe(286);
+       });
+ 
+       it("takes the rail's twelve pixels into account when it is turned off", () => {
++        /* (1600 − 696) / 2 = 452 either side, so the full 100px: the content
++           box is 1600 − 200, the prose starts (1400 − 696) / 2 = 352 in, ends
++           at 1048, and the card has 1600 − 1048 − 28. */
+         const fit = fitView({ windowWidth: 1600, showSpine: false, margin: true });
+-        expect(tableLeft(fit, 1600)).toBe(296);
+-        expect(fit.margLeft).toBe(1104);
+-        expect(chatCard(fit, 1600)).toBe(468);
++        expect(tableLeft(fit, 1600)).toBe(352);
++        expect(fit.margLeft).toBe(1048);
++        expect(chatCard(fit, 1600)).toBe(524);
+       });
+ 
++      /* The card is full once the centred prose leaves 604 right of it:
++         12 + 696 + 2 × 604 = 1916 (2028 at the 49rem cap). Below that the prose
++         moves by what is short, and its left edge stays at 12 + 604 = 616. */
+       it("rejoins the centred layout at the card's cap boundary", () => {
+-        expect(at(2027).left).toBe(615);
+-        expect(at(2028).left).toBe(616);
+-        expect(at(2029).left).toBe(616.5);
+-        expect(fitView({ windowWidth: 2028, margin: true }).margReserve).toBe(0);
++        expect(at(1915).left).toBe(615);
++        expect(at(1916).left).toBe(616);
++        expect(at(1917).left).toBe(616.5);
++        expect(fitView({ windowWidth: 1916, margin: true }).margReserve).toBe(0);
+       });
+ 
+       it("at every width and root: never more than 100px, never past what the card uses, never into the rail", () => {
+@@ -297,11 +319,15 @@ describe("the marginalia column", () => {
+           if (c.windowWidth < PROSE_SHIFT_FROM && fit.margReserve > 0) pushed++;
+         }
+         expect(pushed).toBeGreaterThan(100);
++        /* Rule 2: 2 × 288 + 696 − 1188 (196 at the 49rem cap). */
+         const fit = fitView({ windowWidth: 1200, margin: true });
+-        expect(fit.margReserve).toBe(196);
+-        expect(margTitleReserve(fit)).toBe(196);
++        expect(fit.margReserve).toBe(84);
++        expect(margTitleReserve(fit)).toBe(84);
++        /* Twice the card's 100px shift. */
+         expect(margTitleReserve(fitView({ windowWidth: 1600, margin: true }))).toBe(200);
+-        expect(margTitleReserve(fitView({ windowWidth: 1600, rootFontPx: 24, margin: true }))).toBe(288);
++        /* 2 × 288 + 1044 − 1588 = 32 for the column, plus twice the 100px shift
++           (288 at the 49rem cap). */
++        expect(margTitleReserve(fitView({ windowWidth: 1600, rootFontPx: 24, margin: true }))).toBe(232);
+       });
+ 
+       it("leaves the title to the band's own rule beside a band, and at 0 with no column", () => {
+@@ -343,10 +369,14 @@ describe("the marginalia column", () => {
+         if (fit.margW > MARG_IDEAL) wider += 1;
+       }
+       expect(wider).toBeGreaterThan(100);
+-      /* Greg's layout, a Structure band at 1440: no spare room, so no change. */
++      /* Greg's layout, a Structure band at 1440. The columns do not fit
++         (1428 − 288 − 544 = 596 is under their 609), so the band is 400, the
++         prose stops at its 696 cap, and 1428 − 400 − 696 = 332 is left right of
++         it: the column takes all of it. At the 49rem cap the prose took 740 and
++         left exactly 288, so there was no change. */
+       expect(
+         fitView({ windowWidth: 1440, modeBand: true, bandShape: "structure", margin: true }).margW,
+-      ).toBe(MARG_IDEAL);
++      ).toBe(332);
+     });
+   });
+ 
+@@ -470,8 +500,10 @@ describe("the chat panel's dock in the marginalia column", () => {
+   it("docks in a full column beside a Structure band at 1440px", () => {
+     const windowWidth = 1440;
+     const fit = fitView({ windowWidth, modeBand: true, bandShape: "structure", margin: true });
+-    expect(fit.margW).toBe(MARG_IDEAL);
+-    expect(chatDock(fit, windowWidth)).toBe(MARG_IDEAL - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER);
++    /* 1428 − 400 of band − 696 of prose; it was exactly `MARG_IDEAL` at the
++       49rem cap, and a full column is still enough. */
++    expect(fit.margW).toBe(332);
++    expect(chatDock(fit, windowWidth)).toBe(332 - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER);
+   });
+ 
+   it("does not dock without a column, however much room there is", () => {
+@@ -579,13 +611,15 @@ describe("the chat card in the marginalia column", () => {
+   });
+ 
+   /* Greg's layout, and GPT Sol's F2 on the plan: without the gap the card was
+-     280px starting 20px past 1152, and ran 12px over a 1440px window. */
++     280px starting 20px past 1152, and ran 12px over a 1440px window. The cell
++     ends at 12 + 400 + 696 = 1108 since the cap came down to 42rem (1152 at
++     49rem, with 740 of prose). */
+   it("fits the column's room beside a Structure band at 1440px, gap and gutter out", () => {
+     const windowWidth = 1440;
+     const fit = fitView({ windowWidth, modeBand: true, bandShape: "structure", margin: true });
+-    expect(fit.margLeft).toBe(1152);
++    expect(fit.margLeft).toBe(1108);
+     const width = chatCard(fit, windowWidth);
+-    expect(width).toBe(1440 - 1152 - MARG_GAP_REM * 16 - CHAT_DOCK_GUTTER);
++    expect(width).toBe(1440 - 1108 - MARG_GAP_REM * 16 - CHAT_DOCK_GUTTER);
+     expect(fit.margLeft + MARG_GAP_REM * 16 + (width ?? 0) + CHAT_DOCK_GUTTER).toBe(windowWidth);
+   });
+ 
+diff --git a/tests/layout.test.ts b/tests/layout.test.ts
+index d9eee23d8..9d6b48166 100644
+--- a/tests/layout.test.ts
++++ b/tests/layout.test.ts
+@@ -16,6 +16,7 @@ import {
+   MODE_IDEAL,
+   MODE_MIN,
+   MODE_PROSE_FLOOR,
++  PROSE_MIN,
+   proseAloneMaxPx,
+   SPINE_W,
+   wideIdeal,
+@@ -37,11 +38,14 @@ describe("hiding the spine", () => {
+   });
+ 
+   it("goes away when asked, and gives its width to a window-wide column", () => {
+-    const on = fit({ windowWidth: 700 });
+-    const off = fit({ windowWidth: 700, showSpine: false });
++    // 680 is under the lone column's cap (696 at a 16px root) with the rail or
++    // without, so both columns are the whole window: 668 and 680. It was 700
++    // until the cap came down to 42rem (plan 261023a), and 700 is now over it.
++    const on = fit({ windowWidth: 680 });
++    const off = fit({ windowWidth: 680, showSpine: false });
+     expect(off.spine).toBe("off");
+     expect(off.tableW).toBe(on.tableW + SPINE_W);
+-    expect(off.minWidth).toBe(700);
++    expect(off.minWidth).toBe(680);
+   });
+ 
+   // Absent and `true` now agree, and the parameter still has three states
+@@ -66,10 +70,11 @@ describe("the article on its own stops at the measure", () => {
+ 
+   it("caps the lone reading column at proseAloneMaxPx", () => {
+     const f = alone(1600);
+-    // 49rem + the gutter's 24px, at the 16px default. It was 48px and the
+-    // gutter two columns wide until 2026-09-05, when the bookmark moved into
+-    // the line and the second column went — layout.ts § proseAloneMaxPx.
+-    expect(f.widths).toEqual([808]);
++    // 42rem + the gutter's 24px, at the 16px default: 672 + 24. It was 49rem
++    // (808) until plan 261023a, and the gutter 48px and two columns wide until
++    // 2026-09-05, when the bookmark moved into the line and the second column
++    // went — layout.ts § proseAloneMaxPx.
++    expect(f.widths).toEqual([696]);
+     /* Through the function rather than `PROSE_ALONE_MAX_REM * root`, because the
+        cap stopped being one rem number on 2026-09-04: the gutter's slot is
+        `max(1.5rem, 24px)`, so below a 16px root it stops shrinking and the cell's
+@@ -89,23 +94,25 @@ describe("the article on its own stops at the measure", () => {
+        and both of the cell's pads 25% wider — so a fixed 800 would have clipped
+        their measure to about 51ch, which is the one thing this cap must never
+        do. Found by GPT Sol reviewing the built code, 2026-09-03. */
+-    expect(fit({ windowWidth: 1600, rootFontPx: 20 }).tableW).toBe(1010);
+-    // 624 until 2026-09-04, and 624 was the bug: at a 12px root the gutter's
+-    // px floor makes the left pad 2.7rem, not 2.2, and a rem constant could not
+-    // follow it. GPT Sol's stage 1 review. 636 until 2026-09-05, when the
+-    // gutter halved: one slot at every root, so this term is 24px here and 30
+-    // at a 20px root rather than 48 and 60.
+-    expect(fit({ windowWidth: 1600, rootFontPx: 12 }).tableW).toBe(612);
++    // 42 × 20 + 1.5 × 20 = 840 + 30. (1010 while the cap was 49rem.)
++    expect(fit({ windowWidth: 1600, rootFontPx: 20 }).tableW).toBe(870);
++    // 42 × 12 + the gutter's 24px floor = 504 + 24, not 42 × 12 + 1.5 × 12.
++    // At 49rem it was 624 until 2026-09-04, and 624 was the bug: at a 12px root
++    // the gutter's px floor makes the pad 2.7rem, not 2.2, and a rem constant
++    // could not follow it. GPT Sol's stage 1 review. 636 until 2026-09-05, when
++    // the gutter halved: one slot at every root, so this term is 24px here and
++    // 30 at a 20px root rather than 48 and 60. 612 until plan 261023a.
++    expect(fit({ windowWidth: 1600, rootFontPx: 12 }).tableW).toBe(528);
+     // And it is still a cap, not a width: a window narrower than it wins.
+     expect(fit({ windowWidth: 700, rootFontPx: 20 }).tableW).toBe(688);
+   });
+ 
+   it("takes the whole window below the cap, and never scrolls sideways", () => {
+-    // 820 = `proseAloneMaxPx(16)` plus the spine, so the cap stops
++    // 708 = `proseAloneMaxPx(16)` plus the spine, 696 + 12, so the cap stops
+     // biting one pixel below it. Under that the column is the whole window,
+     // which is what every phone gets.
+-    expect(alone(820).tableW).toBe(808);
+-    expect(alone(819).tableW).toBe(807);
++    expect(alone(708).tableW).toBe(696);
++    expect(alone(707).tableW).toBe(695);
+     expect(alone(390).tableW).toBe(378);
+     for (let w = 0; w <= 2600; w += 7) {
+       const f = alone(w);
+@@ -166,8 +173,14 @@ describe("a wide band", () => {
+     expect(wide(1440).modeW).toBe(544);
+     // And the prose beside it keeps the rest of the window.
+     expect(wide(1440).widths).toEqual([1440 - SPINE_W - 544]);
+-    // Below the cap it is the share: 0.42 × 1268 = 533.
+-    expect(wide(1280).modeW).toBe(533);
++    // Below the cap it is the share: 1200 − 12 = 1188, 0.42 × 1188 = 499, above
++    // the 1188 − 696 = 492 the standard band takes there.
++    expect(wide(1200).modeW).toBe(499);
++    /* And never narrower than the standard band, widened or not (plan 261023a):
++       at 1280 the share is 0.42 × 1268 = 533, but the standard band has
++       1268 − 696 = 572 past the measure, capped at 544, so this is 544 too. At
++       the 49rem cap it was the share, 533. */
++    expect(wide(1280).modeW).toBe(544);
+   });
+ 
+   it("caps with the root, because the posts are rem-sized type", () => {
+@@ -216,10 +229,11 @@ describe("a wide band", () => {
+       fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx });
+     /* Past the prose's measure it grows to the same 34rem ceiling (plan
+        261002a, § a band past the prose's measure below), but by what the prose
+-       cannot use rather than by a share: 1440 − 12 − 808 = 620, capped at 544;
+-       at a 20px root 1428 − 1010 = 418. */
++       cannot use rather than by a share: 1440 − 12 − 696 = 732, capped at 544;
++       at a 20px root 1428 − 870 = 558, under that root's 680. Below the measure
++       it is the ordinary band: 1100 − 12 − 696 = 392, under 400. */
+     expect(standard(1440).modeW).toBe(544);
+-    expect(standard(1440, 20).modeW).toBe(418);
++    expect(standard(1440, 20).modeW).toBe(558);
+     expect(standard(1100).modeW).toBe(400);
+     // The default shape is the standard one.
+     expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(544);
+@@ -260,8 +274,14 @@ describe("a roomy band", () => {
+   });
+ 
+   it("never comes out narrower than an ordinary band at a small root", () => {
+-    // 28rem at a 12px root is 336, under `MODE_IDEAL`.
+-    expect(roomy(1000, 12).modeW).toBe(MODE_IDEAL);
++    /* 28rem at a 13px root is 364, under `MODE_IDEAL`: 970 − 12 = 958 and
++       958 − 544 = 414, so the floor of 400 binds, and the spare past the
++       measure, 958 − 570 = 388, does not reach it. This was a 12px root at
++       1000px until plan 261023a, but there the spare now passes both:
++       988 − 544 = 444 (the cap, 528, is under `PROSE_MIN`), capped at 34rem,
++       408. */
++    expect(roomy(970, 13).modeW).toBe(MODE_IDEAL);
++    expect(roomy(1000, 12).modeW).toBe(408);
+     expect(roomy(1440, 20).modeW).toBe(560);
+   });
+ 
+@@ -307,11 +327,15 @@ describe("a band past the prose's measure", () => {
+ 
+   it("starts where the prose has its measure, and stops at 34rem", () => {
+     const chat = (w: number) => fitView({ windowWidth: w, modeBand: true, bandShape: "standard" });
+-    // 808 is `proseAloneMaxPx(16)`: 49rem and one gutter cell.
+-    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBe(808);
+-    expect(chat(1220).modeW).toBe(400);
+-    expect(chat(1280).modeW).toBe(460);
+-    expect(chat(1364).modeW).toBe(544);
++    // 696 is `proseAloneMaxPx(16)`: 42rem and one gutter cell, 672 + 24.
++    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBe(696);
++    // 1108 − 12 − 696 = 400, exactly the band, so the last width it is untouched.
++    expect(chat(1108).modeW).toBe(400);
++    expect(chat(1109).modeW).toBe(401);
++    // 1200 − 12 − 696 = 492; 1252 − 12 − 696 = 544, the 34rem ceiling.
++    expect(chat(1200).modeW).toBe(492);
++    expect(chat(1252).modeW).toBe(544);
++    // These were 1220, 1280 → 460 and 1364 at the 49rem cap.
+     expect(chat(1920).modeW).toBe(544);
+     expect(chat(1920).widths).toEqual([1920 - SPINE_W - 544]);
+   });
+@@ -325,7 +349,9 @@ describe("a band past the prose's measure", () => {
+             if (f.modeW === 0) continue; // the covering band, untouched
+             const avail = w - (spine === false ? 0 : SPINE_W);
+             const old = before(avail, shape, root);
+-            const measure = proseAloneMaxPx(root);
++            /* What the prose can use, and never less than what it is defended
++               at: at a 9px root the cap is 402, under `PROSE_MIN` (plan 261023a). */
++            const measure = Math.max(proseAloneMaxPx(root), PROSE_MIN);
+             if (avail - old <= measure) {
+               expect(f.modeW, `${shape} ${w}px @${root}`).toBe(old);
+             } else {
+@@ -340,11 +366,29 @@ describe("a band past the prose's measure", () => {
+     }
+   });
+ 
++  /* **The band widens only into prose the prose was not defending** — plan
++     261023a. At a small root the cap is under `PROSE_MIN` (402px at 9px, with
++     the cap at 42rem), and taking the spare against the cap alone handed a band
++     144px of the 544 the standard band gives way to keep: 430 + 402 at 844. */
++  it("never widens by taking the prose below PROSE_MIN", () => {
++    for (const shape of ["standard", "roomy"] as const) {
++      for (const root of [9, 10, 11, 12, 16, 20]) {
++        for (let w = 700; w <= 2400; w++) {
++          const f = fitView({ windowWidth: w, modeBand: true, bandShape: shape, rootFontPx: root });
++          if (f.modeW > before(w - SPINE_W, shape, root)) {
++            expect(f.widths[0], `${shape} ${w}px @${root}`).toBeGreaterThanOrEqual(PROSE_MIN);
++          }
++        }
++      }
++    }
++    expect(fitView({ windowWidth: 844, modeBand: true, rootFontPx: 9 }).modeW).toBe(MODE_MIN);
++  });
++
+   it("is the same rule beside the marginalia column", () => {
+     const both = fitView({ windowWidth: 1920, modeBand: true, margin: true });
+-    // 1908 − 288 of notes = 1620 of rest; 1620 − 808 > 544, so the band is at its ceiling.
++    // 1908 − 288 of notes = 1620 of rest; 1620 − 696 > 544, so the band is at its ceiling.
+     expect(both.modeW).toBe(544);
+-    expect(both.widths[0]).toBe(808);
++    expect(both.widths[0]).toBe(696);
+   });
+ });
+ 
+diff --git a/tests/structure-band-width.test.ts b/tests/structure-band-width.test.ts
+index c92326cec..51727f792 100644
+--- a/tests/structure-band-width.test.ts
++++ b/tests/structure-band-width.test.ts
+@@ -89,11 +89,13 @@ describe("fitView with Structure's band", () => {
+     expect(band(at - 1, { rootFontPx: 20 }).modeW).toBe(MODE_IDEAL);
+   });
+ 
+-  /* Up to 1165 only since 2026-10-02: past about 1220 a standard band grows
+-     into what the prose cannot use, which layout.test.ts § a band past the
+-     prose's measure owns (plan 261002a). */
++  /* Up to 1108 only: from 1109 (12 + 696 of cap + 400 + 1) a standard band
++     grows into what the prose cannot use, which layout.test.ts § a band past
++     the prose's measure owns (plan 261002a). It was 1165, Structure's own
++     threshold, while the cap was 49rem and the band widened only past 1220;
++     plan 261023a. */
+   it("leaves every other mode's band exactly as it was", () => {
+-    for (const w of [700, 900, 1165]) {
++    for (const w of [700, 900, 1108]) {
+       const standard = fitView({ windowWidth: w, modeBand: true });
+       expect(standard.modeW, `${w}`).toBe(Math.min(MODE_IDEAL, Math.max(288, w - SPINE_W - PROSE_MIN)));
+     }
+diff --git a/tests/text-alone-centring.test.ts b/tests/text-alone-centring.test.ts
+index 9f668fd47..39687260c 100644
+--- a/tests/text-alone-centring.test.ts
++++ b/tests/text-alone-centring.test.ts
+@@ -142,15 +142,19 @@ describe("the article on its own is centred", () => {
+     );
+   });
+ 
+-  /* **Known loose, and waiting on Greg** (q-z3j0ep, plan 261022d § Stage 2): the
+-     cap was built for 65ch of Geist, ≈46rem, and the measure is now ~31rem, so
+-     it is ~15rem wider than the column it holds. Bringing it down widens bands
+-     on iPad-landscape windows, which is his call. This goes red the day the cap
+-     comes down; then drop the `.fails`. */
+-  it.fails("is not so generous that the column stops looking capped (under a rem of slack)", () => {
++  /* **Loose on purpose, and by no more than 10rem.** The cap was built for 65ch
++     of Geist, ≈46rem, and the measure is now ~31rem. The tight value would be
++     34rem, and that widens bands on an iPad in landscape past the width Greg
++     tuned there, so the cap is a middle: 42rem, 696px here against the
++     (31 + 1.4 + 2.2) × 16 = 553.6 the measure and its pads need, ≈8.9rem of
++     slack. Greg, 2026-10-22, q-z3j0ep: *"Maybe somewhere in the middle? Dunno.
++     Take screenshots, use your judgment."* — plan 261023a. This is here so the
++     cap cannot drift back to 49rem (808px, ≈15.9rem of slack) unnoticed;
++     `tests/gutter-target-size.test.ts` checks the same at five roots. */
++  it("is loose by a deliberate middle: no more than 10rem wider than the measure needs", () => {
+     expect(padL).toBe(1.4);
+     expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeLessThan(
+-      (MEASURE_REM + padL + padR + 1) * DEFAULT_ROOT_PX,
++      (MEASURE_REM + padL + padR + 10) * DEFAULT_ROOT_PX,
+     );
+   });
+ 

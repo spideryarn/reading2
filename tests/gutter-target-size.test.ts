@@ -785,13 +785,19 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
     }
   });
 
-  /* **Known loose, and waiting on Greg** (q-z3j0ep, plan 261022d § Stage 2): the
-     cap is ~15rem wider than the measure since it came down to 56ch, and taking
-     it down widens bands on iPad-landscape windows, which is his call. This goes
-     red the day the cap comes down; then drop the `.fails`. */
-  it.fails("is not so generous that the column stops looking capped (under a rem of slack)", () => {
+  /* **Loose on purpose, and by no more than 10rem, at every root.** The measure
+     and its pads need 31 + 1.4 + 2 × 0.35 = 33.1rem plus a slot; the cap is
+     42rem plus the same slot, so the slack is 8.9rem wherever the slot falls.
+     The tight value, 34rem, widens bands on an iPad in landscape past the width
+     Greg tuned there, so the cap is a middle. Greg, 2026-10-22, q-z3j0ep:
+     *"Maybe somewhere in the middle? Dunno. Take screenshots, use your
+     judgment."* — plan 261023a. This is here so the cap cannot drift back to
+     49rem (15.9rem of slack) unnoticed. */
+  it("is loose by a deliberate middle: no more than 10rem wider than the measure needs", () => {
     for (const root of ROOTS) {
-      expect(proseAloneMaxPx(root), `the cap is loose at a ${root}px root`).toBeLessThan(needed(root) + root);
+      expect(proseAloneMaxPx(root), `the cap is too loose at a ${root}px root`).toBeLessThan(
+        needed(root) + 10 * root,
+      );
     }
   });
 
@@ -799,11 +805,14 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
     // Adding the gutter as its own term rather than raising the constant is
     // what makes this follow the stylesheet: one slot at 16 and 12 where the px
     // floor holds it at 24, and 30 at a 20px root where the rem wins.
-    expect(proseAloneMaxPx(16)).toBe(808);
-    expect(proseAloneMaxPx(20)).toBe(1010);
-    // 624 before 2026-09-04, and 624 was the bug; 636 until 2026-09-05, when the
-    // gutter went from two columns to one and every root lost a slot.
-    expect(proseAloneMaxPx(12)).toBe(612);
+    // 42 × 16 + 24 and 42 × 20 + 30.
+    expect(proseAloneMaxPx(16)).toBe(696);
+    expect(proseAloneMaxPx(20)).toBe(870);
+    // 42 × 12 + 24, the floor rather than 1.5 × 12 = 18. At 49rem it was 624
+    // before 2026-09-04, and 624 was the bug; 636 until 2026-09-05, when the
+    // gutter went from two columns to one and every root lost a slot; 612 until
+    // the cap came down to 42rem (plan 261023a).
+    expect(proseAloneMaxPx(12)).toBe(528);
   });
 
   it("keeps the rem part a whole number of rem", () => {

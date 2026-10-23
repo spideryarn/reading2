@@ -143,26 +143,29 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * **Everything in it except the gutter is rem, so it is not one number any
  * more.** `proseAloneMaxPx` below is the cap; this is the rem part of it.
  *
- * 49rem was `--reading-measure` (65ch, ≈46rem in Geist, the reading face then),
- * plus the cell's plain pad (1.4 — `--text-pad-l` since the gutter moved right in
- * 261003c, `--text-pad-r` before; the sum is the same), plus the gutter's inset on each side (0.35 × 2)
- * — 48.1, rounded up to something round, exactly as the old 50 rounded its own
- * 49.5. The rounding runs upwards on purpose: `.prose` keeps its own clamp, so
- * slack here is a few pixels of margin inside the column rather than a clipped
- * measure. A whole number of rem is worth keeping — 51.6 was tried on the way
- * here and left every width this derives fractional, so the tests had to round
- * with it and stopped asserting anything checkable by hand.
+ * **42rem is a middle, chosen by eye, not the measure plus its pads.** It was
+ * 49: `--reading-measure` as 65ch of Geist (≈46rem), plus the cell's plain pad
+ * (1.4 — `--text-pad-l`), plus the gutter's inset on each side (0.35 × 2),
+ * rounded up. The face became Source Serif on 2026-10-02 and the measure 56ch
+ * on 2026-10-22 (≈30.9rem), so the tight value would be 34rem. `.prose` keeps
+ * its own clamp, so the slack never changes a line; what it decides is
+ * distance. Marginalia's notes sit at the cell's right edge, so slack pushes
+ * them away from their paragraphs; and `spareBeyondTheMeasure` gives a band
+ * only what the cell cannot use, so slack delays when bands widen. 34 would
+ * have widened the band on an iPad in landscape (1194px) from 400 to 544, the
+ * width Greg called too wide there for Tweets on 2026-09-30. Asked
+ * (q-z3j0ep), he said *"Maybe somewhere in the middle? Dunno. Take
+ * screenshots, use your judgment."* (2026-10-22). 42 is the middle of 34 and
+ * 49, and the smallest whole value at which the standard band on his iPad in
+ * landscape is no wider than the Tweets band he tuned there (486 against 496;
+ * 41 gives 502). Measured at 1194px: the notes sit 121px from the line's end
+ * instead of 177; the standard band is unchanged below a 1109px window. Plan
+ * 261023a.
+ * `scripts/measure-line-length.ts` fails if any change here clips the measure.
  *
- * **It is no longer the measure plus its pads, and that is known and left.**
- * The measure is 56ch of Source Serif since 2026-10-22 (≈30.9rem; 35.8rem as
- * 65ch from 2026-10-02), so this cap is ~15rem wider than the column it holds.
- * `.prose` keeps its own clamp, so the prose reads at the measure regardless;
- * what the slack costs is distance — Marginalia sits that much further from its
- * paragraphs — and what it buys is that bands do not widen until 1220px
- * (`spareBeyondTheMeasure`). Bringing it to 34rem moves the band on an iPad in
- * landscape from 400px to 544px, so it waits on Greg: plan 261022d § Stage 2,
- * question q-z3j0ep. `scripts/measure-line-length.ts` fails if any change
- * here clips the measure.
+ * A whole number of rem is worth keeping: 51.6 was tried once and left every
+ * width this derives fractional, so the tests had to round with it and
+ * stopped asserting anything checkable by hand.
  *
  * **Rem, and this is the second time that has mattered in this file.** `SPINE_W`
  * above records the same lesson from the other side: nothing in this app locks
@@ -176,7 +179,7 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * **And the gutter is the exception that proves it, which is why it left this
  * constant.** See `proseAloneMaxPx`.
  */
-export const PROSE_ALONE_MAX_REM = 49;
+export const PROSE_ALONE_MAX_REM = 42;
 
 /**
  * **One cell of the prose gutter, in rem and in px — the two halves of
@@ -216,7 +219,8 @@ export const BLK_SLOT_REM = 1.5;
  * is `var(--blk-slot)` and this term halves with it: 808px at a 16px root, 1010
  * at 20, 612 at 12. Greg asked for the margin back — *"especially on mobile we
  * want the margins either side of the text to be minimal"* — and this is the
- * half of that a stylesheet cannot state.
+ * half of that a stylesheet cannot state. With the cap at 42rem since
+ * 2026-10-23 those are 696, 870 and 528.
  *
  * `Math.round` because a fractional CSS pixel in a table width is a hairline
  * seam, and because every number derived from this is asserted by hand in
@@ -245,7 +249,9 @@ export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading a
 
 /**
  * **The widest a `"wide"` band goes: a prose column's measure** — a ceiling
- * since 2026-09-30, reached from about 1307px at a 16px root (`WIDE_SHARE`). Tweets' posts
+ * since 2026-09-30, reached from 1252px at a 16px root (where the widened
+ * standard band reaches it, plan 261023a; by `WIDE_SHARE` alone it was about
+ * 1307). Tweets' posts
  * are set in the prose face, so the width at which prose reads well is the width
  * at which they do. Greg, 2026-09-29: *"It could be quite a wide left-hand
  * column if that will help to make it be readable."*
@@ -273,7 +279,8 @@ export function wideIdeal(rootFontPx: number): number {
  * thread column perhaps could be slightly wider when I'm looking at it on my
  * iPad in portrait mode, and slightly narrower when I'm looking at it on my
  * iPad in landscape mode."* A share is one number for the relationship he was
- * reacting to: 345 and 496 on those two, and 544 still from about 1307 up.
+ * reacting to: 345 and 496 on those two, and 544 from 1252 up (about 1307
+ * until the cap came down, 261023a).
  *
  * So in Tweets the prose gives up its `PROSE_MIN` defence (477 in portrait):
  * the thread is what is being read there and the prose is where its links
@@ -640,8 +647,9 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
  *
  * `left` and `right` are the page either side of the prose before the shift.
  * Three limits: `PROSE_SHIFT_MAX`; what the card can use, since it stops at
- * `CHAT_CARD_MAX` (so at 1920px the shift is 54px, and from about 2030px the
- * prose is centred again); and half of `left`, which only binds at a large
+ * `CHAT_CARD_MAX` (so at 1800px the shift is 58px, and from 1916px the prose
+ * is centred again; 54px at 1920 and centred from about 2030 with the cap at
+ * 49rem, before 261023a); and half of `left`, which only binds at a large
  * root and keeps the prose clear of the rail.
  *
  * **A step at `PROSE_SHIFT_FROM`**: the prose jumps 100px as a window is
@@ -968,12 +976,14 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
   if (bandShape === "standard") return Math.max(standard, spare);
   /* Grows smoothly rather than jumping: the posts reflow at any width, unlike
      Structure's two columns. A share of the room (`WIDE_SHARE`), never
-     narrower than the standard band, never wider than its root-relative cap
-     or than leaves the prose its floor. The last bound is what keeps
-     `fitMode` from overflowing at the crossover: 0.42 × 688 is 289. */
+     narrower than the standard band — the widened one, since past the measure
+     the standard band can outgrow the share (from 1213px at a 16px root,
+     plan 261023a) — never wider than its root-relative cap or than leaves the
+     prose its floor. The last bound is what keeps `fitMode` from overflowing
+     at the crossover: 0.42 × 688 is 289. */
   if (bandShape === "wide") {
     const cap = Math.min(Math.max(MODE_IDEAL, wideIdeal(rootFontPx)), avail - MODE_PROSE_FLOOR);
-    return clamp(Math.round(avail * WIDE_SHARE), standard, cap);
+    return clamp(Math.round(avail * WIDE_SHARE), Math.max(standard, spare), cap);
   }
   /* Structure whose columns do not fit: the ordinary band, and deliberately
      not `spare` — its list face in a band past `MODE_IDEAL` is a look Greg has
@@ -990,20 +1000,29 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
  * windows is pretty good, so we don't want to screw that up … let's not
  * introduce too much complexity."*
  *
- * **No new number.** The prose stops reading wider at `proseAloneMaxPx` — the
- * measure, its pad and the gutter, the cap it already has alone — so anything
+ * **No new number.** The lone prose cell stops at `proseAloneMaxPx` — its
+ * deliberately loose cap around the measure, pads and gutter — so anything
  * the cell holds past that is page on either side of a centred column. The
  * band takes it, and stops at `wideIdeal`, which is already this file's name
  * for a prose column's measure and Tweets' ceiling.
  *
- * **Narrow windows are untouched by construction**: this is negative until the
- * cell is wider than the prose can use, which at a 16px root is a 1220px
- * window for a standard band (1268 for Summary's roomy one), and below that the
- * band is exactly what it was. It reaches 34rem at 1364 and stops.
+ * **Narrow windows are untouched by construction**: this is less than the
+ * band until the cell is wider than the prose can use, which at a 16px root is
+ * from a 1109px window for a standard band (1157 for Summary's roomy one), and
+ * below that the band is exactly what it was. It reaches 34rem at 1252 and
+ * stops. Those were 1221 and 1364 until the cap came down to 42rem (plan
+ * 261023a).
  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
+ *
+ * **Never below `PROSE_MIN`.** At a small root the cap is narrower than the
+ * width the standard band gives way to defend (402px at a 9px root). At an
+ * 844px window the raw spare against that cap is 430px, but `wideIdeal(9)`
+ * limits the band to 306px; that still leaves only 526px of prose, where the
+ * standard band holds 288 + 544. GPT Sol, plan 261022d's stage 2 and plan
+ * 261023a.
  */
 function spareBeyondTheMeasure(avail: number, rootFontPx: number): number {
-  return Math.min(avail - proseAloneMaxPx(rootFontPx), wideIdeal(rootFontPx));
+  return Math.min(avail - Math.max(proseAloneMaxPx(rootFontPx), PROSE_MIN), wideIdeal(rootFontPx));
 }
 
 /**

@@ -112,11 +112,11 @@ or floats in the corner. [comments.md § Where the chat panel sits](comments.md#
 
 It is 288px at most wherever it has to take room from the prose or a band, as before. Where
 the centred prose already leaves more than that to its right, the column grows into it, up to
-384px. With a 16px root, the rail on and no band, it is 310px in a 1440px window and reaches
-384px from about 1590px. Beside a band it grows only into room
+384px. With a 16px root, the rail on and no band, it is 366px in a 1440px window and reaches
+384px from 1476px (310 and about 1590 before the cap came down to 42rem on 2026-10-23). Beside a band it grows only into room
 that was already spare right of the column. The prose and the band do not move or change width, and
-below about 1400px nothing changes at that root size. The chat card's own width did not change:
-it already took all the room right of the prose, up to 576px, so at 1440px it is still about 282px, and wider there would
+below about 1285px nothing changes at that root size. The chat card's sizing rule and cap did not
+change: it still takes all the room right of the prose, up to 576px, so at 1440px it is about 338px (282 before 2026-10-23), and wider there would
 mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/layout.ts);
 [`layout-margin.test.ts`](../../tests/layout-margin.test.ts).
 
@@ -129,8 +129,10 @@ mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/
 B was offered as a small shift left from about 1600px, keeping the prose's width, so the margin
 and the card get about 100px more. With the column on and no band, the prose moves up to 100px
 further left from 1600px, whether or not a card is open. It moves only as far as the card can use, and the card
-stops at 576px. With a 16px root and the rail on: 100px at 1600 (card 362 → 462), 54px at
-1920 (522 → 576), and none from 2028px, where the prose is centred again. Larger type can leave
+stops at 576px. With a 16px root and the rail on: 100px at 1600 (card 418 → 518), 58px at
+1800 (518 → 576), and none from 1916px, where the prose is centred again. (Before the column's
+cap came down to 42rem on 2026-10-23 it was 362 → 462 at 1600 and centred from 2028:
+[261023a](../plans/261023a-reading-column-cap-a-middle-value.md).) Larger type can leave
 less space on the left; the shift keeps at least half of it clear of the rail. The notes' cap
 stays at 384px; at larger roots the notes can also grow into the new room, up to that cap.
 Below 1600px the prose stays where it was, so it jumps as a window

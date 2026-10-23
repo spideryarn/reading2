@@ -89,14 +89,23 @@ describe("fitView with Structure's band", () => {
     expect(band(at - 1, { rootFontPx: 20 }).modeW).toBe(MODE_IDEAL);
   });
 
-  /* Up to 1165 only since 2026-10-02: past about 1220 a standard band grows
-     into what the prose cannot use, which layout.test.ts § a band past the
-     prose's measure owns (plan 261002a). */
-  it("leaves every other mode's band exactly as it was", () => {
-    for (const w of [700, 900, 1165]) {
+  /* Up to 1108 only: from 1109 (12 + 696 of cap + 400 + 1) a standard band
+     grows into what the prose cannot use, which layout.test.ts § a band past
+     the prose's measure owns (plan 261002a). It was 1165, Structure's own
+     threshold, while the cap was 49rem and the band widened only past 1220;
+     plan 261023a. */
+  it("leaves an ordinary band on its own rule below Structure's switch", () => {
+    for (const w of [700, 900, 1108]) {
       const standard = fitView({ windowWidth: w, modeBand: true });
       expect(standard.modeW, `${w}`).toBe(Math.min(MODE_IDEAL, Math.max(288, w - SPINE_W - PROSE_MIN)));
     }
+  });
+
+  it("does not give an ordinary mode Structure's wider band at Structure's switch", () => {
+    /* At 1165 Structure switches to 609px. The standard band instead takes only
+       the spare past its 696px prose cap: 1165 − 12 − 696 = 457. */
+    expect(fitView({ windowWidth: 1165, modeBand: true }).modeW).toBe(457);
+    expect(band(1165).modeW).toBe(609);
   });
 
   it("leaves the covering band alone below 700px", () => {

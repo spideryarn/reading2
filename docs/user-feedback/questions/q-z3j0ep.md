@@ -1,10 +1,11 @@
 ---
 id: q-z3j0ep
 report: spya-vywcpu
-status: open
+status: answered
 asked: 2026-10-22
 title: Should the reading column's width cap come down with the measure, which makes bands wider on iPads and laptops?
-refs: docs/plans/261022d-reading-measure-in-real-characters.md · docs/user-feedback/261021_2302-reading-measure-in-real-characters.md · spya-vywcpu · spya-xebdgz · SPIDERYARN-READING2-6G
+refs: docs/plans/261022d-reading-measure-in-real-characters.md · docs/user-feedback/261021_2302-reading-measure-in-real-characters.md · spya-vywcpu · spya-xebdgz · SPIDERYARN-READING2-6G · docs/plans/261023a-reading-column-cap-a-middle-value.md
+acted: spya-gf24w4
 ---
 The text column is now narrower (about 60 characters a line, as you asked in spya-vywcpu), but the box the layout reserves for it has not shrunk with it. Shrinking that box brings the Marginalia notes about 120px closer to the text, but it also makes every mode's left-hand band wider on mid-sized windows. Which do you want?
 
@@ -33,3 +34,15 @@ The question is about a second number. The layout code keeps a box that is "as w
 The text itself stays the same width in every option. Only the empty space around it moves.
 
 What would decide it: whether wider bands on an iPad in landscape and on small laptops are welcome (A), or whether those layouts should stay as you tuned them (B).
+
+## Greg's answer, 2026-10-22 (in the Feedback dialog, reply `spya-gf24w4`)
+
+> Maybe somewhere in the middle? Dunno. Take screenshots, use your judgment.
+
+He picked no letter, so I chose a middle value from screenshots at 1024, 1194, 1280 and 1440, trying
+caps of 49, 44, 42 and 38. **42rem, used for both Marginalia and band widening**, so there is no
+second number. The standard band at 1024px is unchanged. On an iPad in landscape it goes from
+400px to 486px. That is still narrower than the 496px Tweets band, which stays as it was.
+Marginalia's notes sit 121px from the end of a line instead of 177px. The standard band starts widening at a
+1109px window instead of 1221px. Plan
+[261023a](../../plans/261023a-reading-column-cap-a-middle-value.md), 2026-10-23.

@@ -207,9 +207,12 @@ describe("fitView in a mode — the band beside the prose", () => {
   const band = (windowWidth: number) =>
     fitView({ modeBand: true, windowWidth });
 
-  /* 1100 rather than 1600 since 2026-10-02: past about 1220 the band grows
-     again into what the prose cannot use (layout.test.ts § a band past the
-     prose's measure, plan 261002a), so 1600 no longer shows the ideal. */
+  /* 1100 rather than 1600 since 2026-10-02: once the prose has more than its
+     cap (696px at a 16px root), the band grows again into what the prose cannot
+     use (layout.test.ts § a band past the prose's measure, plan 261002a), so
+     1600 no longer shows the ideal. With the rail that is from a 1109px window,
+     12 + 696 + 400 + 1 (1221 while the cap was 49rem, plan 261023a); 1100
+     leaves the prose 1088 − 400 = 688, under the cap. */
   it("1100px: the band at its ideal width, the rest to the prose", () => {
     const f = band(1100);
     expect(f.modeW).toBe(MODE_IDEAL);
@@ -365,16 +368,19 @@ describe("fitView in a mode — the band beside the prose", () => {
      it is the one thing that takes the rail away here — the mode band's own
      rule is that the rail is unconditional. */
   it("hides the rail in a mode too, when the reader has hidden it", () => {
+    /* 1080, not 1100 as above: without the rail 1100 − 696 of cap = 404, which
+       is past the band's 400, so the band would widen into it. Here 1080 − 400
+       = 680 of prose, under the cap. */
     const f = fitView({
       modeBand: true,
-      windowWidth: 1100,
+      windowWidth: 1080,
       showSpine: false,
     });
     expect(f.spine).toBe("off");
     // The rail's 12px goes to the prose; the band keeps its ideal width.
     expect(f.modeW).toBe(MODE_IDEAL);
-    expect(f.widths).toEqual([700]);
-    expect(f.minWidth).toBe(1100);
+    expect(f.widths).toEqual([680]);
+    expect(f.minWidth).toBe(1080);
   });
 
   it("takes no room for a band when there is none", () => {

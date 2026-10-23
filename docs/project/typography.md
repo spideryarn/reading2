@@ -98,15 +98,18 @@ counts out at median 60, 90th percentile 64.
 - **Change the measure only by counting it**, never by writing the number of characters you want as
   `ch`: `scripts/measure-line-length.ts` counts the non-final lines of prose paragraphs at least
   three lines long, in Playwright at Greg's iPad (725 wide, at Default, Large and Largest), an 820
-  iPad, a 1440 desktop and two phones. It exits 1 when a column at the measure is below median 45,
+  iPad, a 1194 iPad in landscape, a 1440 desktop at all four text sizes, and two phones. It exits 1 when a column at the measure is below median 45,
   over median 62, or over 66 at the 90th percentile. **Change the author's face and you have changed
   the measure**, so run it then too.
 - **`PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) was a copy of the measure** in
   rem, for the layout's arithmetic, and must never be *narrower* than it: the script fails when a
   window 1000px or wider has a column narrower than the measure, which is that copy clipping it.
-  It is wider than the measure since 2026-10-02, because bringing it down also widens the mode
-  bands on mid-sized windows. Whether to do that is Greg's question
-  [q-z3j0ep](../user-feedback/questions/q-z3j0ep.md), so don't treat it as a stale number to fix.
+  It is deliberately looser than the measure: 42rem against the ~34 the measure and its pads need,
+  because bringing it down also widens the mode bands on mid-sized windows and brings Marginalia's
+  notes closer to the text. Greg, asked
+  ([q-z3j0ep](../user-feedback/questions/q-z3j0ep.md)): *"Maybe somewhere in the middle? Dunno.
+  Take screenshots, use your judgment."* (2026-10-22). So it is a middle chosen from screenshots
+  ([261023a](../plans/261023a-reading-column-cap-a-middle-value.md)), not a stale number to fix.
 - **The text size keeps the count**, because `ch` grows with the type: Large holds the same ~60 in
   a wider column, and only when the window runs out does a bigger size mean fewer characters.
 - **Narrower things are written relative to it**: a quotation and a callout are

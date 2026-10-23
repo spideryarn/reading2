@@ -64,7 +64,14 @@ const WINDOWS: Window[] = [
   { name: "ipad-large", width: 725, height: 967, textSize: "large", touch: IPAD },
   { name: "ipad-largest", width: 725, height: 967, textSize: "largest", touch: IPAD },
   { name: "ipad-air", width: 820, height: 1180, textSize: "default", touch: IPAD },
+  { name: "ipad-landscape", width: 1194, height: 834, textSize: "default", touch: IPAD },
   { name: "desktop", width: 1440, height: 900, textSize: "default", touch: null },
+  /* The text sizes again where the column is at its measure, not the window's
+     width: at 725 they are exempt, so only these can catch the cap clipping a
+     larger size (GPT Sol, plan 261023a). */
+  { name: "desktop-large", width: 1440, height: 900, textSize: "large", touch: null },
+  { name: "desktop-larger", width: 1440, height: 900, textSize: "larger", touch: null },
+  { name: "desktop-largest", width: 1440, height: 900, textSize: "largest", touch: null },
   { name: "iphone", width: 390, height: 844, textSize: "default", touch: IPHONE },
   { name: "iphone-se", width: 375, height: 667, textSize: "default", touch: IPHONE },
 ];
@@ -141,7 +148,16 @@ function count(): Count {
 }
 
 const { chromium } = await import("playwright-core");
-const browser = await chromium.launch({ headless: true, executablePath: chromePath(), args: ["--no-sandbox"] });
+/* Classic scrollbars, as browser-testing-playwright.md says: with them hidden,
+   `scrollbar-gutter: stable` still holds 15px back while the root's
+   `clientWidth` reports the whole window, so the layout is fitted to a width
+   the page does not have (plan 261023a). */
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: chromePath(),
+  args: ["--no-sandbox"],
+  ignoreDefaultArgs: ["--hide-scrollbars"],
+});
 let failed = false;
 try {
   const first = await browser.newContext();
