@@ -472,3 +472,204 @@ describe("an article with no footnotes to show", () => {
     expect(render([r(1, "paragraph", "Nothing cites it."), r(1, "footnote", "1 Affiliation.")])).not.toContain("<section");
   });
 });
+
+/**
+ * *The Order of Time*, first import, 2026-10-04 (report spya-rg5kk6, addendum spya-zdp62y): its
+ * notes run 1–132 over pages 127–137, a chapter heading before each group, and of the three chunks
+ * that read them the middle one typed every note `reference`, 21 to 93, so seventy-three notes
+ * were transcribed and never shown. Shapes are the real ones; the words are not.
+ * docs/plans/261023b-endnotes-typed-as-references-are-kept-as-notes.md.
+ */
+describe("a run of endnotes the model typed as references", () => {
+  const prose = r(40, "paragraph", "Time slows down20 near a mass, and clocks21 disagree, and so22 on.");
+  const typed = [r(127, "heading1", "NOTES"), r(127, "heading2", "1. LOSS OF UNITY"), r(128, "footnote", "20 A typed note.")];
+
+  it("lists them as notes and links their markers, across a chapter heading on each side", () => {
+    const records = [
+      prose,
+      ...typed,
+      r(129, "heading1", "3. THE END OF THE PRESENT"),
+      r(129, "reference", "21. Hafele and Keating, Science 177 (1972)."),
+      r(129, "reference", "22. That depends as much on t as on"),
+      r(130, "reference", "your speed and position.", true),
+      r(130, "heading1", "4. LOSS OF INDEPENDENCE"),
+      r(131, "footnote", "94 Typed again."),
+    ];
+    expect(links(records)).toEqual([
+      "20 → A typed note.",
+      "21 → Hafele and Keating, Science 177 (1972).",
+      "22 → That depends as much on t as on your speed and position.",
+    ]);
+    expect(listed(records)).toEqual([
+      "A typed note.",
+      "Hafele and Keating, Science 177 (1972).",
+      "That depends as much on t as on your speed and position.",
+      "Typed again.",
+    ]);
+  });
+
+  it("does not change the transcription it was given", () => {
+    const records = [prose, ...typed, r(129, "reference", "21. Hafele and Keating.")];
+    const before = structuredClone(records);
+    expect(listed(records)).toEqual(["A typed note.", "Hafele and Keating."]);
+    expect(records).toEqual(before);
+  });
+
+  it("leaves a reference list alone when it starts again at 1 after the notes", () => {
+    const records = [
+      prose, ...typed,
+      r(129, "heading1", "References"),
+      r(129, "reference", "1. Smith, J. (2020). A book."),
+      r(129, "reference", "2. Jones, K. (2021). Another."),
+    ];
+    expect(listed(records)).toEqual(["A typed note."]);
+  });
+
+  it("leaves a numbered reference alone when no note comes before it", () => {
+    expect(listed([prose, r(129, "reference", "21. Smith, J. (2020). A book.")])).toEqual([]);
+  });
+
+  it("stops at a label that skips, and does not start again after it", () => {
+    const records = [prose, ...typed, r(129, "reference", "22. Skips twenty-one."), r(129, "reference", "23. Follows the skip.")];
+    expect(listed(records)).toEqual(["A typed note."]);
+  });
+
+  it("does not reach past a page with nothing on it", () => {
+    expect(listed([prose, ...typed, r(130, "reference", "21. Two pages on.")])).toEqual(["A typed note."]);
+  });
+
+  it("does not take an unlabelled reference that does not say it continues", () => {
+    const records = [prose, ...typed, r(129, "reference", "21. A note."), r(129, "reference", "Smith, J. (2020). A book.")];
+    expect(listed(records)).toEqual(["A typed note.", "A note."]);
+  });
+
+  it("keeps the run going across a chapter heading between two references (34, heading, 35)", () => {
+    const records = [
+      prose, ...typed,
+      r(129, "reference", "21. Twenty-one."),
+      r(129, "heading1", "4. LOSS OF INDEPENDENCE"),
+      r(129, "reference", "22. Twenty-two."),
+    ];
+    expect(listed(records)).toEqual(["A typed note.", "Twenty-one.", "Twenty-two."]);
+  });
+
+  it("joins a recovered note's continuation, then takes the next label (60, continuation, 61)", () => {
+    const records = [
+      prose, ...typed,
+      r(131, "heading1", "NOTES"),
+      r(129, "reference", "21. Runs on"),
+      r(130, "reference", "over the page.", true),
+      r(130, "reference", "22. Next."),
+    ];
+    expect(listed(records)).toEqual(["A typed note.", "Runs on over the page.", "Next."]);
+  });
+
+  it("hands the run back to typed footnotes that continue the last recovered note (93, continues, 94)", () => {
+    const records = [
+      prose, ...typed,
+      r(129, "reference", "21. Ninety-three runs on"),
+      r(130, "footnote", "into the next chunk.", true),
+      r(130, "footnote", "22 Ninety-four."),
+    ];
+    expect(listed(records)).toEqual(["A typed note.", "Ninety-three runs on into the next chunk.", "Ninety-four."]);
+  });
+
+  it("stops at a References heading, even when the list's numbers would follow on (GPT Sol, F2)", () => {
+    const records = [prose, ...typed, r(129, "heading1", "References"), r(129, "reference", "21. Smith, J. (2020). A book.")];
+    expect(listed(records)).toEqual(["A typed note."]);
+  });
+
+  it("does nothing outside a Notes section: a page footnote, then a numbered list that follows on", () => {
+    const records = [
+      r(9, "paragraph", "A claim.20"),
+      r(9, "footnote", "20 A page footnote."),
+      r(10, "reference", "21. Smith, J. (2020). A book."),
+    ];
+    expect(listed(records)).toEqual(["A page footnote."]);
+  });
+
+  it("leaves author-year, bracketed and symbol-labelled entries alone", () => {
+    const records = [
+      prose, ...typed,
+      r(129, "reference", "1971 Smith, J. A book."),
+      r(129, "reference", "[21] Smith, J. A book."),
+    ];
+    expect(listed(records)).toEqual(["A typed note."]);
+    const afterSymbol = [prose, ...typed, r(128, "footnote", "* A symbol note."), r(129, "reference", "21. Not after twenty.")];
+    expect(listed(afterSymbol)).toEqual(["A typed note.", "* A symbol note."]);
+  });
+
+  it("takes a run anchored on a note that endnotesTypedAsProse gave back", () => {
+    /* No chapter heading here: endnotesTypedAsProse takes a page only straight after a Notes heading's notes. */
+    const records = [
+      prose,
+      r(127, "heading1", "NOTES"),
+      r(128, "footnote", "20 A typed note."),
+      r(129, "paragraph", "21 Typed as prose."),
+      r(130, "reference", "22. Typed as a reference."),
+    ];
+    expect(listed(records)).toEqual(["A typed note.", "Typed as prose.", "Typed as a reference."]);
+  });
+});
+
+describe("a footnote marked `continues` that opens with the next explicit label (Rovelli's note 122)", () => {
+  it("starts a note of its own", () => {
+    const records = [
+      lead,
+      r(2, "paragraph", "One121 and two122 and three123."),
+      r(137, "footnote", "121. Mahābhārata III.297."),
+      r(137, "footnote", "122. Ibid., I.119. The note goes on", true),
+      r(137, "footnote", "over the line.", true),
+      r(137, "footnote", "123. Calasso."),
+    ];
+    expect(listed(records)).toEqual(["Mahābhārata III.297.", "Ibid., I.119. The note goes on over the line.", "Calasso."]);
+  });
+
+  it("still joins a continuation whose prose opens with the next number", () => {
+    const records = [lead, r(2, "footnote", "39 Of the patients,"), r(2, "footnote", "40 per cent recovered.", true)];
+    expect(listed(records)).toEqual(["Of the patients, 40 per cent recovered."]);
+  });
+
+  it("also treats a superscript next label as explicit", () => {
+    const records = [lead, r(2, "footnote", "¹ First."), r(2, "footnote", "² Second.", true)];
+    expect(listed(records)).toEqual(["First.", "Second."]);
+  });
+});
+
+/** The same book, pages 55–59: each marker split out as a record of its own between two paragraphs. */
+describe("a footnote record that is only its label", () => {
+  it("is not listed as a note", () => {
+    const records = [
+      lead,
+      r(55, "paragraph", "The idea that time could be granular is not new."),
+      r(55, "footnote", "53"),
+      r(55, "paragraph", "The idea probably dates back even further."),
+      r(130, "footnote", "53 Plato, Timaeus."),
+    ];
+    expect(listed(records)).toEqual(["Plato, Timaeus."]);
+  });
+
+  it("is one note with the continuation after it, label and body split across two records (GPT Sol, F4)", () => {
+    const records = [
+      lead,
+      r(2, "paragraph", "A claim.11 Another.12"),
+      r(2, "footnote", "11 Eleven."),
+      r(2, "footnote", "12."),
+      r(3, "publisher", "Running header"),
+      r(3, "footnote", "The body of note twelve.", true),
+    ];
+    expect(listed(records)).toEqual(["Eleven.", "The body of note twelve."]);
+    expect(links(records)).toEqual(["11 → Eleven.", "12 → The body of note twelve."]);
+  });
+
+  it("does not take a later continuation across substantive non-footnote content", () => {
+    const records = [
+      lead,
+      r(2, "footnote", "11 Eleven runs on"),
+      r(2, "footnote", "12"),
+      r(2, "paragraph", "Body prose separates the stray label from the real continuation."),
+      r(2, "footnote", "over the page.", true),
+    ];
+    expect(listed(records)).toEqual(["Eleven runs on over the page."]);
+  });
+});

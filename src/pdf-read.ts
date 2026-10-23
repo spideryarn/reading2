@@ -1915,7 +1915,7 @@ export function renderHtml(
   /* The one seam: the body loop, `collectNotes` and `findMarkers` all read the
      records from here down, so a mistyped endnote leaves the body and joins the
      notes in the same step. Indexes do not move, so `targets` still lines up. */
-  const records = endnotesTypedAsProse(transcribed);
+  const records = endnotesTypedAsReferences(endnotesTypedAsProse(transcribed));
   /* **Whole blocks first, HTML second.** A continuation's text is added to its
      block before anything is written, so a caption continued onto the next page
      is inside its `<figcaption>` and the figure's ref is minted from the whole
@@ -2293,7 +2293,8 @@ interface PdfNote {
  * word (`3It is important`, `1Max Planck`). Not `1-2:` (a verse range), not
  * `1970 was`, and not a letter (`a To test`), which prose could not be searched for.
  */
-const NOTE_LABEL = /^([1-9]\d{0,2}|[¹²³⁴⁵⁶⁷⁸⁹][⁰¹²³⁴⁵⁶⁷⁸⁹]{0,2}|[*†‡§¶]{1,3})(?:\.?\s+|(?=\p{L}))/u;
+const LABEL = "[1-9]\\d{0,2}|[¹²³⁴⁵⁶⁷⁸⁹][⁰¹²³⁴⁵⁶⁷⁸⁹]{0,2}|[*†‡§¶]{1,3}";
+const NOTE_LABEL = new RegExp(`^(${LABEL})(?:\\.?\\s+|(?=\\p{L}))`, "u");
 
 /** The prose a marker may sit in. Captions and headings are left alone. */
 const CITING: ReadonlySet<RecordType> = new Set<RecordType>(["paragraph", "quote", "listitem"]);
@@ -2304,6 +2305,21 @@ function numericLabel(text: string): number | null {
   if (!label || !text.slice(label[0].length).trim()) return null;
   const plain = markerSpellings(label[1]!)[0]!;
   return /^\d+$/.test(plain) ? Number(plain) : null;
+}
+
+/**
+ * A numeric label strong enough to overrule `continues`: `122.` or `¹²²`,
+ * but not ordinary prose such as `40 per cent` or `122nd`. The latter shapes
+ * can genuinely start a continuation and otherwise look like a note label.
+ */
+function explicitNumericLabel(text: string): number | null {
+  const label = NOTE_LABEL.exec(text);
+  if (!label || !text.slice(label[0].length).trim()) return null;
+  const printed = label[1]!;
+  const plain = markerSpellings(printed)[0]!;
+  if (!/^\d+$/.test(plain)) return null;
+  const superscript = printed !== plain;
+  return superscript || label[0].startsWith(`${printed}.`) ? Number(plain) : null;
 }
 
 /**
@@ -2397,17 +2413,153 @@ function endnotesTypedAsProse(records: readonly PdfRecord[]): PdfRecord[] {
   return out;
 }
 
-/** The footnote records, as notes. A record marked `continues` joins the note before it. */
+/** A heading that opens a section of endnotes, and one that opens a reference list. */
+const NOTES_HEADING = /^(?:end)?notes$/i;
+const LIST_HEADING = /^(?:references|bibliography|works cited|literature cited|sources)$/i;
+
+/**
+ * **A run of endnotes the model typed as `reference`, given back to the notes.**
+ *
+ * The first import of *The Order of Time*, 2026-10-04: its notes run 1–132
+ * over pages 127–137 with a chapter heading before each group, and of the
+ * three chunks that read them the middle one typed every note, 21 to 93, as
+ * `reference`. `reference` is transcribed and never shown (src/pdf.ts §
+ * `RecordType`), so seventy-three notes passed the gate and vanished, and
+ * their markers linked to nothing. The mirror of `endnotesTypedAsProse`, and
+ * found in code for the same reason: no prompt change, no stale checkpoint.
+ * docs/plans/261023b-endnotes-typed-as-references-are-kept-as-notes.md.
+ *
+ * **Wider than `endnotesTypedAsProse` where it is safe to be.** Its wrong
+ * direction moves the author's prose out of the body; this one's moves a
+ * reference entry, which no reader is shown, into the notes list (and the
+ * Bibliography reads a PDF's list from the text layer, not from these
+ * records). So it works record by record, not page by page, and a heading
+ * does not end the run: Rovelli's chapter headings sit between the notes.
+ *
+ * A `reference` becomes a note when all of these hold:
+ *
+ * 1. a `Notes` or `Endnotes` heading opened a section, and no `References` or
+ *    `Bibliography` heading has closed it since (GPT Sol, plan review F2: a
+ *    numbered list continuing a page footnote's number is otherwise possible);
+ * 2. its label is exactly one more than the last note's, which is a `footnote`
+ *    record or a reference already given back, on its page or the one before;
+ * 3. or it has no label, says it `continues`, and follows one given back.
+ *
+ * Anything else, a symbol-labelled footnote included, ends the run. A reference
+ * list starting again at 1 therefore stops at its first entry.
+ */
+function endnotesTypedAsReferences(records: readonly PdfRecord[]): PdfRecord[] {
+  const out = [...records];
+  let inNotes = false;
+  let last: number | null = null;
+  let lastPage: number | null = null;
+  /* Whether the last note piece was a reference given back, so an unlabelled continuation may join it. */
+  let recovering = false;
+  for (const [i, r] of out.entries()) {
+    const text = r.text.trim();
+    if (r.type.startsWith("heading")) {
+      if (NOTES_HEADING.test(text)) inNotes = true;
+      else if (LIST_HEADING.test(text)) {
+        inNotes = false;
+        last = null;
+      }
+      continue;
+    }
+    if (r.type === "publisher" || !text) continue;
+    const near = lastPage !== null && r.page >= lastPage && r.page - lastPage <= 1;
+    if (r.type === "footnote") {
+      if (startsNote(r, last)) last = numericLabel(text);
+      lastPage = r.page;
+      recovering = false;
+      continue;
+    }
+    if (r.type === "reference" && inNotes && near) {
+      const n = numericLabel(text);
+      if (last !== null && n === last + 1) {
+        out[i] = { ...r, type: "footnote", continues: false };
+        last = n;
+        lastPage = r.page;
+        recovering = true;
+        continue;
+      }
+      if (n === null && r.continues && recovering) {
+        out[i] = { ...r, type: "footnote" };
+        lastPage = r.page;
+        continue;
+      }
+    }
+    last = null;
+    recovering = false;
+  }
+  return out;
+}
+
+/**
+ * Whether a footnote record starts a note rather than continuing the last one.
+ *
+ * A record without `continues` does. So does one marked `continues` whose
+ * explicit label is the next number: the model sometimes marks a whole new
+ * note that way (Rovelli's `122.`), and appending it to note 121 lost its
+ * marker (GPT Sol, plan review F1). A plain number followed by whitespace is
+ * not explicit enough: note 39 can genuinely continue "40 per cent…".
+ */
+function startsNote(record: PdfRecord, last: number | null): boolean {
+  if (!record.continues) return true;
+  return last !== null && explicitNumericLabel(record.text.trim()) === last + 1;
+}
+
+/** A footnote record that is nothing but its label: `53`, `53.`, `¹²`, `*`. */
+const BARE_LABEL = new RegExp(`^(${LABEL})\\.?$`, "u");
+
+/**
+ * The footnote records, as notes. A record marked `continues` joins the note
+ * before it, unless it opens with the next explicit label (`startsNote`).
+ *
+ * **A record that is only a label is not a note.** On Rovelli's pages 55–59
+ * the model split five markers out of their paragraphs as `footnote "53"` …
+ * `"57"`, and they were listed as notes saying "53". It is held instead: if
+ * the next footnote record is an unlabelled continuation on its page or the
+ * next, with no substantive record between, the two are one note, label and
+ * body split across records (GPT Sol, plan review F4); otherwise it is dropped.
+ * Publisher furniture is transparent at a page turn. Putting the label back in
+ * the paragraph as a marker was passed over: a bare number may as well be a folio.
+ */
 function collectNotes(records: readonly PdfRecord[]): PdfNote[] {
   const notes: Omit<PdfNote, "id">[] = [];
   /* The page of the last note's last piece, which a continuation must be on or next to. */
   let lastPage = 0;
+  let lastNumber: number | null = null;
+  let held: { label: string; page: number; uncertain: boolean } | null = null;
   for (const record of records) {
-    if (record.type !== "footnote") continue;
+    if (record.type !== "footnote") {
+      /* A split label and body may straddle a running header. Anything else
+         means the next footnote is no longer the other half of this record. */
+      if (held && record.type !== "publisher" && (record.text.trim() || record.type === "figure")) held = null;
+      continue;
+    }
     const text = record.text.trim();
     if (!text) continue;
+    const bare = BARE_LABEL.exec(text);
+    if (bare) {
+      held = { label: bare[1]!, page: record.page, uncertain: record.uncertain };
+      continue;
+    }
+    const pending = held;
+    held = null;
+    if (pending && record.continues && !NOTE_LABEL.exec(text) && record.page >= pending.page && record.page - pending.page <= 1) {
+      lastPage = record.page;
+      lastNumber = numericLabel(`${pending.label} ${text}`);
+      notes.push({
+        label: pending.label,
+        text: `${pending.label} ${text}`,
+        body: text,
+        page: pending.page,
+        uncertain: pending.uncertain || record.uncertain,
+      });
+      continue;
+    }
     const last = notes.at(-1);
-    if (record.continues && last && record.page >= lastPage && record.page - lastPage <= 1) {
+    if (!startsNote(record, lastNumber) && last && record.page >= lastPage && record.page - lastPage <= 1) {
       last.text = `${last.text} ${text}`;
       last.body = `${last.body} ${text}`;
       last.uncertain ||= record.uncertain;
@@ -2415,6 +2567,7 @@ function collectNotes(records: readonly PdfRecord[]): PdfNote[] {
       continue;
     }
     lastPage = record.page;
+    lastNumber = numericLabel(text);
     const label = NOTE_LABEL.exec(text);
     const body = label ? text.slice(label[0].length).trim() : "";
     notes.push({

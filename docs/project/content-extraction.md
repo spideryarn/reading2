@@ -278,6 +278,12 @@ The differences that matter to a reader:
   continue the preceding note; other content leaves the page alone. A fresh import had fifteen notes come out
   as body paragraphs with their markers bare —
   [261004d](../investigations/261004d-glued-footnote-and-citation-digits-census-across-production-articles.md).
+  **And a run of endnotes typed as references** (2026-10-23, `endnotesTypedAsReferences`): inside
+  a `Notes` section not yet closed by a `References` heading, a `reference` whose number is the
+  last note's plus one, on its page or the next, is a note; chapter headings between notes do not
+  end the run. *The Order of Time* lost notes 21–93 that way, since `reference` is transcribed and
+  never shown. A footnote record that is only its label (`53`) is not listed as a note —
+  [261023b](../plans/261023b-endnotes-typed-as-references-are-kept-as-notes.md).
 - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
   table was a caption over nothing, though the cells were transcribed and scored all
