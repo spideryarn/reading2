@@ -19,10 +19,12 @@
  * tests/extract-resolves-against-the-final-url.test.ts.
  */
 import { randomUUID } from "node:crypto";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { Verifier } from "../src/auth.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -118,6 +120,54 @@ describe("a saved page's address", () => {
       .where(eq(articleRevisions.id, draftId))
       .limit(1);
     expect(draft).toEqual({ saved: SAVED, final: null, requested: null });
+  });
+
+  /**
+   * `GET /api/library/by-url`, the Chrome extension's "already on the shelf?"
+   * (plan 261024y), over HTTP: the owner finds it by the saved address, a
+   * stranger asking the same address finds nothing. The owner's answer is the
+   * positive control that makes the stranger's `null` a refusal.
+   */
+  it("is found by its owner through the by-url route, and by nobody else", async () => {
+    const asPerson = (sub: string): Verifier => async () => ({
+      ok: true,
+      claims: { sub, email: `${sub}@example.test`, role: "authenticated", is_anonymous: false },
+    });
+    async function byUrl(sub: string, url: string) {
+      const req = Object.assign((async function* () {})(), {
+        method: "GET",
+        url: `/api/library/by-url?url=${encodeURIComponent(url)}`,
+        headers: { authorization: "Bearer whatever" },
+      }) as unknown as IncomingMessage;
+      let status = 0;
+      let text = "";
+      const res = {
+        set statusCode(v: number) {
+          status = v;
+        },
+        get statusCode() {
+          return status;
+        },
+        setHeader() {},
+        end(chunk: string) {
+          text = chunk;
+        },
+      } as unknown as ServerResponse;
+      const { handleApi } = await import("../src/routes.js");
+      await handleApi(req, res, asPerson(sub));
+      return { status, body: text ? (JSON.parse(text) as unknown) : null };
+    }
+
+    /* A fragment and an `http:` spelling are the same article, as a paste is. */
+    expect(await byUrl(DEV_OWNER_ID, `${SAVED.replace("https:", "http:")}#s2`)).toEqual({
+      status: 200,
+      body: { slug: SLUG },
+    });
+    expect(await byUrl("00000000-0000-4000-8000-0000000000c3", SAVED)).toEqual({
+      status: 200,
+      body: { slug: null },
+    });
+    expect((await byUrl(DEV_OWNER_ID, "javascript:alert(1)")).status).toBe(400);
   });
 
   describe("for a visitor", () => {

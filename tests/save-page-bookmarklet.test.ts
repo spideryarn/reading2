@@ -524,6 +524,21 @@ describe("capturePage", () => {
     expect(saved.alerts).toEqual([]);
   });
 
+  /* Plan 261024y: the extension hands this to our page beside the HTML, so it
+     must be exactly the meta it wrote, and null exactly when it wrote none. */
+  it("says the address it wrote into the meta, and null when it wrote none", () => {
+    const at = "https://www.cell.com/article/S1/fulltext?rss=yes#sec1";
+    const got = capturePage(MAX_UPLOAD_BYTES, 0, page(article(), at).win);
+    if (got.kind !== "page") throw new Error(`expected a page, got ${got.kind}`);
+    expect(got.savedFrom).toBe("https://www.cell.com/article/S1/fulltext?rss=yes");
+    const metas = new JSDOM(got.html).window.document.querySelectorAll('head meta[name="spideryarn-saved-from"]');
+    expect([...metas].map((m) => m.getAttribute("content"))).toEqual([got.savedFrom]);
+    for (const url of ["file:///home/someone/paper.html", "https://user:secret@www.cell.com/article"]) {
+      const none = capturePage(MAX_UPLOAD_BYTES, 0, page(article(), url).win);
+      expect(none.kind === "page" && none.savedFrom).toBeNull();
+    }
+  });
+
   it("is the same text the bookmarklet saves", async () => {
     const got = capturePage(MAX_UPLOAD_BYTES, 0, page(article()).win);
     const { saved } = await save(article());

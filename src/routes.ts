@@ -277,7 +277,7 @@ import { answerOpening } from "./answer-opening.js";
 import { answerAsSeen } from "./recall-hint.js";
 import { gptLiveSession } from "./live-gpt.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
-import { isWebUrl } from "./urls.js";
+import { isWebUrl, savedSource } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
@@ -529,6 +529,7 @@ import type {
   LibraryResponse,
   LibraryTermsResponse,
   PublicShelfTopicsStatus,
+  LibraryByUrlResponse,
   LibraryTagsResponse,
   ArticleTagsResponse,
   LearnStance,
@@ -11590,6 +11591,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* The reader's own words: never a shared cache's, as the terms route. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, tags);
+    },
+  },
+
+  /* **Does this reader already have an article from this address?** Asked by
+     the page the Chrome extension opens, with the address its capture says it
+     was saved from, before it uploads: found, it offers the article instead of
+     a second copy and a second slot. `slugForUrlKey` is the lookup a pasted
+     address already answers through (`POST /api/jobs`' repeat paste), on this
+     reader's own shelf only; this one never fetches, queues or spends. The
+     address is a claim, so it is held to `savedSource` first. Exact, GET, and
+     no `viewAs`: an administrator viewing as a reader never adds. Plan
+     docs/plans/261024y-a-second-press-on-a-page-already-on-the-shelf-opens-it.md. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library/by-url",
+    article: "none",
+    handler: async ({ request: { res, query } }) => {
+      const url = savedSource(query.get("url"));
+      if (url === null) throw httpError(400, "Expected ?url= an http(s) address");
+      const found: LibraryByUrlResponse = { slug: (await slugForUrlKey(urlKey(url))) ?? null };
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, found);
     },
   },
 

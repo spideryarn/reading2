@@ -541,6 +541,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/library/tags"],
   },
   {
+    /* Already on the shelf? for the Chrome extension's page, 261024y — the
+       same overlap again. */
+    match: { kind: "literal", path: "/api/library/by-url" },
+    methods: ["GET"],
+    witnesses: ["/api/library/by-url"],
+  },
+  {
     /* **`DELETE` joined `PATCH` on 2026-09-06**, and they are one matcher with
        two arms rather than two matchers: the same `shelfEntry` regex, branching
        on the method. The permanent delete —
@@ -2231,6 +2238,8 @@ const OVERLAP_PROBES = [
   "/api/library/terms",
   /* GET is the reader's tags; PATCH is the shelf entry for a slug `tags`. */
   "/api/library/tags",
+  /* GET is the already-on-the-shelf lookup; PATCH is a slug `by-url`. */
+  "/api/library/by-url",
   /* POST is the live tool; PATCH and DELETE are the thread whose id happens to
      read `live-tool`. */
   "/api/chat/w1/live-tool",
@@ -2443,6 +2452,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/library/terms",
         // the reader's tags, 261003d — beside the PATCH it serves
         "GET literal /api/library/tags",
+        // does this reader already have this address, 261024y
+        "GET literal /api/library/by-url",
         "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)\\/tags$/",
         "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/library\\/([\\w.%-]+)$/",

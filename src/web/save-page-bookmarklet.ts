@@ -30,7 +30,17 @@ import { MAX_UPLOAD_BYTES } from "../uploads.js";
  * name to give it, or why there is none.
  */
 export type PageCapture =
-  | { kind: "page"; html: string; filename: string; bytes: number }
+  | {
+      kind: "page";
+      html: string;
+      filename: string;
+      bytes: number;
+      /** The address written into the saved-from meta (3a), or `null` when none
+       *  was. The Chrome extension hands it to our page beside the HTML, so the
+       *  page can ask whether the reader already has it without parsing the
+       *  HTML (plan 261024y). */
+      savedFrom: string | null;
+    }
   | { kind: "too-big"; bytes: number }
   | { kind: "pdf" };
 
@@ -209,6 +219,7 @@ export function capturePage(
     }
   }
   let savedFrom: URL | null = null;
+  let savedFromHref: string | null = null;
   try {
     savedFrom = new win.URL(win.location.href);
   } catch (_) {
@@ -221,9 +232,10 @@ export function capturePage(
     savedFrom.password === ""
   ) {
     savedFrom.hash = "";
+    savedFromHref = savedFrom.href;
     const savedFromEl = doc.createElement("meta");
     savedFromEl.setAttribute("name", "spideryarn-saved-from");
-    savedFromEl.setAttribute("content", savedFrom.href);
+    savedFromEl.setAttribute("content", savedFromHref);
     head.insertBefore(savedFromEl, charsetEl.nextSibling);
   }
 
@@ -263,7 +275,7 @@ export function capturePage(
     .trim()
     .slice(0, 120)
     .replace(/^[\s.]+|[\s.]+$/g, "");
-  return { kind: "page", html, filename: `${title || "page"}.html`, bytes };
+  return { kind: "page", html, filename: `${title || "page"}.html`, bytes, savedFrom: savedFromHref };
 }
 
 /**

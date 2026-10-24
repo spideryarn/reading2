@@ -50,6 +50,8 @@ export interface Waiting {
   nonce: string;
   html: string;
   filename: string;
+  /** `PageCapture.savedFrom`. Absent on an entry an older build kept. */
+  savedFrom?: string | null;
   /** `Date.now()` when it was captured. */
   at: number;
 }
@@ -62,7 +64,9 @@ export interface Opened {
 }
 
 /** The answer to `TAKE`. The page reads it in src/web/extension-handoff.ts. */
-export type TakeReply = { kind: "page"; html: string; filename: string } | { kind: "nothing" };
+export type TakeReply =
+  | { kind: "page"; html: string; filename: string; savedFrom: string | null }
+  | { kind: "nothing" };
 
 /**
  * Where captures wait between the button and the tab asking. IndexedDB in the
@@ -186,7 +190,7 @@ async function press(
   const at = now();
   const nonce = chrome.nonce();
   await store.put(
-    { tabId: receiver, nonce, html: got.html, filename: got.filename, at },
+    { tabId: receiver, nonce, html: got.html, filename: got.filename, savedFrom: got.savedFrom, at },
     { source, tabId: receiver, at },
   );
   await chrome.navigate(receiver, `${origin}${RECEIVE_PATH}?handoff=${nonce}`);
@@ -241,7 +245,7 @@ export async function take(
   if (nonce === undefined || !/^[0-9a-f]{32}$/.test(nonce)) return NOTHING;
   const entry = await store.take(tabId, nonce);
   if (entry === undefined || now() - entry.at > KEEP_MS) return NOTHING;
-  return { kind: "page", html: entry.html, filename: entry.filename };
+  return { kind: "page", html: entry.html, filename: entry.filename, savedFrom: entry.savedFrom ?? null };
 }
 
 const NOTHING: TakeReply = { kind: "nothing" };

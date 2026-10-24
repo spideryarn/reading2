@@ -16,6 +16,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { REPEAT_PASTE_ON_THE_SHELF } from "../messages.js";
+import type { LibraryByUrlResponse } from "../types.js";
 import {
   type SendMessage,
   type Taken,
@@ -24,9 +27,10 @@ import {
   trustedExtensionIds,
 } from "./extension-handoff.js";
 import { Link } from "./Link.js";
+import { apiFetch, readJson } from "./lib/api.js";
 import { heldReader } from "./lib/session.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { LIBRARY_HREF, addUploadHref, navigate } from "./router.js";
+import { LIBRARY_HREF, addUploadHref, navigate, readHref } from "./router.js";
 import { ONE_UPLOAD_AT_A_TIME, type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 
@@ -37,12 +41,19 @@ const ALREADY_SENT =
 export type Receiving =
   | { kind: "asking" }
   | { kind: "sent" }
+  /** The reader already has an article from the page's address: offered, nothing uploaded. */
+  | { kind: "have"; slug: string }
+  /** The shelf could not be asked. Nothing uploaded, and the capture is kept for Try again. */
+  | { kind: "unchecked" }
   | { kind: "no-extension" }
   | { kind: "nothing" }
   | { kind: "refused"; reason: string | null };
 
 export interface ReceiveDeps {
   take: () => Promise<Taken>;
+  /** The slug of the reader's own article from this saved-from address, or
+   *  `null` when there is none. Throws when the shelf could not be asked. */
+  have: (savedFrom: string) => Promise<string | null>;
   /** Still mounted, and the engine and the tab both still hold this reader. */
   stillFor: () => boolean;
   send: (file: File) => Promise<string | null>;
@@ -54,6 +65,21 @@ export async function receive(deps: ReceiveDeps): Promise<Receiving | null> {
   const taken = await deps.take();
   if (taken.kind !== "page") return taken;
   if (!deps.stillFor()) return null;
+  /* **Already on the shelf?** Asked before the upload, so a second press on a
+     page the reader has offers that article and spends nothing (plan 261024y).
+     A failed ask uploads nothing: treating it as "not there" would be the very
+     duplicate this exists to stop (GPT Sol, plan review F3). A page with no
+     address has nothing to ask about, and uploads as before. */
+  if (taken.savedFrom !== null) {
+    let slug: string | null;
+    try {
+      slug = await deps.have(taken.savedFrom);
+    } catch {
+      return deps.stillFor() ? { kind: "unchecked" } : null;
+    }
+    if (!deps.stillFor()) return null;
+    if (slug !== null) return { kind: "have", slug };
+  }
   let uploadId: string | null;
   try {
     uploadId = await deps.send(taken.file);
@@ -107,6 +133,23 @@ export function uploadInFlight(transfer: Transfer | null): boolean {
   return phase === "hashing" || phase === "granting" || phase === "sending" || phase === "queueing";
 }
 
+/**
+ * The slug of `readerId`'s article from the address the capture says it was
+ * saved from, or `null`; throws when the shelf could not be asked. The lookup
+ * is the server's, on that reader's shelf only, and the request is **made for
+ * `readerId`**, so a sign-in as somebody else meanwhile cannot send one
+ * reader's page address under another's account (`apiFetch`'s `madeFor`;
+ * GPT Sol, plan review F2).
+ */
+export async function alreadyOnShelf(
+  savedFrom: string,
+  readerId: string,
+  fetchFor: typeof apiFetch = apiFetch,
+): Promise<string | null> {
+  const r = await fetchFor(`/api/library/by-url?url=${encodeURIComponent(savedFrom)}`, {}, readerId);
+  return (await readJson<LibraryByUrlResponse>(r)).slug;
+}
+
 /** For tests: forget the ask, as a new page load would. */
 export function forgetAsk(): void {
   asked = null;
@@ -124,6 +167,9 @@ export function AddFromExtension({
   useDocumentTitle(pageTitle({ kind: "add" }));
   const [sendMessage] = useState(() => (given === undefined ? pageSendMessage() : (given ?? undefined)));
   const [state, setState] = useState<Receiving>({ kind: "asking" });
+  /* Bumped by Try again after `unchecked`, to run the effect once more over
+     the capture still cached in `asked`. */
+  const [attempt, setAttempt] = useState(0);
   const transfer = useUpload();
   const started = useRef(false);
   /* Once this capture has started, its own transfer makes the engine busy. Keep
@@ -137,6 +183,7 @@ export function AddFromExtension({
     let mounted = true;
     void receive({
       take: () => askOnce(readerId, sendMessage),
+      have: (savedFrom) => alreadyOnShelf(savedFrom, readerId),
       stillFor: () => mounted && uploadEngine.reader() === readerId && heldReader() === readerId,
       send: async (file) => {
         if (!spendAsk()) throw new Error(ALREADY_SENT);
@@ -152,6 +199,8 @@ export function AddFromExtension({
       go: (href) => navigate(href, { replace: true }),
     }).then((next) => {
       if (!mounted || next === null) return;
+      /* Spent, as a send would be: Back to this address must not upload it. */
+      if (next.kind === "have") spendAsk();
       if (next.kind === "refused" && next.reason === ONE_UPLOAD_AT_A_TIME) {
         started.current = false;
         setState({ kind: "asking" });
@@ -162,8 +211,8 @@ export function AddFromExtension({
     return () => {
       mounted = false;
     };
-    /* Once per mount: `App` remounts this page for another reader (`key`). */
-  }, [readerId, sendMessage, ready]);
+    /* Once per mount and Try again: `App` remounts this page for another reader (`key`). */
+  }, [readerId, sendMessage, ready, attempt]);
 
   const failed = transfer?.phase.kind === "failed" ? transfer.phase.reason : null;
   return (
@@ -174,6 +223,28 @@ export function AddFromExtension({
       <p className="tw:m-0 tw:text-foreground" role="status">
         {!ready ? "Waiting for the upload already in progress to finish…" : sentence(state, failed)}
       </p>
+      {state.kind === "have" && (
+        <div className="tw:mt-4">
+          <Button type="button" size="sm" onClick={() => navigate(readHref(state.slug))}>
+            Open the article
+          </Button>
+        </div>
+      )}
+      {state.kind === "unchecked" && (
+        <div className="tw:mt-4">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              started.current = false;
+              setState({ kind: "asking" });
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
+      )}
       {state.kind !== "asking" && state.kind !== "sent" && (
         <p className="tw:mt-6 tw:mb-0 tw:text-sm">
           <Link href={LIBRARY_HREF} className="tw:text-muted-foreground tw:hover:text-highlight-text">
@@ -190,6 +261,10 @@ function sentence(state: Receiving, failed: string | null): string {
     case "asking":
     case "sent":
       return "Getting the page from Spideryarn's Chrome extension…";
+    case "have":
+      return REPEAT_PASTE_ON_THE_SHELF;
+    case "unchecked":
+      return "Spideryarn couldn't check whether this page is already on your shelf, so it hasn't been added yet.";
     case "no-extension":
       return "Spideryarn's Chrome extension didn't answer. If it's installed and switched on, go back to the page and press its button again.";
     case "nothing":

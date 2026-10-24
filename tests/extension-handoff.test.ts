@@ -36,7 +36,7 @@ import {
 } from "../extension/src/handoff.js";
 import { HANDOFF_DB_NAME, indexedDbStore } from "../extension/src/store.js";
 import type { PageCapture } from "../src/web/save-page-bookmarklet.js";
-import { receive, uploadInFlight } from "../src/web/AddFromExtension.js";
+import { alreadyOnShelf, receive, uploadInFlight } from "../src/web/AddFromExtension.js";
 import * as web from "../src/web/extension-handoff.js";
 import { EXTENSION_RECEIVE_HREF, parseRoute } from "../src/web/router.js";
 import { MAX_UPLOAD_BYTES } from "../src/uploads.js";
@@ -200,7 +200,7 @@ describe.sequential("the real IndexedDB handoff store", () => {
   });
 });
 
-const page: PageCapture = { kind: "page", html: "<!doctype html><p>hi</p>", filename: "Hi.html", bytes: 24 };
+const page: PageCapture = { kind: "page", html: "<!doctype html><p>hi</p>", filename: "Hi.html", bytes: 24, savedFrom: "https://www.cell.com/a" };
 
 /** A browser that records what was asked of it, in order. */
 function fakeChrome(capture: () => Promise<PageCapture> = async () => page) {
@@ -256,6 +256,7 @@ describe("take: who gets the page", () => {
       kind: "page",
       html: page.kind === "page" ? page.html : "",
       filename: "Hi.html",
+      savedFrom: "https://www.cell.com/a",
     });
     expect(await take(ask, fromReceiver(tabId), ORIGINS, store, () => 2000)).toEqual({ kind: "nothing" });
   });
@@ -485,6 +486,18 @@ describe("the page: which extensions it asks, and what it accepts", () => {
     }
   });
 
+  it("the saved-from address is a claim: checked, and absent or refused is null (261024y)", () => {
+    const at = (savedFrom: unknown) => {
+      const got = web.asTaken({ kind: "page", html: "<p>x</p>", filename: "X.html", savedFrom });
+      return got.kind === "page" ? got.savedFrom : "not a page";
+    };
+    expect(at("https://www.cell.com/a#s2")).toBe("https://www.cell.com/a");
+    expect(at(undefined)).toBeNull();
+    expect(at(7)).toBeNull();
+    expect(at("javascript:alert(1)")).toBeNull();
+    expect(at("https://u:p@www.cell.com/a")).toBeNull();
+  });
+
   it("the file name is tidied: no path, always .html", () => {
     const got = web.asTaken({ kind: "page", html: "<p>x</p>", filename: "../../etc/pass\u0000wd.htm" });
     expect(got.kind === "page" && got.file.name).toBe(".. .. etc pass wd.htm.html");
@@ -539,7 +552,8 @@ describe("receive: the page is sent only for the reader it was opened for (F1)",
     const went: string[] = [];
     const sent: File[] = [];
     const r = await receive({
-      take: async () => ({ kind: "page", file }),
+      take: async () => ({ kind: "page", file, savedFrom: null }),
+      have: async () => null,
       stillFor: () => true,
       send: async (f) => (sent.push(f), "e47e0510-0000-4000-8000-00000000c0de"),
       go: (h) => went.push(h),
@@ -555,8 +569,9 @@ describe("receive: the page is sent only for the reader it was opened for (F1)",
     const r = await receive({
       take: async () => {
         reader = "B"; // another tab signed in as B while the extension answered
-        return { kind: "page", file };
+        return { kind: "page", file, savedFrom: null };
       },
+      have: async () => null,
       stillFor: () => reader === "A",
       send: async (f) => (sent.push(f), "id"),
       go: () => {},
@@ -571,8 +586,9 @@ describe("receive: the page is sent only for the reader it was opened for (F1)",
     await receive({
       take: async () => {
         reader = null;
-        return { kind: "page", file };
+        return { kind: "page", file, savedFrom: null };
       },
+      have: async () => null,
       stillFor: () => reader === "A",
       send: async (f) => (sent.push(f), "id"),
       go: () => {},
@@ -584,7 +600,8 @@ describe("receive: the page is sent only for the reader it was opened for (F1)",
     const went: string[] = [];
     expect(
       await receive({
-        take: async () => ({ kind: "page", file }),
+        take: async () => ({ kind: "page", file, savedFrom: null }),
+        have: async () => null,
         stillFor: () => true,
         send: async () => {
           throw new Error("That upload is still going. Wait for it, or stop it first.");
@@ -617,9 +634,103 @@ describe("receive: the page is sent only for the reader it was opened for (F1)",
     ).toBe(false);
   });
 
+  /* Plan 261024y: a second press on a page already on the shelf. */
+  const SAVED = "https://www.cell.com/fulltext/S1";
+
+  it("a page the reader already has is offered, and nothing is sent", async () => {
+    const sent: File[] = [];
+    const went: string[] = [];
+    const asked: string[] = [];
+    const r = await receive({
+      take: async () => ({ kind: "page", file, savedFrom: SAVED }),
+      have: async (u) => (asked.push(u), "a-saved-page-spya-k3m9qt"),
+      stillFor: () => true,
+      send: async (f) => (sent.push(f), "id"),
+      go: (h) => went.push(h),
+    });
+    expect(r).toEqual({ kind: "have", slug: "a-saved-page-spya-k3m9qt" });
+    expect(asked).toEqual([SAVED]);
+    expect(sent).toEqual([]);
+    expect(went).toEqual([]);
+  });
+
+  it("a page not on the shelf is sent, as before", async () => {
+    const sent: File[] = [];
+    const r = await receive({
+      take: async () => ({ kind: "page", file, savedFrom: SAVED }),
+      have: async () => null,
+      stillFor: () => true,
+      send: async (f) => (sent.push(f), "id"),
+      go: () => {},
+    });
+    expect(r).toEqual({ kind: "sent" });
+    expect(sent).toEqual([file]);
+  });
+
+  it("a page with no address is sent without asking", async () => {
+    const asked: string[] = [];
+    const r = await receive({
+      take: async () => ({ kind: "page", file, savedFrom: null }),
+      have: async (u) => (asked.push(u), "never"),
+      stillFor: () => true,
+      send: async () => "id",
+      go: () => {},
+    });
+    expect(r).toEqual({ kind: "sent" });
+    expect(asked).toEqual([]);
+  });
+
+  it("a lookup that fails sends nothing and says so (Sol F3)", async () => {
+    const sent: File[] = [];
+    const r = await receive({
+      take: async () => ({ kind: "page", file, savedFrom: SAVED }),
+      have: async () => {
+        throw new Error("503");
+      },
+      stillFor: () => true,
+      send: async (f) => (sent.push(f), "id"),
+      go: () => {},
+    });
+    expect(r).toEqual({ kind: "unchecked" });
+    expect(sent).toEqual([]);
+  });
+
+  it("the lookup is made for the reader the page was opened for (Sol F2)", async () => {
+    const calls: { input: string; madeFor: string | null | undefined }[] = [];
+    const fake = (async (input: string, _init?: RequestInit, madeFor?: string | null) => {
+      calls.push({ input, madeFor });
+      return new Response(JSON.stringify({ slug: "mine-spya-k3m9qt" }), {
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof import("../src/web/lib/api.js").apiFetch;
+    expect(await alreadyOnShelf(`${SAVED}?a=1&b=2`, "reader-a", fake)).toBe("mine-spya-k3m9qt");
+    expect(calls).toEqual([
+      { input: `/api/library/by-url?url=${encodeURIComponent(`${SAVED}?a=1&b=2`)}`, madeFor: "reader-a" },
+    ]);
+  });
+
+  it("a reader who changes while the lookup is out gets nothing, found or not", async () => {
+    for (const found of [null, "theirs-spya-k3m9qt"]) {
+      let reader = "A";
+      const sent: File[] = [];
+      const r = await receive({
+        take: async () => ({ kind: "page", file, savedFrom: SAVED }),
+        have: async () => {
+          reader = "B";
+          return found;
+        },
+        stillFor: () => reader === "A",
+        send: async (f) => (sent.push(f), "id"),
+        go: () => {},
+      });
+      expect(r).toBeNull();
+      expect(sent).toEqual([]);
+    }
+  });
+
   it("no extension, or nothing waiting, is said as such", async () => {
     for (const kind of ["no-extension", "nothing"] as const) {
-      expect(await receive({ take: async () => ({ kind }), stillFor: () => true, send: async () => "x", go: () => {} })).toEqual({ kind });
+      expect(await receive({ take: async () => ({ kind }), have: async () => null, stillFor: () => true, send: async () => "x", go: () => {} })).toEqual({ kind });
     }
   });
 });

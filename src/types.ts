@@ -2572,6 +2572,14 @@ export interface LibraryTagsResponse {
   tags: { tag: string; count: number }[];
 }
 
+/**
+ * `GET /api/library/by-url?url=` — the slug of this reader's article from that
+ * address, or `null`. Plan 261024y.
+ */
+export interface LibraryByUrlResponse {
+  slug: string | null;
+}
+
 /** `PATCH /api/library/:slug/tags` — the article's tags after the edit, sorted. */
 export interface ArticleTagsResponse {
   tags: string[];

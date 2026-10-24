@@ -19,6 +19,7 @@
  * installed for something else hand us a page.
  */
 import { MAX_UPLOAD_BYTES } from "../uploads.js";
+import { savedSource } from "../urls.js";
 
 /**
  * The store's id for the published extension, once Greg has created the item
@@ -47,8 +48,9 @@ export function trustedExtensionIds(dev: boolean): string[] {
 const ANSWER_MS = 20_000;
 
 export type Taken =
-  /** The page, as a file to upload. */
-  | { kind: "page"; file: File }
+  /** The page, as a file to upload, and the address it says it was saved from
+   *  (checked by `savedSource`; `null` when it gave none or one that fails). */
+  | { kind: "page"; file: File; savedFrom: string | null }
   /** No extension we trust answered: not installed, disabled, or another browser. */
   | { kind: "no-extension" }
   /** It answered, with nothing for this tab: already taken, expired, or never captured. */
@@ -90,13 +92,15 @@ export async function takeFromExtension(
  */
 export function asTaken(reply: unknown): Taken {
   if (typeof reply !== "object" || reply === null) return { kind: "nothing" };
-  const r = reply as { kind?: unknown; html?: unknown; filename?: unknown };
+  const r = reply as { kind?: unknown; html?: unknown; filename?: unknown; savedFrom?: unknown };
   if (r.kind !== "page" || typeof r.html !== "string" || typeof r.filename !== "string") {
     return { kind: "nothing" };
   }
   const file = new File([r.html], fileName(r.filename), { type: "text/html" });
   if (file.size === 0 || file.size > MAX_UPLOAD_BYTES) return { kind: "nothing" };
-  return { kind: "page", file };
+  /* A claim, like the meta it mirrors: only ever looked up on this reader's
+     own shelf, never fetched (plan 261024y). */
+  return { kind: "page", file, savedFrom: typeof r.savedFrom === "string" ? savedSource(r.savedFrom) : null };
 }
 
 /** The capture names its own file; it is still a claim, so it is tidied. */
