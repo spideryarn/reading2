@@ -1,0 +1,80 @@
+The plan is not ready to build. I found no P0s, but eight P1s—mostly around atomic deduplication, client state, cost arithmetic, and the unproven streaming promise.
+
+- **C1 — P1 — The unique index does not currently produce the planned 409, and a losing request can consume allowance.**
+
+  **Evidence:** The proposed index is described as making the loser’s `begin` return 409 ([plan:114](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md:114>)). But `withTurn` resolves only by the requested thread ID or a single-thread kind ([chat.ts:190](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/chat.ts:190>)); `pgChatStore.begin` then inserts under the article-row lock ([pg-chat.ts:432](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/store/pg-chat.ts:432>)), and its `ON CONFLICT` covers only `(article_id, id)` ([pg-chat.ts:386](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/store/pg-chat.ts:386>)). A violation of the new partial index is therefore an uncaught database error, scrubbed to a 500—not a `ChatConflict`. Because allowance is taken first, the loser’s rate row remains counted even after `finish` clears its lease ([pg-rate-limit.ts:224](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/store/pg-rate-limit.ts:224>)).
+
+  **Fix:** Resolve `cite-check` identity inside the article-row transaction and return a typed conflict containing the existing thread ID. Keep the index as the invariant/backstop and explicitly translate its named constraint too. Add an allowance `cancel`/refund operation for any refusal before the model starts, including this race. The concurrency test must prove: one thread, one model invocation, and one counted fill.
+
+- **C2 — P1 — `runTurn` cannot represent the proposed 409, cap, or global-fuse outcomes.**
+
+  **Evidence:** `TurnSink.refused` accepts only a string ([effects.ts:102](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/chat/effects.ts:102>)). `runTurn` treats only 409 and mention-related 4xx responses as definite refusals, discards structured fields, and sends 429/503 through `failed` ([effects.ts:169](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/chat/effects.ts:169>)). Yet the API layer already preserves `status` and structured `details` such as `threadId` ([api.ts:221](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/lib/api.ts:221>)).
+
+  **Fix:** Extend the sink to receive status and validated details, and classify the explicit 409/429/503 cite-check responses as refusals. Alternatively, the plan must stop claiming it reuses `runTurn`. Test adoption of the 409 thread ID and every capped state.
+
+- **C3 — P1 — The module-level loader, as planned, can expose one reader’s answer to the next reader in the same tab. This would weaken an existing security defence.**
+
+  **Evidence:** The loader persists outside React and is keyed only by slug/work/block ([plan:149](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md:149>)). The repository explicitly requires module stores holding reader data to clear before React hears about a reader change ([reader-change.ts:5](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/lib/reader-change.ts:5>)). The security map separately identifies binding browser requests to their starting reader as a defence ([security-map.md:114](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/project/security-map.md:114>)). Request binding does not stop an old response callback from repopulating the cache after account B has replaced account A.
+
+  **Fix:** Register `forgetOnReaderChange`, clear every partial/done entry, use a generation fence around all callbacks, and bind polling/POSTs to the captured reader. A stream may continue server-side after sign-out, but its callbacks must become inert locally. Add an A→B account-switch test during streaming.
+
+- **C4 — P1 — A `cite-check` origin does not yet guarantee that its thread actually asked “Does it say that?”**
+
+  **Evidence:** The plan leaves the question client-built ([plan:139](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md:139>)). A stale or malformed client can therefore create the durable origin with arbitrary question text; every later card will trust the origin and display that answer. Existing `help: true` handling deliberately validates both literal shape and semantic meaning before writing ([routes.ts:3451](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/routes.ts:3451>), [routes.ts:3685](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/routes.ts:3685>)).
+
+  **Fix:** Validate `auto` as absent or literally `true`, permit it only on the first `cite-check` turn, and derive—or exactly verify—the seeded question server-side from the current block and bibliography work. Move the pure question builder to shared code if necessary.
+
+  An uncapped press is otherwise consistent with the current security posture: signed-in readers are explicitly trusted ([security-map.md:29](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/project/security-map.md:29>)), and ordinary chat turns are uncapped. But `auto` is a client assertion, so this allowance is an accidental-spend guard, not an abuse boundary; omitting `auto` always bypasses it.
+
+- **C5 — P1 — The client’s durable answer/cache semantics are incomplete, especially for edit and delete.**
+
+  **Evidence:** A summary contains no answer message ID ([routes.ts:5251](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/routes.ts:5251>)), while `settledAnswer` requires one ([effects.ts:381](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/chat/effects.ts:381>)); therefore “as `settledAnswer` does” is not an implementable lookup yet. The plan also does not say whether the card shows the first assistant answer or the newest follow-up. Editing the first question changes the title and replaces its answer ([chat.ts:891](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/chat.ts:891>)), potentially leaving a `cite-check` identity attached to a different question. A full DELETE can run after `begin` while the model is still working ([routes.ts:13742](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/routes.ts:13742>)); a permanent module `done` entry could then retain a deleted/phantom thread and prevent the promised next rest.
+
+  **Fix:** Define the card answer as the first assistant message, fetch the full thread to identify it, and cache only while locally in flight. Invalidate/refetch on summary `updatedAt`, retry, edit, deletion, and missing-thread responses. Either forbid editing the seeded first question of a `cite-check` thread or explicitly sever its cite-check identity. Retry is otherwise safe; delete-from already refuses deletion of the first question ([chat.ts:941](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/chat.ts:941>)); full deletion frees the DB key only after the client cache is invalidated.
+
+- **C6 — P1 — The cap arithmetic is wrong, and the measured cache life does not justify the daily estimates.**
+
+  **Evidence:** The measured cold median is about $0.30, not $0.24, and clean warm median about $0.08, not $0.06 ([investigation:45](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/investigations/261024d-does-it-say-that-cost-and-latency.md:45>)). At the observed maximum:
+
+  - 25 cold turns cost `25 × $0.431 ≈ $10.78`, not “worst about $4”.
+  - 150 cold turns cost about `$64.70`, not $45.
+  - $45 is approximately 150 times the *cold median*, not the “very worst”.
+  - The $2.20 one-article estimate assumes one cold plus 24 warm turns within cache life, but the experiment established warmth only four minutes later ([investigation:24](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/investigations/261024d-does-it-say-that-cost-and-latency.md:24>)). It did not establish all-day reuse ([investigation:77](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/investigations/261024d-does-it-say-that-cost-and-latency.md:77>)).
+
+  **Fix:** Correct the table and size the fuses from an explicitly accepted cold-case budget. Concurrency 2 is sensible. I would start nearer 5/hour, 10/day, and 50/day global—an observed maximum around $21.57 globally—and raise them from telemetry. Retaining 10/25/150 requires Greg explicitly accepting roughly $11 per reader and $65 globally for automatic checks.
+
+- **C7 — P1 — The central “streams into the card” promise has not been demonstrated.**
+
+  **Evidence:** All nine measured turns delivered essentially all text at the end ([investigation:57](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/investigations/261024d-does-it-say-that-cost-and-latency.md:57>)). Stage 0b says to fix what is ours, but the investigation suspects the batching is upstream ([plan:191](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md:191>)). An activity label followed by a complete 350-word answer is not the selected option’s streaming behaviour.
+
+  **Fix:** Make stage 0b a go/no-go gate with a production-path assertion that meaningful deltas arrive materially before completion. If the provider/model cannot do that, take the choice back to Greg: accept activity-then-batched text, change model/effort, or defer.
+
+- **C8 — P1 — A two-second touch timer is an automatic purchase after an ordinary tap, not a touch equivalent of “resting”.**
+
+  **Evidence:** The plan acknowledges nearly every tapped citation will spend ([plan:65](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md:65>)). Existing touch behaviour describes a tap as a request to reveal the card ([useHoverCard.ts:706](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/useHoverCard.ts:706>)), and the card already contains an explicit *Does it say that?* button ([ProseHoverCard.tsx:2421](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/ProseHoverCard.tsx:2421>)). Revealing citation details is not consent to a $0.08–$0.43 Opus turn.
+
+  **Fix:** Keep automatic dwell on hover-capable devices; on touch retain the explicit button, or ask Greg specifically to approve tap-and-wait as a paid automatic action. Caps do not remove the surprise.
+
+- **C9 — P2 — Several reader-facing claims are too strong.**
+
+  **Evidence:** “Focus on a marked citation” is true only when the citation is inside an already focusable link; bare `mark.cite` elements deliberately are not tab stops ([ProseHoverCard.tsx:637](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/ProseHoverCard.tsx:637>)). Tool events also do not cover the whole pre-answer wait—the measured example’s first tool began after 5.4 seconds ([investigation:57](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/docs/investigations/261024d-does-it-say-that-cost-and-latency.md:57>)). Finally, a socket disconnect deliberately does not cancel the server call ([routes.ts:3153](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/routes.ts:3153>)), but “always finishes and saves” is too absolute: process loss, timeout, or storage failure can leave recovery to mark an orphan.
+
+  **Fix:** Say “linked citations” for keyboard unless adding a new accessible affordance; draw generic *Reading…* immediately before the first tool event; and say the server “continues after an ordinary disconnect and normally stores a terminal result.” The sentence you highlighted is correct for a normal client disconnect, not an unconditional guarantee.
+
+- **C10 — P2 — The allowance response and release details do not support the promised copy yet.**
+
+  **Evidence:** Both hourly and daily refusals currently return only `{kind: "rate"}` ([pg-rate-limit.ts:180](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/store/pg-rate-limit.ts:180>)), so the client cannot distinguish the two sentences in the plan. Also, allowance release must follow the server-side model/storage lifetime, not the browser socket lifetime, because disconnect intentionally leaves the turn running.
+
+  **Fix:** Extend `AllowanceTaken` with an `hour`/`day` reason. Release the concurrency lease in the server turn’s terminal `finally`, after model/storage completion, never on `res.close`. Check for an existing origin before requiring a fresh bibliography, so an old saved chat remains reopenable even when current eligibility has gone stale.
+
+- **C11 — P2 — The identity is the right design, but its durability is overstated.**
+
+  **Evidence:** Block IDs are the correct stable paragraph identity. Bibliography IDs are inherited by dedupe key ([types.ts:5267](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/types.ts:5267>)), but inheritance is deliberately withheld on ambiguity ([bibliography.ts:1570](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/bibliography.ts:1570>)), and some identifier-to-metadata transitions mint a new ID ([bibliography.ts:1777](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/bibliography.ts:1777>)). A reminted work ID permits another cite-check thread for what a person may regard as the same work.
+
+  **Fix:** Keep the new origin and partial index—they are better than the free-text and unkeyed alternatives—but describe the guarantee as “one per inherited work ID and stable block ID.” Add rerun tests for retained ID, improved identifier, ambiguity, and reminted ID; decide explicitly whether the last case may spend again.
+
+What otherwise holds up: the new origin is cleaner than the rejected alternatives; retry and delete-from do not conflict with the index; the initial title can come from `titleFromOrigin`; gist generation remains server-side; and opening Chat mid-stream is safe—the Chat controller sees the pending row and starts a read-only recovery poll, not a second model call ([useChat.ts:689](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/useChat.ts:689>)). The loader still needs to coordinate presses before its `begin` frame: route the footer button through the same per-key coordinator so a press cancels a waiting timer or adopts an in-flight automatic request instead of racing it. Avoid trying to mutate `handedItemChats` from the module—it is Reader-local ([Reader.tsx:1207](</var/tmp/spideryarn-worktrees/qhc4y2j-citation-card-chat/src/web/reader/Reader.tsx:1207>)); let the loader expose its thread ID and refresh summaries after settlement.
+
+A smaller version that keeps most of the value is: retain the `cite-check` origin, transactional dedupe, eligibility checks, and normal Chat thread; automatically start only for pointer dwell and linked keyboard focus; keep touch explicit; let the external loader own only the live stream, then refetch settled answers from the server; refresh rather than optimistically manufacturing complete summaries; and launch with lower cold-case caps. That removes the most fragile persistent client state without turning the feature experimental.
+
+**Verdict:** Option C’s overall shape is sound, and the investigation is a useful measurement of marginal model cost—the raw cache counters make its cold/warm classification credible—but the present plan would not reliably deliver one paid turn per citation, would mishandle its planned refusals, could leak cached text across readers, and budgets against incorrect worst-case arithmetic. Resolve C1–C8 before implementation; with those changes, the new origin plus partial unique index is the right foundation, and Chat’s existing pending-row recovery can coexist safely with the card stream.
