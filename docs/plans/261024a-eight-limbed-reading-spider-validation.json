@@ -243,5 +243,15 @@
     "src/web/styles/logo-animations.css",
     "tests/brand-assets.test.ts",
     "tests/semaphore-geometry.test.ts"
-  ]
+  ],
+  "implementation_commit": "d3baedfe0e83cd63afdd715a5c6e83b4d024e02b",
+  "post_merge": {
+    "commit": "f9bf3549bfa749d62745ab37cf5b3f27d1223d9b",
+    "focused_files_passed": 9,
+    "focused_tests_passed": 291,
+    "typecheck": "passed; 3948 source files covered",
+    "build": "passed",
+    "push": "origin HEAD:dev succeeded d629e567f..f9bf3549b",
+    "full_suite_rerun": false
+  }
 }

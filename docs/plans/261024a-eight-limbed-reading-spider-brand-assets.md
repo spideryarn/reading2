@@ -1,6 +1,6 @@
 # An eight-limbed reading spider, and reproducible brand assets
 
-Status: implemented and independently reviewed, 2026-10-24; final validation and push in progress. No production deployment. Claimed by this Codex session.
+Status: complete on `dev`, 2026-10-24. Implementation `d3baedfe0e83cd63afdd715a5c6e83b4d024e02b`, integrated and pushed as `f9bf3549bfa749d62745ab37cf5b3f27d1223d9b`. No production deployment. Full-suite/browser limits below remain explicit.
 
 ## Goal and authority
 
@@ -36,7 +36,7 @@ Replacing the existing PNG and shrinking Z everywhere would be simpler, but Z ha
 - [x] Get GPT Sol plan review before implementation. LOGO-PLAN-261024: proceed; F1/F2 accepted below.
 - [x] Generate a small final Z-led round with eight intended limbs: four upper/rear free limbs, two book-support loops, two crossed lower limbs. Preserve a few earlier favourites and their prompts. Review bounded the claim: concealed attachments are not anatomically traceable through the knot.
 - [x] Obtain two independent visual critiques (new reader and icon expert), without disclosing the preferred candidate. These are simulated perspectives, not real user research. Count limbs, compare small renders and choose a winner; record dissent and reasoning.
-- [ ] Commit the source, discussion/review evidence and selection note after stage review.
+- [x] Commit the source, discussion/review evidence and selection note after stage review. Source and derivatives landed together so the committed family and its regeneration evidence agree.
 
 ### Generate and integrate the asset family
 
@@ -46,7 +46,7 @@ Replacing the existing PNG and shrinking Z everywhere would be simpler, but Z ha
 - [x] Save intent, selected variants, prompt provenance and regeneration command with appropriate signposting. Add no new rule or policy.
 - [x] Verify generation determinism, dimensions, alpha/internal gaps, visible content, ICO frames, manifest paths and small-size legibility. Test a deliberately invalid source/check so success is meaningful.
 - [x] Independent Sol review, inspect fixes, run focused tests, full `npm test`, `npm run typecheck`, touched-file lint and build. Browser-check both themes and real logo hosts via the prescribed browser mechanism if available; report any actual environmental limit honestly. Full suite was red; limits and focused passes below.
-- [ ] Commit named files, merge current `origin/dev`, rerun affected gates, push `HEAD:dev`. Do not deploy to `main`. Check worktree safety before cleanup.
+- [x] Commit named files, merge current `origin/dev`, rerun affected gates, push `HEAD:dev`. Do not deploy to `main`. Check worktree safety before cleanup.
 
 ## Progress
 
@@ -70,3 +70,9 @@ Replacing the existing PNG and shrinking Z everywhere would be simpler, but Z ha
 - `node --import tsx scripts/check-public-shell.ts --self-test`: 127 passed, 0 failed, including the independent favicon/robots fixture. The stale counted-files comment in robots was corrected.
 
 Generation environment: Node 24.20.0 on macOS arm64, `@napi-rs/canvas` 1.0.8, `png-to-ico` 3.0.2, pinned Geist font from the lockfile. Social-card Chrome is selected by the existing `chromePath()` helper.
+
+## Landing
+
+The code review's live candidate closed as implementation commit `d3baedfe0e83cd63afdd715a5c6e83b4d024e02b`. Merge `f9bf3549bfa749d62745ab37cf5b3f27d1223d9b` brought in 46 newer `dev` commits, with no overlapping rollout files and no conflicts. Afterwards all nine focused files / 291 tests passed again; typecheck covered all 3948 source files and passed; the complete build passed again. The full-suite run above belongs to the pre-merge candidate, not the newer peer code.
+
+`git push origin HEAD:dev` succeeded (`d629e567f..f9bf3549b`). Before this completion-note edit, `npm run worktree:check` reported SAFE TO REMOVE: commits on `origin/dev`, clean files, matching environment and fixture data/output. This completion note is a documentation follow-up to the landed implementation. The worktree is retained for inspection because the full suite and live-browser verification were not green; no ignored work is discarded. Nothing was pushed to `main` and no deployment was requested.
