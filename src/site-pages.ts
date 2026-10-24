@@ -226,6 +226,7 @@ export const SITE_BRAND_FILES: readonly string[] = [
   "/favicon.ico",
   "/favicon-32x32.png",
   "/favicon-16x16.png",
+  "/favicon-48x48.png",
   "/apple-touch-icon.png",
   "/og-card.png",
 ];

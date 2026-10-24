@@ -902,12 +902,10 @@
       var(--highlight) 1turn
     );
     /* `100% 100%` of a box that is exactly the spider (`inset: 0` on
-       `.logo-mark`), rather than the `20px 20px` it was. **The spider is not
-       square**: measured on 2026-09-15 it is drawn 20 × 21.14 in the dock and
-       the corner, 19.22 × 20.31 in the corner on a phone, and 28 × 29.59 on the
-       shelf — so a fixed `20px 20px` painted the sweep about 5% shorter than
-       the spider it sits on, in every host. A mask sized to the box is the
-       image's own size wherever it is drawn. */
+       `.logo-mark`), rather than the `20px 20px` it was. The original mark
+       was taller than it was wide, so a fixed square made the sweep too
+       short. The optical reader is square, but the mask still follows the
+       actual image box in every host and at every size. */
     -webkit-mask: url(/spideryarn-logo.png) center / 100% 100% no-repeat;
     mask: url(/spideryarn-logo.png) center / 100% 100% no-repeat;
     animation: spya-radius 2.4s linear infinite;
@@ -1030,11 +1028,11 @@
 }
 
 /* -- 16. Asterisk ---------------------------------------------------------
-   The spider contracts and rises until its six legs read as a small
-   superscript asterisk before the word — a footnote mark — holds there, then
-   unfurls back into a spider with a little overshoot. GPT Sol's: the mark
-   already contains its second form, and the asterisk is the oldest compact
-   promise that there is a source worth following.
+   The reader contracts and rises into a small superscript before the word
+   — a footnote mark — holds there, then unfurls with a little overshoot.
+   The original six-legged knot read as an asterisk; the optical reader keeps
+   the superscript gesture rather than changing its silhouette. The asterisk
+   is the oldest compact promise that there is a source worth following.
 
    Reduced motion: base style. */
 .spya-asterisk .logo-image {
@@ -1218,12 +1216,16 @@
    complement — the same two quadrants cut out as holes — so the real legs
    are not drawn under the moving copies. At rest the copies sit exactly
    where the holes are, so the class on with nothing moving (the guard's
-   still) is the spider, whole. The coordinates are this PNG's: the left leg
-   runs from its tip near (26%, 3%) to the body near (43%, 32%), the right
-   from (74%, 3%) to (55%, 32%), and the mid legs stay below both polygons. A
-   new logo needs them measured again.
+   still) is the spider, whole. These coordinates select the optical yarn
+   reader's two UPPER free ends, whose tips sit near (20%, 7%) and (80%, 9%).
+   The cuts stop above the side limbs and outside the body oval; the lower
+   stems, body and book remain on the still image. The pivots are at those
+   cuts, near (28.5%, 34.75%) and (71.5%, 34.75%). They belong to the cropped
+   public PNG, not the uncropped source SVG. A new silhouette or crop needs
+   them measured again; tests/semaphore-geometry.test.ts checks which actual
+   foreground pixels the polygons select.
 
-   **Each copy reaches 1.5% further down than its hole.** Where two clipped
+   **Each copy reaches 0.5% further down than its hole.** Where two clipped
    edges meet exactly, each is antialiased against the other and the page
    shows through the seam: the first version drew a thin dark line across both
    legs at rest, visible at 2× and on the 2.2× loader (browser check,
@@ -1247,8 +1249,8 @@
   .spya-semaphore .logo-image {
     clip-path: polygon(evenodd,
       0 0, 100% 0, 100% 100%, 0 100%, 0 0,
-      18% 0, 34% 0, 44% 27%, 42% 33%, 34% 33%, 18% 12%, 18% 0, 0 0,
-      64% 0, 80% 0, 79% 10%, 63% 33%, 56% 33%, 58% 25%, 64% 0, 0 0);
+      15% 0, 33% 0, 33% 30%, 31.5% 35%, 15% 35%, 15% 0, 0 0,
+      67% 0, 85% 0, 85% 35%, 68.5% 35%, 67% 30%, 67% 0, 0 0);
   }
   .spya-semaphore .logo-mark::before,
   .spya-semaphore .logo-mark::after {
@@ -1260,15 +1262,15 @@
     transform: rotate(0deg);
   }
   .spya-semaphore .logo-mark::before {
-    clip-path: polygon(18% 0, 34% 0, 44% 27%, 41.5% 34.5%, 34% 34.5%, 18% 12%);
+    clip-path: polygon(15% 0, 33% 0, 33% 30%, 31.5% 35.5%, 15% 35.5%);
     transform: rotate(0deg);
-    transform-origin: 42% 32%;
+    transform-origin: 28.5% 34.75%;
     animation: spya-flag-left 1.8s ease-in-out infinite;
   }
   .spya-semaphore .logo-mark::after {
-    clip-path: polygon(64% 0, 80% 0, 79% 10%, 63% 34.5%, 56.5% 34.5%, 58% 25%);
+    clip-path: polygon(67% 0, 85% 0, 85% 35.5%, 68.5% 35.5%, 67% 30%);
     transform: rotate(0deg);
-    transform-origin: 57% 32%;
+    transform-origin: 71.5% 34.75%;
     animation: spya-flag-right 1.8s ease-in-out infinite;
   }
 }

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Spideryarn: an eight-limbed yarn reader</title>
+  <!-- Four free ends, two book-support loops, two crossed lower loops.
+       Deliberately broad gaps keep the same character readable at 16px. -->
+  <defs>
+    <mask id="crossing">
+      <rect width="256" height="256" fill="white"/>
+      <path d="M66 211 Q107 215 151 233" fill="none" stroke="black" stroke-width="27" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <g fill="none" stroke="#DB8A45" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M94 101 Q57 87 58 29 M89 124 Q43 128 24 83 M162 101 Q199 87 198 33 M167 124 Q213 128 232 87"/>
+    <ellipse cx="128" cy="109" rx="35" ry="48"/>
+    <path d="M90 147 Q38 152 51 179 Q57 189 79 188 M166 147 Q218 152 205 179 Q199 189 177 188"/>
+    <path d="M94 199 C44 185 36 233 78 235 Q111 235 169 210 Q213 194 208 219 Q204 234 170 234" mask="url(#crossing)"/>
+    <path d="M66 211 Q107 215 151 233"/>
+  </g>
+  <!-- The open book is a single-colour cover with clear negative-space pages. -->
+  <path fill-rule="evenodd" d="M82 151 L128 169 L174 151 L174 191 L128 209 L82 191 Z M91 164 L124 177 L124 195 L91 183 Z M132 177 L165 164 L165 183 L132 195 Z" fill="#DB8A45"/>
+</svg>
