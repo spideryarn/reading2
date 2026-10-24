@@ -80,7 +80,7 @@ describe("splitLinks — the ordering bug it exists to prevent", () => {
     const known = new Map([["spya-k3m9qt", "The paragraph."]]);
     expect(
       splitCitations("Notes are at https://example.com/notes/spya-k3m9qt today.", known).map((s) =>
-        s.kind === "text" ? s.text : `cite:${s.ids.join(",")}`,
+        s.kind === "text" ? s.text : `cite:${(s.kind === "thread" ? s.links.map((l) => l.id) : s.ids).join(",")}`,
       ),
     ).toEqual(["Notes are at https://example.com/notes/", "cite:spya-k3m9qt", " today."]);
   });

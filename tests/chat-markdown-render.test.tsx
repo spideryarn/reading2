@@ -29,6 +29,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CitedMarkdown, CitedText } from "../src/web/Cited.js";
 import { citableText } from "../src/citable.js";
+import { citedBlockIds, threadCitations } from "../src/converse.js";
+import type { CrossArticles, ThreadLink } from "../src/web/citations.js";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -442,6 +444,116 @@ describe("the client and the server agree about what a citation is", () => {
   ])("agrees at the depth cap: %s", (_what, answer, expected) => {
     expect(chipsOnScreen(answer)).toBe(expected);
     expect(serverCount(answer)).toBe(expected);
+  });
+});
+
+describe("…and about what a link to another conversation is (plan 261024u)", () => {
+  /**
+   * GPT Sol's F4 on the plan: the agreement above counts `.block-ref` chips,
+   * and an answer can now also carry a link to another of the reader's
+   * conversations. Each side's three counts — passages, conversations, and
+   * ids drawn as neither because a passage and a conversation share them —
+   * must match, through links, code and collisions.
+   */
+  const THREAD = "spya-thrd23";
+  const LINKS: ReadonlyMap<string, ThreadLink> = new Map([
+    [THREAD, { id: THREAD, title: "What is access consciousness?", target: { band: "here" } }],
+    /* Shares the cited block's id: drawn as neither. */
+    ["spya-k3m9qt", { id: "spya-k3m9qt", title: "A colliding one", target: { band: "here" } }],
+  ]);
+  const draw = (text: string) =>
+    act(() => {
+      root.render(
+        createElement(CitedMarkdown, { text, blocks: BLOCKS, threadLinks: LINKS, onJump: () => {}, links: true }),
+      );
+    });
+  const server = (answer: string) => {
+    const passages = { known: new Set(BLOCKS.keys()), ambiguous: new Set<string>() };
+    const t = threadCitations(answer, [...LINKS.keys()], passages);
+    const blocks = new Set([...BLOCKS.keys()].filter((id) => !t.clash.has(id)));
+    return { blocks: citedBlockIds(answer, blocks).length, threads: t.linked.length };
+  };
+
+  it.each([
+    ["a bracketed conversation", `Your earlier conversation [${THREAD}] covered it.`, 0, 1],
+    ["a bare conversation id", `See ${THREAD} for that.`, 0, 1],
+    ["a conversation id in a link's address", `[notes](https://a.example/${THREAD})`, 0, 0],
+    ["a conversation id in a code span", `the string \`${THREAD}\``, 0, 0],
+    ["a conversation id used as a link's label", `[${THREAD}](https://a.example/x)`, 0, 0],
+    ["a passage and a conversation in one bracket", `So it goes [spya-k3m9qt ${THREAD}].`, 0, 0],
+    ["an id a passage and a conversation share", "He says so [spya-k3m9qt].", 0, 0],
+    ["a collision before an emphasised conversation", `spya-k3m9qt **${THREAD}**`, 0, 1],
+    ["a collision before code and a conversation", `spya-k3m9qt \`between\` ${THREAD}`, 0, 1],
+    [
+      "a collision before a link and a conversation",
+      `spya-k3m9qt [between](https://a.example/x) ${THREAD}`,
+      0,
+      1,
+    ],
+    [
+      "a collision before a bare address and a conversation",
+      `spya-k3m9qt https://a.example/x ${THREAD}`,
+      0,
+      1,
+    ],
+    [
+      "a collision before a command token and a conversation",
+      `spya-k3m9qt [cmd:bookmark:spya-k3m9qt] ${THREAD}`,
+      0,
+      1,
+    ],
+  ])("counts %s the same on both sides", (_what, answer, blocks, threads) => {
+    draw(answer);
+    expect(all(".cite-chips .block-ref")).toHaveLength(blocks);
+    expect(all("[data-thread-link]")).toHaveLength(threads);
+    expect(server(answer)).toEqual({ blocks, threads });
+  });
+
+  it("draws the link from the server's row, to that conversation", () => {
+    draw(`Your earlier conversation [${THREAD}] covered it.`);
+    const [a] = all("a[data-thread-link]");
+    expect(a?.getAttribute("href")).toBe(`/?thread=${THREAD}`);
+    expect(a?.textContent).toContain("What is access consciousness?");
+  });
+
+  it("leaves a mentioned-article block/thread collision as text on both sides", () => {
+    const id = "spya-mntn23";
+    const threads: ReadonlyMap<string, ThreadLink> = new Map([
+      [id, { id, title: "A colliding conversation", target: { band: "here" } }],
+      [THREAD, LINKS.get(THREAD) as ThreadLink],
+    ]);
+    const cross: CrossArticles = {
+      byId: new Map([[id, { slug: "another", title: "Another article", href: "/read/another" }]]),
+      ambiguous: new Set(),
+    };
+    const answer = `They meet [${id} ${THREAD}].`;
+    act(() => {
+      root.render(
+        createElement(CitedMarkdown, {
+          text: answer,
+          blocks: BLOCKS,
+          cross,
+          threadLinks: threads,
+          onJump: () => {},
+          links: true,
+        }),
+      );
+    });
+    expect(all(".cite-chips")).toHaveLength(0);
+    expect(text()).toContain(`[${id} ${THREAD}]`);
+
+    const counted = threadCitations(answer, [...threads.keys()], {
+      known: new Set([...BLOCKS.keys(), id]),
+      ambiguous: new Set(),
+    });
+    expect(counted.linked).toEqual([]);
+    expect(counted.clash).toEqual(new Set([id, THREAD]));
+  });
+
+  it("leaves a conversation id as text where no conversations are given", () => {
+    paint(`Your earlier conversation [${THREAD}] covered it.`);
+    expect(all("[data-thread-link]")).toHaveLength(0);
+    expect(text()).toContain(`[${THREAD}]`);
   });
 });
 
