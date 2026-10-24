@@ -1,0 +1,11 @@
+{
+ "url": "https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control",
+ "label": "multi",
+ "pages": [
+  "https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control",
+  "https://git-scm.com/book/en/v2/Getting-Started-A-Short-History-of-Git"
+ ],
+ "mechanism": "prev/next anchors with \"next\"/\"prev\" text (no rel); Chapters dropdown",
+ "ssr": true,
+ "notes": "book sections ~5-8k chars each"
+}

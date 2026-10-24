@@ -973,6 +973,15 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **Whether a fetched page continues on others** (src/multi-page.ts).
+     `front-matter-authors`' route, for its reason: a page a reader added, to
+     the upstream the capable tier already sends it to, with a strict schema
+     back. */
+  "multi-page": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **An article's front and back matter** (src/matter.ts). The authors
      pass's route, for its reason: the stored blocks' edges, to the upstream
      the capable tier already sends the whole article to, with a strict
@@ -1316,6 +1325,10 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      At `low`, with a 6,000 ceiling, 108 calls answered in a median 5.8 s,
      ~$0.0014 each (scripts/matter-eval.ts, plan 261018a). */
   matter: { effort: "low" },
+  /* `low`, on `matter`'s evidence that Haiku at the default can spend its
+     whole ceiling thinking: every web import waits on this call, so it is
+     kept short. Measured by evals/multi-page/run.ts (report spya-qkyukr). */
+  "multi-page": { effort: "low" },
   /* Left at the default because the default is what the spike measured:
      Haiku thinking over twenty abstracts at a time, about $0.002 a batch
      (docs/investigations/261017c-citation-blurbs-cost-and-quality.md). The

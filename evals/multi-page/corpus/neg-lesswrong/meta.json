@@ -1,0 +1,10 @@
+{
+ "url": "https://www.lesswrong.com/posts/k7kwAemRuLQuFNpau/link-still-alive-astral-codex-ten",
+ "label": "single",
+ "pages": [
+  "https://www.lesswrong.com/posts/k7kwAemRuLQuFNpau/link-still-alive-astral-codex-ten"
+ ],
+ "mechanism": "fooler: comments, sequence-ish nav",
+ "ssr": true,
+ "notes": "short link post, 3k chars"
+}

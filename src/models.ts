@@ -526,6 +526,14 @@ export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
 export const OPENING_TITLE_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What decides whether a fetched web page is only the first part of its
+ * piece**, and picks the page's own links that carry the rest
+ * (src/multi-page.ts, report spya-qkyukr). Greg named Haiku; the eval that
+ * holds it to that is evals/multi-page/run.ts.
+ */
+export const MULTI_PAGE_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What finds an article's front and back matter** — the title block, the
  * abstract, acknowledgements, the reference list — so the reading view can
  * fold it (src/matter.ts, plan 261018a). The authors pass's model and route,
@@ -1061,6 +1069,10 @@ export type NonTaskAiJob =
   /* **A paper's title, off its opening**, when its `<title>` is known not to
      be it — src/opening-title.ts, on `OPENING_TITLE_MODEL` below. */
   | "opening-title"
+  /* **Whether a fetched web page is only the first part of its piece**, and
+     which of its own links carry the rest — src/multi-page.ts, on
+     `MULTI_PAGE_MODEL` below. */
+  | "multi-page"
   /* **An article's front and back matter, found** — src/matter.ts, on
      `MATTER_MODEL` below. */
   | "matter"
@@ -1656,6 +1668,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "front-matter-authors": "chat",
   /* A strict JSON schema back, on chat/completions. src/opening-title.ts. */
   "opening-title": "chat",
+  /* A strict JSON schema back, on chat/completions. src/multi-page.ts. */
+  "multi-page": "chat",
   /* A strict JSON schema back, on chat/completions. src/matter.ts. */
   matter: "chat",
   /* A strict JSON schema back, on chat/completions. src/citation-blurbs.ts. */
@@ -1935,6 +1949,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
   { job: "front-matter-authors", id: FRONT_MATTER_AUTHORS_MODEL, provider: "openrouter" },
   { job: "opening-title", id: OPENING_TITLE_MODEL, provider: "openrouter" },
+  { job: "multi-page", id: MULTI_PAGE_MODEL, provider: "openrouter" },
   { job: "matter", id: MATTER_MODEL, provider: "openrouter" },
   { job: "citation-blurbs", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
   { job: "citation-blurbs-check", id: CITATION_BLURBS_MODEL, provider: "openrouter" },

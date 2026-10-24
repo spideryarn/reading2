@@ -1,0 +1,13 @@
+{
+ "url": "https://www.thecompendium.ai/",
+ "label": "multi",
+ "pages": [
+  "https://www.thecompendium.ai/",
+  "https://www.thecompendium.ai/summary",
+  "https://www.thecompendium.ai/introduction",
+  "https://www.thecompendium.ai/the-state-of-ai-today"
+ ],
+ "mechanism": "landing (1.6k chars) with Start Reading; chapters have Previous Section / Next Section links",
+ "ssr": true,
+ "notes": "only first 4 of the chapters fetched"
+}

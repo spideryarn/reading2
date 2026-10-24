@@ -1,0 +1,10 @@
+{
+ "url": "https://www.astralcodexten.com/p/logistics",
+ "label": "single",
+ "pages": [
+  "https://www.astralcodexten.com/p/logistics"
+ ],
+ "mechanism": "fooler: link titled \"Part 1 of infinity\" to an old post",
+ "ssr": true,
+ "notes": "Substack post 6.5k chars"
+}

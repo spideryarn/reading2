@@ -1,0 +1,10 @@
+{
+ "url": "https://docs.python.org/3/howto/functional.html",
+ "label": "single",
+ "pages": [
+  "https://docs.python.org/3/howto/functional.html"
+ ],
+ "mechanism": "fooler: <link rel=next href=logging.html> and rel=prev enum.html point to OTHER howtos; part 1/2/3 external links",
+ "ssr": true,
+ "notes": "single howto 47k chars; Sphinx always emits rel next/prev"
+}

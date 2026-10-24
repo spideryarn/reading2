@@ -1,0 +1,10 @@
+{
+ "url": "https://diveintopython3.net/installing-python.html",
+ "label": "multi",
+ "pages": [
+  "https://diveintopython3.net/installing-python.html"
+ ],
+ "mechanism": "<a rel=\"next\"> glyph link to next chapter; only p1 saved",
+ "ssr": true,
+ "notes": "book chapter, 20k chars; the 2nd chapter was not saved"
+}

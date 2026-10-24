@@ -1,0 +1,13 @@
+{
+ "url": "https://superdark.antikythera.org/",
+ "label": "multi",
+ "pages": [
+  "https://superdark.antikythera.org/",
+  "https://superdark.antikythera.org/chapter-i-darkness",
+  "https://superdark.antikythera.org/chapter-ii-the-dark-stack",
+  "https://superdark.antikythera.org/chapter-iii-the-anything-factory"
+ ],
+ "mechanism": "chapter TOC on landing; one <a rel=\"next\">Next chapter</a> (not <link>)",
+ "ssr": true,
+ "notes": "p1 is ~2.4k-char abstract; chapters ~130k/130k/25k chars each"
+}

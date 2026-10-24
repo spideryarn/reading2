@@ -1,0 +1,13 @@
+{
+ "url": "https://aisafety.dance/",
+ "label": "multi",
+ "pages": [
+  "https://aisafety.dance/",
+  "https://aisafety.dance/p1",
+  "https://aisafety.dance/p2",
+  "https://aisafety.dance/p3"
+ ],
+ "mechanism": "intro page with Part 1/2/3 nav + \"PART ONE ->\" link; relative hrefs (p1, ../p2)",
+ "ssr": true,
+ "notes": "Nicky Case guide; p1 ~36k chars"
+}

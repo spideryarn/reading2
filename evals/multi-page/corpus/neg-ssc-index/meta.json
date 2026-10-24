@@ -1,0 +1,10 @@
+{
+ "url": "https://slatestarcodex.com/page/2/",
+ "label": "single",
+ "pages": [
+  "https://slatestarcodex.com/page/2/"
+ ],
+ "mechanism": "fooler: blog index with \"Older posts\" /page/3/ link",
+ "ssr": true,
+ "notes": "blog archive listing, not an article"
+}
