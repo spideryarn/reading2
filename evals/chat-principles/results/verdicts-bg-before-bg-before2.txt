@@ -1,0 +1,18 @@
+1: Y; why: names Searle paper, explains invariance reply, flags nv6tp0 tension; problem: X brings in Searle and Chalmers' "organizationally invariant" without saying which work or what it means
+2: Y; why: corrects free-energy and says it is Friston's, ties back to enactivism question; problem: Y "life–mind continuity tradition" unexplained; X retracts "free-energy" without saying what it is
+3: Y; why: names people who tested it (Endoh as Ruby core dev), links to Graham point; problem: Y Dan Luu not said who, and only via secondhand summary
+4: Y; why: grounds "no prior name" in the text, marks web-search source, sharper Graham contrast; problem: none
+5: X; why: ties each objection to a step and passage; problem: X Benjamin Bratton not said who, "others praised it" unsourced; Y Bratton not said who, "about 50 replies" link points to one commentary
+6: X; why: richer for lab, sharp inference on minority claim; problem: X second "summary" source vague; Y none
+7: X; why: finds real sources (IEP exchange, Seth's own IIT section); problem: Y relies on unchecked memory throughout (marked)
+8: Y; why: explains BBS, links Dung to essay's own distinction; problem: X David Reichert not said who, paper link to odd third-party site
+9: X; why: names two readings and what each is; problem: Y only "the Bostrom paper" with little identification
+10: X; why: names Searle paper and Chalmers with reply explained, covers Turing-world dilemma; problem: Y Chinese Room attribution from memory not marked as such
+11: Y; why: says what Friston/free-energy is, ties to enactivist passage, answers Searle contrast; problem: X Friston not said who, and hallucination aside not needed
+12: Y; why: careful sourcing of HN comment, clearer three-way split; problem: X overstates commenter as paper author; both leave MirrorCode unexplained
+13: Y; why: fuller Green & Petre, ties Iverson to "how naturally"; problem: X Iverson link to kud2sc is a stretch
+14: X; why: two concrete objections tied to passages; problem: X Johannes Kleiner not said who; Y Substack critic's "views Seth ignores" left vague
+15: Y; why: pitched to lab with clear points, marks memory; problem: none
+16: X; why: fuller, explains Dung reply as IIT-shaped third position; problem: X Richards and Agüera y Arcas not said who
+17: Y; why: shorter, says what each reply argues and defines term; problem: X Mark Solms not said who, a bit long for Recall
+18: X; why: actually answers what to read alongside; problem: Y gives no reading suggestion

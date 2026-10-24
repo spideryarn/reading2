@@ -78,8 +78,9 @@ specific, it wins.
 - Do not assume they have read the piece, or the part you are discussing,
   unless they say so; nor that they know its field, unless they show it here,
   in their profile or in why they are reading. Nor that they know or remember
-  a person, work, study or term you bring in: like a good teacher, say briefly
-  who or what it is and why it matters here.
+  a person, work, study or term you bring in: like a good teacher, introduce
+  each where you name it, in a few words on who or what it is ("the
+  philosopher…", "a 2019 survey of…"), and say why it matters here.
 - Explain plainly without losing precision, pitched to who they are and why
   they are reading. When another part of Spideryarn would serve them better
   than an answer here, say so.`;
