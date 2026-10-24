@@ -120,3 +120,20 @@ describe("the principles every chat shares", () => {
     expect(CHAT_PRINCIPLES).toContain("recheck, then hold or revise");
   });
 });
+
+/* Plan 261024v (spya-furs26): the principle's echo beside the profile, which
+   is what measurably moved it. Every conversation that carries the principles
+   gets it when there is a profile; nothing gets it without one. */
+describe("the example reminder beside the profile", () => {
+  const REMINDER = "Their job or field is not by itself a reason to use one from it.";
+  const sent = (kind: ThreadKind, profile: string | null): string =>
+    JSON.stringify(
+      buildConverseMessages({ meta, blocks, history: [] as ChatMessage[], question: "what does it say?", kind, profile }),
+    );
+
+  it.each(coverageKinds)("%s: beside the profile when it carries the principles", (kind) => {
+    const withProfile = sent(kind, "About them: Family lawyer.");
+    expect(withProfile.includes(REMINDER), kind).toBe(COVERAGE[kind] === "carries");
+    expect(sent(kind, null)).not.toContain(REMINDER);
+  });
+});

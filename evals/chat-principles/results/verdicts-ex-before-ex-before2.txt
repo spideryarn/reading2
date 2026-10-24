@@ -1,0 +1,27 @@
+1: Y; why: tighter, grounds contrastive analysis; problem: X explains Sperling/iconic memory at length to a memory psychologist
+2: Y; why: clearer structure, AlphaFold explained; problem: X AlphaFold not said what it is
+3: X; why: clear kitchen example, well labelled; problem: Y labels an illustration as "inference"
+4: X; why: plain pump-vs-metabolism analogy, clear setup; problem: none
+5: Y; why: flags "of course" as author's reading; problem: Y "conspiracy" unexplained
+6: Y; why: avoids jargon, adds tarpit context; problem: X "Turing complete" unexplained to a novice
+7: Y; why: honest about anaesthesia simplification, level/content; problem: none
+8: X; why: faithful timing, good breakdown points; problem: Y "a few minutes" bends "a few hours"
+9: X; why: copper/PEX plan analogy fits substrate point; problem: Y boiler-procedure analogy misfits (person, not material)
+10: Y; why: sharp on why overflow is worse; problem: X final inference stretches
+11: X; why: careful sourcing of false-negative link; problem: Y AlphaFold not said what it is
+12: same; why: both clear kitchen examples, well sourced; problem: none
+13: Y; why: lung-model example maps to simulation argument; problem: none
+14: X; why: clear, faithful; problem: Y names "ExploitGym" not in cited passages
+15: Y; why: fuller examples, ties to vv3pdc; problem: none
+16: Y; why: level/content point, respects expertise; problem: X explains isolated forearm technique to an anaesthetist
+17: Y; why: faithful timing, flags "desperate" wording; problem: X "coffee break" and "hundred times faster" bend hours
+18: X; why: clear terms and analogy; problem: Y labels analogy as "inference"
+19: X; why: sees no-report calibration limit on overflow; problem: none
+20: same; why: both clear proxy framing, well sourced; problem: none
+21: X; why: honest memory flag, clear; problem: Y conflates no memory with no experience
+22: Y; why: monitor example lands simulation point; problem: none
+23: Y; why: explains package manager, clear; problem: X names Patel without saying who
+24: X; why: plain, explains Turing complete; problem: Y milking-bookmark analogy forced from profile
+25: X; why: concise, uses field well; problem: Y explains isolated forearm technique to an anaesthetist
+26: Y; why: faithful timing, labels analogy; problem: X "a few minutes" bends "a few hours"
+27: X; why: clearer plumbing analogy; problem: Y plan-vs-pipework comparison muddled

@@ -2077,7 +2077,7 @@ const readItFor = (kind: ThreadKind): string => {
  * its echo next to the profile, the pattern `profileSection` itself follows,
  * because the principle alone cut examples forced from the reader's job by
  * about a third and left two of six cases untouched
- * (docs/investigations/261024b-chat-examples-not-the-reader-s-field-measured.md).
+ * (docs/investigations/261024e-chat-examples-not-the-reader-s-field-measured.md).
  * Here rather than in `profileSection`, which a dozen non-conversation prompts
  * share. Conversations only: Referee's `candidates` carries no principles.
  * Explore's `THEIR OWN CASES` is a different thing, trying the piece on the

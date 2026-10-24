@@ -1,6 +1,15 @@
 # 261024v — Chat picks the clearest example, not the reader's field
 
 Up: [plans.md](../project/plans.md). Report `spya-furs26` (#699, admin, suggestion, 2026-10-24).
+Measured in [261024e](../investigations/261024e-chat-examples-not-the-reader-s-field-measured.md).
+
+**Outcome (2026-10-24):** shipped the principle sentence below *and* the fallback the plan named, a
+two-line reminder beside the profile in conversation prompts (`withExampleReminder`,
+src/converse.ts), since the sentence alone missed the bar set before the run (forced examples
+17→11, in 3 of 6 cases). With both, examples forced from the reader's job fell from 9–11 to 0–1 per
+27 replies, blind pairs went 22–3 and 16–9 against a 13–12 control, and the guards held. Examples per
+reply came in just under the controls' range (1.5–1.6 against 1.7–1.8), a miss against the rule as
+written, read as one fewer example in a few replies.
 
 ## What Greg asked
 

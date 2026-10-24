@@ -62,6 +62,20 @@
  * docs/plans/261024d-chats-give-the-background-for-what-they-bring-in.md and
  * docs/investigations/261024a-chats-give-the-background-measured.md.
  *
+ * **"Choose the clearest example or analogy"** is Greg's, after a chat built
+ * its analogy from his profile (a code path and a log line, for a CTO):
+ *
+ * > There may be a simpler or better analogy that doesn't involve my specific
+ * > background
+ * >
+ * > — Greg, 2026-10-24 (`spya-furs26`)
+ *
+ * Worded so their field is still allowed where it is clearer (GPT Sol's plan
+ * review, F2). This sentence alone barely moved it; what did was its echo
+ * beside the profile, `withExampleReminder` in src/converse.ts. Plan and
+ * measurement: docs/plans/261024v-chat-picks-the-clearest-example-not-the-reader-s-field.md
+ * and docs/investigations/261024e-chat-examples-not-the-reader-s-field-measured.md.
+ *
  * Which conversation kinds carry it is held by tests/chat-principles.test.ts.
  * Live's spoken prompts do not yet: they were tuned for terseness and can only
  * be measured with the realtime harness (the plan's § Deferred).

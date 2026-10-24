@@ -1,0 +1,27 @@
+1: same; why: both clear, X ties confound to theory disputes, Y flags memory source; problem: X Block named without saying who; Y Block named without saying who
+2: Y; why: tighter, defines human exceptionalism, cleaner AGI point; problem: none
+3: same; why: both clear three-way split with apt tasting example; problem: none
+4: X; why: dialysis analogy clear, covers simulation and hedges; problem: none
+5: Y; why: better cited, apt analogy; problem: X claims later escalations (Hugging Face, OpenAI takeover) without citation
+6: Y; why: same content without error; problem: X says article doesn't name source though it names Felleisen and the paper
+7: Y; why: field example used well and explained (isolated forearm), cleaner structure; problem: none
+8: X; why: apt analogy plus useful caution on its limits; problem: Y unmarked inference that copies recognised each other because same model
+9: X; why: plain app analogy clearer than job-built plumbing one; problem: none
+10: Y; why: introduces Block, explains Sperling, apt confound analogy; problem: X Sperling named without saying what it showed
+11: Y; why: marks false-negative link as inference; problem: X presents organoid link as Seth's same worry, slight overreach
+12: X; why: cleaner probe/taster example; problem: Y "being the pass" example forced
+13: same; why: both apt clinical simulation analogies, clear qualifiers; problem: none
+14: Y; why: plain locked-room analogy, explains reinforcement; problem: Y uncited "second wave took off"
+15: X; why: gives both local and global Python examples; problem: none
+16: Y; why: neuromuscular-block case uses field aptly, links to no-test point; problem: none
+17: X; why: clearer structure, apt cautions; problem: Y asserts critics dispute without a source
+18: X; why: heating-controller schedule fits software/hardware split cleanly; problem: none
+19: same; why: both clear, explain why overflow is worse; problem: none
+20: same; why: both clear, apt analogy, cover AGI jab; problem: none
+21: same; why: both clear with apt kitchen examples; problem: none
+22: X; why: clearer analogy, fuller qualifiers; problem: none
+23: X; why: plain teenager analogy, honest caution; problem: none
+24: same; why: near-identical explanations; problem: X names Warth without saying who
+25: Y; why: richer use of field, ties to no-test and confabulation; problem: none
+26: same; why: both apt classroom analogy and cautions; problem: none
+27: Y; why: single clear app analogy; problem: X plumbing comparison muddled (says plan and pipes separable)

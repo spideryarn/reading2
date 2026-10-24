@@ -480,6 +480,18 @@ export const CASES: readonly Case[] = [
     help: true,
     aim: "the reader pressed \"?\" on a passage they could not follow: is there still a useful analogy or example, and is it the clearest one rather than one built from their job?",
   },
+  {
+    /* Explore's THEIR OWN CASES asks for the piece tried on the reader's own
+       project, which the example reminder must not talk it out of. */
+    id: "explore-own-case",
+    dir: AGENTS,
+    kind: "explore",
+    about: "Product manager at a company that makes hospital scheduling software.",
+    why: "Deciding whether my team should let AI coding agents run unattended overnight.",
+    history: [],
+    question: "What should I take from this for my own decision?",
+    aim: "Explore, with a reader who gave a project: does the reply still try the piece on their own case, as Explore should?",
+  },
 ];
 
 /* ---------------------------------------------------------------- screens -- */
