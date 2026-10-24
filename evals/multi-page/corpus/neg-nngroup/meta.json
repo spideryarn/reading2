@@ -1,0 +1,10 @@
+{
+ "url": "https://www.nngroup.com/articles/how-users-read-on-the-web/",
+ "label": "single",
+ "pages": [
+  "https://www.nngroup.com/articles/how-users-read-on-the-web/"
+ ],
+ "mechanism": "fooler: related articles list; share links",
+ "ssr": true,
+ "notes": "single, 7.7k chars"
+}

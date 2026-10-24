@@ -1,0 +1,10 @@
+{
+ "url": "https://www.theguardian.com/environment/2018/oct/08/global-warming-must-not-exceed-15c-warns-landmark-un-report",
+ "label": "single",
+ "pages": [
+  "https://www.theguardian.com/environment/2018/oct/08/global-warming-must-not-exceed-15c-warns-landmark-un-report"
+ ],
+ "mechanism": "fooler: related/\"read next\" links to other stories",
+ "ssr": true,
+ "notes": "news article 14k chars"
+}

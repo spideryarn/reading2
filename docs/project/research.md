@@ -38,6 +38,10 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
   and learning deeply (2026-10-10): twenty-one topic files and a digest of what they say about each
   mode. Research on how people read goes there, not only here.
 
+- [261024a-situating-a-paper-in-the-literature-how-researchers-read-and-check.md](../research/261024a-situating-a-paper-in-the-literature-how-researchers-read-and-check.md)
+  — how researchers situate a paper, how often citations fail their claims, what changes the
+  picture after publication, and what CiteSee and CiteRead learned about notes in the reading view
+
 - [261021a-table-library-for-sortable-hideable-columns.md](../research/261021a-table-library-for-sortable-hideable-columns.md)
   — TanStack Table stays the table library (headless, behind `DataTable`); stay on v8 for now, and what
   a v9 move would cost

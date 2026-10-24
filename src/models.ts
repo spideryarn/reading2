@@ -526,6 +526,14 @@ export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
 export const OPENING_TITLE_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What decides whether a fetched web page is only the first part of its
+ * piece**, and picks the page's own links that carry the rest
+ * (src/multi-page.ts, report spya-qkyukr). Greg named Haiku; the eval that
+ * holds it to that is evals/multi-page/run.ts.
+ */
+export const MULTI_PAGE_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What finds an article's front and back matter** — the title block, the
  * abstract, acknowledgements, the reference list — so the reading view can
  * fold it (src/matter.ts, plan 261018a). The authors pass's model and route,
@@ -786,6 +794,14 @@ export type Task =
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. Article-reading
      like `faq`, naming block ids and quotes, so `articleWithIds`. No web search. */
   | "sources-claims"
+  /* **Where the piece sits in the literature** — plan 261024o, src/situate.ts.
+     Two capable calls on the Messages wire. `situate-plan` writes the searches
+     from the fenced title, headings, opening and the works it leans on — not
+     the whole article, and never the reader's profile. `situate` reads the
+     whole article (fenced as untrusted, so not an `ArticleStage`: its bytes
+     match no other stage's) beside everything the searches found. */
+  | "situate-plan"
+  | "situate"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
@@ -1007,6 +1023,13 @@ export type Task =
    */
   | "web-search-subagent"
   /**
+   * **Situate's searches** (src/situate.ts, plan 261024o): `search_web`'s
+   * request exactly — a forced Exa search on the quick tier — one per planned
+   * query, up to sixteen a run. Its own job so the ledger shows what a run's
+   * searches cost beside its read, and apart from a conversation's.
+   */
+  | "situate-search"
+  /**
    * **Who wrote an article, and how to reach them** — the author gift's one
    * lookup (src/author-lookup.ts, plan 261010c D4). Admin-only, pressed by an
    * administrator for one article at a time, run after the response. Chat
@@ -1061,6 +1084,10 @@ export type NonTaskAiJob =
   /* **A paper's title, off its opening**, when its `<title>` is known not to
      be it — src/opening-title.ts, on `OPENING_TITLE_MODEL` below. */
   | "opening-title"
+  /* **Whether a fetched web page is only the first part of its piece**, and
+     which of its own links carry the rest — src/multi-page.ts, on
+     `MULTI_PAGE_MODEL` below. */
+  | "multi-page"
   /* **An article's front and back matter, found** — src/matter.ts, on
      `MATTER_MODEL` below. */
   | "matter"
@@ -1279,6 +1306,11 @@ export const TASK_TIER: Record<Task, Tier> = {
   faq: "capable",
   relations: "capable",
   "sources-claims": "capable",
+  /* Capable, both, as the spike measured them (investigation 261024b): Haiku
+     read the same evidence for an eighth of the price and lost 3 of 11 quotes
+     and a date. Sonnet is the provisional reader (plan 261024o, S14). */
+  "situate-plan": "capable",
+  situate: "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1294,6 +1326,9 @@ export const TASK_TIER: Record<Task, Tier> = {
   /* Quick by measurement (investigation 261012b): GPT Luna wrote no link the
      search had not returned, in 28, at $0.007 a search, nearly all of it Exa's. */
   "web-search-subagent": "quick",
+  /* `search_web`'s request and model, by measurement there (investigation
+     261012b): the search is what is bought, and the read is Sonnet's. */
+  "situate-search": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, and on Opus for every article: `ALWAYS_HIGH_POWER` below. */
@@ -1576,6 +1611,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
   faq: "messages",
   relations: "messages",
   "sources-claims": "messages",
+  /* A strict schema back on the Messages wire, as `sources-claims`. */
+  "situate-plan": "messages",
+  situate: "messages",
   crossrefs: "messages",
   simple: "messages",
   skim: "messages",
@@ -1619,6 +1657,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
      the quick tier's only wire. */
   "dig-deeper-search": "chat",
   "web-search-subagent": "chat",
+  /* `search_web`'s wire, for its reason: the web-search server tool is there. */
+  "situate-search": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1656,6 +1696,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "front-matter-authors": "chat",
   /* A strict JSON schema back, on chat/completions. src/opening-title.ts. */
   "opening-title": "chat",
+  /* A strict JSON schema back, on chat/completions. src/multi-page.ts. */
+  "multi-page": "chat",
   /* A strict JSON schema back, on chat/completions. src/matter.ts. */
   matter: "chat",
   /* A strict JSON schema back, on chat/completions. src/citation-blurbs.ts. */
@@ -1742,6 +1784,9 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   faq: null,
   relations: null,
   "sources-claims": null,
+  /* The Messages-wire stages hand `CAPABLE_MODEL` straight through. */
+  "situate-plan": null,
+  situate: null,
   crossrefs: null,
   simple: null,
   skim: null,
@@ -1782,6 +1827,9 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   "dig-deeper-search": "SPIDERYARN_DIG_DEEPER_SEARCH_MODEL",
   /* For a comparison run, as investigation 261012b ran Haiku beside it. */
   "web-search-subagent": "SPIDERYARN_WEB_SEARCH_SUBAGENT_MODEL",
+  /* Every chat-wire task has one (tests/models.test.ts); for a comparison run
+     of another search model under Situate's queries. */
+  "situate-search": "SPIDERYARN_SITUATE_SEARCH_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
@@ -1935,6 +1983,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
   { job: "front-matter-authors", id: FRONT_MATTER_AUTHORS_MODEL, provider: "openrouter" },
   { job: "opening-title", id: OPENING_TITLE_MODEL, provider: "openrouter" },
+  { job: "multi-page", id: MULTI_PAGE_MODEL, provider: "openrouter" },
   { job: "matter", id: MATTER_MODEL, provider: "openrouter" },
   { job: "citation-blurbs", id: CITATION_BLURBS_MODEL, provider: "openrouter" },
   { job: "citation-blurbs-check", id: CITATION_BLURBS_MODEL, provider: "openrouter" },

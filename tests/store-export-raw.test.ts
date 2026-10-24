@@ -51,7 +51,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, jobs } from "../src/db/schema.js";
 import type { RawSourceStore } from "../src/store/blobs.js";
 import { loadEnvLocal } from "../src/env.js";
-import type { RawManifest } from "../src/fetch.js";
+import { type RawManifest, type RawPart, rawPartFile } from "../src/fetch.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
 import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -89,6 +89,12 @@ requireFixture(FROM, [
 /** Ours, and `test-`-prefixed so the other suites' `data/` scans skip it. */
 const SLUG = "test-export-raw";
 
+/** The clone's two further pages: two documents of their own, each with its own head. */
+const PART_TEXTS = [
+  "<!doctype html><html><head><title>Part two</title></head><body><p>The second page of the export fixture.</p></body></html>",
+  "<!doctype html><html><head><title>Part three</title><style>p{color:#222}</style></head><body><p>The third page of the export fixture.</p></body></html>",
+];
+
 await pgReady({
   suite: "tests/store-export-raw.test.ts",
   tables: ["spideryarn.raw_sources"],
@@ -115,6 +121,8 @@ describe("exporting an article whose bytes are in the bucket", () => {
   let original: RawManifest;
   /** `data/writes/raw.html`, the bytes on disk. */
   let originalBytes: Buffer;
+  /** The further pages this file gives the clone. */
+  let parts: RawPart[] = [];
 
   beforeAll(async () => {
     original = JSON.parse(
@@ -137,6 +145,25 @@ describe("exporting an article whose bytes are in the bucket", () => {
         await writeFile(at, JSON.stringify(value, null, 2));
       }
     }
+    /* **Two further pages**, as stage 1 stores a piece split over several (plan
+       261024p): each a file beside `raw.json` and an entry in its `parts`, so
+       the loader has to put them in the bucket and the table, and the export
+       has to bring them back out. */
+    const manifestAt = path.join(ROOT, "data", SLUG, "raw.json");
+    const withParts = JSON.parse(await readFile(manifestAt, "utf8")) as RawManifest;
+    withParts.parts = [];
+    for (const [i, text] of PART_TEXTS.entries()) {
+      const bytes = new TextEncoder().encode(text);
+      await writeFile(path.join(ROOT, "data", SLUG, rawPartFile(i + 1)), bytes);
+      withParts.parts.push({
+        url: `https://example.com/writes/part-${i + 2}`,
+        storedSha256: createHash("sha256").update(bytes).digest("hex"),
+        storedBytes: bytes.byteLength,
+      });
+    }
+    parts = withParts.parts;
+    await writeFile(manifestAt, JSON.stringify(withParts, null, 2));
+
     /* Two files in `output/`, not one. `stampedHtml` is `output/<slug>.html`
        and stage 3's `blocks` is `output/<slug>.blocks.json` — a different file
        from `data/<slug>/blocks.json`, which belongs to `structure`. Copy only the
@@ -225,6 +252,15 @@ describe("exporting an article whose bytes are in the bucket", () => {
     const written = await readFile(path.join(out, "data", SLUG, original.file));
     expect(written.byteLength).toBe(originalBytes.byteLength);
     expect(createHash("sha256").update(written).digest("hex")).toBe(original.storedSha256);
+  });
+
+  it("writes each further page beside it, byte for byte, and lists them in order", async () => {
+    const back = JSON.parse(await readFile(path.join(out, "data", SLUG, "raw.json"), "utf8")) as RawManifest;
+    expect(back.parts).toEqual(parts);
+    for (const [i, text] of PART_TEXTS.entries()) {
+      expect(files).toContain(rawPartFile(i + 1));
+      expect(await readFile(path.join(out, "data", SLUG, rawPartFile(i + 1)), "utf8")).toBe(text);
+    }
   });
 
   it("writes a manifest a re-import can actually use", async () => {

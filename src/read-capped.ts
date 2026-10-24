@@ -28,6 +28,7 @@ export async function readStreamCapped(
   body: ReadableStream<Uint8Array> | null,
   maxBytes: number,
   tooLarge: (seenBytes: number) => Error,
+  onBytesRead?: (bytes: number) => void,
 ): Promise<Uint8Array> {
   if (!body) return new Uint8Array(0);
   const reader = body.getReader();
@@ -38,6 +39,7 @@ export async function readStreamCapped(
       const { done, value } = await reader.read();
       if (done) break;
       if (!value) continue;
+      onBytesRead?.(value.byteLength);
       total += value.byteLength;
       if (total > maxBytes) throw tooLarge(total);
       chunks.push(value);

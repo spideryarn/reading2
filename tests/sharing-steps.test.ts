@@ -137,6 +137,9 @@ describe("the policy", () => {
         "matter",
         /* 2026-10-18, a whole column that reads the Bibliography — plan 261017h. */
         "citation-blurbs",
+        /* 2026-10-24, a whole column that reads the Bibliography and the notes
+           on its works — plan 261024o. */
+        "situate",
       ].sort(),
     );
   });
@@ -151,8 +154,10 @@ describe("the policy", () => {
     expect([...readsOf(job(["skim"]))].sort()).toEqual(["ideas", "quotes"]);
     /* Plan 261017h: each note is keyed to a row of the list. */
     expect([...readsOf(job(["citation-blurbs"]))]).toEqual(["bibliography"]);
+    /* Plan 261024o: the works it leans on, and their cited words. */
+    expect([...readsOf(job(["situate"]))].sort()).toEqual(["bibliography", "citation-blurbs"]);
     for (const step of SHARING_STEPS) {
-      if (step === "illustrated" || step === "skim" || step === "citation-blurbs") continue;
+      if (step === "illustrated" || step === "skim" || step === "citation-blurbs" || step === "situate") continue;
       expect([...readsOf(job([step]))], step).toEqual([]);
     }
   });

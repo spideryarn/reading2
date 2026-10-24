@@ -718,6 +718,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/sources-claims/w1"],
   },
   {
+    /* Sources › Investigate's dossier, owner only (plan 261024o). */
+    match: { kind: "regex", source: "^\\/api\\/situate\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/situate/w1"],
+  },
+  {
     /* The claims list's old path, for one deploy (plan 261009w F1; removed by its contract). */
     match: { kind: "regex", source: "^\\/api\\/debate-claims\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
@@ -1199,8 +1205,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    (plan 261019p); 126 with an article's access for the admin and a private
    link's opens (plan 261021d); 129 with view as's start, current and end
    (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j); 132
-   with a draft gift's email preview and the lookup's guidance (plan 261024f). */
-const EXPECTED_MATCHER_COUNT = 132;
+   with a draft gift's email preview and the lookup's guidance (plan 261024f);
+   133 with Situate's owner read (plan 261024o). */
+const EXPECTED_MATCHER_COUNT = 133;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1223,8 +1230,9 @@ const EXPECTED_MATCHER_COUNT = 132;
    admin and a private link's opens (plan 261021d); 158 with view as's start,
    current and end (plan 261019n); 159 with a draft gift's High-powered AI
    (plan 261021j); 163 with a discarded gift's DELETE, a draft's email preview
-   and the guidance's GET and PUT (plan 261024f). */
-const EXPECTED_GUARD_COUNT = 163;
+   and the guidance's GET and PUT (plan 261024f); 164 with Situate's owner
+   read (plan 261024o). */
+const EXPECTED_GUARD_COUNT = 164;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2487,6 +2495,8 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/sources-claims\\/([\\w.%-]+)$/",
+        // Situate's dossier, owner only (plan 261024o)
+        "GET regex /^\\/api\\/situate\\/([\\w.%-]+)$/",
         // and its old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)$/",
         // the claim checks, 261008i stage 3 — beside the list they check

@@ -1,0 +1,12 @@
+{
+ "url": "https://www.kitguru.net/components/cases/leo-waldock/corsair-warthog-case-review/",
+ "label": "single",
+ "pages": [
+  "https://www.kitguru.net/components/cases/leo-waldock/corsair-warthog-case-review/"
+ ],
+ "mechanism": "a rel=next 'Next' to another article",
+ "ssr": true,
+ "notes": "",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

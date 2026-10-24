@@ -1,0 +1,16 @@
+{
+ "url": "https://intelligence-curse.ai/",
+ "label": "multi",
+ "pages": [
+  "https://intelligence-curse.ai/",
+  "https://intelligence-curse.ai/pyramid/",
+  "https://intelligence-curse.ai/capital/",
+  "https://intelligence-curse.ai/defining/",
+  "https://intelligence-curse.ai/shaping/",
+  "https://intelligence-curse.ai/breaking/",
+  "https://intelligence-curse.ai/history/"
+ ],
+ "mechanism": "chapter TOC on landing (~6.5k chars: intro + Chapters list)",
+ "ssr": true,
+ "notes": "landing also anchors #section-N"
+}

@@ -55,6 +55,7 @@ import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
 import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, openingHeading, pageOpening } from "./front-matter-authors.js";
 import type { OpeningTitleReader } from "./opening-title.js";
+import { type PageSource, readParts } from "./read-parts.js";
 import { addressDay, datelineDay } from "./page-date.js";
 import type { Author, Meta } from "./types.js";
 
@@ -718,7 +719,7 @@ function visibleLength(text: string | null | undefined): number {
  * (src/challenge-page.ts, since 2026-10-06), and this knows nothing about
  * *what* the page is. `refusalFor` below asks that question first.
  */
-function capabilityFloor(
+export function capabilityFloor(
   article: { textContent: string | null | undefined } | null,
 ): TooLittleTextToRead | null {
   /* Readability declining outright is `ReadabilityRefused`'s branch, not this
@@ -1387,12 +1388,20 @@ export async function runExtract(opts: {
    * else the slug.
    */
   titleFromOpening?: OpeningTitleReader;
+  /**
+   * **The pages after this one, when the piece arrived as several** (stage 1
+   * followed them: src/follow-pages.ts, plan 261024p). Each is read on its own
+   * and joined by `readParts` (src/read-parts.ts); absent or empty, this is
+   * the one page it always was.
+   */
+  parts?: readonly PageSource[];
 }): Promise<ExtractResult> {
   const { slug } = opts;
+  const parts = opts.parts ?? [];
   /* Before the DOM pass that asks whether each formula would draw: this is the
      temml load the built function can trace (src/maths-server.ts). Only for a
      page that could hold a formula — most do not, and need not pay for it. */
-  if (MIGHT_HOLD_MATHS.test(opts.html)) await loadMathsRenderer();
+  if (MIGHT_HOLD_MATHS.test(opts.html) || parts.some((p) => MIGHT_HOLD_MATHS.test(p.html))) await loadMathsRenderer();
 
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
@@ -1411,9 +1420,9 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors: declaredAuthors, opening, openingHeaded, ownIds, untitled, drawnTitle, refusal, notes, callouts, removed, kept } = readArticle(
-    opts.html,
-    opts.url,
+  const { article, authors: declaredAuthors, opening, openingHeaded, ownIds, untitled, drawnTitle, refusal, notes, callouts, removed, kept } = readParts(
+    { html: opts.html, url: opts.url },
+    parts,
   );
   /* **Before the `!article` check, so it wins over `ReadabilityRefused` too.**
      A bot check Readability happens to decline is still a bot check, and that

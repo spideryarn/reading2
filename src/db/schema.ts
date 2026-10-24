@@ -84,6 +84,7 @@ import type {
   BlockKind,
   Bibliography,
   CitationBlurbs,
+  Situate,
   Arc,
   Citation,
   Reception,
@@ -1468,6 +1469,18 @@ export const articleRevisions = spideryarn.table(
      * neighbours make.
      */
     citationBlurbs: jsonb("citation_blurbs").$type<CitationBlurbs>(),
+
+    /**
+     * Where the piece sits in the literature — `Situate`, src/types.ts,
+     * written by the `situate` step (src/situate.ts). Plan 261024o.
+     *
+     * **Owner only**: no public projection reads it and no visitor DTO carries
+     * it. Every source in it is the search's URL and title and a quote found in
+     * that source's own text; the model's words are the notes, the overview and
+     * the questions. The search queries are stored too, because the panel says
+     * what was searched. No foreign key, on its neighbours' argument.
+     */
+    situate: jsonb("situate").$type<Situate>(),
 
     /**
      * **Retired: nothing reads or writes this.** Bibliography's column before
@@ -3710,7 +3723,7 @@ export const revisionStepRuns = spideryarn.table(
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -3777,6 +3790,50 @@ export const rawSources = spideryarn.table(
      */
     check("raw_sources_sha256_format", sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
     check("raw_sources_kind", sql`${t.kind} in ('pdf','html')`),
+  ],
+);
+
+/**
+ * **The further pages of a piece spread over several**, in reading order — the
+ * pages stage 1 followed from the first one (src/follow-pages.ts, plan
+ * docs/plans/261024p-a-multi-page-article-imports-from-its-first-page.md).
+ *
+ * Page 1 is not here: it stays the revision's own `raw_source_sha256`, byte for
+ * byte, so every reader of the source that does not know about parts reads
+ * page 1, which is what it read before. Each further page is its own
+ * content-addressed object, stored exactly as page 1 is, with its own `<head>`
+ * and its own address; a stitched document lost each later page's `<style>`
+ * (GPT Sol's plan review, F2). No row: a single page, which is most of them.
+ *
+ * Nothing in a page can forge a row. They exist only as rows we wrote, from the
+ * links the model picked by id, after `fetchDocument` and the same-site check.
+ */
+export const articleRevisionParts = spideryarn.table(
+  "article_revision_parts",
+  {
+    revisionId: uuid("revision_id")
+      .notNull()
+      .references(() => articleRevisions.id, { onDelete: "cascade" }),
+    /** 1 for the first page after page 1, in the judge's order. */
+    ordinal: integer("ordinal").notNull(),
+    /** Where the page's fetch ended, after redirects: the base its links resolve against. */
+    url: text("url").notNull(),
+    rawSourceSha256: text("raw_source_sha256").notNull(),
+    rawSourceKind: text("raw_source_kind").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.revisionId, t.ordinal] }),
+    check("article_revision_parts_ordinal", sql`${t.ordinal} >= 1`),
+    /* Only a web page is followed, so only a web page is a part. */
+    check("article_revision_parts_kind", sql`${t.rawSourceKind} = 'html'`),
+    check("article_revision_parts_url", sql`${t.url} ~ '^https?://'`),
+    /** No `onDelete`, for the reason `article_revisions_raw_source_fk` gives. */
+    foreignKey({
+      name: "article_revision_parts_raw_source_fk",
+      columns: [t.rawSourceSha256, t.rawSourceKind],
+      foreignColumns: [rawSources.sha256, rawSources.kind],
+    }),
   ],
 );
 
@@ -8599,7 +8656,7 @@ export const rateLimitEvents = spideryarn.table(
        rewrites or deletes those rows, then drops it from this list. */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

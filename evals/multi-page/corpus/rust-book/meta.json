@@ -1,0 +1,11 @@
+{
+ "url": "https://doc.rust-lang.org/book/ch01-00-getting-started.html",
+ "label": "multi",
+ "pages": [
+  "https://doc.rust-lang.org/book/ch01-00-getting-started.html",
+  "https://doc.rust-lang.org/book/ch01-01-installation.html"
+ ],
+ "mechanism": "<a rel=\"next prefetch\"> Next chapter (mdBook); no <link>",
+ "ssr": true,
+ "notes": "chapter index page p1 only 541 chars; book has many chapters"
+}

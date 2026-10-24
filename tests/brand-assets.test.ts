@@ -166,6 +166,57 @@ describe("brand assets", () => {
     await expect(generateBrandAssets({ outputDir: path.join(ROOT, "public"), check: true })).resolves.toHaveLength(11);
   });
 
+  it.each(["preview.png", "tiny-size-preview.png"])("detects missing/stale %s without writing", async (file) => {
+    const previewDir = path.join(temporary, `${file}-proofs`);
+    const options = { outputDir, preview: true, previewDir };
+    await generateBrandAssets(options);
+    const proof = path.join(previewDir, file);
+    const original = await readFile(proof);
+    await rm(proof);
+    await expect(generateBrandAssets({ ...options, check: true })).rejects.toThrow(file);
+    await expect(stat(proof)).rejects.toThrow(/ENOENT/);
+    await writeFile(proof, "deliberately stale proof");
+    await expect(generateBrandAssets({ ...options, check: true })).rejects.toThrow(file);
+    expect(await readFile(proof, "utf8")).toBe("deliberately stale proof");
+    await writeFile(proof, original);
+    const before = await Promise.all(["preview.png", "tiny-size-preview.png"].map((file) => stat(path.join(previewDir, file))));
+    await expect(generateBrandAssets({ ...options, check: true })).resolves.toHaveLength(11);
+    for (const [i, file] of ["preview.png", "tiny-size-preview.png"].entries()) {
+      expect((await stat(path.join(previewDir, file))).mtimeMs).toBe(before[i]?.mtimeMs);
+    }
+  });
+
+  it("does not create absent public/proof destinations in check mode", async () => {
+    const missingOutput = path.join(temporary, "absent-public");
+    const missingPreview = path.join(temporary, "absent-proofs");
+    await expect(generateBrandAssets({ outputDir: missingOutput, previewDir: missingPreview, preview: true, check: true })).rejects.toThrow(/missing or stale/);
+    await expect(stat(missingOutput)).rejects.toThrow(/ENOENT/);
+    await expect(stat(missingPreview)).rejects.toThrow(/ENOENT/);
+  });
+
+  it("preserves native favicon pixels and unsmoothed 8x diagnostic blocks in the tiny proof", async () => {
+    const previewDir = path.join(temporary, "pixel-proof");
+    await generateBrandAssets({ outputDir, previewDir, preview: true });
+    const sheet = await pixels(path.join(previewDir, "tiny-size-preview.png"));
+    const icon = await loadImage(await readFile(path.join(outputDir, "favicon-16x16.png")));
+    for (const [left, background] of [[0, "#FFF9EE"], [460, "#242321"]] as const) {
+      const expected = createCanvas(16, 16);
+      const ctx = expected.getContext("2d");
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, 16, 16);
+      ctx.drawImage(icon, 0, 0);
+      const data = ctx.getImageData(0, 0, 16, 16).data;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const rgba = [...data.slice((y * 16 + x) * 4, (y * 16 + x + 1) * 4)];
+        for (const [px, py] of [[left + 30 + x, 84 + y], [left + 30 + x * 8 + 3, 486 + y * 8 + 3]]) {
+          if (px === undefined || py === undefined) throw new Error("Missing proof coordinate");
+          const at = (py * sheet.width + px) * 4;
+          expect([...sheet.data.slice(at, at + 4)]).toEqual(rgba);
+        }
+      }
+    }
+  });
+
   it("serves image bytes matching the shell and install manifest declarations", async () => {
     const head = new JSDOM(await readFile(path.join(ROOT, "index.html"), "utf8")).window.document;
     const pngLinks = [...head.querySelectorAll('link[rel="icon"][type="image/png"], link[rel="apple-touch-icon"]')];

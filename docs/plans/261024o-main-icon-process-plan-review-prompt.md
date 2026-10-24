@@ -1,0 +1,7 @@
+# Review the repeatable main-icon process plan
+
+Live pre-commit plan, base f2b128b914bec227c65a9472715a26b54c45ee47. Untracked candidate: docs/plans/261024o-a-repeatable-main-icon-update-and-tiny-size-review.md and this prompt. Read that plan and existing scripts/generate-brand-assets.ts, scripts/make-og-card.ts, package scripts, and current identity section of design-logo.md. Small plan review only; no broad repo scan, no edits.
+
+The user explicitly asks docs/scripts, suggests main-icon.md with signposting, to make future updates repeatable. Keep current art and public assets unchanged, reuse canvas/ICO/OG, add actual-output tiny proof under --preview, verify proof staleness in no-write mode, provide update/og/check aliases. Move current facts into one main-icon owner and retain old anchor pointer. Main doc ownership requires a signpost-only AGENTS/overview line. No new policy, deployment, dependency or image generation. The parent proposes focused npm test/typecheck/lint/build for this dev-only change; previous full runs failed or were interrupted in unrelated local Auth/DB tests, and the focused icon check should not depend on them.
+
+Assess smallest sensible design and concrete traps. Return concise verdict and F1... findings, severity P0=data/security/service unusable; P1=reachable wrong behavior or authoritative contract violated; P2=maintainability risk; P3=prose, established vs reasoned. Refuse only established P0/P1. Echo MAIN-ICON-PLAN-261024. Read-only, no network needed.

@@ -3,7 +3,9 @@
  *
  *   npx tsx scripts/make-og-card.ts
  *
- * Run by hand when the logo, the name or the strapline changes, and the PNG is
+ * Included in `npm run brand:update`; `npm run brand:og` runs just this step.
+ * See docs/project/main-icon.md for the complete artwork-update process.
+ * Run when the logo, the name or the strapline changes, and the PNG is
  * committed: nothing draws it at build time, so a deploy cannot fail on a
  * browser. It is one static image for the whole site — the choice, and the
  * per-article image it passed over, are in

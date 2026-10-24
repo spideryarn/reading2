@@ -105,6 +105,7 @@ import type {
   QuizQuestionId,
   FaqFound,
   SourcesClaimListFound,
+  SituateFound,
   SourcesClaimCheckCounts,
   SourcesClaimCheckResult,
   SourcesClaimCheckTarget,
@@ -161,6 +162,24 @@ export interface RawSource {
   filename: string | null;
 }
 
+/** One further page of the source document: `ArticleReader.loadSourcePages`. Always HTML. */
+export interface SourcePart {
+  /** Its position in the piece, page 1 being the revision's own document: 2, 3, … */
+  page: number;
+  /** Where its fetch ended: the base its links resolve against. */
+  url: string;
+  bytes: Uint8Array;
+}
+
+/** Page 1 and its further pages, read from **one** revision. `ArticleReader.loadSourcePages`. */
+export interface SourcePages {
+  source: RawSource;
+  /** In page order. Fewer than `partCount` only when a `maxBytes` budget left some out. */
+  parts: SourcePart[];
+  /** How many further pages the revision lists. */
+  partCount: number;
+}
+
 export interface ArticleReader {
   /** Everything needed for every zoom level. 404 when there are no artefacts. */
   loadArticle(slug: string): Promise<Article>;
@@ -178,13 +197,35 @@ export interface ArticleReader {
    * reaching for a local file is how this feature spent its life 404ing on
    * Vercel while working on a laptop.
    *
-   * **`maxBytes` is a caller's tighter cap**, and there is one: the bug-report
-   * mirror, which sends the document to Sentry only under 10 MiB
-   * (src/feedback-article.ts). Over it the read throws `RawObjectTooLarge`
-   * (src/store/raw-document.ts) instead of downloading the object to refuse
-   * it. It can only lower the store's own ceiling, never raise it.
+   * **`maxBytes` is a caller's tighter cap.** Over it the read throws
+   * `RawObjectTooLarge` (src/store/raw-document.ts) instead of downloading the
+   * object to refuse it. It can only lower the store's own ceiling, never
+   * raise it. (Its caller was the bug-report mirror until that moved to
+   * `loadSourcePages` with every page, plan 261024p.)
    */
   loadSource(slug: string, options?: { maxBytes?: number }): Promise<RawSource | null>;
+
+  /**
+   * **Page 1 and the further pages of the source, from one revision** — each
+   * page its own document, for a piece the site split over several
+   * (`article_revision_parts`, plan 261024p); `parts` is empty for a single
+   * page, which is most articles. `null` exactly when `loadSource` would be.
+   *
+   * **One read, not `loadSource` plus a second lookup**, because two
+   * current-revision lookups straddling a refresh hand back page 1 of one
+   * revision and the later pages of another — a composite that never existed
+   * (GPT Sol's code review of 261024p, F5). The revision row and its part rows
+   * come out of one snapshot.
+   *
+   * **`maxBytes` is a budget for every page together**, for the bug-report
+   * mirror (src/feedback-article.ts), whose 10 MiB is the whole envelope's
+   * worry. Page 1 over it throws `RawObjectTooLarge`, as `loadSource` does; a
+   * later page that would take the total past it is **left out, not thrown
+   * for**, and `partCount` says how many there were. Without it every page is
+   * read, and a reference the bucket cannot honour throws as `loadSource`
+   * does — never a shorter list.
+   */
+  loadSourcePages(slug: string, options?: { maxBytes?: number }): Promise<SourcePages | null>;
 
   /**
    * The shelf. Never throws for an empty library — that is `[]`, not a fault.
@@ -314,6 +355,12 @@ export interface ArticleReader {
    * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
    */
   loadSourcesClaims(slug: string): Promise<SourcesClaimListFound>;
+  /**
+   * Where the piece sits in the literature (plan 261024o) — **owner only**,
+   * with no public twin. Throws `ArtefactNotMadeYet` until the `situate` step
+   * has run. The profile verdict is the route's.
+   */
+  loadSituate(slug: string): Promise<SituateFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still
@@ -3392,7 +3439,12 @@ export type RateBucket =
      note (src/citation-web-note.ts § `WEB_NOTE_RATE_POLICY`, plan 261018o R7).
      Not Dig deeper's bucket: that one is shared by much dearer presses, and
      a cheap one here must not starve them, or they it. */
-  | "citation-web-note";
+  | "citation-web-note"
+  /* Sources' *Search the literature* — the `situate` step's planned web
+     searches and its one read over everything they found, about $0.40–0.50 a
+     run, taken inside the step so every way of starting it passes it
+     (src/situate.ts § `SITUATE_RATE_POLICY`, plan 261024o, GPT Sol's S5). */
+  | "situate";
 
 /**
  * **A bucket's old spellings, still counted against it.** Plan

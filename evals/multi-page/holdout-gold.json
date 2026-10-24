@@ -1,0 +1,124 @@
+{
+ "about": "Held-out gold for evals/multi-page/run.ts (--corpus=evals/multi-page/holdout --gold=evals/multi-page/holdout-gold.json), same schema as gold.json. Collected 2026-10-24 after the prompt was fixed, for GPT Sol's plan review F11; gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it.",
+ "cases": [
+  {
+   "name": "guru3d-nzxt",
+   "url": "https://www.guru3d.com/review/nzxt-s5-rgb-review/",
+   "gold": "multi",
+   "complete": true,
+   "pages": [
+    "/review/nzxt-s5-rgb-review/page-2/",
+    "/review/nzxt-s5-rgb-review/page-3/",
+    "/review/nzxt-s5-rgb-review/page-4/",
+    "/review/nzxt-s5-rgb-review/page-5/",
+    "/review/nzxt-s5-rgb-review/page-6/",
+    "/review/nzxt-s5-rgb-review/page-7/",
+    "/review/nzxt-s5-rgb-review/page-8/"
+   ],
+   "why": "A case review in eight /page-N/ pages, listed in a contents dropdown; also a ?print view of the whole, which is not a part."
+  },
+  {
+   "name": "arch-forum-thread",
+   "url": "https://bbs.archlinux.org/viewtopic.php?id=314887",
+   "gold": "multi",
+   "complete": true,
+   "pages": [
+    "/viewtopic.php?id=314887&p=2"
+   ],
+   "why": "A FluxBB forum thread, posts 1-25 on page 1 and the rest at ?id=…&p=2. The thread is the piece (not an article with a comments page), so its second page is its continuation; a reader could argue for page 1 alone."
+  },
+  {
+   "name": "kfh-chain",
+   "url": "https://keepthefuturehuman.ai/",
+   "gold": "multi",
+   "complete": false,
+   "pages": [
+    "/essay/"
+   ],
+   "why": "A landing page for one essay; 'Essay: Read the full essay online' goes to /essay/ (which redirects to /essay/docs, a contents page for 10 chapters). Page 1 links the essay's entry and two chapters as teasers, not the chapters list: a chain."
+  },
+  {
+   "name": "narrowpath",
+   "url": "https://www.narrowpath.co/",
+   "gold": "multi",
+   "complete": true,
+   "pages": [
+    "/introduction",
+    "/phase-0",
+    "/phase-1",
+    "/phase-2",
+    "/what-success-looks-like",
+    "/annexes"
+   ],
+   "why": "A policy document's front page ('Read the full plan'); its parts are Introduction, Phases 0-2, What Success Looks Like and Annexes, all in the nav. Editions, media, about and changelog are not parts."
+  },
+  {
+   "name": "president-loan",
+   "url": "https://president.jp/articles/-/117568",
+   "gold": "multi",
+   "complete": true,
+   "pages": [
+    "/articles/-/117568?page=2",
+    "/articles/-/117568?page=3",
+    "/articles/-/117568?page=4",
+    "/articles/-/117568?page=5"
+   ],
+   "why": "A President Online (magazine) article in five ?page=N pages; also a print view of the whole, and '次の記事へ' (next article) to a different piece."
+  },
+  {
+   "name": "explained-gradient-boosting",
+   "url": "https://explained.ai/gradient-boosting/",
+   "gold": "multi",
+   "complete": true,
+   "pages": [
+    "/gradient-boosting/L2-loss.html",
+    "/gradient-boosting/L1-loss.html",
+    "/gradient-boosting/descent.html",
+    "/gradient-boosting/faq.html"
+   ],
+   "why": "Its text: 'Our goal in this article is to explain … We've split the discussion into three morsels and a FAQ'. It calls the parts 'articles' too; the matrix-calculus link is a different piece."
+  },
+  {
+   "name": "neg-ars-yosemite",
+   "url": "https://arstechnica.com/gadgets/2014/10/os-x-10-10/",
+   "gold": "single",
+   "why": "Siracusa's Yosemite review, once 25 pages, now served whole on one page (163k chars); 'Next story' is a different piece."
+  },
+  {
+   "name": "neg-kitguru-warthog",
+   "url": "https://www.kitguru.net/components/cases/leo-waldock/corsair-warthog-case-review/",
+   "gold": "single",
+   "why": "A one-page case review; its 'Next' with rel=next is a different news story."
+  },
+  {
+   "name": "neg-fowler-microservices",
+   "url": "https://martinfowler.com/articles/microservices.html",
+   "gold": "single",
+   "why": "A long article with an in-page contents list, bliki links it cites, and an aside recommending a related article ('Read more…')."
+  },
+  {
+   "name": "neg-substack-marcus",
+   "url": "https://garymarcus.substack.com/p/it-remains-very-difficult-to-find",
+   "gold": "single",
+   "why": "A Substack post on the shared substack.com host, with comment and profile links and a link to another post."
+  },
+  {
+   "name": "neg-githubio-karpathy",
+   "url": "https://karpathy.github.io/2019/04/25/recipe/",
+   "gold": "single",
+   "why": "A github.io blog post; links only to the blog's home and about page."
+  },
+  {
+   "name": "neg-diplomat-rohingya",
+   "url": "https://thediplomat.com/2026/08/remembering-a-genocide-the-view-from-the-rohingya-camps/",
+   "gold": "single",
+   "why": "A magazine news feature on one page, with section menus and category links."
+  },
+  {
+   "name": "neg-mdn-fetch",
+   "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch",
+   "gold": "single",
+   "why": "A docs guide page whose sidebar lists its API's other pages (Using Deferred Fetch, fetchLater …) beside ~140 reference links: a contents of separate pages mixed with links it cites."
+  }
+ ]
+}

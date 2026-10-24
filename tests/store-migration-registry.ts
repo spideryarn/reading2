@@ -2109,6 +2109,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "condemned modules is the seeder's copy step, as for " +
       "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/situate-pg.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres (plan 261024o, 2026-10-24). It seeds one article with `scratchArticleInPg`, " +
+      "writes the `situate` column onto its revision and drives `GET /api/situate/:slug` through " +
+      "`handleApi`, reads it as a second owner, and takes the `situate` bucket against the real " +
+      "`rate_limit_events` CHECK. No model is called.",
+  },
   "tests/none-yet-is-not-a-404-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2912,6 +2921,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/billing-long-documents-db.test.ts": "private-postgres",
   "tests/long-pdf-fetch-step.test.ts": "private-postgres",
   "tests/long-pdf-fetch-matrix.test.ts": "private-postgres",
+  /* Plan 261024p: the fetch step following a piece's pages, then the parts
+     through the real adapter, the revision copy and the source scan — rows of
+     its own and Storage too. */
+  "tests/multi-page-fetch-step.test.ts": "private-postgres",
   /* 261001m Stage 3: the thin article. `pgReady`, its own two seeded readers,
      and uploads through the real routes — so Storage too, as
      `an-upload-is-queued-…` below — and its oracle is the rows it wrote. */
@@ -3179,6 +3192,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and citations GETs through the route, with and without the header that
      asks for `200 null`. No model is called. */
   "tests/none-yet-is-not-a-404-route.test.ts": "private-postgres",
+  /* Seeds one article, writes its `situate` column, drives the owner's GET
+     and takes the `situate` allowance against the real table. No model. */
+  "tests/situate-pg.test.ts": "private-postgres",
   /* Seeds two articles, writes a purpose on each, and drives the command
      bar's suggest POST and the reader GET through the route. The model's
      address is stubbed; no model is called. */
@@ -3903,6 +3919,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/fetch-allowance.test.ts": {
     "00000000-0000-4000-8000-00000000fd01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000fd02": { kind: "seeded" },
+  },
+  /* A second reader beside `TEST_OWNER`: the dossier must be no such article
+     to them, and the allowance's rows must reference a real account.
+     `seedAuthUser` at module scope, `onConflictDoNothing`. 2026-10-24. */
+  "tests/situate-pg.test.ts": {
+    "00000000-0000-4000-8000-0000005a7a7e": { kind: "seeded" },
   },
   /* One extra owner beside `TEST_OWNER`, and the case it exists for is the
      sharpest in the file: an article belonging to somebody else must be a 404

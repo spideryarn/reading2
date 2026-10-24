@@ -1,58 +1,25 @@
-# The reading-spider identity and wordmark animations
+# The wordmark's hover and loading animations
 
 Up: [design-css-overview.md](design-css-overview.md)
 
 ## Identity and asset regeneration
 
-The identity is a faceless orange yarn spider absorbed in a book. Its intended eight limbs are
-four free rear strands, two book-support strands and two crossed lower strands; the hollow oval
-is its body. Character comes from the knot, material and pose. Greg's exact brief, the earlier
-versions, simulated independent critiques and the selection are preserved in
-[the design investigation](../investigations/261024a-spideryarn-logo-character-intent-and-selection.md).
-Both reviewers chose the compact reader. The [plan](../plans/261024a-eight-limbed-reading-spider-brand-assets.md)
-records implementation/review evidence.
+[main-icon.md](main-icon.md) owns the artwork, source history, theme/size treatments and
+future-update process, including regeneration and tiny-size inspection. This anchor remains
+for older links. The animation behavior and silhouette-dependent geometry belong here.
 
-The two source treatments are [the detailed wool reader](../../assets/brand/source/reader.png) and
-[its optical SVG companion](../../assets/brand/source/mark.svg). The latter preserves the loop,
-book, free strands and crossed base while removing texture for small wordmarks and favicons.
-It is not a separate brand. [The source prompt](../../assets/brand/source/reader-generation.json)
-distinguishes the final generative cutout from the original opaque selected candidate.
+## Regenerating the static animation proof
 
-One transparent detailed artwork works on both app themes; the optical companion is one orange
-with transparent negative space. There is no theme-dependent pose or image swap. Opaque light
-and dark square exports are generated from the same pixels for install/design use. The shipped
-Apple/Android tile uses the warm ivory treatment, a 12% inset around the visible artwork, square
-corners and an opaque background; the OS supplies its mask. Do not label the ordinary manifest
-icons `maskable`: they are `any`, not a separately verified maskable safe-zone layout.
+[`scripts/preview-logo-animation.ts`](../../scripts/preview-logo-animation.ts) reconstructs Semaphore
+from the generated app PNG and its current CSS cuts/pivots, and writes
+[animation-preview.png](../../assets/brand/animation-preview.png). It is included in the main-icon
+update/check commands; `npm run brand:animation-preview` runs only this step, with `-- --check`
+to compare without writing. Missing geometry fails loudly. Use it after a silhouette/crop change
+and keep [the pixel-geometry checks](../../tests/semaphore-geometry.test.ts) independent.
 
-[`scripts/generate-brand-assets.ts`](../../scripts/generate-brand-assets.ts) is the one raster/ICO
-pipeline; `BRAND_OUTPUTS` there is the exact output/size/padding inventory. It uses the existing
-canvas dependency and the small `png-to-ico` dev dependency; the compared alternatives and
-upstream sources are in the investigation. The output names used by existing pages and email
-templates are preserved. Both source files are committed: regenerating derivatives makes no AI calls.
-
-```sh
-npm run brand:generate -- --preview
-npm run brand:generate -- --check --preview
-node --import tsx scripts/make-og-card.ts
-```
-
-The first writes the public PNG/ICO family and [the size/theme preview](../../assets/brand/preview.png).
-The second checks those exact bytes without writing. The social card is generated afterwards by
-its existing script, using the detailed reader. It needs system Chrome and the installed Geist
-font; byte equality is a same-runtime check, not a cross-OS screenshot promise. Its dimensions
-and size budget remain guarded by `tests/og-card.test.ts`.
-
-Tiny marks are visually checked at actual 16/20/32/48px sizes; a large illustration alone is not
-evidence that a favicon is legible. `tests/brand-assets.test.ts` decodes outputs, checks internal
-gaps/backgrounds/padding and ICO frame pixels, and proves stale/invalid inputs are rejected.
-
-The shared app mark remains transparent because Radius Sweep masks its alpha. Semaphore's
-clipping is tied to the optical mark's anatomy and must follow source changes; its pixel
-geometry checks live in `tests/semaphore-geometry.test.ts`, with
-[rest/movement proofs](../../assets/brand/animation-preview.png). The `.logo-mark`, `.logo-image`
-and individual `.logo-letter` hooks still belong to the shared markup in
-[`LogoGlyphs.tsx`](../../src/web/LogoGlyphs.tsx).
+This proof shows selected static poses and an unanimated reference, not a live browser's timing,
+touch behavior or operating-system reduced-motion response. The browser mechanism for those
+checks is [browser-control.md](browser-control.md).
 
 ## The wordmark's hover animations
 

@@ -1,7 +1,8 @@
 /** One source family, one explicit output table. All images are rendered and
  * validated before any destination is touched. Run `npm run brand:generate`;
  * `--check` verifies committed bytes without writing. `--preview` includes
- * assets/brand/preview.png; combine both flags to verify it. See design-logo.md. */
+ * assets/brand/preview.png and tiny-size-preview.png; combine both flags to
+ * verify them. See main-icon.md. */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -89,18 +90,27 @@ function render(input: Source, output: RenderSpec): Buffer {
   return canvas.toBuffer("image/png");
 }
 
-/** Uses the actual generated favicon/install pixels, and the same render
- * specifications for the two app display sizes. The pinned font avoids a
- * system-font fallback changing the proof image between machines. */
-async function renderPreview(inputs: Record<"mark" | "reader", Source>, files: Map<string, Buffer>): Promise<Buffer> {
+function proofCanvas(width: number, height: number) {
   const font = path.join(ROOT, "node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2");
   if (!GlobalFonts.registerFromPath(font, "SpideryarnBrandPreview")) throw new Error(`Cannot load preview font: ${font}`);
-  const canvas = createCanvas(800, 740);
+  return createCanvas(width, height);
+}
+
+async function proofImage(files: Map<string, Buffer>, name: string): Promise<Image> {
+  const bytes = files.get(name);
+  if (!bytes) throw new Error(`Missing preview output: ${name}`);
+  return loadImage(bytes);
+}
+
+/** Every sample uses generated PNG bytes; fonts and colours are shared by
+ * both proofs. A static image is not a browser or device check. */
+async function renderPreview(inputs: Record<"mark" | "reader", Source>, files: Map<string, Buffer>): Promise<Buffer> {
+  const canvas = proofCanvas(800, 740);
   const ctx = canvas.getContext("2d");
-  const detail = BRAND_OUTPUTS.find((output) => output.file === "spideryarn-reader.png");
-  const mark = BRAND_OUTPUTS.find((output) => output.file === "spideryarn-logo.png");
-  const install = files.get("apple-touch-icon.png");
-  if (!detail || !mark || !install) throw new Error("Missing preview source outputs");
+  const detail = await proofImage(files, "spideryarn-reader.png");
+  const mark = await proofImage(files, "spideryarn-logo.png");
+  const install = await proofImage(files, "apple-touch-icon.png");
+  ctx.imageSmoothingQuality = "high";
   ctx.font = "15px SpideryarnBrandPreview";
   for (const [left, background, foreground, label] of [
     [0, LIGHT, DARK, "Light"], [400, DARK, LIGHT, "Dark"],
@@ -110,22 +120,74 @@ async function renderPreview(inputs: Record<"mark" | "reader", Source>, files: M
     ctx.fillStyle = foreground;
     ctx.fillText(`${label} - optical mark at actual display sizes`, left + 20, 30);
     for (const [index, size] of [16, 20, 32, 48].entries()) {
-      const png = size === 20 ? render(inputs.mark, { ...mark, size }) : files.get(`favicon-${size}x${size}.png`);
-      if (!png) throw new Error(`Missing preview favicon ${size}`);
+      const png = size === 20 ? mark : await proofImage(files, `favicon-${size}x${size}.png`);
       const x = left + 28 + index * 93;
-      ctx.drawImage(await loadImage(png), x, 58);
+      ctx.imageSmoothingEnabled = size === 20;
+      ctx.drawImage(png, x, 58, size, size);
       ctx.fillText(`${size}px`, x, 132);
     }
     ctx.fillText("Detailed reader - same transparent master", left + 20, 180);
+    ctx.imageSmoothingEnabled = true;
     for (const [index, size] of [144, 180].entries()) {
       const x = left + 20 + index * 180;
-      ctx.drawImage(await loadImage(render(inputs.reader, { ...detail, size })), x, 200);
+      ctx.drawImage(detail, x, 200, size, size);
       ctx.fillText(`${size}px`, x, 406);
     }
     ctx.fillText("180px install tile - opaque cream, 12% inset", left + 20, 458);
-    ctx.drawImage(await loadImage(install), left + 110, 478);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(install, left + 110, 478);
     ctx.fillText(`Mark SHA256 ${inputs.mark.hash}`, left + 20, 696);
     ctx.fillText(`Reader SHA256 ${inputs.reader.hash}`, left + 20, 720);
+  }
+  return canvas.toBuffer("image/png");
+}
+
+async function renderTinyPreview(files: Map<string, Buffer>): Promise<Buffer> {
+  const canvas = proofCanvas(920, 740);
+  const ctx = canvas.getContext("2d");
+  const mark = await proofImage(files, "spideryarn-logo.png");
+  const install = await proofImage(files, "apple-touch-icon.png");
+  const favicon16 = await proofImage(files, "favicon-16x16.png");
+  for (const [left, background, foreground, label] of [
+    [0, LIGHT, DARK, "LIGHT"], [460, DARK, LIGHT, "DARK"],
+  ] as const) {
+    ctx.fillStyle = background;
+    ctx.fillRect(left, 0, 460, 740);
+    ctx.fillStyle = foreground;
+    ctx.font = "16px SpideryarnBrandPreview";
+    ctx.fillText(`${label} - actual output pixels, 1:1`, left + 20, 30);
+    ctx.font = "13px SpideryarnBrandPreview";
+    ctx.fillText("Favicons: generated PNGs at native pixels", left + 20, 64);
+    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingQuality = "high";
+    for (const [index, size] of [16, 32, 48].entries()) {
+      const x = left + 30 + index * 130;
+      ctx.drawImage(await proofImage(files, `favicon-${size}x${size}.png`), x, 84);
+      ctx.fillText(`${size}px`, x, 152);
+    }
+    ctx.fillText("App mark: generated PNG reduced as in a wordmark", left + 20, 196);
+    ctx.imageSmoothingEnabled = true;
+    for (const [index, size] of [20, 15, 10].entries()) {
+      const x = left + 25 + index * 145;
+      ctx.drawImage(mark, x, 220, size, size);
+      ctx.font = `${14 * size / 20}px SpideryarnBrandPreview`;
+      ctx.fillText("Spideryarn", x + size + 6, 220 + size * 0.8);
+      ctx.font = "12px SpideryarnBrandPreview";
+      ctx.fillText(`${size}px / ${size * 5}% equivalent`, x, 260);
+    }
+    ctx.font = "13px SpideryarnBrandPreview";
+    ctx.fillText("Detailed opaque install tile, reduced from generated PNG", left + 20, 300);
+    for (const [index, size] of [60, 48, 32, 24, 16].entries()) {
+      const x = left + 25 + index * 86;
+      ctx.drawImage(install, x, 325, size, size);
+      ctx.fillText(`${size}px`, x, 410);
+    }
+    ctx.fillText("16px favicon at 8x: enlarged pixels, no smoothing", left + 20, 458);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(favicon16, left + 30, 486, 128, 128);
+    ctx.fillText("Assess rows above at native scale; this grid is diagnostic.", left + 20, 658);
+    ctx.fillText("Source: generated public PNG bytes, not re-rendered artwork.", left + 20, 684);
+    ctx.fillText("Static proof only - not a browser, zoom or device test.", left + 20, 710);
   }
   return canvas.toBuffer("image/png");
 }
@@ -136,12 +198,13 @@ export interface GenerateBrandOptions {
   outputDir?: string;
   check?: boolean;
   preview?: boolean;
+  previewDir?: string;
 }
 
-async function staleFiles(destinations: Map<string, Buffer>, previewPath: string): Promise<string[]> {
+async function staleFiles(destinations: Map<string, Buffer>): Promise<string[]> {
   const stale: string[] = [];
   for (const [file, expected] of destinations) {
-    const label = file === previewPath ? "assets/brand/preview.png" : path.basename(file);
+    const label = path.basename(file);
     try {
       if (!expected.equals(await readFile(file))) stale.push(label);
     } catch (error) {
@@ -167,16 +230,19 @@ export async function generateBrandAssets(options: GenerateBrandOptions = {}): P
     return frame;
   });
   files.set("favicon.ico", await pngToIco(frames));
-  // The contact sheet is review evidence, never a served public-family member.
-  const previewPath = path.join(ROOT, "assets/brand/preview.png");
+  // Proofs are review evidence, never served public-family members.
+  const previewDir = options.previewDir ?? path.join(ROOT, "assets/brand");
   const destinations = new Map([...files].map(([file, bytes]) => [path.join(outputDir, file), bytes]));
-  if (options.preview) destinations.set(previewPath, await renderPreview(inputs, files));
+  if (options.preview) {
+    destinations.set(path.join(previewDir, "preview.png"), await renderPreview(inputs, files));
+    destinations.set(path.join(previewDir, "tiny-size-preview.png"), await renderTinyPreview(files));
+  }
   if (options.check) {
-    const stale = await staleFiles(destinations, previewPath);
+    const stale = await staleFiles(destinations);
     if (stale.length) throw new Error(`Brand assets missing or stale: ${stale.join(", ")}. Run npm run brand:generate${options.preview ? " -- --preview" : ""}.`);
   } else {
     await mkdir(outputDir, { recursive: true });
-    if (options.preview) await mkdir(path.dirname(previewPath), { recursive: true });
+    if (options.preview) await mkdir(previewDir, { recursive: true });
     for (const [file, bytes] of destinations) await writeFile(file, bytes);
   }
   return [...files.keys()];
@@ -188,5 +254,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const check = args.includes("--check");
   const preview = args.includes("--preview");
   const files = await generateBrandAssets({ check, preview });
-  console.log(`${check ? "Verified" : "Generated"} ${files.length} public brand assets${preview ? " and assets/brand/preview.png" : ""}.`);
+  console.log(`${check ? "Verified" : "Generated"} ${files.length} public brand assets${preview ? " and both assets/brand proof images" : ""}.`);
 }

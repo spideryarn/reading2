@@ -78,7 +78,8 @@ import {
   type TableCoverage,
 } from "../src/store/article-rows.js";
 import { articleBundle } from "../src/store/export-bundle.js";
-import { type ExportResult, exportArticle } from "../src/store/export.js";
+import { type ExportResult, exportArticle, exportBlobStore } from "../src/store/export.js";
+import { CONTENT_TYPE, storeRawSource } from "../src/store/blobs.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -403,6 +404,44 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         .update(schema.articleRevisions)
         .set({ title: sentinel("article_revisions") })
         .where(eq(schema.articleRevisions.id, REVISION_ID));
+    },
+    /* A further page needs a page 1 for the rollback to write it beside, and
+       both need their bytes in the bucket the export reads: it refuses a
+       reference it cannot honour. The sentinel goes in the page's address,
+       which `raw.json`'s `parts` keeps. Plan 261024p. */
+    article_revision_parts: async () => {
+      const sources = exportBlobStore();
+      const pages = ["one", "two"].map((n) =>
+        new TextEncoder().encode(`<html><body><p>Page ${n} of the export coverage fixture.</p></body></html>`),
+      );
+      const [one, two] = await Promise.all(pages.map((bytes) => storeRawSource(bytes, "html", sources)));
+      if (!one || !two) throw new Error("the coverage fixture's pages were not stored");
+      await db
+        .insert(schema.rawSources)
+        .values(
+          [one, two].map((stored, i) => ({
+            sha256: stored.sha256,
+            kind: "html",
+            bytes: pages[i]!.byteLength,
+            contentType: CONTENT_TYPE.html,
+            verifiedAt: new Date(),
+          })),
+        )
+        .onConflictDoNothing();
+      await db
+        .update(schema.articleRevisions)
+        .set({ rawSourceSha256: one.sha256, rawSourceKind: "html" })
+        .where(eq(schema.articleRevisions.id, REVISION_ID));
+      await db
+        .insert(schema.articleRevisionParts)
+        .values({
+          revisionId: REVISION_ID,
+          ordinal: 1,
+          url: `https://example.com/${sentinel("article_revision_parts")}`,
+          rawSourceSha256: two.sha256,
+          rawSourceKind: "html",
+        })
+        .onConflictDoNothing();
     },
     revision_blocks: async () => {
       await db.insert(schema.revisionBlocks).values({
@@ -814,6 +853,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     timeline: "Written whole as augmentations/timeline.json.",
     bibliography: "Written whole as augmentations/bibliography.json.",
     citationBlurbs: "Written whole as augmentations/citation-blurbs.json.",
+    situate: "Written whole as augmentations/situate.json.",
     quiz: "Written whole as augmentations/quiz.json.",
     faq: "Written whole as augmentations/faq.json.",
     relations: "Written whole as augmentations/relations.json.",
@@ -949,6 +989,7 @@ await pgReady({
     "spideryarn.quiz_attempts",
     "spideryarn.stale_notice_dismissals",
     "spideryarn.command_suggestion_dismissals",
+    "spideryarn.article_revision_parts",
   ],
 });
 

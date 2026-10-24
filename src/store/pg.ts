@@ -49,6 +49,7 @@ import { NotProcessed } from "../not-processed.js";
 import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
+  articleRevisionParts,
   articleRevisions,
   articleTags,
   articles,
@@ -94,6 +95,12 @@ import {
   isStale as sourcesClaimsIsStale,
   PROMPT_VERSION as SOURCES_CLAIMS_PROMPT_VERSION,
 } from "../sources-claims.js";
+import {
+  inputFingerprint as situateFingerprint,
+  isOutdated as situateIsOutdated,
+  isStale as situateIsStale,
+  PROMPT_VERSION as SITUATE_PROMPT_VERSION,
+} from "../situate.js";
 import {
   inputFingerprint as relationsFingerprint,
   isOutdated as relationsAreOutdated,
@@ -215,6 +222,8 @@ import type {
   FaqFound,
   SourcesClaimList,
   SourcesClaimListFound,
+  Situate,
+  SituateFound,
   Relations,
   RelationsResponse,
   Crossrefs,
@@ -250,12 +259,12 @@ import type {
 import { isUsableSimpleSummary } from "../types.js";
 import { structureCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
-import type { ArticleReader, RawSource } from "./contracts.js";
+import type { ArticleReader, RawSource, SourcePages, SourcePart } from "./contracts.js";
 import { ArtefactNotMadeYet } from "./artefact-not-made-yet.js";
 import { BibliographyListNotFound } from "./bibliography-list-not-found.js";
 import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
-import { readRawDocument } from "./raw-document.js";
+import { RawObjectTooLarge, readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { tagsForArticles } from "./tag-rows.js";
 import { compareTags } from "../tags.js";
@@ -574,6 +583,8 @@ type RevisionReader =
   | "faq"
   | "relations"
   | "sourcesClaims"
+  /** Situate's dossier, owner only (src/situate.ts, plan 261024o). */
+  | "situate"
   | "skim"
   | "crossrefs"
   | "simpleSummary"
@@ -625,6 +636,7 @@ const REVISION_READ_POLICY: Record<
     illustrated: "value", reception: "value", assets: "value", bibliography: "value", faq: "value",
     relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
     sourcesClaims: "value",
+    situate: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -674,6 +686,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -701,6 +714,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -728,6 +742,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -807,6 +822,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -868,6 +884,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Only for Debate Claims' fallback head when metadata has no title. */
     sourcesClaims: "value",
+    situate: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
     /* Not for a skeleton — its user message is a constant — but for the
@@ -1027,6 +1044,11 @@ const REVISION_READ_POLICY: Record<
      visitor by default (docs/project/mode.md § The artefact).
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   sourcesClaims: { metadata: "value", sourcesClaims: "value" },
+  /* Its own reader and the metadata page, and not the library. `isCurrent`
+     needs the column for its arm, and `personalisedSteps` needs it because it
+     carries a `profileHash`. **And no public read**: src/store/public-reader.ts
+     does not select it — owner only (plan 261024o, S9). */
+  situate: { metadata: "value", situate: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
@@ -1382,6 +1404,9 @@ export const REVISION_PROJECTIONS = {
     relations: articleRevisions.relations,
     /* For `isCurrent`'s arm, as `debate` above. */
     sourcesClaims: articleRevisions.sourcesClaims,
+    /* For `isCurrent`'s arm, as `debate` above. Owner only, and never
+       personalised in the publish dialog's sense (`NeverShared`). */
+    situate: articleRevisions.situate,
     /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, as `debate` above. */
@@ -1490,6 +1515,13 @@ export const REVISION_PROJECTIONS = {
   sourcesClaims: {
     id: articleRevisions.id,
     sourcesClaims: articleRevisions.sourcesClaims,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited head and tree fallback its exact-request fingerprint needs, as
+     `sourcesClaims`. */
+  situate: {
+    id: articleRevisions.id,
+    situate: articleRevisions.situate,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree its own exact-request fingerprint needs. */
@@ -2083,7 +2115,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
      is in the `sources` bucket, which is not a table; `raw_sources` is the row
      describing it. This said `article_revisions.raw_bytes` until 2026-09-01,
      when the column that held the document itself was dropped. */
-  fetch: ["article_revisions.raw_source_sha256", "raw_sources"],
+  fetch: ["article_revisions.raw_source_sha256", "article_revision_parts", "raw_sources"],
   /* The meta columns `extract` also writes, and the two only a minimal paper has. */
   metadata: ["article_revisions.title", "article_revisions.abstract", "article_revisions.doi"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
@@ -2116,6 +2148,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   "sources-claims": ["article_revisions.sources_claims"],
   bibliography: ["article_revisions.bibliography"],
   "citation-blurbs": ["article_revisions.citation_blurbs"],
+  situate: ["article_revisions.situate"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
   skim: ["article_revisions.skim"],
@@ -2759,10 +2792,12 @@ export type ProfileCarrying = Exclude<
  * the owner's badge and Regenerate (plan 261002f), but `PublicArtefacts` has no
  * quiz and src/store/public-reader.ts never reads the column: telling an owner
  * "your quiz was written for your profile" before they share would describe
- * something no visitor receives. One named exception rather than a hand list,
- * so every *other* artefact gaining the field still fails the compiler here.
+ * something no visitor receives. Situate is the second, for the same reason:
+ * owner only, read for the owner's profile, and never in the public payload
+ * (plan 261024o, S9). Named exceptions rather than a hand list, so every
+ * *other* artefact gaining the field still fails the compiler here.
  */
-type NeverShared = "quiz";
+type NeverShared = "quiz" | "situate";
 
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
@@ -2953,6 +2988,69 @@ const rawPgArticleReader: ArticleReader = {
     );
     if (!document) return null;
     return { bytes: document.bytes, kind: document.kind, filename: found.revision.rawFilename };
+  },
+
+  /**
+   * **Page 1 and its later pages, pinned to one revision.** The revision row
+   * (through `currentRevisionQuery`, so owner-scoped by `ownedSlug` exactly as
+   * `loadSource` is) and its part rows are read in one read-only `repeatable
+   * read` snapshot, so a refresh landing between them cannot pair one
+   * revision's page 1 with another's later pages. The bytes are fetched after
+   * it: every reference is content-addressed, so what the snapshot named
+   * cannot change under it. Contracts.ts has the budget's rules.
+   */
+  async loadSourcePages(slug: string, options: { maxBytes?: number } = {}): Promise<SourcePages | null> {
+    requireSlug(slug);
+    const pinned = await getDb().transaction(async (tx) => {
+      const rows = await currentRevisionQuery(tx, slug, "rawSource");
+      const found = rows[0] as { revision: RevisionRowFor<"rawSource"> } | undefined;
+      if (!found) return undefined;
+      const parts = await tx
+        .select({
+          ordinal: articleRevisionParts.ordinal,
+          url: articleRevisionParts.url,
+          rawSourceSha256: articleRevisionParts.rawSourceSha256,
+          rawSourceKind: articleRevisionParts.rawSourceKind,
+        })
+        .from(articleRevisionParts)
+        .where(eq(articleRevisionParts.revisionId, found.revision.id))
+        .orderBy(asc(articleRevisionParts.ordinal));
+      return { revision: found.revision, parts };
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    if (!pinned) throw notFound(slug);
+
+    const sources = postgresBlobStore("the Postgres store serves an article's source document");
+    const document = await readRawDocument(slug, pinned.revision, sources, options);
+    if (!document) return null;
+    const source: RawSource = { bytes: document.bytes, kind: document.kind, filename: pinned.revision.rawFilename };
+
+    const budget = options.maxBytes;
+    let spent = document.bytes.byteLength;
+    const parts: SourcePart[] = [];
+    for (const row of pinned.parts) {
+      /* `ordinal` 1 is the first page after page 1. */
+      const page = row.ordinal + 1;
+      if (budget === undefined) {
+        /* The same read as page 1's, so a missing or wrong object throws rather than shrinking the list. */
+        const part = await readRawDocument(slug, row, sources);
+        if (part) parts.push({ page, url: row.url, bytes: part.bytes });
+        continue;
+      }
+      const left = budget - spent;
+      if (left <= 0) continue;
+      try {
+        /* Refused on the object's size before it is downloaded, as page 1's is. */
+        const part = await readRawDocument(slug, row, sources, { maxBytes: left });
+        if (!part) continue;
+        parts.push({ page, url: row.url, bytes: part.bytes });
+        spent += part.bytes.byteLength;
+      } catch (err) {
+        /* Over what is left of the budget: left out, and a later, smaller page may still fit. */
+        if (err instanceof RawObjectTooLarge) continue;
+        throw err;
+      }
+    }
+    return { source, parts, partCount: pinned.parts.length };
   },
 
   async loadArticle(slug: string): Promise<Article> {
@@ -3601,6 +3699,26 @@ const rawPgArticleReader: ArticleReader = {
           );
         }
         /* The same stamp shape as `faq`, over its own exact request input. */
+        /* Its exact rendered body and cited head, as `sources-claims`. The
+           profile is the artefact's own on both sides, for `skim`'s reason:
+           this read cannot see the profile a job would stamp with today, and
+           `GET /api/situate/:slug` is where a changed profile is reported. */
+        case "situate": {
+          const situate = revision.situate as Situate | null;
+          if (!situate || !Array.isArray(situate.findings) || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: situate.sourceHash,
+              promptVersion: situate.version,
+              model: situate.generator,
+            },
+            {
+              inputHash: situateFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: SITUATE_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         case "crossrefs": {
           const crossrefs = revision.crossrefs as Crossrefs | null;
           if (!crossrefs || !tree || blocks.length === 0) return false;
@@ -4139,6 +4257,38 @@ const rawPgArticleReader: ArticleReader = {
         !tree ||
         sourcesClaimsIsStale(claimList, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: sourcesClaimsAreOutdated(claimList),
+    };
+  },
+
+  /**
+   * Where the piece sits in the literature — the Postgres half of
+   * `loadSituate`. **Owner only**: there is no public twin, and
+   * src/store/public-reader.ts never selects the column (plan 261024o, S9).
+   *
+   * `loadSourcesClaims`'s shape: the cited head and the tree, because the
+   * fingerprint is the article the read was sent. **A 404 is the ordinary
+   * case** (it runs only on the owner's press); a run that found nothing, or
+   * kept no finding, is a 200 with an empty list. The profile half is the
+   * route's, because a store adapter does not read the profile.
+   */
+  async loadSituate(slug: string): Promise<SituateFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "situate");
+    if (!found) throw notFound(slug);
+    const situate = found.revision.situate as Situate | null;
+    if (!situate || !Array.isArray(situate.findings)) {
+      throw new ArtefactNotMadeYet(
+        `No search of the literature for "${slug}" yet. Run one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["situate"] }.`,
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      situate,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale: !tree || situateIsStale(situate, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: situateIsOutdated(situate),
     };
   },
 

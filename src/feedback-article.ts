@@ -14,7 +14,7 @@
  * Not this file. `mirrorFeedback` (src/feedback.ts) calls it only when there is
  * a Sentry client, the reader ticked *Send extra diagnostics*, and the report
  * names an article; otherwise it is not called and nothing is read at all.
- * **Ownership is decided by the reads themselves**: `loadSource`, `loadArticle`
+ * **Ownership is decided by the reads themselves**: `loadSourcePages`, `loadArticle`
  * and `articleMetadata` all resolve through `ownedSlug` and answer 404 for an
  * article that is not the caller's, and the owner box `handleApi` opened is
  * still open while the mirror runs. So there is no second ownership question
@@ -34,7 +34,9 @@
  * Sentry drops the **whole event** when a compressed envelope passes 20 MB,
  * and a dropped event takes the reader's own words with it — the one failure
  * that matters here. So the source is capped at 10 MiB (a PDF is already
- * compressed and counts nearly in full) and `article.json` at 5 MiB, which
+ * compressed and counts nearly in full) — **every page of it together**, for a
+ * piece split over several (plan 261024p), with a later page that would pass
+ * it left out and counted — and `article.json` at 5 MiB, which
  * gzips to well under one. The JSON is capped on **encoded bytes**: `.length`
  * counts UTF-16 units and undercounts non-Latin text by up to three times.
  *
@@ -45,7 +47,7 @@
  */
 import type { AllowedAttachment } from "./feedback-envelope.js";
 import type { DocumentKind } from "./fetch.js";
-import { articleMetadata, loadArticle, loadSource } from "./store/index.js";
+import { articleMetadata, loadArticle, loadSourcePages } from "./store/index.js";
 import { NotProcessed } from "./not-processed.js";
 import { RawObjectTooLarge } from "./store/raw-document.js";
 import type { Article, ArticleMetadata, StepName, Visibility } from "./types.js";
@@ -59,11 +61,27 @@ export const SOURCE_FILE_MAX_BYTES = 10 * 1024 * 1024;
 /** `article.json`'s cap, on UTF-8 bytes. */
 export const ARTICLE_JSON_MAX_BYTES = 5 * 1024 * 1024;
 
+/**
+ * **How many of a split piece's later pages went** (plan 261024p), each as its
+ * own `source.part-<page>.html`. `total` is how many the revision lists, so
+ * `0/0` is a single page — or no source read at all, which `sourceFile` says.
+ * Fewer attached than listed means the 10 MiB, which is all the pages'
+ * together, ran out.
+ */
+export interface SourcePartsSent {
+  attached: number;
+  total: number;
+}
+
 export interface FeedbackArticle {
   attachments: AllowedAttachment[];
+  /** Page 1's outcome — the document itself, whatever its later pages did. */
   sourceFile: FeedbackArticleOutcome;
+  sourceParts: SourcePartsSent;
   articleJson: FeedbackArticleOutcome;
 }
+
+const NO_PARTS: SourcePartsSent = { attached: 0, total: 0 };
 
 /**
  * **The name and type a source goes out under, per kind.** A `Record` over
@@ -82,7 +100,15 @@ const SOURCE_ATTACHMENT: Record<DocumentKind, { filename: string; contentType: s
 /** The facts about the source that go in `article.json` whether or not it went. */
 interface SourceFacts {
   kind: DocumentKind;
+  /** Page 1's size. */
   bytes: number;
+  /** Only for a piece with later pages, so a single page's facts read as they always did. */
+  parts?: SourcePartsSent;
+}
+
+/** A later page's attachment name: numbered by its page, page 1 being `source.html`. */
+export function partFilename(page: number): string {
+  return `source.part-${page}.html`;
 }
 
 /**
@@ -169,8 +195,10 @@ async function within<T>(read: Promise<T>, timeoutMs: number, fallback: T): Prom
 export async function gatherFeedbackArticle(slug: string, timeoutMs: number): Promise<FeedbackArticle> {
   try {
     const [source, article] = await Promise.all([
-      within(readSource(slug), timeoutMs, {
+      within<SourceRead>(readSource(slug), timeoutMs, {
         gathered: { outcome: "failed" },
+        parts: [],
+        sent: NO_PARTS,
         facts: null,
       }),
       within(readArticle(slug), timeoutMs, { outcome: "failed" }),
@@ -180,46 +208,78 @@ export async function gatherFeedbackArticle(slug: string, timeoutMs: number): Pr
         ? articleJson(article.article, article.metadata, source.facts)
         : { outcome: article.outcome };
     return {
-      attachments: [source.gathered, json].flatMap((one) =>
-        one.outcome === "attached" ? [one.attachment] : [],
-      ),
+      /* Page 1, its later pages in page order, then `article.json`. */
+      attachments: [
+        ...(source.gathered.outcome === "attached" ? [source.gathered.attachment] : []),
+        ...source.parts,
+        ...(json.outcome === "attached" ? [json.attachment] : []),
+      ],
       sourceFile: source.gathered.outcome,
+      sourceParts: source.sent,
       articleJson: json.outcome,
     };
   } catch {
     /* Both reads catch their own failures, so this is for a bug in this file.
        Rule 2 of src/monitoring.ts: the report must go whatever happens here. */
-    return { attachments: [], sourceFile: "failed", articleJson: "failed" };
+    return { attachments: [], sourceFile: "failed", sourceParts: NO_PARTS, articleJson: "failed" };
   }
 }
 
+/** Page 1's outcome, the later pages that went with it, and how many of how many. */
+interface SourceRead {
+  gathered: Gathered;
+  parts: AllowedAttachment[];
+  sent: SourcePartsSent;
+  facts: SourceFacts | null;
+}
+
 /**
- * The source document, capped **by the read**: `loadSource` passes the cap to
- * the bucket, which refuses an oversized object on its `Content-Length` rather
- * than downloading it (src/store/raw-document.ts).
+ * The source document and its later pages, from one revision, capped **by
+ * the read**: `loadSourcePages` passes the cap to the bucket as a budget for
+ * every page together, which refuses an oversized object on its
+ * `Content-Length` rather than downloading it (src/store/raw-document.ts) and
+ * leaves out a later page the budget cannot hold.
  */
-async function readSource(slug: string): Promise<{ gathered: Gathered; facts: SourceFacts | null }> {
-  let source: Awaited<ReturnType<typeof loadSource>>;
+async function readSource(slug: string): Promise<SourceRead> {
+  let pages: Awaited<ReturnType<typeof loadSourcePages>>;
   try {
-    source = await loadSource(slug, { maxBytes: SOURCE_FILE_MAX_BYTES });
+    pages = await loadSourcePages(slug, { maxBytes: SOURCE_FILE_MAX_BYTES });
   } catch (err) {
     if (err instanceof RawObjectTooLarge) {
-      return { gathered: { outcome: "too_large" }, facts: { kind: err.kind, bytes: err.bytes } };
+      return { gathered: { outcome: "too_large" }, parts: [], sent: NO_PARTS, facts: { kind: err.kind, bytes: err.bytes } };
     }
-    return { gathered: { outcome: outcomeOfThrow(err) }, facts: null };
+    return { gathered: { outcome: outcomeOfThrow(err) }, parts: [], sent: NO_PARTS, facts: null };
   }
-  if (source === null) return { gathered: { outcome: "none" }, facts: null };
+  if (pages === null) return { gathered: { outcome: "none" }, parts: [], sent: NO_PARTS, facts: null };
 
-  const facts = { kind: source.kind, bytes: source.bytes.byteLength };
+  const { source } = pages;
+  const facts: SourceFacts = { kind: source.kind, bytes: source.bytes.byteLength };
   /* Checked again on what came back: the cap is this file's promise, and a read
      that ignored the option must not be what breaks it. */
   if (source.bytes.byteLength > SOURCE_FILE_MAX_BYTES) {
-    return { gathered: { outcome: "too_large" }, facts };
+    return { gathered: { outcome: "too_large" }, parts: [], sent: NO_PARTS, facts };
   }
+  /* The later pages, under what page 1 left of the same cap — checked here
+     again for the same reason, so a page that would pass it is left out and a
+     later one that fits still goes. */
+  let spent = source.bytes.byteLength;
+  const parts: AllowedAttachment[] = [];
+  for (const part of pages.parts) {
+    if (spent + part.bytes.byteLength > SOURCE_FILE_MAX_BYTES) continue;
+    spent += part.bytes.byteLength;
+    parts.push({ filename: partFilename(part.page), contentType: SOURCE_ATTACHMENT.html.contentType, data: part.bytes });
+  }
+  const sent: SourcePartsSent = { attached: parts.length, total: pages.partCount };
+  if (sent.total > 0) facts.parts = sent;
   /* Not `source.filename`: that is what the reader called the file when they
      uploaded it, which is their text rather than a fact about the document. */
   const { filename, contentType } = SOURCE_ATTACHMENT[source.kind];
-  return { gathered: { outcome: "attached", attachment: { filename, contentType, data: source.bytes } }, facts };
+  return {
+    gathered: { outcome: "attached", attachment: { filename, contentType, data: source.bytes } },
+    parts,
+    sent,
+    facts,
+  };
 }
 
 /**

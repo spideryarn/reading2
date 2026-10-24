@@ -1,6 +1,6 @@
 # The reading spider: intent, exploration and selection
 
-Parent: [Investigations](../project/investigations.md). Current artwork and regeneration: [design-logo.md](../project/design-logo.md#identity-and-asset-regeneration). Implementation plan: [261024a](../plans/261024a-eight-limbed-reading-spider-brand-assets.md).
+Parent: [Investigations](../project/investigations.md). Current artwork and regeneration: [main-icon.md](../project/main-icon.md). Implementation plan: [261024a](../plans/261024a-eight-limbed-reading-spider-brand-assets.md).
 
 ## What Greg wanted
 
@@ -44,7 +44,21 @@ Greg then explicitly delegated another generation round, independent subagent in
 
 The count is the intended construction, not a claim that all concealed attachments can be anatomically traced through the knot. The central oval is a body; it does not supply additional limbs. The abstraction remains deliberate. Original [S](../../assets/brand/archive/s-quiet-thinker.png), [U](../../assets/brand/archive/u-seated-reader.png), [Z](../../assets/brand/archive/z-woolly-reader.png) and the [old mark](../../assets/brand/archive/original-logo.png) survive for comparison.
 
-The detailed artwork was illegible as a dependable 16px favicon in actual-size review. The agent therefore selected a restrained optical companion with the same hollow core, four free ends, supporting loops, book and crossed base. It removes wool microtexture and most shading; it is a size treatment of the chosen identity. The [SVG](../../assets/brand/source/mark.svg) is editable. The [transparent detailed master](../../assets/brand/source/reader.png) and [cutout prompt/provenance](../../assets/brand/source/reader-generation.json) are separate from the opaque winning candidate: image generation produced a new final rendering, not a pixel-exact deterministic extraction.
+The detailed artwork was illegible as a dependable 16px favicon in actual-size review. The agent therefore selected a restrained optical companion with the same hollow core, four free ends, supporting loops, book and crossed base. It removes wool microtexture and most shading; it is a size treatment of the chosen identity. The [SVG](../../assets/brand/source/mark.svg) is editable. The [first transparent detailed master](../../assets/brand/archive/reader-before-limb-refinement.png) and [its cutout prompt/provenance](../../assets/brand/archive/reader-before-limb-refinement-generation.json) are separate from the opaque winning candidate: image generation produced a new final rendering, not a pixel-exact deterministic extraction. The current versions incorporate the limb refinement below.
+
+## Limb-proportion refinement
+
+> can we tweak it so that the limbs are slightly closer to all being the same length (like a spider)?
+>
+> — Greg, 2026-10-24
+
+The targeted edit makes the crossed lower limbs more compact, bringing their implied length closer to the free and book-support limbs. The pose bends and conceals parts of the strands, so this is a proportion refinement, not a claim of eight mathematically equal projected lengths. The four free ends, two supports and two crossed lower limbs remain; the body loop, faceless character and open book carry the same intent.
+
+![Before and refined proportions](../../assets/brand/limb-refinement-comparison.png)
+
+The [current detailed master](../../assets/brand/source/reader.png) was edited with the built-in image tool; [exact prompt and input history](../../assets/brand/source/reader-generation.json). The first transparent master and [previous optical SVG](../../assets/brand/archive/mark-before-limb-refinement.svg) are archived. The optical treatment follows the same modestly shortened lower folds. A fresh simulated new-reader check accepted the change as visible but modest, found the reading pose and identity intact, and noted that overlapping lower attachments still cannot be traced independently. The upper pair also became somewhat more symmetrical. This is an agent reaction, not user research or Greg's approval of the output.
+
+The [follow-up plan and validation](../plans/261024a-reading-spider-limb-refinement.md) record the image review, matching small mark and anatomy-dependent animation checks.
 
 ## Regeneration/library decision
 
@@ -52,7 +66,7 @@ Following [third-party-library-selection.md](../reusable/third-party-library-sel
 
 On 2026-10-24, registry metadata reported `png-to-ico` **3.0.2**, Node >=20, with `pngjs`, `minimist` and Node types as dependencies; `favicons` **7.3.1**, Node >=20, adds `sharp`, XML and HTML helpers. The [png-to-ico upstream API](https://github.com/steambap/png-to-ico#usage) accepts an array of exact-size PNG frames. The [favicons API](https://github.com/itgalaxy/favicons#usage) covers a much broader platform family. **Decision:** reuse canvas and add the small, established `png-to-ico` dev dependency for the actual missing format operation. No second native raster stack, custom ICO codec, or whole favicon-platform configuration was needed.
 
-The source-to-assets command and current background/padding policy have one home in [design-logo.md](../project/design-logo.md#identity-and-asset-regeneration). Repeat runs are checked byte-for-byte in the recorded environment. Social-card rendering retains its existing browser/font prerequisite, so cross-OS screenshot byte identity is not promised.
+The source-to-assets command and current background/padding policy have one home in [main-icon.md](../project/main-icon.md). Repeat runs are checked byte-for-byte in the recorded environment. Social-card rendering retains its existing browser/font prerequisite, so cross-OS screenshot byte identity is not promised.
 
 ## Validation record
 

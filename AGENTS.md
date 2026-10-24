@@ -112,6 +112,7 @@ listed here; the names under each are files in `docs/project/`.
   `fonts.md` (a face for each voice: the author's, the model's, the reader's) ·
   `controls.md` (one height, one radius, and the preflight we do not import) ·
   `narrow-windows.md` (rows wrap, columns are given up in JS, and the notch) · `icons.md` ·
+  `main-icon.md` (the reading-spider artwork, regeneration and tiny-size review) ·
   `loading-spinner.md` (the wordmark for a whole page waiting, `LoaderCircle` for the rest) ·
   `design-logo.md` (the animations the wordmark plays when you point at it, and while an article loads) ·
   `marketing-pages.md` (the signed-out pages, and how to shoot a screenshot that shows what it

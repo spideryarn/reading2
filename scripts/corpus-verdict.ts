@@ -50,7 +50,8 @@ export function readinessFailures(
 }
 
 /**
- * The two faults `--seed-a-bad-row` plants, inside a transaction it rolls back.
+ * The three faults `--seed-a-bad-row` plants, inside a transaction it rolls
+ * back: one for check 1, and one for each half of check 2.
  *
  * `null` means it could not be planted — no revision to break, or no revision
  * naming a source object. That is a control that **could not be run**, which is
@@ -61,6 +62,13 @@ export interface Seeds {
   orphanedRevision: string | null;
   /** The sha a revision's source reference was repointed at, for check 2. */
   danglingSha: string | null;
+  /**
+   * The sha a seeded later page (`article_revision_parts`, plan 261024p) names,
+   * for check 2's other half. Referenced from nowhere else, so check 2 naming it
+   * is proof that it read the parts and not only page 1 — GPT Sol's code review
+   * of 261024p, F6.
+   */
+  danglingPartSha: string | null;
 }
 
 /** What `--seed-a-bad-row` proved, or failed to. */
@@ -96,6 +104,7 @@ export function controlVerdict(
   const couldNotRun: string[] = [];
   if (seeds.orphanedRevision === null) couldNotRun.push("there are no revisions to break for check 1");
   if (seeds.danglingSha === null) couldNotRun.push("no revision names a source object, so check 2 has nothing to break");
+  if (seeds.danglingPartSha === null) couldNotRun.push("there is no revision to give a bad later page for check 2");
   if (couldNotRun.length) {
     return {
       sawIt: false,
@@ -112,6 +121,9 @@ export function controlVerdict(
   if (!namedByCheckTwo.includes(seeds.danglingSha!)) {
     missed.push(`CHECK 2 DID NOT NAME the dangling reference ${seeds.danglingSha}`);
   }
+  if (!namedByCheckTwo.includes(seeds.danglingPartSha!)) {
+    missed.push(`CHECK 2 DID NOT NAME the dangling later-page reference ${seeds.danglingPartSha}`);
+  }
   if (missed.length) {
     return {
       sawIt: false,
@@ -124,6 +136,7 @@ export function controlVerdict(
     sawIt: true,
     say:
       `Check 1 named revision ${seeds.orphanedRevision} and check 2 named the dangling\n` +
-      `reference ${seeds.danglingSha}. Both are the faults this flag planted; both can fail.`,
+      `reference ${seeds.danglingSha} and the dangling later page ${seeds.danglingPartSha}.\n` +
+      "All three are the faults this flag planted; both checks can fail.",
   };
 }

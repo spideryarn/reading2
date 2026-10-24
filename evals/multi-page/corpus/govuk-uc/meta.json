@@ -1,0 +1,11 @@
+{
+ "url": "https://www.gov.uk/universal-credit",
+ "label": "multi",
+ "pages": [
+  "https://www.gov.uk/universal-credit",
+  "https://www.gov.uk/universal-credit/eligibility"
+ ],
+ "mechanism": "GOV.UK \"guide\" format: parts list + \"Next: Eligibility\" link + /print page for whole guide",
+ "ssr": true,
+ "notes": "p1 5.5k chars; 9 parts; also has /print single-page version"
+}

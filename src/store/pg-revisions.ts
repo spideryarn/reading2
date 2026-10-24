@@ -68,6 +68,7 @@ import { and, asc, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-o
 
 import { getDb } from "../db/client.js";
 import {
+  articleRevisionParts,
   articleRevisions,
   articles,
   jobs,
@@ -464,6 +465,11 @@ export const REVISION_CARRY_POLICY: Record<
      entry carries its row's identity, so a carried note that no longer
      describes its row is detached at read time. Plan 261017h stage 3. */
   citationBlurbs: "carry",
+  /* **Carries, as every paid artefact does**: a re-extraction keeps the dearest
+     press in Sources (about $0.40–0.50 a run), and its `sourceHash` marks it
+     stale against the new article, so it is not passed off as current. Plan
+     261024o (GPT Sol's S9). */
+  situate: "carry",
 
   /* ---- MIRROR: never copied; a trigger fills it -------------------------- */
 
@@ -1318,6 +1324,18 @@ async function beginDraftIn(
         where ${revisionStepRuns.revisionId} = ${basedOn}
       `);
       stepRunsCopied = copiedRuns.rowCount ?? 0;
+
+      /* **And the further pages of the source**, which travel with the
+         reference above (`rawSourceSha256: "carry"`) for the same reason: a
+         re-extraction inherits the `fetch` run, so it must inherit everything
+         that run fetched, or stage 2 would read page 1 alone. Plan 261024p,
+         GPT Sol's review F9. */
+      await tx.execute(sql`
+        insert into ${articleRevisionParts} (${sql.identifier("revision_id")}, ${sql.identifier("ordinal")}, ${sql.identifier("url")}, ${sql.identifier("raw_source_sha256")}, ${sql.identifier("raw_source_kind")}, ${sql.identifier("created_at")})
+        select ${revisionId}::uuid, ${sql.identifier("ordinal")}, ${sql.identifier("url")}, ${sql.identifier("raw_source_sha256")}, ${sql.identifier("raw_source_kind")}, ${sql.identifier("created_at")}
+        from ${articleRevisionParts}
+        where ${articleRevisionParts.revisionId} = ${basedOn}
+      `);
     }
 
     if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, revisionId);

@@ -1,0 +1,10 @@
+{
+ "url": "https://paulgraham.com/greatwork.html",
+ "label": "single",
+ "pages": [
+  "https://paulgraham.com/greatwork.html"
+ ],
+ "mechanism": "fooler: numbered footnote anchors [1]..[N]",
+ "ssr": true,
+ "notes": "single, 67k chars"
+}

@@ -1,0 +1,26 @@
+{
+ "url": "https://realhardwarereviews.com/ryzen-3-budget-or-bust/",
+ "label": "multi",
+ "pages": [
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/2/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/3/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/4/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/5/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/6/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/7/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/8/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/9/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/10/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/11/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/12/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/13/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/14/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/15/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/16/",
+  "https://realhardwarereviews.com/ryzen-3-budget-or-bust/17/"
+ ],
+ "mechanism": "numbered /N/ trailing-slash links in a page TOC (href has #split_content fragment); no rel=next",
+ "ssr": true,
+ "notes": "17 pages, p1 ~6.7k chars; WordPress split-post plugin"
+}
