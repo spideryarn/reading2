@@ -1,0 +1,13 @@
+{
+ "url": "https://bbs.archlinux.org/viewtopic.php?id=314887",
+ "label": "multi",
+ "pages": [
+  "https://bbs.archlinux.org/viewtopic.php?id=314887",
+  "https://bbs.archlinux.org/viewtopic.php?id=314887&p=2"
+ ],
+ "mechanism": "query-string pagination ?p=2, <link rel=next> and a '2 | Next' pager",
+ "ssr": true,
+ "notes": "2 pages; p1 ~14k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

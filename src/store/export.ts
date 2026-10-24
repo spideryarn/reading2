@@ -53,7 +53,7 @@ import {
 import { configFromRow } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import { blocksArtefact } from "../blocks.js";
-import { type RawManifest, sniffKind } from "../fetch.js";
+import { type RawManifest, type RawPart, rawPartFile, sniffKind } from "../fetch.js";
 import { metaRawSha256 } from "./artifacts.js";
 import { blockOf } from "./block-rows.js";
 import { type RawSourceStore, postgresBlobStore } from "./blobs.js";
@@ -247,6 +247,8 @@ async function writeRawDocument(
     fetchedAt: Date | null;
     createdAt: Date;
   },
+  /** The further pages, by ordinal (`ArticleRows.rawParts`). Plan 261024p. */
+  rawParts: readonly { ordinal: number; url: string; rawSourceSha256: string; rawSourceKind: string }[],
   sources: RawSourceStore,
 ): Promise<string[]> {
   const document = await readRawDocument(slug, revision, sources);
@@ -255,6 +257,21 @@ async function writeRawDocument(
   const { bytes, kind, storedSha256 } = document;
   const file = kind === "pdf" ? "raw.pdf" : "raw.html";
   await writeFile(path.join(dir, file), bytes);
+
+  /* **Each further page as its own file, through the same read** — the same
+     refusal for an object that is missing or is not what its key says, so a
+     rollback cannot quietly come back as page 1 alone. Numbered by position in
+     the list, which is the order `ordinal` gives. */
+  const parts: RawPart[] = [];
+  const partFiles: string[] = [];
+  for (const row of rawParts) {
+    const part = await readRawDocument(slug, row, sources);
+    if (!part) continue;
+    const partFile = rawPartFile(parts.length + 1);
+    await writeFile(path.join(dir, partFile), part.bytes);
+    parts.push({ url: row.url, storedSha256: part.storedSha256, storedBytes: part.bytes.byteLength });
+    partFiles.push(partFile);
+  }
 
   /* raw.json — stage 1's manifest, rebuilt from the columns. It was not
      exported at all, which meant a round trip lost the content type, the
@@ -311,13 +328,14 @@ async function writeRawDocument(
     sha256: revision.rawSha256,
     storedSha256,
     storedBytes: bytes.byteLength,
+    ...(parts.length === 0 ? {} : { parts }),
     fetchedAt: (revision.fetchedAt ?? revision.createdAt).toISOString(),
     backfilled:
       "Rebuilt from the database by db:export. Provenance beyond the two URLs " +
       "was not stored, so origin and uploadId are absent rather than invented.",
   };
   await writeJson(path.join(dir, "raw.json"), manifest);
-  return [file, "raw.json"];
+  return [file, ...partFiles, "raw.json"];
 }
 
 /**
@@ -491,7 +509,10 @@ export async function exportArticle(
     await put("article_revisions", "illustrated.json", revision.illustrated);
   if (revision.labels) await put("article_revisions", "labels.json", revision.labels);
 
-  written.push(...(await writeRawDocument(dir, slug, revision, sources)));
+  const rawFiles = await writeRawDocument(dir, slug, revision, rows.rawParts, sources);
+  written.push(...rawFiles);
+  /* Said only when they went in: a single page's raw.json carries none. */
+  if (rows.rawParts.length > 0 && rawFiles.includes("raw.json")) wroteFrom.add("article_revision_parts");
 
   if (revision.stampedHtml) {
     /* stage 3's artefact lives in `output/`, not in `data/` — see

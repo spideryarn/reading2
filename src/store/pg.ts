@@ -49,6 +49,7 @@ import { NotProcessed } from "../not-processed.js";
 import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
+  articleRevisionParts,
   articleRevisions,
   articleTags,
   articles,
@@ -250,7 +251,7 @@ import type {
 import { isUsableSimpleSummary } from "../types.js";
 import { structureCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
-import type { ArticleReader, RawSource } from "./contracts.js";
+import type { ArticleReader, RawSource, SourcePart } from "./contracts.js";
 import { ArtefactNotMadeYet } from "./artefact-not-made-yet.js";
 import { BibliographyListNotFound } from "./bibliography-list-not-found.js";
 import { guardDbStore } from "./db-errors.js";
@@ -2953,6 +2954,25 @@ const rawPgArticleReader: ArticleReader = {
     );
     if (!document) return null;
     return { bytes: document.bytes, kind: document.kind, filename: found.revision.rawFilename };
+  },
+
+  async loadSourceParts(slug: string): Promise<SourcePart[]> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "rawSource");
+    if (!found) throw notFound(slug);
+    const rows = await getDb()
+      .select({ url: articleRevisionParts.url, rawSourceSha256: articleRevisionParts.rawSourceSha256, rawSourceKind: articleRevisionParts.rawSourceKind })
+      .from(articleRevisionParts)
+      .where(eq(articleRevisionParts.revisionId, found.revision.id))
+      .orderBy(asc(articleRevisionParts.ordinal));
+    const sources = postgresBlobStore("the Postgres store serves an article's source document");
+    const parts: SourcePart[] = [];
+    for (const row of rows) {
+      /* The same read as page 1's, so a missing or wrong object throws rather than shrinking the list. */
+      const document = await readRawDocument(slug, row, sources);
+      if (document) parts.push({ url: row.url, bytes: document.bytes });
+    }
+    return parts;
   },
 
   async loadArticle(slug: string): Promise<Article> {

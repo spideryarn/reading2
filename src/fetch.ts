@@ -236,9 +236,44 @@ export interface RawManifest {
    * before 2026-10-20, which is the grandfathered case.
    */
   pages?: number;
+  /**
+   * **The further pages of a piece spread over several**, in reading order —
+   * `article_revision_parts`. Page 1 is this manifest's own document and is
+   * not in the list. Absent means a single page, which is most of them, and it
+   * is never an empty list. Plan
+   * docs/plans/261024p-a-multi-page-article-imports-from-its-first-page.md;
+   * src/follow-pages.ts follows them, `readPartBytes` below reads one.
+   */
+  parts?: RawPart[];
   fetchedAt: string;
   /** Present only on a backfilled manifest, saying so in a sentence. */
   backfilled?: string;
+}
+
+/**
+ * **One further page of a multi-page piece**, stored exactly as page 1 is: its
+ * own content-addressed HTML object, its own `<head>`, its own address.
+ *
+ * Only what a reader needs: the address its links resolve against, and the
+ * object. The network's own hash and byte count, which page 1 keeps in
+ * `sha256` and `bytes`, are not kept for a part: nothing reads them.
+ */
+export interface RawPart {
+  /** Where the page's fetch ended, after redirects. */
+  url: string;
+  /** The object's key in the `sources` bucket, as `RawManifest.storedSha256`. Always HTML. */
+  storedSha256: string;
+  /** Its size, as `RawManifest.storedBytes`. */
+  storedBytes: number;
+}
+
+/**
+ * The name the `ordinal`th further page's bytes go by beside `raw.json`, as
+ * `RawManifest.file` names page 1's: `db:export` writes it and the fixture
+ * loader reads it (tests/helpers/load-article.ts). From 1.
+ */
+export function rawPartFile(ordinal: number): string {
+  return `raw.part-${ordinal}.html`;
 }
 
 /**
@@ -506,6 +541,26 @@ export async function readRawBytes(
     store?: RawSourceStore;
   } = {},
 ): Promise<Uint8Array> {
+  return await readStoredObject(manifest, opts);
+}
+
+/** **A further page's bytes** — the same read as page 1's, with every check it makes. */
+export async function readPartBytes(
+  part: RawPart,
+  opts: { slug?: string; store?: RawSourceStore } = {},
+): Promise<Uint8Array> {
+  return await readStoredObject({ kind: "html", storedSha256: part.storedSha256, storedBytes: part.storedBytes }, opts);
+}
+
+/**
+ * `readRawBytes`'s body, over only the three fields it reads, so a part
+ * (`readPartBytes`) is read by the same code, check for check, rather than a
+ * copy of it.
+ */
+async function readStoredObject(
+  manifest: Pick<RawManifest, "kind" | "storedSha256" | "storedBytes">,
+  opts: { slug?: string; store?: RawSourceStore },
+): Promise<Uint8Array> {
   const store = opts.store ?? blobStore();
   const about = opts.slug === undefined ? "This article" : `"${opts.slug}"`;
   const { storedSha256, kind } = manifest;
@@ -584,7 +639,7 @@ export async function readRawBytes(
 async function overlongObject(
   store: RawSourceStore,
   key: string,
-  manifest: RawManifest,
+  manifest: Pick<RawManifest, "storedBytes">,
   about: string,
 ): Promise<RawDocumentUnavailable | null> {
   const claimed = manifest.storedBytes;

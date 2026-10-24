@@ -284,6 +284,8 @@ export const relatedWorkStore: RelatedWorkStore = pgRelatedWorkStore;
 /* The one read whose answer is bytes. See `ArticleReader.loadSource` in
    contracts.ts for what `null` means and what it deliberately does not. */
 export const loadSource = reader.loadSource.bind(reader);
+/* Its further pages, for a piece split over several. Plan 261024p. */
+export const loadSourceParts = reader.loadSourceParts.bind(reader);
 export const loadArc = reader.loadArc.bind(reader);
 /* The manifest on its own, for the route that serves one asset's bytes. See
    `ArticleReader.loadAssets` in contracts.ts for why it is not

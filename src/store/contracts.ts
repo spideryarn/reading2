@@ -161,6 +161,13 @@ export interface RawSource {
   filename: string | null;
 }
 
+/** One further page of the source document: `ArticleReader.loadSourceParts`. Always HTML. */
+export interface SourcePart {
+  /** Where its fetch ended: the base its links resolve against. */
+  url: string;
+  bytes: Uint8Array;
+}
+
 export interface ArticleReader {
   /** Everything needed for every zoom level. 404 when there are no artefacts. */
   loadArticle(slug: string): Promise<Article>;
@@ -185,6 +192,17 @@ export interface ArticleReader {
    * it. It can only lower the store's own ceiling, never raise it.
    */
   loadSource(slug: string, options?: { maxBytes?: number }): Promise<RawSource | null>;
+
+  /**
+   * **The further pages of the source, in order** — each its own document, for
+   * a piece the site split over several (`article_revision_parts`, plan
+   * 261024p). Empty for a single page, which is most articles. `loadSource` is
+   * page 1 and stays page 1, so a caller that wants every page asks both: today
+   * that is the injection scan (src/source-scan.ts), which reads each page with
+   * its own CSS. Throws as `loadSource` does for a reference the bucket cannot
+   * honour.
+   */
+  loadSourceParts(slug: string): Promise<SourcePart[]>;
 
   /**
    * The shelf. Never throws for an empty library — that is `[]`, not a fault.

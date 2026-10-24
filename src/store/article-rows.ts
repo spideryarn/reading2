@@ -26,6 +26,7 @@ import { asc, eq } from "drizzle-orm";
 
 import { type Db, getDb } from "../db/client.js";
 import {
+  articleRevisionParts,
   articleRevisions,
   articles,
   blockIdentities,
@@ -155,6 +156,20 @@ export const ARTICLE_TABLE_COVERAGE = {
   article_revisions: {
     rollback: { exported: true, into: "meta.json" },
     bundle: { exported: true, into: "content/revision.json" },
+  },
+  /* The further pages of a piece spread over several (plan 261024p): the
+     rollback carries them in `raw.json`'s `parts`, each page's bytes in a
+     `raw.part-<n>.html` beside it, so a re-load gets every page back. */
+  article_revision_parts: {
+    rollback: { exported: true, into: "raw.json" },
+    bundle: {
+      exported: false,
+      why:
+        "The further pages of the source document, for a piece the site split over " +
+        "several pages: an address and an object in the sources bucket each. The " +
+        "bundle carries no source document at all, by Greg's call — see raw_sources — " +
+        "and the article read from all of them is in content/ as it is for one page.",
+    },
   },
   revision_blocks: {
     rollback: { exported: true, into: "blocks.json" },
@@ -798,6 +813,8 @@ export interface ArticleRows {
   readonly revision: ActiveRevisionRow;
   /** **In document order.** See the ordering note on `readArticleRows`. */
   readonly blocks: readonly (typeof revisionBlocks.$inferSelect)[];
+  /** The current revision's further source pages, **by `ordinal`**. Empty for a single page. Plan 261024p. */
+  readonly rawParts: readonly (typeof articleRevisionParts.$inferSelect)[];
   /**
    * Every block id this article has ever minted, including ones no longer in
    * the current revision.
@@ -1000,6 +1017,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revision.id))
     .orderBy(revisionBlocks.ordinal);
+  const rawParts = await tx
+    .select()
+    .from(articleRevisionParts)
+    .where(eq(articleRevisionParts.revisionId, revision.id))
+    .orderBy(asc(articleRevisionParts.ordinal));
   const identities = await tx
     .select()
     .from(blockIdentities)
@@ -1110,6 +1132,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     article,
     revision,
     blocks,
+    rawParts,
     blockIdentities: identities,
     comments,
     chatThreads: threads,

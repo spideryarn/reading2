@@ -2912,6 +2912,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/billing-long-documents-db.test.ts": "private-postgres",
   "tests/long-pdf-fetch-step.test.ts": "private-postgres",
   "tests/long-pdf-fetch-matrix.test.ts": "private-postgres",
+  /* Plan 261024p: the fetch step following a piece's pages, then the parts
+     through the real adapter, the revision copy and the source scan — rows of
+     its own and Storage too. */
+  "tests/multi-page-fetch-step.test.ts": "private-postgres",
   /* 261001m Stage 3: the thin article. `pgReady`, its own two seeded readers,
      and uploads through the real routes — so Storage too, as
      `an-upload-is-queued-…` below — and its oracle is the rows it wrote. */
