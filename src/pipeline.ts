@@ -6172,7 +6172,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      replaces the list. */
   crossrefs: {
     name: "crossrefs",
-    label: "Linking the article to itself",
+    /* *Linking the article to itself* until 2026-10-24, which a reader could
+       not parse (spya-rvj2p7); now the name Metadata's AI processing gives it. */
+    label: "Adding cross-references",
     produces: ["crossrefs"],
     /**
      * The exact body-only article rendering and top-level skeleton the request

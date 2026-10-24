@@ -35,6 +35,17 @@ const BASE: Job = {
 };
 
 describe("importProblemReport", () => {
+  /* spya-rvj2p7: an automatic-extra job queued after the import failed, and the
+     box opened on "This import failed." about an article that had imported fine. */
+  it("does not call a job that was not an import an import", () => {
+    const report = importProblemReport({
+      ...BASE,
+      steps: [{ name: "crossrefs", label: "Adding cross-references", status: "error", error: ERROR }],
+    });
+    expect(report.split("\n")[0]).toBe("This job failed.");
+    expect(report).not.toMatch(/import failed/);
+  });
+
   it("names the job, where it came from, the failed step, its error and the times, for an address import", () => {
     const report = importProblemReport({ ...BASE, url: SECRET_URL });
     expect(report).toBe(

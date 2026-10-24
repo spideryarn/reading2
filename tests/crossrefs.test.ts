@@ -393,6 +393,43 @@ describe("three empty outcomes, three different answers", () => {
     ).toThrow(/named 2 links and none of them.*1 naming a block id.*1 whose phrase occurs more than once/);
   });
 
+  /* spya-rvj2p7: a nine-block article whose three proposed links all pointed at
+     the paragraph next door failed the whole job. Nothing was misread; there was
+     nothing worth linking further away, which is the answer [] (plan 261024c). */
+  it("a list whose every link points next door is an empty artefact, with the counts", () => {
+    const out = build([
+      link(RESULT_A.id, "38% fewer words", RESULT_A.id),
+      link(RESULT_A.id, "after one night", RESULT_B.id),
+      link(RESULT_B.id, "the second experiment", RESULT_A.id),
+    ]);
+    expect(out.links).toEqual([]);
+    expect(out.dropped.nearby).toBe(3);
+  });
+
+  /* Only `nearby`: a one-word phrase is counted as `length` before anybody asks
+     whether it is in the block at all, so exempting `length` would publish
+     empty over a misreading (GPT Sol, plan review finding 2). */
+  it("next door plus any other drop still throws", () => {
+    expect(() =>
+      build([
+        link(RESULT_A.id, "38% fewer words", RESULT_B.id),
+        link(DISCUSSION.id, "invented", RESULT_A.id),
+      ]),
+    ).toThrow(/named 2 links and none of them.*1 to their own block.*1 under 2/);
+    expect(() =>
+      build([
+        link(RESULT_A.id, "38% fewer words", RESULT_B.id),
+        link(ABSTRACT.id, "words nobody wrote here", RESULT_A.id),
+      ]),
+    ).toThrow(/named 2 links and none of them.*1 to their own block.*1 whose phrase is not in/);
+  });
+
+  it("decides whether this answer was all nearby without counting drops from an earlier call", () => {
+    const dropped = emptyDropped();
+    dropped.nearby = 1;
+    expect(() => build([null], dropped)).toThrow(/named 1 links and none of them.*1 malformed/);
+  });
+
   it("stores what it dropped on the artefact", () => {
     const out = build([GOOD, link(DISCUSSION.id, "the effect", RESULT_A.id)]);
     expect(out.dropped.ambiguous).toBe(1);
