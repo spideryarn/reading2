@@ -1,0 +1,17 @@
+VERDICT: RUN WITH CHANGES
+
+1. **blocker — `docs/plans/261024g-map.mjs.txt:18`, `docs/plans/261024g-map.json.txt:240,2278`** — Coverage-only sorting misroutes two headings to earlier duplicate text. `spya-r87888` should map to `spya-cudr59` at ordinal 47, not `spya-m263z4` at ordinal 10; `spya-vkeh9t` should map to the `h1` `spya-ga9fbv`, not the contents-list item `spya-mmubm4`. Add explicit overrides, then regenerate the dry-run counts and undo data.
+
+2. **blocker — `docs/plans/261024g-apply.mjs.txt:45,63-75,94-101`; `src/store/pg-reading-time.ts:45-53`** — Locking the article does not block reading-time flushes. A pre-re-read tab can add to an old row after the snapshot: the script may silently delete those new seconds, or a queued flush may recreate a stale row after commit. Require Greg to close or reload every old tab before applying, wait for pending requests, then rerun the preflight. Also lock `reading_time` against writes for the transaction or use serializable isolation, and perform a delayed post-commit stale-row check.
+
+3. **blocker — `docs/plans/261024g-apply.mjs.txt:77-83`; `docs/plans/261024g-undo.json:5`** — The committed undo record is from the dry run, while apply deliberately does not write its newly calculated record. Reading-time totals can change between the two, so it may not describe what was moved. Generate the undo record from the apply transaction’s locked values, write it atomically before commit, and abort if that write fails.
+
+4. **should — `docs/plans/261024g-repoint-greg-s-bookmarks-and-reading-time-on-the-re-read-order-of-time.md:105-109`; `docs/plans/261024g-undo.json:60`; `src/store/pg-reading-time.ts:14-16`** — Committing exact passage-level seconds permanently records Greg’s private reading behavior in Git and will not cascade when the article is deleted. Keep the undo artifact outside Git with restrictive permissions, retain it only for a bounded rollback window, then delete it.
+
+5. **should — `docs/plans/261024g-apply.mjs.txt:41,87-120`** — The dry run does not run “the same statements”: all mutations and post-state assertions are skipped. It is a preflight calculation, not a rehearsal of the write path. Correct that claim and either test the mutation path against a disposable copy or deliberately execute it in a rollback-only write transaction.
+
+6. **should — `docs/plans/261024g-apply.mjs.txt:115,121-124`** — If the connection fails while awaiting `COMMIT`, PostgreSQL may have committed even though the catch block prints `ROLLED BACK`. Track whether commit was attempted; on an error at that point, report “commit outcome unknown” and reconnect for a fresh read-only verification before any retry or undo.
+
+7. **should — `docs/plans/261024g-apply.mjs.txt:32-34`** — The production guard checks only a regional Supabase hostname shared by projects and accepts either pooler port. Verify the expected project-ref username, database, and port `6543`, and print the sanitized full target.
+
+8. **nit — `docs/plans/261024g-repoint-greg-s-bookmarks-and-reading-time-on-the-re-read-order-of-time.md:35`** — The map has 70, not 71, successors with coverage at least `0.85`; `spya-h0zv5x` is `0.849315…`. Change the claim to “70 at least 0.85; one at 0.849” or “71 about 0.85.”

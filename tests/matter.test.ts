@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { splitIntoBlocks } from "../src/blocks.js";
 import {
   CLOSE_MAX_BLOCKS,
   HEADINGS_MAX,
@@ -104,16 +105,18 @@ describe("matterWindows", () => {
 });
 
 describe("matterInputHash", () => {
-  it("is versioned, stable, and changes with id, kind, level, words, text and role", () => {
+  it("is versioned, stable, and changes with every block field the matter pass reads", () => {
     const a = paper();
     const h = matterInputHash(a.blocks);
-    expect(h).toMatch(/^m1:[0-9a-f]{16}$/u);
+    expect(h).toMatch(/^m2:[0-9a-f]{16}$/u);
     expect(matterInputHash(a.blocks.map((b) => ({ ...b })))).toBe(h);
     const changed = (f: (b: MatterBlock) => MatterBlock) => matterInputHash(a.blocks.map((b, i) => (i === 2 ? f(b) : b)));
     expect(changed((b) => ({ ...b, kind: "heading" }))).not.toBe(h);
     expect(changed((b) => ({ ...b, level: 3 }))).not.toBe(h);
     expect(changed((b) => ({ ...b, words: 9 }))).not.toBe(h);
     expect(changed((b) => ({ ...b, text: "Summary" }))).not.toBe(h);
+    expect(changed((b) => ({ ...b, html: `<p><a href="#spya-zzzzzz">${b.text}</a></p>` }))).not.toBe(h);
+    expect(changed((b) => ({ ...b, html: `<p><strong>${b.text}</strong></p>` }))).toBe(h);
     expect(changed((b) => ({ ...b, id: "spya-zzzzzz" as MatterBlock["id"] }))).not.toBe(h);
     expect(changed((b) => ({ ...b, role: "footnote" }))).not.toBe(h);
     /* An absent level or role and a `null` one are the same block: the owner's
@@ -951,5 +954,173 @@ describe("the second held-out set's misses, where the gap was general", () => {
     blocks.splice(at + 2, 0, block("", "media"));
     const b = { ...a, blocks };
     expect(spans(b, admitMatter(b, [range(b, at, at + 2, ["acknowledgements"])]))).toEqual([[at, at + 1]]);
+  });
+});
+
+
+/**
+ * A table of contents with no label (plan 261024h, report spya-jk0xw5):
+ * 2025-11-02-what-if-you-dont-need-mcp-spya-ssvya4, whose "Table of contents"
+ * heading Readability removed (its class, `toc-header`, matches `header`), so
+ * thirteen bare list items, each a link to a later heading, reach the matter
+ * step with no label to start a run.
+ */
+describe("a contents list with no label", () => {
+  const SECTIONS: [string, number][] = [
+    ["My Browser DevTools Use Cases", 2],
+    ["Problems with Common Browser DevTools for Your Agent", 2],
+    ["Embracing Bash (and Code)", 2],
+    ["The Start Tool", 3],
+    ["The Navigate Tool", 3],
+    ["The Evaluate JavaScript Tool", 3],
+    ["The Screenshot Tool", 3],
+    ["The Benefits", 2],
+    ["Adding the Pick Tool", 2],
+    ["Adding the Cookies Tool", 2],
+    ["A Contrived Example", 2],
+    ["Making This Reusable Across Agents", 2],
+    ["In Conclusion", 2],
+  ];
+  /** A list item; `linked` makes it a link to the heading of the same name, as the page's are. */
+  type Entry = { text: string; linked: boolean };
+  const linked = (text: string): Entry => ({ text, linked: true });
+  const bare = (text: string): Entry => ({ text, linked: false });
+
+  /**
+   * The reported article's opening, the entries, six paragraphs, then the
+   * sections. `before` is put after the dateline (a label line, say); `recap`
+   * moves the entries to after the first three sections.
+   */
+  function mcp(
+    entries: readonly Entry[] = SECTIONS.map(([t]) => linked(t)),
+    opts: { before?: string; recap?: boolean; sections?: readonly [string, number][] } = {},
+  ): LabelsArticle & { at: { first: number; last: number } } {
+    const sections = opts.sections ?? SECTIONS;
+    const headings = sections.map(([h, level]) => block(h, "heading", level));
+    const items = entries.map(({ text, linked: l }) => {
+      const target = headings.find((h) => h.text === text);
+      const inner = l && target ? `<a href="#${target.id}">${text}</a>` : text;
+      return { ...block(text), tag: "li", html: `<li>${inner}</li>` } as MatterBlock & Block;
+    });
+    const intro = Array.from({ length: 6 }, (_, k) => block(prose(k)));
+    const body = headings.flatMap((h, k) => [h, ...Array.from({ length: 5 }, (_, j) => block(prose(100 + k * 10 + j)))]);
+    const head = [block("What if you don't need MCP at all?", "heading", 1), block("2025-11-02"), block("One chonky MCP server", "media")];
+    if (opts.before !== undefined) head.push(block(opts.before));
+    const blocks = opts.recap
+      ? [...head, ...intro, ...body.slice(0, 18), ...items, ...body.slice(18)]
+      : [...head, ...items, ...intro, ...body];
+    const first = blocks.indexOf(items[0]!);
+    return { blocks, meta: { title: "What if you don't need MCP at all?" }, at: { first, last: first + items.length - 1 } };
+  }
+
+  const spans = (a: MatterArticle, r: { stretches: { from: string; to: string; kinds: string[] }[] }) =>
+    r.stretches.map((s) => [a.blocks.findIndex((b) => b.id === s.from), a.blocks.findIndex((b) => b.id === s.to), s.kinds.join(",")]);
+
+  const splitPage = (items: string[], headingIds = ["section-1", "section-2", "section-3"]) => {
+    const sections = ["One", "Two", "Three"];
+    const html = `<article><h1>A linked article</h1><ol>${items.join("")}</ol>
+      ${Array.from({ length: 6 }, (_, i) => `<p>${prose(2000 + i)}</p>`).join("")}
+      ${sections.map((name, i) => `<h2 id="${headingIds[i]}">${name}</h2>${Array.from({ length: 5 }, (_, j) => `<p>${prose(2100 + i * 10 + j)}</p>`).join("")}`).join("")}
+    </article>`;
+    const blocks = splitIntoBlocks(html).blocks;
+    return { blocks, meta: { title: "A linked article" } } satisfies LabelsArticle;
+  };
+
+  it("recognises the href form blocks actually stores after sanitising and retargeting", () => {
+    const a = splitPage([
+      `<li><a data-author-title="author words > note" href='&#35;section-1'><span>One</span></a></li>`,
+      `<li><a rel="nofollow" href="#section-2"><strong>Two</strong></a></li>`,
+      `<li><a href="#section-3">Three</a></li>`,
+    ]);
+    const entries = a.blocks.map((b, i) => ({ b, i })).filter(({ b }) => b.tag === "li");
+    expect(entries).toHaveLength(3);
+    expect(entries.every(({ b }) => /\shref="#spya-[a-z0-9]+"/u.test(b.html))).toBe(true);
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([[entries[0]!.i, entries[2]!.i, "contents"]]);
+  });
+
+  it("does not count a list item's self-link as a link to its later section heading", () => {
+    const a = splitPage([
+      `<li id="self-1"><a href="#self-1">One</a></li>`,
+      `<li id="self-2"><a href="#self-2">Two</a></li>`,
+      `<li id="self-3"><a href="#self-3">Three</a></li>`,
+    ]);
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+  });
+
+  it("does not mistake an SVG image href for an entry link", () => {
+    const ids = ["spya-aaaaaa", "spya-bbbbbb", "spya-cccccc"];
+    const a = splitPage([
+      `<li><svg><image href="#${ids[0]}"></image></svg>One</li>`,
+      `<li><svg><image href="#${ids[1]}"></image></svg>Two</li>`,
+      `<li><svg><image href="#${ids[2]}"></image></svg>Three</li>`,
+    ], ids);
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+  });
+
+  it("folds a run of links to the article's later headings, by the free rule alone", () => {
+    const a = mcp();
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([[a.at.first, a.at.last, "contents"]]);
+  });
+
+  it("keeps it beside the model's title stretch in the union, without taking the intro", () => {
+    const a = mcp();
+    const model = admitMatter(a, [range(a, 0, 1, ["title", "dates"])]);
+    const contents = spans(a, combineMatter(a, model, matterByLabels(a, new Set()), new Set())).filter(([, , k]) => k === "contents");
+    expect(contents).toEqual([[a.at.first, a.at.last, "contents"]]);
+  });
+
+  it("leaves a Key points list showing whose lines repeat later headings but link nowhere", () => {
+    const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(bare), { before: "Key points" });
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+  });
+
+  it("leaves a fully linked Key points list showing", () => {
+    const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(linked), { before: "Key points" });
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+  });
+
+  it("leaves it showing when each line names a heading but its link targets a different one", () => {
+    const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(linked), { before: "Key points" });
+    const wrong = ["My Browser DevTools Use Cases", "The Start Tool", "A Contrived Example"].map(
+      (text) => a.blocks.find((b) => b.kind === "heading" && b.text === text)!,
+    );
+    const blocks = a.blocks.map((b, i) => {
+      const entry = i - a.at.first;
+      return entry >= 0 && entry < wrong.length
+        ? { ...b, html: `<li>${b.text}<a href="#${wrong[entry]!.id}"></a></li>` }
+        : b;
+    }) as (MatterBlock & Block)[];
+    expect(spans({ ...a, blocks }, matterByLabels({ ...a, blocks }, new Set()))).toEqual([]);
+  });
+
+  it("takes a linked list that opens with Abstract as one contents stretch, not an abstract", () => {
+    const sections: [string, number][] = [["Abstract", 2], ["Introduction", 2], ["Methods", 2], ["Results", 2]];
+    const a = mcp(sections.map(([t]) => linked(t)), { sections });
+    const got = spans(a, matterByLabels(a, new Set()));
+    expect(got[0]).toEqual([a.at.first, a.at.last, "contents"]);
+    /* The rest is the article's own Abstract section, under its heading after the list. */
+    expect(got.slice(1).every(([from]) => (from as number) > a.at.last)).toBe(true);
+  });
+
+  it("does not fold two linked lines", () => {
+    const a = mcp(["The Benefits", "In Conclusion"].map(linked));
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+  });
+
+  it("ends the run at a line that links nowhere: too few either side", () => {
+    const a = mcp([linked("My Browser DevTools Use Cases"), linked("The Benefits"), bare("Adding the Pick Tool"), linked("In Conclusion"), linked("A Contrived Example")]);
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+  });
+
+  it("does not fold links back to headings the article has already passed", () => {
+    const a = mcp(["My Browser DevTools Use Cases", "Problems with Common Browser DevTools for Your Agent", "Embracing Bash (and Code)"].map(linked), { recap: true });
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+  });
+
+  it("does not fold such a run past the opening", () => {
+    const a = mcp();
+    const filler = Array.from({ length: 200 }, (_, k) => block(prose(1000 + k)));
+    const blocks = [...a.blocks.slice(0, a.at.first), ...filler, ...a.blocks.slice(a.at.first)] as (MatterBlock & Block)[];
+    expect(spans({ ...a, blocks }, matterByLabels({ ...a, blocks }, new Set()))).toEqual([]);
   });
 });

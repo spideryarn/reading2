@@ -83,7 +83,7 @@ for that.
   citation in the text. A longer reading kept on a row from before (once made by a button called
   **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a
   line with the chat's short summary; press it to open that conversation again beside
-  Bibliography. The conversation is also in Chat’s list, marked with Sources’ icon. Only
+  Bibliography. The conversation is also in Chat’s list, marked *Bibliography* beside Sources’ icon. Only
   whoever added the article has this.
 - **Does it say that?** is on the card you get by pointing at a citation in a paragraph. It opens
   a new chat beside that paragraph, asking whether the work says what the paragraph

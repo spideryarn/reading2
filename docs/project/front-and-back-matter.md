@@ -53,6 +53,18 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
   opening, its headings and its close ([`src/matter.ts`](../../src/matter.ts)). The model finds
   unlabelled title blocks and author lists; the rule finds long reference lists and contents. Their
   union keeps the finer of their boundaries, so an abstract is always its own stretch.
+- **A contents list needs no label.** The rule also takes a run of three or more short lines in
+  the opening that each name and link to the same one of the article's own later headings (`linkedContentsRuns`,
+  plan
+  [261024h](../plans/261024h-an-unlabelled-contents-list-folds-like-a-labelled-one.md)): a page's
+  *Table of contents* heading can be lost at extraction (Readability dropped
+  `<h1 class="toc-header">`, report `spya-jk0xw5`) or never be there. The link is the evidence: a
+  line must name the heading that its own anchor targets, and a run under *Key points*, *Highlights*,
+  *Significance*, *Executive summary* or *Author summary* stays showing even when it links onward.
+- **A rule change that leaves older admitted folds sound keeps older values readable.** The step's version
+  (`MATTER_PROMPT_VERSION`) decides when it runs again; `MATTER_READABLE_VERSIONS` decides what a
+  read still folds, so a new source does not take every stored fold away until each article is
+  re-read ([`src/matter-current.ts`](../../src/matter-current.ts)).
 - **The checks are the design, not the prompt.** Whatever either method says, a stretch is kept
   only if every block passes evidence for its kind on its full stored text (a contents entry names
   one of the article's own headings or carries a page number; a reference looks like one; an
@@ -62,10 +74,10 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
   article. The model's answer is a stranger's text acted on: it can name only ids it was shown, in
   a closed schema, and nothing it writes is drawn.
 - **Fails towards showing.** A failed call stores the label rule's stretches alone. A stored value
-  is used only when it was computed from exactly the blocks on screen (`matterInputHash`, checked
-  on every read); otherwise, and for every article imported before this existed, the reading view
-  uses the older byline rule ([`src/web/front-matter.ts`](../../src/web/front-matter.ts), plan
-  261007d) as one *Authors* stretch.
+  is used only when it was computed from exactly the blocks on screen (`matterInputHash`, including
+  the in-page anchor targets interpreted from the stored markup, checked on every read); otherwise,
+  and for every article imported before this existed, the reading view uses the older byline rule
+  ([`src/web/front-matter.ts`](../../src/web/front-matter.ts), plan 261007d) as one *Authors* stretch.
 - **Visitors** (the public page) get the same folds, under the same rule, since 2026-10-18:
   `PublicArticle.matter` carries each stretch's two ids and kinds and nothing else of the stored
   document ([security-map.md](security-map.md) § `PublicArticle` gained `matter`; plan

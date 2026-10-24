@@ -1,0 +1,314 @@
+diff --git a/docs/project/front-and-back-matter.md b/docs/project/front-and-back-matter.md
+index ea7254bd6..4266df286 100644
+--- a/docs/project/front-and-back-matter.md
++++ b/docs/project/front-and-back-matter.md
+@@ -53,6 +53,17 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
+   opening, its headings and its close ([`src/matter.ts`](../../src/matter.ts)). The model finds
+   unlabelled title blocks and author lists; the rule finds long reference lists and contents. Their
+   union keeps the finer of their boundaries, so an abstract is always its own stretch.
++- **A contents list needs no label.** The rule also takes a run of three or more short lines in
++  the opening that each link to one of the article's own later headings (`linkedContentsRuns`,
++  plan
++  [261024h](../plans/261024h-an-unlabelled-contents-list-folds-like-a-labelled-one.md)): a page's
++  *Table of contents* heading can be lost at extraction (Readability dropped
++  `<h1 class="toc-header">`, report `spya-jk0xw5`) or never be there. The link is the evidence: a
++  *Key points* list that repeats the headings has none.
++- **A rule change that only adds candidates keeps older values readable.** The step's version
++  (`MATTER_PROMPT_VERSION`) decides when it runs again; `MATTER_READABLE_VERSIONS` decides what a
++  read still folds, so a new source does not take every stored fold away until each article is
++  re-read ([`src/matter-current.ts`](../../src/matter-current.ts)).
+ - **The checks are the design, not the prompt.** Whatever either method says, a stretch is kept
+   only if every block passes evidence for its kind on its full stored text (a contents entry names
+   one of the article's own headings or carries a page number; a reference looks like one; an
+diff --git a/src/matter-current.ts b/src/matter-current.ts
+index 7b319ff58..87f3bc3be 100644
+--- a/src/matter-current.ts
++++ b/src/matter-current.ts
+@@ -31,7 +31,20 @@ import type { BlockId, MatterStretchStored } from "./types.js";
+  * gateway, which the public import graph may not reach
+  * (tests/public-imports.test.ts). Plan 261018l.
+  */
+-export const MATTER_PROMPT_VERSION = "matter/2";
++export const MATTER_PROMPT_VERSION = "matter/3";
++
++/**
++ * **The versions a read still folds.** Not the same thing as the version above,
++ * which decides whether the step runs again: a change that only *adds* a
++ * source of candidates leaves every stretch an older version stored as sound
++ * as it was, so withdrawing them all until each article is re-read would take
++ * every fold off the shelf for nothing. Keep an older version here only when
++ * that holds; drop it when a change makes the checks stricter.
++ *
++ * - `matter/3` (plan 261024h) added the linked contents run to the labels rule;
++ *   `matter/2`'s stretches are what `matter/3` would store less that one.
++ */
++export const MATTER_READABLE_VERSIONS: ReadonlySet<string> = new Set([MATTER_PROMPT_VERSION, "matter/2"]);
+ 
+ /** As much of a block as the pass reads. Every `Block` satisfies it. */
+ export interface MatterBlock {
+@@ -68,7 +81,7 @@ export function matterInputHash(blocks: readonly MatterBlock[]): string {
+  * rule*.** Every one of these, or nothing (review F2):
+  *
+  * 1. the stored shape is valid and its status is `ok`;
+- * 2. its version is today's safety-and-prompt version;
++ * 2. its version is one a read still folds (`MATTER_READABLE_VERSIONS`);
+  * 3. `sourceHash` equals `matterInputHash` of the blocks on this payload —
+  *    so a column a draft carried over changed blocks, or a value copied from
+  *    another revision, is withheld;
+@@ -82,7 +95,7 @@ export function matterInputHash(blocks: readonly MatterBlock[]): string {
+  */
+ export function matterForReader(value: unknown, blocks: readonly MatterBlock[]): MatterStretchStored[] | undefined {
+   if (!isMatterDocument(value) || value.status !== "ok") return undefined;
+-  if (value.version !== MATTER_PROMPT_VERSION) return undefined;
++  if (!MATTER_READABLE_VERSIONS.has(value.version)) return undefined;
+   if (value.sourceHash !== matterInputHash(blocks)) return undefined;
+   const index = new Map(blocks.map((b, i) => [b.id, i]));
+   let last = -1;
+diff --git a/src/matter-labels.ts b/src/matter-labels.ts
+index 84f11eaa0..aca0a3eb7 100644
+--- a/src/matter-labels.ts
++++ b/src/matter-labels.ts
+@@ -4,7 +4,7 @@
+  * classifier (src/matter.ts) as the second baseline. If it matches the
+  * classifier with no prose folded, it is what gets built.
+  *
+- * Two sources, then the classifier's own shared checks (`holdStretches`):
++ * Four sources, then the classifier's own shared checks (`holdStretches`):
+  *
+  * - **Today's byline rule** (src/web/front-matter.ts § `frontMatter`), as one
+  *   `authors` stretch. Its evidence test is its own, so it is trusted.
+@@ -19,10 +19,16 @@
+  *   funding and declarations family in either.
+  * - **Inline labels**: a run of paragraphs that open "Funding: …",
+  *   "Competing interests: …" (that family only), as one stretch.
++ * - **A contents list with no label** (`linkedContentsRuns`, plan 261024h):
++ *   short lines that each link to one of the article's later headings, placed
++ *   as a *Contents* label would be. A page's label can be lost before this
++ *   (Readability dropped `<h1 class="toc-header">`, spya-jk0xw5) or never be
++ *   there at all.
+  */
+ import {
+   BACK_MATTER_FROM_SHARE,
+   CONTENTS_LEADING_SHARE,
++  CONTENTS_MAX_ENTRY_WORDS,
+   type MatterAdmitted,
+   type MatterArticle,
+   type MatterCandidate,
+@@ -63,9 +69,16 @@ export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId
+     return kinds.every((k) => (FRONT.has(k) ? front : EITHER.has(k) ? front || back : back));
+   };
+ 
++  /* An entry of a linked contents list is not a label: one that reads
++     "Abstract" would otherwise label the next entry as the abstract and take
++     the start of the list (review of 261024h). */
++  const linked = linkedContentsRuns(blocks).filter((r) => placed(r.start, ["contents"]));
++  const inLinked = (i: number) => linked.some((r) => i >= r.start && i < r.end);
++
+   for (let i = 0; i < n; i++) {
+     const block = blocks[i]!;
+     if (block.kind !== "heading" && block.kind !== "text") continue;
++    if (inLinked(i)) continue;
+     const kinds = labelKinds(block.text);
+     if (kinds === null || !placed(i, kinds)) continue;
+     if (block.kind === "heading") {
+@@ -97,9 +110,60 @@ export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId
+     candidates.push({ item: item++, start: i, end, kinds: [...kinds], headedBy: null, shape: "range" });
+   }
+   for (const run of inlineLabelRuns(blocks, placed)) candidates.push({ item: item++, ...run, headedBy: null, shape: "range" });
++  for (const run of linked) candidates.push({ item: item++, ...run, kinds: ["contents"], headedBy: null, shape: "range" });
+   return holdStretches(article, candidates, echo);
+ }
+ 
++/** A contents list with no label links to at least this many distinct headings. */
++export const LINKED_CONTENTS_MIN_ENTRIES = 3;
++
++/** The in-page targets of a block's links: `href="#…"`, as blocks rewrote them to block ids. */
++const IN_PAGE_HREF = /\bhref="#([^"]+)"/gu;
++
++/**
++ * **Tables of contents with no label** (plan 261024h): runs of short text
++ * blocks, empty blocks allowed between, each linking to a heading of the
++ * article that comes after it, together naming at least
++ * `LINKED_CONTENTS_MIN_ENTRIES` distinct headings. The link is the evidence:
++ * a "Key points" list whose lines happen to repeat later headings has none,
++ * and stays showing (front-and-back-matter.md: never folded). Where a run
++ * sits is the caller's to check, and the shared checks still hold it to its
++ * entries naming the headings (`stretchEvidence`'s unlabelled contents).
++ * `[start, end)`, ending at the last entry.
++ */
++export function linkedContentsRuns(blocks: readonly Block[]): { start: number; end: number }[] {
++  const headingAt = new Map<string, number>();
++  blocks.forEach((b, i) => {
++    if (b.kind === "heading") headingAt.set(b.id, i);
++  });
++  const runs: { start: number; end: number }[] = [];
++  let start = -1;
++  let last = -1;
++  let named = new Set<string>();
++  const close = () => {
++    if (start >= 0 && named.size >= LINKED_CONTENTS_MIN_ENTRIES) runs.push({ start, end: last + 1 });
++    start = -1;
++    named = new Set();
++  };
++  for (let i = 0; i < blocks.length; i++) {
++    const b = blocks[i]!;
++    if (b.words === 0 && b.kind !== "heading") continue;
++    const target =
++      b.kind === "text" && b.words <= CONTENTS_MAX_ENTRY_WORDS
++        ? [...b.html.matchAll(IN_PAGE_HREF)].map((m) => m[1]!).find((id) => (headingAt.get(id) ?? -1) > i)
++        : undefined;
++    if (target === undefined) {
++      close();
++      continue;
++    }
++    if (start < 0) start = i;
++    named.add(target);
++    last = i;
++  }
++  close();
++  return runs;
++}
++
+ const MATTER_ORDER: readonly MatterKind[] = ["acknowledgements", "funding", "declarations"];
+ 
+ /**
+diff --git a/tests/matter-step.test.ts b/tests/matter-step.test.ts
+index bd2b8db4c..bac93d313 100644
+--- a/tests/matter-step.test.ts
++++ b/tests/matter-step.test.ts
+@@ -124,6 +124,11 @@ describe("matterForReader — the stretches reach the reading view only about th
+     expect(matterForReader({ ...okValue(blocks, [{ from: a, to: b }]), version: "matter/1" }, blocks)).toBeUndefined();
+   });
+ 
++  it("still folds a value from a version that only lacked a source of candidates (matter/2, plan 261024h)", () => {
++    expect(MATTER_PROMPT_VERSION).not.toBe("matter/2");
++    expect(matterForReader({ ...okValue(blocks, [{ from: a, to: b }]), version: "matter/2" }, blocks)).toEqual([{ from: a, to: b, kinds: ["references"] }]);
++  });
++
+   it("withholds a value carried over blocks that have since changed", () => {
+     const stored = okValue(blocks, [{ from: a, to: b }]);
+     const edited = blocks.map((x, i) => (i === 5 ? { ...x, text: `${x.text} And one more.` } : x));
+@@ -176,5 +181,7 @@ describe("matterSettled — whether a publication still needs the step", () => {
+   it("queues a successor when the stored value belongs to an older rule", () => {
+     expect(matterSettled({ ...okValue(blocks, []), version: "matter/1" }, blocks)).toBe(false);
+     expect(matterSettled({ status: "unavailable", version: "matter/1", sourceHash: matterInputHash(blocks), reason: "step-failed" }, blocks)).toBe(false);
++    /* Readable is not settled: a matter/2 value still folds, and the next run replaces it. */
++    expect(matterSettled({ ...okValue(blocks, []), version: "matter/2" }, blocks)).toBe(false);
+   });
+ });
+diff --git a/tests/matter.test.ts b/tests/matter.test.ts
+index b80796b50..ac99f66b0 100644
+--- a/tests/matter.test.ts
++++ b/tests/matter.test.ts
+@@ -953,3 +953,111 @@ describe("the second held-out set's misses, where the gap was general", () => {
+     expect(spans(b, admitMatter(b, [range(b, at, at + 2, ["acknowledgements"])]))).toEqual([[at, at + 1]]);
+   });
+ });
++
++
++/**
++ * A table of contents with no label (plan 261024h, report spya-jk0xw5):
++ * 2025-11-02-what-if-you-dont-need-mcp-spya-ssvya4, whose "Table of contents"
++ * heading Readability removed (its class, `toc-header`, matches `header`), so
++ * thirteen bare list items, each a link to a later heading, reach the matter
++ * step with no label to start a run.
++ */
++describe("a contents list with no label", () => {
++  const SECTIONS: [string, number][] = [
++    ["My Browser DevTools Use Cases", 2],
++    ["Problems with Common Browser DevTools for Your Agent", 2],
++    ["Embracing Bash (and Code)", 2],
++    ["The Start Tool", 3],
++    ["The Navigate Tool", 3],
++    ["The Evaluate JavaScript Tool", 3],
++    ["The Screenshot Tool", 3],
++    ["The Benefits", 2],
++    ["Adding the Pick Tool", 2],
++    ["Adding the Cookies Tool", 2],
++    ["A Contrived Example", 2],
++    ["Making This Reusable Across Agents", 2],
++    ["In Conclusion", 2],
++  ];
++  /** A list item; `linked` makes it a link to the heading of the same name, as the page's are. */
++  type Entry = { text: string; linked: boolean };
++  const linked = (text: string): Entry => ({ text, linked: true });
++  const bare = (text: string): Entry => ({ text, linked: false });
++
++  /**
++   * The reported article's opening, the entries, six paragraphs, then the
++   * sections. `before` is put after the dateline (a label line, say); `recap`
++   * moves the entries to after the first three sections.
++   */
++  function mcp(
++    entries: readonly Entry[] = SECTIONS.map(([t]) => linked(t)),
++    opts: { before?: string; recap?: boolean; sections?: readonly [string, number][] } = {},
++  ): LabelsArticle & { at: { first: number; last: number } } {
++    const sections = opts.sections ?? SECTIONS;
++    const headings = sections.map(([h, level]) => block(h, "heading", level));
++    const items = entries.map(({ text, linked: l }) => {
++      const target = headings.find((h) => h.text === text);
++      const inner = l && target ? `<a href="#${target.id}">${text}</a>` : text;
++      return { ...block(text), tag: "li", html: `<li>${inner}</li>` } as MatterBlock & Block;
++    });
++    const intro = Array.from({ length: 6 }, (_, k) => block(prose(k)));
++    const body = headings.flatMap((h, k) => [h, ...Array.from({ length: 5 }, (_, j) => block(prose(100 + k * 10 + j)))]);
++    const head = [block("What if you don't need MCP at all?", "heading", 1), block("2025-11-02"), block("One chonky MCP server", "media")];
++    if (opts.before !== undefined) head.push(block(opts.before));
++    const blocks = opts.recap
++      ? [...head, ...intro, ...body.slice(0, 18), ...items, ...body.slice(18)]
++      : [...head, ...items, ...intro, ...body];
++    const first = blocks.indexOf(items[0]!);
++    return { blocks, meta: { title: "What if you don't need MCP at all?" }, at: { first, last: first + items.length - 1 } };
++  }
++
++  const spans = (a: MatterArticle, r: { stretches: { from: string; to: string; kinds: string[] }[] }) =>
++    r.stretches.map((s) => [a.blocks.findIndex((b) => b.id === s.from), a.blocks.findIndex((b) => b.id === s.to), s.kinds.join(",")]);
++
++  it("folds a run of links to the article's later headings, by the free rule alone", () => {
++    const a = mcp();
++    expect(spans(a, matterByLabels(a, new Set()))).toEqual([[a.at.first, a.at.last, "contents"]]);
++  });
++
++  it("keeps it beside the model's title stretch in the union, without taking the intro", () => {
++    const a = mcp();
++    const model = admitMatter(a, [range(a, 0, 1, ["title", "dates"])]);
++    const contents = spans(a, combineMatter(a, model, matterByLabels(a, new Set()), new Set())).filter(([, , k]) => k === "contents");
++    expect(contents).toEqual([[a.at.first, a.at.last, "contents"]]);
++  });
++
++  it("leaves a Key points list showing whose lines repeat later headings but link nowhere", () => {
++    const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(bare), { before: "Key points" });
++    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
++  });
++
++  it("takes a linked list that opens with Abstract as one contents stretch, not an abstract", () => {
++    const sections: [string, number][] = [["Abstract", 2], ["Introduction", 2], ["Methods", 2], ["Results", 2]];
++    const a = mcp(sections.map(([t]) => linked(t)), { sections });
++    const got = spans(a, matterByLabels(a, new Set()));
++    expect(got[0]).toEqual([a.at.first, a.at.last, "contents"]);
++    /* The rest is the article's own Abstract section, under its heading after the list. */
++    expect(got.slice(1).every(([from]) => (from as number) > a.at.last)).toBe(true);
++  });
++
++  it("does not fold two linked lines", () => {
++    const a = mcp(["The Benefits", "In Conclusion"].map(linked));
++    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
++  });
++
++  it("ends the run at a line that links nowhere: too few either side", () => {
++    const a = mcp([linked("My Browser DevTools Use Cases"), linked("The Benefits"), bare("Adding the Pick Tool"), linked("In Conclusion"), linked("A Contrived Example")]);
++    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
++  });
++
++  it("does not fold links back to headings the article has already passed", () => {
++    const a = mcp(["My Browser DevTools Use Cases", "Problems with Common Browser DevTools for Your Agent", "Embracing Bash (and Code)"].map(linked), { recap: true });
++    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
++  });
++
++  it("does not fold such a run past the opening", () => {
++    const a = mcp();
++    const filler = Array.from({ length: 200 }, (_, k) => block(prose(1000 + k)));
++    const blocks = [...a.blocks.slice(0, a.at.first), ...filler, ...a.blocks.slice(a.at.first)];
++    expect(spans({ ...a, blocks }, matterByLabels({ ...a, blocks }, new Set()))).toEqual([]);
++  });
++});
