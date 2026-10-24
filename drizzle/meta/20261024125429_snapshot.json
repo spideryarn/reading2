@@ -1,6 +1,6 @@
 {
   "id": "0e2d649b-0bf5-487d-96d8-2b7cb66839d5",
-  "prevId": "1cd7db79-e7df-439f-bedd-076da4f188a7",
+  "prevId": "649e6b2e-353f-4a2f-80de-ed2309cbb257",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -9995,6 +9995,108 @@
         "view_as_sessions_not_self": {
           "name": "view_as_sessions_not_self",
           "value": "\"spideryarn\".\"view_as_sessions\".\"actor_id\" <> \"spideryarn\".\"view_as_sessions\".\"subject_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.article_revision_parts": {
+      "name": "article_revision_parts",
+      "schema": "spideryarn",
+      "columns": {
+        "revision_id": {
+          "name": "revision_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal": {
+          "name": "ordinal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_source_sha256": {
+          "name": "raw_source_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_source_kind": {
+          "name": "raw_source_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "article_revision_parts_revision_id_article_revisions_id_fk": {
+          "name": "article_revision_parts_revision_id_article_revisions_id_fk",
+          "tableFrom": "article_revision_parts",
+          "tableTo": "article_revisions",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "revision_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "article_revision_parts_raw_source_fk": {
+          "name": "article_revision_parts_raw_source_fk",
+          "tableFrom": "article_revision_parts",
+          "tableTo": "raw_sources",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "raw_source_sha256",
+            "raw_source_kind"
+          ],
+          "columnsTo": [
+            "sha256",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "article_revision_parts_revision_id_ordinal_pk": {
+          "name": "article_revision_parts_revision_id_ordinal_pk",
+          "columns": [
+            "revision_id",
+            "ordinal"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "article_revision_parts_ordinal": {
+          "name": "article_revision_parts_ordinal",
+          "value": "\"spideryarn\".\"article_revision_parts\".\"ordinal\" >= 1"
+        },
+        "article_revision_parts_kind": {
+          "name": "article_revision_parts_kind",
+          "value": "\"spideryarn\".\"article_revision_parts\".\"raw_source_kind\" = 'html'"
+        },
+        "article_revision_parts_url": {
+          "name": "article_revision_parts_url",
+          "value": "\"spideryarn\".\"article_revision_parts\".\"url\" ~ '^https?://'"
         }
       },
       "isRLSEnabled": false

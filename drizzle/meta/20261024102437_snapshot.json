@@ -1,6 +1,6 @@
 {
   "id": "649e6b2e-353f-4a2f-80de-ed2309cbb257",
-  "prevId": "0e2d649b-0bf5-487d-96d8-2b7cb66839d5",
+  "prevId": "1cd7db79-e7df-439f-bedd-076da4f188a7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1039,12 +1039,6 @@
         },
         "citation_blurbs": {
           "name": "citation_blurbs",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "situate": {
-          "name": "situate",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -7743,7 +7737,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note')"
         }
       },
       "isRLSEnabled": false
@@ -9026,7 +9020,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','crossrefs','simple')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",
