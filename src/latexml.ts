@@ -674,8 +674,18 @@ function isDownloadLink(cell: Element): boolean {
 /** What an SVG that only frames a passage is drawn with. `text`, `image`, `circle`, `use`: a drawing. */
 const FRAME_TAGS = new Set(["g", "path", "rect"]);
 
-/** Content that would begin loading or running only after it was lifted into ordinary HTML. */
-const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, img, link, object, picture, script, source, style, svg, video";
+/**
+ * Content that would begin loading or running only after it was lifted into
+ * ordinary HTML — an embedded player above all (GPT Sol, 261005l F28).
+ *
+ * **Not a plain `<img>`, since 2026-10-24.** Box 3 of 2308.08708 holds the
+ * paper's own self-attention figure, and refusing it left the whole box — 450
+ * words — an empty frame (spya-weuekx). Lifted, it is one more of the paper's
+ * figures on an arXiv page (rule 1), fetched and hosted by stage 4.5 like every
+ * other (docs/project/article-images.md). `picture` and `source` stay refused:
+ * nothing measured needs them.
+ */
+const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, link, object, picture, script, source, style, svg, video";
 
 /**
  * **`svg.ltx_picture` that is only a frame round one `<foreignObject>` → a
@@ -700,6 +710,14 @@ const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, img, link, object, picture
  *       span.ltx_foreignobject_content   → its child nodes are the passage
  * ```
  *
+ * **Or two, when the box has a title bar** — the title, then the body, in
+ * document order, each of the shape above (Boxes 1–4 of 2308.08708, report
+ * spya-weuekx: a thousand words that reached the reader as four empty frames).
+ * The first must read as a title: at most `BOX_TITLE_WORDS` words and no line
+ * break. It comes out first, in a `<strong>` — LaTeXML sets it
+ * `ltx_font_bold`, a class the sanitiser drops, and run straight into the body
+ * it reads as the body's first sentence — then a `<br>`, then the body.
+ *
  * A diagram is not this: it has a `foreignObject` per label (nine in each of
  * Figure 1's panels in 2610.01988v1) and is left as the picture it is. The
  * `<span>` takes the SVG's `id`; the passage's own ids move with it; a link to
@@ -710,8 +728,57 @@ const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, img, link, object, picture
 function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
   if (svg.classList.contains("ltx_markedasmath")) return false;
   const objects = Array.from(svg.querySelectorAll("foreignObject"));
-  const object = objects[0];
-  if (objects.length !== 1 || object === undefined) return false;
+  if (objects.length !== 1 && objects.length !== 2) return false;
+  const contents: Element[] = [];
+  for (const object of objects) {
+    const content = passageOf(object);
+    if (content === null || content.querySelector(ACTIVE_PASSAGE_CONTENT) !== null) return false;
+    contents.push(content);
+  }
+  const title = contents.length === 2 ? contents[0] : undefined;
+  const body = contents[contents.length - 1];
+  if (body === undefined || (title !== undefined && !readsAsTitle(title))) return false;
+  /* The two wrappers round each passage, which are discarded with the frame. */
+  const wrappers = new Set<Element>(objects);
+  for (const content of contents) if (content.parentElement) wrappers.add(content.parentElement);
+  /* Everything else in the SVG is the frame: drawn, wordless, and not linked to. */
+  for (const part of Array.from(svg.querySelectorAll("*"))) {
+    const inside = contents.find((content) => content.contains(part));
+    if (inside !== undefined) {
+      /* The wrapper itself is discarded: only its children move. A linked id
+         or name on that wrapper therefore has no faithful home. */
+      if (part === inside && linkedNamesOf(part, targets).length > 0) return false;
+      continue;
+    }
+    if (linkedNamesOf(part, targets).length > 0) return false;
+    if (wrappers.has(part)) continue;
+    if (!FRAME_TAGS.has(part.tagName.toLowerCase()) || !noOwnText(part)) return false;
+  }
+  if (!noOwnText(svg)) return false;
+
+  const doc = svg.ownerDocument;
+  const passage = doc.createElement("span");
+  const id = svg.getAttribute("id");
+  if (id) passage.setAttribute("id", id);
+  if (title !== undefined) {
+    const strong = doc.createElement("strong");
+    strong.append(...Array.from(title.childNodes));
+    passage.append(strong, doc.createElement("br"));
+  }
+  passage.append(...Array.from(body.childNodes));
+  svg.replaceWith(passage);
+  return true;
+}
+
+/** The most words a box's title bar may have and still be read as one. Box 2 of 2308.08708's has eight. */
+const BOX_TITLE_WORDS = 25;
+
+/**
+ * The passage inside one `foreignObject` — exactly
+ * `foreignObject > span.ltx_foreignobject_container > span.ltx_foreignobject_content`,
+ * nothing beside either wrapper, and some words in it — or `null`.
+ */
+function passageOf(object: Element): Element | null {
   const container = object.firstElementChild;
   const content = container?.firstElementChild;
   if (
@@ -723,28 +790,25 @@ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
     !content?.matches("span.ltx_foreignobject_content") ||
     (content.textContent ?? "").trim() === ""
   ) {
-    return false;
+    return null;
   }
-  if (content.querySelector(ACTIVE_PASSAGE_CONTENT) !== null) return false;
-  /* Everything else in the SVG is the frame: drawn, wordless, and not linked to. */
-  for (const part of Array.from(svg.querySelectorAll("*"))) {
-    if (content.contains(part)) {
-      /* The wrapper itself is discarded: only its children move. A linked id
-         or name on that wrapper therefore has no faithful home. */
-      if (part === content && linkedNamesOf(part, targets).length > 0) return false;
-      continue;
-    }
-    if (linkedNamesOf(part, targets).length > 0) return false;
-    if (part === object || part === container) continue;
-    if (!FRAME_TAGS.has(part.tagName.toLowerCase()) || !noOwnText(part)) return false;
-  }
-  if (!noOwnText(svg)) return false;
+  return content;
+}
 
-  const passage = svg.ownerDocument.createElement("span");
-  const id = svg.getAttribute("id");
-  if (id) passage.setAttribute("id", id);
-  passage.append(...Array.from(content.childNodes));
-  svg.replaceWith(passage);
+/**
+ * A title bar: a few words on one line, **every one of them set bold**. The
+ * bold is the evidence: a diagram with two short labels has the same count of
+ * `foreignObject`s, and nothing else tells them apart (GPT Sol, plan review).
+ */
+function readsAsTitle(content: Element): boolean {
+  if (content.querySelector("br") !== null) return false;
+  if ((content.textContent ?? "").trim().split(/\s+/u).length > BOX_TITLE_WORDS) return false;
+  const walker = content.ownerDocument.createTreeWalker(content, 4 /* NodeFilter.SHOW_TEXT */);
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if ((node.nodeValue ?? "").trim() === "") continue;
+    const bold = node.parentElement?.closest(".ltx_font_bold");
+    if (!bold || !content.contains(bold)) return false;
+  }
   return true;
 }
 

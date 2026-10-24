@@ -69,6 +69,7 @@ import {
   zoomTargetOf,
   type ZoomedFigure,
 } from "./zoomable.js";
+import { OriginalLinkNote, originalLinksIn } from "./OriginalLink.js";
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 import { useFoldArticle } from "./fold.js";
 import { atFront, matterStretches, stubCount, stubHow, stubLabel, stubWhat } from "./matter-view.js";
@@ -1261,6 +1262,11 @@ function TableViewInner({
      PdfFigureNote.tsx § `hasOriginalPdf` — which is also the ownership gate,
      and says why that is safe and where to look if it stops being. */
   const canOpenSource = hasOriginalPdf(article);
+  /* **And a web article's figures, tables and images, each with a way back to
+     the publisher's page** — OriginalLink.tsx. Empty for anything with no web
+     address, a PDF included, which has the control above. Memoised for the
+     same reason. */
+  const originalLinks = useMemo(() => originalLinksIn(article), [article]);
 
   const noteStarts = useMemo(() => {
     const out = new Map<BlockId, NoteStart>();
@@ -1774,6 +1780,8 @@ function TableViewInner({
                     canOpenSource={canOpenSource}
                   />
                 )}
+                {/* The web half of the same control — OriginalLink.tsx. */}
+                <OriginalLinkNote link={originalLinks.get(block.id)} />
                 {/* The quiz's questions on this block — `Props.quizAfter`. */}
                 {quizAfter?.get(block.id)}
                 {/* The open mode's door, after its block — `Props.afterBlock`. */}

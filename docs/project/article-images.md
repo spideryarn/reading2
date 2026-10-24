@@ -337,6 +337,30 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   article became up to 200 requests. `GATE` admits two at a time *across the process* — not two per
   article, which is the same unbounded number wearing a limit's name.
 
+## A way back to the original, beside every figure
+
+> All figures and tables and anything else like that extracted from the original article should
+> provide a subtle UI widget of some kind that enables you to go back to the original article to see
+> that diagram.
+>
+> — Greg, 2026-10-24 (report spya-weuekx)
+
+A PDF's figures have had it since 2026-09-06: an icon after the figure opening the owner's PDF at
+its page, or the words *View the original* when the picture was not recovered
+([`src/web/PdfFigureNote.tsx`](../../src/web/PdfFigureNote.tsx)). **A web article's figures, tables
+and media get the same icon since 2026-10-24**, an ordinary link to the publisher's page
+([`src/web/OriginalLink.tsx`](../../src/web/OriginalLink.tsx)), for owner and visitor alike. Which
+blocks is `figuresOf`'s answer (src/figures.ts), plus a block with no words that draws something.
+It aims at an `id` inside the block, which the publisher's page has too, then at the caption's
+first words as a text fragment, then at the page.
+
+What it cannot do yet, and why
+([261024w](../plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md)):
+**a PDF's tables** carry no page marker, so they have no icon; **a figure whose only id was on its
+own element** loses it to the block id stage 3 gives that element, so it aims by caption or at the
+page; and **a figure on a later page of a multi-page article** opens page 1, since the article holds
+only page 1's address.
+
 ## An image the step never sees
 
 **The manifest can only speak for the images stage 2 kept.** A picture Readability threw away is in

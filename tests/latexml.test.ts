@@ -597,6 +597,68 @@ describe("fix 7 — a boxed passage keeps its words", () => {
     expect(block[0]?.text.replace(/\s+/gu, " ").trim()).toBe(WORDS);
   });
 
+  describe("a box with a title bar: two foreignObjects, the title then the body (Box 1 of 2308.08708, spya-weuekx)", () => {
+    const TITLE = "Box 1: Determinacy, degrees, dimensions";
+
+    it("keeps the title, set apart, and every word of the body", () => {
+      const { doc, stats } = prepared(latexml(fx("titled-boxed-passage")));
+      expect(stats).toEqual({ ...NOTHING, boxedPassages: 1 });
+      expect(doc.querySelector("svg, foreignObject")).toBeNull();
+      const lifted = doc.querySelector('[id="S1.SS2.p5.pic1"]');
+      expect(lifted?.tagName).toBe("SPAN");
+      const first = lifted?.firstElementChild;
+      expect(first?.tagName).toBe("STRONG");
+      expect(first?.textContent?.trim()).toBe(TITLE);
+      expect(first?.nextElementSibling?.tagName).toBe("BR");
+      const text = lifted?.textContent?.replace(/\s+/gu, " ").trim() ?? "";
+      expect(text.startsWith(`${TITLE} In this report, we generally write`)).toBe(true);
+      expect(text).toContain("constituents which make up");
+      expect(lifted?.querySelector('[id="S1.SS2.p5.pic1.2.1.1"]')).not.toBeNull();
+    });
+
+    it("a reader gets one block holding the title and the body", async () => {
+      const { blocks } = await blocksOf(fx("titled-boxed-passage"));
+      const block = blocks.filter((b) => b.text.includes("Determinacy, degrees"));
+      expect(block).toHaveLength(1);
+      expect(block[0]?.text).toContain("blurry");
+      expect(block[0]?.html).toContain("<strong>");
+    });
+
+    it("keeps a figure the box holds (Box 3 of 2308.08708)", async () => {
+      const { doc, stats } = prepared(latexml(fx("titled-boxed-passage-with-figure")));
+      expect(stats).toEqual({ ...NOTHING, boxedPassages: 1 });
+      const lifted = doc.querySelector('[id="S2.SS2.SSS3.p15.pic1"]');
+      expect(lifted?.firstElementChild?.textContent?.trim()).toBe("Box 3: Attention in neuroscience and in AI");
+      expect(lifted?.querySelector("img")?.getAttribute("src")).toBe("2308.08708v3/figures/selfAttention.png");
+      const { blocks } = await blocksOf(fx("titled-boxed-passage-with-figure"));
+      expect(blocks.some((b) => b.text.includes("The fields of neuroscience and machine learning"))).toBe(true);
+      expect(blocks.some((b) => b.html.includes("selfAttention.png"))).toBe(true);
+    });
+
+    it("is left alone when the first part is not a short title", () => {
+      const fixture = fx("titled-boxed-passage");
+      const long = `${"word ".repeat(30)}`;
+      const html = fixture.replace(TITLE, long);
+      expect(html).not.toBe(fixture);
+      expect(prepared(latexml(html)).unchanged).toBe(true);
+    });
+
+    it("is left alone when the first part is not set bold: a diagram with two short labels", () => {
+      const fixture = fx("titled-boxed-passage");
+      const html = fixture.replace("ltx_text ltx_font_bold", "ltx_text");
+      expect(html).not.toBe(fixture);
+      expect(prepared(latexml(html)).unchanged).toBe(true);
+    });
+
+    it("is left alone when a third foreignObject makes it a diagram", () => {
+      const fixture = fx("titled-boxed-passage");
+      const label = '<g><foreignObject width="5" height="5"><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">x</span></span></foreignObject></g>';
+      const html = fixture.replace("</g></svg>", `${label}</g></svg>`);
+      expect(html).not.toBe(fixture);
+      expect(prepared(latexml(html)).unchanged).toBe(true);
+    });
+  });
+
   describe("left exactly as the page had it", () => {
     const fixture = fx("boxed-passage");
     it("a diagram whose labels are foreignObjects (Figure 1a of 2610.01988v1)", () => {
