@@ -39,6 +39,7 @@
  *
  * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 4.
  */
+import { AUTO_MODE_STEPS } from "./auto-mode-steps.js";
 import { jobWorthRetrying } from "./job-failure.js";
 import { codeOfMessage, INTERRUPTED_CODE } from "./messages.js";
 import type { Job, JobStep, StepName } from "./types.js";
@@ -233,6 +234,37 @@ export const STOPPING_AFTER_STEP = "Stopping after the current step…";
  */
 export const STOP_CAME_TOO_LATE =
   "You pressed Stop during the last step. What it had done by then was kept.";
+
+/**
+ * **Under a failed automatic-extra job**, the one thing the failed step's own message
+ * cannot say: the article is fine. Greg, 2026-10-23 (spya-rvj2p7), about a
+ * cross-references job that failed after its import had published: *"I have no
+ * idea what that error means, and the article seemed to work, so it's just a
+ * very confusing message."*
+ *
+ * **Only a job made of `AUTO_MODE_STEPS`** (`onlyAutoModeSteps`), because only
+ * for those is it provably true: each writes its own artefact into the claim's
+ * draft, and a job publishes that draft only on a `done` ending (src/jobs.ts §
+ * the session one claim runs on). The list is the main modes plus
+ * cross-references, which is an automatic extra but not a mode. Not every
+ * non-import job is so harmless —
+ * a failed `labels` marks the published revision's labels failed
+ * (src/store/pg-session.ts) — and an import may leave no article at all.
+ *
+ * *Unchanged*, not *still there to read*: a mode job can be queued by name
+ * while its article's import is still running, and then there is nothing to
+ * read yet. GPT Sol, plan review finding 1. Plan 261024c.
+ */
+export const ARTICLE_UNAFFECTED = "The article itself is unchanged. Only this extra did not finish.";
+
+/**
+ * Whether every step of this job is one of the automatic extras a first
+ * publication queues — `AUTO_MODE_STEPS`, which already holds what each of
+ * them reads first.
+ */
+function onlyAutoModeSteps(job: Pick<Job, "steps">): boolean {
+  return job.steps.length > 0 && job.steps.every((s) => AUTO_MODE_STEPS.includes(s.name));
+}
 
 /**
  * The tab is the worker, said out loud.
@@ -606,7 +638,12 @@ export function displayJob(job: Job, now: number): JobDisplay {
     usually: state === "slow" ? null : (timing?.usually ?? null),
     retryable: jobWorthRetrying(job),
     state,
-    sentence: state === "slow" ? slowSentence(timing) : SENTENCES[state],
+    sentence:
+      state === "slow"
+        ? slowSentence(timing)
+        : (state === "failed" || state === "interrupted") && onlyAutoModeSteps(job)
+          ? ARTICLE_UNAFFECTED
+          : SENTENCES[state],
   };
 }
 

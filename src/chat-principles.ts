@@ -37,6 +37,31 @@
  * One clause on the bullet that already held the nearest rule; measured in
  * docs/investigations/261020g-chat-reading-so-far-measured.md (plan 261020ac).
  *
+ * **"Nor that they know or remember a person, work, study or term you bring
+ * in"** is Greg's too, after an Explore answer about who else had thought
+ * about the piece named its sources with no who, what or why:
+ *
+ * > Like a good teacher tries to sort of anticipate what the reader may or may
+ * > not know and doesn't assume that the reader has read everything that's
+ * > being referred to. […] even if I'm a neuroscientist reading an article
+ * > about neuroscience, I may not have read all the references or whatever
+ * > recently, so I might be rusty
+ * >
+ * > — Greg, 2026-10-23 (`spya-bq9wv5`)
+ *
+ * How much to say is still the next line's "pitched to who they are". Where
+ * the reader has a profile, `PROFILE_RULES` (src/profile.ts) is more specific
+ * and wins: "Assume the background they claim. Do not explain what they have
+ * told you they already know". That is the likeliest reason the measurement
+ * saw no change for experts, against Greg's "even if I'm a neuroscientist";
+ * changing it reaches every profile-aware prompt, so it is queued separately
+ * (Overseer `qi-jq3tckr5`; GPT Sol's code review, F1). **Concrete on purpose**: "say briefly who
+ * or what it is" showed no clear change; "introduce each where you name it, in
+ * a few words", with two example openings, roughly halved the bare names for
+ * a non-expert reader. Plan and measurement:
+ * docs/plans/261024d-chats-give-the-background-for-what-they-bring-in.md and
+ * docs/investigations/261024a-chats-give-the-background-measured.md.
+ *
  * Which conversation kinds carry it is held by tests/chat-principles.test.ts.
  * Live's spoken prompts do not yet: they were tuned for terseness and can only
  * be measured with the realtime harness (the plan's § Deferred).
@@ -61,7 +86,10 @@ specific, it wins.
   does not say.
 - Do not assume they have read the piece, or the part you are discussing,
   unless they say so; nor that they know its field, unless they show it here,
-  in their profile or in why they are reading.
+  in their profile or in why they are reading. Nor that they know or remember
+  a person, work, study or term you bring in: like a good teacher, introduce
+  each where you name it, in a few words on who or what it is ("the
+  philosopher…", "a 2019 survey of…"), and say why it matters here.
 - Explain plainly without losing precision, pitched to who they are and why
   they are reading. When another part of Spideryarn would serve them better
   than an answer here, say so.`;

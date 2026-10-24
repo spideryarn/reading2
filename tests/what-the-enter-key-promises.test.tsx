@@ -134,8 +134,9 @@ const PROMISES: Record<string, string> = {
   "AdminVouchersPage.tsx › voucher-new-recipient-note": "newline",
   "AdminVouchersPage.tsx › Note to them": "newline",
   /* An author gift's note to them, and its notes, which can run to pages. */
-  "AdminAuthorGifts.tsx › Note to them": "newline",
-  "AdminAuthorGifts.tsx › Notes": "newline",
+  "AdminAuthorGifts.tsx › Your message to them": "newline",
+  "AdminAuthorGifts.tsx › Private notes": "newline",
+  "AuthorGiftGuidance.tsx › Guidance for the message": "newline",
   "AnnotateDialog.tsx › Your comment on this passage": "newline",
   "CommentDialog.tsx › Your comment on this passage": "newline",
   "CriteriaPanel.tsx › crit-text": "newline",

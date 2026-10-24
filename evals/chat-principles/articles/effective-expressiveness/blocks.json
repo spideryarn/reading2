@@ -1,0 +1,85 @@
+{
+  "blocks": [
+    {
+      "id": "spya-kahxda",
+      "tag": "p",
+      "kind": "text",
+      "text": "I keep reaching for a term that I have nowhere to link to, so I decided to write this note.",
+      "words": 20,
+      "html": "<p id=\"spya-kahxda\">I keep reaching for a term that I have nowhere to link to, so I decided to write this note.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-er9psy",
+      "tag": "p",
+      "kind": "text",
+      "text": "Nearly every general-purpose programming language is Turing complete. In terms of raw computational power, x86 assembly, C, JavaScript, Prolog, Haskell, and even Microsoft Excel are equivalent: each can express any computable function. If you only care about what a language can do, they’re all the same.",
+      "words": 46,
+      "html": "<p id=\"spya-er9psy\">Nearly every general-purpose programming language is <a href=\"https://en.wikipedia.org/wiki/Turing_completeness\">Turing complete</a>. In terms of raw computational power, x86 assembly, C, JavaScript, Prolog, Haskell, and even Microsoft Excel are equivalent: each can express any <a href=\"https://en.wikipedia.org/wiki/Computable_function\">computable function</a>. If you only care about what a language <em>can</em> do, they’re all the same.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-m6u2kp",
+      "tag": "p",
+      "kind": "text",
+      "text": "How it feels to use these languages is a different story. Each one makes some things easy and other things painful. Each gives you a different way to think about a problem, and some of those ways fit a given class of problems far better than others. Alan Perlis called this the Turing tarpit, “in which everything is possible but nothing of interest is easy.” Computational power tells you almost nothing about what a language is good for.",
+      "words": 78,
+      "html": "<p id=\"spya-m6u2kp\">How it <em>feels</em> to use these languages is a different story. Each one makes some things easy and other things painful. Each gives you a different way to think about a problem, and some of those ways fit a given class of problems far better than others. Alan Perlis called this the <a href=\"https://en.wikipedia.org/wiki/Turing_tarpit\">Turing tarpit</a>, “in which everything is possible but nothing of interest is easy.” Computational power tells you almost nothing about what a language is <em>good for</em>.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-s79g0v",
+      "tag": "p",
+      "kind": "text",
+      "text": "Programming language researchers have a better term for talking about this sort of thing. In his paper “On the Expressive Power of Programming Languages”, Matthias Felleisen proposes that [warning: I’m loosely paraphrasing here!] a feature adds expressive power to a language if removing it would force a global rewrite of your program (rather than a local one). First-class continuations are more expressive than plain procedure calls because you can’t eliminate them without restructuring the whole program. That’s a step toward what I mean. But it’s still about what can be expressed, not about how it feels to express it.",
+      "words": 99,
+      "html": "<p id=\"spya-s79g0v\">Programming language researchers have a better term for talking about this sort of thing. In his paper “<a href=\"https://www2.ccs.neu.edu/racket/pubs/scp91-felleisen.pdf\">On the Expressive Power of Programming Languages</a>”, Matthias Felleisen proposes that [warning: I’m loosely paraphrasing here!] a feature adds <strong>expressive power</strong> to a language if removing it would force a global rewrite of your program (rather than a local one). First-class continuations are more expressive than plain procedure calls because you can’t eliminate them without restructuring the whole program. That’s a step toward what I mean. But it’s still about what can be expressed, not about how it <em>feels</em> to express it.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-h9rqg0",
+      "tag": "p",
+      "kind": "text",
+      "text": "What I care about is the effective expressiveness of a language: how naturally it lets a programmer express solutions to a particular kind of problem, in practice.",
+      "words": 27,
+      "html": "<p id=\"spya-h9rqg0\">What I care about is the <strong>effective expressiveness</strong> of a language: how naturally it lets a programmer express solutions to a particular kind of problem, in practice.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-npnyrb",
+      "tag": "p",
+      "kind": "text",
+      "text": "Take an expert system, for instance. I could write one in C. But Prolog has rules, queries, and backtracking built in, so I’d have a much easier time there. I could of course “just” write a library that introduces these abstractions in C as an embedded DSL, getting fancy with macros and everything. But that’s a lot of work, and the result still wouldn’t be as nice to use as Prolog. The gap between “possible with enough effort” and “natural” is what I’m talking about.",
+      "words": 85,
+      "html": "<p id=\"spya-npnyrb\">Take an expert system, for instance. I could write one in C. But Prolog has rules, queries, and backtracking built in, so I’d have a much easier time there. I could of course “just” write a library that introduces these abstractions in C as an embedded DSL, getting fancy with macros and everything. But that’s a lot of work, and the result still wouldn’t be as nice to use as Prolog. The gap between “possible with enough effort” and “natural” is what I’m talking about.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-mjc4vw",
+      "tag": "p",
+      "kind": "text",
+      "text": "So here’s my working definition. The effective expressiveness of a language is the answer to the following question: what kinds of problems make me want to reach for it?",
+      "words": 29,
+      "html": "<p id=\"spya-mjc4vw\">So here’s my working definition. The effective expressiveness of a language is the answer to the following question: <em>what kinds of problems make me want to reach for it</em>?</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-vv3pdc",
+      "tag": "p",
+      "kind": "text",
+      "text": "Of course this depends on who’s asking, what they already know, and what they’re trying to build. “Expressiveness” in the formal sense is a property of just the language. Effective expressiveness is a property of a language and a problem and a programmer.",
+      "words": 43,
+      "html": "<p id=\"spya-vv3pdc\">Of course this depends on who’s asking, what they already know, and what they’re trying to build. “Expressiveness” in the formal sense is a property of just the language. Effective expressiveness is a property of a language <em>and</em> a problem <em>and</em> a programmer.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-kud2sc",
+      "tag": "p",
+      "kind": "text",
+      "text": "This matters a whole lot, because effective expressiveness doesn’t just shape how you solve a problem. It influences which problems you actually bother to work on! Every programmer carries around a rough sense of what’s worth the effort in a given language, and so much of what gets built (or doesn’t!) comes down to where we draw that line.",
+      "words": 59,
+      "html": "<p id=\"spya-kud2sc\">This matters a whole lot, because effective expressiveness doesn’t just shape <em>how</em> you solve a problem. It influences <em>which</em> problems you actually bother to work on! Every programmer carries around a rough sense of what’s worth the effort in a given language, and so much of what gets built (or doesn’t!) comes down to where we draw that line.</p>",
+      "gistable": true
+    }
+  ]
+}

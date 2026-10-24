@@ -32,15 +32,33 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { RefreshCw } from "lucide-react";
 
 import { formatCostNanos } from "../admin.js";
-import type { AdminAuthorGift, AdminAuthorLookup, AuthorGiftStatus } from "../admin-author-gifts.js";
-import { freeArticles, RECIPIENT_NAME_MAX, cleanRecipientName } from "../admin-vouchers.js";
+import {
+  type AdminAuthorGift,
+  type AdminAuthorLookup,
+  type AuthorGiftStatus,
+  STARTER_LINK_PLACEHOLDER,
+} from "../admin-author-gifts.js";
+import {
+  freeArticles,
+  giftEmailGreeting,
+  RECIPIENT_NAME_MAX,
+  VOUCHER_NOTE_MAX,
+  cleanRecipientName,
+} from "../admin-vouchers.js";
 import { addressBoxChange } from "../email-address.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
 import { BUTTON, INPUT, Refusal, StarterOwnerLine, TEXTAREA } from "./admin-vouchers-parts.js";
+import { AuthorGiftGuidance } from "./AuthorGiftGuidance.js";
 import { Button } from "./components/ui/button.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
-import { type AuthorGiftPatchInput, lookupPending, type UseAdminAuthorGifts } from "./useAdminAuthorGifts.js";
+import {
+  type AuthorGiftPatchInput,
+  type EmailPreviewAnswer,
+  fetchEmailPreview,
+  lookupPending,
+  type UseAdminAuthorGifts,
+} from "./useAdminAuthorGifts.js";
 import { useNow } from "./useNow.js";
 import { voiceClass } from "./voice.js";
 
@@ -259,8 +277,10 @@ function Notes({
   return (
     <div className="tw:mt-3">
       <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-2">
-        <span className="tw:text-sm tw:font-medium tw:text-foreground">Notes</span>
-        <span className="tw:text-ink-faint">(only admins see them{written ? `; last written ${written}` : ""})</span>
+        <span className="tw:text-sm tw:font-medium tw:text-foreground">Private notes</span>
+        <span className="tw:text-ink-faint">
+          (never sent; only admins see them{written ? `; last written ${written}` : ""})
+        </span>
       </div>
       {refusal && (
         <p role="alert" className="tw:m-0 tw:mt-1 tw:text-danger">
@@ -281,7 +301,7 @@ function Notes({
             </p>
           )}
           <textarea
-            aria-label="Notes"
+            aria-label="Private notes"
             rows={8}
             value={text}
             disabled={busy}
@@ -320,14 +340,21 @@ function Notes({
   );
 }
 
-/** The draft's own fields: address, name, note to them, articles. Only what changed is sent. */
+/**
+ * The draft's own fields — address, name, the message to them, articles: every
+ * part of the email that is not fixed. Only what changed is sent. `noteToUse`
+ * is a lookup's suggestion, put in the message box by *Use as your message*
+ * for Greg to edit and save (plan 261024f, R1): it is not saved until he does.
+ */
 function DraftEditor({
   gift,
   patch,
+  noteToUse,
   done,
 }: {
   gift: AdminAuthorGift;
   patch: UseAdminAuthorGifts["patch"];
+  noteToUse: string | null;
   done: () => void;
 }) {
   /* **What the fields held when Edit was pressed**, and what a save compares
@@ -341,7 +368,8 @@ function DraftEditor({
   }));
   const [email, setEmail] = useState(initial.email ?? "");
   const [name, setName] = useState(initial.recipientName ?? "");
-  const [note, setNote] = useState(initial.recipientNote ?? "");
+  const [note, setNote] = useState(noteToUse ?? initial.recipientNote ?? "");
+  const noteLength = [...note.trim()].length;
   const [articles, setArticles] = useState(String(initial.articles));
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -379,7 +407,7 @@ function DraftEditor({
   return (
     <form
       onSubmit={(e) => void save(e)}
-      aria-label="Edit the draft"
+      aria-label="Edit the email"
       className="tw:mt-2 tw:flex tw:flex-col tw:gap-2 tw:rounded-md tw:border tw:border-border tw:p-3"
     >
       {refusal && (
@@ -389,7 +417,7 @@ function DraftEditor({
       )}
       <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-3">
         <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1">
-          Email address (editing it marks it as typed by you)
+          To: their email address (editing it marks it as typed by you)
           <input
             type="email"
             aria-label="Email address"
@@ -406,7 +434,7 @@ function DraftEditor({
           />
         </label>
         <label className="tw:flex tw:w-24 tw:flex-col tw:gap-1">
-          Articles
+          Free articles
           <input
             type="number"
             aria-label="Articles"
@@ -422,7 +450,7 @@ function DraftEditor({
         </label>
       </div>
       <label className="tw:flex tw:flex-col tw:gap-1">
-        Their name
+        Their name (the email opens “{giftEmailGreeting("<name>")}”)
         <input
           type="text"
           aria-label="Their name"
@@ -435,15 +463,20 @@ function DraftEditor({
         />
       </label>
       <label className="tw:flex tw:flex-col tw:gap-1">
-        Note to them (it goes in their email; sign it yourself)
+        Your message to them: the one part of the email you write, under the greeting. Everything else in it is fixed.
+        Sign it yourself.
         <textarea
-          aria-label="Note to them"
-          rows={3}
+          aria-label="Your message to them"
+          rows={6}
           value={note}
           disabled={busy}
           onChange={(e) => setNote(e.target.value)}
           className={`${TEXTAREA} tw:w-full`}
         />
+        <span className={noteLength > VOUCHER_NOTE_MAX ? "tw:text-danger" : "tw:text-ink-faint"}>
+          {noteLength} of {VOUCHER_NOTE_MAX} characters
+          {noteLength > VOUCHER_NOTE_MAX && ": shorten it before saving"}
+        </span>
       </label>
       <div className="tw:flex tw:flex-wrap tw:gap-2">
         <button type="submit" disabled={busy} className={`${BUTTON} tone-positive`}>
@@ -483,8 +516,12 @@ function GiftTitle({ gift }: { gift: AdminAuthorGift }) {
   );
 }
 
-/** What the voucher will carry, and where each part came from. */
-function GiftFields({ gift }: { gift: AdminAuthorGift }) {
+/**
+ * What the voucher will carry, and where each part came from. `withNote` draws
+ * the note to them too: a gift that can still be sent shows it in its email
+ * instead (plan 261024f § D2), so it is not drawn twice.
+ */
+function GiftFields({ gift, withNote }: { gift: AdminAuthorGift; withNote: boolean }) {
   const byId = (id: string | null) => (id === null ? null : (gift.lookups.find((l) => l.id === id) ?? null));
   const emailFrom = byId(gift.emailLookupId);
   const nameFrom = byId(gift.nameLookupId);
@@ -502,24 +539,138 @@ function GiftFields({ gift }: { gift: AdminAuthorGift }) {
       </dd>
       <dt>Gift</dt>
       <dd className="tw:m-0 tw:text-foreground">{freeArticles(gift.articles)}</dd>
-      <dt>Note to them</dt>
-      <dd className="tw:m-0 tw:whitespace-pre-wrap tw:break-words tw:text-foreground">
-        {gift.recipientNote ?? <span className="tw:text-ink-faint">none</span>}
-      </dd>
+      {withNote && (
+        <>
+          <dt>Note to them</dt>
+          <dd className="tw:m-0 tw:whitespace-pre-wrap tw:break-words tw:text-foreground">
+            {gift.recipientNote ?? <span className="tw:text-ink-faint">none</span>}
+          </dd>
+        </>
+      )}
     </dl>
+  );
+}
+
+/**
+ * **The email, if you sent it now** — Greg, 2026-10-23 (#687, spya-nt6hee):
+ * *"crystal clear what the subject line, what the text is going to be … what's
+ * about to go out and where from"*. Plan 261024f § D2, R2.
+ *
+ * The server renders it with the function Send uses, so this is the email,
+ * not a sketch of it (unlike the Give form's `EmailSketch`, which draws while
+ * you type). Asked again whenever the gift's `updatedAt` moves — an edit, a
+ * lookup filling an address. The small print names the two things that can
+ * still differ at Send.
+ */
+function useEmailPreview(gift: AdminAuthorGift | null, refresh: number): EmailPreviewAnswer | null {
+  /* A result belongs only to the content that asked for it, so an edit hides
+     the old answer at once, before the new one arrives (261024f code review).
+     Content, not object identity: the list's poll hands every card a new
+     object, and must not reload every email. The title is a live preview
+     input but does not move `author_gifts.updated_at`. */
+  const key = gift === null ? null : `${gift.id}\n${gift.updatedAt}\n${gift.starter.title ?? ""}\n${refresh}`;
+  const giftId = gift?.id ?? null;
+  const [resolved, setResolved] = useState<{ readonly key: string; readonly answer: EmailPreviewAnswer } | null>(null);
+  useEffect(() => {
+    if (giftId === null || key === null) return;
+    let live = true;
+    void fetchEmailPreview(giftId).then((a) => {
+      if (live) setResolved({ key, answer: a });
+    });
+    return () => {
+      live = false;
+    };
+  }, [giftId, key]);
+  return key !== null && resolved?.key === key ? resolved.answer : null;
+}
+
+function EmailPreview({ answer, retry }: { answer: EmailPreviewAnswer | null; retry: () => void }) {
+  return (
+    <section
+      aria-label="The email, if you sent it now"
+      className="tw:mt-3 tw:rounded-md tw:border tw:border-border tw:bg-background tw:p-3"
+    >
+      <h3 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-medium tw:text-foreground">The email, if you sent it now</h3>
+      {answer === null ? (
+        <p className="tw:m-0 tw:text-ink-faint">Loading the email…</p>
+      ) : answer.kind === "failed" ? (
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          <p className="tw:m-0 tw:text-danger">Could not show the email: {answer.message}</p>
+          <button type="button" onClick={retry} className={BUTTON}>
+            Try again
+          </button>
+        </div>
+      ) : (
+        <>
+          <dl className="tw:m-0 tw:grid tw:grid-cols-[auto_1fr] tw:gap-x-3 tw:gap-y-1">
+            <dt>From</dt>
+            <dd className="tw:m-0 tw:break-words tw:text-foreground">{answer.preview.from}</dd>
+            <dt>To</dt>
+            <dd className="tw:m-0 tw:break-words tw:text-foreground">
+              {answer.preview.to ?? <span className="tw:text-ink-faint">no address yet</span>}
+            </dd>
+            <dt>Subject</dt>
+            <dd className="tw:m-0 tw:break-words tw:text-foreground">{answer.preview.subject}</dd>
+          </dl>
+          <div
+            data-email-body=""
+            className="tw:mt-2 tw:whitespace-pre-wrap tw:break-words tw:border-t tw:border-border/60 tw:pt-2 tw:text-foreground"
+          >
+            {answer.preview.text}
+          </div>
+          <p className="tw:m-0 tw:mt-2 tw:text-ink-faint">
+            This is the plain-text version; the formatted one has the same words, with buttons for the links.{" "}
+            {STARTER_LINK_PLACEHOLDER} stands for the article's real link, which Send adds.{" "}
+            {answer.preview.audience === "reader"
+              ? "This address already has a Spideryarn account, so the email tells them what the gift adds to theirs."
+              : "No confirmed Spideryarn account has this address yet, so the email invites them to sign up."}{" "}
+            That part is decided again at Send, as is the article's title, so either can change if the address signs up
+            or the article is re-imported first. Replies go to {answer.preview.from}.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * **The lookup's suggested message, offered, never applied** (plan 261024f,
+ * R1). The newest lookup's suggestion, shown while it differs from the
+ * message already in the email, with *Use as your message*, which opens the
+ * editor with it in the message box. Model text reaches the email only through
+ * that editor's Save — Greg's own — so 261010c's D7 is unchanged.
+ */
+function SuggestedMessage({ gift, onUse }: { gift: AdminAuthorGift; onUse: (text: string) => void }) {
+  const suggestion = gift.lookups.find((l) => l.suggestedMessage !== null)?.suggestedMessage ?? null;
+  if (suggestion === null || suggestion.trim() === (gift.recipientNote ?? "").trim()) return null;
+  return (
+    <section aria-label="Suggested message" className="tw:mt-3 tw:rounded-md tw:border tw:border-dashed tw:border-border tw:p-3">
+      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-2">
+        <span className="tw:text-sm tw:font-medium tw:text-foreground">Suggested message</span>
+        <span className="tw:text-ink-faint">(written by the lookup; not in the email unless you use it)</span>
+      </div>
+      <p className={`tw:m-0 tw:mt-1 tw:whitespace-pre-wrap tw:break-words tw:text-foreground ${voiceClass("ai")}`}>
+        {suggestion}
+      </p>
+      <button type="button" onClick={() => onUse(suggestion)} className={`${BUTTON} tw:mt-2`}>
+        Use as your message
+      </button>
+    </section>
   );
 }
 
 /**
  * What can be done to a draft or a half-sent gift: Send (held back, with the
  * reason, until there is an address); Edit, Look up again and Discard on a
- * draft. A finished gift has none of these: Restore, on a discarded one, is on
- * its card's line, so it is reachable while the card is shut (plan 261020ab).
+ * draft. A finished gift has none of these: Restore and Delete, on a discarded
+ * one, are on its card's line, so they are reachable while the card is shut
+ * (plans 261020ab, 261024f).
  */
 function GiftActions({
   gift,
   busy,
   running,
+  preview,
   onSend,
   onEdit,
   onDiscard,
@@ -529,6 +680,7 @@ function GiftActions({
   gift: AdminAuthorGift;
   busy: boolean;
   running: boolean;
+  preview: EmailPreviewAnswer | null;
   onSend: () => void;
   onEdit: () => void;
   onDiscard: () => void;
@@ -543,6 +695,10 @@ function GiftActions({
       ? "Send waits for an address: add one with Edit."
       : running
         ? "Send waits for the lookup to finish, so you can review what it found first."
+        : preview === null
+          ? "Send waits until the email above has loaded."
+          : preview.kind === "failed"
+            ? "Send waits until the email above can be shown."
         : null;
   if (!canSend) return null;
   return (
@@ -564,7 +720,7 @@ function GiftActions({
       {draft && (
         <>
           <button type="button" disabled={busy} onClick={onEdit} className={BUTTON}>
-            Edit
+            Edit the email
           </button>
           <button
             type="button"
@@ -634,13 +790,15 @@ function GiftCard({
   onSent,
 }: {
   gift: AdminAuthorGift;
-  hooks: Pick<UseAdminAuthorGifts, "patch" | "send" | "lookUpAgain" | "switchOnHighPower">;
+  hooks: Pick<UseAdminAuthorGifts, "patch" | "send" | "lookUpAgain" | "switchOnHighPower" | "remove">;
   now: number;
   /** A fresh object each time this gift is pointed at, so an old fold choice cannot hide a new arrival. */
   pointer: GiftPointer | null;
   onSent: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  /* *Use as your message*: the suggestion the editor opens with in its message box (plan 261024f, R1). */
+  const [noteToUse, setNoteToUse] = useState<string | null>(null);
   /* Keep what the person opened, including the fields drawn above the
      confirmation. A refresh (or a poll for another gift's lookup) must not
      replace their review with an agent's newer edit. The server compares
@@ -652,6 +810,12 @@ function GiftCard({
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  /* The inline *Delete for good?* on a discarded gift's line (plan 261024f § D1). */
+  const [deleting, setDeleting] = useState(false);
+  /* Incremented for Try again and whenever Send opens its confirmation. The
+     latter asks the server again for mutable audience/title inputs, and the
+     final Send waits until that fresh email has actually been shown. */
+  const [previewRefresh, setPreviewRefresh] = useState(0);
   /* **Whether a finished gift is open** (plan 261020ab, P1-03 and P2-02 of its
      review): what the person chose with Show or Hide in this pointing context.
      A fresh pointer supersedes an earlier Hide, but Hide still works after the
@@ -666,6 +830,8 @@ function GiftCard({
   const running = gift.lookups.some((l) => lookupPending(l, now));
   const title = gift.starter.title;
   const shown = canSend && confirming ? confirming : gift;
+  const preview = useEmailPreview(canSend ? shown : null, previewRefresh);
+  const previewReady = preview?.kind === "preview";
   const bodyId = `${authorGiftAnchor(gift.id)}-body`;
 
   /* A gift sent or discarded elsewhere no longer has anything to confirm.
@@ -673,6 +839,10 @@ function GiftCard({
   useEffect(() => {
     if (!canSend) setConfirming(null);
   }, [canSend]);
+  /* Restored elsewhere: there is nothing to delete, so the question goes. */
+  useEffect(() => {
+    if (gift.status !== "discarded") setDeleting(false);
+  }, [gift.status]);
   /* Whether this Send would make the private link, decided by what the confirmation showed. */
   const needsRights = confirming !== null && !confirming.starter.linkable;
 
@@ -685,7 +855,7 @@ function GiftCard({
   }
 
   async function sendNow() {
-    if (busy || running || confirming === null || (needsRights && !rights)) return;
+    if (busy || running || confirming === null || !previewReady || (needsRights && !rights)) return;
     setBusy(true);
     setSaid(null);
     const answer = await hooks.send(confirming, { rightsConfirmed: needsRights && rights });
@@ -735,17 +905,58 @@ function GiftCard({
             </button>
           )}
           {gift.status === "discarded" && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void attempt(() => hooks.patch(gift.id, { discarded: false }))}
-              className={BUTTON}
-            >
-              Restore
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void attempt(() => hooks.patch(gift.id, { discarded: false }))}
+                className={BUTTON}
+              >
+                Restore
+              </button>
+              <button
+                type="button"
+                disabled={busy || deleting}
+                onClick={() => {
+                  setRefusal(null);
+                  setDeleting(true);
+                }}
+                className={`${BUTTON} tone-negative`}
+              >
+                Delete
+              </button>
+            </>
           )}
         </span>
       </div>
+      {/* Greg, 2026-10-23 (#685): *"actually delete permanently the discarded
+          draft"*. Asked inline, like Send, and outside the fold so it is seen
+          whether the card is open or shut. */}
+      {deleting && gift.status === "discarded" && (
+        <fieldset
+          aria-label="Delete this draft for good"
+          className="tw:m-0 tw:mt-2 tw:min-w-0 tw:rounded-md tw:border tw:border-border tw:p-3"
+        >
+          <p className="tw:m-0 tw:mb-2 tw:text-foreground">
+            Delete this draft for good? Its notes and lookups go with it. This cannot be undone.
+          </p>
+          <div className="tw:flex tw:flex-wrap tw:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="tone-negative"
+              disabled={busy}
+              onClick={() => void attempt(() => hooks.remove(gift.id)).finally(() => setDeleting(false))}
+            >
+              {busy ? "Deleting…" : "Delete for good"}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setDeleting(false)}>
+              Cancel
+            </Button>
+          </div>
+        </fieldset>
+      )}
       {refusal && (
         <p role="alert" className="tw:m-0 tw:mt-2 tw:text-danger">
           {refusal}
@@ -759,15 +970,24 @@ function GiftCard({
 
       {/* Hidden rather than unmounted, so an open notes editor survives a fold. */}
       <div id={bodyId} hidden={!open}>
-        <GiftFields gift={shown} />
-        {draft && <HighPowerLine gift={gift} busy={busy} attempt={attempt} hooks={hooks} />}
+        <GiftFields gift={shown} withNote={!canSend} />
+        {/* The email itself, for a gift that can still be sent (plan 261024f § D2). */}
+        {canSend && <EmailPreview answer={preview} retry={() => setPreviewRefresh((n) => n + 1)} />}
 
         {editing && draft ? (
-          <DraftEditor gift={gift} patch={hooks.patch} done={() => setEditing(false)} />
+          <DraftEditor
+            gift={gift}
+            patch={hooks.patch}
+            noteToUse={noteToUse}
+            done={() => {
+              setEditing(false);
+              setNoteToUse(null);
+            }}
+          />
         ) : confirming && canSend && confirming.email !== null ? (
           <div className="tw:mt-2 tw:rounded-md tw:border tw:border-border tw:p-3">
             <p className="tw:m-0 tw:mb-2 tw:text-foreground">
-              Send the gift email to <strong>{confirming.email}</strong>? It gives {freeArticles(confirming.articles)}
+              Send the email above to <strong>{confirming.email}</strong>? It gives {freeArticles(confirming.articles)}
               {confirming.starter.title !== null ? <> and links “{confirming.starter.title}”</> : null}. This sends a
               real email and cannot be taken back.
             </p>
@@ -795,7 +1015,7 @@ function GiftCard({
                 variant="outline"
                 size="sm"
                 className="tone-positive"
-                disabled={busy || running || (needsRights && !rights)}
+                disabled={busy || running || !previewReady || (needsRights && !rights)}
                 onClick={() => void sendNow()}
               >
                 {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${confirming.email}`}
@@ -810,14 +1030,17 @@ function GiftCard({
             gift={gift}
             busy={busy}
             running={running}
+            preview={preview}
             onSend={() => {
               setRefusal(null);
               /* A fresh confirmation starts unticked: a tick belongs to the one it was given in. */
               setRights(false);
               setConfirming(gift);
+              setPreviewRefresh((n) => n + 1);
             }}
             onEdit={() => {
               setRefusal(null);
+              setNoteToUse(null);
               setEditing(true);
             }}
             onDiscard={() => {
@@ -829,6 +1052,19 @@ function GiftCard({
             hooks={hooks}
           />
         )}
+
+        {draft && !editing && (
+          <SuggestedMessage
+            gift={gift}
+            onUse={(text) => {
+              setRefusal(null);
+              setConfirming(null);
+              setNoteToUse(text);
+              setEditing(true);
+            }}
+          />
+        )}
+        {draft && <HighPowerLine gift={gift} busy={busy} attempt={attempt} hooks={hooks} />}
 
         <Notes gift={gift} patch={hooks.patch} lookupRunning={running} />
 
@@ -880,12 +1116,12 @@ export function AuthorGifts({
   active: boolean;
   onVoucherMade: () => void;
 }) {
-  const { gifts, error, loading, watching, reload, lookUpAgain, patch, send, switchOnHighPower } = list;
+  const { gifts, error, loading, watching, reload, lookUpAgain, patch, remove, send, switchOnHighPower } = list;
   /* Re-render each minute, so a lookup past the stale limit says it did not finish. */
   const now = useNow();
   const hooks = useMemo(
-    () => ({ patch, send, lookUpAgain, switchOnHighPower }),
-    [patch, send, lookUpAgain, switchOnHighPower],
+    () => ({ patch, send, lookUpAgain, switchOnHighPower, remove }),
+    [patch, send, lookUpAgain, switchOnHighPower, remove],
   );
   const ordered = useMemo(
     () => (gifts === null ? null : [...gifts.filter((g) => !finished(g)), ...gifts.filter(finished)]),
@@ -929,6 +1165,7 @@ export function AuthorGifts({
         under Given, with its article as the starter. Sent and discarded ones are folded to a line at the end.
         {watching && " A lookup is running, so this list is checked every few seconds."}
       </p>
+      <AuthorGiftGuidance />
       {notice && (
         <p role="status" className="tw:m-0 tw:mb-3 tw:text-sm tw:text-foreground">
           {notice}

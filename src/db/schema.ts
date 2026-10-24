@@ -7758,6 +7758,18 @@ export const authorLookups = spideryarn.table(
     /** The lookup's own collector: the key into `ai_calls`. Null until claimed. */
     runId: uuid("run_id"),
     model: text("model"),
+    /**
+     * **The model's suggested message**, kept on its own so the card can offer
+     * *Use as your message* (plan 261024f, R1). Never written into the draft by
+     * the lookup: it reaches the email only through Greg's own edit.
+     */
+    suggestedMessage: text("suggested_message"),
+    /**
+     * **Which guidance the lookup ran with** — the `author_gift_guidance` row
+     * in force when it was claimed; null for none (the built-in text) or before
+     * it was claimed (plan 261024f, R5).
+     */
+    guidanceId: uuid("guidance_id").references((): AnyPgColumn => authorGiftGuidance.id, { onDelete: "set null" }),
   },
   (t) => [
     check("author_lookups_outcome", sql`${t.outcome} is null or ${t.outcome} in ('address', 'author', 'nothing', 'failed')`),
@@ -7773,7 +7785,8 @@ export const authorLookups = spideryarn.table(
           and coalesce(char_length(${t.emailSourceUrl}), 0) <= 10000
           and coalesce(char_length(${t.suggestedEmail}), 0) <= 10000
           and coalesce(char_length(${t.contactUrl}), 0) <= 10000
-          and coalesce(char_length(${t.model}), 0) <= 10000`,
+          and coalesce(char_length(${t.model}), 0) <= 10000
+          and coalesce(char_length(${t.suggestedMessage}), 0) <= 10000`,
     ),
     /* The list's runs of one gift, newest first. */
     index("author_lookups_gift").on(t.authorGiftId, t.createdAt),
@@ -7782,6 +7795,41 @@ export const authorLookups = spideryarn.table(
     uniqueIndex("author_lookups_one_pending")
       .on(t.authorGiftId)
       .where(sql`${t.outcome} is null`),
+  ],
+);
+
+/**
+ * **Greg's guidance for the author lookup's suggested message**, edited on
+ * `/admin/vouchers` — Greg, 2026-10-23 (#688, spya-n8ruxv): *"have some kind
+ * of prompt or template that I can easily screw with, you know, in the web"*.
+ * Plan docs/plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md § D4 and R5; src/store/pg-author-gifts.ts is
+ * the only writer.
+ *
+ * **Insert-only: the newest row is in force**, so every earlier version is
+ * kept with who wrote it and when. `guidance` null means *use the built-in
+ * text* (src/author-lookup.ts), so a change to the built-in text is not
+ * shadowed by a stored copy of it. No row at all means the same.
+ *
+ * Only the voice of the message: the fixed rules around it — what to find,
+ * the address and URL rules, the untrusted-text fence, the truthfulness and
+ * length rules — stay in code.
+ */
+export const authorGiftGuidance = spideryarn.table(
+  "author_gift_guidance",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    guidance: text("guidance"),
+    createdAt: createdAt(),
+    /** The administrator who saved it. */
+    createdBy: uuid("created_by").notNull(),
+  },
+  (t) => [
+    /* The app's limit is 4,000 (AUTHOR_GIFT_GUIDANCE_MAX); this catches a runaway. */
+    check(
+      "author_gift_guidance_length",
+      sql`${t.guidance} is null or char_length(${t.guidance}) between 1 and 100000`,
+    ),
+    index("author_gift_guidance_newest").on(t.createdAt),
   ],
 );
 

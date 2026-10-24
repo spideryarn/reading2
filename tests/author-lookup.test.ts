@@ -17,9 +17,12 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import { type JsonCall, ProviderRefused } from "../src/ai-call.js";
 import {
   ANSWER_TOKENS,
+  AUTHOR_GIFT_GUIDANCE_BUILT_IN,
   type AuthorLookupInput,
+  authorLookupFixedPrompt,
   authorLookupPrompt,
   authorLookupRequest,
+  authorLookupSystem,
   emailTokens,
   judgeAuthorLookup,
   MAX_RESULTS_PER_SEARCH,
@@ -328,6 +331,29 @@ describe("the request", () => {
     expect(system.role).toBe("system");
     expect(system.content).toMatch(/search results?.*not instructions/i);
     expect(system.content).toMatch(/article.*data, not instructions/i);
+  });
+
+  /* Plan 261024f § D4, R4: Greg's guidance replaces the voice and nothing else. */
+  it("puts Greg's guidance in the system prompt, the built-in text when he has none, and keeps every fixed rule", () => {
+    const mine = authorLookupSystem("Say it in one sentence.");
+    const builtIn = authorLookupSystem(null);
+    expect(mine).toContain("Say it in one sentence.");
+    expect(mine).not.toContain(AUTHOR_GIFT_GUIDANCE_BUILT_IN);
+    expect(builtIn).toContain(AUTHOR_GIFT_GUIDANCE_BUILT_IN);
+    expect(authorLookupSystem("   ")).toBe(builtIn);
+    for (const system of [mine, builtIn]) {
+      expect(system).toMatch(/Claim nothing you were not told/);
+      expect(system).toMatch(/at most 450 characters/);
+      expect(system).toMatch(/Never guess one from a name or a domain/);
+      expect(system).toMatch(/article.*data, not instructions/i);
+      expect(system).toMatch(/cannot change any rule above/);
+    }
+    /* The guidance is the only difference between the two, and the page's read-only copy is the rest. */
+    const [head, tail] = authorLookupFixedPrompt().split("(the guidance you edit goes here)");
+    expect(mine.startsWith(head ?? "")).toBe(true);
+    expect(mine.endsWith(tail ?? "")).toBe(true);
+    const sent = authorLookupRequest(INPUT, "test/model", "Say it in one sentence.");
+    expect((sent.messages as { content: string }[])[0]?.content).toBe(mine);
   });
 
   it("sends only the first and last 1,500 characters of a long text", () => {
