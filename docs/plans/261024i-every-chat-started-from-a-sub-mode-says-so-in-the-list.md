@@ -309,5 +309,13 @@ and a null CHECK passes. The test went red on it; the second migration
       seeder restores quiz attempts before threads, and the export test now re-seeds from empty;
       stale comments. Its bridge broke *forgets a refused handoff* for Glossary, Bibliography and
       Ideas (the refused draft was reopened); fixed with `refusedHandoffs`
+- [x] Stage 2 browser pass on the box (Sonnet, Playwright), on question 2 of 3 so a landing on
+      question 1 could not pass by accident: Discuss seeds the composer; the list row reads
+      *Quiz: …* / *Quiz · 1 turn · …* and opens in Chat; *Back to “…” in Quiz* lands on question 2;
+      the step shows the mark in Discuss's place and it opens the same chat, visibly; one Quiz row
+      per mark; answering again brings Discuss back with no mark. No overflow at 1440 or 390, no
+      console errors. Shots: `261024i-shot-3-quiz-mark-wide.png`, `261024i-shot-4-quiz-mark-narrow.png`,
+      `261024i-shot-5-chat-list-quiz.png`. Seen and left alone: a list left on the *Chats* filter
+      hides a Quiz row, as it hides every row from a mode
 - [ ] Docs (chat-from-a-mode.md table, quiz.md, chat-tools.md list section, url-state if needed,
       help page), note in docs/user-feedback/, queue item done, pushed to dev
