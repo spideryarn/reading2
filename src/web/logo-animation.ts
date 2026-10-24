@@ -178,7 +178,7 @@ export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
     id: "spya-asterisk",
     reach: "mark",
     name: "Asterisk",
-    blurb: "The spider shrinks and rises into a superscript asterisk before the word, a footnote mark, then unfurls.",
+    blurb: "The reader shrinks and rises into a superscript before the word, a footnote mark, then unfurls.",
   },
   {
     id: "spya-magnifier",
@@ -208,7 +208,7 @@ export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
     id: "spya-semaphore",
     reach: "mark",
     name: "Semaphore",
-    blurb: "One foreleg waves twice like a peacock spider flagging, and the other answers. The mark grows a limb.",
+    blurb: "One upper free limb waves twice like a peacock spider flagging, and the other answers. The reader keeps its book still.",
   },
   {
     id: "spya-quotes",

@@ -1332,7 +1332,7 @@ function runSelfTest(): void {
   const pageAllows = ["/", "/features", "/features/public-readable-sharing", "/pricing", "/changelog", "/help", "/privacy", "/contact", "/opensource"]
     .map((p) => `Allow: ${p}$\nAllow: ${p}?\n`)
     .join("");
-  const brandAllows = "Allow: /favicon.ico\nAllow: /favicon-32x32.png\nAllow: /favicon-16x16.png\nAllow: /apple-touch-icon.png\nAllow: /og-card.png\n";
+  const brandAllows = "Allow: /favicon.ico\nAllow: /favicon-32x32.png\nAllow: /favicon-16x16.png\nAllow: /favicon-48x48.png\nAllow: /apple-touch-icon.png\nAllow: /og-card.png\n";
   const anonymousGroup = `User-agent: *\n${pageAllows}Allow: /assets/\n${brandAllows}Allow: /sitemap.xml\nAllow: /read/\nAllow: /login$\nAllow: /login?\nAllow: /help/\nDisallow: /\n\n`;
   const previewGroup =
     "User-agent: facebookexternalhit\nUser-agent: Twitterbot\nUser-agent: LinkedInBot\nUser-agent: WhatsApp\n" +

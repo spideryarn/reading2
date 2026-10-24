@@ -1,0 +1,7 @@
+{
+  "tool": "Built-in image_gen",
+  "date": "2026-10-24",
+  "selected": "../explorations/03-eight-limbs-compact.png",
+  "prompt": "Use case: background-extraction. Image 1 is the selected final Spideryarn character and the edit target. Remove ONLY the ivory studio background and the cast ground shadow. Preserve the exact original character pixels, eight-limb anatomy, compact proportions, orange wool texture, dark open book and ivory page highlights. Produce a clean isolated character on genuine fully transparent RGBA background, including transparency through the central oval and gaps between limbs. Keep all ivory book pages opaque. Preserve soft wool fibers at the edge without a cream halo, no extra fringes or debris. Do not redraw, restyle, change the pose or add facial features. Keep the whole existing character and its placement; retain a square canvas.",
+  "note": "Generative cutout is a new final rendering of the selected compact identity; the original opaque candidate is retained for comparison. Inspect alpha on light and dark surfaces, including internal gaps."
+}

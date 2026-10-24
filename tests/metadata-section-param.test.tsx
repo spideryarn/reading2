@@ -21,6 +21,7 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { METADATA_RERUN_STEPS } from "../src/rerun-steps.js";
 import { STEP_ORDER } from "../src/step-order.js";
 import type { Article, Job, StageState, StepName } from "../src/types.js";
@@ -34,6 +35,12 @@ vi.mock("../src/web/lib/supabase.js", () => ({
     },
   },
   googleSignInAvailable: false,
+}));
+
+/** Who `useSession` says is here: nobody in particular, or the administrator (plan 261024n). */
+const session: { user: { id: string } | null } = { user: null };
+vi.mock("../src/web/useSession.js", () => ({
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 vi.mock("../src/web/useExperimental.js", () => ({
@@ -153,6 +160,7 @@ beforeEach(() => {
       this.dispatchEvent(new Event("close"));
     };
   }
+  session.user = null;
   posts = [];
   patches = [];
   tagPatches = [];
@@ -191,6 +199,9 @@ beforeEach(() => {
       return Promise.resolve(json(job));
     }
     if (url === "/api/jobs") return Promise.resolve(json({ jobs: [] }));
+    if (url === `/api/admin/articles/${SLUG}/cost`) {
+      return Promise.resolve(json({ slug: SLUG, lines: [], silentLiveSessions: 0 }));
+    }
     if (url === `/api/library/${SLUG}` && method === "PATCH") {
       patches.push(JSON.parse(String(init?.body ?? "{}")));
       return Promise.resolve(patchAnswer());
@@ -261,6 +272,8 @@ describe("arriving with ?section=", () => {
   });
 
   it("names, in every value it accepts, a section this page really has", async () => {
+    /* As the administrator, because *What it cost* is drawn only for them. */
+    session.user = { id: ADMIN_USER_ID_LOCAL };
     await open("");
     for (const value of METADATA_SECTIONS) {
       expect(host.querySelector(`main #sec-${value}[data-section]`), value).not.toBeNull();
@@ -268,9 +281,35 @@ describe("arriving with ?section=", () => {
   });
 
   it("does nothing with a value it does not know, and leaves it where it is", async () => {
-    await open("?section=what-it-cost");
+    await open("?section=nonsense");
     expect(expanded("AI processing")).toBe("false");
+    expect(location.search).toBe("?section=nonsense");
+  });
+
+  it("finds no What it cost for anybody but the administrator, and leaves the value where it is", async () => {
+    await open("?section=what-it-cost");
+    expect(section("What it cost")).toBeNull();
     expect(location.search).toBe("?section=what-it-cost");
+  });
+
+  it("opens What it cost for the administrator, from the command bar, in place", async () => {
+    session.user = { id: ADMIN_USER_ID_LOCAL };
+    await open("?at=spya-aaaaaa");
+    expect(expanded("What it cost")).toBe("false");
+    act(() => host.querySelector<HTMLButtonElement>(".dock-commands")?.click());
+    const input = host.querySelector<HTMLInputElement>("dialog.cmdbar input.cmdbar-input");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(input, "what it cost");
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+    expect(expanded("What it cost")).toBe("true");
+    expect(location.search).toBe("?at=spya-aaaaaa");
+    expect(posts).toEqual([]);
   });
 
   it("is where the command bar's Run again lands on this page: one run, the section opened, the address clean", async () => {

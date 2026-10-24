@@ -1129,7 +1129,7 @@ describe("Author gifts", () => {
       expect([...picker().options].map((o) => o.value)).toEqual(["", "some-paper", "the-bitter-lesson"]);
       expect(picker().options[0]?.textContent).toBe("Choose one…");
       expect(visibleText(form())).toContain(SHARING_RIGHTS_CONFIRM);
-      expect(visibleText(form())).toContain("up to three searches");
+      expect(visibleText(form())).toContain("up to 5 searches");
       expect(visibleText(form())).toContain("Nothing is emailed");
       expect(visibleText(form())).toContain("Drafts");
       expect(submit().textContent).toBe("Draft a gift");

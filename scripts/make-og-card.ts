@@ -3,7 +3,9 @@
  *
  *   npx tsx scripts/make-og-card.ts
  *
- * Run by hand when the logo, the name or the strapline changes, and the PNG is
+ * Included in `npm run brand:update`; `npm run brand:og` runs just this step.
+ * See docs/project/main-icon.md for the complete artwork-update process.
+ * Run when the logo, the name or the strapline changes, and the PNG is
  * committed: nothing draws it at build time, so a deploy cannot fail on a
  * browser. It is one static image for the whole site — the choice, and the
  * per-article image it passed over, are in
@@ -25,7 +27,8 @@ const root = process.cwd();
 const dataUri = (file: string, type: string): string =>
   `data:${type};base64,${readFileSync(path.join(root, file)).toString("base64")}`;
 
-const logo = dataUri("public/spideryarn-logo.png", "image/png");
+// Large previews use the wool reader; the optical mark is for tiny wordmarks.
+const logo = dataUri("public/spideryarn-reader.png", "image/png");
 const font = dataUri(
   "node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2",
   "font/woff2",

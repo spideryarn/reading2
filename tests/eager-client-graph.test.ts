@@ -346,8 +346,8 @@ if (graphOut) {
 }
 
 /**
- * **Every lazy chunk the reader's graph can open that is *not* an admin or
- * `/design` route, and why.** The far side of the boundary is derived from
+ * **Every lazy chunk the reader's graph can open that is *not* an
+ * administrator-only surface or `/design`, and why.** The far side of the boundary is derived from
  * this, not listed — see `ROUTE_ROOTS` below.
  *
  * Keys are repo-relative for a local file and the bare specifier for a
@@ -371,8 +371,9 @@ const NOT_ROUTE_ROOTS = new Map<string, string>([
 const lazyKey = (d: string) => (path.isAbsolute(d) ? path.relative(ROOT, d) : d);
 
 /**
- * The far side of the boundary: every page the reader's graph `import()`s that
- * `NOT_ROUTE_ROOTS` does not claim — `/admin`'s pages and `/design`.
+ * The far side of the boundary: every local module the reader's graph
+ * `import()`s that `NOT_ROUTE_ROOTS` does not claim — `/admin`'s pages, the
+ * author-gift dialog and `/design`.
  *
  * **Derived, and it used to be two names.** `AdminPage.tsx` and `DesignPage.tsx`
  * were listed by hand, and when `/admin/costs`, `/admin/vouchers` and
@@ -380,7 +381,7 @@ const lazyKey = (d: string) => (path.isAbsolute(d) ? path.relative(ROOT, d) : d)
  * private to one of them could join the reader's startup with every assertion
  * here green — reproduced 2026-10-22 by importing `useAdminCosts.ts` from
  * `App.tsx` (GPT Sol, 261021i stage 1 review, C4). Reading the `import()` edges
- * the walk already records means a new lazy page is on this side the day its
+ * the walk already records means a new lazy private surface is on this side the day its
  * loader is written, and the default is the safe one: an unclassified chunk is
  * treated as admin-only, so the seam test below asks about it.
  *
@@ -393,15 +394,16 @@ const ROUTE_ROOTS = [...closure.dynamic]
   .sort();
 
 /**
- * The seam: everything the lazy routes reach that the reader reaches too.
+ * The seam: everything the lazy administrator-only surfaces reach that the
+ * reader reaches too.
  *
- * Walked a second time from the route roots, and intersected. `ROUTE_PRIVATE`
+ * Walked a second time from the lazy roots, and intersected. `ROUTE_PRIVATE`
  * below names the roots and a representative set outside that intersection.
  *
  * `parseFailures` is appended to by both walks, so a file in the overlap that
  * failed to parse is reported twice. That is untidy and harmless; the assertion
  * on it is `toEqual([])`. The walk does widen that assertion's reach, though —
- * the route-private modules are now parsed and checked as well.
+ * the lazy-private modules are now parsed and checked as well.
  */
 const routeClosure = eagerClosure(ROUTE_ROOTS);
 const routeShared = [...routeClosure.files].filter((f) => closure.files.has(f)).map(rel).sort();
@@ -444,7 +446,8 @@ function why(p: string): string {
 }
 
 /**
- * Every module the lazy routes and the reader **both** reach.
+ * Every module the lazy administrator-only surfaces and the reader **both**
+ * reach.
  *
  * `ROUTE_PRIVATE` below is readable calibration, and a hand-written list was
  * all this file used to have. GPT Sol showed that it is weaker than the claim
@@ -455,13 +458,13 @@ function why(p: string): string {
  * only way to know a guard was ever red.
  *
  * So the boundary is asserted as a **seam** instead: intersect the eager
- * closure with the route closure, and require the result to be this list,
+ * closure with the lazy-private closure, and require the result to be this list,
  * exactly, in both directions.
  *
  * **A line added here is a decision that every reader downloads that module
  * before they have asked for anything.** It is not a formality — the whole
  * 1.35 per cent this plan bought was 39 kB of exactly this kind of module.
- * Make the decision, or move the code so the route owns it.
+ * Make the decision, or move the code so the lazy surface owns it.
  *
  * **A line removed is the other half**, and it is the half a one-directional
  * check would miss: an entry that no longer applies is a claim about the graph
@@ -770,10 +773,17 @@ const SHARED_WITH_READER = [
   "src/web/uploadEngine.ts",
   "src/web/useJobs.ts",
   "src/web/useShelf.ts",
+  /* Arrived 2026-10-24 (plan 261024n, spya-v88mga) by the first predicted
+     path: the command bar's author-gift dialog is a lazy chunk of its own,
+     loaded on the administrator's first press, and like every other dialog it
+     keeps itself inside the visible viewport through this hook. The reader
+     already has it — twelve eager dialogs and panels import it — so the new
+     edge costs nothing. */
+  "src/web/useVisualViewport.ts",
 ];
 
 /**
- * Packages or local assets imported by both an actually route-private local
+ * Packages or local assets imported by both an actually lazy-private local
  * module and the reader's eager closure. Package specifiers stay exact because
  * subpaths can be different modules; local assets use repo-relative paths.
  * Like `SHARED_WITH_READER`, asserted in both directions.
@@ -788,8 +798,8 @@ const SHARED_EXTERNALS_WITH_READER = [
 ];
 
 /**
- * Every lazy route root, plus representative modules the routes own and
- * nothing of the reader's uses — readable calibration beside the seam above,
+ * Every administrator-only lazy root, plus representative modules those
+ * surfaces own and nothing of the reader's uses — readable calibration beside the seam above,
  * which can see a module nobody thought to name.
  *
  * Named individually rather than by directory because there is no directory —
@@ -803,6 +813,7 @@ const SHARED_EXTERNALS_WITH_READER = [
  * admin pages with chunks of their own were added then.
  */
 const ROUTE_PRIVATE = [
+  "src/web/AuthorGiftDialog.tsx",
   "src/web/AdminPage.tsx",
   "src/web/AdminArticlesPage.tsx",
   "src/web/AdminCostsPage.tsx",
@@ -947,6 +958,14 @@ describe("the eager client graph", () => {
     expect(stale, "NOT_ROUTE_ROOTS names an import() the reader's graph no longer makes").toEqual(
       [],
     );
+  });
+
+  it("names every administrator-only lazy root in the route-private calibration", () => {
+    const unnamed = ROUTE_ROOTS.map(rel).filter((root) => !ROUTE_PRIVATE.includes(root));
+    expect(
+      unnamed,
+      "a derived administrator-only lazy root is absent from ROUTE_PRIVATE, so making it eager could remove it from ROUTE_ROOTS and leave the guard green",
+    ).toEqual([]);
   });
 
   it("derived a route closure that reaches every named calibration module", () => {
