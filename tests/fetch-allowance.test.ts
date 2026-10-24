@@ -100,13 +100,13 @@ describe("the fetch allowance", () => {
   it("refuses the fill after the cap", async () => {
     await fill(ALICE, TIGHT);
     await fill(ALICE, TIGHT);
-    expect(await take(ALICE, TIGHT)).toEqual({ kind: "rate" });
+    expect(await take(ALICE, TIGHT)).toEqual({ kind: "rate", reason: "hour" });
   });
 
   it("counts one reader's fills against nobody else", async () => {
     await fill(ALICE, TIGHT);
     await fill(ALICE, TIGHT);
-    expect(await take(ALICE, TIGHT)).toEqual({ kind: "rate" });
+    expect(await take(ALICE, TIGHT)).toEqual({ kind: "rate", reason: "hour" });
     /* Bob has spent nothing. The key is the authenticated owner and nothing
        else — never the article or the URL, which vary freely. P1-5. */
     const bob = await take(BOB, TIGHT);
@@ -136,7 +136,30 @@ describe("the fetch allowance", () => {
       .where(eq(rateLimitEvents.ownerId, ALICE));
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.leaseUntil === null)).toBe(true);
-    expect(await take(ALICE, TIGHT)).toEqual({ kind: "rate" });
+    expect(await take(ALICE, TIGHT)).toEqual({ kind: "rate", reason: "hour" });
+  });
+
+  it("refunds a cancelled fill: the slot is freed and the fill stops counting", async () => {
+    /* Plan 261024m, GPT Sol's C1: a caller refused after taking a fill and
+       before spending anything gives it back, so a lost race costs nothing. */
+    await fill(ALICE, TIGHT);
+    const second = await take(ALICE, TIGHT);
+    if (second.kind !== "allowed") throw new Error(`expected allowance, got ${second.kind}`);
+    await runAsOwner(ALICE, () => pgFetchAllowanceStore.cancel(second.id));
+    const rows = await getDb()
+      .select({ id: rateLimitEvents.id })
+      .from(rateLimitEvents)
+      .where(eq(rateLimitEvents.ownerId, ALICE));
+    expect(rows).toHaveLength(1);
+    expect((await take(ALICE, TIGHT)).kind).toBe("allowed");
+  });
+
+  it("refunds only the owner's own fill", async () => {
+    const taken = await take(ALICE, TIGHT);
+    if (taken.kind !== "allowed") throw new Error(`expected allowance, got ${taken.kind}`);
+    await runAsOwner(BOB, () => pgFetchAllowanceStore.cancel(taken.id));
+    const rows = await getDb().select({ id: rateLimitEvents.id }).from(rateLimitEvents);
+    expect(rows).toHaveLength(1);
   });
 
   it("frees an abandoned slot when its lease runs out", async () => {
@@ -213,7 +236,7 @@ describe("a bucket with a day and a fuse", () => {
   it("counts the day as well as the hour", async () => {
     await spend(ALICE);
     await spend(ALICE);
-    expect((await ask(ALICE)).kind).toBe("rate");
+    expect(await ask(ALICE)).toEqual({ kind: "rate", reason: "hour" });
     /* The hour rolls over and the day does not — so the third fill is allowed
        and the fourth is not, on a daily cap of three. **This is the case that
        would pass with a sweep that kept only the shorter window**, because the
@@ -221,7 +244,8 @@ describe("a bucket with a day and a fuse", () => {
     await anHourAgo(ALICE);
     await spend(ALICE);
     await anHourAgo(ALICE);
-    expect((await ask(ALICE)).kind).toBe("rate");
+    /* The day, said as the day: the reader's sentence differs (plan 261024m, C10). */
+    expect(await ask(ALICE)).toEqual({ kind: "rate", reason: "day" });
   });
 
   it("blows the fuse for everybody, and says which limit it was", async () => {

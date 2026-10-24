@@ -25,7 +25,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import { environmentOwnerId, runAsOwner } from "../src/owner.js";
 import type { BibliographyFound, CitedWork } from "../src/types.js";
-import { askAboutBlock, askDoesItSayThat } from "../src/web/chat-handoff.js";
+import { askAboutBlock, askDoesItSayThat } from "../src/chat-question.js";
 
 interface Candidate {
   slug: string;

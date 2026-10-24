@@ -212,7 +212,7 @@ describe("noticeFeedback", () => {
 
   it("sends nothing once the allowance is spent, and says which", async () => {
     for (const why of ["rate", "concurrency", "global"] as const) {
-      const h = harness({ kind: why });
+      const h = harness(why === "rate" ? { kind: why, reason: "hour" } : { kind: why });
       expect(await noticeFeedback(report(), READER, h.deps)).toEqual({ kind: "capped", why });
       expect(h.sent).toEqual([]);
     }

@@ -318,7 +318,7 @@ describe("the check's own allowance (GPT Sol's E1)", () => {
       const refused = await admitSourcesClaimCheck({
         async take(bucket) {
           taken.push(bucket);
-          return { kind };
+          return kind === "rate" ? { kind, reason: "hour" } : { kind };
         },
         async finish() {},
       }).catch((err: unknown) => err as { status: number; message: string });

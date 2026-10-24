@@ -1,10 +1,11 @@
 ---
 id: q-hc4y2j
 report: spya-mxk20e
-status: open
+status: answered
 asked: 2026-10-24
 title: Resting on a source: a quick note, or start a real chat in the card?
-refs: SPIDERYARN-READING2-NA · docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md · docs/plans/261024m-plan-review-sol.md · docs/user-feedback/261023_2215-hover-a-source-starts-a-deeper-dive.md
+refs: SPIDERYARN-READING2-NA · docs/investigations/261024d-does-it-say-that-cost-and-latency.md · docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md · docs/plans/261024m-plan-review-sol.md · docs/user-feedback/261023_2215-hover-a-source-starts-a-deeper-dive.md
+acted: spya-r5hb87
 ---
 When you rest the pointer on a citation in the prose, what should start by itself? Nothing is built yet, because most cited works have nothing we could ground a cheap note in. So the only versions that would reach your article spend money on a hover.
 
@@ -35,3 +36,24 @@ Cost controls that would apply to any of them: it fires only when the card shows
 What would decide it: whether you want depth on every hover (C), whether the 0.8p search is enough (B), or whether you would rather keep choosing when to spend and only stop being taken to Chat (D). A is cheap but would rarely show, which is why it is not the recommendation on its own.
 
 The plan, with GPT Sol's review and the cost controls already designed, is ready for whichever you pick.
+
+## Greg's answer, 2026-10-24 (in the Feedback dialog, reply `spya-r5hb87`)
+
+> C. Make it a main rather than experimental feature
+
+Built, for every reader, on dev. Rest on a citation naming one work, in a paragraph that cites it,
+and after about 2 seconds the card starts *Does it say that?* and shows the answer, with *Continue
+in Chat*. One chat per work and paragraph, in Chat's list; a second rest or the button reuses it.
+Keyboard focus counts as a rest. **A tap on a phone does not start one** (a tap asks to see the
+card, not to spend); the button is there, and starting on a tap is a one-line change.
+
+Measured on nine real turns: **17p median (7p to 43p)**, about 30p the first time on an article and
+8p after, **about 20 seconds** to an answer. Automatic starts are capped at 8 an hour and 20 a day
+per reader, 100 a day overall (worst about $43 a day); at a cap the card says so in one line and the
+button still works.
+
+The answer arrives whole after the wait, not word by word, with a line saying what the chat is doing
+meanwhile. That is upstream: the provider holds back text written after a tool call, and this chat
+nearly always reads the paper first (Chat is the same today). Reading the paper on our side first
+would let it stream; not built, the first follow-up if the wait feels wrong. Plan:
+[261024m](../../plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md).

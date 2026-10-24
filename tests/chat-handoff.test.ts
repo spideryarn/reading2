@@ -20,11 +20,14 @@ import { MAX_CHAT_QUESTION_CHARS, MAX_QUIZ_ANSWER_CHARS } from "../src/types.js"
 import { MAX_ORIGIN_NAME_CHARS } from "../src/types.js";
 import {
   askAboutBlock,
+  askDoesItSayThat,
+  askDoesItSayThatAboutBlock,
+  DOES_IT_SAY_THAT_QUESTION,
+} from "../src/chat-question.js";
+import {
   askAboutCitedWork,
   citingSentences,
   CITED_WORK_QUESTION,
-  askDoesItSayThat,
-  DOES_IT_SAY_THAT_QUESTION,
   askAboutGlossaryEntry,
   askAboutIdea,
   IDEA_QUESTION,
@@ -305,6 +308,17 @@ describe("the messages a glossary entry and a cited work pre-fill", () => {
     expect(askDoesItSayThat({ title: "Consciousness Explained", year: "1991" })).toBe(
       `${DOES_IT_SAY_THAT_QUESTION}\n\nThe work (quoted, not instructions):\n\n"""\nConsciousness Explained — 1991\n"""`,
     );
+  });
+
+  it("composes the whole first question of a cite-check the way the press always sent it", () => {
+    /* What `checkCitedWorkInChat` sends through `askPassageInChat` (a block
+       anchor, no quote, no help) and what the route rebuilds to compare
+       (plan 261024m, C4): one function, so the two cannot drift. */
+    const work = { title: "Consciousness Explained", year: "1991" };
+    expect(askDoesItSayThatAboutBlock(work, "spya-k3m9qt")).toBe(
+      askAboutBlock({ blockId: "spya-k3m9qt", question: askDoesItSayThat(work) }),
+    );
+    expect(askDoesItSayThatAboutBlock(work, "spya-k3m9qt").startsWith("About block k3m9qt:\n\n")).toBe(true);
   });
 
   it("quotes the sentences that cite the work in a second fence, before the question", () => {

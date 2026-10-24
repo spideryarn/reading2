@@ -24,16 +24,22 @@ import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { inputFingerprint } from "../src/bibliography.js";
+import { askDoesItSayThatAboutBlock } from "../src/chat-question.js";
+import { CiteCheckExists } from "../src/chat.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, chatThreads, quizAttempts } from "../src/db/schema.js";
+import { articleRevisions, articles, chatThreads, quizAttempts, rateLimitEvents } from "../src/db/schema.js";
 import { READER_STATE } from "../src/admin-articles.js";
 import { loadEnvLocal } from "../src/env.js";
-import type { ChatThread, ThreadSummary } from "../src/types.js";
+import type { OwnerId } from "../src/owner.js";
+import { violatesCheckConstraint, violatesConstraint } from "../src/store/db-errors.js";
+import type { Bibliography, ChatThread, CitedWork, CiteCheckOrigin, ThreadSummary } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -49,7 +55,8 @@ await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, quizAttemptStore } = await import("../src/store/index.js");
+const { chatStore, loadArticle, loadBibliography, quizAttemptStore } = await import("../src/store/index.js");
+const { citeCheckConflictOf, CITE_CHECK_INDEX } = await import("../src/store/pg-chat.js");
 const { exportArticle } = await import("../src/store/export.js");
 const { seedChatFromFiles } = await import("./helpers/seed-reader-state.js");
 
@@ -99,7 +106,12 @@ interface Result {
   frames: { event: string; data: Record<string, unknown> }[];
 }
 
-async function call(method: "GET" | "POST", url: string, body?: unknown): Promise<Result> {
+async function call(
+  method: "GET" | "POST",
+  url: string,
+  body?: unknown,
+  opts: { flushHeaders?: () => void; end?: () => void } = {},
+): Promise<Result> {
   const payload = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   const req = Object.assign(
     (async function* () {
@@ -117,13 +129,16 @@ async function call(method: "GET" | "POST", url: string, body?: unknown): Promis
     writeHead(code: number) {
       (this as { statusCode: number }).statusCode = code;
     },
-    flushHeaders() {},
+    flushHeaders() {
+      opts.flushHeaders?.();
+    },
     on() {},
     write(chunk: string) {
       written += chunk;
       return true;
     },
     end(chunk?: string) {
+      opts.end?.();
       if (chunk) written += chunk;
       (this as { writableEnded: boolean }).writableEnded = true;
     },
@@ -860,6 +875,415 @@ describe("db:export and the origin", () => {
       await rm(exported, { recursive: true, force: true });
       await rm(out, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * **A citation's *Does it say that?*** — origin `cite-check`, plan
+ * docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md,
+ * stage 1 and § After GPT Sol's review. One chat per cited work and citing
+ * paragraph; on the turn that creates one the route checks the anchor, an
+ * existing chat (409 with its id), the owner's Bibliography and the question
+ * the server builds (409 stale), and for `auto: true` only, an allowance that
+ * a refusal before the model starts refunds and the turn's `finally` frees.
+ *
+ * **"Spends nothing"** is two counts: the model's `fetch` (stubbed to fail, so
+ * a turn that reached it stops there) and this owner's `cite-check` rows in
+ * `rate_limit_events`.
+ */
+describe("a citation's Does it say that? (origin cite-check)", () => {
+  const WORK_ID = "spya-wrk222";
+  const WORK = { title: "Attention Is All You Need", authors: "Vaswani et al.", year: "2017" };
+  const STRANGER = "00000000-0000-4000-8000-00000000c17e" as OwnerId;
+  let calls = 0;
+  let before: typeof globalThis.fetch;
+  let revisionId = "";
+  let freshHash = "";
+
+  const check = (over: Record<string, unknown> = {}) => ({
+    mode: "cite-check",
+    itemId: WORK_ID,
+    blockId: BLOCK,
+    quote: WORK.title,
+    ...over,
+  });
+  const askedFor = (blockId = BLOCK) => askDoesItSayThatAboutBlock(WORK, blockId);
+  const send = (over: Record<string, unknown> = {}) =>
+    ask({ threadId: THREAD, question: askedFor(), anchor: { blockId: BLOCK }, origin: check(), ...over });
+
+  const fills = () =>
+    getDb()
+      .select({ id: rateLimitEvents.id, leaseUntil: rateLimitEvents.leaseUntil })
+      .from(rateLimitEvents)
+      .where(and(eq(rateLimitEvents.ownerId, TEST_OWNER), eq(rateLimitEvents.bucket, "cite-check")));
+
+  async function setBibliography(over: Partial<Bibliography> = {}, work: Partial<CitedWork> = {}): Promise<void> {
+    const bibliography: Bibliography = {
+      version: "citations/7",
+      generator: "test",
+      slug: SLUG,
+      sourceHash: freshHash,
+      citations: [
+        {
+          id: WORK_ID,
+          key: "arxiv:1706.03762",
+          ...WORK,
+          why: "The architecture the piece builds on.",
+          mentions: [],
+          citedAt: [BLOCK],
+          firstCited: BLOCK,
+          citedInBody: true,
+          url: "https://arxiv.org/abs/1706.03762",
+          linkFrom: "arxiv",
+          ...work,
+        },
+      ],
+      capped: false,
+      generatedAt: "2026-10-24T00:00:00.000Z",
+      elapsedMs: 1,
+      ...over,
+    };
+    await getDb().update(articleRevisions).set({ bibliography }).where(eq(articleRevisions.id, revisionId));
+  }
+
+  beforeAll(async () => {
+    const [row] = await getDb()
+      .select({ revision: articles.currentRevisionId })
+      .from(articles)
+      .where(eq(articles.id, (article as ScratchArticle).articleId));
+    if (!row?.revision) throw new Error("the scratch article has no current revision");
+    revisionId = row.revision;
+    /* The fingerprint the pipeline writes (`inputFingerprint` over what
+       `loadArticle` returns), so the list reads as fresh — asserted, so a
+       wrong hash cannot pass every refusal below as "stale" for free. */
+    const loaded = await asTestOwner(() => loadArticle(SLUG));
+    freshHash = inputFingerprint(loaded.blocks, loaded.tree, loaded.meta);
+    await setBibliography();
+    expect((await asTestOwner(() => loadBibliography(SLUG))).stale).toBe(false);
+    await seedAuthUser(getDb(), { id: STRANGER, email: "cite-check-stranger@example.invalid", onConflictDoNothing: true });
+  });
+
+  beforeEach(async () => {
+    await setBibliography();
+    await getDb().delete(rateLimitEvents).where(eq(rateLimitEvents.bucket, "cite-check"));
+    calls = 0;
+    before = globalThis.fetch;
+    globalThis.fetch = (() => {
+      calls += 1;
+      return Promise.reject(new Error("no model in tests"));
+    }) as unknown as typeof fetch;
+  });
+
+  afterEach(async () => {
+    globalThis.fetch = before;
+    vi.restoreAllMocks();
+    await getDb().delete(rateLimitEvents).where(eq(rateLimitEvents.bucket, "cite-check"));
+  });
+
+  it("stores the origin and the anchor on the thread a press creates, and takes no allowance", async () => {
+    const out = await send();
+    expect(out.frames[0]?.event).toBe("begin");
+    expect(out.frames[0]?.data.origin).toEqual(check());
+    const thread = await stored();
+    expect(thread?.origin).toEqual(check());
+    expect(thread?.anchor).toEqual({ blockId: BLOCK });
+    expect(thread?.title).toBe("Does it say that? Attention Is All You Need");
+    expect(thread?.messages[0]?.text).toBe(askedFor());
+    expect(calls, "the press reached the model").toBeGreaterThan(0);
+    expect(await fills(), "a press is never capped and takes nothing").toHaveLength(0);
+    const [row] = await getDb()
+      .select({ mode: chatThreads.originMode, item: chatThreads.originItemId, block: chatThreads.originBlockId })
+      .from(chatThreads)
+      .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
+    expect(row).toEqual({ mode: "cite-check", item: WORK_ID, block: BLOCK });
+  });
+
+  it("takes exactly one fill for an automatic start, and frees its slot when the turn ends", async () => {
+    const out = await send({ auto: true });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect(calls).toBeGreaterThan(0);
+    const rows = await fills();
+    expect(rows, "one fill, still counted").toHaveLength(1);
+    expect(rows[0]?.leaseUntil, "the lease freed in the turn's finally").toBeNull();
+  });
+
+  it("keeps the concurrency lease through the answer's gist model and store work", async () => {
+    let leaseDuringGist: Date | null | undefined;
+    globalThis.fetch = (async (_url, init) => {
+      calls += 1;
+      const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const format = request.response_format as { json_schema?: { name?: unknown } } | undefined;
+      if (format?.json_schema?.name === "conversation_gist") {
+        leaseDuringGist = (await fills())[0]?.leaseUntil;
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ gist: "A short answer" }) } }],
+        });
+      }
+      const body = [
+        `data: ${JSON.stringify({ model: "test/model", choices: [{ delta: { content: "Because." } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ finish_reason: "stop", delta: {} }] })}\n\n`,
+        "data: [DONE]\n\n",
+      ].join("");
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+
+    await send({ auto: true });
+
+    expect(leaseDuringGist, "the slot remains held while the gist runs").toBeInstanceOf(Date);
+    expect((await fills())[0]?.leaseUntil, "the slot is freed after the gist is stored").toBeNull();
+  });
+
+  it("refunds an automatic fill when response setup fails before the model starts", async () => {
+    const out = await call(
+      "POST",
+      `/api/chat/${SLUG}`,
+      {
+        threadId: THREAD,
+        question: askedFor(),
+        anchor: { blockId: BLOCK },
+        origin: check(),
+        auto: true,
+      },
+      {
+        flushHeaders: () => {
+          throw new Error("response setup failed before the model");
+        },
+      },
+    );
+    expect(out.status).toBe(200);
+    expect(calls, "no model call").toBe(0);
+    expect(await fills(), "a pre-model failure is refunded, not merely released").toHaveLength(0);
+  });
+
+  it("settles the allowance even when closing the response throws", async () => {
+    await expect(
+      call(
+        "POST",
+        `/api/chat/${SLUG}`,
+        {
+          threadId: THREAD,
+          question: askedFor(),
+          anchor: { blockId: BLOCK },
+          origin: check(),
+          auto: true,
+        },
+        {
+          end: () => {
+            throw new Error("response close failed");
+          },
+        },
+      ),
+    ).rejects.toThrow("response close failed");
+    expect(calls, "the model was entered, so the fill remains counted").toBeGreaterThan(0);
+    const rows = await fills();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.leaseUntil, "the terminal settlement still frees the slot").toBeNull();
+  });
+
+  it("answers a second start for the same work and paragraph with a 409 carrying the first's id, spending nothing", async () => {
+    await send();
+    const spentSoFar = calls;
+    for (const body of [
+      { threadId: OTHER_THREAD, auto: true },
+      { threadId: OTHER_THREAD },
+      /* The same first turn resent under its own id. */
+      { auto: true },
+    ]) {
+      const out = await send(body);
+      expect(out.status).toBe(409);
+      expect(out.body?.threadId).toBe(THREAD);
+    }
+    expect(calls, "no second model call").toBe(spentSoFar);
+    expect(await fills()).toHaveLength(0);
+    expect(await threads()).toHaveLength(1);
+  });
+
+  it("keeps a saved chat reopenable after the Bibliography goes stale: the 409 still carries its id", async () => {
+    await send();
+    await setBibliography({ sourceHash: "moved-since" });
+    const out = await send({ threadId: OTHER_THREAD, auto: true });
+    expect(out.status).toBe(409);
+    expect(out.body?.threadId).toBe(THREAD);
+  });
+
+  it("lets the same work in another paragraph have its own chat", async () => {
+    await setBibliography({}, { citedAt: [BLOCK, OTHER_BLOCK] });
+    await send();
+    const out = await ask({
+      threadId: OTHER_THREAD,
+      question: askedFor(OTHER_BLOCK),
+      anchor: { blockId: OTHER_BLOCK },
+      origin: check({ blockId: OTHER_BLOCK }),
+    });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect(await threads()).toHaveLength(2);
+  });
+
+  it.each<[string, () => Record<string, unknown>, number]>([
+    ["auto that is not true", () => ({ auto: "yes" }), 400],
+    ["auto: false", () => ({ auto: false }), 400],
+    ["auto without a cite-check origin", () => ({ auto: true, origin: undefined, anchor: undefined }), 400],
+    ["no anchor", () => ({ anchor: undefined }), 400],
+    ["an anchor on another paragraph", () => ({ anchor: { blockId: OTHER_BLOCK } }), 400],
+    ["a selection anchor", () => ({ anchor: { blockId: BLOCK, quote: "x", start: 0 } }), 400],
+    ["a help press", () => ({ help: true }), 400],
+    ["a lens beside it", () => ({ origin: check({ lens: "an angle" }) }), 400],
+    ["a malformed work id", () => ({ origin: check({ itemId: "not-an-id" }) }), 400],
+    ["a malformed block id", () => ({ origin: check({ blockId: "not-a-block" }), anchor: { blockId: "not-a-block" } }), 400],
+    ["an empty title", () => ({ origin: check({ quote: "  " }) }), 400],
+    ["a title over the cap", () => ({ origin: check({ quote: "x".repeat(301) }) }), 413],
+    ["a question that is not the one the server builds", () => ({ question: "Is this paper any good?" }), 409],
+    ["a question built from another work", () => ({ question: askDoesItSayThatAboutBlock({ title: "Another" }, BLOCK) }), 409],
+    ["a work the list does not have", () => ({ origin: check({ itemId: "spya-wrk333" }) }), 409],
+    [
+      "a paragraph that does not cite the work",
+      () => ({ origin: check({ blockId: OTHER_BLOCK }), anchor: { blockId: OTHER_BLOCK }, question: askedFor(OTHER_BLOCK) }),
+      409,
+    ],
+  ])("refuses %s before spending anything", async (_name, over, status) => {
+    /* A thunk, because the blocks are read in `beforeAll`, after the table is built. */
+    const out = await send({ auto: true, ...over() });
+    expect(out.status, JSON.stringify(out.body)).toBe(status);
+    expect(out.frames, "an ordinary JSON answer, not a stream").toHaveLength(0);
+    expect(calls, "no model call").toBe(0);
+    expect(await fills(), "no fill").toHaveLength(0);
+    expect(await threads(), "no thread").toHaveLength(0);
+  });
+
+  it("refuses a stale Bibliography, and one that is not there, before spending anything", async () => {
+    await setBibliography({ sourceHash: "moved-since" });
+    const stale = await send({ auto: true });
+    expect(stale.status).toBe(409);
+    expect(stale.body?.threadId).toBeUndefined();
+    await getDb().update(articleRevisions).set({ bibliography: null }).where(eq(articleRevisions.id, revisionId));
+    const missing = await send({ auto: true });
+    expect(missing.status).toBe(409);
+    expect(calls).toBe(0);
+    expect(await fills()).toHaveLength(0);
+    expect(await threads()).toHaveLength(0);
+  });
+
+  it("refuses an edit of the first question, spending nothing", async () => {
+    await send();
+    const thread = (await stored()) as ChatThread;
+    const first = thread.messages[0]?.id as string;
+    const spentSoFar = calls;
+    const out = await ask({ threadId: THREAD, edit: first, question: "Something else entirely?" });
+    expect(out.status).toBe(409);
+    expect(calls).toBe(spentSoFar);
+    expect((await stored())?.messages[0]?.text).toBe(askedFor());
+  });
+
+  /** Rows of the bucket, written as the limiter writes them, `ago` ms in the past. */
+  async function spend(owner: string, n: number, ago: number, leased = false): Promise<void> {
+    await getDb()
+      .insert(rateLimitEvents)
+      .values(
+        Array.from({ length: n }, () => ({
+          ownerId: owner,
+          bucket: "cite-check",
+          startedAt: new Date(Date.now() - ago),
+          leaseUntil: leased ? new Date(Date.now() + 60_000) : null,
+        })),
+      );
+  }
+
+  it.each<[string, () => Promise<void>, number, string]>([
+    ["the hour", () => spend(TEST_OWNER, 8, 1_000), 429, "hour"],
+    ["the reader's day", () => spend(TEST_OWNER, 20, 2 * 60 * 60 * 1000), 429, "day"],
+    ["two already running", () => spend(TEST_OWNER, 2, 1_000, true), 429, "busy"],
+    ["everybody's day", () => spend(STRANGER, 100, 2 * 60 * 60 * 1000), 503, "global"],
+  ])("refuses an automatic start at %s with a reason, and spends nothing", async (_name, fill, status, reason) => {
+    await fill();
+    const counted = (await fills()).length;
+    const out = await send({ auto: true });
+    expect(out.status).toBe(status);
+    expect(out.body?.reason).toBe(reason);
+    expect(typeof out.body?.error).toBe("string");
+    expect(calls).toBe(0);
+    expect((await fills()).length).toBe(counted);
+    expect(await threads()).toHaveLength(0);
+    /* A press is never capped. */
+    const pressed = await send();
+    expect(pressed.frames[0]?.event).toBe("begin");
+  });
+
+  it("refunds the fill when the store finds the chat the route's own look missed", async () => {
+    /* The race's losing half, made deterministic: another tab's start landed
+       after this request's look for an existing chat, so the look saw none —
+       here, a look that returns nothing — and `withTurn`, under the article
+       row lock, refuses it (plan § C1). */
+    await send();
+    const spentSoFar = calls;
+    vi.spyOn(chatStore, "load").mockResolvedValue([]);
+    const out = await send({ threadId: OTHER_THREAD, auto: true });
+    vi.restoreAllMocks();
+    expect(out.status).toBe(409);
+    expect(out.body?.threadId).toBe(THREAD);
+    expect(calls, "no model call for the loser").toBe(spentSoFar);
+    expect(await fills(), "its fill refunded, not counted").toHaveLength(0);
+    expect(await threads()).toHaveLength(1);
+  });
+
+  it("makes one thread, one model call and one counted fill from two starts at once", async () => {
+    /* One turn's worth of model calls, measured rather than assumed. */
+    await send({ threadId: OTHER_THREAD });
+    const perTurn = calls;
+    await asTestOwner(async () => {
+      for (const thread of await chatStore.load(SLUG)) await chatStore.remove(SLUG, thread.id);
+    });
+    calls = 0;
+    const [a, b] = await Promise.all([send({ auto: true }), send({ threadId: OTHER_THREAD, auto: true })]);
+    const won = [a, b].filter((r) => r.frames[0]?.event === "begin");
+    const lost = [a, b].filter((r) => r.status === 409);
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    const all = await threads();
+    expect(all).toHaveLength(1);
+    expect(lost[0]?.body?.threadId).toBe(all[0]?.id);
+    expect(calls).toBe(perTurn);
+    expect(await fills()).toHaveLength(1);
+  });
+
+  it("holds the shape in the database: a cite-check row without its block is refused by its CHECK", async () => {
+    const err = await getDb()
+      .insert(chatThreads)
+      .values({
+        articleId: (article as ScratchArticle).articleId,
+        id: THREAD,
+        ownerId: TEST_OWNER,
+        title: "t",
+        kind: "chat",
+        originMode: "cite-check",
+        originItemId: WORK_ID,
+        originQuote: WORK.title,
+      })
+      .catch((e: unknown) => e);
+    expect(violatesCheckConstraint(err, "chat_threads_origin_cite_check")).toBe(true);
+  });
+
+  it("holds one per work and block in the database, and reads a violation as the 409's conflict", async () => {
+    await send();
+    const origin = check() as CiteCheckOrigin;
+    const err = await getDb()
+      .insert(chatThreads)
+      .values({
+        articleId: (article as ScratchArticle).articleId,
+        id: OTHER_THREAD,
+        ownerId: TEST_OWNER,
+        title: "t",
+        kind: "chat",
+        originMode: "cite-check",
+        originItemId: WORK_ID,
+        originBlockId: BLOCK,
+        originQuote: WORK.title,
+      })
+      .catch((e: unknown) => e);
+    expect(violatesConstraint(err, CITE_CHECK_INDEX)).toBe(true);
+    const conflict = await citeCheckConflictOf(err, (article as ScratchArticle).articleId, origin);
+    expect(conflict).toBeInstanceOf(CiteCheckExists);
+    expect(conflict?.threadId).toBe(THREAD);
+    expect(await citeCheckConflictOf(new Error("anything else"), (article as ScratchArticle).articleId, origin)).toBeNull();
   });
 });
 

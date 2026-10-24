@@ -1,0 +1,27 @@
+1: Y; why: defines terms, flags memory source; problem: X brings in RPT and GWT undefined
+2: Y; why: flags inferences on false negatives; problem: X presents organoid worry as the paragraph's missed-case without flagging
+3: Y; why: plain smoke-alarm example; problem: X kitchen-built sauce machine where plainer serves
+4: Y; why: plain song analogy, Bostrom explained; problem: X dialysis analogy built from reader's field
+5: X; why: plain exam analogy, clear; problem: Y associate analogy built from reader's job
+6: X; why: for-loop point sharpens the turn; problem: none
+7: X; why: apt clinical nuance, clear; problem: none
+8: X; why: honest caution on analogy limits; problem: none
+9: X; why: plain phone-app example; problem: Y plumbing analogy built from reader's job
+10: Y; why: Sperling and Block explained clearly; problem: X Sperling mentioned without explaining
+11: same; why: both clear, inferences flagged; problem: none
+12: X; why: plain smoke-alarm example; problem: Y heavy kitchen-built examples (the pass, service)
+13: Y; why: plain spreadsheet analogy; problem: X lung-model analogy built from reader's field
+14: Y; why: plain locked-room analogy; problem: X associate analogy built from reader's job
+15: X; why: clearer global-rewrite example; problem: none
+16: X; why: direct, clinical nuance well placed; problem: none
+17: X; why: clearer structure and cautions; problem: none
+18: X; why: plain app/song example; problem: Y plumbing analogy built from reader's job
+19: X; why: grounded links, no overreach; problem: Y claims article fails to apply risk to own rubric, unsupported
+20: Y; why: plain correlation framing; problem: X classifier analogy built from reader's background
+21: X; why: simpler examples; problem: Y kitchen order-system illustration built from reader's job
+22: X; why: plain spreadsheet analogy; problem: Y patient-simulator analogy built from reader's field
+23: X; why: plain exam analogy; problem: Y associate analogy built from reader's job; Y names Patel unintroduced
+24: Y; why: clearer global-rewrite example; problem: none
+25: same; why: both apt clinical nuance; problem: none
+26: X; why: clearer two-clocks framing; problem: none
+27: Y; why: one plain app analogy; problem: X adds plumbing analogy built from reader's job

@@ -49,6 +49,15 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
     case "ideas":
       /* An id and a snapshot of the name; no block, no lens. */
       return { ...NO_ORIGIN, originMode: origin.mode, originItemId: origin.itemId, originQuote: origin.quote };
+    case "cite-check":
+      /* A citation's check: the work's id, the citing block, the title; no lens. */
+      return {
+        ...NO_ORIGIN,
+        originMode: "cite-check",
+        originItemId: origin.itemId,
+        originBlockId: origin.blockId,
+        originQuote: origin.quote,
+      };
     case "quiz":
       /* A mark: the question's id and words, its batch and its attempt. */
       return {
@@ -72,7 +81,8 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  * built) reads as no origin: the thread is still an ordinary chat. So does a
  * row that is not one shape exactly, which the CHECKs refuse
  * (`chat_threads_origin_reception`, `chat_threads_origin_sources_claims`,
- * `chat_threads_origin_debate`, `chat_threads_origin_item`); half of one is
+ * `chat_threads_origin_debate`, `chat_threads_origin_item`,
+ * `chat_threads_origin_cite_check`, `chat_threads_origin_quiz`); half of one is
  * never read as the whole.
  *
  * **Not exhaustive by construction**: `originMode` is a string out of a
@@ -105,6 +115,9 @@ export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin }
   }
   if (mode === "sources-claims" && itemId === null && blockId !== null && quote !== null && lens === null) {
     return { origin: { mode: "sources-claims", blockId, quote } };
+  }
+  if (mode === "cite-check" && itemId !== null && blockId !== null && quote !== null && lens === null) {
+    return { origin: { mode: "cite-check", itemId, blockId, quote } };
   }
   if (mode === "reception" && itemId === null && blockId === null && quote === null && lens !== null) {
     return { origin: { mode: "reception", lens } };

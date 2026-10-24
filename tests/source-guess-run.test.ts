@@ -375,7 +375,7 @@ describe("the allowance — every search is billed", () => {
     ["concurrency", 429],
     ["global", 503],
   ] as const)("a %s refusal is a %i: nothing searched, and the claim and its attempt given back", async (kind, status) => {
-    const h = harness({ allowance: { kind } });
+    const h = harness({ allowance: kind === "rate" ? { kind, reason: "hour" } : { kind } });
     await expect(h.guess("an-upload")).rejects.toMatchObject({ status });
     expect(h.finds).toEqual([]);
     expect(h.finished).toEqual([]);

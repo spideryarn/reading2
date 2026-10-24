@@ -80,6 +80,11 @@ export const SOURCE_RECEPTION_LENS = `Started from a question in ${SOURCES_IN} $
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
 /** And for one started from a cited work's *Ask in chat*. */
 export const SOURCE_CITED_WORK = `Started from a cited work in ${SOURCES_IN} ${SOURCES_SUB_MODES.bibliography.label}`;
+/**
+ * And for one a citation's *Does it say that?* started, by a rest on its card
+ * or the card's button (plan 261024m): the work, checked against one paragraph.
+ */
+export const SOURCE_CITE_CHECK = "Started from Does it say that? on a citation";
 /** And for one started from an idea's *Ask in chat* (plan 261009k, stage 3). */
 export const SOURCE_IDEA = "Started from an idea";
 /** And for one started from a mark's *Discuss this in chat* in Learn › Quiz (plan 261024i, stage 2). */
@@ -152,7 +157,9 @@ export function originPlace(origin: ThreadOrigin): OriginPlace {
     case "glossary":
     case "ideas":
       return { mode: origin.mode };
+    /* A citation's check is about a cited work, so it lives with the work. */
     case "bibliography":
+    case "cite-check":
       return { mode: "sources", view: "bibliography" };
     /* A lens lands on Investigate, where *Your questions* lists it (plan 261020n). */
     case "reception":
@@ -191,6 +198,9 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
         return { ...at, label: SOURCE_CITED_WORK, quote: origin.quote };
       case "ideas":
         return { ...at, label: SOURCE_IDEA, quote: origin.quote };
+      /* The quote is the work's title as it was when the chat started. */
+      case "cite-check":
+        return { ...at, label: SOURCE_CITE_CHECK, quote: origin.quote };
       /* The question's words. No `learn`: that field sends a row to Learn,
          and this is a chat, opened in Chat like any other. */
       case "quiz":

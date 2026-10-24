@@ -101,6 +101,7 @@ import {
 import {
   ANCHORED_ELSEWHERE,
   ChatConflict,
+  CiteCheckExists,
   HELP_NOT_FIRST,
   isSpokenKind,
   requireTail,
@@ -109,6 +110,14 @@ import {
   withRetry,
 } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
+import {
+  admitCiteCheck,
+  CiteCheckCapped,
+  type CiteCheckLease,
+  citeCheckQuestion,
+  CiteCheckStale,
+  settleCiteCheckLease,
+} from "./cite-check.js";
 import { WebNoteRefused, type WebNoteRun } from "./citation-web-note.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
@@ -496,6 +505,7 @@ import type {
   Block,
   ChatAnchor,
   ThreadOrigin,
+  CiteCheckOrigin,
   QuizOrigin,
   ChatThread,
   Comment,
@@ -3415,6 +3425,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     sourceCommentId,
     visible,
     mentions,
+    auto,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* **A stance is a legacy field: validated, then dropped.** Until 2026-10-02
@@ -3466,6 +3477,14 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      JSON 400 rather than an `error` frame inside a 200 stream. */
   if (help !== undefined && help !== true) {
     throw httpError(400, "help must be true, or left out entirely");
+  }
+  /* **`auto: true`: a rest on a citation's card started this, not a press**
+     (plan 261024m). Absent or literally `true`, like `help`; it takes an
+     allowance (`admitCiteCheck`) where a press takes none, so it is allowed
+     only on the turn that creates a `cite-check` thread — checked once the
+     origin is parsed, below. */
+  if (auto !== undefined && auto !== true) {
+    throw httpError(400, "auto must be true, or left out entirely");
   }
   const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
@@ -3689,6 +3708,23 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, "Only a chat can be started from an item in another mode");
   }
   const sentOrigin = parseOrigin(origin);
+  /* **A citation's *Does it say that?*** (plan 261024m): the paragraph it
+     checks is the chat's anchor, the whole paragraph, so the origin and the
+     anchor cannot disagree about which one. Its question is the server's to
+     check (below), so nothing else may change what is asked or how: not the
+     "?" prompt, not other articles. `auto` belongs to this turn and no other.
+     All before `loadArticle`, so a bad body is a plain 400. */
+  const citeCheck = sentOrigin?.mode === "cite-check" ? sentOrigin : null;
+  if (auto === true && citeCheck === null) {
+    throw httpError(400, "auto only applies to the turn that starts a cite-check chat");
+  }
+  if (citeCheck) {
+    if (!wanted || "quote" in wanted || wanted.blockId !== citeCheck.blockId) {
+      throw httpError(400, "A cite-check chat is anchored on its paragraph: send anchor: { blockId } with origin.blockId");
+    }
+    if (help !== undefined) throw httpError(400, 'A cite-check chat is not a "?" press');
+    if (mentions !== undefined) throw httpError(400, "A cite-check chat cannot bring in other articles");
+  }
   /* **`help: true` has a meaning, and the meaning is checked, not just the
      shape.**
 
@@ -3775,9 +3811,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   /* A claim's block is one of this article's. The foreign key would say so
      too, as a 500 out of a transaction. The quote is not compared with the
      block: it is a snapshot of the item's words, kept for the list to show.
-     **Only a claim names a block.** A lens has none, and a glossary entry or
-     a cited work is an id this server never dereferences (plan 261006d, D3):
-     a made-up one gives its owner a chat with no mark, and nothing else. */
+     **Only a claim's block is checked here.** A lens has none, and a glossary
+     entry or a cited work is an id this server never dereferences (plan
+     261006d, D3): a made-up one gives its owner a chat with no mark, and
+     nothing else. A cite-check's block is the anchor's, checked with it, and
+     its work is checked against the Bibliography (`admitCiteCheckTurn`). */
   if (
     wantedOrigin &&
     isClaimOrigin(wantedOrigin) &&
@@ -3794,11 +3832,21 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     mentions !== undefined && (mentions as string[]).length > 0
       ? await admitMentions(slug, threadId, mentions as string[])
       : null;
+  /* **A turn that would create a `cite-check` thread**, in the plan's order
+     (261024m, § After GPT Sol's review), all before headers and before any
+     spend. An `auto` start takes its allowance last, so every refusal before
+     it is free; any refusal after it, until the model starts, refunds it. */
+  const lease: CiteCheckLease | null = citeCheck ? await admitCiteCheckTurn(slug, citeCheck, question as string, article, auto === true) : null;
+  /* The allowance's spend boundary. This outer try begins immediately after
+     the row is taken: a throw anywhere before the provider stream starts must
+     refund it, including turn setup which precedes the streaming try below. */
+  let modelStarted = false;
+  try {
 
   /* Deciding and writing the turn happen together, under the conversation's
      turn order — see `inTurnOrder`. Everything after it is one answer streaming
      and needs no lock at all. */
-  const begun = await inTurnOrder(`${slug}/${threadId}`, async () => {
+  const begun = await refundingOnRefusal(lease, () => inTurnOrder(`${slug}/${threadId}`, async () => {
     if (wantsRetry || wantsEdit) {
       /* **Refuse a stale request before anything is aborted.**
 
@@ -3934,7 +3982,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             ...(isComposerModality(modality) ? { modality } : {}),
             ...(admitted ? { mentions: admitted.mentions } : {}),
           });
-  });
+  }));
   const { thread, reply, user } = begun;
   /* **Which model call this is**, as far as storage is concerned, and it is
      NOT the same thing as `attempt` below.
@@ -3961,7 +4009,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      so a failure here is an ordinary JSON error, like `loadArticle` above. */
   const mentioned =
     thread.kind === "chat"
-      ? await resolveMentions(slug, thread, user.id, admitted ? { reads: admitted.reads } : {})
+      ? await refundingOnRefusal(lease, () =>
+          resolveMentions(slug, thread, user.id, admitted ? { reads: admitted.reads } : {}),
+        )
       : [];
   const key = `${slug}/${thread.id}/${reply.id}`;
   const attempt = randomUUID();
@@ -4210,6 +4260,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       /* From the stored thread via `resolveMentions` above, never the body. */
       mentions: mentioned,
       signal: stop.signal,
+      onModelStart: () => {
+        modelStarted = true;
+      },
     })) {
       if (event.type === "delta") {
         text += event.text;
@@ -4314,6 +4367,89 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      handler's own promise that keeps the instance awake (src/vercel.ts).
      `refreshGist` never throws. */
   if (answered) await refreshGist(slug, thread.id, reply.id);
+  } finally {
+    /* **An automatic cite-check's allowance, settled here and only here**:
+       after the answer and its gist have finished their model and store work,
+       never on socket close (plan 261024m, C10). A response/profile failure
+       before `converse` refunds the fill; every outcome after it keeps the fill
+       and frees only the slot. The lease itself makes an earlier race refund
+       and this terminal settlement exactly-once. Nothing here may throw after
+       the response has ended; a failed settlement is left to the DB lease. */
+    if (lease) {
+      try {
+        await settleCiteCheckLease(lease, modelStarted);
+      } catch (err) {
+        log("store").error(
+          { ...errorFields(err), route: "chat" },
+          modelStarted ? "could not free a cite-check allowance" : "could not refund a cite-check allowance",
+        );
+      }
+    }
+  }
+}
+
+/**
+ * **The checks on a turn that would create a `cite-check` thread**, and the
+ * allowance an automatic one takes — plan 261024m, § After GPT Sol's review,
+ * steps b–e. Returns the lease for `auto`, `null` for a press.
+ *
+ * 1. **A chat for this work and paragraph already exists** → 409 carrying its
+ *    id (`CiteCheckExists`). First, so a saved chat stays reopenable when the
+ *    Bibliography has since gone stale (C10). Fast and outside any lock;
+ *    `withTurn` decides it again under the article row lock (C1).
+ * 2. **The owner's Bibliography backs it** — fresh, the work there, the block
+ *    a current one that cites it — and **the question is the one the server
+ *    builds** for that work and block (C4) → else 409 (`CiteCheckStale`).
+ * 3. **`auto` only**: the allowance (`admitCiteCheck`), 429 or 503 with a
+ *    reason when spent. A press takes nothing.
+ *
+ * Nothing is spent before step 3, and nothing after it here can refuse.
+ */
+async function admitCiteCheckTurn(
+  slug: string,
+  origin: CiteCheckOrigin,
+  question: string,
+  article: Pick<Article, "blocks">,
+  auto: boolean,
+): Promise<CiteCheckLease | null> {
+  const held = (await chatStore.load(slug)).find((t) => t.origin !== undefined && sameOrigin(t.origin, origin));
+  if (held) throw new CiteCheckExists(held.id);
+  let found: Awaited<ReturnType<typeof loadBibliography>> | null;
+  try {
+    found = await loadBibliography(slug);
+  } catch (err) {
+    if (!(err instanceof ArtefactNotMadeYet)) throw err;
+    found = null;
+  }
+  /* Compared as the store will hold it: `begin` stores the question trimmed. */
+  if (question.trim() !== citeCheckQuestion(found, article.blocks, origin).trim()) {
+    throw new CiteCheckStale();
+  }
+  return auto ? await admitCiteCheck(fetchAllowanceStore) : null;
+}
+
+/**
+ * **Run a step that may still refuse the turn, giving back an automatic
+ * cite-check's allowance if it does** — the lost race in `begin`
+ * (`CiteCheckExists` from `withTurn` or the unique index), a conflict, a store
+ * failure: all before the model starts, so the fill is refunded rather than
+ * counted (plan 261024m, C1). With no lease it is just the step.
+ */
+async function refundingOnRefusal<T>(lease: CiteCheckLease | null, step: () => Promise<T>): Promise<T> {
+  try {
+    return await step();
+  } catch (err) {
+    if (lease) {
+      try {
+        await lease.refund();
+      } catch (refundErr) {
+        /* The refusal is the answer; a refund that failed leaves one fill
+           counted, which is the safe direction. */
+        log("store").error({ ...errorFields(refundErr), route: "chat" }, "could not refund a cite-check allowance");
+      }
+    }
+    throw err;
+  }
 }
 
 /**
@@ -5437,6 +5573,8 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
     case "bibliography":
     case "ideas":
       return parseItemOrigin(built, origin as Record<string, unknown>);
+    case "cite-check":
+      return parseCiteCheckOrigin(origin as Record<string, unknown>);
     case "quiz":
       return parseQuizOrigin(origin as Record<string, unknown>);
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
@@ -5469,6 +5607,33 @@ function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Reco
     throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
   }
   return { mode, itemId, quote };
+}
+
+/**
+ * **A citation's *Does it say that?***: the cited work's id, the citing
+ * block's id and a snapshot of the work's title (plan 261024m). Shape only
+ * here; whether the work, the block and the question agree with the owner's
+ * Bibliography is `admitCiteCheck`'s, on the turn that creates the thread. No
+ * part of the title reaches a thrown message.
+ */
+function parseCiteCheckOrigin(body: Record<string, unknown>): ThreadOrigin {
+  const { itemId, blockId, quote, lens } = body;
+  if (lens !== undefined) {
+    throw httpError(400, "A cite-check origin is an itemId, a blockId and a quote, with no lens");
+  }
+  if (typeof itemId !== "string" || !isSpideryarnId(itemId)) {
+    throw httpError(400, "origin.itemId must be an item id");
+  }
+  if (typeof blockId !== "string" || !isSpideryarnId(blockId)) {
+    throw httpError(400, "origin.blockId must be a block id");
+  }
+  if (typeof quote !== "string" || quote.trim() === "") {
+    throw httpError(400, "origin.quote must be a non-empty string");
+  }
+  if (quote.length > MAX_ORIGIN_NAME_CHARS) {
+    throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
+  }
+  return { mode: "cite-check", itemId, blockId, quote };
 }
 
 /**
@@ -9441,6 +9606,11 @@ function declaredFields(err: unknown): Record<string, unknown> {
   /* The code and nothing else: this answer is given to a stranger, about an
      article that is not published yet (src/still-being-added.ts). */
   if (err instanceof StillBeingAdded) return { code: err.code };
+  /* A citation's chat that already exists: its id (ours, minted), so the card
+     opens it instead of starting a second (plan 261024m, C1/C2). */
+  if (err instanceof CiteCheckExists) return { threadId: err.threadId };
+  /* Which allowance refused an automatic cite-check, a closed set. */
+  if (err instanceof CiteCheckCapped) return { reason: err.reason };
   return {};
 }
 

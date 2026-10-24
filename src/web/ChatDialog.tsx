@@ -61,12 +61,13 @@ import {
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from "lucide-react";
 
-import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
+import type { BlockId, ChatAnchor, ChatThread, CiteCheckOrigin, ThreadSummary } from "../types.js";
 import { Composer, Conversation, type SendHow } from "./ChatPanel.js";
 import type { PickedMention } from "./mentions.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { answerOpening } from "../answer-opening.js";
-import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
+import { HELP_QUESTION } from "./chat-handoff.js";
+import { askAboutBlock } from "../chat-question.js";
 import { shortBlockId } from "./BlockRef.js";
 import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 /* **The client's own creation window, imported rather than restated.** This
@@ -120,6 +121,13 @@ export type ChatTarget =
        * gives. docs/plans/261006j-ask-in-chat-sends-the-question.md, D4, D6.
        */
       sendNow?: true;
+      /**
+       * **What the conversation remembers it was started from**, sent with
+       * the first question. Only a citation's *Does it say that?* sets it
+       * (plan 261024m): one chat per work and paragraph, so the card's rest
+       * and a second press find this one rather than starting another.
+       */
+      origin?: CiteCheckOrigin;
       /**
        * The comment this conversation is being started from, if it is.
        *
@@ -320,6 +328,7 @@ export function ChatDialog({
     threads,
     loaded,
     loadFailed,
+    reload,
     recovering,
     send,
     retry,
@@ -1030,6 +1039,35 @@ export function ChatDialog({
            on a comment they just saved. The server links the two once it has a
            real thread id; nothing here does, on purpose. */
         ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
+        /* A citation's *Does it say that?*: its identity (plan 261024m). */
+        ...(target.origin ? { origin: target.origin } : {}),
+        ...(target.origin?.mode === "cite-check"
+          ? {
+              onRefused: (refusal) => {
+                if (!refusal.threadId) return;
+                drafts.dropThread(id);
+                onDropped(id);
+                /* The summary read can legitimately lag the 409: that is the
+                   cross-tab race this refusal reports. Keep the dialog's
+                   target resolvable while its full-thread reload catches up,
+                   just as the optimistic summary below keeps a newly minted
+                   thread resolvable before the first `begin`. */
+                const now = new Date().toISOString();
+                onCreated({
+                  id: refusal.threadId,
+                  title: text.slice(0, 60),
+                  createdAt: now,
+                  updatedAt: now,
+                  anchor: target.anchor,
+                  origin: target.origin!,
+                  kind: "chat",
+                  turns: 1,
+                });
+                onThread(refusal.threadId);
+                reload();
+              },
+            }
+          : {}),
         /* The shared Composer saw how these words arrived. Keep that fact on
            the question just as the full Chat panel does; handed-over and
            automatically sent drafts call `ask` without it and stay unknown. */
@@ -1058,9 +1096,11 @@ export function ChatDialog({
            App.tsx relies on. */
         kind: "chat",
         turns: 1,
+        /* So the card and a second press find it before the list is re-read. */
+        ...(target.origin ? { origin: target.origin } : {}),
       });
     },
-    [target, send, at, onThread, onCreated, onRenamed, drafts],
+    [target, send, at, onThread, onCreated, onDropped, onRenamed, reload, drafts],
   );
 
   /**

@@ -1778,10 +1778,19 @@ alone, in order.
   provider instead of by a nudge — and it would remove the need for the nudge message entirely. Two
   things to check first, neither of them assumable: whether OpenRouter passes the parameter through
   for `anthropic/*` or drops it silently (which is the documented hazard in
-  [setup-dev.md](setup-dev.md)), and the cache arithmetic. Changing `tool_choice` invalidates cached
-  *message* blocks while leaving tools and system cached — and the article lives in a message here, so
-  it may well be worse than the tools-array invalidation it replaces. Measure `cacheReadTokens` before
-  believing it.
+  [setup-dev.md](setup-dev.md)), and the cache arithmetic.
+
+  **Both measured 2026-10-24**, on Opus 5.5 with a 19,000-token stand-in article in a message
+  behind the breakpoint
+  ([`scripts/spikes/261024q-last-round-cache-probe.ts`](../../scripts/spikes/261024q-last-round-cache-probe.ts)).
+  The cache worry was wrong: with the same tools array, `tool_choice: "none"` **read** all 19,031
+  cached tokens, while chat's current last round (web search only) read none and wrote 18,955 — the
+  $0.256 write seen on a real capped turn in
+  [261024d](../investigations/261024d-does-it-say-that-cost-and-latency.md). What stops it being a
+  plain swap is the other half: asked a question that needed a search, the same request with
+  `tool_choice: "none"` came back with **no text at all**, where `auto` searched and answered. So the
+  guide's shape would likely switch off web search on chat's last round and risk the empty answer
+  this whole section is about. One run each; not built.
 - **The logged `model` is whichever one answered last.** OpenRouter can route different rounds of one
   turn to different providers or models, and `used` is overwritten each round, so a turn that changed
   hands mid-way reports only where it ended. Nobody has seen this happen; it would be invisible if it
@@ -1826,7 +1835,23 @@ alone, in order.
   ahead of system and messages, so withholding them on the last round costs a cache write on the one
   path that has already been expensive. It only happens after three tool rounds, which is rare, and
   the alternative designs all trade it for a loop that can fail to terminate — so it stands, named
-  rather than hidden. Also from the review.
+  rather than hidden. Also from the review. Measured, and why `tool_choice: "none"` is not yet the
+  fix: the bullet on it above.
+- **An answer written after a tool round does not stream; it arrives in one burst.** Upstream of
+  us, measured 2026-10-24
+  ([`scripts/spikes/261024q-chat-stream-round2-probe.ts`](../../scripts/spikes/261024q-chat-stream-round2-probe.ts),
+  [`…-burst-probe.ts`](../../scripts/spikes/261024q-chat-stream-burst-probe.ts)). A first round
+  streams: ~125 deltas over 4 s, on Opus at high, medium or low effort and on Sonnet, with or without
+  tools declared. The round after a `role: "tool"` result does not, on every one of those: the
+  reasoning streams, then nothing for the time it takes to write the answer, then the thinking
+  block's signature and **every content delta inside 30–140 ms**. The same content handed over in a
+  user message, same tools declared, streamed over 4 s — so the trigger is the tool result in the
+  history, not the effort, the model, web search or our parser. Replaying `reasoning_details` did
+  not change it. Whether OpenRouter or Anthropic holds the text is not separable without a direct
+  Anthropic key. Until it changes, a chat turn that uses a tool shows its reasoning period as
+  silence and then the whole answer; the levers are the reasoning deltas (they do stream, seconds
+  earlier) as an activity line, or doing the tool's work before the turn so the answer is a first
+  round.
 - **Nothing measures whether the tools make answers better.** This is the same gap
   [original-version/search-and-chat.md](original-version/search-and-chat.md) reports about the
   previous version's chat — a year of work and no document assessing whether it helped anyone read.
