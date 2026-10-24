@@ -1135,6 +1135,31 @@ describe("GET /api/admin/author-gifts/:id/email", () => {
     expect(preview.status).toBe(400);
     expect(String(preview.body.error)).toMatch(/not one of yours/i);
   });
+
+  /**
+   * The case above is also caught by the title read, which 404s a slug that
+   * names nothing. This one is not: the frozen slug now names *another* of the
+   * owner's articles, so only the slug comparison after the join refuses it,
+   * and without it the preview shows that article's title where Send refuses
+   * (resolveGiftStarter). Seen red with the comparison removed, 2026-10-24.
+   */
+  it("refuses a starter whose frozen slug now names another of the owner's articles", async () => {
+    const mine = await seed("preview-taken", { linkOn: true });
+    const other = await seed("preview-taker", { linkOn: true });
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("preview-taken") },
+    });
+    const id = String(made.body.id);
+    await pool.query("update spideryarn.articles set slug = $2 where id = $1", [mine.id, `${mine.slug}-renamed`]);
+    await pool.query("update spideryarn.articles set slug = $2 where id = $1", [other.id, mine.slug]);
+
+    const preview = await drive("GET", `/api/admin/author-gifts/${id}/email`, null);
+    expect(preview.status).toBe(400);
+    expect(String(preview.body.error)).toMatch(/not one of yours/i);
+  });
 });
 
 /* -------------------------------------------------------------- guidance -- */

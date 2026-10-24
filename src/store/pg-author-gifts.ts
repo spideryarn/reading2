@@ -1076,25 +1076,33 @@ export async function previewAuthorGiftEmail(id: string): Promise<PreviewAnswer>
       starterSlug: authorGifts.starterSlug,
       createdBy: authorGifts.createdBy,
       articleThere: articles.id,
+      articleSlug: articles.slug,
       processing: articles.processing,
       currentRevisionId: articles.currentRevisionId,
     })
     .from(authorGifts)
     /* Send resolves by the frozen slug as the gift's creator, then pins that
-       resolution to article_id. These join conditions ask the same identity
-       question without touching the share token. */
+       resolution to article_id (resolveGiftStarter). This asks the same
+       identity question the other way round, without touching the share token:
+       the gift's own article, by id and owner, and then whether it still has
+       the frozen slug. If the slug has since gone to another article, Send
+       refuses it as absent, so this does too.
+
+       The slug is compared after the read, not in the join, on purpose. A
+       join on the slug column is a slug lookup, which
+       tests/owner-isolation.test.ts admits only through the owner-naming
+       leaves; this row is found by its primary key, so there is no slug
+       lookup to sanction. */
     .leftJoin(
       articles,
-      and(
-        eq(articles.id, authorGifts.articleId),
-        eq(articles.slug, authorGifts.starterSlug),
-        eq(articles.ownerId, authorGifts.createdBy),
-      ),
+      and(eq(articles.id, authorGifts.articleId), eq(articles.ownerId, authorGifts.createdBy)),
     )
     .where(eq(authorGifts.id, id))
     .limit(1);
   if (!gift) return { kind: "not-found" };
-  if (gift.articleThere === null) return { kind: "starter-refused", reason: "absent" };
+  if (gift.articleThere === null || gift.articleSlug !== gift.starterSlug) {
+    return { kind: "starter-refused", reason: "absent" };
+  }
   if (gift.processing === "minimal" || gift.currentRevisionId === null) {
     return { kind: "starter-refused", reason: "unpublished" };
   }
