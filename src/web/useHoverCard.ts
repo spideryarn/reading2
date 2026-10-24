@@ -191,6 +191,13 @@ export interface HoverTarget<T> {
   el: HTMLElement;
   /** Whatever `read` made of it. */
   data: T;
+  /**
+   * **A finger opened it**: a tap's reveal, not a pointer's rest or a
+   * keyboard's focus. Fixed when the card opens; a pointer arriving later
+   * does not change it. A citation's card starts *Does it say that?* by
+   * itself only when this is false (plan 261024m, C8).
+   */
+  byTouch: boolean;
 }
 
 export interface UseHoverCard<T> {
@@ -443,7 +450,7 @@ export function useHoverCard<T>({
         // A pointer opened this one, whatever opened the last one.
         byTouchRef.current = false;
         refs.setPositionReference(el);
-        setShown({ el, data });
+        setShown({ el, data, byTouch: false });
       }, wait);
     };
 
@@ -459,15 +466,19 @@ export function useHoverCard<T>({
          of that sentence. docs/postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md. */
       if (event.pointerType === "touch") return;
       const target = event.target as Element | null;
-      const hit = target?.closest?.(selector) as HTMLElement | null;
-      if (hit) return arm(hit, currentRef.current ? WARM_MS : "cold");
       // Inside the card: the reader is reaching for a control in it. Cancel the
-      // close that entering it would otherwise have already started.
+      // close that entering it would otherwise have already started. **Before
+      // the selector**, since a card can hold what the selector matches: a
+      // citation's *Does it say that?* answer is drawn by Chat's
+      // `CitedMarkdown`, whose web links are `a.cited-link`, and pointing at
+      // one would otherwise swap the card for that link's (plan 261024m).
       if (target?.closest?.(`.${CARD_CLASS}`)) {
         disarm();
         clearTimeout(closeTimer);
         return;
       }
+      const hit = target?.closest?.(selector) as HTMLElement | null;
+      if (hit) return arm(hit, currentRef.current ? WARM_MS : "cold");
       close();
     };
 
@@ -697,7 +708,7 @@ export function useHoverCard<T>({
            "nothing" — two glossary terms overlapping one phrase have no order
            worth committing to. So the consumer closes the card if it acts.
            Raised by a GPT Sol review, 2026-08-27. */
-        commitRef.current?.({ el: hit, data });
+        commitRef.current?.({ el: hit, data, byTouch: true });
         return;
       }
       reveal(hit, data);
@@ -712,7 +723,7 @@ export function useHoverCard<T>({
       currentRef.current = hit;
       byTouchRef.current = true;
       refs.setPositionReference(hit);
-      setShown({ el: hit, data });
+      setShown({ el: hit, data, byTouch: true });
     };
 
     /**
@@ -870,7 +881,7 @@ export function useHoverCard<T>({
          reader was looking at that card when they pressed. */
       if (press && hit === press.open) {
         // The consumer closes the card if it acts — see `onCommit`.
-        commitRef.current?.({ el: hit, data });
+        commitRef.current?.({ el: hit, data, byTouch: true });
         return;
       }
       reveal(hit, data);

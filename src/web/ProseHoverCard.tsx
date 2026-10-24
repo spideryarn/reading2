@@ -62,6 +62,7 @@ import {
   MAX_MENTIONS,
   type PagePreview,
   type Quote,
+  type ThreadSummary,
 } from "../types.js";
 import { LABEL as QUOTE_SCORE_LABEL } from "./QuotesPanel.js";
 import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
@@ -149,6 +150,39 @@ import {
   type NoteMarker,
 } from "./notes-view.js";
 import { articleTitleVoice, gistVoice, voiceClass } from "./voice.js";
+import { CitedMarkdown } from "./Cited.js";
+import {
+  CITE_CHECK_ELSEWHERE,
+  CITE_CHECK_FAILED,
+  CITE_CHECK_FAILED_UNSTARTED,
+  type CiteCheckKey,
+  citeCheckOrigin,
+  scheduleCiteCheck,
+  syncCiteCheck,
+  useCiteCheck,
+} from "./cite-check.js";
+import { threadForOrigin } from "./useChatAnchors.js";
+import { viewAsNonce } from "./lib/view-as.js";
+
+/**
+ * **What a citation's card needs to start *Does it say that?* by itself** —
+ * plan docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md.
+ * The owner's, from Reader; `null` for a visitor, who gets nothing automatic
+ * and no request.
+ */
+export interface CiteCheckSenders {
+  /** The article, for the chat route. */
+  slug: string;
+  /** The owner's chat summaries, where an earlier check for the same key is found. */
+  summaries: readonly ThreadSummary[];
+  /** Whether they have answered yet, so a missing thread can be told from an unread list. */
+  summariesLoaded: boolean;
+  /** *Continue in Chat*: open this thread where *Ask in chat* reopens an item's chat. */
+  onContinue(threadId: string): void;
+}
+
+/** The section's button that opens the check's thread in Chat. */
+export const CONTINUE_IN_CHAT = "Continue in Chat";
 
 /** The hover card's icon-only Ask control, including touch's reveal-then-send rule. */
 function CardAskInChat({ label, className, onAsk }: { label: string; className: string; onAsk(): void }) {
@@ -271,6 +305,7 @@ function HoverCard({
   onAskCitedWork = null,
   onCheckCitedWork = null,
   onOpenCitedWork = null,
+  citeCheck = null,
   quotes = null,
 }: {
   entries: GlossaryEntry[];
@@ -441,6 +476,13 @@ function HoverCard({
    * `null` or absent and no button is drawn; the marks are the owner's only.
    */
   onOpenCitedWork?: ((workId: string) => void) | null;
+  /**
+   * **A rest on a citation starts *Does it say that?* and streams it into the
+   * card** (plan 261024m): the owner's senders, `null` or absent for a visitor
+   * and in view-as. Drawn only on a card naming exactly one work, opened by a
+   * pointer or keyboard focus (not a tap, C8), from a paragraph that cites it.
+   */
+  citeCheck?: CiteCheckSenders | null;
   /**
    * **The quotes the prose fills, and what the card's buttons do with one**
    * — `QuoteCard`. `null` where there are none to point at; then `read` never
@@ -865,6 +907,20 @@ function HoverCard({
                 onJump(id, citePassageKey(w.id));
               }}
               onClose={close}
+              /* Only where the card names this one work — a phrase citing two
+                 does not start two — and a finger did not open it (C8). */
+              check={
+                citeCheck && cited.length === 1 && !shown.byTouch
+                  ? {
+                      senders: citeCheck,
+                      blocks: blockText,
+                      onJumpTo: (id) => {
+                        close();
+                        onJump(id);
+                      },
+                    }
+                  : null
+              }
             />
           ))}
           {/* The quote half, under the term and the citation and above the
@@ -2266,6 +2322,7 @@ export function CiteCard({
   here,
   onJump,
   onClose,
+  check = null,
 }: {
   work: CitedWork;
   showInSpideryarn: boolean;
@@ -2280,6 +2337,11 @@ export function CiteCard({
   /** Go to one of the passages that cite the work. The caller closes the card. */
   onJump(id: BlockId): void;
   onClose(): void;
+  /**
+   * The automatic *Does it say that?* (plan 261024m), from the prose card
+   * only; absent in Marginalia's *Cites* card, which has no slug.
+   */
+  check?: CiteCheckProps | null;
 }) {
   const source = sourceOf(work);
   const by = byLineOf(work);
@@ -2376,6 +2438,18 @@ export function CiteCard({
         </div>
       )}
       <CiteCardReading work={work} />
+      {/* Under what we already know of the work and above where it is cited:
+          the answer to the question this paragraph raises. Owner, prose card,
+          a citing paragraph, not view-as — the button's own conditions. */}
+      {check && checkHere && onCheck && viewAsNonce() === null && (
+        <CiteCheckSection
+          key={`${check.senders.slug}\n${work.id}\n${checkHere}`}
+          work={work}
+          blockId={checkHere}
+          check={check}
+          onClose={onClose}
+        />
+      )}
       {work.citedInBody && (
         <CitedAtJumps
           citedAt={work.citedAt}
@@ -2451,6 +2525,126 @@ export function CiteCard({
 
 /** The citation card's button that asks chat to read the work (plan 261011w). */
 export const DOES_IT_SAY_THAT = "Does it say that?";
+
+/** What `CiteCard` is handed for the automatic check: the senders, and the answer's chips. */
+export interface CiteCheckProps {
+  senders: CiteCheckSenders;
+  /** The article's blocks, for the passage chips in the answer (`CitedMarkdown`). */
+  blocks: Map<string, string>;
+  /** A chip's jump, closing the card first. */
+  onJumpTo(id: BlockId): void;
+}
+
+/**
+ * **The card's *Does it say that?* section** — plan
+ * docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md
+ * (§ What the reader sees, and GPT Sol's C5, C8, C9).
+ *
+ * Mounted only where the check may start (see `CiteCard`). On mount it starts
+ * the 2 s rest (`scheduleCiteCheck`), cancelled if the card closes or moves to
+ * another mark first; once it fires the check carries on in src/web/cite-check.ts
+ * whatever happens to the card. A chat already in the owner's summaries for
+ * this work and paragraph is shown, read from the server, with no send.
+ *
+ * The answer is drawn by Chat's own `CitedMarkdown`, so its passage chips and
+ * web links look as they do in Chat, in a box that scrolls past about sixteen
+ * lines; *Continue in Chat* opens the thread itself.
+ */
+function CiteCheckSection({
+  work,
+  blockId,
+  check,
+  onClose,
+}: {
+  work: CitedWork;
+  blockId: BlockId;
+  check: CiteCheckProps;
+  onClose(): void;
+}) {
+  const { senders } = check;
+  const key = useMemo<CiteCheckKey>(
+    () => ({ slug: senders.slug, workId: work.id, blockId }),
+    [senders.slug, work.id, blockId],
+  );
+  const existing = threadForOrigin(senders.summaries, citeCheckOrigin(work, blockId));
+  const existingId = existing?.id;
+  const existingAt = existing?.updatedAt;
+  /* The summaries are the record once a chat exists (C5): read it, again when
+     it moves, and let it go when they no longer list it. */
+  useEffect(() => {
+    syncCiteCheck(
+      key,
+      existingId !== undefined && existingAt !== undefined ? { id: existingId, updatedAt: existingAt } : undefined,
+      senders.summariesLoaded,
+    );
+  }, [key, existingId, existingAt, senders.summariesLoaded]);
+  /* The rest. Not while a chat is known: then there is nothing to start. */
+  const startable = existingId === undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the work's title and authors build the question; its id is in `key`, and a re-render with the same work must not restart the rest.
+  useEffect(() => {
+    if (!startable) return;
+    return scheduleCiteCheck(key, work);
+  }, [key, startable]);
+
+  const view = useCiteCheck(key);
+  if (view.kind === "idle") return null;
+
+  const streaming = view.kind === "streaming";
+  const activity = streaming ? view.activity : null;
+  const text = view.kind === "streaming" || view.kind === "done" ? view.text : "";
+  const threadId =
+    view.kind === "streaming" || view.kind === "done" || view.kind === "elsewhere" || view.kind === "failed"
+      ? view.threadId
+      : null;
+  const line =
+    view.kind === "said"
+      ? view.message
+      : view.kind === "elsewhere"
+        ? CITE_CHECK_ELSEWHERE
+        : view.kind === "failed"
+          ? view.threadId
+            ? CITE_CHECK_FAILED
+            : CITE_CHECK_FAILED_UNSTARTED
+          : null;
+
+  return (
+    <div className="prose-card-part prose-card-check">
+      <p className="prose-card-check-head">
+        <span className="prose-card-label">
+          <FileSearch size={9} aria-hidden="true" />
+          {DOES_IT_SAY_THAT}
+        </span>
+        {activity && (
+          <span className="prose-card-check-activity" aria-live="polite">
+            {activity}
+          </span>
+        )}
+      </p>
+      {text !== "" && (
+        <div className={`prose-card-check-answer ${voiceClass("ai")}`}>
+          <CitedMarkdown text={text} blocks={check.blocks} onJump={check.onJumpTo} partial={streaming} links />
+          {streaming && <span className="prose-card-caret" aria-hidden="true" />}
+        </div>
+      )}
+      {line && <p className="prose-card-check-line">{line}</p>}
+      {threadId && (
+        <p className="prose-card-check-foot">
+          <button
+            type="button"
+            className="prose-card-open prose-card-check-continue"
+            onClick={() => {
+              senders.onContinue(threadId);
+              onClose();
+            }}
+          >
+            <MessagesSquare size={10} aria-hidden="true" />
+            {CONTINUE_IN_CHAT}
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** Past this many the row ends in *and N more*; the count before it stays exact. */
 export const CITED_AT_JUMPS_SHOWN = 20;

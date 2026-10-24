@@ -61,7 +61,7 @@ import {
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from "lucide-react";
 
-import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
+import type { BlockId, ChatAnchor, ChatThread, CiteCheckOrigin, ThreadSummary } from "../types.js";
 import { Composer, Conversation, type SendHow } from "./ChatPanel.js";
 import type { PickedMention } from "./mentions.js";
 import { chatDraftsFor } from "./chat-draft.js";
@@ -119,6 +119,13 @@ export type ChatTarget =
        * gives. docs/plans/261006j-ask-in-chat-sends-the-question.md, D4, D6.
        */
       sendNow?: true;
+      /**
+       * **What the conversation remembers it was started from**, sent with
+       * the first question. Only a citation's *Does it say that?* sets it
+       * (plan 261024m): one chat per work and paragraph, so the card's rest
+       * and a second press find this one rather than starting another.
+       */
+      origin?: CiteCheckOrigin;
       /**
        * The comment this conversation is being started from, if it is.
        *
@@ -1012,6 +1019,8 @@ export function ChatDialog({
            on a comment they just saved. The server links the two once it has a
            real thread id; nothing here does, on purpose. */
         ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
+        /* A citation's *Does it say that?*: its identity (plan 261024m). */
+        ...(target.origin ? { origin: target.origin } : {}),
         /* The shared Composer saw how these words arrived. Keep that fact on
            the question just as the full Chat panel does; handed-over and
            automatically sent drafts call `ask` without it and stay unknown. */
@@ -1040,6 +1049,8 @@ export function ChatDialog({
            App.tsx relies on. */
         kind: "chat",
         turns: 1,
+        /* So the card and a second press find it before the list is re-read. */
+        ...(target.origin ? { origin: target.origin } : {}),
       });
     },
     [target, send, at, onThread, onCreated, onRenamed, drafts],

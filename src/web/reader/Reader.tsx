@@ -126,7 +126,9 @@ import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
 import { Dock, useActivateMode, useActivateSubMode } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { type CiteCheckSenders, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { citeCheckOrigin, onCiteCheckThread, pressCiteCheck } from "../cite-check.js";
+import { viewAsNonce } from "../lib/view-as.js";
 import type { CiteFocus } from "../BibliographyPanel.js";
 import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
@@ -1062,7 +1064,8 @@ export function Reader({
           question: target.question,
         }),
         "send",
-        undefined,
+        /* A citation's *Does it say that?* carries its identity (plan 261024m). */
+        target.origin,
         {
           anchor: target.anchor,
           ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
@@ -1160,18 +1163,22 @@ export function Reader({
       handToChat(askAboutCitedWork(work, citing), "send", itemOrigin("bibliography", work.id, work.title)),
     [handToChat],
   );
-  /* **And *Does it say that?* on a citation's card** (plan 261011w): a fresh
-     chat anchored on the citing paragraph, not an item's chat, so it stores no
-     origin and is never reopened; the same work cited in two paragraphs is two
-     questions. Chat answers it by reading the paper (`read_cited_work`). */
-  const checkCitedWorkInChat = useCallback(
-    (work: Pick<CitedWork, "title" | "authors" | "year">, blockId: BlockId) =>
+  /* **And *Does it say that?* on a citation's card** (plan 261011w): a chat
+     anchored on the citing paragraph. Since plan 261024m it stores a
+     `cite-check` origin, one chat per work and paragraph, so a rest on the
+     card and a second press find it; the same work cited in two paragraphs is
+     still two questions. Chat answers it by reading the paper
+     (`read_cited_work`). This starts one; `checkCitedWork` below decides
+     whether to. */
+  const startCiteCheckChat = useCallback(
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">, blockId: BlockId) =>
       askPassageInChat({
         kind: "draft",
         anchor: { blockId },
         opening: article.blocks.find((block) => block.id === blockId)?.text ?? "",
         question: askDoesItSayThat(work),
         sendNow: true,
+        origin: citeCheckOrigin(work, blockId),
       }),
     [article.blocks, askPassageInChat],
   );
@@ -2845,6 +2852,58 @@ export function Reader({
     },
     [chatSummaries, mode, showBand, openClaimChat],
   );
+  /* **Open a thread where *Ask in chat* reopens an item's chat** — beside the
+     mode, or in Chat's band from Chat and Learn. A citation card's *Continue
+     in Chat*, and the press that finds a check already running (plan 261024m). */
+  const openThreadInChat = useCallback(
+    (threadId: string) => {
+      if (mode === "learn" || mode === "chat") showBand("chat");
+      openClaimChat(threadId);
+    },
+    [mode, showBand, openClaimChat],
+  );
+  /**
+   * ***Does it say that?* on a citation's card, routed through the card's
+   * own check** (plan 261024m, § After GPT Sol's review, last bullet). A chat
+   * for this work and paragraph that the summaries or the check know is
+   * opened; a check still starting is adopted, and opened once it has a
+   * thread; otherwise the chat is started as before, now with its origin, so
+   * the next rest finds it. The press also cancels a resting card's timer.
+   * A press is never capped: it sends no `auto`.
+   */
+  const checkCitedWork = useCallback(
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">, blockId: BlockId) => {
+      const decided = pressCiteCheck({ slug, workId: work.id, blockId });
+      if (reopenItemChat(citeCheckOrigin(work, blockId))) return;
+      if ("open" in decided) {
+        openThreadInChat(decided.open);
+        return;
+      }
+      if ("wait" in decided) {
+        void decided.wait.then((id) => {
+          if (id) openThreadInChat(id);
+        });
+        return;
+      }
+      startCiteCheckChat(work, blockId);
+    },
+    [slug, reopenItemChat, openThreadInChat, startCiteCheckChat],
+  );
+  /* The card's check tells us of each thread it begins and settles, so Chat's
+     list, the button's reuse and the marks hear of it (plan 261024m). */
+  useEffect(() => {
+    if (!refreshChats) return;
+    return onCiteCheckThread(() => refreshChats());
+  }, [refreshChats]);
+  /* What the prose card needs to start the check by itself: the owner's, and
+     not in view-as, where nothing is spent on the owner's behalf. */
+  const citeCheckSenders = useMemo<CiteCheckSenders | null>(
+    () =>
+      owner && viewAsNonce() === null
+        ? { slug, summaries: chatSummaries, summariesLoaded: chatSummariesLoaded, onContinue: openThreadInChat }
+        : null,
+    [owner, slug, chatSummaries, chatSummariesLoaded, openThreadInChat],
+  );
   const askEntry = useCallback(
     (entry: Pick<GlossaryEntry, "id" | "name">) => {
       if (!reopenItemChat(itemOrigin("glossary", entry.id, entry.name))) askGlossaryEntryInChat(entry);
@@ -2933,9 +2992,9 @@ export function Reader({
   const marginCiteActions = useMemo<MarginCiteSenders | null>(
     () =>
       isOwner
-        ? { onAsk: askWork, onCheck: checkCitedWorkInChat, onOpen: openCitedWorkFromCard, onJump: jumpTo }
+        ? { onAsk: askWork, onCheck: checkCitedWork, onOpen: openCitedWorkFromCard, onJump: jumpTo }
         : null,
-    [isOwner, askWork, checkCitedWorkInChat, openCitedWorkFromCard, jumpTo],
+    [isOwner, askWork, checkCitedWork, openCitedWorkFromCard, jumpTo],
   );
   /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
   const ideaChats = useMemo(
@@ -5030,7 +5089,9 @@ export function Reader({
            261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
         onAskTerm={owner ? askEntry : null}
         onAskCitedWork={owner ? askWork : null}
-        onCheckCitedWork={owner ? checkCitedWorkInChat : null}
+        onCheckCitedWork={owner ? checkCitedWork : null}
+        /* And the same check started by a rest on the card (plan 261024m). */
+        citeCheck={citeCheckSenders}
         /* *Open in Sources* on a cited work's card: Bibliography, its row in
            view (plan 261010e). Owner only, as the marks are. On a row with
            no note it also starts the one web search (plan 261018o). */
