@@ -60,6 +60,8 @@ let gumRequests: MediaStreamConstraints[] = [];
 /** The `"default"` input is listed but gone by the time it is opened. */
 let defaultVanishes = false;
 let gumRejects = false;
+/** Return a stream with no audio track, but still with a track that ownership must close. */
+let gumHasNoAudio = false;
 /** Per `getUserMedia` call: was this page's microphone claim already taken? */
 let claimHeldAtRequest: boolean[] = [];
 /**
@@ -75,6 +77,11 @@ let enumerationCalls = 0;
 let holdEnumerationAt: number | null = null;
 let releaseEnumeration: (() => void) | null = null;
 let tracksStopped = 0;
+/** Raw `stop()` calls, beside the once-only state transition above. */
+let trackStopCalls = 0;
+/** Hold the next microphone request after it has been made but before it returns a stream. */
+let holdNextGum = false;
+let releaseGum: (() => void) | null = null;
 /** `ended` handlers the hook installed on the track it opened. */
 let endedListeners: Array<() => void> = [];
 /** Every `MediaRecorder` the hook has built, newest last — "is a tape running". */
@@ -204,8 +211,11 @@ function fakeTrack(device: { deviceId: string; label: string } | null = null) {
     },
     removeEventListener: () => {},
     /* Counted once, as a real track ends once: a second `stop()` on an ended
-       track does nothing, and the hook may stop one from two places. */
+       track does nothing. `trackStopCalls` separately keeps a double cleanup
+       observable: idempotence in the fake must not make duplicate ownership
+       look correct. */
     stop: () => {
+      trackStopCalls++;
       if (track.readyState === "ended") return;
       track.readyState = "ended";
       tracksStopped++;
@@ -330,6 +340,12 @@ function install(Ctor: typeof FakeRecognition) {
         gumRequests.push(c);
         claimHeldAtRequest.push(!microphoneFree());
         if (gumRejects) throw new DOMException("denied", "NotAllowedError");
+        if (holdNextGum) {
+          holdNextGum = false;
+          await new Promise<void>((release) => {
+            releaseGum = release;
+          });
+        }
         const audio = c.audio;
         const wanted =
           typeof audio === "object" && audio && typeof audio.deviceId === "object"
@@ -343,6 +359,10 @@ function install(Ctor: typeof FakeRecognition) {
           ? inputs.find((d) => d.deviceId === exact && !(defaultVanishes && exact === "default"))
           : (inputs.find((d) => d.deviceId === wanted.ideal) ?? defaultInput);
         if (exact && !device) throw { name: "OverconstrainedError", constraint: "deviceId" };
+        if (gumHasNoAudio) {
+          const other = fakeTrack(device ?? null);
+          return { getAudioTracks: () => [], getTracks: () => [other] };
+        }
         /* **One track per stream**, made lazily and the same object from both
            methods: a stream that minted a new track on every call let a test
            "stop" a track the hook never had. GPT Sol's plan review of 261024z. */
@@ -489,6 +509,7 @@ beforeEach(() => {
   claimHeldAtRequest = [];
   defaultVanishes = false;
   gumRejects = false;
+  gumHasNoAudio = false;
   inputs = [];
   defaultInput = null;
   enumerationCalls = 0;
@@ -505,6 +526,9 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockImplementation(() => base + clock);
   transcriptReply = "THE SERVER SAID THIS";
   tracksStopped = 0;
+  trackStopCalls = 0;
+  holdNextGum = false;
+  releaseGum = null;
   tracksHandedOut = [];
   endedListeners = [];
   recorders = [];
@@ -1748,15 +1772,15 @@ describe("the remembered microphone", () => {
     });
     inputs = [AIRPODS];
     defaultInput = AIRPODS;
-    /* The first enumeration finds the choice missing (261008d), the second
-       chooses the system-default route. Hold the third, where the opened track
-       is compared with the remembered choice. */
-    holdEnumerationAt = 3;
+    /* The early request opens first; its first enumeration is the post-capture
+       comparison with the remembered choice. */
+    holdEnumerationAt = 1;
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
     expect(tracksHandedOut).toHaveLength(1);
     expect(tracksStopped).toBe(0);
+    expect(releaseEnumeration, "the post-capture device check never began").not.toBeNull();
 
     act(() => h.get().toggle());
     /* Since plan 261019m a tape is already running in this gap, and `finish`
@@ -1782,9 +1806,10 @@ describe("the remembered microphone", () => {
  * WebKit reuses a grant without a prompt for ten minutes after capture when the
  * request is gesture-privileged, and for **one minute** on iOS and iPadOS when
  * it is not — and ours came after the microphone lock and a device listing,
- * which the logs say cost it the gesture. A request made synchronously in the
- * click handler is privileged on every WebKit, however promise propagation
- * works. docs/plans/261024z-dictation-asks-for-the-microphone-inside-the-press.md.
+ * with timings consistent with the gesture having been lost. A request made
+ * synchronously in the click handler is privileged on every WebKit, however
+ * promise propagation works.
+ * docs/plans/261024z-dictation-asks-for-the-microphone-inside-the-press.md.
  *
  * "Inside the press" is checked inside the same synchronous `act` callback as
  * the `toggle()`, before any microtask can run: the property is the call's
@@ -1877,8 +1902,27 @@ describe("the request inside the press", () => {
     expect(gumCalls).toBe(1);
     expect(tracksHandedOut).toHaveLength(1);
     expect(tracksStopped, "a microphone left on after Stop").toBe(1);
+    expect(trackStopCalls, "two owners both cleaned up the early track").toBe(1);
     expect(h.get().phase).toBe("idle");
     h.unmount();
+  });
+
+  it("stops a pending early track once before an unmount releases its claim", async () => {
+    useSafari();
+    store({});
+    holdNextGum = true;
+    const h = drive();
+    expect(press(h)).toBe(1);
+    expect(tracksHandedOut).toHaveLength(0);
+
+    h.unmount();
+    releaseGum?.();
+    await settleCapture();
+
+    expect(tracksHandedOut).toHaveLength(1);
+    expect(tracksStopped, "an unmounted request left the microphone on").toBe(1);
+    expect(trackStopCalls, "unmount and the opening continuation both stopped the track").toBe(1);
+    expect(microphoneFree()).toBe(true);
   });
 
   it("takes its claim before it asks", async () => {
@@ -1906,6 +1950,21 @@ describe("the request inside the press", () => {
     h.unmount();
   });
 
+  it("stops the whole stream and releases the claim when it contains no audio track", async () => {
+    useSafari();
+    store({});
+    gumHasNoAudio = true;
+    const h = drive();
+    expect(press(h)).toBe(1);
+    await settleCapture();
+
+    expect(h.get().error).toContain("[mic-no-start]");
+    expect(tracksStopped, "the no-track stream was left live").toBe(1);
+    expect(trackStopCalls).toBe(1);
+    expect(microphoneFree()).toBe(true);
+    h.unmount();
+  });
+
   it("holds the claim until a pending request has landed and been stopped", async () => {
     /* A second box pressed while the first press's request is still opening:
        the first is asked to stop, and the second must not ask until whatever
@@ -1928,6 +1987,29 @@ describe("the request inside the press", () => {
     expect(second.get().phase).toBe("listening");
     first.unmount();
     second.unmount();
+  });
+
+  it("stops a pending early track before chooseDevice opens its replacement", async () => {
+    useSafari();
+    store({});
+    const pad = { deviceId: "ipad-mic", label: "iPad Microphone" };
+    inputs = [pad];
+    defaultInput = pad;
+    holdNextGum = true;
+    const h = drive();
+    expect(press(h)).toBe(1);
+
+    act(() => h.get().chooseDevice("ipad-mic"));
+    expect(gumCalls, "the replacement opened beside the pending request").toBe(1);
+    releaseGum?.();
+    await settleCapture();
+    await drain();
+
+    expect(gumCalls).toBe(2);
+    expect(tracksStopped, "the abandoned request's track stayed live").toBe(1);
+    expect(trackStopCalls, "the abandoned request had two cleanup owners").toBe(1);
+    expect(h.get().phase).toBe("listening");
+    h.unmount();
   });
 
   it("asks inside the press on Firefox too", async () => {

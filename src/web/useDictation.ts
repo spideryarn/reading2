@@ -1007,7 +1007,13 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     };
     /* A request still opening holds the device the moment it lands, so the
        next claimant waits for it to land and be stopped (`Session.early`). */
+    let freeing = false;
     const free = () => {
+      /* `tape.stop().then(...)` and its catch share this ending. If something
+         after the ordinary release throws, the catch must not release the same
+         claim a second time. */
+      if (freeing) return;
+      freeing = true;
       if (pending) void discardEarly(pending).then(release);
       else release();
     };
@@ -1711,11 +1717,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     void (async () => {
       await claimed;
       if (session.current !== s || s.finished) {
-        /* Free only once whatever the early request opened is stopped. */
-        void discardEarly(early).then(() => {
-          releaseMicrophone(s.claim);
-          s.freed();
-        });
+        /* Every route that makes a session stale ends it; keep early-request
+           cleanup and claim release behind that one ownership boundary. */
+        if (!s.finished) finish(s, true);
         return;
       }
       const outcome = await beginCapture(
@@ -1730,6 +1734,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (session.current !== s || s.finished) {
         /* The reader stopped, or moved on, while the microphone was opening.
            `beginCapture` has already released anything it opened. */
+        if (!s.finished) finish(s, true);
         return;
       }
       if (outcome.kind !== "started") {
@@ -2450,6 +2455,8 @@ function probeIsSafe(): boolean {
 /** A `getUserMedia` made inside the press, which its session owns until it adopts the track. */
 interface EarlyRequest {
   stream: Promise<MediaStream>;
+  /** The one cleanup shared by `finish` and an opening continuation. */
+  discard: Promise<void> | null;
 }
 
 /**
@@ -2494,7 +2501,7 @@ function earlyRequest(preferred: string | null): EarlyRequest | null {
     /* Its refusal is read where it is awaited; this only stops one that is
        discarded unread from surfacing as unhandled. */
     stream.catch(() => {});
-    return { stream };
+    return { stream, discard: null };
   } catch {
     return null;
   }
@@ -2506,12 +2513,14 @@ function earlyRequest(preferred: string | null): EarlyRequest | null {
  */
 function discardEarly(early: EarlyRequest | null): Promise<void> {
   if (!early) return Promise.resolve();
-  return early.stream.then(
+  if (early.discard) return early.discard;
+  early.discard = early.stream.then(
     (stream) => {
       for (const t of stream.getTracks()) t.stop();
     },
     () => {},
   );
+  return early.discard;
 }
 
 /**
@@ -2543,10 +2552,16 @@ async function adoptEarly(
   } catch (err) {
     return { kind: "failed", micError: micErrorName(err) };
   }
-  if (!track) return { kind: "failed", micError: "no-track" };
+  if (!track) {
+    /* Audio-only capture should contain no other tracks, but the stream is
+       still ours and the no-track failure must not depend on that assumption. */
+    await discardEarly(early);
+    return { kind: "failed", micError: "no-track" };
+  }
   if (!stillWanted()) {
-    // The reader stopped while we were opening. Do not leave the device on.
-    track.stop();
+    /* `finish` may already be awaiting this same cleanup. One owner stops every
+       track exactly once; both continuations may safely wait for it. */
+    await discardEarly(early);
     return { kind: "failed", micError: null };
   }
   return { kind: "started", track, live: false, honoured: preferred === null || openedId(track) === preferred };
