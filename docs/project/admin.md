@@ -1073,12 +1073,31 @@ is how the section reads each lookup's cost from the ledger.
 **The lookup** (`src/author-lookup.ts`, `src/author-lookup-start.ts`) is one capable-tier chat call
 with Exa web search, standard power whatever the article's, in a collector of its own because the
 request's has closed. **An address fills the draft only if it was seen**: an exact, normalised
-address token in the extract of the search result the model named, or in the article's own text.
-Anything else is shown as *suggested, not seen in any result* and never put in the voucher. It fills
-only empty fields, and appends to the **notes** — free text the administrator also edits, here and by
-MCP: where the address was seen, who the author is, a suggested message, why this piece. The notes
-never leave the admin routes. The model can choose up to three searches from a prompt holding a
-stranger's article; that residual risk is accepted and written up in the plan's D7.
+address token in the article's own text, or in the extract of the search result the model named —
+and, from a search result, only if it is in the author's name, because the search also visits
+colleagues' pages. It fills only empty fields, and appends to the **notes** — free text the
+administrator also edits, here and by MCP: where the address was seen, who the author is, a
+suggested message, why this piece. The notes never leave the admin routes. The model can choose up
+to five searches from a prompt holding a stranger's article; that residual risk is accepted and
+written up in the plan's D7.
+
+**It tries harder when no address was seen** — Greg, 2026-10-23 (#686, `spya-w5yavh`): *"I found
+an email address listed as an image here that I feel like you could have spotted … list a few with
+tooltips for me with a level of confidence for each"*. Since 2026-10-24
+([261024j](../plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md)):
+
+- the search looks for the author's homepage, contact page and, failing those, a colleague's page;
+- **it reads the homepage and contact page itself** (`src/author-page.ts`, through `fetchDocument`'s
+  guards, two pages, one try, 10 s, 2 MB), with each image kept as a marker, so an `@` drawn as an
+  image is read — no model sees the page;
+- every address it did not apply is listed on the run as **Possible addresses — none applied**
+  (`author_lookup_candidates`): written on a page it read, seen in a result but not in the author's
+  name, or a guess from a colleague's address pattern. Each has a chip — *likely*, *possible*,
+  *long shot* — that is **computed, never the model's** (`src/author-candidates.ts`; a guess is at
+  best *possible*, and only when a colleague's seen address follows a name pattern that gives
+  exactly it), and a card saying why and where. **Use this address** puts one in the draft through
+  the ordinary `PATCH`; the address then reads *chosen or typed by you*. Nothing on the list is
+  ever applied or sent without that press.
 
 **The card shows the email itself** since 2026-10-24 — Greg, 2026-10-23 (#687, `spya-nt6hee`):
 *"I'm confused about what is notes and what's an actual email that it would send"*. A draft's card

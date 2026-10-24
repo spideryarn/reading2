@@ -46,7 +46,8 @@ const ADMIN = ADMIN_USER_ID_LOCAL as OwnerId;
 const RUN = randomUUID().slice(0, 8);
 const SLUG = `test-author-lookup-start-${RUN}`;
 const BIO_PAGE = "https://writer.example.org/about";
-const ADDRESS = `lookup-${RUN}@example.invalid`;
+/* In the author's name, so a seen address in a result fills the draft (plan 261024j, R1). */
+const ADDRESS = `paulgraham-${RUN}@example.invalid`;
 
 let article: ScratchArticle | undefined;
 const runIds: string[] = [];

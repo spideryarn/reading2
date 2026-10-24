@@ -61,7 +61,7 @@ vi.mock("../src/author-lookup-start.js", () => ({
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { AUTHOR_GIFT_NOTES_MAX } from "../src/admin-author-gifts.js";
-import type { AdminAuthorGift } from "../src/admin-author-gifts.js";
+import type { AdminAuthorGift, AdminLookupCandidate } from "../src/admin-author-gifts.js";
 import type { Verifier } from "../src/auth.js";
 import { getDb } from "../src/db/client.js";
 import { aiCalls } from "../src/db/schema.js";
@@ -1135,6 +1135,31 @@ describe("GET /api/admin/author-gifts/:id/email", () => {
     expect(preview.status).toBe(400);
     expect(String(preview.body.error)).toMatch(/not one of yours/i);
   });
+
+  /**
+   * The case above is also caught by the title read, which 404s a slug that
+   * names nothing. This one is not: the frozen slug now names *another* of the
+   * owner's articles, so only the slug comparison after the join refuses it,
+   * and without it the preview shows that article's title where Send refuses
+   * (resolveGiftStarter). Seen red with the comparison removed, 2026-10-24.
+   */
+  it("refuses a starter whose frozen slug now names another of the owner's articles", async () => {
+    const mine = await seed("preview-taken", { linkOn: true });
+    const other = await seed("preview-taker", { linkOn: true });
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("preview-taken") },
+    });
+    const id = String(made.body.id);
+    await pool.query("update spideryarn.articles set slug = $2 where id = $1", [mine.id, `${mine.slug}-renamed`]);
+    await pool.query("update spideryarn.articles set slug = $2 where id = $1", [other.id, mine.slug]);
+
+    const preview = await drive("GET", `/api/admin/author-gifts/${id}/email`, null);
+    expect(preview.status).toBe(400);
+    expect(String(preview.body.error)).toMatch(/not one of yours/i);
+  });
 });
 
 /* -------------------------------------------------------------- guidance -- */
@@ -1477,6 +1502,79 @@ describe("appendNotes", () => {
 });
 
 /* ------------------------------------------------------------------- list -- */
+
+describe("offered addresses (plan 261024j)", () => {
+  const offered = (address: string, over: Partial<AdminLookupCandidate> = {}): AdminLookupCandidate => ({
+    address,
+    kind: "on-page-disguised",
+    confidence: "high",
+    why: "Written in disguise on example.org/~a.",
+    sourceUrl: "https://example.org/~a/",
+    patternSeen: null,
+    ...over,
+  });
+
+  it("are stored in order and listed on the run, never fill the draft, and a bad one is dropped", async () => {
+    const mine = await seed("offered");
+    const { id, lookupId } = await ensured(mine);
+    const answer = await finishLookup(lookupId, {
+      kind: "found",
+      authorName: "Found Name",
+      authorSourceUrl: null,
+      email: null,
+      emailSourceUrl: null,
+      suggestedEmail: null,
+      contactUrl: null,
+      searches: 5,
+      model: null,
+      notes: null,
+      candidates: [
+        offered(" First@Example.org "),
+        offered("guess@example.org", { kind: "guess", confidence: "low", patternSeen: false, sourceUrl: null }),
+        /* A guess may never be likely (R3): dropped, not stored. */
+        offered("bad-guess@example.org", { kind: "guess", confidence: "high", patternSeen: true }),
+        offered("unsupported-medium@example.org", { kind: "guess", confidence: "medium", patternSeen: false }),
+        offered("low-page@example.org", { confidence: "low" }),
+        offered("high-result@example.org", { kind: "in-result", confidence: "high" }),
+        offered("page-without-source@example.org", { confidence: "medium", sourceUrl: null }),
+        offered("pattern-without-source@example.org", { kind: "guess", confidence: "medium", patternSeen: true, sourceUrl: null }),
+        offered("first@example.org"),
+        offered("not an address"),
+      ],
+    });
+    expect(answer).toMatchObject({ kind: "finished", outcome: "author", applied: { email: false } });
+    expect((await giftRow(id)).email).toBeNull();
+
+    const reply = await drive("GET", "/api/admin/author-gifts", null);
+    const run = (reply.body.gifts as AdminAuthorGift[]).find((g) => g.id === id)?.lookups[0];
+    expect(run?.candidates).toEqual([
+      offered("first@example.org"),
+      offered("guess@example.org", { kind: "guess", confidence: "low", patternSeen: false, sourceUrl: null }),
+    ]);
+  });
+
+  it("a lost finish writes none", async () => {
+    const mine = await seed("offered-lost");
+    const { lookupId } = await ensured(mine);
+    await settle(lookupId);
+    const late = await finishLookup(lookupId, {
+      kind: "found",
+      authorName: null,
+      authorSourceUrl: null,
+      email: null,
+      emailSourceUrl: null,
+      suggestedEmail: null,
+      contactUrl: null,
+      searches: null,
+      model: null,
+      notes: null,
+      candidates: [offered("late@example.org")],
+    });
+    expect(late).toEqual({ kind: "lost" });
+    const rows = await pool.query("select 1 from spideryarn.author_lookup_candidates where lookup_id = $1", [lookupId]);
+    expect(rows.rowCount).toBe(0);
+  });
+});
 
 describe("GET /api/admin/author-gifts", () => {
   it("lists every gift with its status, its lookups and what each cost from the ledger, never the key", async () => {

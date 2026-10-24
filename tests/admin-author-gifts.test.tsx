@@ -17,7 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AdminAuthorGift, AdminAuthorLookup } from "../src/admin-author-gifts.js";
+import type { AdminAuthorGift, AdminAuthorLookup, AdminLookupCandidate } from "../src/admin-author-gifts.js";
 import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -63,6 +63,7 @@ function lookup(over: Partial<AdminAuthorLookup> = {}): AdminAuthorLookup {
     searches: 2,
     model: "anthropic/claude-sonnet",
     cost: { nanos: 12_340_000, calls: 1, unpricedCalls: 0 },
+    candidates: [],
     ...over,
   };
 }
@@ -676,7 +677,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     const fields = c?.querySelector("dl")?.textContent ?? "";
-    expect(fields).toContain("typed@example.test — typed by you");
+    expect(fields).toContain("typed@example.test — chosen or typed by you");
     expect(fields).toContain("seen at https://example.test/bio");
     const run = c?.querySelector("ul li")?.textContent ?? "";
     expect(run).toContain("Address found");
@@ -701,15 +702,94 @@ describe("Author gifts", () => {
     expect(card(DRAFT)?.querySelector("dl")?.textContent).toContain("from the lookup");
   });
 
-  it("labels an address no result showed as suggested, not seen", async () => {
+  it("lists an address no result showed as a long shot, never applied (plan 261024j, R7)", async () => {
     giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", suggestedEmail: "guess@example.test" })] })];
     await mount();
     const run = card(DRAFT)?.querySelector("ul li")?.textContent ?? "";
     expect(run).toContain("Author found, no address");
-    expect(run).toContain("guess@example.test — suggested, not seen in any result");
+    expect(run).toContain("Possible addresses — none applied");
+    expect(run).toContain("guess@example.testlong shot");
   });
 
-  it("says each run's outcome, flags more than three searches, and gives the cost", async () => {
+  it("keeps a suggestion that is not an address as text, with no button to use it (R7)", async () => {
+    giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", suggestedEmail: "ann at example" })] })];
+    await mount();
+    expect(card(DRAFT)?.textContent).toContain("ann at example — suggested, not seen in any result, and not shaped like an address");
+    expect(button(card(DRAFT), "Use this address")).toBeUndefined();
+  });
+
+  describe("possible addresses (plan 261024j)", () => {
+    const offered: AdminLookupCandidate[] = [
+      {
+        address: "alexwarth@gmail.com",
+        kind: "on-page-disguised",
+        confidence: "high",
+        why: "Written in disguise on tinlizzie.org/~awarth/, the page the lookup took for theirs, and in the author's name.",
+        sourceUrl: "https://tinlizzie.org/~awarth/",
+        patternSeen: null,
+      },
+      {
+        address: "alessandro.warth@inkandswitch.com",
+        kind: "guess",
+        confidence: "low",
+        why: "A long shot: no colleague's address was seen to support it.",
+        sourceUrl: null,
+        patternSeen: false,
+      },
+    ];
+
+    it("lists each with its confidence in words, and none is applied", async () => {
+      giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      const rows = [...(card(DRAFT)?.querySelectorAll('ul[aria-label="Possible addresses"] > li') ?? [])].map((li) => li.textContent ?? "");
+      expect(rows).toEqual([
+        "alexwarth@gmail.comlikelyUse this address",
+        "alessandro.warth@inkandswitch.comlong shotUse this address",
+      ]);
+      expect(writes()).toEqual([]);
+    });
+
+    it("puts one in the draft only when pressed, through the ordinary edit", async () => {
+      giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      await act(async () => button(card(DRAFT), "Use this address")?.click());
+      await settle();
+      expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { email: "alexwarth@gmail.com" } }]);
+    });
+
+    it("closes an open Send confirmation before choosing a different address", async () => {
+      giftsAnswer = () => [gift({ email: "ann@example.test", lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      await act(async () => button(card(DRAFT), "Send")?.click());
+      expect(button(card(DRAFT), "Send to ann@example.test")).toBeDefined();
+
+      await act(async () => button(card(DRAFT), "Use instead")?.click());
+      await settle();
+
+      expect(button(card(DRAFT), "Send to ann@example.test")).toBeUndefined();
+      expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { email: "alexwarth@gmail.com" } }]);
+    });
+
+    it("says Use instead when the draft has another address, and marks the one it has", async () => {
+      giftsAnswer = () => [gift({ email: "alexwarth@gmail.com", lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      const rows = [...(card(DRAFT)?.querySelectorAll('ul[aria-label="Possible addresses"] > li') ?? [])].map((li) => li.textContent ?? "");
+      expect(rows).toEqual(["alexwarth@gmail.comlikelyin the draft", "alessandro.warth@inkandswitch.comlong shotUse instead"]);
+    });
+
+    it("offers no button on a gift that is no longer a draft", async () => {
+      giftsAnswer = () => [
+        gift({ id: SENT, status: "sent", voucherId: "v1", lookups: [lookup({ outcome: "author", candidates: offered })] }),
+      ];
+      await mount({ tab: "Given" });
+      const shown = button(host, "Show");
+      if (shown) await act(async () => shown.click());
+      expect(host.textContent).toContain("alexwarth@gmail.com");
+      expect(button(host, "Use this address")).toBeUndefined();
+    });
+  });
+
+  it("says each run's outcome, flags more than five searches, and gives the cost", async () => {
     const recent = new Date(Date.now() - 30_000).toISOString();
     const old = new Date(Date.now() - 20 * 60_000).toISOString();
     giftsAnswer = () => [
@@ -717,7 +797,7 @@ describe("Author gifts", () => {
         lookups: [
           lookup({ id: "r1", outcome: null, finishedAt: null, cost: null, createdAt: recent }),
           lookup({ id: "r2", outcome: null, finishedAt: null, cost: null, createdAt: old }),
-          lookup({ id: "r3", outcome: "failed", failure: "503", searches: 5, cost: { nanos: 1_000_000, calls: 2, unpricedCalls: 1 } }),
+          lookup({ id: "r3", outcome: "failed", failure: "503", searches: 6, cost: { nanos: 1_000_000, calls: 2, unpricedCalls: 1 } }),
           lookup({ id: "r4", outcome: "failed", failure: "stale" }),
         ],
       }),
@@ -728,7 +808,7 @@ describe("Author gifts", () => {
     expect(runs[0]).toContain("nothing spent yet");
     expect(runs[1]).toContain("Did not finish");
     expect(runs[2]).toContain("Failed: 503");
-    expect(runs[2]).toContain("5 searches — more than the 3 it was allowed");
+    expect(runs[2]).toContain("6 searches — more than the 5 it was allowed");
     expect(runs[2]).toContain("cost not fully known");
     expect(runs[3]).toContain("Did not finish");
     expect(runs[3]).toContain("2 searches · cost: $0.0123 (1 call)");
