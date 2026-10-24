@@ -403,8 +403,19 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$", flags: "" },
-    methods: ["PATCH"],
+    methods: ["PATCH", "DELETE"],
     witnesses: ["/api/admin/author-gifts/w1"],
+  },
+  /* A draft's email, if sent now, and the lookup's guidance for its message, 261024f. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/email$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/author-gifts/w1/email"],
+  },
+  {
+    match: { kind: "literal", path: "/api/admin/author-gift-guidance" },
+    methods: ["GET", "PUT"],
+    witnesses: ["/api/admin/author-gift-guidance"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/send$", flags: "" },
@@ -1187,8 +1198,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    your-words.md on its own (plan 261020w); 124 with the guide's prepare step
    (plan 261019p); 126 with an article's access for the admin and a private
    link's opens (plan 261021d); 129 with view as's start, current and end
-   (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j). */
-const EXPECTED_MATCHER_COUNT = 130;
+   (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j); 132
+   with a draft gift's email preview and the lookup's guidance (plan 261024f). */
+const EXPECTED_MATCHER_COUNT = 132;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1210,8 +1222,9 @@ const EXPECTED_MATCHER_COUNT = 130;
    guide's prepare step (plan 261019p); 155 with an article's access for the
    admin and a private link's opens (plan 261021d); 158 with view as's start,
    current and end (plan 261019n); 159 with a draft gift's High-powered AI
-   (plan 261021j). */
-const EXPECTED_GUARD_COUNT = 159;
+   (plan 261021j); 163 with a discarded gift's DELETE, a draft's email preview
+   and the guidance's GET and PUT (plan 261024f). */
+const EXPECTED_GUARD_COUNT = 163;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2386,6 +2399,10 @@ describe("the authenticated API's route contract", () => {
         // a draft gift's article switched to Opus, 261021j
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/high-power$/",
         "PATCH regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$/",
+        "GET regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/email$/",
+        "GET literal /api/admin/author-gift-guidance",
+        "PUT literal /api/admin/author-gift-guidance",
+        "DELETE regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$/",
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/send$/",
         // every article, and one article's transfer, 261011n — after the gifts
         "GET literal /api/admin/articles",

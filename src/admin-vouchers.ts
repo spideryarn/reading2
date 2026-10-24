@@ -193,6 +193,9 @@ export function giftEmailStarterLine(title: string): string {
   return `Here is "${title}" in Spideryarn, to start with:`;
 }
 
+/** The longest note — private, or to them — the API takes, in Unicode code points. */
+export const VOUCHER_NOTE_MAX = 500;
+
 /** The longest recipient name the API and table take, in Unicode code points. */
 export const RECIPIENT_NAME_MAX = 80;
 

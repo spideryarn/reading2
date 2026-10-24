@@ -59,6 +59,7 @@ function lookup(over: Partial<AdminAuthorLookup> = {}): AdminAuthorLookup {
     emailSourceUrl: null,
     suggestedEmail: null,
     contactUrl: null,
+    suggestedMessage: null,
     searches: 2,
     model: "anthropic/claude-sonnet",
     cost: { nanos: 12_340_000, calls: 1, unpricedCalls: 0 },
@@ -121,6 +122,7 @@ let sendAnswer: Answer;
 let lookupAnswer: Answer;
 let highPowerAnswer: Answer;
 let heldWrite: Promise<Response> | null;
+let previewAnswer: (g: AdminAuthorGift) => Answer;
 
 beforeEach(() => {
   calls = [];
@@ -131,6 +133,16 @@ beforeEach(() => {
   lookupAnswer = { status: 202, body: { lookupId: LOOKUP } };
   highPowerAnswer = { status: 200, body: { highPower: true, queued: 0 } };
   heldWrite = null;
+  previewAnswer = (g) => ({
+    status: 200,
+    body: {
+      from: "Spideryarn <hello@spideryarn.com>",
+      to: g.email,
+      subject: `A gift of ${g.articles} free articles on Spideryarn`,
+      text: [g.recipientName === null ? "" : `Dear ${g.recipientName},`, g.recipientNote ?? "", "[the private link to this article]"].join("\n\n"),
+      audience: "invite",
+    },
+  });
   /* A tab click writes `?tab=` into the address, which would outlive the test. */
   history.replaceState(null, "", "/admin/vouchers");
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -143,6 +155,12 @@ beforeEach(() => {
     if (method === "GET" && url === "/api/admin/author-gifts") return json({ status: 200, body: { gifts: giftsAnswer() } });
     if (method !== "GET" && heldWrite !== null) return heldWrite;
     if (method === "POST" && url === "/api/admin/author-gifts") return json(ensureAnswer);
+    /* The email preview (plan 261024f § D2): the server's renderer stood in for by the fields it reads. */
+    if (method === "GET" && url.endsWith("/email")) {
+      const shown = giftsAnswer().find((g) => url === `/api/admin/author-gifts/${g.id}/email`);
+      if (!shown) return json({ status: 404, body: { error: "There is no such author gift." } });
+      return json(previewAnswer(shown));
+    }
     if (method === "POST" && url.endsWith("/lookups")) return json(lookupAnswer);
     if (method === "POST" && url.endsWith("/send")) return json(sendAnswer);
     if (method === "POST" && url.endsWith("/high-power")) return json(highPowerAnswer);
@@ -274,7 +292,7 @@ describe("Author gifts", () => {
     /* Send on a draft and a half-sent one; Restore only on the discarded; nothing but notes on the sent. */
     expect(button(card("a2"), "Send")).toBeDefined();
     expect(button(card("a3"), "Send")).toBeUndefined();
-    expect(button(card("a3"), "Edit")).toBeUndefined();
+    expect(button(card("a3"), "Edit the email")).toBeUndefined();
     expect(button(card("a4"), "Restore")).toBeDefined();
     expect(button(card("a4"), "Send")).toBeUndefined();
   });
@@ -337,7 +355,7 @@ describe("Author gifts", () => {
     const before = vouchersRead();
     await act(async () => button(card(DRAFT), "Send")?.click());
     expect(writes()).toEqual([]);
-    expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
+    expect(card(DRAFT)?.textContent).toContain("Send the email above to ann@example.test?");
     /* Plan 261020z: green outline send, red back-out. */
     const sendTo = button(card(DRAFT), "Send to ann@example.test");
     expect(sendTo?.classList.contains("tone-positive")).toBe(true);
@@ -513,7 +531,7 @@ describe("Author gifts", () => {
     expect(c?.textContent).toContain("Old notes.\nSecond line.");
     expect(c?.textContent).toContain("last written");
     await act(async () => button(c, "Edit notes")?.click());
-    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    const box = c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement;
     expect(box.value).toBe("Old notes.\nSecond line.");
     await act(async () => sets(box, "Old notes.\nSecond line.\nShe replied."));
     /* Plan 261020z: Save notes green, Cancel red. */
@@ -536,7 +554,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     await act(async () => button(c, "Edit notes")?.click());
-    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    const box = c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement;
     await act(async () => sets(box, "First words."));
     await act(async () => button(c, "Save notes")?.click());
     await settle();
@@ -551,7 +569,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     await act(async () => button(c, "Edit notes")?.click());
-    const box = () => c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement | null;
+    const box = () => c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement | null;
     await act(async () => sets(box() as HTMLTextAreaElement, "Greg's long, careful rewrite."));
     await act(async () => button(c, "Save notes")?.click());
     await settle();
@@ -567,7 +585,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     await act(async () => button(c, "Edit notes")?.click());
-    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    const box = c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement;
     await act(async () => sets(box, "Greg's edited note."));
 
     row = gift({
@@ -603,14 +621,14 @@ describe("Author gifts", () => {
     giftsAnswer = () => [gift({ recipientName: "Ann" })];
     await mount();
     const c = card(DRAFT);
-    await act(async () => button(c, "Edit")?.click());
+    await act(async () => button(c, "Edit the email")?.click());
     const name = c?.querySelector('input[aria-label="Their name"]') as HTMLInputElement;
     await act(async () => sets(name, "Ann Author"));
     heldWrite = new Promise<Response>(() => {});
     act(() => button(c, "Save")?.click());
     expect(name.disabled).toBe(true);
     expect((c?.querySelector('input[aria-label="Email address"]') as HTMLInputElement | null)?.disabled).toBe(true);
-    expect((c?.querySelector('textarea[aria-label="Note to them"]') as HTMLTextAreaElement | null)?.disabled).toBe(true);
+    expect((c?.querySelector('textarea[aria-label="Your message to them"]') as HTMLTextAreaElement | null)?.disabled).toBe(true);
   });
 
   it("offers Look up again only on a draft, and not while one is running", async () => {
@@ -717,7 +735,7 @@ describe("Author gifts", () => {
     giftsAnswer = () => [gift({ email: "found@example.test", emailLookupId: LOOKUP, recipientName: "Ann", lookups: [lookup()] })];
     await mount();
     const c = card(DRAFT);
-    await act(async () => button(c, "Edit")?.click());
+    await act(async () => button(c, "Edit the email")?.click());
     const name = c?.querySelector('input[aria-label="Their name"]') as HTMLInputElement;
     await act(async () => sets(name, "Ann Author"));
     /* Plan 261020z: Save green, Cancel red. */
@@ -733,7 +751,7 @@ describe("Author gifts", () => {
     giftsAnswer = () => [gift({ email: "old@example.test", recipientName: null })];
     await mount();
     const c = card(DRAFT);
-    await act(async () => button(c, "Edit")?.click());
+    await act(async () => button(c, "Edit the email")?.click());
     const email = c?.querySelector('input[aria-label="Email address"]') as HTMLInputElement;
     await act(async () => sets(email, "Ann Author <ann@example.test>"));
     await act(async () => button(c, "Save")?.click());
@@ -815,6 +833,71 @@ describe("Author gifts", () => {
       [`/api/admin/author-gifts/${DRAFT}`, { discarded: true }],
       [`/api/admin/author-gifts/${SENT}`, { discarded: false }],
     ]);
+  });
+
+  /* Plan 261024f § D1, Greg 2026-10-23 (#685, spya-h2r5ap). */
+  it("deletes a discarded gift for good only after asking, and Cancel sends nothing", async () => {
+    giftsAnswer = () => [gift(), gift({ id: SENT, status: "discarded", discardedAt: "2026-10-09T12:00:00Z" })];
+    await mount();
+    expect(button(card(DRAFT), "Delete")).toBeUndefined();
+    await act(async () => button(card(SENT), "Delete")?.click());
+    expect(card(SENT)?.textContent).toContain("Delete this draft for good?");
+    await act(async () => button(card(SENT), "Cancel")?.click());
+    expect(card(SENT)?.textContent).not.toContain("Delete this draft for good?");
+    expect(writes()).toEqual([]);
+
+    await act(async () => button(card(SENT), "Delete")?.click());
+    await act(async () => button(card(SENT), "Delete for good")?.click());
+    await settle();
+    expect(writes()).toEqual([{ method: "DELETE", url: `/api/admin/author-gifts/${SENT}`, body: undefined }]);
+  });
+
+  /* Plan 261024f § D2, Greg 2026-10-23 (#687, spya-nt6hee). */
+  it("shows a draft's email as it would go — from, to, subject and body — and not on a sent gift", async () => {
+    giftsAnswer = () => [
+      gift({ email: "ann@example.test", recipientName: "Ann", recipientNote: "Hello from Greg." }),
+      gift({ id: SENT, status: "sent", email: "bo@example.test" }),
+    ];
+    await mount();
+    await settle();
+    const email = card(DRAFT)?.querySelector('[aria-label="The email, if you sent it now"]');
+    expect(email?.textContent).toContain("Spideryarn <hello@spideryarn.com>");
+    expect(email?.textContent).toContain("ann@example.test");
+    expect(email?.textContent).toContain("A gift of 20 free articles on Spideryarn");
+    expect(email?.querySelector("[data-email-body]")?.textContent).toContain("Dear Ann,");
+    expect(email?.querySelector("[data-email-body]")?.textContent).toContain("Hello from Greg.");
+    expect(card(SENT)?.querySelector('[aria-label="The email, if you sent it now"]')).toBeNull();
+    /* The notes say what they are. */
+    expect(card(DRAFT)?.textContent).toContain("Private notes");
+    expect(card(DRAFT)?.textContent).toContain("never sent");
+  });
+
+  /* Plan 261024f, R1: the lookup's message is offered, never applied. */
+  it("offers the lookup's suggested message, and saves it as the message only through the editor", async () => {
+    giftsAnswer = () => [
+      gift({ email: "ann@example.test", lookups: [lookup({ suggestedMessage: "I made a version of your essay.\nGreg" })] }),
+    ];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+    expect(c?.querySelector('[aria-label="Suggested message"]')?.textContent).toContain("not in the email unless you use it");
+    await act(async () => button(c, "Use as your message")?.click());
+    expect(writes()).toEqual([]);
+    const box = c?.querySelector('textarea[aria-label="Your message to them"]') as HTMLTextAreaElement;
+    expect(box.value).toBe("I made a version of your essay.\nGreg");
+    await act(async () => button(c, "Save")?.click());
+    await settle();
+    expect(writes()).toEqual([
+      { method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { recipientNote: "I made a version of your essay.\nGreg" } },
+    ]);
+  });
+
+  it("hides the suggestion once it is the message", async () => {
+    giftsAnswer = () => [
+      gift({ recipientNote: "Same words.", lookups: [lookup({ suggestedMessage: "Same words." })] }),
+    ];
+    await mount();
+    expect(card(DRAFT)?.querySelector('[aria-label="Suggested message"]')).toBeNull();
   });
 
   /* Plan 261020ab, Greg 2026-10-20 (spya-vusqvg): one *New gift* form on

@@ -26,6 +26,9 @@ export type AuthorLookupOutcome = "address" | "author" | "nothing" | "failed";
 /** The longest the notes may be, in code points (D6). The table's CHECK is a far higher ceiling. */
 export const AUTHOR_GIFT_NOTES_MAX = 20_000;
 
+/** The longest guidance for the lookup's message, in code points (plan 261024f § D4). The table's CHECK is a far higher ceiling. */
+export const AUTHOR_GIFT_GUIDANCE_MAX = 4_000;
+
 /** A lookup unfinished this long is `failed / stale`, and a new one may start (D4). */
 export const AUTHOR_LOOKUP_STALE_MINUTES = 5;
 
@@ -63,6 +66,12 @@ export interface AdminAuthorLookup {
   /** How many searches the provider says ran. */
   readonly searches: number | null;
   readonly model: string | null;
+  /**
+   * The model's suggested message, whole: shown under the email with *Use as
+   * your message*, and never in the email until Greg saves it there (plan
+   * 261024f, R1). Null when there was none.
+   */
+  readonly suggestedMessage: string | null;
   /** Null until the run claimed the row and could spend. */
   readonly cost: AuthorLookupCost | null;
 }
@@ -173,6 +182,41 @@ export interface AuthorGiftSendExpected {
 export interface AuthorGiftSent {
   readonly voucherId: string;
   readonly email: "queued" | "replayed";
+}
+
+/**
+ * **The email a draft would send, if sent now** — `GET
+ * /api/admin/author-gifts/:id/email` (plan 261024f § D2, R2, R3). Rendered by
+ * the same function Send uses, with the private link's address replaced by
+ * `STARTER_LINK_PLACEHOLDER`: the page never holds the key. The plain-text part
+ * only; the HTML is the same words in the same order. `to` is null while the
+ * draft has no address. `audience` says which middle the body has, which can
+ * change by Send if the address signs up in between.
+ */
+export interface AuthorGiftEmailPreview {
+  readonly from: string;
+  readonly to: string | null;
+  readonly subject: string;
+  readonly text: string;
+  readonly audience: "invite" | "reader";
+}
+
+/** What the preview shows where the email will carry the article's address, key and all. */
+export const STARTER_LINK_PLACEHOLDER = "[the private link to this article]";
+
+/**
+ * **Greg's guidance for the lookup's suggested message** — `GET` and `PUT
+ * /api/admin/author-gift-guidance` (plan 261024f § D4, R5). `guidance` is his
+ * text, or null while the built-in text is in force; `builtIn` is that text;
+ * `fixedPrompt` is the rest of the prompt, read-only, with a marker where the
+ * guidance goes. `updatedAt` is when the row in force was saved, null when none
+ * ever was.
+ */
+export interface AuthorGiftGuidance {
+  readonly guidance: string | null;
+  readonly builtIn: string;
+  readonly fixedPrompt: string;
+  readonly updatedAt: string | null;
 }
 
 /**

@@ -30,17 +30,21 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import {
+  AUTHOR_GIFT_GUIDANCE_MAX,
   AUTHOR_GIFT_NOTES_MAX,
   AUTHOR_LOOKUP_STALE_MINUTES,
   type AdminAuthorGift,
   type AdminAuthorLookup,
+  type AuthorGiftEmailPreview,
+  STARTER_LINK_PLACEHOLDER,
   type AuthorGiftSendExpected,
   type AuthorGiftStatus,
   type AuthorLookupOutcome,
 } from "../admin-author-gifts.js";
 import { RECIPIENT_NAME_MAX, cleanRecipientName, starterOwnerOf } from "../admin-vouchers.js";
 import { getDb } from "../db/client.js";
-import { articleRevisions, articles, authorGifts, authorLookups, billingVouchers } from "../db/schema.js";
+import { FROM } from "../email.js";
+import { articleRevisions, articles, authorGiftGuidance, authorGifts, authorLookups, billingVouchers } from "../db/schema.js";
 import { isSlug } from "../ingest.js";
 import { log } from "../log.js";
 import { type OwnerId, runAsOwner } from "../owner.js";
@@ -56,13 +60,15 @@ import {
   prepareLockedGiftArticleIn,
 } from "./pg-gift-prep.js";
 import { ensureShareLinkForArticle } from "./pg-share-link.js";
-import { latestVoucherEmails } from "./pg-voucher-emails.js";
+import { type GiftAudience, giftMessage, latestVoucherEmails } from "./pg-voucher-emails.js";
+import { pgArticleReader } from "./pg.js";
 import {
   type CreateVoucherAnswer,
   type NewVoucher,
   type Parsed,
   type StarterRefusal,
   createVoucher,
+  giftAudienceFor,
   isPlainObject,
   looksLikeEmail,
   normaliseEmail,
@@ -477,10 +483,11 @@ export async function lookupSubject(lookupId: string): Promise<LookupSubject | n
  * `runId` is the fresh collector's own id, so `ai_calls.run_id` names exactly
  * this run's calls.
  */
-export async function claimLookup(lookupId: string, runId: string): Promise<boolean> {
+export async function claimLookup(lookupId: string, runId: string, guidanceId: string | null = null): Promise<boolean> {
   const claimed = await getDb()
     .update(authorLookups)
-    .set({ runId })
+    /* The guidance it runs with, recorded as it is claimed (plan 261024f, R5). */
+    .set({ runId, guidanceId })
     .where(and(eq(authorLookups.id, lookupId), isNull(authorLookups.outcome), isNull(authorLookups.runId)))
     .returning({ id: authorLookups.id });
   return claimed.length === 1;
@@ -505,6 +512,8 @@ export type LookupResult =
       readonly searches: number | null;
       readonly model: string | null;
       readonly notes: string | null;
+      /** Kept on the lookup's row for *Use as your message*; never written into the draft (plan 261024f, R1). */
+      readonly suggestedMessage?: string | null;
     }
   | {
       readonly kind: "failed";
@@ -615,6 +624,7 @@ export async function finishLookup(lookupId: string, result: LookupResult): Prom
         emailSourceUrl: bounded(found?.emailSourceUrl),
         suggestedEmail: bounded(found?.suggestedEmail),
         contactUrl: bounded(found?.contactUrl),
+        suggestedMessage: bounded(found?.suggestedMessage),
         searches: result.searches ?? null,
         model: bounded(result.model),
       })
@@ -727,6 +737,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
       emailSourceUrl: l.emailSourceUrl,
       suggestedEmail: l.suggestedEmail,
       contactUrl: l.contactUrl,
+      suggestedMessage: l.suggestedMessage,
       searches: l.searches,
       model: l.model,
       cost: runSpend,
@@ -998,6 +1009,160 @@ export async function patchAuthorGift(id: string, patch: AuthorGiftPatch): Promi
       .returning({ notesUpdatedAt: authorGifts.notesUpdatedAt });
     if (!row) throw new Error(`author gift ${id} was locked and then not updated`);
     return { kind: "updated", notesUpdatedAt: row.notesUpdatedAt?.toISOString() ?? null };
+  }, READ_COMMITTED);
+}
+
+/* --------------------------------------------------------------- preview -- */
+
+export type PreviewAnswer =
+  | { readonly kind: "preview"; readonly preview: AuthorGiftEmailPreview }
+  | { readonly kind: "not-found" };
+
+/**
+ * **The email this gift would send, if sent now** — Greg, 2026-10-23 (#687,
+ * spya-nt6hee): *"crystal clear what the subject line, what the text is going
+ * to be … what's about to go out and where from"*. Plan 261024f § D2, R2, R3.
+ *
+ * Rendered by `giftMessage`, the function Send's `createVoucher` renders with,
+ * from the same inputs it reads: the draft's fields, the audience
+ * `giftAudienceFor` finds for the address, and the starter article's revision
+ * title read as its owner through the same `starter_slug`. **Never the key**:
+ * the starter's address is `STARTER_LINK_PLACEHOLDER`, and nothing here reads
+ * the private link (voucher-starter.ts is that read's caller, and only for the
+ * email itself). An article that cannot be read now is left out, as Send would
+ * refuse it. Only the text part goes back, never the HTML.
+ *
+ * A read: nothing is written and nothing is queued.
+ */
+export async function previewAuthorGiftEmail(id: string): Promise<PreviewAnswer> {
+  const [gift] = await getDb()
+    .select({
+      email: authorGifts.email,
+      recipientName: authorGifts.recipientName,
+      recipientNote: authorGifts.recipientNote,
+      articles: authorGifts.articles,
+      starterSlug: authorGifts.starterSlug,
+      createdBy: authorGifts.createdBy,
+    })
+    .from(authorGifts)
+    .where(eq(authorGifts.id, id))
+    .limit(1);
+  if (!gift) return { kind: "not-found" };
+
+  const title = await runAsOwner(gift.createdBy as OwnerId, async () => {
+    try {
+      return (await pgArticleReader.loadArticleIdentity(gift.starterSlug)).title;
+    } catch (err) {
+      const status = (err as { status?: unknown } | null | undefined)?.status;
+      if (status === 404 || status === 409) return null;
+      throw err;
+    }
+  });
+  let audience: GiftAudience = { kind: "invite" };
+  if (gift.email !== null) {
+    try {
+      audience = await giftAudienceFor(gift.email);
+    } catch {
+      /* Send falls back the same way (pg-vouchers.ts § giftAudienceOrInvite). */
+      audience = { kind: "invite" };
+    }
+  }
+  const message = giftMessage(gift.articles, audience, {
+    recipientName: gift.recipientName,
+    recipientNote: gift.recipientNote,
+    starter: title === null ? null : { title, url: STARTER_LINK_PLACEHOLDER },
+  });
+  return {
+    kind: "preview",
+    preview: { from: FROM, to: gift.email, subject: message.subject, text: message.text, audience: audience.kind },
+  };
+}
+
+/* -------------------------------------------------------------- guidance -- */
+
+/** The guidance row in force: Greg's text, or null for the built-in; null itself when none was ever saved. */
+export interface GuidanceRow {
+  readonly id: string;
+  readonly guidance: string | null;
+  readonly createdAt: string;
+}
+
+/**
+ * **The newest guidance row** (plan 261024f § D4, R5) — read by the lookup as
+ * it is claimed, and by the page. Insert-only, so the newest is in force; ties
+ * on the timestamp go to the larger id, so two reads always agree.
+ */
+export async function currentGuidance(): Promise<GuidanceRow | null> {
+  const [row] = await getDb()
+    .select({ id: authorGiftGuidance.id, guidance: authorGiftGuidance.guidance, createdAt: authorGiftGuidance.createdAt })
+    .from(authorGiftGuidance)
+    .orderBy(desc(authorGiftGuidance.createdAt), desc(authorGiftGuidance.id))
+    .limit(1);
+  return row ? { ...row, createdAt: row.createdAt.toISOString() } : null;
+}
+
+/** `{ guidance: string | null }`, nothing else; null, or text that is only spaces, is *the built-in text*. */
+export function parseGuidance(body: unknown): Parsed<string | null> {
+  if (!isPlainObject(body)) return { ok: false, message: "The body must be a JSON object." };
+  const unknown = Object.keys(body).filter((k) => k !== "guidance");
+  if (unknown.length > 0) return { ok: false, message: `Unknown field: ${unknown.join(", ")}.` };
+  if (!("guidance" in body)) return { ok: false, message: "guidance is required (null for the built-in text)." };
+  const value = body.guidance;
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== "string") return { ok: false, message: "guidance must be a string or null." };
+  if ([...value].length > AUTHOR_GIFT_GUIDANCE_MAX) {
+    return { ok: false, message: `guidance must be at most ${AUTHOR_GIFT_GUIDANCE_MAX.toLocaleString("en-GB")} characters.` };
+  }
+  const trimmed = value.trim();
+  return { ok: true, value: trimmed === "" ? null : trimmed };
+}
+
+/** **Save Greg's guidance** — a new row, so the old one is kept (R5). Null goes back to the built-in text. */
+export async function saveGuidance(guidance: string | null, createdBy: string): Promise<GuidanceRow> {
+  const [row] = await getDb()
+    .insert(authorGiftGuidance)
+    .values({ guidance, createdBy })
+    .returning({ id: authorGiftGuidance.id, guidance: authorGiftGuidance.guidance, createdAt: authorGiftGuidance.createdAt });
+  if (!row) throw new Error("saving the author gift guidance returned no row");
+  return { ...row, createdAt: row.createdAt.toISOString() };
+}
+
+/* ---------------------------------------------------------------- delete -- */
+
+export type DeleteAnswer =
+  | { readonly kind: "deleted" }
+  | { readonly kind: "not-found" }
+  /** Not discarded, being sent, or sent: only a discarded gift may go (plan 261024f § D1). */
+  | { readonly kind: "not-discarded" };
+
+/**
+ * **Delete a discarded gift for good, with its lookups** — Greg, 2026-10-23
+ * (#685, spya-h2r5ap): *"actually delete permanently the discarded draft"*.
+ * Plan docs/plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md § D1.
+ *
+ * Under the gift's row lock, so a Restore or a Send's freeze waits on it, and
+ * refused unless the gift is discarded, never frozen, and has no voucher: a
+ * sent gift's voucher is a billing record, and its gift row is that record's
+ * notes. `author_lookups` goes by its cascade; the spend stays in the ledger
+ * under each lookup's `run_id`. A lookup still running finishes into
+ * `not-found` and writes nothing.
+ */
+export async function deleteAuthorGift(id: string): Promise<DeleteAnswer> {
+  return await getDb().transaction(async (tx): Promise<DeleteAnswer> => {
+    const [gift] = await tx
+      .select({
+        sendStartedAt: authorGifts.sendStartedAt,
+        discardedAt: authorGifts.discardedAt,
+        voucherExists: VOUCHER_EXISTS,
+      })
+      .from(authorGifts)
+      .where(eq(authorGifts.id, id))
+      .for("update")
+      .limit(1);
+    if (!gift) return { kind: "not-found" };
+    if (statusOf(gift) !== "discarded") return { kind: "not-discarded" };
+    await tx.delete(authorGifts).where(eq(authorGifts.id, id));
+    return { kind: "deleted" };
   }, READ_COMMITTED);
 }
 
@@ -1393,6 +1558,10 @@ export const pgAuthorGiftStore = guardDbStore("author-gifts", {
   ensureAuthorGift,
   listAuthorGifts,
   patchAuthorGift,
+  deleteAuthorGift,
+  previewAuthorGiftEmail,
+  currentGuidance,
+  saveGuidance,
   sendAuthorGift,
   switchGiftOnHighPower,
   beginLookup,

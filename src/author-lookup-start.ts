@@ -110,6 +110,7 @@ export function lookupResultFor(result: AuthorLookupResult): LookupResult {
     searches,
     model,
     notes,
+    suggestedMessage: result.suggestedMessage,
   };
 }
 
@@ -135,11 +136,17 @@ async function runLookup(lookupId: string, deps: StartAuthorLookupDeps): Promise
     async () => {
       const runId = currentSpend()?.runId;
       if (!runId) throw new Error("author lookup: no spend collector open inside its own collectSpend");
-      if (!(await pgAuthorGiftStore.claimLookup(lookupId, runId))) {
+      /* Greg's guidance for the message, read as the lookup is claimed and
+         recorded on its row (plan 261024f, R5). */
+      const guidance = await pgAuthorGiftStore.currentGuidance();
+      if (!(await pgAuthorGiftStore.claimLookup(lookupId, runId, guidance?.id ?? null))) {
         logger.info({ lookupId }, "an author lookup was already claimed or finished; nothing called");
         return;
       }
-      const result = await runAuthorLookup(loaded.input, deps.call ? { call: deps.call } : {});
+      const result = await runAuthorLookup(loaded.input, {
+        ...(deps.call ? { call: deps.call } : {}),
+        guidance: guidance?.guidance ?? null,
+      });
       const finished = await pgAuthorGiftStore.finishLookup(lookupId, lookupResultFor(result));
       logger.info({ lookupId, runId, outcome: result.outcome, finish: finished.kind }, "author lookup finished");
     },

@@ -21,6 +21,7 @@ import {
   type AdminAuthorGift,
   type AdminAuthorLookup,
   AUTHOR_LOOKUP_STALE_MINUTES,
+  type AuthorGiftEmailPreview,
   type AuthorGiftEnsured,
   type AuthorGiftHighPowered,
   type AuthorGiftSendExpected,
@@ -43,6 +44,28 @@ export function lookupPending(lookup: AdminAuthorLookup, now: number): boolean {
   if (lookup.outcome !== null) return false;
   const started = Date.parse(lookup.createdAt);
   return !Number.isFinite(started) || now - started < STALE_MS;
+}
+
+/** What the email preview came to: the email, or why it could not be read. */
+export type EmailPreviewAnswer =
+  | { readonly kind: "preview"; readonly preview: AuthorGiftEmailPreview }
+  | { readonly kind: "failed"; readonly message: string };
+
+/**
+ * **`GET /api/admin/author-gifts/:id/email`** — the email this draft would
+ * send, if sent now (plan 261024f § D2). A read with no state of its own: the
+ * card asks again whenever the gift's `updatedAt` moves. Never rejects.
+ */
+export async function fetchEmailPreview(id: string): Promise<EmailPreviewAnswer> {
+  try {
+    const body = await readJson<Partial<AuthorGiftEmailPreview>>(await apiFetch(`${PATH}/${encodeURIComponent(id)}/email`));
+    if (typeof body.subject !== "string" || typeof body.text !== "string" || typeof body.from !== "string") {
+      throw new MalformedReply("the email preview reply is incomplete");
+    }
+    return { kind: "preview", preview: body as AuthorGiftEmailPreview };
+  } catch (e) {
+    return { kind: "failed", message: describeFetchFailure(e as Error) };
+  }
 }
 
 /** The draft fields and the notes; `PATCH /api/admin/author-gifts/:id` refuses anything else. */
@@ -80,7 +103,7 @@ export interface UseAdminAuthorGifts {
   /** Re-reading on a timer because a lookup is running. */
   watching: boolean;
   reload: () => Promise<void>;
-  /** All five never reject. */
+  /** All six never reject. */
   /**
    * `highPower`: switch the article to Opus as the gift is made (plan 261021j
    * § D4). Ignored by the server when the article already has a gift.
@@ -90,6 +113,8 @@ export interface UseAdminAuthorGifts {
   patch: (id: string, patch: AuthorGiftPatchInput) => Promise<string | null>;
   /** A draft's *Switch on*: its article to Opus, and its main modes queued (plan 261021j § D4). */
   switchOnHighPower: (id: string) => Promise<string | null>;
+  /** A discarded gift, deleted for good with its lookups (plan 261024f § D1). */
+  remove: (id: string) => Promise<string | null>;
   /** Sends the gift as drawn: refused if it has changed since. */
   /** `rightsConfirmed`: the person ticked the rights box, so Send may make the private link (261010r). */
   send: (gift: AdminAuthorGift, options?: { readonly rightsConfirmed?: boolean }) => Promise<SendAnswer>;
@@ -166,7 +191,7 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
   }, [gifts, reads, reload]);
 
   const write = useCallback(
-    (path: string, method: "POST" | "PATCH", body?: unknown): Promise<Written> =>
+    (path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<Written> =>
       apiFetch(path, {
         method,
         ...(body === undefined
@@ -228,6 +253,14 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
     [write],
   );
 
+  const remove = useCallback(
+    async (id: string) => {
+      const written = await write(`${PATH}/${encodeURIComponent(id)}`, "DELETE");
+      return written.ok ? null : written.message;
+    },
+    [write],
+  );
+
   const switchOnHighPower = useCallback(
     async (id: string) => {
       const written = await write(`${PATH}/${encodeURIComponent(id)}/high-power`, "POST");
@@ -271,5 +304,5 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
     [write],
   );
 
-  return { gifts, error, loading, watching, reload, ensure, lookUpAgain, patch, switchOnHighPower, send };
+  return { gifts, error, loading, watching, reload, ensure, lookUpAgain, patch, remove, switchOnHighPower, send };
 }

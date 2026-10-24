@@ -989,6 +989,180 @@ describe("PATCH /api/admin/author-gifts/:id", () => {
   });
 });
 
+/* ----------------------------------------------------------------- delete -- */
+
+/** Greg, 2026-10-23 (#685): a discarded draft deleted for good. Plan 261024f § D1. */
+describe("DELETE /api/admin/author-gifts/:id", () => {
+  it("deletes a discarded gift with its lookups, and leaves the article and the spend", async () => {
+    const mine = await seed("delete");
+    const { id, lookupId } = await ensured(mine);
+    await settle(lookupId);
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { discarded: true })).status).toBe(200);
+
+    const reply = await drive("DELETE", `/api/admin/author-gifts/${id}`, null);
+    expect(reply.status).toBe(200);
+    expect(reply.body).toEqual({ deleted: true });
+    const gifts = await pool.query("select id from spideryarn.author_gifts where id = $1", [id]);
+    expect(gifts.rows).toEqual([]);
+    expect(await lookupsOf(id)).toEqual([]);
+    const article = await pool.query("select id from spideryarn.articles where id = $1", [mine.id]);
+    expect(article.rows).toHaveLength(1);
+
+    /* Gone, so a second delete is a 404, and the article may have a new gift. */
+    expect((await drive("DELETE", `/api/admin/author-gifts/${id}`, null)).status).toBe(404);
+    const again = await ensured(mine);
+    expect(again.id).not.toBe(id);
+  });
+
+  it("refuses a draft, a half-sent and a sent gift with a 409, and deletes nothing", async () => {
+    const mine = await seed("delete-refused");
+    const { id, lookupId } = await ensured(mine);
+    await settle(lookupId);
+    const draft = await drive("DELETE", `/api/admin/author-gifts/${id}`, null);
+    expect(draft.status).toBe(409);
+    expect(String(draft.body.error)).toMatch(/discard/i);
+
+    await drive("PATCH", `/api/admin/author-gifts/${id}`, { email: addressOf("delete-refused") });
+    await pool.query("update spideryarn.author_gifts set send_started_at = now(), send_attempt = $2 where id = $1", [
+      id,
+      randomUUID(),
+    ]);
+    expect((await drive("DELETE", `/api/admin/author-gifts/${id}`, null)).status).toBe(409);
+
+    await pool.query("update spideryarn.author_gifts set send_started_at = null, send_attempt = null where id = $1", [id]);
+    const box = mailbox();
+    control.deps = box.deps;
+    const gift = (await listAuthorGifts()).find((g) => g.id === id);
+    if (!gift || gift.email === null) throw new Error("no gift to send");
+    const sent = await drive("POST", `/api/admin/author-gifts/${id}/send`, {
+      expected: { email: gift.email, recipientName: gift.recipientName, recipientNote: gift.recipientNote, articles: gift.articles },
+    });
+    expect(sent.status).toBe(201);
+    expect((await drive("DELETE", `/api/admin/author-gifts/${id}`, null)).status).toBe(409);
+    expect((await giftRow(id)).id).toBe(id);
+  });
+
+  it("refuses an id that is not a uuid", async () => {
+    expect((await drive("DELETE", "/api/admin/author-gifts/not-a-uuid", null)).status).toBe(400);
+  });
+});
+
+/* ---------------------------------------------------------------- preview -- */
+
+/** Greg, 2026-10-23 (#687): the email, exactly, before Send. Plan 261024f § D2, R2, R3. */
+describe("GET /api/admin/author-gifts/:id/email", () => {
+  it("is the email Send queues, word for word, with the private link's address left out", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const mine = await seed("preview", { linkOn: true });
+    const key = await shareTokenOf(mine.id);
+    expect(key).not.toBeNull();
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("preview"), recipientName: "Bea", recipientNote: "I made this of your essay.\nGreg", articles: 5 },
+    });
+    expect(made.status).toBe(201);
+    const id = String(made.body.id);
+
+    const reply = await drive("GET", `/api/admin/author-gifts/${id}/email`, null);
+    expect(reply.status).toBe(200);
+    expect(reply.body).toMatchObject({
+      from: "Spideryarn <hello@spideryarn.com>",
+      to: addressOf("preview"),
+      subject: "A gift of 5 free articles on Spideryarn",
+      audience: "invite",
+    });
+    const text = String(reply.body.text);
+    expect(text).toContain("Dear Bea,");
+    expect(text).toContain("I made this of your essay.");
+    expect(text).toContain(`Here is "${mine.title}" in Spideryarn, to start with:\n[the private link to this article]`);
+    /* The key, anywhere in the reply, under any name. */
+    const whole = JSON.stringify(reply.body);
+    expect(whole).not.toContain(String(key));
+    expect(whole).not.toContain("key=");
+    expect(Object.keys(reply.body).sort()).toEqual(["audience", "from", "subject", "text", "to"]);
+
+    /* Send, and compare with what was frozen for Resend. */
+    const sent = await drive("POST", `/api/admin/author-gifts/${id}/send`, {
+      expected: { email: addressOf("preview"), recipientName: "Bea", recipientNote: "I made this of your essay.\nGreg", articles: 5 },
+    });
+    expect(sent.status).toBe(201);
+    const { rows } = await pool.query(
+      "select subject, body_text, recipient from spideryarn.billing_voucher_emails where voucher_id = $1 and kind = 'gift'",
+      [String(sent.body.voucherId)],
+    );
+    const queued = rows[0] as { subject: string; body_text: string; recipient: string };
+    expect(queued.subject).toBe(reply.body.subject);
+    expect(queued.recipient).toBe(reply.body.to);
+    const link = /^https?:\/\/\S*key=\S+$/m.exec(queued.body_text)?.[0];
+    expect(link).toContain(String(key));
+    expect(queued.body_text.replace(String(link), "[the private link to this article]")).toBe(text);
+  });
+
+  it("says who it is to before there is an address, and 404s a gift that is not there", async () => {
+    const mine = await seed("preview-blank");
+    const { id, lookupId } = await ensured(mine);
+    await settle(lookupId);
+    const reply = await drive("GET", `/api/admin/author-gifts/${id}/email`, null);
+    expect(reply.status).toBe(200);
+    expect(reply.body).toMatchObject({ to: null, subject: "A gift of 20 free articles on Spideryarn", audience: "invite" });
+    expect(String(reply.body.text)).not.toContain("Dear ");
+    expect((await drive("GET", `/api/admin/author-gifts/${randomUUID()}/email`, null)).status).toBe(404);
+    expect((await drive("GET", "/api/admin/author-gifts/nope/email", null)).status).toBe(400);
+  });
+});
+
+/* -------------------------------------------------------------- guidance -- */
+
+/** Greg, 2026-10-23 (#688): the lookup's message guidance, edited on the page. Plan 261024f § D4, R5. */
+describe("GET and PUT /api/admin/author-gift-guidance", () => {
+  const made: string[] = [];
+  afterEach(async () => {
+    if (made.length > 0) await pool.query("delete from spideryarn.author_gift_guidance where id = any($1::uuid[])", [made.splice(0)]);
+  });
+  async function newest(): Promise<{ id: string; guidance: string | null; created_by: string } | undefined> {
+    const { rows } = await pool.query(
+      "select id, guidance, created_by from spideryarn.author_gift_guidance order by created_at desc, id desc limit 1",
+    );
+    return rows[0] as { id: string; guidance: string | null; created_by: string } | undefined;
+  }
+
+  it("saves each version as a new row, reads back the newest, and goes back to the built-in as null", async () => {
+    const before = await drive("GET", "/api/admin/author-gift-guidance", null);
+    expect(before.status).toBe(200);
+    expect(String(before.body.builtIn)).toContain("Greg");
+    expect(String(before.body.fixedPrompt)).toContain("(the guidance you edit goes here)");
+    expect(String(before.body.fixedPrompt)).toContain("Claim nothing you were not told");
+
+    const saved = await drive("PUT", "/api/admin/author-gift-guidance", { guidance: "  Be brief. Sign off as Greg.  " });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toMatchObject({ guidance: "Be brief. Sign off as Greg." });
+    expect(typeof saved.body.updatedAt).toBe("string");
+    const first = await newest();
+    if (first) made.push(first.id);
+    expect(first).toMatchObject({ guidance: "Be brief. Sign off as Greg.", created_by: ADMIN });
+    expect((await drive("GET", "/api/admin/author-gift-guidance", null)).body).toMatchObject({ guidance: "Be brief. Sign off as Greg." });
+
+    const reset = await drive("PUT", "/api/admin/author-gift-guidance", { guidance: null });
+    expect(reset.status).toBe(200);
+    expect(reset.body).toMatchObject({ guidance: null });
+    const second = await newest();
+    if (second) made.push(second.id);
+    expect(second?.guidance).toBeNull();
+    expect(second?.id).not.toBe(first?.id);
+  });
+
+  it("refuses an over-long guidance, a missing field, an unknown key and a non-string, and writes nothing", async () => {
+    const was = await newest();
+    for (const body of [{ guidance: "x".repeat(4_001) }, {}, { guidance: "x", extra: 1 }, { guidance: 7 }, null]) {
+      expect((await drive("PUT", "/api/admin/author-gift-guidance", body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect((await newest())?.id).toBe(was?.id);
+  });
+});
+
 /* ------------------------------------------------------- notes, together -- */
 
 /**
@@ -1170,6 +1344,7 @@ describe("the lookup's store transactions", () => {
       searches: 3,
       model: "anthropic/claude-sonnet-5",
       notes: "Seen at https://example.org/about.",
+      suggestedMessage: "I made a version of your essay.\nGreg",
     });
     expect(answer).toEqual({ kind: "finished", outcome: "address", applied: { email: true, name: false, notes: true } });
     const gift = await giftRow(id);
@@ -1182,6 +1357,9 @@ describe("the lookup's store transactions", () => {
     });
     const [run] = await lookupsOf(id);
     expect(run).toMatchObject({ outcome: "address", author_name: "Found Name", email: addressOf("fill"), searches: 3 });
+    /* The suggestion is kept on the run, and never put in the email (plan 261024f, R1). */
+    expect(run?.suggested_message).toBe("I made a version of your essay.\nGreg");
+    expect(gift.recipient_note).toBeNull();
 
     /* A second lookup never overwrites what the first wrote. */
     const second = await beginLookup(id);
@@ -1203,6 +1381,8 @@ describe("the lookup's store transactions", () => {
 
     const listed = (await listAuthorGifts()).find((g) => g.id === id);
     expect(listed?.lookups.map((l) => l.id)).toEqual([second.lookupId, lookupId]);
+    expect(listed?.lookups[1]?.suggestedMessage).toBe("I made a version of your essay.\nGreg");
+    expect(listed?.lookups[0]?.suggestedMessage).toBeNull();
   });
 
   it("applies nothing to a gift that was discarded or sent meanwhile, and keeps what it found on the run", async () => {
@@ -1314,6 +1494,10 @@ describe("the namespace gate", () => {
       ["POST", "/api/admin/author-gifts", { slug: theirs.slug, rightsConfirmed: true }],
       ["GET", "/api/admin/author-gifts", null],
       ["PATCH", `/api/admin/author-gifts/${id}`, { notes: "x", notesBase: null }],
+      ["DELETE", `/api/admin/author-gifts/${id}`, null],
+      ["GET", `/api/admin/author-gifts/${id}/email`, null],
+      ["GET", "/api/admin/author-gift-guidance", null],
+      ["PUT", "/api/admin/author-gift-guidance", { guidance: "x" }],
       ["POST", `/api/admin/author-gifts/${id}/lookups`, null],
       ["POST", `/api/admin/author-gifts/${id}/send`, null],
       ["POST", `/api/admin/author-gifts/${id}/high-power`, null],
