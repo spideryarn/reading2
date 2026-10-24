@@ -4,7 +4,7 @@ ending: shipped
 ---
 # A glossary term's underline fades each time it comes back
 
-Report `spya-htsjmf` (#701, admin, 2026-10-24 17:19 UTC), on `arxiv-2308-08708-spya-xax6v4`.
+Report `spya-htsjmf` (#701, admin, 2026-10-24 17:19 UTC, Sentry `SPIDERYARN-READING2-P0`), on `arxiv-2308-08708-spya-xax6v4`.
 
 > In this article, there's a few glossary terms that just show up over and over and over again.
 > Consciousness is one. Indicator properties, I think, is another. And it gets quite distracting
