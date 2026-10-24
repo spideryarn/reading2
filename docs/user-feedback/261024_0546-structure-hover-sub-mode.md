@@ -1,7 +1,7 @@
 ---
 reports: spya-kaxamm
 ending: shipped
-comment: On dev, behind the experimental switch. Structure has a third chip, Hover: it looks like Fisheye, but resting the mouse on a row in either column goes there with no click, and rows have no tooltip cards. Back undoes only clicks. To try it, turn on experimental features or open ?mode=structure&structure=hover.
+comment: On dev, behind the experimental switch. Structure's third chip, Hover, looks like Fisheye, but resting the mouse on a row in either column goes there, with no click and no tooltip cards. Or open ?structure=hover.
 ---
 # Structure's Hover sub-mode: pointing at a row goes there
 
