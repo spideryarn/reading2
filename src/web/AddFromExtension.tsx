@@ -81,7 +81,7 @@ async function askOnce(readerId: string, sendMessage: SendMessage | undefined): 
   if (asked === null || asked.readerId !== readerId) {
     asked = {
       readerId,
-      taken: takeFromExtension(trustedExtensionIds(import.meta.env.DEV), sendMessage),
+      taken: takeFromExtension(trustedExtensionIds(!import.meta.env.PROD), sendMessage),
       used: false,
     };
   }

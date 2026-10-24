@@ -285,6 +285,16 @@ see in the implementation:
 
 The reusable classes and countermeasures are in postmortems `261024f`–`261024k`.
 
+Verdict *SHIP AFTER FIXES (MADE)*, ten findings, two P0 (C1, C2); the full review is
+[261024q-code-review-sol.md](261024q-code-review-sol.md). Read, gates re-run here, committed as
+`2623efaa4`. **Seen end to end again on the final code** (the same Sonnet subagent and scripts,
+rebuilt dev extension): one press → `/add-from-extension?handoff=<nonce>` → `/add/upload/<id>` →
+the article in about 8 s; a second press with the first tab open did nothing; signed out, the
+nonce survived `/login?next=…` and the import carried on in the same tab; `chrome://version` got
+`!`; a made-up nonce, signed in, said nothing was waiting and uploaded nothing. Not exercised in a
+browser: the store cleared on restart, two presses at once, the attribute stripping (each is
+held by unit tests instead).
+
 ## Later, not in v1
 
 - **Select a passage, then arrive in a chat about it.** The capture can carry the selection's text;

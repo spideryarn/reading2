@@ -29,7 +29,7 @@ What was built (on dev, not deployed):
 The store steps (question 1), also in docs/project/chrome-extension.md under Publishing:
 1. Open https://chrome.google.com/webstore/devconsole signed in as the Google account that should own it, with 2-step verification on. Pay the one-time fee (about $5) and verify the email.
 2. New item: upload extension/dist/spideryarn-extension-0.1.0.zip from the box (an agent can copy it to your laptop, or build it there with npm run extension:build).
-3. Fill the Store listing and Privacy practices tabs by pasting from extension/store/listing.md: every field's wording is there, matching our /privacy page, which now has a paragraph on the extension. Distribution: Unlisted. Submit for review (usually a few days).
+3. Fill the Store listing and Privacy practices tabs by pasting from extension/store/listing.md: every field's wording is there, matching our /privacy page, which now has a paragraph on the extension. Distribution: Unlisted. Submit for review (usually a few days). One thing you may notice: the data-use section ticks nearly every category (health, financial, location and so on). That is on GPT Sol's advice and is the honest answer: the extension copies whatever page you press it on, and a page can show any of those. It does not mean the extension looks for them.
 4. Tell me the item id. I set it in the app and add a Help section, and the next deploy makes it work in production.
 5. Optional, for updates without the dashboard: a Google Cloud service account (steps in the doc) and its key kept outside the repo. Then each update is: bump the version, npm run extension:build, npm run extension:publish. Chrome installs reviewed updates for everyone within hours.
 
