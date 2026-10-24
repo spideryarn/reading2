@@ -1,7 +1,7 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
  * band: Learn's Recall | Explore | Quiz, Diagram's five pictures, Referee's six views,
- * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Sources' Bibliography |
+ * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded | Hover, Sources' Bibliography |
  * Not cited | Links | Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
@@ -226,9 +226,10 @@ export const SUMMARY_SUB_MODES: Readonly<Record<SummaryView, SubModeWords>> = {
 };
 
 /**
- * Structure's two views. The chips' words, StructureMode.tsx §
+ * Structure's three views. The chips' words, StructureMode.tsx §
  * `StructureViewToggle`. Greg, 2026-10-01 (spya-gxyhcc); the order is the
- * toggle's, Fisheye first because it is the default.
+ * toggle's, Fisheye first because it is the default. Hover last and behind the
+ * switch, as an experiment Greg may revert (spya-kaxamm, plan 261024k).
  */
 export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> = {
   fisheye: {
@@ -240,6 +241,11 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
     label: "Expanded",
     description: "Every part and section, each with its summary, in one list",
     experimental: false,
+  },
+  hover: {
+    label: "Hover",
+    description: "Like Fisheye, but resting the mouse on a row goes there, no click needed",
+    experimental: true,
   },
 };
 

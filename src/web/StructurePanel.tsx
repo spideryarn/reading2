@@ -75,6 +75,7 @@ import {
 import { type Ribbon, ribbonFrom, ribbonPath, sameRibbon } from "./structure-ribbon.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { SummaryNode } from "./tree.js";
+import { type GlanceAt, type GlanceHandlers, useHoverGlance } from "./useHoverGlance.js";
 import { useTapReveal } from "./useTapReveal.js";
 import { type Voice, voiceClass, withVoice } from "./voice.js";
 
@@ -303,12 +304,15 @@ function Row({
    * ignore. Nothing would report it, because the visible cards would work.
    */
   tip,
+  glance,
 }: {
   row: StructureRow;
   /** The article's figures, for the mark after the title (FigureMark.tsx). */
   figures: readonly Figure[];
   onJump(id: BlockId): void;
   tip: boolean;
+  /** Hover view only: a mouse resting on the row goes there (useHoverGlance.ts). */
+  glance?: GlanceHandlers | undefined;
 }) {
   /* A matter row always has a card, if only to say why it is faint
      (MatterMark.tsx); a row with nothing else to say gets an empty one. */
@@ -375,7 +379,7 @@ function Row({
            and no `useTapReveal`, whose first finger tap would otherwise arm a
            card that does not exist and leave the row silently needing two.
            GPT Sol, plan review of 261003c. */
-        button({ onClick: () => jumpToRow(row, onJump) })
+        button({ onClick: () => jumpToRow(row, onJump), ...glance })
       ) : (
         <CardRow row={row} card={card} button={button} onJump={onJump} />
       )}
@@ -388,6 +392,8 @@ interface RowPress {
   onClick(e: ReactMouseEvent): void;
   onPointerDown?(e: ReactPointerEvent): void;
   onPointerCancel?(): void;
+  onPointerMove?(e: ReactPointerEvent): void;
+  onPointerLeave?(): void;
 }
 
 /**
@@ -520,17 +526,35 @@ function Column({
   label,
   figures,
   onJump,
+  onGlance,
+  glanceAt,
 }: {
   column: StructureColumn;
   label: string;
   figures: readonly Figure[];
   onJump(id: BlockId): void;
+  /** Hover view: see `StructurePanel`'s `onGlance`. */
+  onGlance: ((id: BlockId) => void) | undefined;
+  /** The panel's one dwell controller, shared by both columns (useHoverGlance.ts). */
+  glanceAt: GlanceAt;
 }) {
   return (
     <ol className="struct-col" aria-label={label}>
       <Elided n={column.earlier} where="earlier" />
       {column.rows.map((row) => (
-        <Row key={row.id} row={row} figures={figures} onJump={onJump} tip={true} />
+        <Row
+          key={row.id}
+          row={row}
+          figures={figures}
+          onJump={onJump}
+          /* No card in Hover: resting on a row already shows what it holds,
+             in column B and in the prose, so a card would only cover them.
+             Greg: "in hover mode, we don't need the tooltip". */
+          tip={onGlance === undefined}
+          glance={
+            onGlance === undefined ? undefined : glanceAt(row.id, row.here, () => jumpToRow(row, onGlance))
+          }
+        />
       ))}
       <Elided n={column.later} where="later" />
     </ol>
@@ -546,6 +570,7 @@ export function StructurePanel({
   surfaceRef,
   head,
   matter = NO_MATTER,
+  onGlance,
 }: {
   root: SummaryNode | null;
   /**
@@ -580,6 +605,13 @@ export function StructurePanel({
   head?: ReactNode;
   /** The stretches the prose folds, for the faint rows (structure.ts § `StructureRow.matter`). */
   matter?: readonly MatterRange[];
+  /**
+   * **Structure's Hover view**, when present: a mouse resting on a row in
+   * either column goes there with this — a quiet scroll, where a click is
+   * `onJump`'s history-pushing jump — and no row has a card. Absent in
+   * Fisheye. useHoverGlance.ts; docs/plans/261024k-structure-hover-submode.md.
+   */
+  onGlance?: ((id: BlockId) => void) | undefined;
 }) {
   /**
    * **Projected once, unwindowed.** The measuring copies below and the visible
@@ -597,6 +629,9 @@ export function StructurePanel({
   });
 
   const [cap, setCap] = useState<Capacity>(UNMEASURED);
+  /* Hover view's dwell, one for both columns. Called in Fisheye too (a hook
+     cannot be conditional); with no `onGlance` no row is handed its handlers. */
+  const glanceAt = useHoverGlance(onGlance !== undefined, focusRow);
   const gridRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const ofRef = useRef<HTMLParagraphElement>(null);
@@ -855,7 +890,14 @@ export function StructurePanel({
               pressing something does not fire a dozen cards. */}
           <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
             <div className="struct-side">
-              <Column column={columnA} label="Parts" figures={figures} onJump={onJump} />
+              <Column
+                column={columnA}
+                label="Parts"
+                figures={figures}
+                onJump={onJump}
+                onGlance={onGlance}
+                glanceAt={glanceAt}
+              />
             </div>
             <div className="struct-side struct-inner">
               {/* **The header names the row on the left that these rows are
@@ -874,7 +916,14 @@ export function StructurePanel({
                 </p>
               ) : null}
               {columnB.rows.length > 0 || columnB.later > 0 ? (
-                <Column column={columnB} label="Sections of this part" figures={figures} onJump={onJump} />
+                <Column
+                  column={columnB}
+                  label="Sections of this part"
+                  figures={figures}
+                  onJump={onJump}
+                  onGlance={onGlance}
+                  glanceAt={glanceAt}
+                />
               ) : (
                 /* **Two different nothings, and they must not read alike.** No
                    current part at all — the reader is above the first or past the

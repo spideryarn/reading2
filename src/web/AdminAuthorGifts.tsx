@@ -35,7 +35,12 @@ import { formatCostNanos } from "../admin.js";
 import {
   type AdminAuthorGift,
   type AdminAuthorLookup,
+  type AdminLookupCandidate,
+  AUTHOR_LOOKUP_MAX_SEARCHES,
   type AuthorGiftStatus,
+  type CandidateConfidence,
+  type CandidateKind,
+  CONFIDENCE_WORDS,
   STARTER_LINK_PLACEHOLDER,
 } from "../admin-author-gifts.js";
 import {
@@ -45,13 +50,14 @@ import {
   VOUCHER_NOTE_MAX,
   cleanRecipientName,
 } from "../admin-vouchers.js";
-import { addressBoxChange } from "../email-address.js";
+import { addressBoxChange, looksLikeEmail, normaliseEmail } from "../email-address.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
 import { BUTTON, INPUT, Refusal, StarterOwnerLine, TEXTAREA } from "./admin-vouchers-parts.js";
 import { AuthorGiftGuidance } from "./AuthorGiftGuidance.js";
 import { Button } from "./components/ui/button.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
+import { TipNote, Tooltip } from "./Tooltip.js";
 import {
   type AuthorGiftPatchInput,
   type EmailPreviewAnswer,
@@ -62,8 +68,8 @@ import {
 import { useNow } from "./useNow.js";
 import { voiceClass } from "./voice.js";
 
-/** More searches than the prompt allows (D4, D7): flagged on the run. */
-const SEARCHES_ASKED = 3;
+/** More searches than the prompt allows (D4, D7): flagged on the run. The prompt's own number, not a copy. */
+const SEARCHES_ASKED = AUTHOR_LOOKUP_MAX_SEARCHES;
 
 /** The gift `?gift=<id>` names, or null. A UUID or nothing, so the address cannot put text in an id. */
 export function giftIdOrNull(id: string | null): string | null {
@@ -164,7 +170,9 @@ function Provenance({
   sourceUrl: string | null;
 }) {
   if (value === null) return null;
-  if (lookup === null) return <span className="tw:text-ink-faint"> — typed by you</span>;
+  /* "Chosen" too: *Use this address* on a possible address is an edit of the
+     person's, so it has no lookup behind it (plan 261024j, R9). */
+  if (lookup === null) return <span className="tw:text-ink-faint"> — chosen or typed by you</span>;
   const when = exactly(lookup.createdAt);
   return (
     <span className="tw:text-ink-faint">
@@ -179,7 +187,112 @@ function Provenance({
   );
 }
 
-function LookupLine({ lookup, gift, now }: { lookup: AdminAuthorLookup; gift: AdminAuthorGift; now: number }) {
+/** What a candidate's kind says, in words. */
+const KIND_WORDS: Record<CandidateKind, string> = {
+  "on-page": "written on a page the lookup read",
+  "on-page-disguised": "written in disguise on a page the lookup read",
+  "in-result": "seen in a search result, not in the author's name",
+  guess: "a guess",
+};
+
+/* The theme's own tokens, from strongest to faintest: no traffic-light colours, which the theme does not have. */
+const CHIP: Record<CandidateConfidence, string> = {
+  high: "tw:border tw:border-highlight tw:text-highlight-text",
+  medium: "tw:border tw:border-border tw:text-foreground",
+  low: "tw:border tw:border-dashed tw:border-border tw:text-ink-faint",
+};
+
+/**
+ * **The lookup's possible addresses** — plan 261024j (#686): *"list a few with
+ * tooltips for me with a level of confidence for each"*. Each row is the
+ * address, a chip for how sure the lookup is (computed, never the model's),
+ * and a card with why and where. *Use this address* puts it in the draft
+ * through the ordinary edit; nothing here is ever applied by the lookup.
+ *
+ * The model's old *suggested, not seen* address joins as a long shot when it
+ * is shaped like an address (R7); otherwise `LookupLine` shows it as text.
+ */
+function PossibleAddresses({
+  lookup,
+  gift,
+  chooseAddress,
+}: {
+  lookup: AdminAuthorLookup;
+  gift: AdminAuthorGift;
+  /** Null when the address cannot be changed now: not a draft, an editor open, or busy. */
+  chooseAddress: ((email: string) => void) | null;
+}) {
+  const rows: AdminLookupCandidate[] = [...lookup.candidates];
+  const suggested = lookup.suggestedEmail === null ? null : normaliseEmail(lookup.suggestedEmail);
+  if (suggested !== null && looksLikeEmail(suggested) && !rows.some((c) => c.address === suggested)) {
+    rows.push({
+      address: suggested,
+      kind: "guess",
+      confidence: "low",
+      why: "The lookup gave this address, but it was not written in any search result it was checked against.",
+      sourceUrl: null,
+      patternSeen: false,
+    });
+  }
+  if (rows.length === 0) return null;
+  return (
+    <div className="tw:mt-1">
+      <div>Possible addresses — none applied:</div>
+      <ul aria-label="Possible addresses" className="tw:m-0 tw:list-none tw:p-0">
+        {rows.map((c) => {
+          const current = gift.email === c.address;
+          const card = (
+            <span className="tw:block tw:max-w-80">
+              <TipNote>
+                <strong>
+                  {CONFIDENCE_WORDS[c.confidence]}: {KIND_WORDS[c.kind]}.
+                </strong>{" "}
+                {c.why}
+              </TipNote>
+              {c.sourceUrl && (
+                <TipNote>
+                  <Out href={c.sourceUrl}>{c.sourceUrl}</Out>
+                </TipNote>
+              )}
+            </span>
+          );
+          return (
+            <li key={c.address} className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:py-0.5">
+              <Tooltip placement="bottom" keepSide content={card} interactive={{ label: `About ${c.address}` }}>
+                {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the content, and a keyboard has to reach it */}
+                <span tabIndex={0} className="tw:cursor-help tw:underline tw:decoration-dotted">
+                  {c.address}
+                </span>
+              </Tooltip>
+              <span className={`tw:rounded tw:px-1.5 tw:text-xs ${CHIP[c.confidence]}`}>{CONFIDENCE_WORDS[c.confidence]}</span>
+              {current ? (
+                <em className="tw:text-ink-faint">in the draft</em>
+              ) : (
+                chooseAddress && (
+                  <Button type="button" variant="outline" size="xs" onClick={() => chooseAddress(c.address)}>
+                    {gift.email === null ? "Use this address" : "Use instead"}
+                  </Button>
+                )
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function LookupLine({
+  lookup,
+  gift,
+  now,
+  chooseAddress,
+}: {
+  lookup: AdminAuthorLookup;
+  gift: AdminAuthorGift;
+  now: number;
+  chooseAddress: ((email: string) => void) | null;
+}) {
   const started = exactly(lookup.createdAt);
   /* Found, but the gift's field did not take it from this run (D4, R2-F5). */
   const emailNotApplied = lookup.email !== null && gift.emailLookupId !== lookup.id && lookup.email !== gift.email;
@@ -215,11 +328,12 @@ function LookupLine({ lookup, gift, now }: { lookup: AdminAuthorLookup; gift: Ad
           {emailNotApplied && <em> — found, not applied</em>}
         </div>
       )}
-      {lookup.suggestedEmail !== null && (
+      {lookup.suggestedEmail !== null && !looksLikeEmail(normaliseEmail(lookup.suggestedEmail)) && (
         <div>
-          {lookup.suggestedEmail} — <em>suggested, not seen in any result</em>
+          {lookup.suggestedEmail} — <em>suggested, not seen in any result, and not shaped like an address</em>
         </div>
       )}
+      <PossibleAddresses lookup={lookup} gift={gift} chooseAddress={chooseAddress} />
       {lookup.contactUrl !== null && (
         <div>
           Contact page: <Out href={lookup.contactUrl}>{lookup.contactUrl}</Out>
@@ -854,6 +968,18 @@ function GiftCard({
     setRefusal(answer);
   }
 
+  /* *Use this address* on a possible address (plan 261024j): the ordinary
+     edit, on a draft only, and never while the editor is open over the same
+     field. An open Send confirmation closes, since it showed the old address;
+     Send's own `expected` check would refuse it anyway (R9). */
+  const chooseAddress =
+    draft && !editing && !busy
+      ? (email: string) => {
+          setConfirming(null);
+          void attempt(() => hooks.patch(gift.id, { email }));
+        }
+      : null;
+
   async function sendNow() {
     if (busy || running || confirming === null || !previewReady || (needsRights && !rights)) return;
     setBusy(true);
@@ -1075,7 +1201,7 @@ function GiftCard({
           ) : (
             <ul className="tw:m-0 tw:mt-1 tw:list-none tw:p-0">
               {gift.lookups.map((l) => (
-                <LookupLine key={l.id} lookup={l} gift={gift} now={now} />
+                <LookupLine key={l.id} lookup={l} gift={gift} now={now} chooseAddress={chooseAddress} />
               ))}
             </ul>
           )}

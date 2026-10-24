@@ -467,6 +467,13 @@ function entryText(text: string): string {
     .trim();
 }
 
+/** Whether a linked contents line names the heading its own link targets. */
+export function contentsEntryMatchesHeading(entry: MatterBlock, heading: MatterBlock): boolean {
+  const name = entryText(entry.text);
+  const target = entryText(heading.text);
+  return name !== "" && target !== "" && (name === target || (name.length >= 12 && target.startsWith(name)));
+}
+
 /** A section number in front: "2", "1.2.3", "IV.", "A)", "Part 1:", "Appendix B:". */
 const ENTRY_NUMBER = /^\s*(?:\d+(?:\.\d+)*\.?|[IVXLCivxlc]+[.)]|[A-Za-z][.)]|(?:part|chapter|section|appendix|annex)\s+(?:\d+|[IVXLC]+|[A-Z])\b[.:]?)\s+\S/u;
 /**

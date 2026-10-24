@@ -102,7 +102,7 @@ export const REMEMBERED = [
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "margin", // Marginalia's column of notes, right of the prose — a restore makes its relation words if there are none (useRelations.ts)
   "summary", // brief, fuller or thread — dormant without `mode`, and a restore never opens the thread
-  "structure", // fisheye or expanded — nothing to generate either way
+  "structure", // fisheye, expanded or hover — nothing to generate in any
   "diagram", // which of the five pictures
   "dx", // drift's sideways axis
   "dhue", // what a dot's colour means

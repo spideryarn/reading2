@@ -4,7 +4,7 @@
  * classifier (src/matter.ts) as the second baseline. If it matches the
  * classifier with no prose folded, it is what gets built.
  *
- * Two sources, then the classifier's own shared checks (`holdStretches`):
+ * Four sources, then the classifier's own shared checks (`holdStretches`):
  *
  * - **Today's byline rule** (src/web/front-matter.ts § `frontMatter`), as one
  *   `authors` stretch. Its evidence test is its own, so it is trusted.
@@ -19,21 +19,29 @@
  *   funding and declarations family in either.
  * - **Inline labels**: a run of paragraphs that open "Funding: …",
  *   "Competing interests: …" (that family only), as one stretch.
+ * - **A contents list with no label** (`linkedContentsRuns`, plan 261024h):
+ *   short lines that each link to one of the article's later headings, placed
+ *   as a *Contents* label would be. A page's label can be lost before this
+ *   (Readability dropped `<h1 class="toc-header">`, spya-jk0xw5) or never be
+ *   there at all.
  */
 import {
   BACK_MATTER_FROM_SHARE,
   CONTENTS_LEADING_SHARE,
+  CONTENTS_MAX_ENTRY_WORDS,
   type MatterAdmitted,
   type MatterArticle,
   type MatterCandidate,
   type MatterKind,
   MAX_RANGE_WORDS,
+  contentsEntryMatchesHeading,
   holdStretches,
   labelKinds,
   labelledSection,
   matterWindows,
   stretchEvidence,
 } from "./matter.js";
+import { inPageHrefs } from "./matter-current.js";
 import type { Block, BlockId } from "./types.js";
 import { type FrontMatterArticle, frontMatter } from "./web/front-matter.js";
 
@@ -41,6 +49,8 @@ import { type FrontMatterArticle, frontMatter } from "./web/front-matter.js";
 const FRONT: ReadonlySet<MatterKind> = new Set(["abstract", "keywords", "contents", "authors"]);
 /** Kinds that may sit either side: "Details" at the top of a report, "Acknowledgements" at the end of a paper. */
 const EITHER: ReadonlySet<MatterKind> = new Set(["acknowledgements", "funding", "declarations"]);
+/** Substantive previews that may link to their later sections but are never matter. */
+const CONTENTS_PREVIEW_LABEL = /^\s*(?:key points?|highlights?|significance|executive summary|author summary)\s*:?\s*$/iu;
 
 export type LabelsArticle = MatterArticle & FrontMatterArticle & { blocks: readonly Block[] };
 
@@ -63,9 +73,15 @@ export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId
     return kinds.every((k) => (FRONT.has(k) ? front : EITHER.has(k) ? front || back : back));
   };
 
+  /* An entry of a linked contents list is not a label: one that reads
+     "Abstract" would otherwise label the next entry as the abstract and take
+     the start of the list (review of 261024h). */
+  const linked = placedLinkedContentsRuns(blocks, (start) => placed(start, ["contents"]));
+
   for (let i = 0; i < n; i++) {
     const block = blocks[i]!;
     if (block.kind !== "heading" && block.kind !== "text") continue;
+    if (insideRun(i, linked)) continue;
     const kinds = labelKinds(block.text);
     if (kinds === null || !placed(i, kinds)) continue;
     if (block.kind === "heading") {
@@ -97,7 +113,74 @@ export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId
     candidates.push({ item: item++, start: i, end, kinds: [...kinds], headedBy: null, shape: "range" });
   }
   for (const run of inlineLabelRuns(blocks, placed)) candidates.push({ item: item++, ...run, headedBy: null, shape: "range" });
+  for (const run of linked) candidates.push({ item: item++, ...run, kinds: ["contents"], headedBy: null, shape: "range" });
   return holdStretches(article, candidates, echo);
+}
+
+/** A contents list with no label links to at least this many distinct headings. */
+export const LINKED_CONTENTS_MIN_ENTRIES = 3;
+
+function placedLinkedContentsRuns(
+  blocks: readonly Block[],
+  placed: (start: number) => boolean,
+): { start: number; end: number }[] {
+  const followsPreviewLabel = (start: number): boolean => {
+    let i = start - 1;
+    while (i >= 0 && blocks[i]!.words === 0) i--;
+    return i >= 0 && CONTENTS_PREVIEW_LABEL.test(blocks[i]!.text);
+  };
+  return linkedContentsRuns(blocks).filter((run) => placed(run.start) && !followsPreviewLabel(run.start));
+}
+
+const insideRun = (index: number, runs: readonly { start: number; end: number }[]): boolean =>
+  runs.some((run) => index >= run.start && index < run.end);
+
+/**
+ * **Tables of contents with no label** (plan 261024h): runs of short text
+ * blocks, empty blocks allowed between, each linking to a heading of the
+ * article that comes after it, together naming at least
+ * `LINKED_CONTENTS_MIN_ENTRIES` distinct headings. Each entry's text must name
+ * the heading that its own link targets. A labelled "Key points" list stays
+ * showing even when it meets this structural rule: the caller vetoes that
+ * label (front-and-back-matter.md: never folded). Where a run sits is the
+ * caller's to check, and the shared checks still hold it to its entries naming
+ * the headings (`stretchEvidence`'s unlabelled contents).
+ * `[start, end)`, ending at the last entry.
+ */
+export function linkedContentsRuns(blocks: readonly Block[]): { start: number; end: number }[] {
+  const headingAt = new Map<string, { index: number; block: Block }>();
+  blocks.forEach((b, i) => {
+    if (b.kind === "heading") headingAt.set(b.id, { index: i, block: b });
+  });
+  const runs: { start: number; end: number }[] = [];
+  let start = -1;
+  let last = -1;
+  let named = new Set<string>();
+  const close = () => {
+    if (start >= 0 && named.size >= LINKED_CONTENTS_MIN_ENTRIES) runs.push({ start, end: last + 1 });
+    start = -1;
+    named = new Set();
+  };
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]!;
+    if (b.words === 0 && b.kind !== "heading") continue;
+    const target =
+      b.kind === "text" && b.words <= CONTENTS_MAX_ENTRY_WORDS
+        ? inPageHrefs(b.html).find((id) => {
+            const heading = headingAt.get(id);
+            return heading !== undefined && heading.index > i && contentsEntryMatchesHeading(b, heading.block);
+          })
+        : undefined;
+    if (target === undefined) {
+      close();
+      continue;
+    }
+    if (start < 0) start = i;
+    named.add(target);
+    last = i;
+  }
+  close();
+  return runs;
 }
 
 const MATTER_ORDER: readonly MatterKind[] = ["acknowledgements", "funding", "declarations"];

@@ -31,7 +31,20 @@ import type { BlockId, MatterStretchStored } from "./types.js";
  * gateway, which the public import graph may not reach
  * (tests/public-imports.test.ts). Plan 261018l.
  */
-export const MATTER_PROMPT_VERSION = "matter/2";
+export const MATTER_PROMPT_VERSION = "matter/3";
+
+/**
+ * **The versions a read still folds.** Not the same thing as the version above,
+ * which decides whether the step runs again: keep an older version here only
+ * while every fold it admitted remains sound under today's rule. Withdrawing
+ * sound folds until each article is re-read would take them off the shelf for
+ * nothing; a change that invalidates an old admission must drop that version.
+ *
+ * - `matter/3` (plan 261024h) added the linked contents run to the labels rule;
+ *   it did not weaken the evidence or admission of any stretch `matter/2`
+ *   stored, so those older folds remain safe to show.
+ */
+export const MATTER_READABLE_VERSIONS: ReadonlySet<string> = new Set([MATTER_PROMPT_VERSION, "matter/2"]);
 
 /** As much of a block as the pass reads. Every `Block` satisfies it. */
 export interface MatterBlock {
@@ -40,27 +53,48 @@ export interface MatterBlock {
   level?: number | null | undefined;
   text: string;
   words: number;
+  /** The labels rule reads in-page links from the sanitised stored markup. */
+  html: string;
   /** Stage 3's role: a `footnote` is the article's own note and is never folded as matter. */
   role?: string | null | undefined;
 }
 
 /** Prefixes the version of everything `matterInputHash` reads; bump it when that changes. */
-export const MATTER_HASH_VERSION = "m1";
+export const MATTER_HASH_VERSION = "m2";
 
 // ───────────────────────────────────────────────────────────────── the hash
 
 /**
- * **What the pass read, fingerprinted** (plan review F1): ordered `[id, text,
- * kind, level, words, role]` (role because the checks read it: a footnote is
- * never folded). `hashBlocks` (src/source-hash.ts) reads id, text, role
- * and treatment; a re-extraction that turned a paragraph into a heading would
- * leave it unchanged while what the model saw had changed. JSON over
- * fixed-position arrays, for `hashBlocks`' reason: no delimiter a page could
- * contain.
+ * Anchor targets in stage 3's canonical, sanitised `Block.html`: lower-case
+ * names and double-quoted attributes. Quote-aware before `href`, so an earlier
+ * author's attribute may contain `>` without ending the tag; restricted to
+ * `<a>` so an SVG image's `href` is not evidence of navigation.
+ */
+const IN_PAGE_HREF = /<a\b(?:[^">]|"[^"]*")*?\shref="#([^"]+)"/gu;
+
+/** The one interpretation shared by the labels rule and its freshness hash. */
+export function inPageHrefs(html: string): string[] {
+  return [...html.matchAll(IN_PAGE_HREF)].map((match) => match[1]!);
+}
+
+/**
+ * **What the pass reads, fingerprinted** (plan review F1): ordered `[id, text,
+ * kind, level, words, inPageHrefs(html), role]`. The interpreted href targets
+ * joined in matter/3 because the linked-contents rule reads them; without them
+ * a re-extraction could remove those links while a carried fold still passed
+ * the reader's freshness check. The rest of `html` is deliberately absent:
+ * emphasis and other markup do not affect the pass. JSON over fixed-position
+ * arrays, for `hashBlocks`' reason: no delimiter a page could contain.
  */
 export function matterInputHash(blocks: readonly MatterBlock[]): string {
-  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, b.role ?? null]));
+  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, inPageHrefs(b.html), b.role ?? null]));
   return `${MATTER_HASH_VERSION}:${createHash("sha256").update(canon).digest("hex").slice(0, 16)}`;
+}
+
+/** The matter/2 fingerprint, kept only while that stored version remains readable. */
+function matter2InputHash(blocks: readonly MatterBlock[]): string {
+  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, b.role ?? null]));
+  return `m1:${createHash("sha256").update(canon).digest("hex").slice(0, 16)}`;
 }
 
 /**
@@ -68,7 +102,7 @@ export function matterInputHash(blocks: readonly MatterBlock[]): string {
  * rule*.** Every one of these, or nothing (review F2):
  *
  * 1. the stored shape is valid and its status is `ok`;
- * 2. its version is today's safety-and-prompt version;
+ * 2. its version is one a read still folds (`MATTER_READABLE_VERSIONS`);
  * 3. `sourceHash` equals `matterInputHash` of the blocks on this payload —
  *    so a column a draft carried over changed blocks, or a value copied from
  *    another revision, is withheld;
@@ -82,8 +116,9 @@ export function matterInputHash(blocks: readonly MatterBlock[]): string {
  */
 export function matterForReader(value: unknown, blocks: readonly MatterBlock[]): MatterStretchStored[] | undefined {
   if (!isMatterDocument(value) || value.status !== "ok") return undefined;
-  if (value.version !== MATTER_PROMPT_VERSION) return undefined;
-  if (value.sourceHash !== matterInputHash(blocks)) return undefined;
+  if (!MATTER_READABLE_VERSIONS.has(value.version)) return undefined;
+  const sourceHash = value.version === "matter/2" ? matter2InputHash(blocks) : matterInputHash(blocks);
+  if (value.sourceHash !== sourceHash) return undefined;
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   let last = -1;
   for (const s of value.stretches) {

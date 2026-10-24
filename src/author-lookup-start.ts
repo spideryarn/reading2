@@ -111,6 +111,7 @@ export function lookupResultFor(result: AuthorLookupResult): LookupResult {
     model,
     notes,
     suggestedMessage: result.suggestedMessage,
+    candidates: result.candidates,
   };
 }
 

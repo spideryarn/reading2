@@ -113,7 +113,37 @@ const DEFAULT_ROUTES: Routes = {
           sendStartedAt: null,
           discardedAt: null,
           voucherId: null,
-          lookups: [],
+          lookups: [
+            {
+              id: "l1",
+              createdAt: "2026-10-09T00:00:00Z",
+              finishedAt: "2026-10-09T00:01:00Z",
+              outcome: "author",
+              failure: null,
+              authorName: "Ann",
+              authorSourceUrl: null,
+              email: null,
+              emailSourceUrl: null,
+              suggestedEmail: null,
+              contactUrl: null,
+              searches: 5,
+              model: "m",
+              suggestedMessage: null,
+              cost: null,
+              candidates: [
+                {
+                  address: "ann@example.org",
+                  kind: "guess",
+                  confidence: "low",
+                  why: "A long shot.",
+                  sourceUrl: null,
+                  patternSeen: false,
+                  /* Not a field: the tool must not pass on what it does not name (plan 261024j). */
+                  extra: "CANDIDATE-EXTRA-FIELD",
+                },
+              ],
+            },
+          ],
         },
       ],
     },
@@ -332,6 +362,16 @@ describe("each tool calls the route it claims", () => {
     expect(gifts[0]?.starter).toEqual({ slug: "on-tools", title: "On Tools", link: `${SITE}/read/on-tools` });
     expect(result.text).not.toContain("key=");
     expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
+  });
+
+  it("list_author_gifts lists a lookup's possible addresses, field by field (plan 261024j)", async () => {
+    const h = await harness();
+    const result = await h.call("list_author_gifts");
+    const { gifts } = result.json() as { gifts: { lookups: { candidates: unknown[] }[] }[] };
+    expect(gifts[0]?.lookups[0]?.candidates).toEqual([
+      { address: "ann@example.org", kind: "guess", confidence: "low", why: "A long shot.", sourceUrl: null, patternSeen: false },
+    ]);
+    expect(result.text).not.toContain("CANDIDATE-EXTRA-FIELD");
   });
 
   it("update_author_gift takes a replace or an append, not both, and sends nothing for both", async () => {

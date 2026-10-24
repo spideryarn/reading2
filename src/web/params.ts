@@ -1312,11 +1312,14 @@ export function summaryInSearch(search: string): SummaryView {
    docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
 
 /**
- * Structure's two views: the fisheye, which opens up around the part you are
- * reading (both faces, StructureMode.tsx § `structureFace`), and Expanded,
- * every part and section with its gist, in one list that scrolls.
+ * Structure's three views: the fisheye, which opens up around the part you are
+ * reading (both faces, StructureMode.tsx § `structureFace`); Expanded, every
+ * part and section with its gist, in one list that scrolls; and Hover, the
+ * fisheye where a mouse resting on a row goes there — an experiment, behind
+ * the switch (Greg, 2026-10-23, spya-kaxamm;
+ * docs/plans/261024k-structure-hover-submode.md).
  */
-export const STRUCTURE_VIEWS = ["fisheye", "expanded"] as const;
+export const STRUCTURE_VIEWS = ["fisheye", "expanded", "hover"] as const;
 export type StructureView = (typeof STRUCTURE_VIEWS)[number];
 
 /**
@@ -1334,6 +1337,12 @@ export const structureParam = createParser<StructureView>({
 })
   .withDefault("fisheye")
   .withOptions({ history: "push" });
+
+/** Structure's view in a query string — `learnInSearch`'s shape, for the command bar (CommandBar.tsx § `subModeRows`). */
+export function structureInSearch(search: string): StructureView {
+  const named = new URLSearchParams(search).get("structure");
+  return (named === null ? null : structureParam.parse(named)) ?? structureParam.defaultValue;
+}
 
 /* ------------------------------------------------------------ referee mode --
    The mode for somebody who has been asked to peer-review the piece. One

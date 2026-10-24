@@ -49,7 +49,7 @@ In an entry:
   **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a
   line with the chat's short summary; press it
   to open that conversation again beside the Glossary. The conversation is also in Chat’s list,
-  marked with the Glossary’s icon. Only whoever added the article has this.
+  marked *Glossary* beside the Glossary’s icon. Only whoever added the article has this.
 
 The list opens on **prioritised**: only the terms that are hard and carry the argument, in the order
 the article introduces them. The **threshold** slider sets how many: left for more, right for fewer.

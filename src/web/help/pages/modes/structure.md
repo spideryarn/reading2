@@ -29,5 +29,8 @@ summary of the current one; when that will not all fit, the list scrolls. Use **
 deeper subsections too. Both scrolling lists follow you only when you move into another section, so
 if you scroll one by hand it keeps your place until then. Press any row to jump there.
 
+With experimental features on, there is a third, **Hover**: Fisheye’s two columns, where resting the
+mouse on a row for a moment goes there without a click. Back undoes only the jumps you clicked.
+
 <kbd>←</kbd> in the middle of a section goes back to that section’s start first. Titles here leave
 off the article’s own numbering (“3.2 Methods” shows as “Methods”); the text and the spine keep it.

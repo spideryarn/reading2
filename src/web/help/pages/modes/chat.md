@@ -45,8 +45,9 @@ An answer with none of these came from the article alone. Chat decides when it n
 Each article keeps its own list of conversations; **‹ Chats**, at the top left of a conversation,
 takes you back to it. That list holds every
 conversation you have had about the article, not only the ones started in Chat. A row from somewhere
-else has a small icon in front of it: point at it, or tap it, to see where it came from, for example
-a claim in Sources, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
+else has a small icon in front of it, and the place it came from under its title, such as
+**Investigate**, **Claims** or **Glossary**: point at the icon, or tap it, to see more, for example
+which claim or which question. A chat about a passage has the icon only. Pressing a Learn row takes you to Learn, where that
 conversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from
 more than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow
 it.

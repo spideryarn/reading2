@@ -185,7 +185,16 @@ import { appearanceRows } from "./appearance-commands.js";
 import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimental-store.js";
 import { isImeComposing } from "./key-chord.js";
 import { useDictationField } from "./useDictationField.js";
-import { type MetadataSection, type Mode, type LearnView, modeParam, learnInSearch, withSection } from "./params.js";
+import {
+  type MetadataSection,
+  type Mode,
+  type LearnView,
+  type StructureView,
+  modeParam,
+  learnInSearch,
+  structureInSearch,
+  withSection,
+} from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LABEL, RERUN_LANDS_IN, type MetadataRerunStep, rerunCommand } from "./rerun-commands.js";
 import { rewriteHeld } from "./rewrite-hold.js";
 import { SECTION_ROWS, archiveCommand, exportCommand, originalCommand, sectionCommand } from "./article-commands.js";
@@ -1584,7 +1593,8 @@ function onlyMovesTheReader(command: Command): boolean {
  * became the second kind of sub-mode behind the switch: the chips' own rule
  * again (sub-modes.ts § `visibleLearnViews`). The caller passes `undefined`
  * outside Learn; a retained `learn=explore` is a last view, not an open
- * Explore. Metadata uses the mode in its carried address.
+ * Explore. Metadata uses the mode in its carried address. **And Structure's
+ * open view**, since 2026-10-24, the same way, for Hover (plan 261024k).
  *
  * Exported for tests/command-pick-catalogue.test.ts, which writes the list the
  * command-pick eval measures against from the functions the bar itself calls.
@@ -1592,7 +1602,12 @@ function onlyMovesTheReader(command: Command): boolean {
 export function subModeRows(
   modes: readonly Mode[],
   experimentalOn: boolean,
-  current: { readonly diagram: DiagramKind; readonly learn: LearnView | undefined },
+  current: {
+    readonly diagram: DiagramKind;
+    readonly learn: LearnView | undefined;
+    /** Structure's open view, `undefined` outside Structure — Hover is behind the switch (plan 261024k). */
+    readonly structure?: StructureView | undefined;
+  },
 ): readonly Command[] {
   return modes.flatMap((mode) =>
     subModesOf(mode)
@@ -1602,7 +1617,8 @@ export function subModeRows(
           on: experimentalOn,
           current:
             (sub.mode === "diagram" && sub.view === current.diagram) ||
-            (sub.mode === "learn" && sub.view === current.learn),
+            (sub.mode === "learn" && sub.view === current.learn) ||
+            (sub.mode === "structure" && sub.view === current.structure),
         }),
       )
       .map(subModeCommand),
@@ -1989,6 +2005,9 @@ export function CommandBar({
         diagram,
         learn: modeParam.parse(new URLSearchParams(article?.search ?? "").get("mode") ?? "") === "learn"
           ? learnInSearch(article?.search ?? "")
+          : undefined,
+        structure: modeParam.parse(new URLSearchParams(article?.search ?? "").get("mode") ?? "") === "structure"
+          ? structureInSearch(article?.search ?? "")
           : undefined,
       }),
       ...besideTheModes({ article, openComments, openFeedback, queue }),

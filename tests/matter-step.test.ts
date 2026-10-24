@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { type MatterGateway } from "../src/matter.js";
+import type { MatterGateway } from "../src/matter.js";
 import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../src/matter-current.js";
 import { isMatterDocument } from "../src/matter-shape.js";
 import {
@@ -124,6 +124,24 @@ describe("matterForReader — the stretches reach the reading view only about th
     expect(matterForReader({ ...okValue(blocks, [{ from: a, to: b }]), version: "matter/1" }, blocks)).toBeUndefined();
   });
 
+  it("still folds a value from a version that only lacked a source of candidates (matter/2, plan 261024h)", () => {
+    expect(MATTER_PROMPT_VERSION).not.toBe("matter/2");
+    const legacyBlocks: Block[] = [
+      { id: "spya-aaaaaa", kind: "text", tag: "p", text: "A", words: 1, html: "<p>A</p>", gistable: true },
+      { id: "spya-bbbbbb", kind: "text", tag: "p", text: "B", words: 1, html: "<p>B</p>", gistable: true },
+    ];
+    /* Pinned from matter/2's m1 `[id,text,kind,level,words,role]` contract,
+       rather than made with today's hash and merely relabelled as old. */
+    const legacy: Matter = {
+      status: "ok",
+      version: "matter/2",
+      generator: MATTER_GENERATOR,
+      sourceHash: "m1:06756ee7e3eebb0e",
+      stretches: [{ from: "spya-aaaaaa", to: "spya-bbbbbb", kinds: ["references"] }],
+    };
+    expect(matterForReader(legacy, legacyBlocks)).toEqual(legacy.stretches);
+  });
+
   it("withholds a value carried over blocks that have since changed", () => {
     const stored = okValue(blocks, [{ from: a, to: b }]);
     const edited = blocks.map((x, i) => (i === 5 ? { ...x, text: `${x.text} And one more.` } : x));
@@ -131,6 +149,12 @@ describe("matterForReader — the stretches reach the reading view only about th
     /* A paragraph turned into a heading moves the hash too (review F1). */
     const retyped = blocks.map((x, i) => (i === 5 ? { ...x, kind: "heading" as const, level: 3 } : x));
     expect(matterForReader(stored, retyped)).toBeUndefined();
+    /* matter/3's free contents source reads links from html. Keeping the same
+       words and ids while removing one must not keep a carried fold current. */
+    const relinked = blocks.map((x, i) =>
+      i === 5 ? { ...x, html: `<p><a href="#${blocks[10]!.id}">${x.text}</a></p>` } : x,
+    );
+    expect(matterForReader(stored, relinked)).toBeUndefined();
   });
 
   it("withholds a value copied from another article, whatever its ids", () => {
@@ -176,5 +200,7 @@ describe("matterSettled — whether a publication still needs the step", () => {
   it("queues a successor when the stored value belongs to an older rule", () => {
     expect(matterSettled({ ...okValue(blocks, []), version: "matter/1" }, blocks)).toBe(false);
     expect(matterSettled({ status: "unavailable", version: "matter/1", sourceHash: matterInputHash(blocks), reason: "step-failed" }, blocks)).toBe(false);
+    /* Readable is not settled: a matter/2 value still folds, and the next run replaces it. */
+    expect(matterSettled({ ...okValue(blocks, []), version: "matter/2" }, blocks)).toBe(false);
   });
 });

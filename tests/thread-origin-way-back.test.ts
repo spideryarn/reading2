@@ -94,6 +94,7 @@ describe("threadSource", () => {
       from: "sources",
       mode: "sources",
       label: "Started from a claim in Sources › Claims",
+      place: "Claims",
       quote: "RNA can transfer a memory",
     });
   });
@@ -107,6 +108,7 @@ describe("threadSource", () => {
       from: "sources",
       mode: "sources",
       label: "Started from a question in Sources › Investigate",
+      place: "Investigate",
       quote: "how it relates to Smith 2019",
       voice: "reader",
     });

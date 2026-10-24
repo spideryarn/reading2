@@ -74,7 +74,46 @@ export interface AdminAuthorLookup {
   readonly suggestedMessage: string | null;
   /** Null until the run claimed the row and could spend. */
   readonly cost: AuthorLookupCost | null;
+  /** Addresses offered, never applied, best first (plan 261024j). Empty for older runs. */
+  readonly candidates: readonly AdminLookupCandidate[];
 }
+
+/**
+ * How a candidate address was come by (plan 261024j): written plainly on a page
+ * the lookup read, written there in disguise, seen in a search result but not
+ * in the author's name, or guessed.
+ */
+export type CandidateKind = "on-page" | "on-page-disguised" | "in-result" | "guess";
+/** Computed by src/author-candidates.ts, never the model's. Shown as *likely*, *possible*, *long shot*. */
+export type CandidateConfidence = "high" | "medium" | "low";
+
+/** One address a lookup offered, as the card lists it. */
+export interface AdminLookupCandidate {
+  readonly address: string;
+  readonly kind: CandidateKind;
+  readonly confidence: CandidateConfidence;
+  /** Our sentence, not the model's: what it is and what it rests on. */
+  readonly why: string;
+  readonly sourceUrl: string | null;
+  /** A guess only: whether a colleague's pattern reproduced it. */
+  readonly patternSeen: boolean | null;
+}
+
+/**
+ * **How many web searches the lookup's prompt allows** — five since plan
+ * 261024j (#686, "try slightly harder"): the author's homepage, their contact
+ * page and a colleague's page each get one. Asked for, not enforced
+ * (src/author-lookup.ts § Searches), so the card flags a run that ran more.
+ * Here, not in src/author-lookup.ts, so the page reads the same number.
+ */
+export const AUTHOR_LOOKUP_MAX_SEARCHES = 5;
+
+/** The words a confidence is shown in, on the card and in the notes. */
+export const CONFIDENCE_WORDS: Record<CandidateConfidence, string> = {
+  high: "likely",
+  medium: "possible",
+  low: "long shot",
+};
 
 /** One gift, as `/admin/vouchers`' *Author gifts* draws it. */
 export interface AdminAuthorGift {

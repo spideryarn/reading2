@@ -35,6 +35,7 @@ import {
   AUTHOR_LOOKUP_STALE_MINUTES,
   type AdminAuthorGift,
   type AdminAuthorLookup,
+  type AdminLookupCandidate,
   type AuthorGiftEmailPreview,
   STARTER_LINK_PLACEHOLDER,
   type AuthorGiftSendExpected,
@@ -49,12 +50,14 @@ import {
   articles,
   authorGiftGuidance,
   authorGifts,
+  authorLookupCandidates,
   authorLookups,
   billingVouchers,
 } from "../db/schema.js";
 import { isSlug } from "../ingest.js";
 import { log } from "../log.js";
 import { type OwnerId, runAsOwner } from "../owner.js";
+import { isWebUrl } from "../urls.js";
 import { spendByRun } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -542,6 +545,8 @@ export type LookupResult =
       readonly notes: string | null;
       /** Kept on the lookup's row for *Use as your message*; never written into the draft (plan 261024f, R1). */
       readonly suggestedMessage?: string | null;
+      /** Addresses offered, best first; kept on their own rows, never written into the draft (plan 261024j). */
+      readonly candidates?: readonly AdminLookupCandidate[];
     }
   | {
       readonly kind: "failed";
@@ -570,6 +575,84 @@ function bounded(value: string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   const points = [...value];
   return points.length > LOOKUP_TEXT_MAX ? points.slice(0, LOOKUP_TEXT_MAX).join("") : value;
+}
+
+const CANDIDATE_KINDS = new Set(["on-page", "on-page-disguised", "in-result", "guess"]);
+const CANDIDATE_CONFIDENCES = new Set(["high", "medium", "low"]);
+/** Per lookup; src/author-candidates.ts caps at the same, this holds it at the door. */
+const CANDIDATES_STORED_MAX = 8;
+
+function candidateConfidenceFits(c: AdminLookupCandidate, patternSeen: boolean | null): boolean {
+  switch (c.kind) {
+    case "guess":
+      return patternSeen ? c.confidence === "medium" : c.confidence === "low";
+    case "in-result":
+      return c.confidence === "medium";
+    case "on-page":
+    case "on-page-disguised":
+      return c.confidence === "high" || c.confidence === "medium";
+  }
+}
+
+/** `undefined` means the candidate's provenance is inconsistent and the row is dropped. */
+function candidateSource(c: AdminLookupCandidate, patternSeen: boolean | null): string | null | undefined {
+  const sourceUrl = bounded(c.sourceUrl);
+  if (sourceUrl !== null && !isWebUrl(sourceUrl)) return undefined;
+  if ((c.kind !== "guess" || patternSeen) && sourceUrl === null) return undefined;
+  return sourceUrl;
+}
+
+/**
+ * **The candidates as the table's checks hold them**: normalised, each address
+ * once, a known kind and confidence, a pattern verdict on guesses only, no
+ * guess *likely* (R3, R8). Anything else is dropped, not stored and not thrown.
+ */
+function cleanCandidates(raw: readonly AdminLookupCandidate[]): AdminLookupCandidate[] {
+  const out: AdminLookupCandidate[] = [];
+  for (const c of raw) {
+    const address = normaliseEmail(c.address);
+    if (!looksLikeEmail(address) || !/.@./.test(address) || out.some((o) => o.address === address)) continue;
+    if (!CANDIDATE_KINDS.has(c.kind) || !CANDIDATE_CONFIDENCES.has(c.confidence)) continue;
+    const patternSeen = c.kind === "guess" ? (c.patternSeen ?? false) : null;
+    if (!candidateConfidenceFits(c, patternSeen)) continue;
+    const sourceUrl = candidateSource(c, patternSeen);
+    if (sourceUrl === undefined) continue;
+    const why = bounded(c.why) ?? "";
+    if (why === "") continue;
+    out.push({
+      address,
+      kind: c.kind,
+      confidence: c.confidence,
+      why,
+      sourceUrl,
+      patternSeen,
+    });
+    if (out.length === CANDIDATES_STORED_MAX) break;
+  }
+  return out;
+}
+
+/** Each lookup's offered addresses, in their stored order (plan 261024j). */
+async function candidatesByLookup(lookupIds: readonly string[]): Promise<Map<string, AdminLookupCandidate[]>> {
+  const byLookup = new Map<string, AdminLookupCandidate[]>();
+  if (lookupIds.length === 0) return byLookup;
+  const rows = await getDb()
+    .select()
+    .from(authorLookupCandidates)
+    .where(inArray(authorLookupCandidates.lookupId, [...lookupIds]))
+    .orderBy(authorLookupCandidates.lookupId, authorLookupCandidates.position);
+  for (const r of rows) {
+    const c: AdminLookupCandidate = {
+      address: r.address,
+      kind: r.kind as AdminLookupCandidate["kind"],
+      confidence: r.confidence as AdminLookupCandidate["confidence"],
+      why: r.why,
+      sourceUrl: r.sourceUrl,
+      patternSeen: r.patternSeen,
+    };
+    byLookup.set(r.lookupId, [...(byLookup.get(r.lookupId) ?? []), c]);
+  }
+  return byLookup;
 }
 
 /** An address the draft may take: normalised and address-shaped, or null. */
@@ -660,6 +743,16 @@ export async function finishLookup(lookupId: string, result: LookupResult): Prom
       .returning({ id: authorLookups.id });
     if (finished.length === 0) return { kind: "lost" };
 
+    /* The offered addresses, on their own rows (plan 261024j). Only after the
+       finish won, so a lost or stale run writes none; whatever the gift's
+       state, since they are the run's record, not the draft's. Each is cleaned
+       to what the table's checks hold, and a bad one is dropped rather than
+       failing the finish. */
+    const offered = cleanCandidates(found?.candidates ?? []);
+    if (offered.length > 0) {
+      await tx.insert(authorLookupCandidates).values(offered.map((c, position) => ({ lookupId, position, ...c })));
+    }
+
     const none = { email: false, name: false, notes: false } as const;
     if (gift.sendStartedAt !== null || gift.discardedAt !== null) return { kind: "finished", outcome, applied: none };
 
@@ -749,6 +842,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
     )
     .orderBy(desc(authorLookups.createdAt), desc(authorLookups.id));
   const spend = await spendByRun(lookups.flatMap((l) => (l.runId === null ? [] : [l.runId])));
+  const offered = await candidatesByLookup(lookups.map((l) => l.id));
 
   const byGift = new Map<string, AdminAuthorLookup[]>();
   for (const l of lookups) {
@@ -769,6 +863,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
       searches: l.searches,
       model: l.model,
       cost: runSpend,
+      candidates: offered.get(l.id) ?? [],
     };
     byGift.set(l.authorGiftId, [...(byGift.get(l.authorGiftId) ?? []), wire]);
   }
@@ -1076,25 +1171,33 @@ export async function previewAuthorGiftEmail(id: string): Promise<PreviewAnswer>
       starterSlug: authorGifts.starterSlug,
       createdBy: authorGifts.createdBy,
       articleThere: articles.id,
+      articleSlug: articles.slug,
       processing: articles.processing,
       currentRevisionId: articles.currentRevisionId,
     })
     .from(authorGifts)
     /* Send resolves by the frozen slug as the gift's creator, then pins that
-       resolution to article_id. These join conditions ask the same identity
-       question without touching the share token. */
+       resolution to article_id (resolveGiftStarter). This asks the same
+       identity question the other way round, without touching the share token:
+       the gift's own article, by id and owner, and then whether it still has
+       the frozen slug. If the slug has since gone to another article, Send
+       refuses it as absent, so this does too.
+
+       The slug is compared after the read, not in the join, on purpose. A
+       join on the slug column is a slug lookup, which
+       tests/owner-isolation.test.ts admits only through the owner-naming
+       leaves; this row is found by its primary key, so there is no slug
+       lookup to sanction. */
     .leftJoin(
       articles,
-      and(
-        eq(articles.id, authorGifts.articleId),
-        eq(articles.slug, authorGifts.starterSlug),
-        eq(articles.ownerId, authorGifts.createdBy),
-      ),
+      and(eq(articles.id, authorGifts.articleId), eq(articles.ownerId, authorGifts.createdBy)),
     )
     .where(eq(authorGifts.id, id))
     .limit(1);
   if (!gift) return { kind: "not-found" };
-  if (gift.articleThere === null) return { kind: "starter-refused", reason: "absent" };
+  if (gift.articleThere === null || gift.articleSlug !== gift.starterSlug) {
+    return { kind: "starter-refused", reason: "absent" };
+  }
   if (gift.processing === "minimal" || gift.currentRevisionId === null) {
     return { kind: "starter-refused", reason: "unpublished" };
   }
