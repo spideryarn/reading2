@@ -164,7 +164,8 @@ evidence is [261018c](../investigations/261018c-modes-say-when-the-piece-is-wron
 section, for conversations only: Chat, Learn's Recall, Explore and the guide. Five principles —
 leave the reader sharper, not more dependent, and sooner; candid, not agreeable (recheck under push-back, then
 hold or revise, saying why); make it clear how you know each thing; do not assume they have read
-it; plain, pitched to them, and point at the part of Spideryarn that would serve them better. It
+it, or know a person or work you bring in (introduce it where you name it); plain, pitched to them,
+and point at the part of Spideryarn that would serve them better. It
 sits **near the top**, after each prompt's opening description and before its first named rule
 section, framed as the spirit behind the rules below, so a prompt's own, more specific rules still
 win. Its broad intent deliberately overlaps the detailed sections above, but it does not copy their
@@ -173,7 +174,9 @@ mechanics: each line leaves the how to `CLAIM_ORIGINS`, `widerWorld`, `plainWord
 find-reviewers is exempt, with its reason) and keeps it short; the word budget is the test's. Live's spoken prompts do
 not carry it yet. The plan and the measurement:
 [261020d](../plans/261020d-principles-every-chat-shares.md) and
-[261020a](../investigations/261020a-chat-principles-measured.md).
+[261020a](../investigations/261020a-chat-principles-measured.md). The clause on what the model
+brings in, and why its wording is concrete (the abstract one showed no clear change):
+[261024a](../investigations/261024a-chats-give-the-background-measured.md).
 
 ## What the model writes back
 

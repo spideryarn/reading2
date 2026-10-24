@@ -1,0 +1,72 @@
+r1: brought 4; bare 0; over 0; bare-names: none
+r2: brought 2; bare 1; over 2; bare-names: strong AI
+r3: brought 7; bare 1; over 0; bare-names: Benjamin Bratton
+r4: brought 8; bare 4; over 1; bare-names: Tononi, Ned Block, Richards, Agüera y Arcas
+r5: brought 4; bare 2; over 2; bare-names: Giulio Tononi, Ned Block
+r6: brought 2; bare 1; over 1; bare-names: strong AI
+r7: brought 2; bare 2; over 0; bare-names: Karl Friston, free-energy principle
+r8: brought 9; bare 2; over 1; bare-names: Koch, Von Neumann digital computer
+r9: brought 10; bare 3; over 0; bare-names: Thomas Green, Marian Petre, Paul Graham
+r10: brought 0; bare 0; over 0; bare-names: none
+r11: brought 2; bare 0; over 0; bare-names: none
+r12: brought 9; bare 2; over 1; bare-names: Ned Block, Koch
+r13: brought 1; bare 1; over 0; bare-names: free-energy
+r14: brought 5; bare 2; over 0; bare-names: Behavioral and Brain Sciences, Mark Solms
+r15: brought 7; bare 0; over 0; bare-names: none
+r16: brought 4; bare 1; over 0; bare-names: David Reichert
+r17: brought 0; bare 0; over 0; bare-names: none
+r18: brought 6; bare 2; over 0; bare-names: Leonard Dung, Benjamin Bratton
+r19: brought 10; bare 6; over 0; bare-names: Butlin, Long, recurrent processing theory, global workspace theory, computational higher-order theories, BBS
+r20: brought 2; bare 1; over 0; bare-names: Karl Friston
+r21: brought 3; bare 2; over 1; bare-names: Tononi, Koch
+r22: brought 1; bare 0; over 1; bare-names: none
+r23: brought 2; bare 2; over 0; bare-names: Karl Friston, free-energy principle
+r24: brought 2; bare 1; over 0; bare-names: Karl Friston
+r25: brought 4; bare 0; over 0; bare-names: none
+r26: brought 3; bare 1; over 0; bare-names: MirrorCode paper
+r27: brought 5; bare 1; over 0; bare-names: Leonard Dung
+r28: brought 5; bare 1; over 0; bare-names: Leonard Dung
+r29: brought 10; bare 3; over 0; bare-names: Thomas Green, Marian Petre, Paul Graham
+r30: brought 3; bare 2; over 1; bare-names: Chalmers, organizational invariance
+r31: brought 13; bare 9; over 0; bare-names: global workspace theory, higher-order theories, Butlin, Long, recurrent processing theory, Tononi, Koch, Von Neumann digital computer, Behavioral and Brain Sciences
+r32: brought 11; bare 5; over 1; bare-names: Ned Block, Giulio Tononi, Koch, Richards, Agüera y Arcas
+r33: brought 3; bare 0; over 0; bare-names: none
+r34: brought 5; bare 1; over 0; bare-names: David Reichert
+r35: brought 0; bare 0; over 0; bare-names: none
+r36: brought 2; bare 1; over 1; bare-names: Chinese Room
+r37: brought 2; bare 0; over 0; bare-names: none
+r38: brought 1; bare 0; over 1; bare-names: none
+r39: brought 7; bare 3; over 0; bare-names: Ben Terhechte, Sonnet 3.5, Dan Luu
+r40: brought 5; bare 1; over 0; bare-names: Bradford Saad
+r41: brought 5; bare 1; over 0; bare-names: Dan Luu
+r42: brought 14; bare 9; over 0; bare-names: GWT, Butlin, Long, recurrent processing theory, computational higher-order theories, BBS, active inference, allostasis, Tim Bayne
+r43: brought 3; bare 1; over 1; bare-names: Chalmers
+r44: brought 11; bare 0; over 0; bare-names: none
+r45: brought 9; bare 3; over 0; bare-names: Green, Petre, Paul Graham
+r46: brought 13; bare 8; over 0; bare-names: global workspace theory, higher-order theory, Butlin, Long, recurrent processing theory, attention schema theory, Tononi, Koch
+r47: brought 14; bare 8; over 0; bare-names: global workspace theory, higher-order theories, recurrent-processing theory, attention-schema theory, Tononi, Koch, Von Neumann digital computer, Behavioral and Brain Sciences
+r48: brought 13; bare 10; over 0; bare-names: global workspace theory, higher-order theories, recurrent processing theory, Butlin, Long, Tononi, Koch, Behavioral and Brain Sciences, active inference, allostasis
+r49: brought 3; bare 0; over 0; bare-names: none
+r50: brought 0; bare 0; over 0; bare-names: none
+r51: brought 10; bare 2; over 0; bare-names: Thomas Green, Marian Petre
+r52: brought 6; bare 1; over 0; bare-names: GitHub Copilot
+r53: brought 4; bare 1; over 0; bare-names: Johannes Kleiner
+r54: brought 12; bare 8; over 0; bare-names: global workspace theory, higher-order theory, Butlin, Long, recurrent processing theory, attention schema theory, Koch, Behavioral and Brain Sciences
+r55: brought 11; bare 6; over 1; bare-names: Ned Block, Tononi, Ted Chiang, active inference, allostasis, Johannes Kleiner
+r56: brought 0; bare 0; over 0; bare-names: none
+r57: brought 2; bare 1; over 0; bare-names: Karl Friston
+r58: brought 2; bare 0; over 0; bare-names: none
+r59: brought 6; bare 2; over 0; bare-names: Claude Code, Dan Luu
+r60: brought 12; bare 2; over 1; bare-names: Shannonian information, Behavioral and Brain Sciences
+r61: brought 2; bare 2; over 0; bare-names: free-energy tradition, Karl Friston
+r62: brought 11; bare 3; over 0; bare-names: Thomas Green, Marian Petre, Paul Graham
+r63: brought 0; bare 0; over 0; bare-names: none
+r64: brought 6; bare 1; over 0; bare-names: Behavioral and Brain Sciences
+r65: brought 0; bare 0; over 0; bare-names: none
+r66: brought 5; bare 0; over 0; bare-names: none
+r67: brought 10; bare 6; over 0; bare-names: global workspace theory, higher-order theory, recurrent processing theory, Butlin, Behavioral and Brain Sciences, active inference
+r68: brought 3; bare 1; over 2; bare-names: Chalmers
+r69: brought 3; bare 1; over 0; bare-names: Bradford Saad
+r70: brought 12; bare 3; over 0; bare-names: Thomas Green, Marian Petre, Paul Graham
+r71: brought 0; bare 0; over 0; bare-names: none
+r72: brought 10; bare 3; over 0; bare-names: Thomas Green, Marian Petre, Paul Graham

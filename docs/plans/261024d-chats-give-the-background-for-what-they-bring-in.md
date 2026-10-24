@@ -1,7 +1,14 @@
 # 261024d — Chats give the background for what they bring in
 
 Up: [plans.md](../project/plans.md). Report `spya-bq9wv5` (#679, admin, suggestion, 2026-10-23).
-Measured in [261024d investigation](../investigations/261024d-chats-give-the-background-measured.md).
+Measured in [261024a](../investigations/261024a-chats-give-the-background-measured.md).
+
+**Outcome (2026-10-24):** shipped the second, more concrete wording — *"introduce each where you
+name it, in a few words on who or what it is ("the philosopher…", "a 2019 survey of…"), and say
+why it matters here"*. The first wording below showed no clear change and was replaced. The
+second roughly halved bare names for a non-expert reader, added no measurable length or lecturing,
+and did not help experts. Overall blind preference gave no clear signal (10–8; control 9–9). The
+principles' word bound is 270.
 
 ## What Greg asked
 
@@ -42,12 +49,13 @@ Minimal, as asked: one clause on the principle that already holds the nearest ru
 clause on the Explore line that pushed the other way.
 
 - `CHAT_PRINCIPLES`, the "do not assume" bullet gains: *"Nor that they know or remember a person,
-  work, study or term you bring in: like a good teacher, say briefly who or what it is and why it
-  matters here."* Not conditioned on the profile, on Greg's word: an expert may be rusty. "Pitched
-  to who they are" on the next bullet still sets how much.
+  work, study or term you bring in: like a good teacher, introduce each where you name it, in a few
+  words on who or what it is (\"the philosopher…\", \"a 2019 survey of…\"), and say why it matters
+  here."* Not conditioned on the profile, on Greg's word: an expert may be rusty. "Pitched to who
+  they are" on the next bullet still sets how much.
 - Explore's `THE WIDER WORLD`: *"Say what you found, with the background needed to follow it, in
   a sentence or two, link it, …"*.
-- `tests/chat-principles.test.ts`' length bound goes from under 220 words to under 250, with the
+- `tests/chat-principles.test.ts`' length bound goes from under 220 words to under 270, with the
   reason, as its comment says to do for a principle Greg asks for; prompting-guide.md's stale
   "under 200 words" points at the test instead of repeating a number.
 
@@ -90,7 +98,7 @@ read-only from production into `evals/chat-principles/articles/`):
 - `guide-others` — the guide, Seth: is it well regarded, what to read alongside? Its 60 words.
 - Regression: `expert-term`, `jargon-shown`.
 
-Arms `bg-before`, `bg-before2` (control) on the commit before; `bg-after` with the change. Two
-runs per case. Blind pairs, one fresh Opus judge per pairs file, tally against the control.
-Decide: ship if after beats before by more than the control's spread on the new cases, and the
-regression cases and word counts show no lecturing.
+Arms `bg-before`, `bg-before2` (control) on the commit before; `bg-after` with the first wording;
+`bg-after2` with the final, concrete wording. Two runs per case. Blind pairs, one fresh Opus judge
+per pairs file, tally against the control. Decide: ship if after beats before by more than the
+control's spread on the new cases, and the regression cases and word counts show no lecturing.

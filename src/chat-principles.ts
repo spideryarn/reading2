@@ -49,9 +49,18 @@
  * >
  * > — Greg, 2026-10-23 (`spya-bq9wv5`)
  *
- * So it holds whatever the profile says; how much to say is still the next
- * line's "pitched to who they are". Plan and measurement:
- * docs/plans/261024d-chats-give-the-background-for-what-they-bring-in.md.
+ * How much to say is still the next line's "pitched to who they are". Where
+ * the reader has a profile, `PROFILE_RULES` (src/profile.ts) is more specific
+ * and wins: "Assume the background they claim. Do not explain what they have
+ * told you they already know". That is the likeliest reason the measurement
+ * saw no change for experts, against Greg's "even if I'm a neuroscientist";
+ * changing it reaches every profile-aware prompt, so it is queued separately
+ * (Overseer `qi-jq3tckr5`; GPT Sol's code review, F1). **Concrete on purpose**: "say briefly who
+ * or what it is" showed no clear change; "introduce each where you name it, in
+ * a few words", with two example openings, roughly halved the bare names for
+ * a non-expert reader. Plan and measurement:
+ * docs/plans/261024d-chats-give-the-background-for-what-they-bring-in.md and
+ * docs/investigations/261024a-chats-give-the-background-measured.md.
  *
  * Which conversation kinds carry it is held by tests/chat-principles.test.ts.
  * Live's spoken prompts do not yet: they were tuned for terseness and can only

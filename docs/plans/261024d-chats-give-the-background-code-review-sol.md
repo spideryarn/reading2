@@ -1,0 +1,20 @@
+No high-severity findings.
+
+1. **Medium — The prompt conflicts when the reader has demonstrated knowledge.** The new clause unconditionally introduces every outside name or term and its comment says it applies regardless of profile ([chat-principles.ts:52](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/src/chat-principles.ts:52), [chat-principles.ts:84](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/src/chat-principles.ts:84)), while `PROFILE_RULES` forbids explaining demonstrated knowledge ([profile.ts:171](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/src/profile.ts:171)) and Learn says experts get no basics ([converse.ts:1266](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/src/converse.ts:1266)). The prompt needs a narrow exception for a *particular thing* the reader has shown they know. I did not change it because that would create an unmeasured fifth arm. Chat’s answer-first rule, Explore’s sentence limit, and guide/Recall brevity otherwise remain compatible through inline introductions and the stated precedence.
+
+2. **Medium — `introduced.ts` could silently miscount.** Malformed key/count lines were skipped, duplicate reply lines were accumulated, and duplicate keys overwrote earlier entries. I changed it to reject malformed, duplicate, missing, unexpected, and internally inconsistent rows ([introduced.ts:107](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/evals/chat-principles/introduced.ts:107), [introduced.ts:133](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/evals/chat-principles/introduced.ts:133)). I also made tallying avoid importing the production conversation/store stack ([introduced.ts:60](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/evals/chat-principles/introduced.ts:60)).
+
+3. **Low — The shuffle was biased, though the existing blind count remains usable.** For `i=4`, the bit-loop plus modulo selected indices with frequencies `2,2,2,1,1`. I replaced modulo reduction with rejection sampling ([introduced.ts:42](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/evals/chat-principles/introduced.ts:42)). Because all 72 replies were counted and every arm still contributed 18, this did not alter the published totals; it only removes possible ordering bias from future sheets.
+
+4. **Medium — One reported subtotal was wrong and two claims were too strong.** Recomputed totals are:
+
+   - `bg-before`: 37/100 overall; 12/48 non-expert; 5 over
+   - `bg-before2`: 36/83; 11/45; 5 over
+   - `bg-after`: 39/104; **11/49 (22%)**, not 12/49; 4 over
+   - `bg-after2`: 35/106; 7/53 (13%); 5 over
+
+   All win tallies are correct: 9–9; 7–10–1; 8–9–1; 8–10. I corrected the table and changed “no change/inside the control” to the defensible “no clear change/signal” ([investigation:61](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/docs/investigations/261024a-chats-give-the-background-measured.md:61), [investigation:71](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/docs/investigations/261024a-chats-give-the-background-measured.md:71)). The “roughly halved” conclusion is supportable with the existing small-sample caveat. I also corrected stale plan wording and its 270-word bound.
+
+5. **Low — The example wording is copied stylistically, but no factual invention was observed.** “The philosopher…” appears verbatim in final-arm replies ([bg-after2.json:112](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/evals/chat-principles/results/bg-after2.json:112), [bg-after2.json:128](/var/tmp/spideryarn-worktrees/fbbq9wv5-chat-gives-background/evals/chat-principles/results/bg-after2.json:128)); “a 2019 survey…” was not copied. The roles were linked and no fabricated role/date was evident, so I left the measured examples unchanged.
+
+`OWN_ARTICLES`, the added cases, and judge wording otherwise look correct. Typecheck passed; targeted tests passed, 28/28; lint had only the two pre-existing complexity notices. Full `npm test` could not run because local Postgres/Docker was unreachable.
