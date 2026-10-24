@@ -23,7 +23,7 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sourcesHead } from "./helpers/sources-head.js";
-import type { BlockId, Situate, SituateFinding, ThreadSummary } from "../src/types.js";
+import type { BlockId, Job, Situate, SituateFinding, ThreadSummary } from "../src/types.js";
 import { MAX_LENS_CHARS } from "../src/types.js";
 import type { UseSituate } from "../src/web/useSituate.js";
 
@@ -31,6 +31,10 @@ import type { UseSituate } from "../src/web/useSituate.js";
 
 const asked: { url: string; method: string; body: unknown }[] = [];
 let stored: unknown = null;
+/** Set to hold `GET /api/situate/a-piece` open until the test answers it. */
+let situateReply: Promise<Response> | null = null;
+/** The same seam for a slug-change race. */
+let otherSituateReply: Promise<Response> | null = null;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
@@ -41,7 +45,14 @@ vi.mock("../src/web/lib/api.js", async () => {
       return new Response(JSON.stringify({ id: "job-1" }), { status: 200 });
     }
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
-    if (url === "/api/situate/a-piece") return new Response(JSON.stringify(stored), { status: 200 });
+    if (url === "/api/situate/a-piece") {
+      if (situateReply) return situateReply;
+      return new Response(JSON.stringify(stored), { status: 200 });
+    }
+    if (url === "/api/situate/another-piece") {
+      if (otherSituateReply) return otherSituateReply;
+      return new Response(JSON.stringify(null), { status: 200 });
+    }
     return new Response(null, { status: 404 });
   };
   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
@@ -77,6 +88,7 @@ const {
 const { InvestigatePanel, SOURCES_INVESTIGATE_SUGGESTED_HEAD } = await import("../src/web/InvestigatePanel.js");
 const { useSituate } = await import("../src/web/useSituate.js");
 const { dayOf } = await import("../src/web/relative-time.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
 
 const A = "spya-aaaaaa" as BlockId;
 const B = "spya-bbbbbb" as BlockId;
@@ -226,32 +238,37 @@ function owner(over: Partial<UseSituate> = {}): UseSituate {
   };
 }
 
+function panel(situateOwner: UseSituate | null, summaries: ThreadSummary[] = []): ReactElement {
+  return createElement(InvestigatePanel, {
+    head: sourcesHead({ view: "investigate", onView: () => {}, ownerSlug: "a-piece" }),
+    chats: {
+      summaries,
+      loaded: false,
+      occupied: false,
+      onQuestion: (q: string) => questions.push(q),
+      onCheck: () => {},
+      onAskWork: () => {},
+      onOpen: (id: string) => opened.push(id),
+    },
+    claims: null,
+    works: null,
+    situate: situateOwner,
+    onJump: (id: BlockId) => jumped.push(id),
+  });
+}
+
 function paint(situateOwner: UseSituate | null, summaries: ThreadSummary[] = []): void {
   act(() => {
-    root.render(
-      createElement(InvestigatePanel, {
-        head: sourcesHead({ view: "investigate", onView: () => {}, ownerSlug: "a-piece" }),
-        chats: {
-          summaries,
-          loaded: false,
-          occupied: false,
-          onQuestion: (q: string) => questions.push(q),
-          onCheck: () => {},
-          onAskWork: () => {},
-          onOpen: (id: string) => opened.push(id),
-        },
-        claims: null,
-        works: null,
-        situate: situateOwner,
-        onJump: (id: BlockId) => jumped.push(id),
-      }),
-    );
+    root.render(panel(situateOwner, summaries));
   });
 }
 
 beforeEach(() => {
   asked.length = 0;
   stored = null;
+  situateReply = null;
+  otherSituateReply = null;
+  jobEngine.reset();
   questions.length = 0;
   opened.length = 0;
   jumped.length = 0;
@@ -563,5 +580,119 @@ describe("useSituate", () => {
       await seen?.regenerate();
     });
     expect(jobPosts().map((r) => r.body)[1]).toEqual({ slug: "a-piece", steps: ["situate"], force: ["situate"] });
+  });
+
+  /* Between the job leaving the queue and the read it sets off landing, the
+     section is still working: without that it drew the before-run press for
+     one poll (stage 4's browser run). useSituate.ts § `landing`. */
+  describe("a run finishing while its read is still out", () => {
+    const doneJob = {
+      id: "situate-run",
+      slug: "a-piece",
+      status: "done",
+      steps: [{ name: "situate", status: "done" }],
+      createdAt: "2026-10-24T10:00:00Z",
+    } as Job;
+
+    /** The real hook driving the real section, as Investigate mounts it. */
+    function Drawn({ slug = "a-piece" }: { slug?: string }): ReactElement {
+      seen = useSituate(slug);
+      return panel(seen);
+    }
+
+    /** Mount on "none", hold the next read, and announce the job as done through the real engine. */
+    async function finishWithTheReadHeld(): Promise<(res: Response) => void> {
+      await act(async () => root.render(createElement(Drawn)));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      });
+      expect(seen?.status).toBe("none");
+      /* The first list is the engine's baseline, not news (jobEngine.ts § `recordCompletions`). */
+      await act(async () => jobEngine.receive([]));
+      let land!: (res: Response) => void;
+      situateReply = new Promise<Response>((resolve) => {
+        land = resolve;
+      });
+      const reads = () => asked.filter((r) => r.url === "/api/situate/a-piece").length;
+      const before = reads();
+      await act(async () => jobEngine.receive([doneJob]));
+      expect(reads(), "the finished job sent a read out").toBe(before + 1);
+      return land;
+    }
+
+    const settle = () =>
+      act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+    it("stays starting until the dossier lands, then is ready", async () => {
+      const land = await finishWithTheReadHeld();
+      expect([seen?.status, seen?.job, seen?.starting]).toEqual(["none", null, true]);
+      /* What the section draws in that window: the working line, not the press. */
+      expect(text()).toContain(SITUATE_WORKING);
+      expect(buttonCalled(SITUATE_RUN)).toBeUndefined();
+      expect(text()).not.toContain(SITUATE_DISCLOSURE);
+
+      const body = { situate: situate(), stale: false, outdated: false, profileChanged: false };
+      await act(async () => land(new Response(JSON.stringify(body), { status: 200 })));
+      await settle();
+      expect([seen?.status, seen?.situate?.kind, seen?.starting]).toEqual(["ready", "review", false]);
+      expect(text()).not.toContain(SITUATE_WORKING);
+      expect(text()).toContain("The report became a reference point.");
+    });
+
+    it("lets go of starting when that read fails", async () => {
+      const land = await finishWithTheReadHeld();
+      expect(seen?.starting).toBe(true);
+      await act(async () => land(new Response("no", { status: 500 })));
+      await settle();
+      expect(seen?.starting).toBe(false);
+      expect(seen?.status).toBe("none");
+      expect(seen?.error).not.toBeNull();
+      expect(text()).not.toContain(SITUATE_WORKING);
+    });
+
+    it("does not carry one article's landing onto another or let the old read clear the new one", async () => {
+      const landFirst = await finishWithTheReadHeld();
+      await act(async () => root.render(createElement(Drawn, { slug: "another-piece" })));
+      await settle();
+      expect([seen?.slug, seen?.status, seen?.starting]).toEqual(["another-piece", "none", false]);
+
+      let landSecond!: (res: Response) => void;
+      otherSituateReply = new Promise<Response>((resolve) => {
+        landSecond = resolve;
+      });
+      const secondJob = { ...doneJob, id: "situate-run-2", slug: "another-piece" };
+      await act(async () => jobEngine.receive([secondJob, doneJob]));
+      expect(seen?.starting).toBe(true);
+
+      await act(async () => landFirst(new Response(JSON.stringify(null), { status: 200 })));
+      await settle();
+      expect(seen?.starting, "the old article's read must not clear this one's landing").toBe(true);
+
+      await act(async () => landSecond(new Response(JSON.stringify(null), { status: 200 })));
+      await settle();
+      expect(seen?.starting).toBe(false);
+    });
+
+    it("does not revive an obsolete landing after navigating away and back", async () => {
+      const landOld = await finishWithTheReadHeld();
+      await act(async () => root.render(createElement(Drawn, { slug: "another-piece" })));
+      await settle();
+
+      let landCurrent!: (res: Response) => void;
+      situateReply = new Promise<Response>((resolve) => {
+        landCurrent = resolve;
+      });
+      await act(async () => root.render(createElement(Drawn)));
+      await act(async () => landCurrent(new Response(JSON.stringify(null), { status: 200 })));
+      await settle();
+      expect(seen?.starting, "the discarded read no longer belongs to this visit").toBe(false);
+
+      /* Let the discarded request finish too; its finalizer must remain harmless. */
+      await act(async () => landOld(new Response(JSON.stringify(null), { status: 200 })));
+      await settle();
+      expect(seen?.starting).toBe(false);
+    });
   });
 });

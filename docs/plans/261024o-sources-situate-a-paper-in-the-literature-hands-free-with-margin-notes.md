@@ -22,7 +22,7 @@ suggestion, filed from `/read/arxiv-2308-08708-spya-xax6v4?mode=chat&sources=inv
 > it back.
 >
 > — Greg, 2026-10-23 (spya-w95xmq, abridged; the whole of it is in the
-> report's note, linked here once it is written)
+> [note](../user-feedback/261023_2305-sources-situate-the-piece-in-the-literature.md))
 
 ## The evidence this rests on
 

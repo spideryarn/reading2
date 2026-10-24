@@ -76,3 +76,42 @@ than the quote). An eighth of the price, but the errors are the kind a margin no
   because Haiku shows what it catches.
 - Not measured here, and measured in the build instead: the second ("dive") pass, and the cost with
   the extracts clipped shorter.
+
+## The built step, run for real (stage 4, 2026-10-24)
+
+The shipped `situate` step, pressed once each in a local browser by a Sonnet agent, on the local
+copies of two articles. Costs are from the local `ai_calls` ledger.
+
+| Article | Press to dossier | Plan | 16 searches | Read | Whole run | Findings |
+|---|---|---|---|---|---|---|
+| Butlin, Long et al., *Consciousness in AI* (2023) | 56 s | $0.022 | $0.112 | $0.335 (38k in + 90k cache write, 3.3k out) | **$0.47** | 14 |
+| *Don't Claim Benchmark-Oriented Optimization…* (2026) | 52 s | $0.023 | $0.112 | $0.193 | **$0.33** | 10 |
+
+The read's cache breakpoint is written and not read back in an ordinary run (about 4.5 cents of
+premium on the long article); it pays for itself only on a retry within five minutes. Kept, with
+that said in the code.
+
+**Hand check of the 14 findings on *Consciousness in AI*** (each source's checked quote against its
+note):
+
+- **Every source's quote is real and bears out the core of its note** — the 2025 *Nature*
+  adversarial collaboration, Seth's *BBS* biological naturalism, Bradley & Saad on indicators not
+  being computational, the authors' own 2025 *TiCS* follow-up, the IIT "pseudoscience" letter,
+  *Taking AI Welfare Seriously*, Anthropic's introspection paper, the reply to Pennartz. The same
+  findings the spike called gold came back from the built pipeline.
+- **Two notes say more than their sources** (GPT Sol's C8, provenance not support): each names a
+  second paper ("a 2026 preprint", "another tested schemas in multi-agent settings") with no source
+  for it. The checked half is right; the unchecked clause is unverifiable.
+- **Two kinds are wrong in time**: a 2020 study and a 2022 paper the report itself cites are filed
+  under *Since*. The note text is accurate; the label is not.
+- **No *Citation?* finding**: the local article has no stored abstract notes on its cited works, so
+  the `A` evidence the citation rule requires was empty. That rule is untested on a real article.
+- **No later papers from OpenAlex**: the DOI's OpenAlex record (`W4386113651`) carries another
+  paper's title, so the shared identity check (`confirmedWorkOf`, also Reception's *Cited by*)
+  refused it, correctly by its own rule. The spike, which took the DOI on trust, got 196 citers
+  from the same record. Every finding came from the web searches alone.
+
+So: worth a margin note on 10 of 14 as written, and on all 14 once the two over-reaching clauses
+and the two labels are discounted. The two failure shapes are prompt work (a note names only its
+sources; *Since* means after the piece's year), to be measured, not guessed — the queued paired
+comparison is where.
