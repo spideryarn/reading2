@@ -2922,6 +2922,9 @@ export function shareableArtefacts(revision: {
   };
 }
 
+/** A read that must see one moment: `loadSourcePages`' revision and its parts. */
+const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } as const;
+
 /**
  * **The whole `ArticleReader`, annotated as one — not a `Pick` of the twelve
  * names that happen to be here today.**
@@ -3016,7 +3019,7 @@ const rawPgArticleReader: ArticleReader = {
         .where(eq(articleRevisionParts.revisionId, found.revision.id))
         .orderBy(asc(articleRevisionParts.ordinal));
       return { revision: found.revision, parts };
-    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    }, SNAPSHOT);
     if (!pinned) throw notFound(slug);
 
     const sources = postgresBlobStore("the Postgres store serves an article's source document");

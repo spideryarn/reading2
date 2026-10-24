@@ -123,6 +123,10 @@ const EXCEPTIONS: Record<string, Options> = {
   /* Sources › Not cited's loader: the identity, the opening, the Bibliography
      and its staleness, and the kept search must be one version of the article
      (plan 261011ac, F6). It never writes; the write is a separate upsert. */
+  /* A multi-page article's page 1 and its later pages must come from one
+     revision, so a refresh landing between the two reads cannot pair them
+     wrongly (plan 261024p). Read-only; the bytes are fetched after it. */
+  "src/store/pg.ts#SNAPSHOT": { isolationLevel: "repeatable read", accessMode: "read only" },
   "src/store/pg-related-work.ts#SNAPSHOT": { isolationLevel: "repeatable read", accessMode: "read only" },
 };
 
