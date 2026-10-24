@@ -315,6 +315,32 @@ P0, eight P1s. **This section overrides the spec above where they differ**; it i
   refreshes the summaries after `begin` and after settlement rather than the module touching
   Reader's `handedItemChats`.
 
+## What landed (2026-10-24)
+
+- **Stage 0**: the plan, the measurement ([261024d](../investigations/261024d-does-it-say-that-cost-and-latency.md)),
+  the streaming and cache probes, Sol's plan review (`65ed71315`).
+- **Stage 1, server** (`339091370`, Sol's fixes S1–S4 `f33fc3986`): the `cite-check` origin, the
+  route's checks, the server-built question in `src/chat-question.ts`, the `cite-check` allowance
+  (`src/cite-check.ts`, 8/h, 20/day, 100/day overall, 2 at once) with refunds, the edit refusal;
+  migration `20261024155534_cite_check_origin` (regenerated on top of the quiz origin's after the
+  merge with dev, `df9d23620`).
+- **Stage 2, client** (`ebbf69930`, Sol's fixes T1–T7 `f33f44e8a`): the loader
+  (`src/web/cite-check.ts`), `CiteCheckSection` in the card, the press through the loader, `runTurn`'s
+  refusal details, `byTouch` and the card's engaged state in `useHoverCard`. T3 changed Chat's
+  controller to gate navigation callbacks on attachment rather than clear them on detach (StrictMode);
+  round 2 checked that a real remount gets a new controller, so nothing stale can fire.
+- **Stage 3, docs** (`ca8969aab`): bibliography.md, chat-from-a-mode.md, the Help page.
+- **Round 2** (narrow: the stage-2 fixes, the merge, the regenerated migration): no findings.
+- **Browser check** (Sonnet, Playwright on the box, `scaling-hypothesis`, two real checks): all six
+  checks pass: section after ~2.5 s, answer ~15 s after the rest in a scrolling box, Continue in
+  Chat opens the titled thread, a pass-over starts nothing, a re-rest shows the saved answer with no
+  send, closing mid-wait loses nothing, the press opens the same chat, a tap starts nothing. No
+  console errors. The card with an answer is about 795 px tall at 1300×900, which fits.
+- **Left, not done**: Sol's T8 (a refusal carries no exact retry time, so a kept cap line can stay a
+  little longer than needed); Sol's S5 from stage 1, an older Chat bug (*Answer again* on a first
+  send that failed before `begin` retries a thread that does not exist), outside this work; the
+  pre-read that would make the card's answer stream (C7, above); Marginalia's *Cites* card.
+
 ## History: the quick note (planned, reviewed by GPT Sol, not built)
 
 Everything from here to § Then: nothing built is the first plan and its review, kept for the
