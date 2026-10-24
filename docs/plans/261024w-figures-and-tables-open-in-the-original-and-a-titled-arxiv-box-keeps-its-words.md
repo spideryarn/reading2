@@ -112,3 +112,19 @@ embedded YouTube player). So the box stayed empty, 450 words with it. A plain `<
 refused: on an arXiv page (rule 1) it is the paper's own figure, fetched and hosted by stage 4.5 like
 any other. Players, `picture`, `source` and the rest stay refused. All four boxes of 2308.08708 now
 lift, checked on the live page.
+
+## GPT Sol's code review
+
+[261024w-code-review-sol.md](261024w-code-review-sol.md), on [the diff](261024w-code-review.diff). It
+fixed four in the tree, each read and kept: a bold first label could still be a diagram's, so a
+titled box now also needs LaTeXML's `.ltx_minipage` wrapper round both parts; a **fetched PDF** has a
+URL too, so it is refused by `meta.source` or by its figure markers; the image test now proves the
+lifted figure's address is the one stage 4.5 collects; stale comments on the shared `.figure-note`
+CSS.
+
+One left, and accepted: a visitor's copy of a fetched PDF with **no** figure marker cannot be told
+from a web page (`PublicMeta` withholds `source` on purpose), so a table in it gets the web icon. It
+opens the PDF's own address, with a fragment the PDF viewer ignores, so it is still the way back to
+the original, only not aimed. Not worth a new public field.
+
+Deferred half queued as **qi-zbpqb2r9** (a PDF's tables).

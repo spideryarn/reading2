@@ -12,6 +12,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { RESERVED_ATTRS } from "../src/reserved.js";
 import type { Article, Block, BlockId, BlockKind } from "../src/types.js";
 import { OriginalLinkNote, originalLinksIn } from "../src/web/OriginalLink.js";
 
@@ -76,10 +77,24 @@ describe("which blocks get a link", () => {
     expect(originalLinksIn(article([rule, inline, layout])).size).toBe(0);
   });
 
-  it("nothing for an article with no web address: an upload, a PDF, or an address that is not http(s)", () => {
+  it("nothing for an article with no web address: an upload or an address that is not http(s)", () => {
     expect(originalLinksIn(article([FIGURE], {})).size).toBe(0);
-    expect(originalLinksIn(article([FIGURE], { source: "pdf" })).size).toBe(0);
     expect(originalLinksIn(article([FIGURE], { url: "javascript:alert(1)" })).size).toBe(0);
+  });
+
+  it("not a fetched PDF merely because it has a web address, for its owner or a visitor", () => {
+    expect(originalLinksIn(article([FIGURE], { source: "pdf", url: `${URL}.pdf` })).size).toBe(0);
+
+    /* PublicMeta withholds `source`, but the public blocks keep the PDF marker.
+       That marker is the remaining proof that this address is a PDF, not an
+       HTML page whose ids and captions can be targeted. */
+    const marked = block(
+      "spya-pdfpdf",
+      `<figure ${RESERVED_ATTRS.pdfFigure}="opaque-ref.3.1"><figcaption>Figure 1: From a PDF</figcaption></figure>`,
+      "figure",
+      "media",
+    );
+    expect(originalLinksIn(article([marked], { url: `${URL}.pdf` })).size).toBe(0);
   });
 });
 

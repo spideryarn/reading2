@@ -23,8 +23,8 @@
  * (src/blocks.ts § `stampAuthorAnchors`), so arXiv's `S2.F1.g1` in our copy is
  * `S2.F1.g1` on arxiv.org too, and `#S2.F1.g1` scrolls the reader to it.
  * **Then on the caption's opening words**, as a text fragment
- * (`#:~:text=`), which every current engine reads and an old one ignores. Only
- * a caption's: a table's first cells sit in separate boxes, and a text fragment
+ * (`#:~:text=`), which a supporting browser reads and another ignores. Only a
+ * caption's: a table's first cells sit in separate boxes, and a text fragment
  * cannot match across them. **Then the page itself**, at the top, which is
  * still the way back, and the tip says so rather than promising the figure.
  *
@@ -42,6 +42,7 @@
 import { ExternalLink } from "lucide-react";
 
 import { figuresOf, type FigureKind } from "../figures.js";
+import { RESERVED_ATTRS } from "../reserved.js";
 import type { Article, Block, BlockId } from "../types.js";
 import { webSource } from "./SourceLink.js";
 
@@ -81,6 +82,12 @@ const LATER_PAGE_ID = /^p\d+-/u;
  */
 export function originalLinksIn(article: Article): Map<BlockId, OriginalLink> {
   const links = new Map<BlockId, OriginalLink>();
+  /* `webSource` means "has a public HTTP address", not "came from HTML": a
+     fetched PDF has both `source: "pdf"` and a URL. Its figures use page
+     markers and PdfFigureNote's control; an HTML id or text directive cannot
+     address the PDF. A visitor's PublicMeta deliberately withholds `source`,
+     so the marker is the second proof available on that path. */
+  if (isKnownPdf(article)) return links;
   const source = webSource(article.meta);
   if (source === null) return links;
   const page = withoutFragment(source);
@@ -96,6 +103,12 @@ export function originalLinksIn(article: Article): Map<BlockId, OriginalLink> {
     links.set(block.id, linkFor(root, figure.kind, figure.caption, page));
   }
   return links;
+}
+
+/** A PDF when either the owner metadata or its unforgeable figure markers say so. */
+function isKnownPdf(article: Article): boolean {
+  if (article.meta.source === "pdf") return true;
+  return article.blocks.some((block) => block.html.includes(RESERVED_ATTRS.pdfFigure));
 }
 
 /** No words, and something drawn: an SVG or a picture the stage-3 rules did not call media. */

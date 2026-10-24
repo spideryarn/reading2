@@ -19,6 +19,7 @@ import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { splitIntoBlocks } from "../src/blocks.js";
+import { imageUrlsIn } from "../src/collect-assets.js";
 import { runExtract } from "../src/extract.js";
 import { latexmlAuthorNames, prepareLatexml } from "../src/latexml.js";
 import { canonicaliseMaths } from "../src/maths-import.js";
@@ -632,7 +633,12 @@ describe("fix 7 — a boxed passage keeps its words", () => {
       expect(lifted?.querySelector("img")?.getAttribute("src")).toBe("2308.08708v3/figures/selfAttention.png");
       const { blocks } = await blocksOf(fx("titled-boxed-passage-with-figure"));
       expect(blocks.some((b) => b.text.includes("The fields of neuroscience and machine learning"))).toBe(true);
-      expect(blocks.some((b) => b.html.includes("selfAttention.png"))).toBe(true);
+      const imageBlock = blocks.find((b) => b.html.includes("selfAttention.png"));
+      expect(imageBlock).toBeDefined();
+      /* Once lifted, Readability resolves it against the fetched page and the
+         assets step sees the same absolute URL as it does for any other image. */
+      expect(imageBlock?.html).toContain('src="https://arxiv.org/html/2308.08708v3/figures/selfAttention.png"');
+      expect(imageUrlsIn(blocks)).toContain("https://arxiv.org/html/2308.08708v3/figures/selfAttention.png");
     });
 
     it("is left alone when the first part is not a short title", () => {
@@ -648,6 +654,14 @@ describe("fix 7 — a boxed passage keeps its words", () => {
       const html = fixture.replace("ltx_text ltx_font_bold", "ltx_text");
       expect(html).not.toBe(fixture);
       expect(prepared(latexml(html)).unchanged).toBe(true);
+    });
+
+    it("is left alone when a two-label diagram makes its first label bold", () => {
+      const diagram = `<svg class="ltx_picture"><g><path d="M 0 0 L 10 10"></path>
+        <foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content"><span class="ltx_font_bold">Input</span></span></span></foreignObject>
+        <foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content"><span>Output</span></span></span></foreignObject>
+      </g></svg>`;
+      expect(prepared(latexml(diagram))).toMatchObject({ unchanged: true, stats: NOTHING });
     });
 
     it("is left alone when a third foreignObject makes it a diagram", () => {

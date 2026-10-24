@@ -713,10 +713,12 @@ const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, link, object, picture, scr
  * **Or two, when the box has a title bar** — the title, then the body, in
  * document order, each of the shape above (Boxes 1–4 of 2308.08708, report
  * spya-weuekx: a thousand words that reached the reader as four empty frames).
- * The first must read as a title: at most `BOX_TITLE_WORDS` words and no line
- * break. It comes out first, in a `<strong>` — LaTeXML sets it
- * `ltx_font_bold`, a class the sanitiser drops, and run straight into the body
- * it reads as the body's first sentence — then a `<br>`, then the body.
+ * Both contents hold LaTeXML's `.ltx_minipage` passage wrapper, rather than a
+ * diagram's bare label. The first must read as a title: at most
+ * `BOX_TITLE_WORDS` words and no line break. It comes out first, in a
+ * `<strong>` — LaTeXML sets it `ltx_font_bold`, a class the sanitiser drops,
+ * and run straight into the body it reads as the body's first sentence — then
+ * a `<br>`, then the body.
  *
  * A diagram is not this: it has a `foreignObject` per label (nine in each of
  * Figure 1's panels in 2610.01988v1) and is left as the picture it is. The
@@ -729,32 +731,11 @@ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
   if (svg.classList.contains("ltx_markedasmath")) return false;
   const objects = Array.from(svg.querySelectorAll("foreignObject"));
   if (objects.length !== 1 && objects.length !== 2) return false;
-  const contents: Element[] = [];
-  for (const object of objects) {
-    const content = passageOf(object);
-    if (content === null || content.querySelector(ACTIVE_PASSAGE_CONTENT) !== null) return false;
-    contents.push(content);
-  }
+  const contents = passagesOf(objects);
+  if (contents === null) return false;
   const title = contents.length === 2 ? contents[0] : undefined;
   const body = contents[contents.length - 1];
-  if (body === undefined || (title !== undefined && !readsAsTitle(title))) return false;
-  /* The two wrappers round each passage, which are discarded with the frame. */
-  const wrappers = new Set<Element>(objects);
-  for (const content of contents) if (content.parentElement) wrappers.add(content.parentElement);
-  /* Everything else in the SVG is the frame: drawn, wordless, and not linked to. */
-  for (const part of Array.from(svg.querySelectorAll("*"))) {
-    const inside = contents.find((content) => content.contains(part));
-    if (inside !== undefined) {
-      /* The wrapper itself is discarded: only its children move. A linked id
-         or name on that wrapper therefore has no faithful home. */
-      if (part === inside && linkedNamesOf(part, targets).length > 0) return false;
-      continue;
-    }
-    if (linkedNamesOf(part, targets).length > 0) return false;
-    if (wrappers.has(part)) continue;
-    if (!FRAME_TAGS.has(part.tagName.toLowerCase()) || !noOwnText(part)) return false;
-  }
-  if (!noOwnText(svg)) return false;
+  if (body === undefined || !isTitledPassage(title, body) || !hasOnlyFrame(svg, objects, contents, targets)) return false;
 
   const doc = svg.ownerDocument;
   const passage = doc.createElement("span");
@@ -772,6 +753,52 @@ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
 
 /** The most words a box's title bar may have and still be read as one. Box 2 of 2308.08708's has eight. */
 const BOX_TITLE_WORDS = 25;
+
+/** All of the objects' ordinary-HTML passages, provided none would newly become active. */
+function passagesOf(objects: readonly Element[]): Element[] | null {
+  const contents: Element[] = [];
+  for (const object of objects) {
+    const content = passageOf(object);
+    if (content === null || content.querySelector(ACTIVE_PASSAGE_CONTENT) !== null) return null;
+    contents.push(content);
+  }
+  return contents;
+}
+
+/** One old-style passage, or the measured title-plus-body shape. */
+function isTitledPassage(title: Element | undefined, body: Element): boolean {
+  return title === undefined || (isMinipagePassage(title) && isMinipagePassage(body) && readsAsTitle(title));
+}
+
+/** The passage wrapper measured inside both parts of a titled tcolorbox. */
+function isMinipagePassage(content: Element): boolean {
+  return content.children.length === 1 && content.firstElementChild?.classList.contains("ltx_minipage") === true;
+}
+
+/** Everything outside the passages is an unlinked, wordless SVG frame. */
+function hasOnlyFrame(
+  svg: Element,
+  objects: readonly Element[],
+  contents: readonly Element[],
+  targets: ReadonlySet<string>,
+): boolean {
+  /* The two wrappers round each passage, which are discarded with the frame. */
+  const wrappers = new Set<Element>(objects);
+  for (const content of contents) if (content.parentElement) wrappers.add(content.parentElement);
+  for (const part of Array.from(svg.querySelectorAll("*"))) {
+    const inside = contents.find((content) => content.contains(part));
+    if (inside !== undefined) {
+      /* The content wrapper itself is discarded: only its children move. A
+         linked id or name on it therefore has no faithful home. */
+      if (part === inside && linkedNamesOf(part, targets).length > 0) return false;
+      continue;
+    }
+    if (linkedNamesOf(part, targets).length > 0) return false;
+    if (wrappers.has(part)) continue;
+    if (!FRAME_TAGS.has(part.tagName.toLowerCase()) || !noOwnText(part)) return false;
+  }
+  return noOwnText(svg);
+}
 
 /**
  * The passage inside one `foreignObject` — exactly
@@ -797,8 +824,9 @@ function passageOf(object: Element): Element | null {
 
 /**
  * A title bar: a few words on one line, **every one of them set bold**. The
- * bold is the evidence: a diagram with two short labels has the same count of
- * `foreignObject`s, and nothing else tells them apart (GPT Sol, plan review).
+ * bold and `isMinipagePassage` are the evidence: a diagram with two short
+ * labels can have the same count of `foreignObject`s (GPT Sol, plan review),
+ * and its first label may itself be bold.
  */
 function readsAsTitle(content: Element): boolean {
   if (content.querySelector("br") !== null) return false;

@@ -1264,8 +1264,8 @@ function TableViewInner({
   const canOpenSource = hasOriginalPdf(article);
   /* **And a web article's figures, tables and images, each with a way back to
      the publisher's page** — OriginalLink.tsx. Empty for anything with no web
-     address, a PDF included, which has the control above. Memoised for the
-     same reason. */
+     address and for a PDF we can identify, which has the control above.
+     Memoised for the same reason. */
   const originalLinks = useMemo(() => originalLinksIn(article), [article]);
 
   const noteStarts = useMemo(() => {
@@ -1766,13 +1766,14 @@ function TableViewInner({
                   dangerouslySetInnerHTML={proseHtml.get(block.id)?.out ?? { __html: block.html }}
                 />
                 {/* **After the prose, and outside it.** A PDF figure that could
-                    not be recovered gets one muted line here, and every PDF
-                    figure gets a way back to the page it was on. It is a sibling
-                    of `.prose` rather than markup inside the block for the
-                    reason `notes-head` above is a real element: `selection.ts`
-                    roots comment offsets at `td.text .prose`, so a generated
-                    sentence written into `block.html` would shift every anchor
-                    in that block, silently. PdfFigureNote.tsx; GPT Sol, I-4. */}
+                    not be recovered gets one muted line here; a PDF figure gets
+                    a way back to its page, and a web figure gets a way back to
+                    the publisher's element. These are siblings of `.prose`
+                    rather than markup inside the block for the reason
+                    `notes-head` above is a real element: `selection.ts` roots
+                    comment offsets at `td.text .prose`, so generated words in
+                    `block.html` would shift every anchor in that block,
+                    silently. PdfFigureNote.tsx; OriginalLink.tsx; GPT Sol, I-4. */}
                 {figureNotes.has(block.id) && (
                   <PdfFigureNotes
                     notes={figureNotes.get(block.id) ?? []}
