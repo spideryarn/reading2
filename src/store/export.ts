@@ -1050,6 +1050,10 @@ export async function exportArticle(
   if (rows.quizAttempts.length) {
     await put("quiz_attempts", "quiz-attempts.json", {
       attempts: rows.quizAttempts.map((row) => ({
+        /* The row's own id, because a chat about this mark names it
+           (`chat.json`'s `origin.attemptId`; plan 261024i, stage 2). Without
+           it a restore could not put the chat back on its mark. */
+        id: row.id,
         batchId: row.batchId,
         questionId: row.questionId,
         question: row.question,

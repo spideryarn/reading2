@@ -26,6 +26,7 @@ import type {
   BlockId,
   ChatAnchor,
   ChatThread,
+  QuizOrigin,
   SingleThreadKind,
   ThreadKind,
   ThreadOrigin,
@@ -34,7 +35,7 @@ import { isLearnKind } from "../../../types.js";
 import { chatFromParam, currentAt, guideParam, modeParam, learnParam, threadParam } from "../../params.js";
 import { listedInChat, openableInChat, sourcesIn } from "../../thread-source.js";
 import { useRenderCount } from "../../perf.js";
-import { type QuizArrival, QuizPanel, type QuizSections, LearnSubModeToggle } from "../../QuizPanel.js";
+import { type QuizArrival, type QuizMarkChats, QuizPanel, type QuizSections, LearnSubModeToggle } from "../../QuizPanel.js";
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
@@ -104,6 +105,7 @@ export function LearnBand({
   onJump,
   onQuizKeys,
   onDiscussQuizMark,
+  quizChats,
 }: {
   slug: string;
   /** The opening quiz read, shared with the prose. `useQuizRead` in `OwnedReader`. */
@@ -120,7 +122,9 @@ export function LearnBand({
   /** The quiz's ← / → handler, up to `Reader` — `QuizPanel`'s `onArrowKeys`. */
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
   /** Quiz's *Discuss this in chat* — `QuizPanel`'s `onDiscuss`. */
-  onDiscussQuizMark?: ((seed: string) => void) | undefined;
+  onDiscussQuizMark?: ((seed: string, origin: QuizOrigin | null) => void) | undefined;
+  /** The chats about Quiz's marks — `QuizPanel`'s `chats`. */
+  quizChats?: QuizMarkChats | undefined;
 }) {
   useRenderCount("LearnBand");
   /* Only for which chips the row draws (QuizPanel.tsx § `LearnSubModeToggle`);
@@ -173,6 +177,7 @@ export function LearnBand({
         onJump={onJump}
         onArrowKeys={onQuizKeys}
         onDiscuss={onDiscussQuizMark}
+        chats={quizChats}
       />
     );
   if (learn === "explore")
@@ -228,6 +233,7 @@ function QuizSubBand({
   onJump,
   onArrowKeys,
   onDiscuss,
+  chats,
 }: {
   slug: string;
   read: QuizRead;
@@ -239,7 +245,8 @@ function QuizSubBand({
   sections: QuizSections;
   onJump(id: BlockId): void;
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
-  onDiscuss?: ((seed: string) => void) | undefined;
+  onDiscuss?: ((seed: string, origin: QuizOrigin | null) => void) | undefined;
+  chats?: QuizMarkChats | undefined;
 }) {
   useRenderCount("QuizSubBand");
   const owner = useQuiz(slug, read);
@@ -255,6 +262,7 @@ function QuizSubBand({
       onJump={onJump}
       onArrowKeys={onArrowKeys}
       onDiscuss={onDiscuss}
+      chats={chats}
     />
   );
 }

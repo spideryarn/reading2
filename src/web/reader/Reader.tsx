@@ -32,6 +32,7 @@ import {
   type BlockId,
   type CitedWork,
   type ClaimOrigin,
+  type QuizOrigin,
   type GlossaryEntry,
   type Idea,
   MAX_LENS_CHARS,
@@ -1191,9 +1192,14 @@ export function Reader({
     [handToChat],
   );
   /* Quiz's *Discuss this in chat* (plan 261018b): the question, the answer
-     and the mark, quoted, waiting for what the reader wants to ask. A plain
-     chat, like the paragraph's: no origin is stored. */
-  const discussQuizMarkInChat = useCallback((seed: string) => handToChat(seed, "wait"), [handToChat]);
+     and the mark, quoted, waiting for what the reader wants to ask. Since plan
+     261024i (stage 2) it stores the mark as its origin, when the mark was
+     stored and so has a row to name; wrapped in `reopenItemChat` below as
+     `discussQuizMark`, so a mark has one chat. */
+  const startQuizMarkChat = useCallback(
+    (seed: string, origin: QuizOrigin | null) => handToChat(seed, "wait", origin ?? undefined),
+    [handToChat],
+  );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
   /**
    * **An item's chat between its first press and the summaries hearing of
@@ -1877,13 +1883,19 @@ export function Reader({
             { history: "push" },
           );
           return;
+        /* A quiz mark lands on its question while its batch is the one on
+           screen; once *Write them again* has replaced it, `QuizArrival` is
+           ignored and Quiz opens as it would (plan 261024i, stage 2). */
+        case "quiz":
+          openQuizAt(origin.batchId, origin.itemId);
+          return;
         default: {
           const never: never = origin;
           return never;
         }
       }
     },
-    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, setThread],
+    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, setThread, openQuizAt],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -2864,6 +2876,21 @@ export function Reader({
     },
     [reopenItemChat, askIdeaInChat],
   );
+  /* A mark's chat, reopened if it has one. A mark that was not stored has no
+     origin, so it always starts a plain chat, as every mark did before plan
+     261024i. A second press before the first draft is sent starts a second
+     draft, not a second stored chat: an unsent draft is not a chat, and
+     leaving Chat for Quiz re-reads the summaries the reopen looks in. */
+  const discussQuizMark = useCallback(
+    (seed: string, origin: QuizOrigin | null) => {
+      if (!reopenItemChat(origin ?? undefined)) startQuizMarkChat(seed, origin);
+    },
+    [reopenItemChat, startQuizMarkChat],
+  );
+  const quizChats = useMemo(
+    () => ({ summaries: chatSummaries, onOpen: openClaimChat }),
+    [chatSummaries, openClaimChat],
+  );
   const checkClaim = useCallback(
     (origin: ClaimOrigin) => {
       if (!reopenItemChat(origin)) checkClaimInChat(origin);
@@ -3664,7 +3691,8 @@ export function Reader({
             sections={quizSections}
             onJump={bandJump}
             onQuizKeys={onQuizKeys}
-            onDiscussQuizMark={discussQuizMarkInChat}
+            onDiscussQuizMark={discussQuizMark}
+            quizChats={quizChats}
           />
         ) : null;
       case "glossary":

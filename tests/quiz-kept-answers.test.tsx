@@ -168,14 +168,18 @@ function markResponse(body: { questionId: string; answer: string }): Response {
   } else {
     server.clock += 1000;
     const answeredAt = new Date(server.clock).toISOString();
+    /* The row's id, as `quiz_attempts` mints one (plan 261024i, stage 2). */
+    const attemptId = `00000000-0000-4000-8000-${String(server.clock).padStart(12, "0")}`;
     /* Kept, as the route keeps it: before the `done` frame goes. */
     if (server.attempts) {
       server.attempts = [
         ...server.attempts.filter((a) => a.questionId !== body.questionId),
-        { questionId: body.questionId, answer: body.answer, reply, answeredAt },
+        { questionId: body.questionId, attemptId, answer: body.answer, reply, answeredAt },
       ];
     }
-    frames.push(frame("done", { reply, model: "m", answeredAt, ...(server.verdict ? { verdict: server.verdict } : {}) }));
+    frames.push(
+      frame("done", { reply, model: "m", answeredAt, attemptId, ...(server.verdict ? { verdict: server.verdict } : {}) }),
+    );
   }
   return new Response(
     new ReadableStream<Uint8Array>({
@@ -323,6 +327,7 @@ afterEach(() => {
 
 const kept = (questionId: string, text: string, answeredAt = "2026-10-04T09:00:00.000Z"): QuizKeptAnswer => ({
   questionId,
+  attemptId: `00000000-0000-4000-8000-${questionId.replace(/\W/g, "").slice(-12).padStart(12, "0")}`,
   answer: text,
   reply: `A mark of “${text}”.`,
   answeredAt,

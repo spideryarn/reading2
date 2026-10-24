@@ -4599,7 +4599,7 @@ export type ChatAnchor =
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | BibliographyOrigin | IdeasOrigin;
+export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | BibliographyOrigin | IdeasOrigin | QuizOrigin;
 
 /** One of Sources › Claims' claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
@@ -4643,6 +4643,30 @@ export type BibliographyOrigin = { mode: "bibliography"; itemId: string; quote: 
 export type IdeasOrigin = { mode: "ideas"; itemId: string; quote: string };
 
 /**
+ * **One mark in Learn › Quiz**: Discuss this in chat on it (plan
+ * docs/plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md
+ * § Stage 2, Greg's answer B to q-nvxfwx, 2026-10-24).
+ *
+ * **The attempt is the identity** (`sameOrigin`): a mark is one row of
+ * `quiz_attempts`, which is append-only, so answering again makes a new mark
+ * and a new chat, and a chat never reopens over an answer the reader has since
+ * replaced. The batch and the question are copies of that row's, kept so the
+ * way back can land on the question without a look-up; a question id alone
+ * repeats across batches (`QuizQuestionId`). The database's composite key
+ * (`chat_threads_origin_quiz_attempt_fk`) holds all three to the row.
+ *
+ * `quote` is the question's words as the attempt stored them, cut by
+ * `originName`. **The route writes it from the row**, never from the request.
+ */
+export type QuizOrigin = {
+  mode: "quiz";
+  batchId: string;
+  itemId: QuizQuestionId;
+  attemptId: string;
+  quote: string;
+};
+
+/**
  * The most the name snapshot of a glossary, citations or ideas origin may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
@@ -4681,7 +4705,7 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas", "quiz"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * **An origin mode's old word, and the mode it is now.** A chat started from a
@@ -4747,6 +4771,9 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
     case "bibliography":
     case "ideas":
       return b.mode === a.mode && a.itemId === b.itemId;
+    /* The mark, which names its batch and question (`QuizOrigin`). */
+    case "quiz":
+      return b.mode === "quiz" && a.attemptId === b.attemptId;
     case "reception":
       return b.mode === "reception" && a.lens === b.lens;
     case "sources-claims":
@@ -6298,6 +6325,8 @@ export interface QuizResponse {
  */
 export interface QuizKeptAnswer {
   questionId: QuizQuestionId;
+  /** The row's id: what a chat about this mark names (`QuizOrigin`). */
+  attemptId: string;
   /** The reader's words, as they went to the marker. */
   answer: string;
   /** The mark, as the reader saw it. */

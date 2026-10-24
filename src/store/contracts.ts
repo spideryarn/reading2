@@ -1950,9 +1950,19 @@ export interface QuizAttemptStore {
       answer: string;
       reply: string;
     },
-  ): Promise<string>;
+  ): Promise<{ id: string; answeredAt: string }>;
   /** The latest kept answer to each question of one batch; other batches' rows are not returned. */
   latestForBatch(slug: string, batchId: string): Promise<QuizKeptAnswer[]>;
+  /**
+   * **The question one kept mark was about**, as the row copied it in, or
+   * `null` when this article has no such attempt with that batch and question.
+   * What a chat about the mark is checked against and titled from
+   * (`QuizOrigin`; plan 261024i, stage 2).
+   */
+  questionOf(
+    slug: string,
+    mark: { attemptId: string; batchId: string; itemId: QuizQuestionId },
+  ): Promise<string | null>;
 }
 
 /**
