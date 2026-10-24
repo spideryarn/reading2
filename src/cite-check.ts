@@ -35,7 +35,7 @@ import {
   CITE_CHECK_STALE,
 } from "./messages.js";
 import type { AllowanceTaken, FetchAllowanceStore, RatePolicy } from "./store/contracts.js";
-import type { BibliographyFound, CiteCheckOrigin } from "./types.js";
+import { originName, type BibliographyFound, type CiteCheckOrigin } from "./types.js";
 
 /**
  * **The automatic start's allowance: 8 an hour and 20 a day for one reader,
@@ -123,6 +123,20 @@ export interface CiteCheckLease {
 }
 
 /**
+ * Settle an automatic start at the turn's real spend boundary.
+ *
+ * Response setup and the reads which assemble Chat's prompt happen after the
+ * row is begun but before `converse` is entered. A failure there has bought no
+ * model call, so it refunds; once the first provider stream is entered,
+ * success, stop and failure all keep the fill and only free its concurrency
+ * slot. The lease is one-shot, so this is also safe after an earlier
+ * transactional-refusal refund.
+ */
+export function settleCiteCheckLease(lease: CiteCheckLease, modelStarted: boolean): Promise<void> {
+  return modelStarted ? lease.release() : lease.refund();
+}
+
+/**
  * **Take one automatic start's allowance, or throw `CiteCheckCapped`** — a
  * 429 or 503 the route answers as ordinary JSON, because its stream has not
  * opened. `admitHelpChat`'s shape (src/help-chat-call.ts), with a refund.
@@ -183,6 +197,7 @@ export function citeCheckQuestion(
   if (found === null || found.stale) throw new CiteCheckStale();
   const work = found.bibliography.citations.find((w) => w.id === origin.itemId);
   if (!work) throw new CiteCheckStale();
+  if (origin.quote !== originName(work.title)) throw new CiteCheckStale();
   if (!blocks.some((b) => b.id === origin.blockId)) throw new CiteCheckStale();
   if (!work.citedAt.includes(origin.blockId)) throw new CiteCheckStale();
   return askDoesItSayThatAboutBlock(work, origin.blockId);

@@ -2204,6 +2204,14 @@ export interface ConverseRequest {
   timeoutMs?: number;
   stallMs?: number;
   /**
+   * Called immediately before each provider stream is entered.
+   *
+   * The chat route uses this as an accounting boundary: failures while it is
+   * still assembling the prompt have spent no automatic cite-check fill and
+   * must refund it. Optional because every other caller has no lease to settle.
+   */
+  onModelStart?: () => void;
+  /**
    * Turn our own tools off, leaving OpenRouter's server web search on.
    *
    * For tests and for a fallback, not for a preference. Note it does **not**
@@ -2929,6 +2937,7 @@ export async function* converse({
      not pass either, so a per-kind default here is the whole of it. */
   timeoutMs = kind === "candidates" ? CANDIDATES_TIMEOUT_MS : CHAT_TIMEOUT_MS,
   stallMs = CHAT_STALL_MS,
+  onModelStart,
 }: ConverseRequest): AsyncGenerator<ConverseEvent> {
   // No thread id and no message id in this logger: this module is handed a
   // conversation, not a file, and the ids belong to whoever stored it. The
@@ -3387,11 +3396,13 @@ export async function* converse({
        now — they describe the answer, not the round — and `stopped` in
        particular has to survive a round for the catch below to mean anything. */
     try {
-      for await (const chunk of openRouterStream(jobFor(kind), request, {
+      const stream = openRouterStream(jobFor(kind), request, {
         signal: composite,
         onActivity: touch,
         end,
-      })) {
+      });
+      onModelStart?.();
+      for await (const chunk of stream) {
         answered = true;
         if (chunk.model) used = chunk.model;
         // A 200 that carries an error in the stream — a mid-generation provider

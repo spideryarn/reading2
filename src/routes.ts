@@ -116,6 +116,7 @@ import {
   type CiteCheckLease,
   citeCheckQuestion,
   CiteCheckStale,
+  settleCiteCheckLease,
 } from "./cite-check.js";
 import { WebNoteRefused, type WebNoteRun } from "./citation-web-note.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
@@ -3813,6 +3814,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      spend. An `auto` start takes its allowance last, so every refusal before
      it is free; any refusal after it, until the model starts, refunds it. */
   const lease: CiteCheckLease | null = citeCheck ? await admitCiteCheckTurn(slug, citeCheck, question as string, article, auto === true) : null;
+  /* The allowance's spend boundary. This outer try begins immediately after
+     the row is taken: a throw anywhere before the provider stream starts must
+     refund it, including turn setup which precedes the streaming try below. */
+  let modelStarted = false;
+  try {
 
   /* Deciding and writing the turn happen together, under the conversation's
      turn order — see `inTurnOrder`. Everything after it is one answer streaming
@@ -4227,6 +4233,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       /* From the stored thread via `resolveMentions` above, never the body. */
       mentions: mentioned,
       signal: stop.signal,
+      onModelStart: () => {
+        modelStarted = true;
+      },
     })) {
       if (event.type === "delta") {
         text += event.text;
@@ -4321,18 +4330,6 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     // key again and abort a stream that has already let go of the row.
     release();
     if (!res.writableEnded) res.end();
-    /* **An automatic cite-check's slot, freed here and only here**: after the
-       model and the store, whatever happened to them, never on the socket
-       closing, since a reader who leaves does not stop the turn (plan 261024m,
-       C10). The fill still counts. Nothing here may throw: the headers are
-       gone, and a slot that cannot be freed is left to its lease. */
-    if (lease) {
-      try {
-        await lease.release();
-      } catch (err) {
-        log("store").error({ ...errorFields(err), route: "chat" }, "could not free a cite-check allowance");
-      }
-    }
   }
   /* **The conversation's gist, after the response has ended and the turn has
      let go** — plan 261008e. Not before `release()`: a retry, an edit or the
@@ -4343,6 +4340,25 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      handler's own promise that keeps the instance awake (src/vercel.ts).
      `refreshGist` never throws. */
   if (answered) await refreshGist(slug, thread.id, reply.id);
+  } finally {
+    /* **An automatic cite-check's allowance, settled here and only here**:
+       after the answer and its gist have finished their model and store work,
+       never on socket close (plan 261024m, C10). A response/profile failure
+       before `converse` refunds the fill; every outcome after it keeps the fill
+       and frees only the slot. The lease itself makes an earlier race refund
+       and this terminal settlement exactly-once. Nothing here may throw after
+       the response has ended; a failed settlement is left to the DB lease. */
+    if (lease) {
+      try {
+        await settleCiteCheckLease(lease, modelStarted);
+      } catch (err) {
+        log("store").error(
+          { ...errorFields(err), route: "chat" },
+          modelStarted ? "could not free a cite-check allowance" : "could not refund a cite-check allowance",
+        );
+      }
+    }
+  }
 }
 
 /**

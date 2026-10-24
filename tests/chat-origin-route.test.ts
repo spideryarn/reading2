@@ -105,7 +105,12 @@ interface Result {
   frames: { event: string; data: Record<string, unknown> }[];
 }
 
-async function call(method: "GET" | "POST", url: string, body?: unknown): Promise<Result> {
+async function call(
+  method: "GET" | "POST",
+  url: string,
+  body?: unknown,
+  opts: { flushHeaders?: () => void; end?: () => void } = {},
+): Promise<Result> {
   const payload = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   const req = Object.assign(
     (async function* () {
@@ -123,13 +128,16 @@ async function call(method: "GET" | "POST", url: string, body?: unknown): Promis
     writeHead(code: number) {
       (this as { statusCode: number }).statusCode = code;
     },
-    flushHeaders() {},
+    flushHeaders() {
+      opts.flushHeaders?.();
+    },
     on() {},
     write(chunk: string) {
       written += chunk;
       return true;
     },
     end(chunk?: string) {
+      opts.end?.();
       if (chunk) written += chunk;
       (this as { writableEnded: boolean }).writableEnded = true;
     },
@@ -996,6 +1004,79 @@ describe("a citation's Does it say that? (origin cite-check)", () => {
     const rows = await fills();
     expect(rows, "one fill, still counted").toHaveLength(1);
     expect(rows[0]?.leaseUntil, "the lease freed in the turn's finally").toBeNull();
+  });
+
+  it("keeps the concurrency lease through the answer's gist model and store work", async () => {
+    let leaseDuringGist: Date | null | undefined;
+    globalThis.fetch = (async (_url, init) => {
+      calls += 1;
+      const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const format = request.response_format as { json_schema?: { name?: unknown } } | undefined;
+      if (format?.json_schema?.name === "conversation_gist") {
+        leaseDuringGist = (await fills())[0]?.leaseUntil;
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ gist: "A short answer" }) } }],
+        });
+      }
+      const body = [
+        `data: ${JSON.stringify({ model: "test/model", choices: [{ delta: { content: "Because." } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ finish_reason: "stop", delta: {} }] })}\n\n`,
+        "data: [DONE]\n\n",
+      ].join("");
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch;
+
+    await send({ auto: true });
+
+    expect(leaseDuringGist, "the slot remains held while the gist runs").toBeInstanceOf(Date);
+    expect((await fills())[0]?.leaseUntil, "the slot is freed after the gist is stored").toBeNull();
+  });
+
+  it("refunds an automatic fill when response setup fails before the model starts", async () => {
+    const out = await call(
+      "POST",
+      `/api/chat/${SLUG}`,
+      {
+        threadId: THREAD,
+        question: askedFor(),
+        anchor: { blockId: BLOCK },
+        origin: check(),
+        auto: true,
+      },
+      {
+        flushHeaders: () => {
+          throw new Error("response setup failed before the model");
+        },
+      },
+    );
+    expect(out.status).toBe(200);
+    expect(calls, "no model call").toBe(0);
+    expect(await fills(), "a pre-model failure is refunded, not merely released").toHaveLength(0);
+  });
+
+  it("settles the allowance even when closing the response throws", async () => {
+    await expect(
+      call(
+        "POST",
+        `/api/chat/${SLUG}`,
+        {
+          threadId: THREAD,
+          question: askedFor(),
+          anchor: { blockId: BLOCK },
+          origin: check(),
+          auto: true,
+        },
+        {
+          end: () => {
+            throw new Error("response close failed");
+          },
+        },
+      ),
+    ).rejects.toThrow("response close failed");
+    expect(calls, "the model was entered, so the fill remains counted").toBeGreaterThan(0);
+    const rows = await fills();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.leaseUntil, "the terminal settlement still frees the slot").toBeNull();
   });
 
   it("answers a second start for the same work and paragraph with a 409 carrying the first's id, spending nothing", async () => {

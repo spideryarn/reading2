@@ -19,6 +19,7 @@ import {
   CiteCheckCapped,
   citeCheckQuestion,
   CiteCheckStale,
+  settleCiteCheckLease,
 } from "../src/cite-check.js";
 import { CITE_CHECK_DAY, CITE_CHECK_HOUR } from "../src/messages.js";
 import type { AllowanceTaken, RateBucket } from "../src/store/contracts.js";
@@ -164,10 +165,10 @@ describe("citeCheckQuestion: what the server rebuilds the first question from", 
     expect(citeCheckQuestion(found([work()]), BLOCKS, CHECK)).toBe(askDoesItSayThatAboutBlock(work(), BLOCK));
   });
 
-  it("uses the stored work, not the origin's title snapshot", () => {
-    const q = citeCheckQuestion(found([work()]), BLOCKS, { ...CHECK, quote: "Something the client made up" });
-    expect(q).toContain("Attention Is All You Need — Vaswani et al., 2017");
-    expect(q).not.toContain("made up");
+  it("refuses a title snapshot that does not name the stored work", () => {
+    expect(() =>
+      citeCheckQuestion(found([work()]), BLOCKS, { ...CHECK, quote: "Something the client made up" }),
+    ).toThrow(CiteCheckStale);
   });
 
   it.each<[string, ReturnType<typeof found> | null, readonly { id: string }[]]>([
@@ -215,6 +216,20 @@ describe("admitCiteCheck: the allowance an automatic start takes", () => {
     await lease.refund();
     await lease.release();
     expect(a.calls).toEqual(["take:cite-check", "cancel:lease-2"]);
+  });
+
+  it("refunds a turn that failed before its model call, and keeps one that reached it", async () => {
+    const before = allowance({ kind: "allowed", id: "lease-before-model" });
+    const beforeLease = await admitCiteCheck(before);
+    await settleCiteCheckLease(beforeLease, false);
+    await settleCiteCheckLease(beforeLease, true);
+    expect(before.calls).toEqual(["take:cite-check", "cancel:lease-before-model"]);
+
+    const after = allowance({ kind: "allowed", id: "lease-after-model" });
+    const afterLease = await admitCiteCheck(after);
+    await settleCiteCheckLease(afterLease, true);
+    await settleCiteCheckLease(afterLease, false);
+    expect(after.calls).toEqual(["take:cite-check", "finish:lease-after-model"]);
   });
 
   it.each<[AllowanceTaken, string, number]>([
