@@ -941,7 +941,7 @@ Feedback draft itself is the next step, and is named in the plan.
     dictation in a sitting. Not yet run on an iPad.
     **Still waiting, so still exposed:** a press in chat while Live is running or connecting,
     because dictation starts only once Live has stopped. And Live itself has the same lock, then
-    listing, then request shape, unchanged.
+    listing, then request shape, unchanged. Both are Overseer queue item `qi-s8w9nshv`.
     [261024z](../plans/261024z-dictation-asks-for-the-microphone-inside-the-press.md).
 
 ## The codes

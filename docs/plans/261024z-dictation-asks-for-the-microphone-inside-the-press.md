@@ -159,3 +159,21 @@ could "stop" a track the hook never had (Sol, item 5). One older test now holds 
 listing rather than the third, because the early path makes no listing before capture.
 
 `tests/mic-devices.test.ts`: `idealConstraint`.
+
+## Checked in a real WebKit
+
+A Sonnet subagent drove this worktree's dev server in Playwright's WebKit (mock microphones) and,
+as a control, Chromium, 2026-10-24. A capture-phase click listener on `window` marked
+`inClick: true` and a bubble-phase one cleared it, so a `getUserMedia` called synchronously by
+React's handler records `true`:
+
+| Run | `getUserMedia` | listening |
+|---|---|---|
+| WebKit, chat, press 1 | 1 call, `inClick: true`, `{ audio: true }` | yes ("Mock audio device 1") |
+| WebKit, chat, press 2 after Stop | 1 more, `inClick: true` | yes |
+| WebKit, Feedback dialog | 1 call, `inClick: true` | yes |
+| Chromium, chat | 1 call, `inClick: false`, `exact: "default"` | yes, unchanged path |
+
+Caveat: that WebKit build has no `MediaRecorder`, so the check stubbed one (without it there is no
+button at all). The capture and its timing are WebKit's own; recording and transcription on an iPad
+are not exercised. Whether the iPad stops prompting is still Greg's next sitting to tell.
