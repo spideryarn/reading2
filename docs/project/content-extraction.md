@@ -567,7 +567,7 @@ retrospective would mean invalidating extractions on a policy version, which is 
 change and is not this one. GPT Sol, reviewing C1a.
 
 **The floor lives in a helper both read paths call** (`capabilityFloor` in
-[`src/extract.ts`](../../src/extract.ts)), because `readArticle` and `readArticleWithProvenance` are
+[`src/read-article.ts`](../../src/read-article.ts)), because `readArticle` and `readArticleWithProvenance` are
 separate entry points and the eval harness uses the second one directly. In `runExtract`'s catch it
 would have been correct in production and permanently invisible to the corpus. The bot check is
 decided the same way, one helper up (`refusalFor`), on the document before anything rewrites it.
@@ -1123,7 +1123,7 @@ instrument that does — [`evals/extraction/inventory.mts`](../../evals/extracti
 which flattens the fetched page into blocks and says which survived — and it is an eval, run by
 hand, not a gate ([evals/README.md](../../evals/README.md)).
 
-**That one is fixed**, 2026-08-28: `unhideCollapsedSections` in [`src/extract.ts`](../../src/extract.ts)
+**That one is fixed**, 2026-08-28: `unhideCollapsedSections` in [`src/read-article.ts`](../../src/read-article.ts)
 removes `aria-hidden="true"` before Readability looks at the page, recovering 39,355 of those
 characters for nothing — no model, no money, no latency. It removes `aria-hidden` and **only** that:
 `[hidden]` and inline `display: none` are stronger claims, and the measurement that says so is on the
@@ -1230,7 +1230,7 @@ one 67,890-character block are in
 **And a third instrument answers by identity rather than by matching text.**
 [`evals/extraction/provenance.mts`](../../evals/extraction/provenance.mts) stamps every source
 element before Readability and takes the DOM back through Readability's `serializer` option
-(`readArticleWithProvenance` in [`src/extract.ts`](../../src/extract.ts)), so an output node says
+(`readArticleWithProvenance` in [`src/read-article.ts`](../../src/read-article.ts)), so an output node says
 which source node it came from — which is the only way to see a *duplicated* passage, invisible to
 any substring test. Over 35 fixtures and 83,091 output elements: 98.7% carry a stamp directly, and
 the stamping is inert on every one of them — the extracted HTML is byte-identical once the stamps are

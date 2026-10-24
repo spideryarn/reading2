@@ -85,7 +85,7 @@
  * existed — and `kept` says `a-table-called-header-rolled-back` /
  * `an-amendment-correction-rolled-back` instead of the stamped name, so a
  * withdrawal is as visible in the audit line as a rescue. `readArticle` and
- * `readArticleWithProvenance` (src/extract.ts) both run it through the one
+ * `readArticleWithProvenance` (src/read-article.ts) both run it through the one
  * shared `armThatKeptTheProse`, because they own the Readability call; the
  * criterion itself is `proseRetention` below and the arm arithmetic is
  * `controlOptionsFor` and `keptWithdrawn`.
@@ -989,7 +989,7 @@ const flatten = (s: string): string => s.replace(/\s+/gu, " ").trim();
 
 /**
  * **Did the treatment keep the prose the control had?** — the criterion the
- * fallback in `readArticle` (src/extract.ts) turns on, and § *The fallback*
+ * fallback in `readArticle` (src/read-article.ts) turns on, and § *The fallback*
  * above is why there is one.
  *
  * **Not a length comparison**, and that is the whole design: in the case that

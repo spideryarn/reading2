@@ -45,7 +45,7 @@
 import { CONTAINER_ATTR, NOTE_ID_PATTERN, NOTE_ATTR, REF_ATTR, BACK_ATTR, type NoteStats } from "./notes.js";
 import { CONTEXT_ATTRS, CONTEXT_ID_PATTERN } from "./reserved.js";
 import { ChallengePage } from "./challenge-page.js";
-import { capabilityFloor, readArticle } from "./extract.js";
+import { capabilityFloor, readArticle } from "./read-article.js";
 import { openingRecordElement } from "./front-matter-authors.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { log as logFor, type Log } from "./log.js";
@@ -151,7 +151,7 @@ function hasSubstance(node: Element): boolean {
  * Join the pages' Readability output into one fragment.
  *
  * One JSDOM for the lot, with a silent `VirtualConsole` for the reason
- * `sourceDom` in src/extract.ts gives; no address, because this parses
+ * `sourceDom` in src/read-article.ts gives; no address, because this parses
  * Readability's *output*, whose links are already absolute or in-page.
  */
 function joinContents(

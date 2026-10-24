@@ -1,7 +1,7 @@
 /**
  * A fetched page must not be able to write itself to the server's stderr.
  *
- * src/extract.ts builds a JSDOM from HTML we did not write. JSDOM's **default**
+ * Stage 2 (src/read-article.ts § `sourceDom`) builds a JSDOM from HTML we did not write. JSDOM's **default**
  * virtual console forwards its own errors straight to `console`, and one of
  * them quotes the page: a malformed `@import` produces
  *
@@ -56,18 +56,18 @@ describe("JSDOM's console, on a page we did not write", () => {
     expect(leaked).toContain("LEAKED-URL");
   });
 
-  it("prints nothing at all with the virtual console extract.ts passes", async () => {
+  it("prints nothing at all with the virtual console stage 2 passes", async () => {
     const lines = await consoleFrom(
       () => void new JSDOM(PAGE, { url: SOURCE, virtualConsole: new VirtualConsole() }),
     );
     expect(lines).toEqual([]);
   });
 
-  it("is what src/extract.ts actually does", async () => {
+  it("is what src/read-article.ts actually does", async () => {
     // Pinned by reading the source: the alternative is a test that passes while
     // the real call site quietly goes back to the default.
     const { readFileSync } = await import("node:fs");
-    const src = readFileSync(new URL("../src/extract.ts", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../src/read-article.ts", import.meta.url), "utf8");
     expect(src).toMatch(/virtualConsole:\s*new VirtualConsole\(\)/);
   });
 });

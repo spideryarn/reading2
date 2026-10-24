@@ -313,6 +313,7 @@ import {
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { ownedSlug } from "./store/owned-slug.js";
+import { pgFetchAllowanceStore } from "./store/pg-rate-limit.js";
 
 /**
  * One line per step, saying what the step cost.
@@ -3450,7 +3451,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              identically.
 
              The count travels on the error rather than in its prose
-             (src/extract.ts § `TooLittleTextToRead`), so the reader's sentence
+             (src/read-article.ts § `TooLittleTextToRead`), so the reader's sentence
              can carry the one fact about their page they can check, and the
              diagnostic can keep the library's name for the log. */
           if (err instanceof TooLittleTextToRead) {
@@ -6351,9 +6352,11 @@ export function situateStep(deps?: () => Promise<SituateStepDeps>): PipelineStep
   const depsFor =
     deps ??
     (async (): Promise<SituateStepDeps> => ({
-      /* Loaded here rather than imported: src/store/index.ts reaches this
-         module, and the step needs the store only when it runs. */
-      allowance: (await import("./store/index.js")).fetchAllowanceStore,
+      /* The adapter itself, already guarded at its export, rather than
+         src/store/index.ts's name for it: index.ts reaches this module through
+         src/store/pg.ts, and even a lazy `import()` of it closes that loop for
+         `npm run cycles` (docs/postmortems/261024m-import-cycles-closed-by-a-new-caller.md). */
+      allowance: pgFetchAllowanceStore,
       search: openRouterJson,
       citers: (identity) => situateCiters(identity),
       now: () => new Date(),
