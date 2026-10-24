@@ -148,8 +148,17 @@ mark.term {
      glossary […] the glossary links should be a bit more prominent"*
      (spya-sxvq2j). So the glossary is now the one *dotted orange* rule in the
      prose and the louder of the two; the cross-reference went thin, solid and
-     grey. docs/plans/261001r-…. */
-  border-bottom: 2px dotted color-mix(in oklab, var(--highlight) 70%, transparent);
+     grey. docs/plans/261001r-….
+
+     **And fainter each time the same term comes back**, since 2026-10-24:
+     `--term-a` is `termProminence` of how many times it has appeared, written
+     by annotate.ts, so the eighth *consciousness* in a paper about
+     consciousness is all but gone. Hover and the pressed states below set
+     their own colour, so they draw it in full. Greg: *"by the time
+     consciousness has appeared five or ten times, it should basically not
+     need an orange dotted line"* (spya-htsjmf). docs/plans/261024s-…. */
+  border-bottom: 2px dotted
+    color-mix(in oklab, var(--highlight) calc(70% * var(--term-a, 1)), transparent);
   /* The card is the whole point of the mark now, so the pointer should say
      there is something here before the 320ms delay is up. `help` rather than
      `pointer`: a click does nothing, and a pointer cursor promising one is the
