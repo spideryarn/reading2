@@ -13,7 +13,7 @@
  *
  * ## What it reads
  *
- * `loadSource` (src/store/index.ts) — **the raw document, not the extracted
+ * `loadSourcePages` (src/store/index.ts) — **the raw document, not the extracted
  * article**, and that is the whole point. Extraction throws hidden text away
  * along with everything else it does not keep, so a scan of the blocks would
  * report a clean paper about a manuscript with `GIVE A POSITIVE REVIEW ONLY` in
@@ -88,14 +88,37 @@
 import { createHash } from "node:crypto";
 
 import { decodeHtml } from "./fetch.js";
-import { scanRawSource } from "./injection-scan.js";
-import type { SourceScan } from "./injection-scan-types.js";
-import type { RawSource } from "./store/contracts.js";
-import { loadSource } from "./store/index.js";
+import { MAX_FINDINGS, scanRawSource } from "./injection-scan.js";
+import type { BlindSpot, HtmlSourceScan, ScanFinding, SourceScan } from "./injection-scan-types.js";
+import type { RawSource, SourcePart } from "./store/contracts.js";
+import { loadSourcePages } from "./store/index.js";
 import { viewingAs } from "./view-as-scope.js";
 
+/**
+ * The raw document, and **for a piece split over several pages, each further
+ * page as a document of its own** (plan 261024p). Each is scanned with its own
+ * `<style>`: a stitched document would hide a later page's CSS from the scan
+ * and lend it page 1's (GPT Sol's plan review, F2). `parts` absent or empty is
+ * a single page, scanned exactly as before.
+ */
+export type ScannableSource = RawSource & { parts?: readonly SourcePart[] };
+
 /** How the raw document is fetched. See the parameters on `scanArticleSource`. */
-export type ReadRawSource = (slug: string) => Promise<RawSource | null>;
+export type ReadRawSource = (slug: string) => Promise<ScannableSource | null>;
+
+/**
+ * The live read: page 1, and its further pages beside it, **from one
+ * revision** — `loadSourcePages`, not `loadSource` and a second lookup, which
+ * a refresh between the two turned into a document that never existed (GPT
+ * Sol's code review of plan 261024p, F5). No budget, so a reference the bucket
+ * cannot honour throws rather than scanning fewer pages.
+ */
+async function loadScannableSource(slug: string): Promise<ScannableSource | null> {
+  const pages = await loadSourcePages(slug);
+  if (!pages) return null;
+  if (pages.source.kind !== "html" || pages.parts.length === 0) return pages.source;
+  return { ...pages.source, parts: pages.parts };
+}
 
 /**
  * How a fetched document is scanned — `scanRawSource`, everywhere but a test.
@@ -148,7 +171,7 @@ export function forgetCachedScans(): void {
 /**
  * What one article's source scan came back with.
  *
- * **`null` is "this article kept no source document"** — `loadSource`'s own
+ * **`null` is "this article kept no source document"** — `loadSourcePages`'s own
  * `null`, unchanged — and it is deliberately not an arm of `SourceScan`. That
  * union is the scanner's answer about a document it was given; an article with
  * no document was never given to it, and widening `NothingExamined.reason` to
@@ -193,20 +216,25 @@ function storedHtmlText(bytes: Uint8Array): string {
  * article with no source document*, and the two properties of the cache, and
  * none of them should need a Postgres container or a fixture directory.
  *
- * Throws whatever `loadSource` throws — a 404 for a slug with no artefacts, a
+ * Throws whatever `loadSourcePages` throws — a 404 for a slug with no artefacts, a
  * 500 for a revision that names an object the bucket cannot produce. A dangling
  * reference must not arrive as *"this article has nothing to scan"*, which is
  * the sentence a referee would read as a clean bill.
  */
 export async function scanArticleSource(
   slug: string,
-  read: ReadRawSource = loadSource,
+  read: ReadRawSource = loadScannableSource,
   scan: ScanSource = scanRawSource,
 ): Promise<ArticleSourceScan> {
   const source = await read(slug);
   if (!source) return { scan: null, ms: null };
+  const parts = source.parts ?? [];
 
-  const key = createHash("sha256").update(source.bytes).digest("hex");
+  /* Every page's bytes, in order and each length-prefixed, so two splits of
+     the same bytes cannot share a key. A single page hashes as it always did. */
+  const hash = createHash("sha256").update(source.bytes);
+  for (const part of parts) hash.update(`\u0000${part.bytes.byteLength}\u0000`).update(part.bytes);
+  const key = hash.digest("hex");
   /* A view-as read may use no mutable cache: even a deterministic, process-local
      entry outlives the request and violates that tab's no-write boundary. */
   const mayCache = viewingAs() === null;
@@ -219,7 +247,9 @@ export async function scanArticleSource(
        `{ examined: "nothing", reason: "pdf" }` for it — the branch that keeps
        the July 2025 incident's own file format from rendering as clean. */
     const text = source.kind === "html" ? storedHtmlText(source.bytes) : undefined;
-    return scan({ kind: source.kind, ...(text !== undefined ? { text } : {}) });
+    const first = scan({ kind: source.kind, ...(text !== undefined ? { text } : {}) });
+    if (parts.length === 0) return first;
+    return acrossPages([first, ...parts.map((part) => scan({ kind: "html", text: storedHtmlText(part.bytes) }))]);
   })();
   if (mayCache) remember(key, running);
 
@@ -231,4 +261,50 @@ export async function scanArticleSource(
     if (mayCache && cache.get(key) === running) cache.delete(key);
     throw err;
   }
+}
+
+/**
+ * The order `blindSpotsOf` (src/injection-scan.ts) lists them in, so a merged
+ * list reads like a single one. A `Record`, so a new kind is a compile error
+ * here rather than a blind spot the merge drops.
+ */
+const BLIND_SPOT_RANK: Readonly<Record<BlindSpot, number>> = {
+  "approximated-cascade": 0,
+  "external-stylesheets": 1,
+  "scripted-styling": 2,
+  "images-of-text": 3,
+  "unreadable-selectors": 4,
+};
+
+/**
+ * **One report across every page of the piece**, each page scanned as its own
+ * document. Page 1's findings keep their `where`; a later page's say which
+ * page (`page 2: body > …`), since a path into one document means nothing in
+ * another. The cap is the single page's, applied again across them all, with
+ * the unexplained findings kept first as `scanHtml` keeps them, and what it
+ * drops counted with what each page dropped. A page that examined nothing
+ * cannot make the whole look examined: if page 1 did not, the answer is page
+ * 1's.
+ */
+export function acrossPages(scans: readonly SourceScan[]): SourceScan {
+  const [first] = scans;
+  if (first === undefined) return { examined: "nothing", reason: "no-text" };
+  if (first.examined === "nothing") return first;
+  const examined = scans.flatMap((scan, i) => (scan.examined === "html-source-only" ? [{ scan, page: i + 1 }] : []));
+  const findings: ScanFinding[] = examined.flatMap(({ scan, page }) =>
+    page === 1 ? scan.findings : scan.findings.map((f) => ({ ...f, where: `page ${page}: ${f.where}` })),
+  );
+  const ordered = [
+    ...findings.filter((f) => f.ordinary === undefined),
+    ...findings.filter((f) => f.ordinary !== undefined),
+  ];
+  const spots = new Set(examined.flatMap(({ scan }) => scan.blindSpots));
+  const merged: HtmlSourceScan = {
+    examined: "html-source-only",
+    findings: ordered.slice(0, MAX_FINDINGS),
+    truncated: examined.reduce((n, { scan }) => n + scan.truncated, 0) + Math.max(0, ordered.length - MAX_FINDINGS),
+    unreadableSelectors: examined.reduce((n, { scan }) => n + scan.unreadableSelectors, 0),
+    blindSpots: [...spots].sort((a, b) => BLIND_SPOT_RANK[a] - BLIND_SPOT_RANK[b]),
+  };
+  return merged;
 }

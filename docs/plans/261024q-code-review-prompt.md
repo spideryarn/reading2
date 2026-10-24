@@ -1,0 +1,21 @@
+You are reviewing, and fixing, code in the Spideryarn repo: this working tree. The candidate is the commit at `HEAD` (`git show --stat HEAD` lists every changed path; `git diff HEAD~1 HEAD` is the diff). Start with these files; they do not limit scope:
+
+- extension/manifest.ts, extension/src/handoff.ts, extension/src/store.ts, extension/src/background.ts, extension/tsconfig.json
+- scripts/build-extension.ts, scripts/publish-extension.ts
+- src/web/save-page-bookmarklet.ts (capturePage split out of the bookmarklet), src/web/extension-handoff.ts, src/web/AddFromExtension.tsx, src/web/App.tsx, src/web/router.ts, src/web/add-visit.ts, src/feedback-page.ts, src/web/PrivacyPage.tsx
+- tests/extension-handoff.test.ts, tests/save-page-bookmarklet.test.ts
+- docs/plans/261024q-chrome-extension-one-click-add-the-page.md (the plan; § GPT Sol's plan review lists your earlier nine findings and how each was taken), docs/project/chrome-extension.md, extension/store/listing.md, docs/project/privacy.md § The Chrome extension
+
+Context: a Chrome MV3 extension. One press captures the current tab's DOM with capturePage (activeTab + scripting only), opens a blank tab, stores the capture in the extension's IndexedDB keyed by that tab, navigates the tab to /add-from-extension; that page asks the extension (externally_connectable) and uploads the page with the reader's own session through the existing upload engine. The extension holds no secret. The run may not edit a defence listed in docs/project/security-map.md § Where the defences physically live, nor add a server route (those go to Greg); report any such need instead of making it.
+
+Evidence I ran (you cannot: no network, no browser): a real Chromium end-to-end on the box with the dev build against a local dev server, the button pressed via CDP Extensions.triggerAction — one press imported the article (~7 s, "Saved from 127.0.0.1"); a second press while the receiving tab was open made no second upload; signed out, it went through /login?next=%2Fadd-from-extension and on to /add/upload/<id>; chrome://version gave badge "!" and no tab. Spike numbers are in the plan § Stage 0. `npm test` and `npm run typecheck` were green at HEAD.
+
+Attack independently first. In particular: is the externally_connectable handoff sound against another site, another extension, another tab, a frame, a stale or reused tab id, a reader change mid-flight (A→B, A→signed out), React Strict Mode's double mount, and Back to /add-from-extension? Is the IndexedDB code correct (transaction completion, `take` atomic, cursor deletes, `db.close`, upgrade)? Is capturePage really self-contained when serialised by executeScript from the esbuild bundle (default params referencing `window`, nothing captured from module scope)? Does the bookmarklet still work identically? Does the publish script's JWT/token/upload/poll/publish logic match the Chrome Web Store v2 API and refuse correctly? Are the privacy page and listing claims true of the code? Anything in App.tsx routing (signed-out branch, add-visit, keys) wrong?
+
+My suspicions, worth less — spend most of the run elsewhere: (1) `chrome.tabs.update(id, {url})` on a tab opened as about:blank by the extension — any case where the navigation is refused; (2) the polled-upload path in publish-extension.ts trusting SUCCEEDED as ours; (3) the `asked` module singleton in AddFromExtension.tsx.
+
+You may fix what is inside this candidate, narrowly, red first (a failing test before the fix), and run the unit tests you touch with `npx vitest run <file>` (tests needing Postgres will not run in your sandbox; say so rather than skip silently). Report, do not fix, anything wider.
+
+Severity scale, by consequence: P0 data loss / exploitable security / service unusable; P1 user-visible wrong behaviour or an authoritative contract violated; P2 design or maintainability risk with no wrong behaviour today; P3 prose. Mark each finding established (direct evidence: file:line, a run) or reasoned.
+
+Write your answer as a numbered list of findings (C1, C2, …), each with severity, established/reasoned, evidence (file:line), the fix, and whether you made it (with the test). End with one line: SHIP, SHIP AFTER FIXES (MADE), or REWORK.

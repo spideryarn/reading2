@@ -1483,6 +1483,14 @@ describe("readCapped", () => {
     expect(cancelled).toBe(true);
   });
 
+  it("reports bytes as they are read even when the read later fails", async () => {
+    const read: number[] = [];
+    await expect(readCapped(streamOf(bytes(1, 2), bytes(3, 4)), 3, "u", (n) => read.push(n))).rejects.toMatchObject({
+      code: "too-large",
+    });
+    expect(read).toEqual([2, 2]);
+  });
+
   it("treats a bodyless response as empty rather than throwing", async () => {
     expect((await readCapped(null, 10, "u")).byteLength).toBe(0);
   });

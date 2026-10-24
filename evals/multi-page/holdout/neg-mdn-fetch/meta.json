@@ -1,0 +1,12 @@
+{
+ "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch",
+ "label": "single",
+ "pages": [
+  "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch"
+ ],
+ "mechanism": "sidebar of sibling docs pages plus in-text reference links",
+ "ssr": true,
+ "notes": "158 links",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

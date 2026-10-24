@@ -121,6 +121,8 @@ export const FEEDBACK_TAG_KEYS = [
   /* What happened to the article the reader was on, when they ticked the box —
      a closed vocabulary, `FeedbackArticleOutcome` in src/feedback-article.ts. */
   "source_file",
+  /* How many of a split piece's later pages went, `attached/total` (plan 261024p). */
+  "source_parts",
   "article_json",
 ] as const;
 

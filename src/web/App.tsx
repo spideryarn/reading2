@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Library } from "./Library.js";
+import { AddFromExtension } from "./AddFromExtension.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { SignedInShell } from "./BackLink.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -22,7 +23,13 @@ import { SignedInReader } from "./lib/made-for.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import { AddStopped } from "./AddStopped.js";
-import { type AddVisit, addAddress, nextAddVisit } from "./add-visit.js";
+import {
+  type AddVisit,
+  addAddress,
+  nextAddVisit,
+  recoverExtensionVisit,
+  rememberExtensionVisit,
+} from "./add-visit.js";
 import {
   type AdminPage,
   adminOnly,
@@ -35,7 +42,7 @@ import {
   type Route,
   useRoute,
 } from "./router.js";
-import { takeReturn } from "./auth-return.js";
+import { loginNext, takeReturn } from "./auth-return.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
@@ -197,8 +204,18 @@ export function App() {
    * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 1.
    */
   const addVisitRef = useRef<AddVisit | null>(null);
-  const addVisit = nextAddVisit(addVisitRef.current, addAddress(route), user?.id ?? null);
+  const loginReturn = route.kind === "login" ? loginNext(location.search, CALLBACK_HREF) : null;
+  const address = addAddress(route, loginReturn);
+  let visitStorage: Storage | null = null;
+  try {
+    visitStorage = window.sessionStorage;
+  } catch {
+    /* The ref still protects account changes that do not reload the page. */
+  }
+  const heldVisit = recoverExtensionVisit(addVisitRef.current, address, visitStorage);
+  const addVisit = nextAddVisit(heldVisit, address, user?.id ?? null);
   addVisitRef.current = addVisit;
+  rememberExtensionVisit(addVisit, visitStorage);
 
   /**
    * **Nothing here tells the experimental-features store who is reading.** It
@@ -285,6 +302,10 @@ export function App() {
        through SignInControls' one-shot store and back via `LeaveLogin`.
        OAuthConsentPage.tsx; docs/plans/261007p. */
     if (route.kind === "oauth-consent") return <SendToSignIn />;
+    /* The Chrome extension's page, the same way: the capture waits in the
+       extension for this tab, and signing in happens in this tab, so coming
+       back here afterwards still finds it (AddFromExtension.tsx). */
+    if (route.kind === "add-from-extension") return <SendToSignIn />;
     /* **The third exception, since 2026-09-02.** The privacy policy is for
        somebody deciding whether to sign in, so answering it with the pitch
        would be answering the one question the pitch is trying to get past.
@@ -487,7 +508,8 @@ function SendToSignIn() {
   useEffect(() => {
     /* StrictMode runs this twice, and the second run is already on `/login`:
        sending that address as `next` would lose the one that mattered. */
-    if (parseRoute(location.pathname).kind !== "oauth-consent") return;
+    const kind = parseRoute(location.pathname).kind;
+    if (kind !== "oauth-consent" && kind !== "add-from-extension") return;
     navigate(loginHref({ next: `${location.pathname}${location.search}` }), { replace: true });
   }, []);
   return null;
@@ -589,7 +611,10 @@ function SignedIn({
      but a running visit draws the page that posts nothing: `App` always has a
      visit for a signed-in reader at one of these addresses, and if it ever
      did not, starting an import is the wrong way to be wrong. */
-  if ((route.kind === "add" || route.kind === "add-upload") && addVisit?.kind !== "running")
+  if (
+    (route.kind === "add" || route.kind === "add-upload" || route.kind === "add-from-extension") &&
+    addVisit?.kind !== "running"
+  )
     return (
       <>
         <HomeLogo />
@@ -625,6 +650,15 @@ function SignedIn({
           source={{ kind: "upload", uploadId: route.uploadId }}
           readerId={user.id}
         />
+      </>
+    );
+  /* Keyed on the reader for the reason the add page is: it holds one reader's
+     captured page until it is sent. */
+  if (route.kind === "add-from-extension")
+    return (
+      <>
+        <HomeLogo />
+        <AddFromExtension key={user.id} readerId={user.id} />
       </>
     );
   if (route.kind === "design")

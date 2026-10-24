@@ -1,0 +1,16 @@
+{
+ "url": "https://explained.ai/gradient-boosting/",
+ "label": "multi",
+ "pages": [
+  "https://explained.ai/gradient-boosting/",
+  "https://explained.ai/gradient-boosting/L2-loss.html",
+  "https://explained.ai/gradient-boosting/L1-loss.html",
+  "https://explained.ai/gradient-boosting/descent.html",
+  "https://explained.ai/gradient-boosting/faq.html"
+ ],
+ "mechanism": "index page listing the three parts and FAQ, each with section titles",
+ "ssr": true,
+ "notes": "p1 ~5.8k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

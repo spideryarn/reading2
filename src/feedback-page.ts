@@ -57,6 +57,7 @@ const FIXED_PAGES: ReadonlySet<string> = new Set([
   "/design",
   "/login",
   "/profile",
+  "/add-from-extension",
   "/privacy",
   "/features",
   "/features/public-readable-sharing",

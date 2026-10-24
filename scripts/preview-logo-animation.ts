@@ -7,6 +7,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { createCanvas, GlobalFonts, loadImage, Path2D, type Image } from "@napi-rs/canvas";
 import { isMain } from "../src/is-main.js";
+import { rastersEquivalent } from "./raster-equivalence.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const OUTPUT = path.join(ROOT, "assets/brand/animation-preview.png");
@@ -164,14 +165,18 @@ export async function renderLogoAnimationPreview(cssText?: string): Promise<Buff
   return canvas.toBuffer("image/png");
 }
 
-/** --check compares exact bytes and never writes, including on mismatch. */
+/** --check compares decoded pixels (raster-equivalence.ts) and never writes,
+ * including on mismatch. Writing leaves an equivalent proof's bytes alone. */
 export async function previewLogoAnimation(options: { outputPath?: string; check?: boolean; cssText?: string } = {}): Promise<string> {
   const output = options.outputPath ?? OUTPUT;
   const bytes = await renderLogoAnimationPreview(options.cssText);
   if (options.check) {
     const current = await readFile(output);
-    if (!current.equals(bytes)) throw new Error(`Static animation proof is stale: ${output}`);
-  } else await writeFile(output, bytes);
+    if (!await rastersEquivalent(current, bytes)) throw new Error(`Static animation proof is stale: ${output}`);
+  } else {
+    const current = await readFile(output).catch(() => null);
+    if (!current || !await rastersEquivalent(current, bytes)) await writeFile(output, bytes);
+  }
   return output;
 }
 

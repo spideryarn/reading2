@@ -1,0 +1,10 @@
+{
+ "url": "https://news.ycombinator.com/news?p=2",
+ "label": "single",
+ "pages": [
+  "https://news.ycombinator.com/news?p=2"
+ ],
+ "mechanism": "fooler: numbered listing page with \"More\" ?p=3 link",
+ "ssr": true,
+ "notes": "a listing, not an article"
+}

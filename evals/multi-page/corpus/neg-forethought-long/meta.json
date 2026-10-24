@@ -1,0 +1,10 @@
+{
+ "url": "https://www.forethought.org/research/preparing-for-the-intelligence-explosion",
+ "label": "single",
+ "pages": [
+  "https://www.forethought.org/research/preparing-for-the-intelligence-explosion"
+ ],
+ "mechanism": "fooler: very long single page with many sections (144k chars)",
+ "ssr": true,
+ "notes": "one page, no pagination"
+}

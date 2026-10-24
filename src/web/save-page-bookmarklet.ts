@@ -26,7 +26,19 @@
 import { MAX_UPLOAD_BYTES } from "../uploads.js";
 
 /**
- * Save `win`'s page as `<title>.html`. Runs in the publisher's page.
+ * What `capturePage` hands back: the page as one HTML string with the file
+ * name to give it, or why there is none.
+ */
+export type PageCapture =
+  | { kind: "page"; html: string; filename: string; bytes: number }
+  | { kind: "too-big"; bytes: number }
+  | { kind: "pdf" };
+
+/**
+ * `win`'s page as one self-contained HTML string. Runs in the publisher's page,
+ * from the bookmarklet (`savePageForSpideryarn`) and from the Chrome extension
+ * (`chrome.scripting.executeScript`, which serialises it the way the bookmark
+ * does, so it is self-contained for both).
  *
  * 1. **Every address made absolute, and no `<base>`.** An upload has no
  *    address of its own, so a relative image would have nothing to resolve
@@ -36,8 +48,9 @@ import { MAX_UPLOAD_BYTES } from "../uploads.js";
  *    says) and written back, and every `<base>` is removed. Not a single
  *    `<base>` instead: with one, the reader resolves an in-page `#fn1` against
  *    it too, and a footnote link would point at the publisher. So an `href`
- *    starting `#` is left exactly as written, as are `javascript:`, `data:`
- *    and `mailto:` addresses and any the URL parser refuses.
+ *    starting `#` is left exactly as written, as are `data:` and `mailto:`
+ *    addresses and any the URL parser refuses. `javascript:` addresses,
+ *    inline event handlers and `srcdoc` are removed with executable scripts.
  * 2. One `<meta charset="utf-8">`, first in `<head>`, every other charset
  *    declaration removed: the file is UTF-8 because a `Blob` of a string always
  *    is, and a page that said `iso-8859-1` would otherwise be decoded by its own
@@ -60,12 +73,26 @@ import { MAX_UPLOAD_BYTES } from "../uploads.js";
  *    carried is removed first, so the only one is ours. The upload path reads
  *    it as a claim to show ("Saved from <host>") and to match a later paste on
  *    the reader's own shelf, and never fetches it — docs/plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md § Stage 3.
- * 4. Over the upload cap, counted in bytes, it says so and stops.
- * 5. A temporary `<a download>` on a blob URL, clicked, removed, and the URL
- *    revoked a tick later so the download has started.
+ * **Its arguments are numbers, and `win` comes last with `window` as its
+ * default**, because `executeScript` sends arguments as JSON and a window
+ * cannot be one (GPT Sol, 261024q F2). The bookmarklet and the tests pass a
+ * window; the extension passes `maxBytes` and `messageCap` only.
+ *
+ * 4. Over the upload cap, counted in bytes, it is `too-big`; so is a page whose
+ *    JSON serialisation is over `messageCap` when one is given, because Chrome
+ *    carries the result and the extension's reply as JSON, capped at 64 MiB,
+ *    and a quote or backslash serialises to two characters (F9). A PDF in Chrome's
+ *    viewer is `pdf`: scripting the viewer works, and captures a 159-character
+ *    wrapper around an embed (measured, docs/plans/261024q-chrome-extension-one-click-add-the-page.md
+ *    § Stage 0).
  */
-export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes: number): void {
+export function capturePage(
+  maxBytes: number,
+  messageCap = 0,
+  win: Window & typeof globalThis = window,
+): PageCapture {
   const doc = win.document;
+  if ((doc.contentType || "").toLowerCase() === "application/pdf") return { kind: "pdf" };
   const base = doc.baseURI;
   const copy = doc.documentElement.cloneNode(true) as HTMLElement;
 
@@ -73,7 +100,7 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
   for (let i = 0; i < bases.length; i++) bases[i]!.remove();
   const absolute = (value: string): string => {
     const v = value.trim();
-    if (v === "" || /^(?:javascript|data|mailto):/i.test(v)) return value;
+    if (v === "" || /^(?:data|mailto):/i.test(v)) return value;
     try {
       return new win.URL(v, base).href;
     } catch (_) {
@@ -128,8 +155,22 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
      attributes are namespace-sensitive in selector engines, while
      `getAttribute("xlink:href")` is the interoperable DOM spelling. */
   const addressed = copy.querySelectorAll("*");
-  for (let i = 0; i < addressed.length; i++) {
-    const el = addressed[i]!;
+  /* `querySelectorAll` excludes `copy` itself; begin at -1 so executable
+     attributes on the root `<html>` element are stripped too. */
+  for (let i = -1; i < addressed.length; i++) {
+    const el = i === -1 ? copy : addressed[i]!;
+    /* A cloned element keeps executable attributes even after its `<script>`
+       children are removed. Walk backwards because NamedNodeMap is live. */
+    for (let a = el.attributes.length - 1; a >= 0; a--) {
+      const attr = el.attributes[a]!;
+      if (
+        attr.name.toLowerCase().indexOf("on") === 0 ||
+        attr.name.toLowerCase() === "srcdoc" ||
+        /^\s*javascript:/i.test(attr.value)
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
     const names = ["src", "href", "poster", "data-src", "xlink:href"];
     for (let n = 0; n < names.length; n++) {
       const value = el.getAttribute(names[n]!);
@@ -209,14 +250,10 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
   }
 
   const html = `<!doctype html>\n${copy.outerHTML}`;
-  const blob = new win.Blob([html], { type: "text/html" });
-  if (blob.size > maxBytes) {
-    win.alert(
-      "This page is too big to add to Spideryarn (the limit is " +
-        Math.round(maxBytes / 1048576) +
-        " MB).",
-    );
-    return;
+  const bytes = new win.Blob([html], { type: "text/html" }).size;
+  if (bytes > maxBytes) return { kind: "too-big", bytes };
+  if (messageCap > 0 && new win.Blob([JSON.stringify(html)]).size > messageCap) {
+    return { kind: "too-big", bytes };
   }
 
   const title = (doc.title || "")
@@ -226,12 +263,41 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
     .trim()
     .slice(0, 120)
     .replace(/^[\s.]+|[\s.]+$/g, "");
-  const filename = `${title || "page"}.html`;
+  return { kind: "page", html, filename: `${title || "page"}.html`, bytes };
+}
 
-  const href = win.URL.createObjectURL(blob);
+/**
+ * Save `win`'s page as `<title>.html`: `capture` it, then a temporary
+ * `<a download>` on a blob URL, clicked, removed, and the URL revoked a tick
+ * later so the download has started. Over the cap, or a PDF, it says so and
+ * stops.
+ *
+ * **`capture` is passed in, not imported**, because this function is
+ * stringified into the bookmark too, and a minifier renames a module-level
+ * name inside it but not in the string that would define it. A parameter is
+ * renamed consistently or not at all. It is always `capturePage`.
+ */
+export function savePageForSpideryarn(
+  win: Window & typeof globalThis,
+  maxBytes: number,
+  capture: typeof capturePage,
+): void {
+  const doc = win.document;
+  const got = capture(maxBytes, 0, win);
+  if (got.kind !== "page") {
+    win.alert(
+      got.kind === "pdf"
+        ? "This is a PDF, not a web page. Download it and upload the file to Spideryarn."
+        : "This page is too big to add to Spideryarn (the limit is " +
+            Math.round(maxBytes / 1048576) +
+            " MB).",
+    );
+    return;
+  }
+  const href = win.URL.createObjectURL(new win.Blob([got.html], { type: "text/html" }));
   const a = doc.createElement("a");
   a.href = href;
-  a.download = filename;
+  a.download = got.filename;
   a.style.display = "none";
   (doc.body || doc.documentElement).appendChild(a);
   a.click();
@@ -248,6 +314,6 @@ export function savePageForSpideryarn(win: Window & typeof globalThis, maxBytes:
  * source would not survive.
  */
 export function bookmarkletHref(): string {
-  const body = `void (${savePageForSpideryarn.toString()})(window,${MAX_UPLOAD_BYTES});`;
+  const body = `void (${savePageForSpideryarn.toString()})(window,${MAX_UPLOAD_BYTES},${capturePage.toString()});`;
   return `javascript:${encodeURIComponent(body)}`;
 }

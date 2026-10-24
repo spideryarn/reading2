@@ -1,0 +1,13 @@
+{
+ "url": "https://80000hours.org/career-guide/",
+ "label": "multi",
+ "pages": [
+  "https://80000hours.org/career-guide/",
+  "https://80000hours.org/career-guide/introduction/",
+  "https://80000hours.org/career-guide/summary/",
+  "https://80000hours.org/career-guide/dream-job/"
+ ],
+ "mechanism": "landing is chapter TOC (~17k chars, 20+ chapters); chapters have \"Read next:\" link",
+ "ssr": true,
+ "notes": "borderline: a book-like guide; first ~4 of 20+ saved"
+}

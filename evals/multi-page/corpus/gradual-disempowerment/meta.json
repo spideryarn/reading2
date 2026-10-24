@@ -1,0 +1,17 @@
+{
+ "url": "https://gradual-disempowerment.ai/",
+ "label": "multi",
+ "pages": [
+  "https://gradual-disempowerment.ai/",
+  "https://gradual-disempowerment.ai/misaligned-economy",
+  "https://gradual-disempowerment.ai/misaligned-culture",
+  "https://gradual-disempowerment.ai/misaligned-states",
+  "https://gradual-disempowerment.ai/mutual-reinforcement",
+  "https://gradual-disempowerment.ai/mitigating-the-risk",
+  "https://gradual-disempowerment.ai/related-work",
+  "https://gradual-disempowerment.ai/conclusion"
+ ],
+ "mechanism": "landing holds first prose chunk (~10k chars) + nav + \"Continue\" link per page to the next section",
+ "ssr": true,
+ "notes": "paper split into sections; no rel=next"
+}

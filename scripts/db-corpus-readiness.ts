@@ -27,7 +27,11 @@
  *
  * **2. Every stored source reference resolves to an object we can actually
  * read.** A revision names its source by `raw_source_sha256` + `raw_source_kind`
- * and the bytes live in the `sources` bucket. This corpus was written across two
+ * and the bytes live in the `sources` bucket — and so does **each later page**
+ * of a piece split over several, one `article_revision_parts` row apiece (plan
+ * 261024p). Both are read the same way; checking only page 1 left a missing
+ * continuation page beside a green report (GPT Sol's code review of 261024p,
+ * F6). This corpus was written across two
  * stores, so half of it once named objects the reading process could not see —
  * docs/postmortems/260831e-a-write-path-with-no-reader.md. Stage 2c made that
  * loud, so a reference with nothing behind it now refuses `extract` rather than
@@ -50,8 +54,9 @@
  * each one names the exact fault planted for it. It used to be decided by a
  * shared counter, so check 1 could miss its seed entirely and the control would
  * still report success on the strength of check 2 having failed for an
- * unrelated reason. Check 2 had no control at all; it has one now — a
- * `raw_sources` row whose object is not in the bucket, which is the shape of
+ * unrelated reason. Check 2 had no control at all; it has two now — a
+ * revision, and a seeded later page, each naming a `raw_sources` row whose
+ * object is not in the bucket, which is the shape of
  * docs/postmortems/260831e-a-write-path-with-no-reader.md. Sol's § 4.
  *
  * **An empty corpus is a failure, not a pass.** Both checks are vacuously green
@@ -109,7 +114,9 @@ async function main() {
 
   /** The sha nothing is stored under. Content-addressed, so this key cannot exist. */
   const DANGLING_SHA = "de1e7ed".padEnd(64, "0");
-  let seeds: Seeds = { orphanedRevision: null, danglingSha: null };
+  /** The same, for the seeded later page — a second key so its arm is told apart. */
+  const DANGLING_PART_SHA = "de1e7edba9e".padEnd(64, "0");
+  let seeds: Seeds = { orphanedRevision: null, danglingSha: null, danglingPartSha: null };
   if (SEED_BAD) {
     if (!isLocalDatabaseUrl(url!)) {
       console.error("--seed-a-bad-row writes. Refusing against a database that is not local.");
@@ -157,15 +164,36 @@ async function main() {
       returning id`,
       [DANGLING_SHA],
     );
+    /* **And one for the later pages.** A revision is given one more part —
+       the next ordinal after any it has — naming an HTML `raw_sources` row whose
+       object is not in the bucket. Referenced from nowhere else, so check 2 can
+       only name this sha by reading `article_revision_parts`. */
+    await client.query(
+      `insert into spideryarn.raw_sources (sha256, kind, bytes, content_type, verified_at)
+       values ($1, 'html', 1, 'text/html', now())`,
+      [DANGLING_PART_SHA],
+    );
+    const danglingPart = await client.query<{ revision_id: string }>(
+      `insert into spideryarn.article_revision_parts (revision_id, ordinal, url, raw_source_sha256, raw_source_kind)
+       select r.id,
+              coalesce((select max(p.ordinal) from spideryarn.article_revision_parts p where p.revision_id = r.id), 0) + 1,
+              'https://seeded.invalid/next-page', $1, 'html'
+         from spideryarn.article_revisions r
+        where r.raw_source_sha256 is not null
+        limit 1
+      returning revision_id`,
+      [DANGLING_PART_SHA],
+    );
     seeds = {
       orphanedRevision: row.rows[0]?.id ?? null,
       danglingSha: dangling.rows[0] ? DANGLING_SHA : null,
+      danglingPartSha: danglingPart.rows[0] ? DANGLING_PART_SHA : null,
     };
     /* **Nothing to seed is a failed control, not a quiet fall-through into the
        ordinary report.** It used to leave `seeded` null and carry on to print
        `✓ ready` and exit 0, which is the most misleading possible answer to
        "show me this check failing". Sol's § 4. */
-    if (!seeds.orphanedRevision || !seeds.danglingSha) {
+    if (!seeds.orphanedRevision || !seeds.danglingSha || !seeds.danglingPartSha) {
       const v = controlVerdict(seeds, [], []);
       await client.query("rollback");
       console.error(v.say);
@@ -175,7 +203,8 @@ async function main() {
     console.log(
       `Seeded, inside a transaction that is rolled back before exit:\n` +
         `  check 1 — revision ${seeds.orphanedRevision} now looks importer-written;\n` +
-        `  check 2 — one revision's source reference now points at ${seeds.danglingSha}.\n` +
+        `  check 2 — one revision's source reference now points at ${seeds.danglingSha},\n` +
+        `            and one revision has a later page naming ${seeds.danglingPartSha}.\n` +
         "What is still NOT proved: that check 2 would notice the *wrong bytes* under a\n" +
         "right key. The re-hash in readRawDocument is what would catch that, and no\n" +
         "rollback-able seed can produce it, so it is unproven rather than assumed.\n",
@@ -196,12 +225,19 @@ async function main() {
   }
 
   /* ── 2. every reference resolves, through the reading path ───────────── */
-  const refs = await client.query<{ slug: string; sha: string; kind: string }>(
-    `select a.slug, r.raw_source_sha256 sha, r.raw_source_kind kind
+  /* Page 1 of every revision, and every later page (`article_revision_parts`),
+     through the one reader below. `page` only labels the line. */
+  const refs = await client.query<{ slug: string; sha: string; kind: string; page: number }>(
+    `select a.slug, r.raw_source_sha256 sha, r.raw_source_kind kind, 1 page
        from spideryarn.article_revisions r
        join spideryarn.articles a on a.id = r.article_id
       where r.raw_source_sha256 is not null
-      order by a.slug`,
+     union all
+     select a.slug, p.raw_source_sha256 sha, p.raw_source_kind kind, p.ordinal + 1 page
+       from spideryarn.article_revision_parts p
+       join spideryarn.article_revisions r on r.id = p.revision_id
+       join spideryarn.articles a on a.id = r.article_id
+      order by slug, page`,
   );
   /* `postgresBlobStore`, not `blobStore()` — the article rows are in Postgres,
      so a filesystem fallback here would be checking a store nothing reads from.
@@ -220,13 +256,13 @@ async function main() {
         blobs,
       );
       if (!doc) {
-        unreadable.push({ sha: r.sha, why: `${r.slug}  -> ${r.sha} (${r.kind}): the reader returned nothing` });
+        unreadable.push({ sha: r.sha, why: `${r.slug} page ${r.page}  -> ${r.sha} (${r.kind}): the reader returned nothing` });
       }
     } catch (err) {
-      unreadable.push({ sha: r.sha, why: `${r.slug}  -> ${(err as Error).message}` });
+      unreadable.push({ sha: r.sha, why: `${r.slug} page ${r.page}  -> ${(err as Error).message}` });
     }
   }
-  console.log(`\n2. Source references — ${refs.rowCount} read back, ${unreadable.length} unreadable`);
+  console.log(`\n2. Source references, later pages included — ${refs.rowCount} read back, ${unreadable.length} unreadable`);
   for (const m of unreadable) console.log(`     ${m.why}`);
   if (unreadable.length) {
     console.log("     ^ the row asserts an object the reading path cannot get. Re-add these.");
@@ -257,7 +293,7 @@ async function main() {
       unreadable.map((u) => u.sha),
     );
     await client.query("rollback");
-    console.log("\nRolled back. Both seeded rows are as they were.");
+    console.log("\nRolled back. Every seeded row is as it was.");
     console.log(control.say);
     if (failures.length) {
       console.log(`(The run also reported: ${failures.join("; ")}.)`);

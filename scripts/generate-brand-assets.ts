@@ -1,6 +1,7 @@
 /** One source family, one explicit output table. All images are rendered and
  * validated before any destination is touched. Run `npm run brand:generate`;
- * `--check` verifies committed bytes without writing. `--preview` includes
+ * `--check` verifies committed images without writing, comparing decoded
+ * pixels rather than bytes (raster-equivalence.ts). `--preview` includes
  * assets/brand/preview.png and tiny-size-preview.png; combine both flags to
  * verify them. See main-icon.md. */
 import { createHash } from "node:crypto";
@@ -9,6 +10,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { createCanvas, GlobalFonts, loadImage, type Image } from "@napi-rs/canvas";
 import pngToIco from "png-to-ico";
+import { rastersEquivalent } from "./raster-equivalence.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const LIGHT = "#FFF9EE";
@@ -201,18 +203,22 @@ export interface GenerateBrandOptions {
   previewDir?: string;
 }
 
-async function staleFiles(destinations: Map<string, Buffer>): Promise<string[]> {
-  const stale: string[] = [];
-  for (const [file, expected] of destinations) {
-    const label = path.basename(file);
-    try {
-      if (!expected.equals(await readFile(file))) stale.push(label);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      stale.push(label);
-    }
+async function committed(file: string): Promise<Buffer | null> {
+  try {
+    return await readFile(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return null;
   }
-  return stale;
+}
+
+/** A committed raster pixel-equivalent to a fresh render is kept byte for
+ * byte, so another machine's antialiasing neither fails --check nor churns
+ * Git on regeneration. */
+async function keepEquivalent(file: string, fresh: Buffer): Promise<{ bytes: Buffer; stale: boolean }> {
+  const existing = await committed(file);
+  if (existing && await rastersEquivalent(existing, fresh)) return { bytes: existing, stale: false };
+  return { bytes: fresh, stale: true };
 }
 
 /** Exported so tests exercise the real pipeline against temporary destinations. */
@@ -223,27 +229,42 @@ export async function generateBrandAssets(options: GenerateBrandOptions = {}): P
   };
   const outputDir = options.outputDir ?? path.join(ROOT, "public");
   const files = new Map<string, Buffer>();
-  for (const output of BRAND_OUTPUTS) files.set(output.file, render(inputs[output.source], output));
+  const stale = new Map<string, Buffer>();
+  for (const output of BRAND_OUTPUTS) {
+    const file = path.join(outputDir, output.file);
+    const kept = await keepEquivalent(file, render(inputs[output.source], output));
+    files.set(output.file, kept.bytes);
+    if (kept.stale) stale.set(file, kept.bytes);
+  }
+  // Packed from the kept PNGs, so the ICO is exact bytes on every machine.
   const frames = [16, 32, 48].map((size) => {
     const frame = files.get(`favicon-${size}x${size}.png`);
     if (!frame) throw new Error(`Missing ICO frame ${size}`);
     return frame;
   });
-  files.set("favicon.ico", await pngToIco(frames));
+  const ico = await pngToIco(frames);
+  files.set("favicon.ico", ico);
+  const icoFile = path.join(outputDir, "favicon.ico");
+  if (!ico.equals(await committed(icoFile) ?? Buffer.alloc(0))) stale.set(icoFile, ico);
   // Proofs are review evidence, never served public-family members.
   const previewDir = options.previewDir ?? path.join(ROOT, "assets/brand");
-  const destinations = new Map([...files].map(([file, bytes]) => [path.join(outputDir, file), bytes]));
   if (options.preview) {
-    destinations.set(path.join(previewDir, "preview.png"), await renderPreview(inputs, files));
-    destinations.set(path.join(previewDir, "tiny-size-preview.png"), await renderTinyPreview(files));
+    for (const [name, fresh] of [
+      ["preview.png", await renderPreview(inputs, files)],
+      ["tiny-size-preview.png", await renderTinyPreview(files)],
+    ] as const) {
+      const file = path.join(previewDir, name);
+      const kept = await keepEquivalent(file, fresh);
+      if (kept.stale) stale.set(file, kept.bytes);
+    }
   }
   if (options.check) {
-    const stale = await staleFiles(destinations);
-    if (stale.length) throw new Error(`Brand assets missing or stale: ${stale.join(", ")}. Run npm run brand:generate${options.preview ? " -- --preview" : ""}.`);
+    const labels = [...stale.keys()].map((file) => path.basename(file));
+    if (labels.length) throw new Error(`Brand assets missing or stale: ${labels.join(", ")}. Run npm run brand:generate${options.preview ? " -- --preview" : ""}.`);
   } else {
     await mkdir(outputDir, { recursive: true });
     if (options.preview) await mkdir(previewDir, { recursive: true });
-    for (const [file, bytes] of destinations) await writeFile(file, bytes);
+    for (const [file, bytes] of stale) await writeFile(file, bytes);
   }
   return [...files.keys()];
 }

@@ -19,6 +19,7 @@ const SAMPLES: Record<Route["kind"], readonly string[]> = {
   "public-library": ["/read/public", "/read/public/"],
   add: ["/add/https://example.com/a", "/add/not a url"],
   "add-upload": ["/add/upload/5c69fb43-2560-4fc9-af88-558702dd35dc"],
+  "add-from-extension": ["/add-from-extension"],
   design: ["/design", "/design/"],
   profile: ["/profile"],
   login: ["/login"],

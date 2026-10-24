@@ -257,6 +257,7 @@ describe("declaredTables", () => {
     expect(declared.map((d) => d.table)).toEqual([
       "ai_calls",
       "article_open_times",
+      "article_revision_parts",
       "article_revisions",
       "article_share_link_events",
       "article_tags",
@@ -428,8 +429,9 @@ describe("against a real database", () => {
          2026-10-21 (plan 261019n); sixty-seven since `feedback_questions`
          the same day (plan 261021h); sixty-eight since
          `author_gift_guidance`, 2026-10-24 (plan 261024f); sixty-nine since
-         `author_lookup_candidates`, the same day (plan 261024j). */
-      expect(report.declaredTables).toBe(69);
+         `author_lookup_candidates`, the same day (plan 261024j); seventy
+         since `article_revision_parts`, the same day (plan 261024p). */
+      expect(report.declaredTables).toBe(70);
       expect(driftWarnings(report)).toEqual([]);
     });
   });
