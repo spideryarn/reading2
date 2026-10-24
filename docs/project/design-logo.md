@@ -1,6 +1,27 @@
-# The wordmark's hover animations
+# The wordmark's hover and loading animations
 
 Up: [design-css-overview.md](design-css-overview.md)
+
+## Identity and asset regeneration
+
+[main-icon.md](main-icon.md) owns the artwork, source history, theme/size treatments and
+future-update process, including regeneration and tiny-size inspection. This anchor remains
+for older links. The animation behavior and silhouette-dependent geometry belong here.
+
+## Regenerating the static animation proof
+
+[`scripts/preview-logo-animation.ts`](../../scripts/preview-logo-animation.ts) reconstructs Semaphore
+from the generated app PNG and its current CSS cuts/pivots, and writes
+[animation-preview.png](../../assets/brand/animation-preview.png). It is included in the main-icon
+update/check commands; `npm run brand:animation-preview` runs only this step, with `-- --check`
+to compare without writing. Missing geometry fails loudly. Use it after a silhouette/crop change
+and keep [the pixel-geometry checks](../../tests/semaphore-geometry.test.ts) independent.
+
+This proof shows selected static poses and an unanimated reference, not a live browser's timing,
+touch behavior or operating-system reduced-motion response. The browser mechanism for those
+checks is [browser-control.md](browser-control.md).
+
+## The wordmark's hover animations
 
 Point at the Spideryarn wordmark, or hold it down on a phone, and one of twenty-seven animations plays
 — a different one each time. This is what they are, why there are twenty-seven rather than one, what the
@@ -103,7 +124,7 @@ then all ten snap straight at once), *The Shed* (a loom's warp), *Cross-referenc
 
 Three things this round found worth keeping:
 
-- **Semaphore moves part of a PNG** without an SVG trace: two pseudo-elements repaint the image
+- **Semaphore moves part of the raster mark**: two pseudo-elements repaint the image
   clipped to one foreleg each and rotate about the joint, while the image itself is clipped with the
   complement. The copies have to overlap their holes by a sliver, or the two antialiased edges leave
   a seam across both legs at rest.
@@ -406,11 +427,10 @@ away entirely.
 
 ## What is deliberately not here
 
-- **No SVG trace of the mark.** Several of the best ideas wanted one — a spider that draws itself in
-  one unbroken stroke is the truest possible animation for a mark that really is one continuous
-  strand. It needs a *centreline* trace rather than an autotraced outline (an outline gives you the
-  line drawing its own border, which looks like a leak), plus a second copy of the mark to keep in
-  sync. Worth doing one day; not worth it for a hover flourish.
+- **No stroke-drawing animation.** The optical mark now has an editable SVG source, with the PNG
+  generated from it (§ Identity and asset regeneration). The animations still share the raster
+  mark; a future strand-drawing effect would need to animate those source centrelines rather than
+  an autotraced outline, which would draw the borders of the yarn instead of the yarn itself.
 - **No user setting.** There is one already, and it is the operating system's:
   `prefers-reduced-motion` collapses each of these to a **still** through the global guard in
   [`tailwind.css`](../../src/web/tailwind.css) — not to nothing, which is what a reader expects and

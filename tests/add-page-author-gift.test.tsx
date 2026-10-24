@@ -23,6 +23,7 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AUTHOR_LOOKUP_MAX_SEARCHES } from "../src/admin-author-gifts.js";
 import type { Job } from "../src/types.js";
 import type { UseJobs } from "../src/web/useJobs.js";
 
@@ -178,7 +179,7 @@ async function arm(): Promise<void> {
   const box = giftBox();
   if (!box) throw new Error("no gift box");
   for (const step of AUTHOR_GIFT_AT_ADD_STEPS) expect(box.textContent).toContain(step);
-  expect(box.textContent).toContain("up to three searches");
+  expect(box.textContent).toContain(`up to ${AUTHOR_LOOKUP_MAX_SEARCHES} searches`);
   expect(button(AUTHOR_GIFT_AT_ADD_CONFIRM, box)?.disabled).toBe(true);
   /* Plan 261020z: green outline send, red back-out. */
   expect(button(AUTHOR_GIFT_AT_ADD_CONFIRM, box)?.classList.contains("tone-positive")).toBe(true);

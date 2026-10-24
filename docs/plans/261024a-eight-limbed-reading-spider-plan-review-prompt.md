@@ -1,0 +1,7 @@
+# Review the eight-limbed reading-spider asset plan
+
+Repo: this worktree. Base is 3e34c751bce898f5d2292e42cce4e6a3010a7f95. Live candidate, untracked: docs/plans/261024a-eight-limbed-reading-spider-brand-assets.md and this prompt. No implementation yet.
+
+Read the plan and inspect actual current asset consumers and generation dependencies. Review the proposed scope/constraints independently. The user delegated the winner selection and explicitly authorized generating another round, simulated naive-reader/icon-specialist subagent critiques, updating all brand variants and sizes, docs, commit and push to dev. Do not add approval gates for those already authorized decisions. The parent's decisions (not user quotations) are marked as proposals in the plan.
+
+Do not change any file. Return a concise verdict and stable findings F1 etc, severity P0 data loss/security/service unusable; P1 user-visible wrong behavior or authoritative contract violated; P2 maintainability/design risk; P3 prose. Mark each established or reasoned, include concrete scenario and smallest remedy. Refuse only established P0/P1. Particular true guarantee: a reproducible asset family with legible small icons, transparent app masks, consistent themes, and documented origin/selection, not a new branding framework. No need for exhaustive platform extras. Read-only review, no network needed. Echo nonce LOGO-PLAN-261024.

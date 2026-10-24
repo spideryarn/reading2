@@ -1982,8 +1982,13 @@ export const libraryTopicsViewParam = createParser<"detail">({
  * src/web/article-commands.ts). That section mounts only once the page knows
  * there is a shelf row, which is the late arrival `useRevealOnArrival` waits
  * for rather than consuming the address before it can be carried out.
+ *
+ * **`what-it-cost` since 2026-10-24**, for the administrator's *What it cost*
+ * row (src/web/admin-commands.ts, plan 261024n). The section is drawn only for
+ * the administrator, so for anybody else the value finds nothing and is left
+ * where it is, as an unknown one would be.
  */
-export const METADATA_SECTIONS = ["ai-processing", "access-sharing"] as const;
+export const METADATA_SECTIONS = ["ai-processing", "access-sharing", "what-it-cost"] as const;
 export type MetadataSection = (typeof METADATA_SECTIONS)[number];
 
 /**
