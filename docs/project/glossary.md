@@ -1049,8 +1049,8 @@ What the owner gets:
   unchanged). **The button goes**, and the hover card's reopens the same chat: an entry has one
   chat reached from it, since plan 261010s
   ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)).
-- **In Chat's list** the conversation has the Glossary's icon, with a card that names the term, and
-  the filter above the list gains *Glossary*.
+- **In Chat's list** the conversation says *Glossary* under its title, beside the Glossary's icon;
+  the icon's card names the term, and the filter above the list gains *Glossary*.
 - **A visitor has neither** the button nor the line.
 
 It is Debate's *Check this claim in chat* with a different origin, and nearly all of it is that

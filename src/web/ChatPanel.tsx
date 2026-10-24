@@ -1266,11 +1266,15 @@ function ThreadList({
                       </span>
                     )}
                     <span className="chat-thread-meta">
-                      {/* No kind tag in words: where a row came from is the icon
-                          at its head (`ThreadSourceMark`). The list showed only
-                          chats from 2026-10-01 (plan 261001m) until 2026-10-05,
-                          when report spya-hyfqkq asked for every conversation
-                          here, marked (plan 261005i, D5). */}
+                      {/* **Where it came from, in words**, beside the icon at
+                          the row's head (`ThreadSourceMark`): *Investigate*
+                          under Sources' book. Until 2026-10-24 the icon alone
+                          said it, and only its card named the sub-mode (report
+                          spya-twsm7t, plan 261024i). A Learn row's title is
+                          already its sub-mode, so it is not said twice. */}
+                      {source?.place !== undefined && !view && (
+                        <span className="chat-thread-place">{source.place}</span>
+                      )}
                       <span className="chat-thread-count">{turns(t)}</span>
                       {/* Recency, because the question a list of conversations
                           answers is "which was I in?". The exact time is in the

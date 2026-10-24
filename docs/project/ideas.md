@@ -477,7 +477,8 @@ Once one exists, its mark replaces the button; either the mark or another Ask co
 reopens that chat. The name and the statement are a model's words, so both go inside the fence
 ([`chat-handoff.ts`](../../src/web/chat-handoff.ts) § `askAboutIdea`). The chat stores the origin
 `{ mode: "ideas", itemId, quote }`: the idea's id and its name as it was. The idea then shows the
-shared mark that reopens the chat beside Ideas, Chat's list shows the row under Ideas' bulb, and the
+shared mark that reopens the chat beside Ideas, Chat's list shows the row with *Ideas* under its
+title beside Ideas' bulb, and the
 open chat has a line back to the idea, which opens Ideas on it and scrolls its row into view without
 moving the prose. The mechanics are [chat-from-a-mode.md](chat-from-a-mode.md).
 

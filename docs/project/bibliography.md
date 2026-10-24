@@ -1095,7 +1095,8 @@ latest answer begins, until there is one), and pressing it opens that conversati
 Bibliography; the hover card's button reopens it too
 ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item), plan
 [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)). Chat's list
-marks the conversation with Sources' icon. A visitor has neither the button nor the line.
+marks the conversation with Sources' icon and *Bibliography* under its title. A visitor has neither
+the button nor the line.
 
 It is the Glossary's button with a different origin, `{ mode: "bibliography", itemId, quote }` (`citations` until 2026-10-09, still read): the
 work's id, which a re-run inherits by its key, and a snapshot of its title. Matched by the mode and

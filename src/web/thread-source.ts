@@ -19,7 +19,7 @@ import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
 import { type ChatThread, isLensOrigin, type LearnKind, type ThreadKind, type ThreadOrigin } from "../types.js";
 import { CHAT_FROM_WORDS, type ChatFrom, type LearnView, type SourcesView } from "./params.js";
-import { LEARN_SUB_MODES, SOURCES_SUB_MODES } from "./sub-modes.js";
+import { LEARN_SUB_MODES, SOURCES_SUB_MODES, type SubMode, subModeWords } from "./sub-modes.js";
 
 /** The parts of Learn that are a conversation: every part but Quiz. */
 export type LearnConversationView = Exclude<LearnView, "quiz">;
@@ -31,6 +31,13 @@ export interface ThreadSource {
   mode: Mode | null;
   /** The tooltip's first line. */
   label: string;
+  /**
+   * **Where it came from, in the words of the chip that goes there**:
+   * *Investigate*, *Claims*, *Glossary*, *Recall*. The row's meta line says it
+   * (report spya-twsm7t: an icon with a hover card did not make an Investigate
+   * chat look like one). Absent for a passage, which is not a mode.
+   */
+  place?: string;
   /** The item's or the passage's words, for the tooltip's second line. */
   quote?: string;
   /**
@@ -52,7 +59,7 @@ export type SourcedThread = Pick<ChatThread, "kind"> & Partial<Pick<ChatThread, 
 
 /**
  * **Sources' three origins**, each under the mode's icon and its
- * `sources` filter, and each tooltip naming the sub-mode it came from
+ * `sources` filter, and each row and tooltip naming the sub-mode it came from
  * (GPT Sol's F5 on plan 261009l). A stored origin keeps its old mode word as
  * data — `debate` for a claim or an angle (a cited work's `citations` is read
  * as `bibliography` by the server since plan 261009w) — until Stage 3 of plan
@@ -118,21 +125,61 @@ export function openableInChat(kind: ThreadKind): boolean {
 /** What the pinned row and the open guide's header call it. */
 export const GUIDE_LABEL = "Guide";
 
+/**
+ * **The mode a chat with this origin came from, and its sub-mode when the
+ * mode has them** — the one place an origin is mapped to where it lives
+ * (plan docs/plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md).
+ * The list's icon, filter word and place (`threadSource`) and the way back
+ * (`originBack`) all read it, so a new origin names its place once. A stored
+ * origin keeps its old mode word as data (`reception` is Investigate's lens);
+ * this is where it is read as the place it now is.
+ *
+ * A mode with no sub-modes, or one of `SubMode`'s arms (sub-modes.ts), so the
+ * mode and its sub-mode cannot disagree. Only the arms an origin can come
+ * from today, since each mode here must also be a filter word (`ChatFrom`).
+ */
+export type OriginPlace = { mode: "glossary" | "ideas" } | Extract<SubMode, { mode: "sources" }>;
+
+export function originPlace(origin: ThreadOrigin): OriginPlace {
+  switch (origin.mode) {
+    case "glossary":
+    case "ideas":
+      return { mode: origin.mode };
+    case "bibliography":
+      return { mode: "sources", view: "bibliography" };
+    /* A lens lands on Investigate, where *Your questions* lists it (plan 261020n). */
+    case "reception":
+      return { mode: "sources", view: "investigate" };
+    case "sources-claims":
+      return { mode: "sources", view: "claims" };
+    default:
+      return origin satisfies never;
+  }
+}
+
+/** A place's name as its chip says it: the sub-mode's when there is one, else the mode's. */
+function placeLabel(place: OriginPlace | SubMode): string {
+  return "view" in place ? subModeWords(place).label : MODE_LABEL[place.mode];
+}
+
 export function threadSource(thread: SourcedThread): ThreadSource | null {
   const { origin, kind, anchor } = thread;
   if (origin) {
+    const place = originPlace(origin);
+    /* Each mode an origin can come from is also its own filter word. */
+    const at = { from: place.mode, mode: place.mode, place: placeLabel(place) };
     switch (origin.mode) {
       case "reception":
-        return { from: "sources", mode: "sources", label: SOURCE_RECEPTION_LENS, quote: origin.lens, voice: "reader" };
+        return { ...at, label: SOURCE_RECEPTION_LENS, quote: origin.lens, voice: "reader" };
       case "sources-claims":
-        return { from: "sources", mode: "sources", label: SOURCE_SOURCES_CLAIM, quote: origin.quote };
+        return { ...at, label: SOURCE_SOURCES_CLAIM, quote: origin.quote };
       /* The quote is the entry's name as it was when the chat started. */
       case "glossary":
-        return { from: "glossary", mode: "glossary", label: SOURCE_GLOSSARY_ENTRY, quote: origin.quote };
+        return { ...at, label: SOURCE_GLOSSARY_ENTRY, quote: origin.quote };
       case "bibliography":
-        return { from: "sources", mode: "sources", label: SOURCE_CITED_WORK, quote: origin.quote };
+        return { ...at, label: SOURCE_CITED_WORK, quote: origin.quote };
       case "ideas":
-        return { from: "ideas", mode: "ideas", label: SOURCE_IDEA, quote: origin.quote };
+        return { ...at, label: SOURCE_IDEA, quote: origin.quote };
       default:
         return origin satisfies never;
     }
@@ -145,6 +192,7 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
         from: "learn",
         mode: "learn",
         label: `From ${MODE_LABEL.learn} › ${LEARN_SUB_MODES[view].label}`,
+        place: placeLabel({ mode: "learn", view }),
         learn: view,
       };
     }
@@ -230,21 +278,13 @@ export const LENS_BACK = "your question";
 export function originBack(origin: ThreadOrigin): OriginBackWords {
   const quote = isLensOrigin(origin) ? null : origin.quote;
   const what = quote === null ? LENS_BACK : `“${quote}”`;
-  switch (origin.mode) {
-    case "glossary":
-    case "ideas": {
-      const modeLabel = MODE_LABEL[origin.mode];
-      return { mode: origin.mode, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
-    }
-    case "bibliography":
-    case "reception":
-    case "sources-claims": {
-      /* A lens lands on Investigate, where *Your questions* lists it (plan 261020n). */
-      const view = origin.mode === "bibliography" ? "bibliography" : origin.mode === "reception" ? "investigate" : "claims";
-      const modeLabel = SOURCES_SUB_MODES[view].label;
-      return { mode: "sources", view, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
-    }
-    default:
-      return origin satisfies never;
-  }
+  const place = originPlace(origin);
+  const modeLabel = placeLabel(place);
+  return {
+    mode: place.mode,
+    ...("view" in place ? { view: place.view } : {}),
+    modeLabel,
+    quote,
+    text: `Back to ${what} in ${modeLabel}`,
+  };
 }

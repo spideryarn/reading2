@@ -685,6 +685,15 @@ From 2026-10-01 it showed chats only.
   an icon at its head, the source mode's own from the bar
   ([`mode-icons.ts`](../../src/web/mode-icons.ts), which the Dock reads too), with a card a tap
   opens. A plain chat has none.
+- **The place a row came from is said in words too**, since 2026-10-24: the meta line under the
+  title starts with the chip you would press to get there (*Investigate*, *Claims*,
+  *Bibliography*, *Glossary*, *Ideas*). Until then only the icon's card named the sub-mode, and an
+  Investigate chat looked like any other Sources one. Greg, 2026-10-23 (spya-twsm7t): *"if I look
+  at it in the chat list of threads, it should be clear that it came from the investigate
+  submode"*. A Learn row's title already says it, so the meta line does not repeat it; a passage
+  chat has no place. Every origin's place is one function, `originPlace` in `thread-source.ts`,
+  which the way back reads too
+  ([261024i](../plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md)).
 - **A Learn row leads back to Learn.** A press goes to `mode=learn` on that sub-mode with
   `thread` set, in one navigation. It is named for its sub-mode and has no rename or delete;
   *Start over* lives in Learn.

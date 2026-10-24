@@ -624,8 +624,18 @@ svg.band-waiting-ghost { flex: none; }
    so that adding or removing one of them cannot leave a stray separator — and
    so that selecting the row copies the facts and not the punctuation. */
 .chat-thread-meta > * + *::before { content: "·"; margin-right: 0.4rem; }
+.chat-thread-place { white-space: nowrap; }
 .chat-thread-count { white-space: nowrap; }
-.chat-thread-when { white-space: nowrap; }
+/* On a 390px touch screen the 40px source and action controls leave just
+   enough room for Bibliography, the count and a relative time. An absolute
+   date can be wider, so the least important fact gives way; its exact value is
+   still in the row's tooltip. `min-width: 0` is what lets this flex item shrink. */
+.chat-thread-when {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* The icons only appear under the pointer — three lines of metadata is enough
    in the row without two permanent buttons competing with it — but never vanish
    for the keyboard, which cannot hover: `:focus-within` brings them back.
