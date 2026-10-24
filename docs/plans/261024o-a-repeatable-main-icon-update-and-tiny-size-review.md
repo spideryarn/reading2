@@ -1,6 +1,6 @@
 # A repeatable main-icon update and tiny-size review
 
-Status: implemented and independently reviewed, 2026-10-24; landing in progress. Base `f2b128b914bec227c65a9472715a26b54c45ee47`.
+Status: complete on `dev`, 2026-10-24. Implementation `173e0d995664bb38bd8d0c757b0be1dda626b3c7`, based on `f2b128b914bec227c65a9472715a26b54c45ee47`. No artwork change or deployment.
 
 > and then update our docs/scripts (e.g. a main-icon.md with appropriate signposting) so that we have a process for updating it again in future
 >
@@ -19,7 +19,7 @@ The simpler option is a doc that lists the current manual commands. Pass it over
 - [x] Add `brand:update` (generate with proofs, static animation proof, then OG), `brand:og`, `brand:animation-preview` and `brand:check` (freshness/proofs plus focused brand/animation/metadata/doc tests). Keep `brand:generate` compatibility and its explicit output table. Existing broad DB/Auth suite limits do not belong on the routine icon-only check path.
 - [x] Write `main-icon.md`: intent/history links, source vs derivative ownership, archiving/prompts, both optical/detailed treatments, commands/prerequisites, native-pixel/theme/zoom inspection, alpha/crop/Semaphore trap, output-consumer links and landing links. Keep inventories/command details in code/package.json rather than duplicate tables. Point existing guide/comments/current investigation at it; preserve dated history and old anchor.
 - [x] Fresh agent starts from AGENTS with a realistic future icon-update task; report navigation and omissions, without edits. Independent Sol implementation review. Inspect actual generated proof, focused `npm test`, typecheck, touched-file lint, build and command behavior. Exercise missing/stale proof failure and no-write check in a temporary destination. No repeat of the previously failing/interrupted broad DB run for this dev-script/doc slice; no full-suite passing claim.
-- [ ] Commit named files, merge current dev, rerun affected checks and push `HEAD:dev`. No deployment. Retain this worktree while wider browser/suite limits remain.
+- [x] Commit named files, merge current dev, rerun affected checks and push `HEAD:dev`. No deployment. Retain this worktree while wider browser/suite limits remain.
 
 ## Authority and boundaries
 
@@ -38,3 +38,7 @@ Fresh navigation check: AGENTS → design overview → main-icon led to the sour
 [Machine-readable result and public hashes](261024o-main-icon-process-validation.json). Parent exercised the complete `brand:update` command, not just its constituent generator: all twelve public PNG/ICO/OG hashes remained exactly unchanged. `brand:check` passed ten files / 301 tests; typecheck covered all 3953 source files and passed; build passed; touched-file lint exited 0 with the existing test-only flood-fill complexity advisory. Both generated size proofs and the static motion proof were visually inspected.
 
 [Independent Sol code review](261024o-main-icon-process-code-review-sol.md), MAIN-ICON-CODE-261024: approve, no new findings. It passed 39 targeted tests and both no-write generation checks, and independently reproduced the 35/39-channel smoothing defect behind the postmortem. No reviewer edits. Plan F1 was accepted and addressed; no new finding IDs were issued.
+
+## Landing
+
+The live candidate closed as `173e0d995664bb38bd8d0c757b0be1dda626b3c7`. A fresh fetch and merge reported already up to date; no peer changes required new checks. Push succeeded `f2b128b91..173e0d995` to `dev`. Before this completion-note edit, `worktree:check` reported SAFE TO REMOVE with all commits on `origin/dev` and matching environment/fixture data. The worktree is retained for inspection under the previously recorded wider-suite/browser limits. This final note closes the review provenance; it does not change the implementation.
