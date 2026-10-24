@@ -63,9 +63,16 @@ const NOT_A_PAGE = /\.(?:jpe?g|png|gif|webp|avif|svg|ico|css|js|mjs|json|xml|rss
 const collapse = (s: string) => s.replace(/\s+/gu, " ").trim();
 const bareHost = (host: string) => host.toLowerCase().replace(/^www\./, "");
 
-/** The same site, for this purpose: the same host, with or without `www.`, and the same scheme family. */
-export function sameSite(a: URL, b: URL): boolean {
-  return bareHost(a.hostname) === bareHost(b.hostname) && /^https?:$/.test(a.protocol) && /^https?:$/.test(b.protocol);
+/**
+ * Whether `link` is on the same site as `page`, for following it: the same
+ * host with or without `www.`, the same port, and a scheme no weaker — an
+ * http page may go up to https, an https page never down to http (GPT Sol,
+ * plan review F10). Not argument-symmetric, on purpose.
+ */
+export function sameSite(page: URL, link: URL): boolean {
+  if (bareHost(page.hostname) !== bareHost(link.hostname) || page.port !== link.port) return false;
+  if (page.protocol === "https:") return link.protocol === "https:";
+  return page.protocol === "http:" && /^https?:$/.test(link.protocol);
 }
 
 /** An address with no fragment and no trailing slash on its path, for telling two links to one page apart. */

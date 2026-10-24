@@ -50,9 +50,20 @@ describe("pageLinks", () => {
     expect(links[1]!.where).toBe("nav.chapters");
   });
 
-  it("treats www. as the same site and a fragment or a trailing slash as the same page", () => {
-    expect(sameSite(new URL("https://www.a.example/x"), new URL("http://a.example/y"))).toBe(true);
+  it("treats www. as the same site, and http going up to https", () => {
+    expect(sameSite(new URL("https://www.a.example/x"), new URL("https://a.example/y"))).toBe(true);
+    expect(sameSite(new URL("http://a.example/x"), new URL("https://www.a.example/y"))).toBe(true);
     expect(sameSite(new URL("https://a.example/"), new URL("https://b.a.example/"))).toBe(false);
+  });
+
+  it("never follows a page's link down to http, or to another port of its host", () => {
+    expect(sameSite(new URL("https://a.example/x"), new URL("http://a.example/y"))).toBe(false);
+    expect(sameSite(new URL("https://a.example/x"), new URL("https://a.example:8443/y"))).toBe(false);
+    expect(sameSite(new URL("http://a.example:8080/x"), new URL("http://a.example:8080/y"))).toBe(true);
+    expect(sameSite(new URL("http://a.example:8080/x"), new URL("https://a.example/y"))).toBe(false);
+  });
+
+  it("treats a fragment or a trailing slash as the same page", () => {
     expect(pageKey(new URL("https://a.example/p/#x"))).toBe(pageKey(new URL("https://www.a.example/p")));
   });
 });

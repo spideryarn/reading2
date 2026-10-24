@@ -30,13 +30,13 @@ joined.
 
 Every fetched web page gets one cheap model call that answers *"is this page only part of its
 piece, and if so which of its own links carry the rest?"* When it says yes, stage 1 fetches those
-pages and stores them with page 1 as one document; stage 2 extracts each page as it would alone and
-joins them, a heading per page.
+pages and stores each beside page 1, in order; stage 2 extracts each page as it would alone and
+joins them.
 
 ```
  stage 1 (fetch)                                              stage 2 (extract)
  ───────────────                                              ─────────────────
- fetch page 1 ─► Readability(page 1) ─► page's own links ─┐
+ fetch page 1 ─► readArticle(page 1) ─► page's own links ─┐
                                                           ▼
                               Haiku: continues? which ids?  (≈ $0.0005, ≈ 3 s)
                                    │ no ─────────────────────► store page 1   ─► as today
@@ -44,9 +44,9 @@ joins them, a heading per page.
                                    ▼
             fetch each, same site, through fetchDocument
                                    ▼
-            one stored document: page 1 + each page's body,     ─► split by part, readArticle
-            in order; manifest lists the parts' addresses            each, join with a heading
-                                                                     per part, ids namespaced
+            page 1 stored as today; each further page its own   ─► readArticle on each page,
+            stored object, listed in order in                        join the authored content,
+            article_revision_parts                                   ids namespaced, notes merged
 ```
 
 ### The judge (built, measured: `src/multi-page.ts`)
@@ -65,108 +65,113 @@ joins them, a heading per page.
 Measured on 32 real pages (the investigation has the tables): 46 of 48 scored decisions right with
 the first prompt, whose one false follow (a blog's series index) went from 2 of 6 runs to 0 of 6
 with two added sentences; then **72 of 72 with the final prompt over three runs**, median $0.0005 a
-call (max $0.0017), median 2.1 s, p95 7.9 s.
+call (max $0.0017), median 2.1 s, p95 7.9 s. **What that number is and is not** (Sol F8, F11): it
+scores the yes/no decision, not whether every page was picked, and it is the corpus the prompt was
+fixed against. So the eval also scores the pages picked against gold, and a held-out set of pages
+gathered after the prompt was frozen is run before this ships; both are in the investigation.
 
 ### Stage 1: following the pages
+
+*Revised after GPT Sol's plan review
+([261024p-plan-review-sol.md](261024p-plan-review-sol.md)); the first version stored all the pages as
+one stitched document, and F1, F2 and F12 there are why it no longer does.*
 
 In the `fetch` step, after `fetchByAddress`, only for a document that is **fetched HTML, not a paper
 source and not converted** (an arXiv HTML page or a Europe PMC JATS is one document by
 construction, and an upload has nothing to follow):
 
-1. Readability on page 1 — **a single plain parse, not `readArticle`'s two arms**: measured,
-   `readArticle` takes 3–6 s on a 1–2 MB page, and stage 2 runs it anyway. A recognised bot check
-   (`isChallengePage`) or no article: no call.
+1. **`readArticle` on page 1**, the same call the eval measured (Sol F7). Stage 2 runs it again,
+   which costs 3–6 s more on a 1–2 MB page; a single plain parse would have saved that and fed the
+   judge an input nobody measured. A recognised bot check or no article: no call.
 2. `pageLinks`, `judgeMultiPage` under `ctx.signal`.
-3. If it continues, fetch the pages in order through the step's own `DocumentFetcher`
-   (`fetchDocument`, so the scheme allow-list, the address guard and its DNS pinning, the redirect
-   limit and the byte cap all apply), at most 4 at a time. **Each must still be the same site after
-   redirects, and HTML.** A page that fails, redirects off-site, is a PDF, or duplicates one already
-   held is **skipped**, and the step's detail says how many of how many were read. Stop adding pages
-   once their stored bytes together pass `MAX_STITCHED_BYTES` (to be set from the corpus; the
-   largest page here is 2.2 MB).
-4. Store one HTML document — page 1's own document with each later page's `<body>` appended in a
-   marked section of ours (`data-spya-part`, registered in `src/reserved.ts`, after scrubbing every
-   reserved attribute each page arrived with), carrying that page's own `<title>` text, which stage
-   2 needs for the part's heading — through a new seam beside `writeConvertedRaw`. Stage 2 scrubs the
-   part attribute from a single page too, so a page cannot forge one into the reading view. The
-   manifest gains **`parts`: the continuation pages' final addresses, in order**, persisted as
-   `article_revisions.raw_part_urls text[]` (one additive migration). `sha256`/`bytes` keep
-   describing page 1 as it arrived, as for every fetched document; `storedSha256` is the document we
-   built, so any change to any page changes it.
+3. If it continues, fetch the pages through the step's own `DocumentFetcher` (`fetchDocument`, so the
+   scheme allow-list, the address guard and its DNS pinning, the redirect limit and the per-document
+   byte cap all apply). **Each must still be the same site after redirects (`sameSite`: host with or
+   without `www.`, same port, never https→http), and HTML.** A page that fails, redirects off-site,
+   is not HTML, or duplicates one already held is **skipped**. **A shared budget of
+   `MAX_PARTS_BYTES`** (30 MB across the continuation pages; one bucket object is capped at 50 MiB,
+   and the largest page in the corpus is 2.2 MB) is reserved before each fetch, not checked after:
+   each fetch is capped at what is left, so the total can never pass it (Sol F6).
+4. **Each continuation page is stored as its own source object**, exactly as page 1 is — the same
+   content-addressed `raw_sources` row and bucket object, its own `<head>`, its own CSS, its own
+   address. A child table **`article_revision_parts`** (`revision_id`, `ordinal` from 1, `url` the
+   final address, `raw_source_sha256` + `raw_source_kind` a foreign key onto `raw_sources`; primary
+   key `(revision_id, ordinal)`) lists them in order; the manifest gains `parts: {url, storedSha256,
+   sha256, bytes}[]` read from it. One additive migration.
 5. The step's `detail`: `fetchDetail` plus *"4 pages"* (or *"3 of 4 pages"*).
 
-**Why one stored document and a column, not one object per page.** One object per page means a
-child table keyed to `raw_sources`, a manifest that is a list, and every reader of the raw source
-(`readRawBytes`, `GET /api/source/:slug`, `db:export`/import, the PDF-page re-count) learning
-about lists. One document keeps every one of them working unchanged, and `/api/source` shows the
-pages stacked, which is what was read. The column is what makes the split *trusted*: a publisher
-can write `data-spya-part` into its own page, so stage 2 splits only when the manifest says there
-are parts, and refuses a document whose sections do not match the list (our bug, not the reader's).
+**Why per-page objects, not one stitched document.** The revision's own `storedSha256` is still page
+1, byte for byte, so **every reader of the raw source that does not know about parts reads page 1,
+which is what it read before** — metadata (which runs Readability once over the whole document and
+would otherwise pick one chapter: Sol F1), the PDF-only readers, `db:export`. Only the readers that
+should see every page are taught to: stage 2's extract, and the prompt-injection scan of the source
+(`scanArticleSource`), which scans each page as its own document with its own CSS (Sol F2) — a
+stitched document lost each later page's `<style>` and lent page 1's to it. Nothing in a page can
+forge a part: the parts exist only as rows we wrote.
+
+Every path that copies or carries a revision's source (revision copying, `db:export`/import, forced
+re-extraction) carries the parts too, with a test each (Sol F9).
 
 ### Stage 2: extracting each part
 
-An Opus spike prototyped this on superdark, Tom's Hardware and gradual-disempowerment and ran stage
-3's real `splitIntoBlocks` on the result; what follows is its design, with the measurements. On
-superdark: 266,524 characters, 344 blocks, three chapter headings, no repeated block, every one of
-chapter I's 18 internal links retargeted inside its own part.
+An Opus spike prototyped the join on superdark, Tom's Hardware and gradual-disempowerment and ran
+stage 3's real `splitIntoBlocks` on the result. On superdark: 266,524 characters, 344 blocks, every
+one of chapter I's 18 internal links retargeted inside its own part.
 
-A sibling of `readArticle`, **`readParts(parts)`**, returning `readArticle`'s own type, so that
+A sibling of `readArticle`, **`readParts(page1, parts)`**, returning `readArticle`'s own type, so that
 `runExtract` changes by one line and `debugPage` not at all:
 
-1. **Split** the stored document by the manifest's `parts`: page 1's whole document, and for part
-   *k* a document of a minimal head — its own `<title>`, which stage 1 keeps on the section — and
-   that part's body, with its own address as the base.
-2. **`readArticle` on each.** Page 1 gives all the metadata — title, byline, authors, date, ids,
-   excerpt, `opening`, `untitled`, `drawnTitle` — exactly as today; a `ChallengePage` or no article
-   on page 1 refuses as today. A later part that Readability declines or that is a bot check is
-   **dropped and logged**, not fatal. `textContent` is concatenated (the title tidier reads it),
-   `length` summed, `notes`, `callouts`, `removed` and `kept` summed per field.
-3. **Join**: part 1's content with no heading of ours, then for each later part an **`<h1>`** of
-   ours and its content. `h1` because Readability turns every `<h1>` it keeps into `<h2>`
-   (Readability.js 828–832) and strips the one matching the title, so ours is always shallower than
-   every author heading; nothing downstream special-cases an `h1` after block 0. Its words: the
-   part's own raw `<title>` with the separator-segments it shares with page 1's `<title>` removed
-   (*"CHAPTER II. THE DARK STACK"*; Tom's Hardware's raw titles give *"AMD Ryzen 9 9950X Gaming
-   Performance"*, where Readability's title, from `og:title`, is the same on all five pages); if
-   nothing is left, and the part's content does not open with a heading of its own, *"Page k"*;
-   otherwise none. Marked with a reserved attribute of ours, scrubbed from every page on the way in
-   (`prepareDocument`), so a page cannot forge one.
-4. **Namespace each later part's anchors.** Every `id`, `a[name]` and `map[name]` gets `p{k}-`, and
-   every same-document reference — `href="#…"`, `xlink:href`, `usemap`, the ARIA id-lists, `for`,
-   `headers`, `url(#…)` — is rewritten through the same map, *whether or not the part defines the
-   target*, so a dead link stays dead instead of landing in part 1. Measured: gradual-
-   disempowerment had 7 duplicate ids and 3 footnote links landing on the previous page's
-   footnote; namespaced, none. **Except note ids**: `NOTE_ID_PATTERN` (src/notes.ts) would reject a
-   prefixed `spya-note-…` and stage 3 would silently drop the note's identity, so a note id that
-   collides takes a `-2` suffix instead, consistently across `id`, `data-spya-note`,
-   `data-spya-note-ref`, `data-spya-note-back` and the hrefs. Callout context ids
-   (`mintContextId`) the same way.
-5. **One notes container.** Every part's `section[data-spya-notes]` items are moved into one
-   container at the end of the article. Measured on two gwern essays joined: with one container per
-   part, `splitBlocks` in src/supplement.ts reports the notes *stranded* (they must be one run
-   ending at the last block) and drops the Notes node for the whole article, and the reading view
-   draws the notes heading only once (src/web/notes-view.ts). Merged: one region, 68 of 68 markers
-   and back-links landing right.
-6. **Repeated furniture**: a block of 60 or more characters whose text equals one already in an
-   earlier part is dropped (Tom's Hardware repeats *"Why you can trust Tom's Hardware"*, a
-   newsletter box and an author bio on every page — 12 blocks).
-7. **The floor** (`TooLittleTextToRead`, `capabilityFloor`) is applied to the **joined** text: a
+1. **`readArticle` on each page**, each with its own address as the base. Page 1 gives all the
+   metadata — title, byline, authors, date, ids, excerpt, `opening`, `untitled`, `drawnTitle` —
+   exactly as today; a `ChallengePage` or no article on page 1 refuses as today. A later page that
+   Readability declines or that is a bot check is **dropped and logged**, not fatal. `textContent` is
+   concatenated, `length` summed, `notes`, `callouts`, `removed` and `kept` summed per field.
+2. **Join the authored content, with no heading of ours** (Sol F3: a heading we wrote would become an
+   ordinary author heading in stage 3, in Structure and in the reading view, with nothing to say it
+   is ours). The one exception is the page's **own** first `<h1>`: Readability drops the heading
+   that matches the title it chose, so a chapter page whose `<h1>` is *"Chapter II. The Dark Stack"*
+   loses it. When a later page's extracted content does not open with that heading's text, it is put
+   back at the top of that page's content as an `<h2>` — Readability's own level for every `<h1>` it
+   keeps — in the author's words.
+3. **Namespace each later page's anchors** through one shared helper. Every `id`, `a[name]` and
+   `map[name]` gets `p{k}-`, and every same-document reference — `href="#…"`, `xlink:href`,
+   `usemap`, the ARIA id-lists, `for`, `headers`, `url(#…)` — is rewritten through the same map,
+   *whether or not the page defines the target*, so a dead link stays dead instead of landing in page
+   1. Measured: gradual-disempowerment had 7 duplicate ids and 3 footnote links landing on the
+   previous page's footnote; namespaced, none. **Except note ids**: `NOTE_ID_PATTERN` (src/notes.ts)
+   would reject a prefixed `spya-note-…` and stage 3 would silently drop the note's identity, so a
+   note id that collides takes a `-2` suffix instead, consistently across `id`, `data-spya-note`,
+   `data-spya-note-ref`, `data-spya-note-back` and the hrefs. Callout context ids (`mintContextId`)
+   the same way.
+4. **One notes region, moved whole** (Sol F4). Each page's notes — its `section[data-spya-notes]` and
+   the authored heading that introduces it (*"Notes"*, *"References"*) when that heading is what
+   stands immediately before it — move to the end of the article as one region under one heading.
+   Measured on two gwern essays joined: with one container per page, `splitBlocks` in
+   src/supplement.ts reports the notes *stranded* and drops the Notes node for the whole article,
+   and the reading view draws the notes heading only once (src/web/notes-view.ts). The test runs
+   through `splitBlocks` and Structure, not only the markers.
+5. **No deduplication** (Sol F5). Tom's Hardware repeats a trust box, a newsletter box and an author
+   bio on every page; that stays, because dropping blocks on equal text alone could drop a refrain
+   or a repeated quotation, and repeated furniture is the lesser harm.
+6. **The floor** (`TooLittleTextToRead`, `capabilityFloor`) is applied to the **joined** text: a
    541-character landing page followed by chapters is not too little.
 
-Re-extraction reads the same stored document and is deterministic; Refresh re-runs stage 1 and
-so asks the model again.
+Re-extraction reads the same stored pages and is deterministic; Refresh re-runs stage 1 and so asks
+the model again.
 
 ## What it costs, and what it gives up
 
 - **Every web import** pays one call, about $0.0005, and waits longer in `fetch`: a median 2.1 s
   for the call (p95 7.9 s, slowest 33.6 s on Wikipedia under four concurrent calls; one round-1
-  call timed out at the then 15 s limit, hence 30 s), plus one plain Readability parse, which is
-  under a second on a normal page and a few seconds on a 2 MB one. Greg's budget was under a cent.
+  call timed out at the then 15 s limit, hence 30 s), plus a `readArticle` on page 1, which is
+  under a second on a normal page and 3–6 s on a 1–2 MB one. Greg's budget was under a cent. A
+  followed article also waits for its pages to download and is read once per page in stage 2;
+  those are the same costs a reader pasting each page would pay.
 - **A followed article is still one slot.** A web page has always been one slot whatever its size,
   and 20 further pages is the bound. A PDF of the same 266,000 characters would be about three
   slots. *Not asked: one slot is what a long single page costs today, and changing it is a
   separate billing decision.*
-- **The Medium shape.** "Same site" is the host, `www.` aside, so on a host where many authors
+- **The Medium shape.** "Same site" is the host (`www.` aside, same port, never down to http), so on a host where many authors
   publish under paths (`medium.com/@a`, `sites.google.com/view/a`) a hostile page could have
   somebody else's page on that host appended to itself. The reader asked for the hostile page;
   what is appended is public. Recorded as a risk, not built against.
@@ -196,10 +201,11 @@ so asks the model again.
 
 1. **The judge and its eval** — `src/multi-page.ts`, job registration, `evals/multi-page/`, the
    investigation. *Done before this plan was reviewed; the numbers above are from it.*
-2. **Stage 1 follows the pages** — the fetch-step integration, the stitched document, the manifest
-   field and its migration, export/import, tests with an injected fetcher and gateway.
-3. **Stage 2 extracts each part** — the split, per-part extraction, the join, id namespacing, the
-   floor on the joined text, tests on a trimmed three-part fixture; a real import of superdark
+2. **Stage 1 follows the pages** — the fetch-step integration, each page stored as its own source
+   object, `article_revision_parts` and its migration, the manifest's `parts`, revision copying and
+   export/import, the source scan per page, tests with an injected fetcher and gateway.
+3. **Stage 2 extracts each part** — per-page extraction, the join, id namespacing, the notes region,
+   the floor on the joined text, tests on a trimmed three-part fixture; a real import of superdark
    against the local stack, read in a browser.
 4. **Docs and the note** — fetching.md, content-extraction.md, security-risks.md (the Medium shape),
    the user-feedback note.

@@ -6,8 +6,8 @@ Node, Postgres). Read-only: do not change any file.
 ## The candidate
 
 Worktree `/var/tmp/spideryarn-worktrees/fbqkyukr-multi-page-import`, branch
-`worktree-fbqkyukr-multi-page-import`. The candidate is commit `<SHA>` on top of `origin/dev`
-(`git show --stat <SHA>`). Start with, but do not limit yourself to:
+`worktree-fbqkyukr-multi-page-import`. The candidate is commit `fe2ce655a` on top of `origin/dev`
+(`git show --stat fe2ce655a`). Start with, but do not limit yourself to:
 
 - `docs/plans/261024p-a-multi-page-article-imports-from-its-first-page.md` — the plan. **Read it as a
   reviewer of its conclusions and its design, not only of its wording.**
