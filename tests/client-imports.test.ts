@@ -172,6 +172,11 @@ const SHARED = new Set([
      This is the outcome the long comment below argues for, reached one more
      time. See src/step-order.ts. */
   "step-order.js",
+  /* The main modes and cross-references a first publication queues. The server
+     uses the list to make the jobs and job-state uses it to say a failed
+     extras-only job did not change the article. Imports only step-order.js and
+     types.js, both on this list. See src/auto-mode-steps.ts and plan 261024c. */
+  "auto-mode-steps.js",
   /* Which steps the Metadata page offers an *AI processing* row for.
      On the list for the reason the header of this file gives rather than for
      convenience: it imports `StepName` from `types.js` and nothing else, and it
@@ -305,9 +310,9 @@ const SHARED = new Set([
      question along — that file answers *may I press Retry*, this one answers
      *what is happening right now* — and it calls that one rather than
      absorbing it, since `retryJob` on the server needs the same answer. It
-     imports `job-failure.js`, `messages.js` and types, all of which are on
-     this list. Two surfaces read it and they disagreed before it existed: the
-     add card and the run button in a band.
+     imports `auto-mode-steps.js`, `job-failure.js`, `messages.js` and types,
+     all of which are on this list. Two surfaces read it and they disagreed
+     before it existed: the add card and the run button in a band.
      See docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 4. */
   "job-state.js",
   // What counts as a PDF worth uploading, and how big is too big. The picker

@@ -55,6 +55,16 @@ export interface OpeningRecord {
   marks?: string[];
 }
 
+/* Structural provenance for deterministic readers that need it, deliberately
+   outside `OpeningRecord`: the records sent to models and all callers' object
+   equality stay byte-for-byte as they were. */
+const RECORD_ELEMENTS = new WeakMap<OpeningRecord, string>();
+
+/** The paragraph-level element that made this record, when `pageOpening` made it. */
+export function openingRecordElement(record: OpeningRecord): string | undefined {
+  return RECORD_ELEMENTS.get(record);
+}
+
 /** At most this many records … */
 export const MAX_RECORDS = 40;
 /** … and this many characters of them: a title block and an abstract, with room for a long author list. */
@@ -200,11 +210,27 @@ export function pageOpening(doc: Document): OpeningRecord[] {
   }
 }
 
-function readOpening(doc: Document): OpeningRecord[] {
+/**
+ * **The heading `pageOpening` starts at**, or null when it reads from the top
+ * of the `<article>`, `<main>` or body instead. Exported for the dateline
+ * reader (src/page-date.ts), which trusts a bare date only just under a title.
+ */
+export function openingHeading(doc: Document): Element | null {
+  return openingBounds(doc)?.heading ?? null;
+}
+
+function openingBounds(doc: Document): { scope: Element; heading: Element | null } | null {
   const heading = doc.querySelector("article h1, main h1") ?? doc.querySelector("h1");
   const scope = heading?.closest("article, main") ?? doc.querySelector("article, main") ?? doc.body;
-  if (!scope) return [];
-  const start = heading && scope.contains(heading) ? heading : scope;
+  if (!scope) return null;
+  return { scope, heading: heading && scope.contains(heading) ? heading : null };
+}
+
+function readOpening(doc: Document): OpeningRecord[] {
+  const bounds = openingBounds(doc);
+  if (!bounds) return [];
+  const { scope } = bounds;
+  const start = bounds.heading ?? scope;
   const walker = doc.createTreeWalker(scope, 1 | 4 /* SHOW_ELEMENT | SHOW_TEXT */);
   const records: OpeningRecord[] = [];
   let current: Element | null = null;
@@ -215,7 +241,9 @@ function readOpening(doc: Document): OpeningRecord[] {
   const flush = () => {
     const t = text.replace(/\s+/gu, " ").trim().slice(0, MAX_RECORD_CHARS);
     if (t) {
-      records.push({ id: `r${records.length + 1}`, text: t, ...(marks.size ? { marks: [...marks] } : {}) });
+      const record = { id: `r${records.length + 1}`, text: t, ...(marks.size ? { marks: [...marks] } : {}) };
+      records.push(record);
+      if (current) RECORD_ELEMENTS.set(record, current.tagName);
       chars += t.length;
     }
     text = "";
@@ -265,7 +293,10 @@ export function openingRecords(paragraphs: readonly OpeningRecord[]): OpeningRec
     const text = p.text.replace(/\s+/gu, " ").trim().slice(0, MAX_RECORD_CHARS);
     if (!text) continue;
     if (out.length >= MAX_RECORDS || chars + text.length > MAX_OPENING_CHARS) break;
-    out.push({ id: p.id, text, ...(p.marks?.length ? { marks: [...p.marks] } : {}) });
+    const record = { id: p.id, text, ...(p.marks?.length ? { marks: [...p.marks] } : {}) };
+    out.push(record);
+    const element = RECORD_ELEMENTS.get(p);
+    if (element) RECORD_ELEMENTS.set(record, element);
     chars += text.length;
   }
   return out;

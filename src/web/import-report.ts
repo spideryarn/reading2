@@ -23,6 +23,7 @@
  * the row (src/store/pg-jobs.ts § `forget`), so a report filed and then
  * dismissed still names a record we can read.
  */
+import { isImportJob } from "../job-state.js";
 import type { Job } from "../types.js";
 
 /**
@@ -41,7 +42,10 @@ export function importProblemReport(job: Job): string {
   const error =
     whole !== undefined && whole.length > ERROR_CHARS ? `${whole.slice(0, ERROR_CHARS)}…` : whole;
   const lines = [
-    "This import failed.",
+    /* An automatic-extra job queued after the import, or a Metadata re-run, is
+       not an import (spya-rvj2p7, plan 261024c). Neutral rather than "on an
+       article already imported", which a job named by slug cannot prove. */
+    isImportJob(job) ? "This import failed." : "This job failed.",
     "",
     `Job: ${job.id}`,
     `Article: ${job.slug}`,

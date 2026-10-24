@@ -45,7 +45,9 @@
  * 4. **No profile**: which passage backs which claim does not depend on who is
  *    reading.
  * 5. **An empty `links: []` is a valid artefact** — a piece with nothing worth
- *    linking. A missing list, or a non-empty one that validation empties, throws.
+ *    linking, and so is a non-empty one every row of which pointed next door.
+ *    A missing list, or a non-empty one that validation empties any other way,
+ *    throws (`buildCrossrefs`).
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -137,11 +139,23 @@ export function emptyDropped(): CrossrefsDropped {
 /**
  * Turn what the model said into links, believing as little as possible.
  *
- * **Three empty outcomes**:
+ * **Four empty outcomes**:
  * - no `links` array — a failed answer, so it throws;
  * - `links: []` — the model found nothing worth linking, a real answer;
  * - a non-empty array that validation empties — throws, with the counts, and
- *   nothing is written over a good artefact.
+ *   nothing is written over a good artefact;
+ * - **except one whose every row was `nearby`**: links to their own block or the
+ *   one beside it. The model read the article right and found nothing worth
+ *   linking further than next door, which is the answer `[]`, kept with its
+ *   counts. spya-rvj2p7, plan 261024c: a nine-block article whose three links
+ *   all pointed at the paragraph beside them failed its whole job.
+ *
+ *   **Only `nearby`**, and that is deliberate. `length` and `ambiguous` are a
+ *   good relation anchored on a phrase the prose cannot mark, which a second
+ *   attempt can repair; and `length` is checked before `unquoted`, so a
+ *   one-word phrase that is not in the block at all is counted as `length`.
+ *   Exempting them would publish empty over a misreading. `overlap` and
+ *   `truncated` cannot empty a list. GPT Sol, plan review finding 2.
  */
 export function buildCrossrefs(
   parsed: { links?: unknown },
@@ -165,8 +179,13 @@ export function buildCrossrefs(
     );
   }
   const d = opts.dropped;
+  /* `dropped` is an accumulator a caller may already have used. Classify this
+     answer from what this call added, not from the lifetime total: an old
+     `nearby` must not make a newly malformed row look all-nearby. */
+  const nearbyBefore = d.nearby;
   const links = toLinks(parsed.links, opts.blocks, d, opts.renderMaths);
-  if (parsed.links.length > 0 && links.length === 0) {
+  const allNearby = d.nearby - nearbyBefore === parsed.links.length;
+  if (parsed.links.length > 0 && links.length === 0 && !allNearby) {
     throw new Error(
       `The model named ${parsed.links.length} links and none of them could be kept, so there ` +
         "is nothing to write. " +

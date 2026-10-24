@@ -157,6 +157,94 @@ export function untitledLatexmlMarkup(doc: Document): boolean {
 }
 
 /**
+ * **The document title as the page draws it**, a line break read as the
+ * space it stood for — when the page's `<title>` agrees with it, and `null`
+ * otherwise.
+ *
+ * Two faults, one cause: the author put a `\\` in `\title`, and the page's
+ * `h1.ltx_title_document` has a `<br class="ltx_break">` in it.
+ *
+ * - LaTeXML's `<title>` deletes the break with nothing in its place, so the
+ *   words either side are glued: arXiv 2602.11988 was shelved as
+ *   `Evaluating AGENTS.md:Are …` (report spya-whpceg), 2203.02155 reads
+ *   `instructionswith`.
+ * - Or `<title>` is right, but Readability, finding no heading whose text is
+ *   exactly the title (the heading's has a newline in it), takes `Name: Title`
+ *   for a site's name and keeps the part after the colon: 2305.10601 reads
+ *   `Deliberate Problem Solving …` without its `Tree of Thoughts:`.
+ *
+ * So the heading is read twice, once with each break (and the whitespace
+ * round it) as one space and once with it deleted, footnote marks and their
+ * text (`.ltx_note`, a `\thanks`) left out of both; and when `<title>`,
+ * whitespace collapsed, is either reading, `drawn` is the spaced one and
+ * `head` is `document.title`. `runExtract` takes `drawn` over Readability's
+ * title only when that title is `head` or the exact suffix after `: `. So
+ * what it can change is a missing space or a prefix cut off the page's own
+ * title. Markup alone, with no source proof, for that reason. Exactly one
+ * document root, one document title and one or more measured breaks, or
+ * `null`.
+ * docs/plans/261024b-an-arxiv-title-keeps-the-space-its-line-break-stood-for.md.
+ */
+export function latexmlTitleText(doc: Document): { drawn: string; head: string } | null {
+  const roots = Array.from(doc.querySelectorAll(DOCUMENT));
+  if (roots.length !== 1) return null;
+  const titles = Array.from(roots[0]!.querySelectorAll(".ltx_title_document"));
+  const [title] = titles;
+  if (titles.length !== 1 || !title) return null;
+
+  const parts = titleParts(title);
+  if (!parts.includes(null)) return null;
+  const drawn = collapse(parts.map((part) => part ?? " ").join(""));
+  const head = collapse(doc.title);
+  return drawn !== "" && (head === drawn || head === withoutBreaks(parts)) ? { drawn, head } : null;
+}
+
+/** Text nodes and the measured breaks, without anything inside a `\thanks` note. */
+function titleParts(title: Element): Array<string | null> {
+  /* Strings are text nodes; null is the measured `br.ltx_break`. Keeping
+     those as separate values matters because the title is untrusted and can
+     carry any character we might otherwise choose as a sentinel. */
+  const parts: Array<string | null> = [];
+  const pending: Node[] = [title];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node.nodeType === 3) {
+      parts.push(node.nodeValue ?? "");
+      continue;
+    }
+    if (node.nodeType === 1) {
+      const element = node as Element;
+      if (element.matches(".ltx_note")) continue;
+      if (element.matches("br.ltx_break")) {
+        parts.push(null);
+        continue;
+      }
+    }
+    for (let i = node.childNodes.length - 1; i >= 0; i -= 1) pending.push(node.childNodes[i]!);
+  }
+  return parts;
+}
+
+/** The same nodes with every measured break and the whitespace touching it deleted. */
+function withoutBreaks(parts: readonly (string | null)[]): string {
+  let deleted = "";
+  let afterBreak = false;
+  for (const part of parts) {
+    if (part === null) {
+      deleted = deleted.replace(/\s+$/u, "");
+      afterBreak = true;
+      continue;
+    }
+    const text = afterBreak ? part.replace(/^\s+/u, "") : part;
+    deleted += text;
+    if (text !== "") afterBreak = false;
+  }
+  return collapse(deleted);
+}
+
+const collapse = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/**
  * Producer evidence outside the page's markup. The document URL is the final
  * fetched address JSDOM was given; unlike a class or generator comment, a
  * stranger's page cannot opt itself into these rewrites by writing one.

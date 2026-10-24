@@ -108,6 +108,40 @@ describe("registry metadata retained during extraction", () => {
   });
 });
 
+/* Plan 261024a: the day in a page's address is the weakest evidence, so it
+   goes in last, and only into an article the registry left with no date. */
+describe("the address's day, after the registry", () => {
+  const DATED = { url: "https://example.org/2023/01/15/paper", author: true };
+  const agreeing = (dates: { published?: string; year?: number }): LookupResult => ({
+    kind: "found",
+    record: {
+      id: parseWorkId("10.1000/old") as WorkId, doi: "10.1000/old", source: "crossref", title: TITLE,
+      authors: [{ family: "Beck", given: "Taylor" }], venue: "Old Journal", ...dates,
+    },
+  });
+
+  it("fills the day when the registry gives none", async () => {
+    const { meta } = await extract(previous, true, TITLE, { kind: "unavailable", why: "busy" }, DATED);
+    expect(meta?.publishedAt).toBe("2023-01-15");
+  });
+
+  it("loses to an agreeing registry's day", async () => {
+    const { meta } = await extract(previous, true, TITLE, agreeing({ published: "2024-05-31" }), DATED);
+    expect(meta?.publishedAt).toBe("2024-05-31");
+  });
+
+  it("loses to an agreeing registry's year, and never sits beside it", async () => {
+    const { meta } = await extract(previous, true, TITLE, agreeing({ year: 2011 }), DATED);
+    expect(meta?.publishedYear).toBe(2011);
+    expect(meta).not.toHaveProperty("publishedAt");
+  });
+
+  it("is nothing at an undated address: the control", async () => {
+    const { meta } = await extract(previous, true);
+    expect(meta).not.toHaveProperty("publishedAt");
+  });
+});
+
 /* Plan 261005j: a model does not answer the same way twice, and `title` is in
    every generated mode's fingerprint. */
 describe("the title across a re-extraction", () => {

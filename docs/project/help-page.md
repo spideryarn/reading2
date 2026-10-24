@@ -165,6 +165,12 @@ and GPT Sol's review: [261020x](../plans/261020x-one-box-on-help-for-search-and-
   may ask 30 an hour and 100 a day, one at a time, and a fuse across everybody stops it for the day
   at 1,300 questions (`HELP_CHAT_RATE_POLICY` in `help-chat-call.ts`), sized from the cost of a
   question with nothing cached.
+- **The box grows with its words and never scrolls itself**, since 2026-10-24 (Greg, `spya-p8h7r3`:
+  *"The input box for when I ask a question doesn't seem to expand. It stays pretty small."*): the
+  shared `useFitTextarea`, two rows as the floor, no roof
+  ([261024e](../plans/261024e-help-box-grows-with-its-words-and-a-costed-history.md)). A history
+  of a reader's own questions was asked for in `spya-jyjph5` and declined for now; that plan says
+  what it would take, starting from the promise above that the question is not stored.
 - The box is [`HelpAsk.tsx`](../../src/web/help/HelpAsk.tsx) § `HelpBox`; `HelpPage.tsx` holds its
   state (the words, which it also searches, and the answer), keyed to the signed-in reader, so an
   answer on `/help` survives following one of its links to a page but a reader switch clears it and

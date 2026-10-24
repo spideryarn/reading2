@@ -1838,6 +1838,11 @@ export interface Meta {
    * It is the publisher's claim, verbatim, not a verified fact: a page can say
    * anything, and re-dating an old post is a thing publishers do.
    *
+   * **Since 2026-10-24 a web page whose markup states none** may get a day
+   * (`YYYY-MM-DD`) off the line printed under its title, or, when the registry
+   * below gave neither a day nor a year, off its address (`/2025/11/02/`) —
+   * src/page-date.ts, plan 261024a. Still a claim.
+   *
    * **Since 2026-10-04 it may be a registry's day instead** (`YYYY-MM-DD`, no
    * time): when the page states none and Crossref's record for the article's
    * own DOI states a whole day — src/article-registry.ts. That is how a PDF

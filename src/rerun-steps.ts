@@ -143,8 +143,10 @@ export const METADATA_RERUN_STEPS = [
      `streamMessage`, no tools (`generateCrossrefs`); **no prerequisite** beyond
      the article itself; and **safe to publish over a good list**,
      draft-then-publish — an answer that validation empties throws and writes
-     nothing (`buildCrossrefs`), and only the model's own empty list is kept, as
-     a real answer. Not a mode, so no switch hides it.
+     nothing (`buildCrossrefs`). An empty list is kept as a real answer: the
+     model's own, or one whose every link pointed next door, which replaces a
+     good list the way the model's `[]` would (plan 261024c). Not a mode, so no
+     switch hides it.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   "crossrefs",
   /* **Joined on 2026-09-30 with the step.** The three answers: **one** metered
