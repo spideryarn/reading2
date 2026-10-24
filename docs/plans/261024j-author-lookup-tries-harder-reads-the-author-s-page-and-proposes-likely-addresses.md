@@ -174,3 +174,27 @@ in these forms:
 - **R10 (Sol 10):** the tests below each guard: colleague auto-fill; seen address plus guesses;
   prose and script false positives; a malformed `mailto:`; overflow; a lost finish inserts no
   candidates; a malformed legacy suggestion; MCP's candidate shape.
+
+## Code review (GPT Sol), 2026-10-24
+
+[261024j-code-review-sol.md](261024j-code-review-sol.md), on
+[the scoped diff](261024j-code-review.diff). Verdict: *approve with fixes*. Sol fixed nine things in
+place, each with a test, and every fix was kept:
+
+1. The model could name a colleague as the author, so that colleague's seen address "named the
+   author" and filled the draft. The name the checks use is now the article's own author first.
+2. Initials alone (`as@…` for Ann Smith) counted as naming the author; R1 needs initials plus surname.
+3. The page was scanned as one flat string, so separate blocks could join into an address. Block
+   boundaries now hold, while Greg's three table cells still join.
+4. Percent-encoded `mailto:` addresses were missed, and malformed escapes were listed.
+5. The six-per-page cap was applied after collecting everything; scanning now stops at it.
+6. `last.first` was not in the plan's pattern set and could make a guess *possible*; removed.
+7. An address-shaped legacy suggestion joined the list only in the browser; it is now assembled on
+   the server too, so the notes and MCP agree. The browser fold stays for lookups stored before this.
+8. The table and the store accepted impossible combinations: two more checks hold confidence to kind,
+   and a source to everything but an unverified guess. The migration was edited before it reached
+   dev; on the shared local database the two checks were added by hand.
+9. A test now holds that choosing an address closes an open Send confirmation and only PATCHes.
+
+Not ours, noted for 261024f: `tests/owner-isolation.test.ts` flags `previewAuthorGiftEmail`'s join
+on `articles.slug` (it also checks the owner, so it is the guard's regex, not a leak).

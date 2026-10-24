@@ -57,6 +57,7 @@ import {
 import { isSlug } from "../ingest.js";
 import { log } from "../log.js";
 import { type OwnerId, runAsOwner } from "../owner.js";
+import { isWebUrl } from "../urls.js";
 import { spendByRun } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -581,6 +582,26 @@ const CANDIDATE_CONFIDENCES = new Set(["high", "medium", "low"]);
 /** Per lookup; src/author-candidates.ts caps at the same, this holds it at the door. */
 const CANDIDATES_STORED_MAX = 8;
 
+function candidateConfidenceFits(c: AdminLookupCandidate, patternSeen: boolean | null): boolean {
+  switch (c.kind) {
+    case "guess":
+      return patternSeen ? c.confidence === "medium" : c.confidence === "low";
+    case "in-result":
+      return c.confidence === "medium";
+    case "on-page":
+    case "on-page-disguised":
+      return c.confidence === "high" || c.confidence === "medium";
+  }
+}
+
+/** `undefined` means the candidate's provenance is inconsistent and the row is dropped. */
+function candidateSource(c: AdminLookupCandidate, patternSeen: boolean | null): string | null | undefined {
+  const sourceUrl = bounded(c.sourceUrl);
+  if (sourceUrl !== null && !isWebUrl(sourceUrl)) return undefined;
+  if ((c.kind !== "guess" || patternSeen) && sourceUrl === null) return undefined;
+  return sourceUrl;
+}
+
 /**
  * **The candidates as the table's checks hold them**: normalised, each address
  * once, a known kind and confidence, a pattern verdict on guesses only, no
@@ -592,7 +613,10 @@ function cleanCandidates(raw: readonly AdminLookupCandidate[]): AdminLookupCandi
     const address = normaliseEmail(c.address);
     if (!looksLikeEmail(address) || !/.@./.test(address) || out.some((o) => o.address === address)) continue;
     if (!CANDIDATE_KINDS.has(c.kind) || !CANDIDATE_CONFIDENCES.has(c.confidence)) continue;
-    if (c.kind === "guess" && c.confidence === "high") continue;
+    const patternSeen = c.kind === "guess" ? (c.patternSeen ?? false) : null;
+    if (!candidateConfidenceFits(c, patternSeen)) continue;
+    const sourceUrl = candidateSource(c, patternSeen);
+    if (sourceUrl === undefined) continue;
     const why = bounded(c.why) ?? "";
     if (why === "") continue;
     out.push({
@@ -600,8 +624,8 @@ function cleanCandidates(raw: readonly AdminLookupCandidate[]): AdminLookupCandi
       kind: c.kind,
       confidence: c.confidence,
       why,
-      sourceUrl: bounded(c.sourceUrl),
-      patternSeen: c.kind === "guess" ? (c.patternSeen ?? false) : null,
+      sourceUrl,
+      patternSeen,
     });
     if (out.length === CANDIDATES_STORED_MAX) break;
   }

@@ -43,7 +43,7 @@
  *
  * ## Searches
  *
- * The prompt allows up to three. The server tool cannot be bound to a number of
+ * The prompt allows up to five. The server tool cannot be bound to a number of
  * searches (src/citation-find.ts § One call, not one search), so the count the
  * provider reports is returned on every result for the page to flag. A
  * non-streamed chat completion does not show the individual search calls, so
@@ -88,7 +88,7 @@ export const TEXT_END_CHARS = 1_500;
  * answer cut off is refused whole.
  */
 export const ANSWER_TOKENS = 2_500;
-/** Nobody is waiting (it runs after the response), and three searches can take a while. */
+/** Nobody is waiting (it runs after the response), and five searches can take a while. */
 export const LOOKUP_TIMEOUT_MS = 120_000;
 
 /** The voucher's rule for a recipient's name: one line, at most this long. */
@@ -411,9 +411,11 @@ export function applyAuthorRules(
   const authorName = nameOk && nameSource ? rawName : null;
   const unappliedName = rawName !== "" && authorName === null ? rawName.replace(/\s+/g, " ").slice(0, NAME_MAX) : null;
 
-  /* The name the address and guess checks work from: the surviving one, else
-     the model's, else the article's own (plan 261024j, R1). */
-  const workingName = authorName ?? unappliedName ?? input.authors?.[0]?.name ?? input.byline ?? null;
+  /* The name the address and guess checks work from: the article's own
+     metadata first, then the sourced search answer when the article had none.
+     A colleague search must not let the model replace a known author name and
+     thereby make the colleague's seen address appear to name the author (R1). */
+  const workingName = input.authors?.[0]?.name ?? input.byline ?? authorName ?? null;
 
   // Rule 2: the address.
   const emailObj = field(parsed, "email");
@@ -571,6 +573,7 @@ export async function followUp(judged: AuthorJudgement, readPage: (url: string) 
     seenNotNamed: judged.leads.seenNotNamed,
     pages,
     guesses: judged.leads.guesses,
+    suggestedEmail: judged.findings.suggestedEmail,
     exclude: [],
   });
   return { pages, candidates };

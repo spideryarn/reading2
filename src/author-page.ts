@@ -44,6 +44,10 @@ const BREAKS = new Set([
   "FOOTER", "FORM", "H1", "H2", "H3", "H4", "H5", "H6", "HEADER", "HR", "LI", "MAIN", "NAV", "OL", "P",
   "PRE", "SECTION", "TABLE", "TBODY", "TD", "TFOOT", "TH", "THEAD", "TR", "UL",
 ]);
+/** Table cells are one local chunk: Greg's example deliberately spans three. Every other block ends one. */
+const CELL_SPACES = new Set(["TD", "TH"]);
+/* Private-use, not whitespace: regexes cannot cross it. If a page contains one itself, it only creates a safe false boundary. */
+const CHUNK_BREAK = "\uE000";
 const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD"]);
 
 /** The last path segment of an image's `src`, without its query. */
@@ -70,8 +74,36 @@ function imageWord(alt: string, src: string): string {
 export interface PageText {
   /** The page as text, whitespace collapsed, images as markers. */
   readonly text: string;
-  /** Every `mailto:` link's address, as written. */
+  /** The same text with block boundaries kept, so an address cannot be assembled across unrelated blocks. */
+  readonly scanText: string;
+  /** Every valid `mailto:` link's decoded address, capped with the page's output. */
   readonly mailtos: readonly string[];
+}
+
+/** One decoded, shaped address from a mailto href; null for a malformed escape or non-address. */
+function mailtoAddress(href: string): string | null {
+  const encoded = href.trim().slice(7).split(/[?#]/)[0] ?? "";
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(encoded);
+  } catch {
+    return null;
+  }
+  const address = normaliseEmail(decoded);
+  return looksLikeEmail(address) ? address : null;
+}
+
+function takeMailto(el: Element, mailtos: string[]): void {
+  if (el.tagName !== "A" || mailtos.length >= PAGE_ADDRESSES_MAX) return;
+  const href = el.getAttribute("href") ?? "";
+  if (!/^mailto:/i.test(href.trim())) return;
+  const address = mailtoAddress(href);
+  if (address !== null && !mailtos.includes(address)) mailtos.push(address);
+}
+
+function separatorFor(tagName: string): string | null {
+  if (!BREAKS.has(tagName)) return null;
+  return CELL_SPACES.has(tagName) ? " " : CHUNK_BREAK;
 }
 
 /**
@@ -96,24 +128,26 @@ export function pageText(html: string): PageText {
       parts.push(imageWord(el.getAttribute("alt") ?? "", el.getAttribute("src") ?? ""));
       return;
     }
-    if (el.tagName === "A") {
-      const href = el.getAttribute("href") ?? "";
-      if (/^mailto:/i.test(href.trim())) mailtos.push(href.trim().slice(7).split("?")[0] ?? "");
-    }
-    const breaks = BREAKS.has(el.tagName);
-    if (breaks) parts.push(" ");
+    takeMailto(el, mailtos);
+    const separator = separatorFor(el.tagName);
+    if (separator !== null) parts.push(separator);
     for (const child of el.childNodes) walk(child);
-    if (breaks) parts.push(" ");
+    if (separator !== null) parts.push(separator);
   };
   if (doc.body) walk(doc.body);
-  return { text: parts.join("").replace(/\s+/g, " ").trim(), mailtos };
+  const scanText = parts
+    .join("")
+    .replace(/[^\S\uE000]+/g, " ")
+    .replace(/ *\uE000+ */g, CHUNK_BREAK)
+    .replace(/^\uE000+|\uE000+$/g, "");
+  return { text: scanText.replace(/\uE000/g, " ").replace(/\s+/g, " ").trim(), scanText, mailtos };
 }
 
 /* ------------------------------------------------------------- decoding -- */
 
-const LOCAL = String.raw`[A-Za-z0-9][A-Za-z0-9._%+'-]*`;
-const LABEL = String.raw`[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?`;
-const TLD = String.raw`[A-Za-z]{2,24}`;
+const LOCAL = "[A-Za-z0-9][A-Za-z0-9._%+'-]*";
+const LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?";
+const TLD = "[A-Za-z]{2,24}";
 /** `@`, `[at]`, `(at)`, `{at}`, `<at>`, with any spacing. */
 const AT_MARK = String.raw`\s*(?:@|\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|<\s*at\s*>)\s*`;
 /** `.`, `[dot]`, `(dot)`, `{dot}`, ` dot `. */
@@ -154,14 +188,27 @@ export function pageAddresses(page: PageText): PageAddress[] {
     if (!looksLikeEmail(address) || found.has(address)) return;
     found.set(address, { address, disguised });
   };
-  for (const m of page.mailtos) add(m, false);
-  for (const m of page.text.matchAll(/[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g)) add(m[0], false);
-  for (const m of page.text.matchAll(DISGUISED)) {
-    const local = m[1] ?? "";
-    const domain = m[2] ?? m[3] ?? "";
-    add(`${local}@${undot(domain)}`, true);
+  const done = () => found.size >= PAGE_ADDRESSES_MAX;
+  for (const m of page.mailtos) {
+    add(m, false);
+    if (done()) return [...found.values()];
   }
-  return [...found.values()].slice(0, PAGE_ADDRESSES_MAX);
+  const chunks = page.scanText.split(CHUNK_BREAK);
+  for (const chunk of chunks) {
+    for (const m of chunk.matchAll(/[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g)) {
+      add(m[0], false);
+      if (done()) return [...found.values()];
+    }
+  }
+  for (const chunk of chunks) {
+    for (const m of chunk.matchAll(DISGUISED)) {
+      const local = m[1] ?? "";
+      const domain = m[2] ?? m[3] ?? "";
+      add(`${local}@${undot(domain)}`, true);
+      if (done()) return [...found.values()];
+    }
+  }
+  return [...found.values()];
 }
 
 /* ----------------------------------------------------------- confidence -- */
@@ -190,8 +237,8 @@ export function addressNamesAuthor(address: string, authorName: string | null): 
   if (local === "" || words.length === 0) return false;
   if (words.some((w) => w.length >= 3 && local.includes(w))) return true;
   const surname = words[words.length - 1] ?? "";
-  const initials = words.map((w) => w[0]).join("");
-  return surname.length >= 2 && (local === initials || local.startsWith(`${initials[0] ?? ""}${surname}`));
+  const initials = words.slice(0, -1).map((w) => w[0]).join("");
+  return surname.length >= 2 && initials !== "" && local.startsWith(`${initials}${surname}`);
 }
 
 /* ----------------------------------------------------------------- read -- */

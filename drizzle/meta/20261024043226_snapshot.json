@@ -2101,6 +2101,14 @@
           "name": "author_lookup_candidates_pattern_only_guess",
           "value": "(\"spideryarn\".\"author_lookup_candidates\".\"pattern_seen\" is not null) = (\"spideryarn\".\"author_lookup_candidates\".\"kind\" = 'guess')"
         },
+        "author_lookup_candidates_confidence_for_kind": {
+          "name": "author_lookup_candidates_confidence_for_kind",
+          "value": "(\"spideryarn\".\"author_lookup_candidates\".\"kind\" in ('on-page', 'on-page-disguised') and \"spideryarn\".\"author_lookup_candidates\".\"confidence\" in ('high', 'medium'))\n          or (\"spideryarn\".\"author_lookup_candidates\".\"kind\" = 'in-result' and \"spideryarn\".\"author_lookup_candidates\".\"confidence\" = 'medium')\n          or (\"spideryarn\".\"author_lookup_candidates\".\"kind\" = 'guess' and ((\"spideryarn\".\"author_lookup_candidates\".\"pattern_seen\" and \"spideryarn\".\"author_lookup_candidates\".\"confidence\" = 'medium')\n              or (not \"spideryarn\".\"author_lookup_candidates\".\"pattern_seen\" and \"spideryarn\".\"author_lookup_candidates\".\"confidence\" = 'low')))"
+        },
+        "author_lookup_candidates_source_for_kind": {
+          "name": "author_lookup_candidates_source_for_kind",
+          "value": "(\"spideryarn\".\"author_lookup_candidates\".\"kind\" = 'guess' or \"spideryarn\".\"author_lookup_candidates\".\"source_url\" is not null)\n          and (\"spideryarn\".\"author_lookup_candidates\".\"pattern_seen\" is distinct from true or \"spideryarn\".\"author_lookup_candidates\".\"source_url\" is not null)"
+        },
         "author_lookup_candidates_address_normalised": {
           "name": "author_lookup_candidates_address_normalised",
           "value": "\"spideryarn\".\"author_lookup_candidates\".\"address\" = lower(btrim(\"spideryarn\".\"author_lookup_candidates\".\"address\")) and \"spideryarn\".\"author_lookup_candidates\".\"address\" like '%_@_%'"

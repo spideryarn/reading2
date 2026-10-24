@@ -1508,6 +1508,11 @@ describe("offered addresses (plan 261024j)", () => {
         offered("guess@example.org", { kind: "guess", confidence: "low", patternSeen: false, sourceUrl: null }),
         /* A guess may never be likely (R3): dropped, not stored. */
         offered("bad-guess@example.org", { kind: "guess", confidence: "high", patternSeen: true }),
+        offered("unsupported-medium@example.org", { kind: "guess", confidence: "medium", patternSeen: false }),
+        offered("low-page@example.org", { confidence: "low" }),
+        offered("high-result@example.org", { kind: "in-result", confidence: "high" }),
+        offered("page-without-source@example.org", { confidence: "medium", sourceUrl: null }),
+        offered("pattern-without-source@example.org", { kind: "guess", confidence: "medium", patternSeen: true, sourceUrl: null }),
         offered("first@example.org"),
         offered("not an address"),
       ],

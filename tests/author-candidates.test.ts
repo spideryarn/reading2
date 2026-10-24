@@ -8,8 +8,10 @@
  * condition fails.
  */
 import { describe, expect, it } from "vitest";
+import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { assembleCandidates, CANDIDATES_MAX, judgeGuess, patternsFor } from "../src/author-candidates.js";
+import { authorLookupCandidates } from "../src/db/schema.js";
 
 const BOB = { name: "Bob Jones", address: "bob.jones@inkandswitch.com", sourceUrl: "https://inkandswitch.com/people" };
 
@@ -19,6 +21,7 @@ describe("patternsFor", () => {
     expect(patternsFor("Bob Jones", "bjones")).toEqual(["flast"]);
     expect(patternsFor("Bob Jones", "bob")).toEqual(["first"]);
     expect(patternsFor("Zoë Müller", "zoe.muller")).toEqual(["first.last"]);
+    expect(patternsFor("Bob Jones", "jones.bob")).toEqual([]);
     expect(patternsFor("Bob Jones", "someoneelse")).toEqual([]);
     expect(patternsFor("Cher", "cher")).toEqual([]);
   });
@@ -32,6 +35,14 @@ describe("judgeGuess", () => {
 
   it("is a long shot when the pattern does not give it", () => {
     expect(judgeGuess({ address: "awarth@inkandswitch.com", colleague: BOB }, "Alessandro Warth")).toMatchObject({
+      confidence: "low",
+      patternSeen: false,
+    });
+  });
+
+  it("does not promote a pattern outside the plan's fixed set", () => {
+    const reversed = { ...BOB, address: "jones.bob@inkandswitch.com" };
+    expect(judgeGuess({ address: "warth.alessandro@inkandswitch.com", colleague: reversed }, "Alessandro Warth")).toMatchObject({
       confidence: "low",
       patternSeen: false,
     });
@@ -95,5 +106,17 @@ describe("assembleCandidates", () => {
     });
     expect(out).toHaveLength(CANDIDATES_MAX);
     expect(out.map((c) => c.address)).not.toContain("a0@x.example");
+  });
+});
+
+describe("candidate row constraints", () => {
+  it("holds the computed confidence/provenance combinations, not only their separate vocabularies", () => {
+    const checks = getTableConfig(authorLookupCandidates).checks.map((check) => check.name);
+    expect(checks).toEqual(
+      expect.arrayContaining([
+        "author_lookup_candidates_confidence_for_kind",
+        "author_lookup_candidates_source_for_kind",
+      ]),
+    );
   });
 });

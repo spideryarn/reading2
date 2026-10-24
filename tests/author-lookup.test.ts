@@ -422,6 +422,48 @@ describe("trying harder (plan 261024j)", () => {
     expect(result.notes).toContain("not in the author's name (not applied): bob.jones@uni.example.edu");
   });
 
+  it("an unsourced model name cannot make a colleague's address fill the draft (R1)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(
+          answer({
+            author: { name: "Bob Jones", sourceUrl: "https://invented.example.net/bob" },
+            email: { address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE },
+          }),
+          [{ url: COLLEAGUE_PAGE, content: "Bob Jones, professor. bob.jones@uni.example.edu" }],
+        ),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBeNull();
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "bob.jones@uni.example.edu", kind: "in-result", confidence: "medium" }),
+    ]);
+  });
+
+  it("a model cannot replace the article's own author name with a colleague's to fill their address (R1)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(
+          answer({
+            author: { name: "Bob Jones", sourceUrl: COLLEAGUE_PAGE },
+            email: { address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE },
+          }),
+          [{ url: COLLEAGUE_PAGE, content: "Bob Jones, professor. bob.jones@uni.example.edu" }],
+        ),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBeNull();
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "bob.jones@uni.example.edu", kind: "in-result", confidence: "medium" }),
+    ]);
+  });
+
   it("an address in the article's own text still fills, whatever its name (rule 2 unchanged there)", async () => {
     const result = await runAuthorLookup(INPUT, {
       call: fakeCall(completion(answer({ email: { address: "hello@essays.example.com", sourceUrl: SOURCE } }), [])),
@@ -522,6 +564,22 @@ describe("trying harder (plan 261024j)", () => {
       ["smith@uni.example.edu", "low", false],
     ]);
     expect(result.candidates[0]?.why).toContain("first.last");
+  });
+
+  it("puts a shaped not-seen suggestion in the server's candidate list (R7)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(answer({ email: { address: "ann@elsewhere.example", sourceUrl: BIO_PAGE } }), [
+          { url: BIO_PAGE, content: "Ann Smith is a writer." },
+        ]),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "ann@elsewhere.example", kind: "guess", confidence: "low", patternSeen: false }),
+    ]);
   });
 });
 

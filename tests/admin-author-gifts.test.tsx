@@ -757,6 +757,19 @@ describe("Author gifts", () => {
       expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { email: "alexwarth@gmail.com" } }]);
     });
 
+    it("closes an open Send confirmation before choosing a different address", async () => {
+      giftsAnswer = () => [gift({ email: "ann@example.test", lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      await act(async () => button(card(DRAFT), "Send")?.click());
+      expect(button(card(DRAFT), "Send to ann@example.test")).toBeDefined();
+
+      await act(async () => button(card(DRAFT), "Use instead")?.click());
+      await settle();
+
+      expect(button(card(DRAFT), "Send to ann@example.test")).toBeUndefined();
+      expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { email: "alexwarth@gmail.com" } }]);
+    });
+
     it("says Use instead when the draft has another address, and marks the one it has", async () => {
       giftsAnswer = () => [gift({ email: "alexwarth@gmail.com", lookups: [lookup({ outcome: "author", candidates: offered })] })];
       await mount();

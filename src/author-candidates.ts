@@ -72,7 +72,6 @@ const PATTERNS: Record<string, (f: string, l: string) => string> = {
   last: (_f, l) => l,
   lastf: (f, l) => `${l}${f[0]}`,
   firstl: (f, l) => `${f}${l[0]}`,
-  "last.first": (f, l) => `${l}.${f}`,
 };
 
 /** Which patterns turn this person's name into this local part. */
@@ -156,6 +155,8 @@ export interface CandidateSources {
   /** The pages read (D2). */
   readonly pages: readonly PageRead[];
   readonly guesses: readonly CheckedGuess[];
+  /** The model's old not-seen suggestion, offered only when it is address-shaped (R7). */
+  readonly suggestedEmail?: string | null;
   /** Addresses never to list: the one that filled the draft. */
   readonly exclude: readonly string[];
 }
@@ -211,6 +212,16 @@ export function assembleCandidates(s: CandidateSources): AddressCandidate[] {
     });
   }
   for (const g of s.guesses) push(judgeGuess(g, s.authorName));
+  if (s.suggestedEmail) {
+    push({
+      address: s.suggestedEmail,
+      kind: "guess",
+      confidence: "low",
+      why: "The lookup gave this address, but it was not written in any search result it was checked against.",
+      sourceUrl: null,
+      patternSeen: false,
+    });
+  }
 
   return out
     .map((c, i) => ({ c, i }))

@@ -7,7 +7,13 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { addressNamesAuthor, pageAddresses, pageText, readAuthorPage } from "../src/author-page.js";
+import {
+  addressNamesAuthor,
+  PAGE_ADDRESSES_MAX,
+  pageAddresses,
+  pageText,
+  readAuthorPage,
+} from "../src/author-page.js";
 import { FetchFailure } from "../src/fetch.js";
 
 const addresses = (html: string) => pageAddresses(pageText(html)).map((a) => `${a.address}${a.disguised ? " (decoded)" : ""}`);
@@ -33,11 +39,17 @@ describe("pageAddresses", () => {
     expect(addresses("<p>Write to jane at example dot org, please.</p>")).toEqual(["jane@example.org (decoded)"]);
   });
 
-  it("takes plain addresses and mailto links as written, not decoded", () => {
+  it("takes plain addresses and mailto links as plain, not disguised", () => {
     expect(addresses(`<p>Mail <a href="mailto:Ann@Example.org?subject=hi">me</a> or bob@example.com.</p>`)).toEqual([
       "ann@example.org",
       "bob@example.com",
     ]);
+  });
+
+  it("decodes mailto addresses, and drops a malformed escape instead of offering it", () => {
+    expect(
+      addresses(`<a href="mailto:jane%2Edoe%40example.org?subject=hi">Jane</a><a href="mailto:%ZZ@example.org">bad</a>`),
+    ).toEqual(["jane.doe@example.org"]);
   });
 
   it("does not read prose as an address", () => {
@@ -50,8 +62,17 @@ describe("pageAddresses", () => {
     expect(pageText("<table><tr><td>a</td><td>b</td></tr></table><p>c</p><div>d</div>").text).toBe("a b c d");
   });
 
+  it("does not assemble an address across unrelated blocks", () => {
+    expect(addresses("<p>Jane</p><p>[at]</p><p>example.com</p>")).toEqual([]);
+  });
+
   it("ignores scripts and styles", () => {
     expect(addresses("<script>var e='x@evil.example'</script><style>a{}</style><p>hi</p>")).toEqual([]);
+  });
+
+  it("keeps no more mailto candidates than one page may contribute", () => {
+    const html = Array.from({ length: PAGE_ADDRESSES_MAX + 20 }, (_, i) => `<a href="mailto:a${i}@example.org">${i}</a>`).join("");
+    expect(pageText(html).mailtos).toHaveLength(PAGE_ADDRESSES_MAX);
   });
 });
 
@@ -65,6 +86,7 @@ describe("addressNamesAuthor", () => {
 
   it("is false for someone else's address", () => {
     expect(addressNamesAuthor("labmanager@example.org", "Alessandro Warth")).toBe(false);
+    expect(addressNamesAuthor("as@example.org", "Ann Smith")).toBe(false);
     expect(addressNamesAuthor("info@example.org", null)).toBe(false);
   });
 });

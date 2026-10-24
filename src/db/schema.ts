@@ -7841,6 +7841,18 @@ export const authorLookupCandidates = spideryarn.table(
     check("author_lookup_candidates_guess_not_high", sql`${t.kind} <> 'guess' or ${t.confidence} <> 'high'`),
     check("author_lookup_candidates_pattern_only_guess", sql`(${t.patternSeen} is not null) = (${t.kind} = 'guess')`),
     check(
+      "author_lookup_candidates_confidence_for_kind",
+      sql`(${t.kind} in ('on-page', 'on-page-disguised') and ${t.confidence} in ('high', 'medium'))
+          or (${t.kind} = 'in-result' and ${t.confidence} = 'medium')
+          or (${t.kind} = 'guess' and ((${t.patternSeen} and ${t.confidence} = 'medium')
+              or (not ${t.patternSeen} and ${t.confidence} = 'low')))`,
+    ),
+    check(
+      "author_lookup_candidates_source_for_kind",
+      sql`(${t.kind} = 'guess' or ${t.sourceUrl} is not null)
+          and (${t.patternSeen} is distinct from true or ${t.sourceUrl} is not null)`,
+    ),
+    check(
       "author_lookup_candidates_address_normalised",
       sql`${t.address} = lower(btrim(${t.address})) and ${t.address} like '%_@_%'`,
     ),
