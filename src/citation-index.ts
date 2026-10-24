@@ -460,7 +460,12 @@ async function resolveDeps(deps: CitersDeps): Promise<Resolved> {
 type Got = { kind: "json"; json: unknown } | { kind: "missing" | "too-large" | "unavailable" };
 
 /** `id` is what the log names: the cache key, or `title` for a search, whose address is never logged. */
-async function get(id: CitersKey | "title", what: "work" | "citers" | "search", url: string, d: Resolved): Promise<Got> {
+async function get(
+  id: CitersKey | "title",
+  what: "work" | "citers" | "search" | "situate-citers",
+  url: string,
+  d: Resolved,
+): Promise<Got> {
   const turn = await inServiceTurn("openalex", { store: d.limiter, sleep: d.sleep }, async (waitMs): Promise<Got> => {
     const started = Date.now();
     try {
@@ -535,6 +540,49 @@ async function searchByTitle(
   if (match === null) return { kind: "unavailable" };
   if (match.kind === "none") return { kind: "no-match" };
   return { kind: "match", key: `openalex:${match.target.openalexId.toLowerCase()}` as CitersKey, target: match.target };
+}
+
+/* ------------------------------------------- for Situate (src/situate-citers.ts) -- */
+
+/**
+ * **The OpenAlex work confirmed to be this article**, by exactly the path
+ * `citersOf` takes — the DOI's record with its title and an author checked, or
+ * the one title-search match — and **nothing cached**. For Situate's own
+ * question of the citers (plan 261024o, GPT Sol's S6): it wants their abstracts,
+ * which neither `Citer` nor this module's cache holds, so it asks its own page
+ * rather than widening either.
+ */
+export async function confirmedWorkOf(
+  article: ArticleIdentity,
+  deps: CitersDeps = {},
+): Promise<
+  | { kind: "confirmed"; key: CitersKey; target: CitedTarget & { title: string } }
+  | { kind: "no-doi" | "not-indexed" | "unconfirmed" | "no-match" | "unavailable" | "too-large" }
+> {
+  const id = citersIdOf(article);
+  const query = id === null ? searchableTitle(article) : null;
+  if (id === null && query === null) return { kind: "no-doi" };
+  const d = await resolveDeps(deps);
+  if (id === null) {
+    const searched = await searchByTitle(query ?? "", article, d);
+    return searched.kind === "match" ? { kind: "confirmed", key: searched.key, target: searched.target } : searched;
+  }
+  const work = await askWork(id, article, d);
+  if (work.kind === "confirmed") return { kind: "confirmed", key: id, target: work.target };
+  return work.kind === "found" ? { kind: "unavailable" } : work;
+}
+
+/**
+ * **One OpenAlex request in its polite turn** — the shared limiter, the
+ * cooling after a 429, the bounded log — for a caller asking its own question.
+ * `key` is what the log names; the address is never logged.
+ */
+export async function openAlexInTurn(
+  key: CitersKey,
+  url: string,
+  deps: CitersDeps = {},
+): Promise<{ kind: "json"; json: unknown } | { kind: "missing" | "too-large" | "unavailable" }> {
+  return get(key, "situate-citers", url, await resolveDeps(deps));
 }
 
 /** How the list was reached. The panel says so when it was by title. */

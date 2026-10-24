@@ -68,6 +68,9 @@ export const STEP_READS: Partial<Record<StepName, readonly StepName[]>> = {
   /* Not a main mode, so no import job carries it: a Bibliography's
      publication queues it (plan 261017h). Here because the copy must be whole. */
   "citation-blurbs": ["bibliography"],
+  /* Not a main mode either: the owner's press makes it (plan 261024o). Here
+     because the copy must be whole. */
+  situate: ["bibliography", "citation-blurbs"],
 };
 
 /**

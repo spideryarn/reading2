@@ -134,6 +134,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "scripts/spike-book-structure.ts": "a one-off spike that sends production's own structure prompt",
   "scripts/matter-eval.ts": "an eval that sends production's own matter prompt, through classifyMatter",
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
+  "scripts/spikes/261024b-situate-spike.ts":
+    "a one-off spike whose findings no reader sees; the step it led to, src/situate.ts, carries the rule",
   "scripts/eval-pdf-chunk-size.ts":
     "an eval that runs production's own PDF readers and their prompts, unchanged",
   "scripts/probes/260930d-quote-stop-repro.ts":

@@ -166,6 +166,8 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   /* Judged on the Bibliography's rows, not the article: none of the moves
      below reaches it (plan 261017h stage 3). */
   "citation-blurbs": ["inputHash", "promptVersion", "model"],
+  /* The article the read was sent, as `sources-claims` (plan 261024o). */
+  situate: ["inputHash", "promptVersion", "model"],
   crossrefs: ["inputHash", "promptVersion", "model"],
 };
 
@@ -361,6 +363,8 @@ function minimal(step: StepName): Artefact {
       return { status: "ok", version: "to be stamped", generator: "labels", sourceHash: "to be stamped", stretches: [] };
     case "citation-blurbs":
       return { ...made, entries: {}, counts: {} };
+    case "situate":
+      return { ...made, profileHash: null, findings: [] };
     case "reception":
       return { ...made, direct: { rows: [] }, claims: { rows: [] } };
     case "sketch":
@@ -858,6 +862,7 @@ describe("when the article itself moves, every step gets the same answer from bo
     "reception",
     "sources-claims",
     "bibliography",
+    "situate",
     "crossrefs",
   ];
   const without = (steps: readonly StepName[], ...drop: StepName[]) =>
@@ -920,11 +925,11 @@ describe("when the article itself moves, every step gets the same answer from bo
       async () => {
         const { stale, disagree } = read(await askAll());
         expect(disagree).toEqual({});
-        /* `relations`, `simple` and `debate-claims` send the paragraphs
-           without the section titles; `skim` lays its route over them.
-           `labels` and `assets` hash the blocks alone. */
+        /* `relations`, `simple`, `debate-claims` and `situate` send the
+           paragraphs without the section titles; `skim` lays its route over
+           them. `labels` and `assets` hash the blocks alone. */
         expect(stale).toEqual(
-          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims"), "skim"]),
+          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims", "situate"), "skim"]),
         );
       },
     );
