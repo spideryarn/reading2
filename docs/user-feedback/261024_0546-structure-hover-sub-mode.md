@@ -5,7 +5,7 @@ comment: On dev, behind the experimental switch. Structure's third chip, Hover, 
 ---
 # Structure's Hover sub-mode: pointing at a row goes there
 
-Report `spya-kaxamm` (#677), a suggestion from Greg (`feedback-reporter.ts` exit 0, no addenda when
+Report `spya-kaxamm` (#677, SPIDERYARN-READING2-N9), a suggestion from Greg (`feedback-reporter.ts` exit 0, no addenda when
 re-read before this note), passing on a friend's wish to move around Structure by hovering instead
 of clicking. Session `fbkaxamm-structure-hover`.
 
