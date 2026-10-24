@@ -156,6 +156,37 @@ describe("Help's one box, signed in", () => {
     }
   });
 
+  it("grows with its words and never scrolls itself (spya-p8h7r3)", () => {
+    /* Greg, 2026-10-23: *"The input box for when I ask a question doesn't
+       seem to expand. It stays pretty small."* The one fit every other box
+       that grows uses (useFitTextarea.ts). jsdom lays nothing out, so the
+       height a browser would measure is given here, as the quiz's test does. */
+    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get(this: HTMLTextAreaElement) {
+        return this.value.length > 100 ? 240 : 40;
+      },
+    });
+    try {
+      mountAt("/help");
+      type("x".repeat(400));
+      expect(box().style.height).toBe("240px");
+      /* Shorter again, it shrinks: `auto` first, or it could only grow. */
+      type("heat");
+      expect(box().style.height).toBe("40px");
+      /* No scroller of its own, and no drag handle to fight the fit. */
+      expect(box().className).toContain("tw:overflow-hidden");
+      expect(box().className).toContain("tw:resize-none");
+      /* Emptied, the rows decide: an empty textarea's `scrollHeight` counts a
+         wrapped placeholder in Chrome (ChatPanel.tsx says so of the composer),
+         which would grow the untouched box past its two rows. */
+      type("");
+      expect(box().style.height).toBe("");
+    } finally {
+      delete (HTMLTextAreaElement.prototype as { scrollHeight?: number }).scrollHeight;
+    }
+  });
+
   it("lists the matching pages as you type, and sends nothing until asked", async () => {
     mountAt("/help");
     type("heat");
