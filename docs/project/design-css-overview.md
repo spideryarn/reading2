@@ -328,8 +328,9 @@ will eventually have to decide whether they are a system or an accident:
   be allowed to wrap; the reading view's columns are given up in JavaScript rather than at a
   breakpoint; and `env(safe-area-inset-*)`, every value of which is `0px` on every machine we
   develop on.
-- **[design-logo.md](design-logo.md)** — the faceless yarn reader, its source artwork, theme/size
-  treatments and regeneration command; then the wordmark's hover/loading animations and the ways
+- **[main-icon.md](main-icon.md)** — the reading-spider artwork, source history, full-family
+  regeneration and native-size/theme/zoom review before an update lands.
+- **[design-logo.md](design-logo.md)** — the wordmark's hover/loading animations and the ways
   an effect can silently do nothing.
 - **[loading-spinner.md](loading-spinner.md)** — the two spinners and which a wait gets: the
   wordmark, running two of its hover animations at once, for a whole page waiting; `LoaderCircle`

@@ -1,6 +1,6 @@
 # The reading spider: intent, exploration and selection
 
-Parent: [Investigations](../project/investigations.md). Current artwork and regeneration: [design-logo.md](../project/design-logo.md#identity-and-asset-regeneration). Implementation plan: [261024a](../plans/261024a-eight-limbed-reading-spider-brand-assets.md).
+Parent: [Investigations](../project/investigations.md). Current artwork and regeneration: [main-icon.md](../project/main-icon.md). Implementation plan: [261024a](../plans/261024a-eight-limbed-reading-spider-brand-assets.md).
 
 ## What Greg wanted
 
@@ -66,7 +66,7 @@ Following [third-party-library-selection.md](../reusable/third-party-library-sel
 
 On 2026-10-24, registry metadata reported `png-to-ico` **3.0.2**, Node >=20, with `pngjs`, `minimist` and Node types as dependencies; `favicons` **7.3.1**, Node >=20, adds `sharp`, XML and HTML helpers. The [png-to-ico upstream API](https://github.com/steambap/png-to-ico#usage) accepts an array of exact-size PNG frames. The [favicons API](https://github.com/itgalaxy/favicons#usage) covers a much broader platform family. **Decision:** reuse canvas and add the small, established `png-to-ico` dev dependency for the actual missing format operation. No second native raster stack, custom ICO codec, or whole favicon-platform configuration was needed.
 
-The source-to-assets command and current background/padding policy have one home in [design-logo.md](../project/design-logo.md#identity-and-asset-regeneration). Repeat runs are checked byte-for-byte in the recorded environment. Social-card rendering retains its existing browser/font prerequisite, so cross-OS screenshot byte identity is not promised.
+The source-to-assets command and current background/padding policy have one home in [main-icon.md](../project/main-icon.md). Repeat runs are checked byte-for-byte in the recorded environment. Social-card rendering retains its existing browser/font prerequisite, so cross-OS screenshot byte identity is not promised.
 
 ## Validation record
 

@@ -6,6 +6,10 @@
   "scripts": {
     "test": "vitest run",
     "brand:generate": "tsx scripts/generate-brand-assets.ts",
+    "brand:og": "tsx scripts/make-og-card.ts",
+    "brand:animation-preview": "tsx scripts/preview-logo-animation.ts",
+    "brand:update": "npm run brand:generate -- --preview && npm run brand:animation-preview && npm run brand:og",
+    "brand:check": "npm run brand:generate -- --check --preview && npm run brand:animation-preview -- --check && npm test -- --project unit tests/brand-assets.test.ts tests/brand-animation-preview.test.ts tests/semaphore-geometry.test.ts tests/logo-animation.test.tsx tests/logo-loader.test.tsx tests/site-wordmark-mark.test.tsx tests/og-card.test.ts tests/site-pages.test.ts tests/doc-links.test.ts tests/auth-email-templates.test.ts",
     "worktree:setup": "node scripts/worktree-setup-bootstrap.mjs",
     "worktree:sweep": "tsx scripts/worktree-sweep.ts",
     "worktree:check": "tsx scripts/worktree-check.ts",
