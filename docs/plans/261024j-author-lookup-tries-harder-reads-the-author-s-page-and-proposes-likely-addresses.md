@@ -196,5 +196,5 @@ place, each with a test, and every fix was kept:
    dev; on the shared local database the two checks were added by hand.
 9. A test now holds that choosing an address closes an open Send confirmation and only PATCHes.
 
-Not ours, noted for 261024f: `tests/owner-isolation.test.ts` flags `previewAuthorGiftEmail`'s join
-on `articles.slug` (it also checks the owner, so it is the guard's regex, not a leak).
+Not ours: `tests/owner-isolation.test.ts` was red on `previewAuthorGiftEmail`'s join on
+`articles.slug` from 261024f; dev fixed it before this landed.
