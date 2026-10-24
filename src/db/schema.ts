@@ -4797,7 +4797,9 @@ export const chatThreads = spideryarn.table(
        `quiz`, so this also covers "no mode, no origin". */
     check(
       "chat_threads_origin_quiz_only",
-      sql`(${t.originBatchId} is null and ${t.originAttemptId} is null) or ${t.originMode} = 'quiz'`,
+      /* `is not distinct from`, not `=`: with no mode, `= 'quiz'` is null,
+         and a CHECK that is null passes, so a batch with no mode got in. */
+      sql`(${t.originBatchId} is null and ${t.originAttemptId} is null) or ${t.originMode} is not distinct from 'quiz'`,
     ),
     /* **The mark, with its batch and question, on this article** — so the
        copies the row keeps for the way back cannot disagree with the attempt.

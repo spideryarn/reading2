@@ -33,7 +33,7 @@
 import { act, createElement, StrictMode, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, Quiz, QuizQuestion } from "../src/types.js";
+import type { BlockId, Quiz, QuizOrigin, QuizQuestion, ThreadSummary } from "../src/types.js";
 import type { Attempt, UseQuiz } from "../src/web/useQuiz.js";
 import type { ReadSoFar } from "../src/web/read-filter.js";
 import { STARTING } from "../src/job-state.js";
@@ -2001,5 +2001,68 @@ describe("discuss a mark in chat", () => {
     expect(buttons("Discuss this in chat")).toHaveLength(0);
     paintWith(owner({ quiz: batch([Q]), attempt: attempt({}) }), false);
     expect(buttons("Discuss this in chat")).toHaveLength(0);
+  });
+
+  /* Plan 261024i, stage 2 (Greg's B on q-nvxfwx): the press names the mark
+     it is about, and the mark's chat is shown on it, and on no other mark. */
+  const ATTEMPT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+  const sent: (QuizOrigin | null)[] = [];
+  const opened: string[] = [];
+  function paintChats(o: UseQuiz, summaries: ThreadSummary[]) {
+    act(() => {
+      root.render(
+        createElement(QuizPanel, {
+          owner: o,
+          blocks: BLOCKS,
+          onJump: () => {},
+          onDiscuss: (_seed: string, origin: QuizOrigin | null) => sent.push(origin),
+          chats: { summaries, onOpen: (id: string) => opened.push(id) },
+        }),
+      );
+    });
+  }
+  const chatAbout = (attemptId: string, id = "spya-aaa333"): ThreadSummary => ({
+    id,
+    title: `Quiz: ${Q.question}`,
+    createdAt: "2026-10-24T10:00:00.000Z",
+    updatedAt: "2026-10-24T10:00:00.000Z",
+    kind: "chat",
+    turns: 2,
+    gist: "Why the answer was only half right.",
+    origin: { mode: "quiz", batchId: "spya-batch1", itemId: Q.id, attemptId, quote: Q.question },
+  });
+
+  it("hands chat the mark's origin: its batch, its question and its attempt", () => {
+    sent.length = 0;
+    paintChats(owner({ quiz: batch([Q]), attempt: attempt({ attemptId: ATTEMPT }) }), []);
+    press("Discuss this in chat");
+    expect(sent).toEqual([
+      { mode: "quiz", batchId: "spya-batch1", itemId: Q.id, attemptId: ATTEMPT, quote: Q.question },
+    ]);
+  });
+
+  it("hands no origin for a mark that was not stored", () => {
+    sent.length = 0;
+    paintChats(owner({ quiz: batch([Q]), attempt: attempt({ notSaved: true }) }), []);
+    press("Discuss this in chat");
+    expect(sent).toEqual([null]);
+  });
+
+  it("shows the mark's chat in place of the button, and opens it", () => {
+    opened.length = 0;
+    paintChats(owner({ quiz: batch([Q]), attempt: attempt({ attemptId: ATTEMPT }) }), [chatAbout(ATTEMPT)]);
+    expect(buttons("Discuss this in chat")).toHaveLength(0);
+    expect(host.textContent).toContain("Why the answer was only half right.");
+    press("Open the chat about this mark");
+    expect(opened).toEqual(["spya-aaa333"]);
+  });
+
+  it("does not show an earlier answer's chat on a new mark", () => {
+    paintChats(
+      owner({ quiz: batch([Q]), attempt: attempt({ attemptId: ATTEMPT }) }),
+      [chatAbout("7f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b")],
+    );
+    expect(buttons("Open the chat about this mark")).toHaveLength(0);
+    expect(buttons("Discuss this in chat")).toHaveLength(1);
   });
 });

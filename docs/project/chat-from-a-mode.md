@@ -45,6 +45,7 @@ remains.
 | Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work) |
 | Sources › Bibliography | a cited work's hover card in the prose, in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (`onAskCitedWork`) | [bibliography.md § Marked in the prose](bibliography.md#marked-in-the-prose-in-every-mode) |
 | Ideas | the open idea, under its passages (since 2026-10-09) | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton`, drawn by [`IdeasPanel.tsx`](../../src/web/IdeasPanel.tsx) § `IdeaRow` | [ideas.md § Asking about an idea in chat](ideas.md#asking-about-an-idea-in-chat) |
+| Learn › Quiz | a finished mark's step row, *Discuss this in chat* (since 2026-10-24; it waits in the composer rather than sending) | [`QuizPanel.tsx`](../../src/web/QuizPanel.tsx) § `QuizPanel` | [quiz.md § On screen](quiz.md#on-screen) |
 
 The rows and the angle box draw the way back with `OriginChatMark` from the same file; a hover card
 draws no mark (it has no room, and the entry or row it opens has one), and its button reopens the
@@ -58,9 +59,15 @@ Timeline, Quotes, FAQ and Skim have no such button (checked 2026-10-09: none of 
 glossary or the ideas or anything like that"* (plan 261009k); the other three wait on a queue item,
 and FAQ first needs an id that survives a re-run.
 
-Four things look like this and are not: Quiz's *Discuss this in chat* on a mark
-([quiz.md § On screen](quiz.md#on-screen)), which, like Summary's, waits in the composer and stores
-no origin; Summary's *Ask about a paragraph*
+**Quiz's origin is not an item's.** A question id is minted per batch and repeats after *Write
+them again*, and a question can be answered many times, so a Quiz chat is about **one mark**: one
+row of `quiz_attempts`. `QuizOrigin` stores the batch, the question and the attempt, the route
+writes its quote from that row, and a composite key holds all three to it
+(`chat_threads_origin_quiz_attempt_fk`). A new answer is a new mark and a new chat; the way back
+lands on the question while its batch is current, and on Quiz's start once it is not. Plan
+[261024i](../plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md) § Stage 2.
+
+Three things look like this and are not: Summary's *Ask about a paragraph*
 ([summaries.md](summaries.md#ask-about-a-paragraph-since-2026-10-04)) goes to Chat and stores no
 origin (`summary` is reserved in the database CHECK and not built, and since 2026-10-09 the CHECK
 `chat_threads_origin_summary` lets it carry none of the shape columns); a chat about a passage has an

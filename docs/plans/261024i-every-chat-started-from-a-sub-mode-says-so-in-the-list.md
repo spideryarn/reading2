@@ -250,16 +250,41 @@ including the export (inherits `originFromColumns`), the test seeder, `CHAT_FROM
 `learn` is already a word), the help page, quiz.md (*a plain chat: no origin is stored* is no
 longer true) and the table in chat-from-a-mode.md.
 
+### GPT Sol's review of the rewrite, and what changed
+
+[261024i-…-stage2-plan-review-sol.md](261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list-stage2-plan-review-sol.md):
+*revise before build*. It found the attempt identity, `sameOrigin` by attempt and the composite
+key sound, and the `from: "learn"` row safe (no `learn` field, so it opens in Chat).
+
+| Finding | What changed |
+|---|---|
+| F1 (blocker): a waiting draft is not registered, so a second press before sending makes a second draft | **Not taken, with the reason in `Reader.tsx` § `discussQuizMark`.** An unsent draft is not a stored chat; to press Discuss again the reader must leave Chat for Quiz, and leaving Chat re-reads the summaries the reopen looks in. So no mark gets two *stored* chats. What is left is a second draft replacing an unsent first one, which is how Discuss and Summary's paragraph button already behave. Registering waiting drafts would need a lifecycle that follows `moveThread` and server id corrections, which is more machinery than the case is worth |
+| F2 (blocker): the rollback export omits the attempt's id, and the seeder restores no attempts | The export writes each attempt's `id`. The seeder is left as it is: it reads the old file fixtures, none of which has a quiz attempt, and a Quiz-origin thread with no attempt is refused **loudly** by the key, not lost silently. A test exports and re-seeds a Quiz chat over its attempt |
+| F3: the route trusts the request's quote | Taken: the route reads the attempt (`quizAttemptStore.questionOf`) and writes `originName(attempt.question)`. A forged quote is replaced, tested |
+| F4: test the deletes, not only the transfer order | Taken: deleting a discussed attempt alone is refused; deleting the article takes both in one statement; `READER_STATE` deletes threads before attempts |
+| F5: Quiz-specific test arms, not the generic lists | Taken: see Tests below |
+
+**Found while building**: `chat_threads_origin_quiz_only` as first written (`… or origin_mode = 'quiz'`)
+let a row with a batch id and **no** mode through, because with a null mode the comparison is null
+and a null CHECK passes. The test went red on it; the second migration
+(`20261024132149_chat_thread_origin_quiz_only_null_mode`) makes it `is not distinct from`.
+
 ## Tests (red first)
 
 - Stage 1: `tests/thread-source.test.ts` covers `place` for every origin and Learn kind, and none
   for a passage. `originBack` is unchanged for the existing origins. A rendered list
   (`tests/chat-panel*.test.tsx`, whichever already renders rows with sources) shows *Investigate*
   in a lens row's meta line, and no second *Recall* on a Learn row.
-- Stage 2: add `quiz` to the `describe.each` lists in `thread-origin-way-back`,
-  `chat-origin-route`, `chat-origin-transaction` and `chat-handoff`. Add a rendered test: Discuss
-  puts the origin on the pending draft, so sending saves it. The step then shows the mark, and a
-  second press makes a second chat.
+- Stage 2 (as built; the first draft said to add `quiz` to the item `describe.each` lists, which
+  Sol's F5 rightly refused): `tests/thread-origin-way-back.test.ts` § *a quiz mark's origin*
+  (identity by attempt, two batches sharing a question id, the columns both ways, half a mark);
+  `tests/thread-source.test.ts` (*Quiz* under Learn with no `learn`; `originBack`);
+  `tests/chat-origin-route.test.ts` § *a quiz mark's origin* (stored and summarised, the quote
+  from the row, an unknown or mismatched attempt a 400, a malformed one, the 409, the CHECKs and
+  the key, the deletes, export and re-seed); `tests/quiz-attempts-route.test.ts` (`done` and the
+  read carry `attemptId`); `tests/quiz-panel.test.tsx` § *discuss a mark in chat* (the press hands
+  the origin, or none for an unkept mark; the mark's chat replaces the button and opens; an
+  earlier answer's chat is not shown).
 
 ## Progress
 
@@ -267,7 +292,10 @@ longer true) and the table in chat-from-a-mode.md.
 - [x] Stage 1: `originPlace` in `thread-source.ts`, `place` on `ThreadSource`, the word in the
       row's meta line (`ChatPanel.tsx`), the help page. Red first in
       `tests/chat-list-sources.test.tsx` § *a row's place, in words*
-- [ ] ~~Stage 2~~: deferred to `qi-g3neq83r` / `q-nvxfwx`
+- [x] ~~Stage 2~~: deferred to `qi-g3neq83r` / `q-nvxfwx`, and **built on 2026-10-24** after
+      Greg chose B (`qi-t5nvqqen`): plan reviewed by Sol (above), two migrations
+      (`20261024131907_chat_thread_origin_quiz`, `20261024132149_chat_thread_origin_quiz_only_null_mode`),
+      docs (chat-from-a-mode.md, quiz.md, chat-tools.md, the Learn and Chat help pages)
 - [x] Browser pass on the box (Sonnet, Playwright): a real Investigate chat's row reads
       *Investigate · 1 turn · just now* at 1440 and at 390, with no overflow and no console
       errors. Shots: `261024i-shot-1-wide.png`, `261024i-shot-2-narrow.png`

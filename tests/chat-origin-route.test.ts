@@ -982,7 +982,12 @@ describe("a quiz mark's origin", () => {
   });
 
   it("goes with its article, chat and attempt in one statement", async () => {
-    const doomed = await scratchArticleInPg(`${SLUG}-quiz-doomed`, { ownerId: TEST_OWNER });
+    /* The loader stores the raw source, which needs the real fetch. */
+    const stub = globalThis.fetch;
+    globalThis.fetch = realFetch;
+    const doomed = await scratchArticleInPg(`${SLUG}-quiz-doomed`, { ownerId: TEST_OWNER }).finally(() => {
+      globalThis.fetch = stub;
+    });
     try {
       const { id } = await asTestOwner(() =>
         quizAttemptStore.record(doomed.slug, {
