@@ -437,8 +437,36 @@ describe("addenda nothing covers (261010o)", () => {
 
   it("says addenda are not deployed, and still lists the reports, before the table exists (F4)", () => {
     const lines = renderListing({ reports: [row("spya-aaaaaa")], addenda: null }, [], [], SINCE, () => false);
-    expect(lines.at(-1)).toBe(ADDENDA_NOT_DEPLOYED);
+    expect(lines.at(-2)).toBe(ADDENDA_NOT_DEPLOYED);
+    expect(lines.at(-1)).toBe("unswept: 1 report, addenda not deployed (since 2026-10-01T00:00:00.000Z)");
     expect(lines.join("\n")).toContain("spya-aaaaaa");
+  });
+
+  /* The Overseer read the listing through `tail`, saw only the addenda, and
+     missed 17 reports (Greg, 2026-10-24). The last line carries both counts. */
+  it("ends with one line counting the unswept reports and addenda, so a trimmed view still shows them", () => {
+    const lines = renderListing(
+      {
+        reports: [
+          row("spya-aaaaaa"),
+          row("spya-dddddd"),
+          row("spya-eeeeee", { ignoredAt: new Date("2026-10-02") }),
+          row("spya-cccccc"),
+        ],
+        addenda: [addendum("spya-bbbbbb"), addendum("spya-ffffff")],
+      },
+      [addendaNote("covered.md", "spya-cccccc", "spya-ffffff")],
+      [],
+      SINCE,
+      () => false,
+    );
+    expect(lines.at(-1)).toBe("unswept: 2 reports, 1 addendum (since 2026-10-01T00:00:00.000Z)");
+    expect(lines.filter((line) => line.startsWith("unswept: "))).toHaveLength(1);
+    expect(lines.some((line) => line.includes("spya-eeeeee"))).toBe(false);
+    expect(lines.some((line) => line.includes("spya-cccccc"))).toBe(false);
+    expect(lines.some((line) => line.includes("addendum spya-ffffff"))).toBe(false);
+    const none = renderListing({ reports: [], addenda: [] }, [], [], SINCE, () => false);
+    expect(none.at(-1)).toBe("unswept: 0 reports, 0 addenda (since 2026-10-01T00:00:00.000Z)");
   });
 
   it("reads the reports and their addenda in one read-only transaction, the table probed first", async () => {
