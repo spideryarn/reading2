@@ -25,6 +25,9 @@ ruled out. It links to the plan and the raw results rather than copying their ta
 The files are not indexed here; list the directory. A few that show the shape, mostly of a prompt
 measured with scripted readers and a blind judge:
 
+- [261024b](../investigations/261024b-situate-spike-searches-into-one-read-cost-and-quality.md) — sixteen
+  Exa searches and one Sonnet read situate a paper for $0.35–0.55; Haiku is an eighth of the price
+  and loses quotes
 - [261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md) — Tutorial's prompt
   weighted towards the author, old against new, with the old run twice as the control.
 - [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md) —
