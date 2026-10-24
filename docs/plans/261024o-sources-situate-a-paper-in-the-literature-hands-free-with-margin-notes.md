@@ -270,3 +270,40 @@ GPT Sol on the first version, read-only, 2026-10-24:
 | S12 P2 | a seventh chip is not needed for the value | taken: the dossier is in Investigate |
 | S13 P2 | the second breakpoint's saving was asserted, not measured | one breakpoint after the article, as the spike measured; no dive |
 | S14 P2 | Sonnet and the ordinary cost overclaimed | Sonnet provisional; cost quoted as measured, $0.36–0.52 |
+
+### Code reviews, one per stage
+
+- **Stage 1** — [261024o-stage1-code-review-sol.md](261024o-stage1-code-review-sol.md): seven fixed
+  (bare hosts and IPs out of queries; a source quote must sit inside one passage; licence
+  boilerplate is not support; ids stable under source reordering; addresses and ids stripped from
+  model prose; duplicate-source counting; two comments). C8, that a quote found in a source proves
+  provenance and not that it supports the note, is deferred below.
+- **Stage 2** — [261024o-stage2-code-review-sol.md](261024o-stage2-code-review-sol.md): an
+  unchecked stored `href` (now `isWebUrl` at the sink), the disclosure and privacy page made to
+  match what stage 1 sends. D4, a finding's chat found by its question text, is deferred below.
+- **Stage 3** — [261024o-stage3-code-review-sol.md](261024o-stage3-code-review-sol.md): the margin's
+  `href` guarded the same way; arriving at a finding no longer also reopens the newest chat.
+
+## What the build changed from the plan
+
+- **The dossier sits under Investigate's question box**, not above it: a long dossier above the box
+  would push the box and the questions off the band.
+- **The margin's jump is an *Open in Sources* button** in the opened note, not the stamp: the stamp is
+  inside the shut line's one toggle button, and a button cannot hold another. Landing uses
+  `ItemFocus` / `useLandOnItem` on the finding's id; no URL parameter.
+- **When everything comes back empty**: fewer than half the searches ran fails first; then no page
+  at all is stored as `outcome: "nothing-found"` with no read; only then does a claims group with
+  nothing found fail. A search with no extract is `empty`, not `found`.
+- **A read whose findings all fail the checks is still stored**, with its counts: we paid for it.
+- **The stale banner's dismissal lasts one page view**: `situate` is not in `STALE_NOTICE_MODES`.
+- **The migration was renumbered** from `20261024085240` to `20261024125429` before any database
+  applied it, because a peer's unlanded migration stamped in between was already on the shared
+  local database.
+
+## Deferred from the build
+
+- **A finding's chat is matched by its question text, not its id** (Sol D4). After *Search again*
+  rewords a note, that finding loses its open-chat mark and a second chat can be started; the
+  first is still listed under *Your questions*. The fix is a finding id in the chat origin.
+- **Support, not only provenance** (Sol C8): a checked quote proves the words are in the source,
+  not that they bear out the note. Stage 4's hand check measures how often that matters.

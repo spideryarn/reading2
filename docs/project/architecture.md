@@ -57,6 +57,9 @@ then where the data lives.
   or still hotlinked, or you are changing how we fetch and host them.
 - **[ingest-queue.md](ingest-queue.md)** — a job is stuck, skipped a step or ran one twice; or you
   are adding a step, since the queue is how every stage runs.
+- **[chrome-extension.md](chrome-extension.md)** — the Chrome extension that adds the page in a tab
+  as the browser shows it: the handoff to a signed-in tab, why it holds no secret, and publishing
+  and updating it in the Chrome Web Store.
 - **[ai-gateway.md](ai-gateway.md)** — before writing any code that calls a model: the two wires,
   which provider each job is pinned to, how a stream's ending is judged, and the things on that path
   that fail without saying so.

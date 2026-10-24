@@ -27,9 +27,11 @@ import type {
   IdeaProvenance,
   MarginNote,
   Relation,
+  SituateFinding,
   TimelineEvent,
   Tree,
 } from "../../types.js";
+import { SITUATE_FINDING_KINDS, SITUATE_STRENGTHS } from "../../types.js";
 import type { PublicClaimReceptionRow, PublicComment } from "../../public-types.js";
 import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
@@ -90,6 +92,10 @@ export type MarginaliaNote =
   | { kind: "timeline"; items: { event: TimelineEvent; quote: string }[] }
   /** Pages on the web that answer a claim made in this block. */
   | { kind: "reception"; items: MarginClaim[] }
+  /** What a search of the literature found about this block (Situate, plan
+      261024o), strongest first (`strongestFirst`). Owner only, behind the
+      experimental switch — the caller's rule. */
+  | { kind: "literature"; items: LiteratureItem[] }
   /** Works first cited in this block. Owner only — the caller's rule. */
   | { kind: "citation"; items: CitedWork[] }
   /** The reader's own comments on this block, and the questions they asked
@@ -105,6 +111,12 @@ export type MarginaliaNote =
 export type MarginEntry =
   | { as: Exclude<CommentKind, "bookmark" | "highlight">; comment: MarginComment }
   | { as: "question"; asked: AskedQuestion };
+
+/** One finding beside its block, with when the search that found it ran — its card says when. */
+export type LiteratureItem = { finding: SituateFinding; searchedAt: string };
+
+/** Situate's findings and when they were searched, as the margin is handed them. */
+export type MarginLiterature = { findings: readonly SituateFinding[]; searchedAt: string };
 
 /**
  * **What other modes have already stored**, each already filtered by the caller
@@ -122,6 +134,8 @@ export type MarginSources = {
   relations?: Readonly<Record<BlockId, Relation>> | null;
   /** The notes the same call wrote — the owner's only, as the words are. */
   notes?: readonly MarginNote[] | null;
+  /** Situate's findings — the owner's only, with the experimental switch on (plan 261024o). */
+  literature?: MarginLiterature | null;
 };
 
 type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
@@ -129,7 +143,32 @@ type GroupedItems = Partial<{
   [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"];
 }>;
 /** The order the kinds are drawn in below the question and the stamps. */
-const GROUPED_ORDER = ["faq", "timeline", "reception", "citation", "comment"] as const;
+const GROUPED_ORDER = ["faq", "timeline", "reception", "literature", "citation", "comment"] as const;
+
+/* Positions in the two closed lists; a word off either (a newer server) sorts last. */
+const rankOf = (list: readonly string[], value: string): number => {
+  const at = list.indexOf(value);
+  return at === -1 ? list.length : at;
+};
+
+/**
+ * **The findings on one block, strongest first** — `strong` before
+ * `suggestive`, then the dossier's order of kinds (`SITUATE_FINDING_KINDS`:
+ * *Challenged* before *Supported*), then the stored order, which is the
+ * step's own strongest-first. The first is the one a shut line stamps.
+ * Plan 261024o § Marginalia.
+ */
+export function strongestFirst<T extends Pick<SituateFinding, "strength" | "kind">>(findings: readonly T[]): T[] {
+  return findings
+    .map((finding, at) => ({ finding, at }))
+    .sort(
+      (a, b) =>
+        rankOf(SITUATE_STRENGTHS, a.finding.strength) - rankOf(SITUATE_STRENGTHS, b.finding.strength) ||
+        rankOf(SITUATE_FINDING_KINDS, a.finding.kind) - rankOf(SITUATE_FINDING_KINDS, b.finding.kind) ||
+        a.at - b.at,
+    )
+    .map(({ finding }) => finding);
+}
 
 /** Turn the placement accumulator into the discriminated notes the renderer consumes. */
 function inGroupedOrder(grouped: ReadonlyMap<BlockId, GroupedItems>): Map<BlockId, GroupedKind[]> {
@@ -386,6 +425,18 @@ function groupedNotes(
   }
   for (const row of more.claims ?? []) {
     if (holds(row.blockId, row.claimQuote)) put(row.blockId, "reception", row);
+  }
+  /* **A finding only while its quoted words are still in its block** — the
+     step re-found them when it ran, but a carried dossier can outlive an edit
+     to its block (`situate` is carried across a re-extraction, src/situate.ts).
+     Strongest first within the block, so the shut line stamps the strongest. */
+  const literature = more.literature;
+  if (literature) {
+    for (const finding of strongestFirst(literature.findings)) {
+      if (holds(finding.blockId, finding.quote)) {
+        put(finding.blockId, "literature", { finding, searchedAt: literature.searchedAt });
+      }
+    }
   }
   for (const work of more.citations ?? []) {
     const first = earliest(work.citedAt, (id) => id, () => true);

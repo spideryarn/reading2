@@ -159,6 +159,9 @@ const STAMP = { version: "test", generator: "test", slug: SLUG, sourceHash: "has
 const AT = { blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 };
 const HASH = "a".repeat(64);
 
+/** Situate's finding note, named apart so the body below can read it. */
+const SAYS_SITUATE = "A replication in Leiden found the calibration drifted";
+
 const SAYS = {
   faq: "Why trust a rig nobody could yet explain?",
   simple: "A short one about the rig.",
@@ -174,6 +177,7 @@ const SAYS = {
   quiz: "What was built before it could be explained?",
   illustrated: "The rig, painted",
   sketch: "The calibrated rig",
+  situate: SAYS_SITUATE,
 } as const;
 
 const NO_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
@@ -447,6 +451,48 @@ const BODIES: Record<string, unknown> = {
     profileChanged: false,
   },
   arc: { arc: { ...STAMP, entries: [] }, stale: false },
+  /* Sources > Investigate's *Where this piece sits* (plan 261024o): the
+     owner's, behind the experimental switch, which `/api/reader` below has on.
+     One finding, whose note is what the band draws. */
+  situate: {
+    situate: {
+      ...STAMP,
+      version: "situate/1",
+      profileHash: null,
+      kind: "empirical",
+      year: 2020,
+      angle: "since",
+      outcome: "read",
+      overview: "The rig is still cited, and argued with.",
+      findings: [
+        {
+          id: "spya-sit234",
+          kind: "challenged",
+          blockId: "spya-bbbbbb",
+          quote: "The instrument was built before anybody",
+          note: SAYS_SITUATE,
+          strength: "strong",
+          sources: [
+            {
+              origin: "web",
+              url: "https://example.org/leiden",
+              title: "The Leiden replication",
+              quote: "We could not reproduce the calibration at all.",
+            },
+          ],
+        },
+      ],
+      questions: [],
+      searched: { queries: [], pages: 1, citers: 0, cited: 0 },
+      counts: {
+        written: 1, kept: 1, malformed: 0, unknownBlock: 0, unquoted: 0, unknownSource: 0, sourceUnquoted: 0,
+        noSource: 0, citationRule: 0, perBlock: 0, overCap: 0, duplicate: 0, queriesRefused: 0,
+      },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
 };
 
 /* ------------------------------------------------------------ the network -- */
@@ -554,6 +600,7 @@ const { useReceptionRead } = await import("../src/web/useReception.js");
 const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
 const { useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useSimple } = await import("../src/web/useSimple.js");
+const { useSituateRead } = await import("../src/web/useSituate.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -685,6 +732,9 @@ const ROWS: readonly Row[] = [
   },
   { hook: "useIllustrated.ts", kind: "illustrated", search: "?mode=diagram&diagram=illustrated", where: ".mode-band.diag" },
   { hook: "useSketch.ts", kind: "sketch", search: "?mode=diagram", where: ".mode-band.diag" },
+  /* Where this piece sits, at the top of Investigate (plan 261024o): the
+     owner's, with the experimental switch on (`/api/reader` above). */
+  { hook: "useSituate.ts", kind: "situate", search: "?mode=sources&sources=investigate", where: ".mode-band.investigate" },
 ];
 
 /**
@@ -1414,6 +1464,7 @@ const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => Artefact
   { kind: "quiz", use: useQuizRead },
   { kind: "illustrated", use: (slug) => useIllustrated(slug, BLOCKS) },
   { kind: "sketch", use: (slug) => useSketch(slug, BLOCKS.map((b) => b.id)) },
+  { kind: "situate", use: useSituateRead },
 ];
 
 it("the reads alone are the same twelve as the bands", () => {

@@ -72,7 +72,7 @@ import {
   type BlockLinkIndex,
 } from "./block-link-index.js";
 import { BlockExcerpt } from "./Excerpt.js";
-import { MARG_TIPS, isMargTipKey } from "./marginalia/tips.js";
+import { MARG_TIPS, isMargTipKey, margTipHow } from "./marginalia/tips.js";
 import type { Section } from "./position.js";
 import { SAFE_ID, spentWords } from "./reading-time.js";
 import { ControlTip } from "./Tooltip.js";
@@ -255,7 +255,8 @@ function contentFor(
     if (!isMargTipKey(key)) return null;
     const tip = MARG_TIPS[key];
     const words = cutWords(el);
-    return <ControlTip head={tip.head} what={tip.what} drawn={words?.text} drawnVoice={words?.voice} how={tip.how} />;
+    const how = margTipHow(tip, el.getAttribute("data-marg-when"));
+    return <ControlTip head={tip.head} what={tip.what} drawn={words?.text} drawnVoice={words?.voice} how={how} />;
   }
   /* A cross-reference's target comes from the resolver and only from there —
      never `data-block-link`, `data-block-missing` or `data-block-preview` off

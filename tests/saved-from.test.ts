@@ -13,7 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { savedFromInHtml } from "../src/saved-from.js";
 import { savedSource } from "../src/urls.js";
-import { savePageForSpideryarn } from "../src/web/save-page-bookmarklet.js";
+import { capturePage, savePageForSpideryarn } from "../src/web/save-page-bookmarklet.js";
 
 const page = (head: string, body = "<p>Prose.</p>") =>
   `<!doctype html><html><head><meta charset="utf-8"><title>T</title>${head}</head><body>${body}</body></html>`;
@@ -78,7 +78,7 @@ describe("savedFromInHtml", () => {
     win.HTMLAnchorElement.prototype.click = () => {};
     vi.useFakeTimers({ toFake: ["setTimeout"] });
     try {
-      savePageForSpideryarn(win, 50 * 1024 * 1024);
+      savePageForSpideryarn(win, 50 * 1024 * 1024, capturePage);
     } finally {
       vi.useRealTimers();
     }

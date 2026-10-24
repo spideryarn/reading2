@@ -40,6 +40,7 @@ for Reception and Claims. This page owns the merge.
 - [§ Not cited](#not-cited) — OpenAlex's search on the owner's press, less the bibliography, and why every row says "not among the works Spideryarn found"
 - [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
 - [§ Investigate](#investigate) — suggested questions and your own, each a chat with a web search; why a launcher and why the name
+  - [§ Where this piece sits](#where-this-piece-sits) — the experimental dossier at its top: one press, a planned search, findings anchored to passages
 - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
 - [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
 - [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one), and no Not cited or Investigate
@@ -239,6 +240,42 @@ The panel is [`src/web/InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx
 Tests: `tests/reception-lens.test.tsx` covers the panel, and `tests/reception-lens-in-chat.test.tsx`
 covers the whole journey with its one POST per press.
 
+### Where this piece sits
+
+**Since 2026-10-24, experimental**: a dossier at the top of Investigate, for the owner with the
+experimental switch on. One press, *Search the literature*, and the rest is automatic: a model plans
+a dozen or so web searches from the piece, they run, OpenAlex lists the later papers that cite it,
+and one read of all of it beside the whole article writes findings anchored to the passages they
+concern, every quote checked in code against the article and against the source it came from. The
+intent is Greg's direction for Sources, one place for "where does this piece sit" rather than
+another chip, and the deeper dive on any one finding is its *Ask in chat*.
+
+- **Before it has run**: the heading, one sentence of what it does, the button, and a line saying
+  what leaves — the piece to the AI through OpenRouter, the searches it writes to Exa through
+  OpenRouter, the DOI or title to OpenAlex, and the reader's profile or purpose only to the final AI read
+  ([privacy.md § Search the literature](privacy.md#search-the-literature)).
+  It is the dearest press in Sources, so arriving never starts it: the chip arms nothing, and the
+  hook has no automatic run.
+- **Done**: a head line (*A review from 2023: what has happened since*), the model's overview, and
+  the findings grouped by kind in the order a reader most needs them — Challenged, Citation?, Since,
+  Not cited?, Reception, Supported — each with its passage as a jump, the model's note, its sources
+  as links with *What it says* one press away, and *Ask in chat*. That sends a lens question, so
+  the chat is an Investigate chat listed under *Your questions*, and the finding then shows its
+  mark. The model's five questions sit above the fixed ones as *Suggested for this piece*.
+- **Found nothing** says so in those words, never as "all clear"; *What was searched*, folded at the
+  foot, lists each query and what came of it, and says that nothing found is not nothing there.
+- **Stale** gets the banner with *Search again*; its × lasts the page view only, because
+  `situate` is not yet in `STALE_NOTICE_MODES` (whose database check would need widening).
+  **Outdated** gets no banner, like every other Sources artefact. **Written for an older
+  profile** gets the usual `WrittenForYou` badge.
+
+Owner only, by construction: `InvestigateBand` in `SourcesMode.tsx` mounts `useSituate` only with
+the switch on, and a visitor's band has no Investigate. A margin kind for the same findings is the
+plan's next stage. The plan, with its research and review, is
+[261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md);
+the tests are `tests/situate-dossier.test.tsx`, and the switch on and off in
+`tests/reception-lens-in-chat.test.tsx`.
+
 ## The address, and old links
 
 `?mode=sources`, and `?sources=` names Bibliography, Not cited, Links, Reception, Claims or
@@ -421,6 +458,11 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   behind `GET` and `POST /api/related-work/:slug`.
 - [`src/web/outbound-links.ts`](../../src/web/outbound-links.ts) — Links' rows and the
   *In Bibliography* join.
+- [`src/web/SituateDossier.tsx`](../../src/web/SituateDossier.tsx),
+  [`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts) and
+  [`src/web/useSituate.ts`](../../src/web/useSituate.ts) — *Where this piece sits*, its words and
+  order, and its read and press; [`src/situate.ts`](../../src/situate.ts) — the step behind
+  `GET /api/situate/:slug` and the `situate` job.
 - [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)
   § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §
   `activationForSources`.

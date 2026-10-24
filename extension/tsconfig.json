@@ -1,0 +1,22 @@
+{
+  /* The Chrome extension's code: a service worker and what it imports, which
+     is src/web/save-page-bookmarklet.ts (the capture, shared with the
+     bookmarklet) and src/uploads.ts (the cap). Bundler resolution, because
+     esbuild builds it (scripts/build-extension.ts); the DOM libs, because the
+     capture runs in a page and the worker uses IndexedDB. The `chrome` global
+     is declared in src/background.ts for the nine calls it makes.
+
+     "include" and "exclude" are stated here, as every project states its own:
+     tsconfig.base.json says why. `npm run typecheck` finds this file by
+     walking the tree (scripts/typecheck.ts) and fails it if it checks nothing. */
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["src", "manifest.ts"],
+  "exclude": ["dist"]
+}
