@@ -314,7 +314,7 @@ describe("a quiz mark's origin", () => {
     originBatchId: null,
     originAttemptId: null,
   };
-  const ATTEMPT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+  const ATTEMPT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a03";
   const MARK: ThreadOrigin = {
     mode: "quiz",
     batchId: "spya-bat111",
@@ -325,7 +325,7 @@ describe("a quiz mark's origin", () => {
 
   it("is the same mark only when it is the same attempt", () => {
     expect(sameOrigin(MARK, { ...MARK, quote: "reworded" })).toBe(true);
-    expect(sameOrigin(MARK, { ...MARK, attemptId: "7f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b" })).toBe(false);
+    expect(sameOrigin(MARK, { ...MARK, attemptId: "7f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a03" })).toBe(false);
     expect(sameOrigin(MARK, { mode: "glossary", itemId: "spya-qqq111", quote: "x" })).toBe(false);
     expect(sameOrigin({ mode: "glossary", itemId: "spya-qqq111", quote: "x" }, MARK)).toBe(false);
   });

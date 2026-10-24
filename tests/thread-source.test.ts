@@ -120,7 +120,7 @@ describe("threadSource", () => {
       mode: "quiz",
       batchId: "spya-bat111",
       itemId: "spya-qqq111",
-      attemptId: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+      attemptId: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a04",
       quote: "What does the author mean by order?",
     };
     expect(threadSource(t("chat", { origin: mark }))).toEqual({
@@ -254,7 +254,7 @@ describe("originBack", () => {
         mode: "quiz",
         batchId: "spya-bat111",
         itemId: "spya-qqq111",
-        attemptId: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+        attemptId: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a04",
         quote: "Why order?",
       }),
     ).toEqual({

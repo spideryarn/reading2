@@ -2005,7 +2005,7 @@ describe("discuss a mark in chat", () => {
 
   /* Plan 261024i, stage 2 (Greg's B on q-nvxfwx): the press names the mark
      it is about, and the mark's chat is shown on it, and on no other mark. */
-  const ATTEMPT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+  const ATTEMPT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a02";
   const sent: (QuizOrigin | null)[] = [];
   const opened: string[] = [];
   function paintChats(o: UseQuiz, summaries: ThreadSummary[]) {
@@ -2060,7 +2060,7 @@ describe("discuss a mark in chat", () => {
   it("does not show an earlier answer's chat on a new mark", () => {
     paintChats(
       owner({ quiz: batch([Q]), attempt: attempt({ attemptId: ATTEMPT }) }),
-      [chatAbout("7f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b")],
+      [chatAbout("7f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a02")],
     );
     expect(buttons("Open the chat about this mark")).toHaveLength(0);
     expect(buttons("Discuss this in chat")).toHaveLength(1);

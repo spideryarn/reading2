@@ -910,7 +910,7 @@ describe("a quiz mark's origin", () => {
 
   it("refuses an attempt this article does not have, or with another batch or question, as a 400", async () => {
     const { id } = await keep();
-    const missing = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+    const missing = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a01";
     for (const origin of [
       mark(missing),
       mark(id, { batchId: "spya-bat333" }),

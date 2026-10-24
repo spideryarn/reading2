@@ -2900,12 +2900,17 @@ export function Reader({
   const reopenItemChat = useCallback(
     (origin: ThreadOrigin | undefined): boolean => {
       if (!origin) return false;
-      const id =
+      const known =
         threadForOrigin(chatSummaries, origin)?.id ??
-        handedItemChats.current.find((h) => sameOrigin(h.origin, origin))?.id ??
-        chatDraftsFor(slug).threadForOrigin(origin, (id) => refusedHandoffs.current.has(id));
+        handedItemChats.current.find((h) => sameOrigin(h.origin, origin))?.id;
+      /* A draft's chat may not be stored yet, and its composer lives in Chat's
+         band, so it opens there rather than beside the mode. */
+      const draft = known
+        ? undefined
+        : chatDraftsFor(slug).threadForOrigin(origin, (id) => refusedHandoffs.current.has(id));
+      const id = known ?? draft;
       if (!id) return false;
-      if (mode === "learn" || mode === "chat") showBand("chat");
+      if (draft || mode === "learn" || mode === "chat") showBand("chat");
       openClaimChat(id);
       return true;
     },
