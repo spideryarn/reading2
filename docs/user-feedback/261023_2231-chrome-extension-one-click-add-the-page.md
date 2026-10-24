@@ -1,7 +1,7 @@
 ---
 reports: spya-xsfrsg
-ending: shipped
-comment: Built on dev: a Chrome extension whose one press adds the page as your browser shows it, walls included. It reaches you once you put it in the Chrome Web Store; the steps, and one choice, are in the question.
+ending: awaiting
+comment: Built on dev, and a second press on a page you already have now opens that one. Kept open, as you asked, until you do the Chrome Web Store step and send me the item id; the steps are in the question.
 ---
 # A Chrome extension: one click adds the page you are reading
 
@@ -20,7 +20,8 @@ filed 2026-10-23 22:31 UTC from an article's Learn mode. Queue item `qi-64ngfhks
 > then just I'll do the final stage. […] ideally make it so that we can update relatively
 > seamlessly.
 
-**Ending: Shipped** to `dev` (not deployed). Plan, reviews and spike:
+**Ending: Awaiting Greg** (the store step; the code is on `dev`, not deployed — see the reply
+below). Plan, reviews and spike:
 [261024q](../plans/261024q-chrome-extension-one-click-add-the-page.md); research:
 [261024c](../research/261024c-chrome-extension-mv3-store-and-updates.md); the doc:
 [chrome-extension.md](../project/chrome-extension.md).
@@ -43,9 +44,21 @@ What was done:
   store's API with a service account.
 
 Left, each with its own queue entry: wiring production to the store item's id and a Help section
-once Greg has created it (`qi-4ma69gtp`); a repeat press on a page already on the shelf opening it
-rather than adding it again, which needs a server route and is asked (`qi-mpjegxhn`); select a
-passage and arrive in a chat about it (`qi-wqxwwxsx`).
+once Greg has created it (`qi-4ma69gtp`); select a passage and arrive in a chat about it
+(`qi-wqxwwxsx`).
 
 Asked: [q-d5ucbd](questions/q-d5ucbd.md) — do the store step (with exact steps), and whether to
 build the repeat check.
+
+**2026-10-24, Greg's reply `spya-fs5wyy`:** *"Yes let's do 1A when I'm back in front of my
+computer. Keep this report open. 2A"*. So:
+
+- **2A built** on `dev`: a press on a page the reader already has offers that article (*already on
+  your shelf, so adding it again cost nothing*, and *Open the article*) and uploads nothing. A
+  read-only, owner-scoped `GET /api/library/by-url` over `slugForUrlKey`, asked by the receiving
+  page with the address the capture carries. Plan and reviews:
+  [261024y](../plans/261024y-a-second-press-on-a-page-already-on-the-shelf-opens-it.md). This took
+  queue item `qi-mpjegxhn`, dropped in its favour.
+- **The ending is now Awaiting Greg**, at his word: the report stays open until he has done the
+  store step (1A) and sent the item id, which `qi-4ma69gtp` then wires in. q-d5ucbd stays open and
+  now asks only that.

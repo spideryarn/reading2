@@ -1213,8 +1213,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    link's opens (plan 261021d); 129 with view as's start, current and end
    (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j); 132
    with a draft gift's email preview and the lookup's guidance (plan 261024f);
-   133 with Situate's owner read (plan 261024o). */
-const EXPECTED_MATCHER_COUNT = 133;
+   133 with Situate's owner read (plan 261024o); 134 with the extension's
+   owner-scoped already-on-the-shelf lookup (plan 261024y). */
+const EXPECTED_MATCHER_COUNT = 134;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1238,8 +1239,9 @@ const EXPECTED_MATCHER_COUNT = 133;
    current and end (plan 261019n); 159 with a draft gift's High-powered AI
    (plan 261021j); 163 with a discarded gift's DELETE, a draft's email preview
    and the guidance's GET and PUT (plan 261024f); 164 with Situate's owner
-   read (plan 261024o). */
-const EXPECTED_GUARD_COUNT = 164;
+   read (plan 261024o); 165 with the extension's owner-scoped
+   already-on-the-shelf lookup (plan 261024y). */
+const EXPECTED_GUARD_COUNT = 165;
 
 /* ------------------------------------------------------------- the source read */
 

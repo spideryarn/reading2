@@ -62,6 +62,14 @@ The checks, each held by `tests/extension-handoff.test.ts` with a positive contr
 - **Twice.** Concurrent presses are serialised, and a second press on the same page focuses the tab
   the first one opened, for 15 minutes or until that tab closes. Back to `/add-from-extension` in
   the same tab sends nothing again.
+- **Again, after the article exists** (since 2026-10-24, Greg's 2A to q-d5ucbd). The capture
+  carries the address it wrote into the saved-from meta, and before uploading the page asks
+  `GET /api/library/by-url` whether this reader already has an article from it — the lookup a
+  pasted address already answers through (`slugForUrlKey`), on the reader's own shelf, made for the
+  reader the page mounted for. Found: the repeat paste's sentence and *Open the article*, nothing
+  uploaded or spent. The lookup failing: nothing uploaded, and *Try again*, since uploading would
+  be the very duplicate this stops. Plan
+  [261024y](../plans/261024y-a-second-press-on-a-page-already-on-the-shelf-opens-it.md).
 - **Size.** The upload's 50 MiB, and 60 MiB of JSON, because Chrome carries messages as JSON
   capped at 64 MiB and a quote is two characters of it. A 47 MB page took about 4 s end to end.
 
@@ -133,9 +141,6 @@ new permission is a product decision, not a line in the manifest.
 
 ## What it does not do yet
 
-- **Repeat after the article exists.** A press on a page already on the shelf uploads it again
-  (a second article, a second slot) unless the first tab is still open. The fix is a read-only,
-  owner-scoped lookup before uploading, which is a server change and was asked of Greg.
 - **A passage selected, then a chat about it**, and **why you are reading it, asked on the
   publisher's page**: Greg's later ideas. The add page the extension lands on already has the
   purpose box.

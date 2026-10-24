@@ -7,7 +7,7 @@ Report `spya-xsfrsg` (#682, SPIDERYARN-READING2-NE), Greg's reply `spya-fs5wyy` 
 >
 > 2A
 
-2A is the held [261024q § Stage 4](261024q-chrome-extension-one-click-add-the-page.md#stage-4-held-for-greg--a-repeat-click-does-not-make-a-second-article):
+2A is the held [261024q § Stage 4](261024q-chrome-extension-one-click-add-the-page.md#stage-4-held-for-greg-a-repeat-click-does-not-make-a-second-article):
 pressing the Chrome extension's button on a page the reader already has adds a second article and
 spends a slot, unless the first Spideryarn tab is still open. 1A (the Web Store step) is Greg's, on
 his laptop, and is not attempted here. Supersedes queue item `qi-mpjegxhn`.
@@ -93,6 +93,22 @@ GPT Sol, read-only, *REWORK*, four findings, all taken
 than a parse in the page; F2 the lookup made for the mounted reader, since `apiFetch` otherwise binds
 to whoever the tab holds when it is called; F3 a failed lookup uploads nothing; F4 tests at the
 wiring, not only at `receive`.
+
+## Code review, and seen working
+
+GPT Sol on commit `ef7185d81`, workspace-write, *SHIP AFTER FIXES (MADE)*
+([261024y-code-review-sol.md](261024y-code-review-sol.md)): F1–F3 met. It fixed a lost wakeup
+older than this change (from `2623efaa4`): a `ONE_UPLOAD_AT_A_TIME` refusal whose competing upload
+had already settled left `ready` true before and after, so the effect never re-ran and the page
+waited for ever; the refusal now bumps `attempt` too, with a regression test, red without it. It
+also corrected the route-contract canaries and made the Strict Mode test count lookups exactly.
+The class is written up under `docs/postmortems/`.
+
+Seen end to end (Sonnet subagent, Playwright's Chromium on the box, dev extension, local server):
+first press on a fresh address uploaded and imported it; with that tab closed, a second press
+showed *This article is already on your shelf, so adding it again cost nothing.* and *Open the
+article*, with no upload request and the shelf count unchanged; the button opened the same slug; a
+new address still uploaded.
 
 ## Tests
 

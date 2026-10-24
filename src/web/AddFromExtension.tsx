@@ -177,6 +177,7 @@ export function AddFromExtension({
      to the upload page. */
   const ready = started.current || !uploadInFlight(transfer);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is the explicit signal that retries this effect over the cached capture.
   useEffect(() => {
     if (!ready) return;
     started.current = true;
@@ -204,6 +205,12 @@ export function AddFromExtension({
       if (next.kind === "refused" && next.reason === ONE_UPLOAD_AT_A_TIME) {
         started.current = false;
         setState({ kind: "asking" });
+        /* The competing upload can settle before this state update renders.
+           In that case `ready` was true before and is true again, so it cannot
+           by itself retrigger the effect. The attempt makes both timings work:
+           while busy the effect waits at `!ready`; already settled, it retries
+           now over the same unspent capture. */
+        setAttempt((n) => n + 1);
         return;
       }
       setState(next);

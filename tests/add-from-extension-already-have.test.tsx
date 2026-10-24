@@ -17,6 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { REPEAT_PASTE_ON_THE_SHELF } from "../src/messages.js";
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 const READER = "00000000-0000-4000-8000-00000000a11c";
 const SAVED = "https://www.cell.com/fulltext/S1";
 
@@ -40,7 +42,7 @@ vi.mock("../src/web/lib/session.js", async (importOriginal) => {
 });
 
 const { AddFromExtension, forgetAsk } = await import("../src/web/AddFromExtension.js");
-const { uploadEngine } = await import("../src/web/uploadEngine.js");
+const { ONE_UPLOAD_AT_A_TIME, uploadEngine } = await import("../src/web/uploadEngine.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -86,7 +88,7 @@ describe("a page the reader already has", () => {
     expect(host.textContent).toContain(REPEAT_PASTE_ON_THE_SHELF);
     expect(host.querySelector("button")?.textContent).toBe("Open the article");
     expect(takes).toBe(1);
-    expect(lookups.length).toBeGreaterThan(0);
+    expect(lookups).toHaveLength(1);
     for (const one of lookups) {
       expect(one).toEqual({ input: `/api/library/by-url?url=${encodeURIComponent(SAVED)}`, madeFor: READER });
     }
@@ -115,13 +117,28 @@ describe("a page the reader already has", () => {
     for (let i = 0; i < 5; i++) await act(async () => {});
     expect(host.textContent).toContain(REPEAT_PASTE_ON_THE_SHELF);
     expect(takes).toBe(1);
+    expect(lookups).toHaveLength(2);
     expect(send).not.toHaveBeenCalled();
   });
 
   it("a page not on the shelf is uploaded once", async () => {
     answer = () => Response.json({ slug: null });
-    const send = vi.spyOn(uploadEngine, "send").mockResolvedValue("e47e0510-0000-4000-8000-00000000c0de");
+    const send = vi.spyOn(uploadEngine, "send").mockResolvedValue("e47e0510-0000-4000-8000-0000000a1f7e");
     await render();
     expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once when the competing upload has already settled before the refusal renders", async () => {
+    answer = () => Response.json({ slug: null });
+    const send = vi
+      .spyOn(uploadEngine, "send")
+      .mockRejectedValueOnce(new Error(ONE_UPLOAD_AT_A_TIME))
+      .mockResolvedValueOnce("e47e0510-0000-4000-8000-0000000a1f7e");
+
+    await render();
+
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(takes).toBe(1);
+    expect(lookups).toHaveLength(2);
   });
 });
