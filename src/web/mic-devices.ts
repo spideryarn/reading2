@@ -190,6 +190,29 @@ export function audioConstraint(preferred: string | null, defaultListed = false)
 }
 
 /**
+ * **The constraint for a request made inside the press, off Chromium** —
+ * `ideal`, where `audioConstraint` above insists on `exact`.
+ *
+ * That request exists so that WebKit counts it as the reader's gesture
+ * (useDictation.ts § earlyRequest; plan 261024z), and a click buys one such
+ * request. `exact` for an id that has gone is refused without a prompt and
+ * spends it (plan 261008d), and checking first means listing the devices, an
+ * await that is the very thing the early request is avoiding. `ideal` never
+ * refuses, so it is the press's only request whatever happened to the device.
+ *
+ * `exact`'s case against `ideal` was measured on Chromium, where `ideal` lost
+ * to Chrome's own choice (plan 261001q), and this is never used there. On
+ * WebKit 26.5 (Playwright, its four mock microphones, 2026-10-24) `ideal`
+ * opened the named device four times in four, and a missing id opened one
+ * anyway. The silent substitution `exact` guards against is caught after the
+ * fact instead: the caller compares the opened track's id with the pick and,
+ * if they differ, runs the same `judgeFallback` check as after a refusal.
+ */
+export function idealConstraint(preferred: string | null): MediaStreamConstraints {
+  return preferred ? { audio: { deviceId: { ideal: preferred } } } : { audio: true };
+}
+
+/**
  * Whether the browser lists an input with the id `"default"` — Chromium's
  * system-default input, for `audioConstraint`.
  *

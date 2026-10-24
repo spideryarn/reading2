@@ -119,13 +119,14 @@ import {
   type TranscriptionResult,
   micErrorName,
 } from "./transcriber.js";
-import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js";
+import { type MicClaim, claimMicrophone, microphoneFree, releaseMicrophone } from "./mic-lock.js";
 import { MIC_NONE, MIC_REFUSED, verdictFor } from "./dictation-errors.js";
 import {
   audioConstraint,
   chosenInputListed,
   defaultInputListed,
   deviceMissing,
+  idealConstraint,
   judgeFallback,
   labelled,
   listInputs,
@@ -535,6 +536,13 @@ interface Session<C> {
    */
   claim: MicClaim;
   freed: () => void;
+  /**
+   * **A request made inside the press and not yet settled** (`earlyRequest`).
+   * While it is pending `track` is still null, so `finish` cannot stop what it
+   * will open — it stops it when it arrives instead, and only then frees the
+   * claim. Cleared the moment `beginCapture` returns.
+   */
+  early: EarlyRequest | null;
   /**
    * Aborts every transcription request this session starts — one per part.
    *
@@ -991,9 +999,17 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        to stop and, because that holder was still registered, stopped the
        session that was replacing it. `tests/dictation-recording.test.ts` caught
        it; nothing on screen would have. */
-    const free = () => {
+    const pending = s.early;
+    s.early = null;
+    const release = () => {
       releaseMicrophone(s.claim);
       s.freed();
+    };
+    /* A request still opening holds the device the moment it lands, so the
+       next claimant waits for it to land and be stopped (`Session.early`). */
+    const free = () => {
+      if (pending) void discardEarly(pending).then(release);
+      else release();
     };
 
     if (quiet) {
@@ -1358,6 +1374,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          that no field can be forgotten, and these two have to refer to it. */
       claim: null as unknown as MicClaim,
       freed: () => {},
+      early: null,
     };
     /**
      * The tape ran out, so the dictation is over.
@@ -1675,17 +1692,30 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        this hook stays mounted. The strip must describe the preference this
        press actually read, rather than the value from this hook's first render. */
     setDeviceId(preferred);
+    /* **The claim before `getUserMedia`, and that is the whole point** — the
+       gap this closes is between one instance opening a device and another
+       instance still holding one, and a claim taken afterwards is a claim on
+       something that has already gone wrong. If another box on this page was
+       dictating, it is asked to stop the ordinary way (keeping its words) and
+       this waits for its track actually to go. GPT Sol's plan review, item 1.
+
+       `claimMicrophone` installs the claim before its first await, so it is
+       taken here, synchronously, and awaited below. Whether anybody held the
+       microphone is read just before: with nobody to wait for, the request
+       is made now, still inside the press (`earlyRequest`, plan 261024z), and
+       the session owns it from this line. */
+    const free = microphoneFree();
+    const claimed = claimMicrophone(s.claim);
+    const early = free ? earlyRequest(preferred) : null;
+    s.early = early;
     void (async () => {
-      /* **Before `getUserMedia`, and that is the whole point** — the gap this
-         closes is between one instance opening a device and another instance
-         still holding one, and a claim taken afterwards is a claim on something
-         that has already gone wrong. If another box on this page was dictating,
-         it is asked to stop the ordinary way (keeping its words) and this waits
-         for its track actually to go. GPT Sol's plan review, item 1. */
-      await claimMicrophone(s.claim);
+      await claimed;
       if (session.current !== s || s.finished) {
-        releaseMicrophone(s.claim);
-        s.freed();
+        /* Free only once whatever the early request opened is stopped. */
+        void discardEarly(early).then(() => {
+          releaseMicrophone(s.claim);
+          s.freed();
+        });
         return;
       }
       const outcome = await beginCapture(
@@ -1693,7 +1723,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         r,
         () => session.current === s && !s.finished,
         preferred,
+        early,
       );
+      /* Settled: its track is `outcome`'s now, or stopped, or never came. */
+      s.early = null;
       if (session.current !== s || s.finished) {
         /* The reader stopped, or moved on, while the microphone was opening.
            `beginCapture` has already released anything it opened. */
@@ -2414,6 +2447,73 @@ function probeIsSafe(): boolean {
   return data?.brands?.some(({ brand }) => brand === "Chromium") ?? false;
 }
 
+/** A `getUserMedia` made inside the press, which its session owns until it adopts the track. */
+interface EarlyRequest {
+  stream: Promise<MediaStream>;
+}
+
+/**
+ * **Ask for the microphone inside the press, where that is safe.**
+ *
+ * WebKit counts a request as the reader's gesture only if it can still see the
+ * click when `getUserMedia` is called, and a gesture-privileged request reuses
+ * the page's grant for ten minutes after the last capture where any other is
+ * prompted again after **one** on iOS and iPadOS
+ * (`UserMediaPermissionRequestManagerProxy::hasGrantedRequest`). Ours used to
+ * come after the microphone lock and a device listing. On Greg's iPad, chat
+ * presses three minutes apart were each prompted, and a Feedback press ten
+ * seconds after a dictation was not (spya-wembb7) — consistent with the
+ * one-minute rule, so with the gesture having been lost on the way. Current
+ * WebKit source says it should survive those awaits; which WebKit his iPadOS
+ * has, nobody here can say. A request made synchronously in the click is
+ * privileged on every version, so the press makes it itself and `beginCapture`
+ * awaits it in place of its own. Plan 261024z.
+ *
+ * Only where nothing the ordinary path waits for could change the request:
+ *
+ * - **Not on Chromium**, where the probe must run before any device opens, the
+ *   system default is asked for by name after a listing, and the site's
+ *   permission is kept anyway so the gesture buys nothing.
+ * - **Nobody else held the microphone** — decided by the caller, which takes
+ *   its claim first (`microphoneFree`, then `claimMicrophone`, then this):
+ *   WebKit runs one capture at a time, so a press while another box is
+ *   dictating, or one that is still stopping, waits for it as before.
+ *
+ * A picked microphone is asked for by `ideal`, not `exact`
+ * (mic-devices.ts § idealConstraint), so no listing has to come first.
+ *
+ * Null means "take the ordinary path". A non-null one is the session's to stop
+ * on every way out until it adopts the track: `finish` does it for a session
+ * that ends while the request is pending, `discardEarly` for the rest.
+ */
+function earlyRequest(preferred: string | null): EarlyRequest | null {
+  if (probeIsSafe()) return null;
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return null;
+  try {
+    const stream = navigator.mediaDevices.getUserMedia(idealConstraint(preferred));
+    /* Its refusal is read where it is awaited; this only stops one that is
+       discarded unread from surfacing as unhandled. */
+    stream.catch(() => {});
+    return { stream };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stop whatever an early request opens, for a session that will not use it.
+ * Resolves once that is done, which is when the device is really free.
+ */
+function discardEarly(early: EarlyRequest | null): Promise<void> {
+  if (!early) return Promise.resolve();
+  return early.stream.then(
+    (stream) => {
+      for (const t of stream.getTracks()) t.stop();
+    },
+    () => {},
+  );
+}
+
 /**
  * How long to wait for an aborted probe recogniser to say it has let go.
  *
@@ -2422,6 +2522,35 @@ function probeIsSafe(): boolean {
  * nothing afterwards.
  */
 const PROBE_RELEASE_MS = 200;
+
+/**
+ * `beginCapture` for a request already made inside the press (`earlyRequest`).
+ *
+ * One request, so no fallbacks: `ideal` does not refuse for a missing device
+ * (mic-devices.ts § idealConstraint), and any refusal it does give is the
+ * reader's answer. No recogniser either, since this is never Chromium. Whether
+ * the pick was honoured is read off the track that opened; when it was not,
+ * the caller runs the same name check (`judgeFallback`) as after a fallback.
+ */
+async function adoptEarly(
+  early: EarlyRequest,
+  stillWanted: () => boolean,
+  preferred: string | null,
+): Promise<CaptureOutcome> {
+  let track: MediaStreamTrack | null;
+  try {
+    track = (await early.stream).getAudioTracks()[0] ?? null;
+  } catch (err) {
+    return { kind: "failed", micError: micErrorName(err) };
+  }
+  if (!track) return { kind: "failed", micError: "no-track" };
+  if (!stillWanted()) {
+    // The reader stopped while we were opening. Do not leave the device on.
+    track.stop();
+    return { kind: "failed", micError: null };
+  }
+  return { kind: "started", track, live: false, honoured: preferred === null || openedId(track) === preferred };
+}
 
 /**
  * Open the microphone, and start the recogniser on it where that is possible.
@@ -2437,7 +2566,11 @@ async function beginCapture(
   r: Recognition | null,
   stillWanted: () => boolean,
   preferred: string | null,
+  /** The request `start` already made inside the press, which this owns from here. */
+  early: EarlyRequest | null = null,
 ): Promise<CaptureOutcome> {
+  /* The request is already made, and only where there is no probe to ask. */
+  if (early) return adoptEarly(early, stillWanted, preferred);
   /* **No recogniser at all is a perfectly good dictation** — Firefox — so this
      is a `false` rather than a refusal. The track still opens, the recorder
      still runs, and the transcript is still what the reader gets. */

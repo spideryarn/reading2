@@ -926,6 +926,24 @@ Feedback draft itself is the next step, and is named in the plan.
     source, and what a reader can try on the phone:
     [261008d](../plans/261008d-dictation-button-holds-still-and-why-the-iphone-asks-again.md).
 
+    **And an iPad asked on every press, a few minutes apart.** Greg, 2026-10-24, `spya-wembb7`:
+    *"Every time I click on the dictate button in a chat, it asks me for permission to use the
+    microphone, whereas somehow the feedback dialog seems to remember permission."* The two boxes
+    share every line of this code. The production logs showed chat presses 3 minutes apart, each
+    prompted, and a Feedback press 10 seconds after a chat dictation, not prompted: the 1-minute
+    rule, as if the request had no gesture. Feedback remembered nothing; it was simply used inside
+    the minute. Ours reached `getUserMedia` after the microphone lock and a device listing, and
+    whether the shipped WebKit carries the click across those is version-dependent. So **off
+    Chromium the press now asks for the microphone itself, synchronously, whenever nobody else
+    holds it** (`earlyRequest` in [`useDictation.ts`](../../src/web/useDictation.ts)). A picked
+    microphone is asked for as `ideal`, so that no listing has to come first and a vanished id
+    cannot spend the press (`idealConstraint`). Expected: no prompt within 10 minutes of the last
+    dictation in a sitting. Not yet run on an iPad.
+    **Still waiting, so still exposed:** a press in chat while Live is running or connecting,
+    because dictation starts only once Live has stopped. And Live itself has the same lock, then
+    listing, then request shape, unchanged.
+    [261024z](../plans/261024z-dictation-asks-for-the-microphone-inside-the-press.md).
+
 ## The codes
 
 Every reader-facing sentence here ends in a bracketed code, per

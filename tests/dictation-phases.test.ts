@@ -30,7 +30,7 @@
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetMicrophoneLock } from "../src/web/mic-lock.js";
+import { microphoneFree, resetMicrophoneLock } from "../src/web/mic-lock.js";
 import { sendForTranscription } from "../src/web/dictation-upload.js";
 import { useDictation } from "../src/web/useDictation.js";
 
@@ -60,6 +60,8 @@ let gumRequests: MediaStreamConstraints[] = [];
 /** The `"default"` input is listed but gone by the time it is opened. */
 let defaultVanishes = false;
 let gumRejects = false;
+/** Per `getUserMedia` call: was this page's microphone claim already taken? */
+let claimHeldAtRequest: boolean[] = [];
 /**
  * The machine's microphones, for the remembered-device cases (spya-k3q9mc).
  * `defaultInput` is what `{ audio: true }` opens; an `exact` request for an id
@@ -201,10 +203,14 @@ function fakeTrack(device: { deviceId: string; label: string } | null = null) {
       if (name === "ended") endedListeners.push(fn);
     },
     removeEventListener: () => {},
+    /* Counted once, as a real track ends once: a second `stop()` on an ended
+       track does nothing, and the hook may stop one from two places. */
     stop: () => {
+      if (track.readyState === "ended") return;
+      track.readyState = "ended";
       tracksStopped++;
     },
-  } as unknown as MediaStreamTrack;
+  } as unknown as { readyState: string } & MediaStreamTrack;
   tracksHandedOut.push(track);
   return track;
 }
@@ -322,20 +328,27 @@ function install(Ctor: typeof FakeRecognition) {
       getUserMedia: async (c: MediaStreamConstraints) => {
         gumCalls++;
         gumRequests.push(c);
+        claimHeldAtRequest.push(!microphoneFree());
         if (gumRejects) throw new DOMException("denied", "NotAllowedError");
         const audio = c.audio;
-        const exact =
+        const wanted =
           typeof audio === "object" && audio && typeof audio.deviceId === "object"
-            ? (audio.deviceId as { exact?: string }).exact
-            : undefined;
+            ? (audio.deviceId as { exact?: string; ideal?: string })
+            : {};
+        const exact = wanted.exact;
+        /* `ideal` the way WebKit does it: the named device when it is there,
+           and otherwise the default rather than a refusal (measured on WebKit
+           26.5, plan 261024z). */
         const device = exact
           ? inputs.find((d) => d.deviceId === exact && !(defaultVanishes && exact === "default"))
-          : defaultInput;
+          : (inputs.find((d) => d.deviceId === wanted.ideal) ?? defaultInput);
         if (exact && !device) throw { name: "OverconstrainedError", constraint: "deviceId" };
-        return {
-          getAudioTracks: () => [fakeTrack(device ?? null)],
-          getTracks: () => [fakeTrack(device ?? null)],
-        };
+        /* **One track per stream**, made lazily and the same object from both
+           methods: a stream that minted a new track on every call let a test
+           "stop" a track the hook never had. GPT Sol's plan review of 261024z. */
+        let track: MediaStreamTrack | null = null;
+        const one = () => (track ??= fakeTrack(device ?? null));
+        return { getAudioTracks: () => [one()], getTracks: () => [one()] };
       },
       enumerateDevices: async () => {
         enumerationCalls += 1;
@@ -473,6 +486,7 @@ beforeEach(() => {
   built = [];
   gumCalls = 0;
   gumRequests = [];
+  claimHeldAtRequest = [];
   defaultVanishes = false;
   gumRejects = false;
   inputs = [];
@@ -637,9 +651,9 @@ describe("the tape starts with the track", () => {
     });
     inputs = [{ deviceId: "airpods-today", label: "AirPods Pro" }];
     defaultInput = inputs[0] ?? null;
-    /* The first listing finds the choice missing (261008d), the second picks
-       the system-default route; the third is the one after the track opened. */
-    holdEnumerationAt = 3;
+    /* Since plan 261024z Safari asks inside the press, with no listing before
+       it, so the first listing is the one after the track opened. */
+    holdEnumerationAt = 1;
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();
@@ -1755,5 +1769,230 @@ describe("the remembered microphone", () => {
     releaseEnumeration?.();
     await settleCapture();
     h.unmount();
+  });
+});
+
+/* ------------------------------------------- the request inside the press -- */
+
+/**
+ * **On WebKit the microphone is asked for inside the press, not after it.**
+ *
+ * Greg's iPad, 2026-10-24 (spya-wembb7): every chat press prompted, three
+ * minutes apart, while a Feedback press ten seconds after a dictation did not.
+ * WebKit reuses a grant without a prompt for ten minutes after capture when the
+ * request is gesture-privileged, and for **one minute** on iOS and iPadOS when
+ * it is not — and ours came after the microphone lock and a device listing,
+ * which the logs say cost it the gesture. A request made synchronously in the
+ * click handler is privileged on every WebKit, however promise propagation
+ * works. docs/plans/261024z-dictation-asks-for-the-microphone-inside-the-press.md.
+ *
+ * "Inside the press" is checked inside the same synchronous `act` callback as
+ * the `toggle()`, before any microtask can run: the property is the call's
+ * position, which no amount of settling afterwards can show.
+ */
+describe("the request inside the press", () => {
+  function store(entries: Record<string, string>) {
+    const map = new Map(Object.entries(entries));
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => void map.set(k, v),
+      removeItem: (k: string) => void map.delete(k),
+    });
+    return map;
+  }
+  /** `toggle()`, and how many `getUserMedia` calls had been made when it returned. */
+  function press(h: ReturnType<typeof drive>): number {
+    let during = -1;
+    act(() => {
+      h.get().toggle();
+      during = gumCalls;
+    });
+    return during;
+  }
+
+  it("asks inside the press on Safari, with nothing picked", async () => {
+    useSafari();
+    store({});
+    const h = drive();
+    expect(press(h)).toBe(1);
+    await settleCapture();
+    expect(gumCalls, "the early request is the only request").toBe(1);
+    expect(gumRequests[0]).toEqual({ audio: true });
+    expect(h.get().phase).toBe("listening");
+    h.unmount();
+  });
+
+  it("asks inside every press of a sitting, not only the first", async () => {
+    useSafari();
+    store({});
+    const h = drive();
+    for (let n = 1; n <= 2; n++) {
+      expect(press(h), `press ${n}`).toBe(n);
+      await settleCapture();
+      talkFor(4000);
+      act(() => h.get().toggle());
+      await drain();
+    }
+    h.unmount();
+  });
+
+  it("leaves Chromium's order alone: the probe, then the request", async () => {
+    store({});
+    const h = drive();
+    expect(press(h)).toBe(0);
+    await settleCapture();
+    expect(gumCalls).toBe(1);
+    expect(h.get().liveText).toBe(true);
+    h.unmount();
+  });
+
+  it("waits for another box that holds the microphone, as before", async () => {
+    useSafari();
+    store({});
+    const first = drive();
+    expect(press(first)).toBe(1);
+    await settleCapture();
+    expect(first.get().phase).toBe("listening");
+    const second = drive();
+    expect(press(second), "a second capture while the first is live").toBe(1);
+    await drain();
+    await settleCapture();
+    expect(first.get().phase).not.toBe("listening");
+    expect(second.get().phase).toBe("listening");
+    expect(gumCalls).toBe(2);
+    first.unmount();
+    second.unmount();
+  });
+
+  it("stops what the early request opens when Stop comes first", async () => {
+    useSafari();
+    store({});
+    const h = drive();
+    act(() => {
+      h.get().toggle();
+      h.get().toggle();
+    });
+    await settleCapture();
+    await drain();
+    expect(gumCalls).toBe(1);
+    expect(tracksHandedOut).toHaveLength(1);
+    expect(tracksStopped, "a microphone left on after Stop").toBe(1);
+    expect(h.get().phase).toBe("idle");
+    h.unmount();
+  });
+
+  it("takes its claim before it asks", async () => {
+    useSafari();
+    store({});
+    const h = drive();
+    press(h);
+    await settleCapture();
+    expect(claimHeldAtRequest, "the request came before the page's claim").toEqual([true]);
+    h.unmount();
+  });
+
+  it("frees the microphone after a refusal, and says why", async () => {
+    useSafari();
+    store({});
+    gumRejects = true;
+    const h = drive();
+    expect(press(h)).toBe(1);
+    await settleCapture();
+    await drain();
+    expect(gumCalls, "a refusal is the reader's answer, not a reason to ask again").toBe(1);
+    expect(h.get().error).toContain("[mic-refused]");
+    expect(h.get().phase).toBe("idle");
+    expect(microphoneFree()).toBe(true);
+    h.unmount();
+  });
+
+  it("holds the claim until a pending request has landed and been stopped", async () => {
+    /* A second box pressed while the first press's request is still opening:
+       the first is asked to stop, and the second must not ask until whatever
+       the first's request opened has been stopped. WebKit runs one capture at a
+       time. */
+    useSafari();
+    store({});
+    const first = drive();
+    const second = drive();
+    act(() => {
+      first.get().toggle();
+      second.get().toggle();
+    });
+    expect(gumCalls, "the second press found the microphone claimed").toBe(1);
+    await settleCapture();
+    await drain();
+    await settleCapture();
+    expect(gumCalls).toBe(2);
+    expect(tracksStopped, "the first press's track, stopped before the second asked").toBe(1);
+    expect(second.get().phase).toBe("listening");
+    first.unmount();
+    second.unmount();
+  });
+
+  it("asks inside the press on Firefox too", async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("requestAnimationFrame", () => 1);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    install(ChromiumRecognition);
+    vi.stubGlobal("SpeechRecognition", undefined);
+    vi.stubGlobal("webkitSpeechRecognition", undefined);
+    chromiumEngine(false);
+    store({});
+    const h = drive();
+    expect(press(h)).toBe(1);
+    await settleCapture();
+    expect(h.get().phase).toBe("listening");
+    h.unmount();
+  });
+
+  describe("with a microphone picked", () => {
+    const AIRPODS = { deviceId: "airpods-today", label: "AirPods Pro" };
+    const PAD = { deviceId: "ipad-mic", label: "iPad Microphone" };
+    const PICKED = { "spya.dictation.deviceId": "airpods-today", "spya.dictation.deviceLabel": "AirPods Pro" };
+
+    it("asks for it inside the press, as the ideal, and is honoured", async () => {
+      useSafari();
+      store(PICKED);
+      inputs = [AIRPODS, PAD];
+      defaultInput = PAD;
+      const h = drive();
+      expect(press(h)).toBe(1);
+      await settleCapture();
+      expect(gumRequests).toEqual([{ audio: { deviceId: { ideal: "airpods-today" } } }]);
+      expect(h.get().deviceUnavailable).toBe(false);
+      h.unmount();
+    });
+
+    it("says so when it has gone, with the one request the press bought", async () => {
+      /* `exact` here would be refused and spend the gesture, leaving the
+         default to an unprivileged second request (plan 261008d). */
+      useSafari();
+      store(PICKED);
+      inputs = [PAD];
+      defaultInput = PAD;
+      const h = drive();
+      expect(press(h)).toBe(1);
+      await settleCapture();
+      await drain();
+      expect(gumCalls).toBe(1);
+      expect(h.get().phase).toBe("listening");
+      expect(h.get().deviceUnavailable).toEqual({ wanted: "AirPods Pro" });
+      h.unmount();
+    });
+
+    it("adopts its new id when the same microphone opened under one", async () => {
+      useSafari();
+      const saved = store({ ...PICKED, "spya.dictation.deviceId": "airpods-yesterday" });
+      inputs = [AIRPODS, PAD];
+      defaultInput = AIRPODS;
+      const h = drive();
+      expect(press(h)).toBe(1);
+      await settleCapture();
+      await drain();
+      expect(h.get().deviceUnavailable).toBe(false);
+      expect(saved.get("spya.dictation.deviceId")).toBe("airpods-today");
+      h.unmount();
+    });
   });
 });

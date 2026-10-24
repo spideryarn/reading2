@@ -181,6 +181,21 @@ async function press(h: ReturnType<typeof drive>) {
 /* ------------------------------------------------------------- the tests -- */
 
 describe("a microphone that will not open", () => {
+  /**
+   * **The fallback chain is the ordinary path's, so these run on it.** Off
+   * Chromium a press with nobody else on the microphone asks once, inside the
+   * press, as `ideal`, and has no chain to fall down (plan 261024z). The chain
+   * is still what Chromium does, and what any browser does when the press had
+   * to wait for another holder, so it is pinned here on Chromium's engine brand
+   * — with no recogniser stubbed, so there is no probe either.
+   */
+  function ordinaryPath() {
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      value: { brands: [{ brand: "Chromium", version: "151" }], mobile: false, platform: "macOS" },
+    });
+  }
+
   it.each([
     ["NotAllowedError", MIC_REFUSED],
     ["SecurityError", MIC_REFUSED],
@@ -212,6 +227,7 @@ describe("a microphone that will not open", () => {
   /* GPT Sol's plan review, F3: once a missing device has sent it down the
      fallback, the reason that counts is the last request's, not the first. */
   it("a chosen microphone gone, then the default refused, is reported as the refusal", async () => {
+    ordinaryPath();
     const h = drive();
     act(() => h.get().chooseDevice("gone"));
     await settle();
@@ -233,6 +249,7 @@ describe("a microphone that will not open", () => {
   });
 
   it("a fallback that opens a stream with no audio track is `no-track`, not the earlier refusal", async () => {
+    ordinaryPath();
     const h = drive();
     act(() => h.get().chooseDevice("gone"));
     await settle();
@@ -244,6 +261,7 @@ describe("a microphone that will not open", () => {
   });
 
   it("keeps the final refusal through the complete chosen/default/unconstrained chain", async () => {
+    ordinaryPath();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: {
@@ -266,6 +284,7 @@ describe("a microphone that will not open", () => {
   });
 
   it("a final unconstrained stream with no audio track is `no-track`", async () => {
+    ordinaryPath();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: {

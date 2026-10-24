@@ -67,9 +67,13 @@ let latest: MicClaim | null = null;
 /**
  * Take the page's microphone, waiting for everyone before you to let go.
  *
- * **Await this before `getUserMedia`, not after.** The whole value of it is the
+ * **Take this before `getUserMedia`, not after.** The whole value of it is the
  * gap it closes, and a claim taken after the device is already open is a claim
- * on something that has already gone wrong.
+ * on something that has already gone wrong. The claim is installed before the
+ * first await, so calling it is taking it. Await it before opening too — with
+ * one exception: when `microphoneFree()` said nobody held the microphone just
+ * before the call, there is nothing to wait for, and a WebKit press may then
+ * open the device in the same click (useDictation.ts § earlyRequest).
  */
 export async function claimMicrophone(claim: MicClaim): Promise<void> {
   const before = queue;
@@ -84,6 +88,9 @@ export async function claimMicrophone(claim: MicClaim): Promise<void> {
     () => claim.released,
     () => claim.released,
   ).catch(() => {});
+  outstanding.add(claim);
+  const gone = () => void outstanding.delete(claim);
+  claim.released.then(gone, gone);
   if (previous) previous.stop();
   try {
     await before;
@@ -103,8 +110,30 @@ export function releaseMicrophone(claim: MicClaim): void {
   if (latest === claim) latest = null;
 }
 
+/**
+ * Every claim taken and not yet released — what `microphoneFree` asks about.
+ * A set rather than a count, so a release that settles after a test's reset
+ * cannot drive it below zero.
+ */
+const outstanding = new Set<MicClaim>();
+
+/**
+ * **Whether a claim taken now would have nobody to wait for.**
+ *
+ * Synchronous, for the one caller that cannot await: a press on WebKit, which
+ * asks for the microphone inside the click so that the request counts as the
+ * reader's gesture (useDictation.ts § earlyRequest; plan 261024z). That is only
+ * safe when no other holder can still have a track, because WebKit runs one
+ * capture at a time — so anything outstanding, even a claim that is only
+ * stopping, sends the press down the ordinary path that waits.
+ */
+export function microphoneFree(): boolean {
+  return outstanding.size === 0;
+}
+
 /** For tests: forget every claim. Never called by the app. */
 export function resetMicrophoneLock(): void {
   latest = null;
   queue = Promise.resolve();
+  outstanding.clear();
 }
