@@ -14,7 +14,7 @@
  * shelf's Add. `App` also keys this page on the reader and makes it an add
  * visit (add-visit.ts), so a change of reader replaces it with AddStopped.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   type SendMessage,
@@ -27,7 +27,7 @@ import { Link } from "./Link.js";
 import { heldReader } from "./lib/session.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF, addUploadHref, navigate } from "./router.js";
-import { uploadEngine } from "./uploadEngine.js";
+import { ONE_UPLOAD_AT_A_TIME, type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 
 const ALREADY_SENT =
@@ -96,6 +96,17 @@ function spendAsk(): boolean {
   return true;
 }
 
+function releaseAsk(): void {
+  if (asked !== null) asked.used = false;
+}
+
+/** Taking from the extension is destructive, so wait until the existing file
+ *  has stopped owning the tab's one upload engine. */
+export function uploadInFlight(transfer: Transfer | null): boolean {
+  const phase = transfer?.phase.kind;
+  return phase === "hashing" || phase === "granting" || phase === "sending" || phase === "queueing";
+}
+
 /** For tests: forget the ask, as a new page load would. */
 export function forgetAsk(): void {
   asked = null;
@@ -114,22 +125,45 @@ export function AddFromExtension({
   const [sendMessage] = useState(() => (given === undefined ? pageSendMessage() : (given ?? undefined)));
   const [state, setState] = useState<Receiving>({ kind: "asking" });
   const transfer = useUpload();
+  const started = useRef(false);
+  /* Once this capture has started, its own transfer makes the engine busy. Keep
+     `ready` true so that update does not tear down the effect which must route
+     to the upload page. */
+  const ready = started.current || !uploadInFlight(transfer);
 
   useEffect(() => {
+    if (!ready) return;
+    started.current = true;
     let mounted = true;
     void receive({
       take: () => askOnce(readerId, sendMessage),
       stillFor: () => mounted && uploadEngine.reader() === readerId && heldReader() === readerId,
-      send: (file) => (spendAsk() ? uploadEngine.send(file) : Promise.reject(new Error(ALREADY_SENT))),
+      send: async (file) => {
+        if (!spendAsk()) throw new Error(ALREADY_SENT);
+        try {
+          return await uploadEngine.send(file);
+        } catch (err) {
+          /* Another picker can win while the extension's reply is in flight.
+             Keep the File cached in `asked` and try it when that upload ends. */
+          if (err instanceof Error && err.message === ONE_UPLOAD_AT_A_TIME) releaseAsk();
+          throw err;
+        }
+      },
       go: (href) => navigate(href, { replace: true }),
     }).then((next) => {
-      if (mounted && next !== null) setState(next);
+      if (!mounted || next === null) return;
+      if (next.kind === "refused" && next.reason === ONE_UPLOAD_AT_A_TIME) {
+        started.current = false;
+        setState({ kind: "asking" });
+        return;
+      }
+      setState(next);
     });
     return () => {
       mounted = false;
     };
     /* Once per mount: `App` remounts this page for another reader (`key`). */
-  }, [readerId, sendMessage]);
+  }, [readerId, sendMessage, ready]);
 
   const failed = transfer?.phase.kind === "failed" ? transfer.phase.reason : null;
   return (
@@ -138,7 +172,7 @@ export function AddFromExtension({
         <h1 className="tw:font-prose tw:text-2xl tw:text-foreground">Adding the page</h1>
       </header>
       <p className="tw:m-0 tw:text-foreground" role="status">
-        {sentence(state, failed)}
+        {!ready ? "Waiting for the upload already in progress to finish…" : sentence(state, failed)}
       </p>
       {state.kind !== "asking" && state.kind !== "sent" && (
         <p className="tw:mt-6 tw:mb-0 tw:text-sm">

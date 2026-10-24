@@ -11,9 +11,10 @@
  *     └─ handed over once, if the asker is the top frame of exactly that tab,
  *        at exactly our receiving address on exactly our origin
  *
- * **The extension holds nothing of the reader's**: no token, no cookie, and it
- * never calls our API. The receiving page uploads the page with the session it
- * already has, through the existing upload path. That is the whole auth design:
+ * **The extension holds no Spideryarn credential**: no token, no cookie, and it
+ * never calls our API. It temporarily holds the captured HTML in its own
+ * IndexedDB. The receiving page uploads the page with the session it already
+ * has, through the existing upload path. That is the whole auth design:
  * docs/plans/261024q-chrome-extension-one-click-add-the-page.md.
  */
 import type { PageCapture } from "../../src/web/save-page-bookmarklet.js";
@@ -44,6 +45,9 @@ export const MESSAGE_CAP = 60 * 1024 * 1024;
 export interface Waiting {
   /** The receiving tab that may take it, and no other. */
   tabId: number;
+  /** A capability carried only in the receiving tab's address. Tab ids are
+   *  reused after a browser restart, so the number alone is not an identity. */
+  nonce: string;
   html: string;
   filename: string;
   /** `Date.now()` when it was captured. */
@@ -69,16 +73,20 @@ export interface WaitingStore {
   put(entry: Waiting, opened: Opened): Promise<void>;
   /** The entry for this tab, **removed in the same transaction**, so two asks
    *  at once cannot both have it (F4). */
-  take(tabId: number): Promise<Waiting | undefined>;
+  take(tabId: number, nonce: string): Promise<Waiting | undefined>;
   openedFor(source: string): Promise<Opened | undefined>;
   /** Everything kept for this receiving tab, which has closed. */
   forgetTab(tabId: number): Promise<void>;
+  /** A browser restart invalidates every persisted tab id. */
+  forgetAll(): Promise<void>;
   /** Everything captured or opened before `before`. */
   dropOlderThan(before: number): Promise<void>;
 }
 
 /** The Chrome calls this needs. */
 export interface Chromeish {
+  /** A fresh, unguessable 128-bit value, encoded as 32 hexadecimal digits. */
+  nonce(): string;
   /** `capturePage(MAX_UPLOAD_BYTES, MESSAGE_CAP)` in the tab, through
    *  `chrome.scripting.executeScript`. Rejects where Chrome forbids it. */
   capture(tabId: number): Promise<PageCapture>;
@@ -108,7 +116,29 @@ export const IDLE_TITLE = "Add this page to Spideryarn";
  * our page** (F4): its id is the key, and a tab opened at our address could ask
  * before the store had it.
  */
-export async function pressed(
+/* One service worker can receive a second action event while the first press is
+   still capturing. The opened-by-source record does not exist until that first
+   capture has finished, so the check below cannot itself coalesce concurrent
+   presses. Serialize presses that share a store; after the first has recorded
+   its receiver, the next sees and focuses it. */
+const pressTails = new WeakMap<WaitingStore, Promise<void>>();
+
+export function pressed(
+  tab: PressedTab,
+  origin: string,
+  chrome: Chromeish,
+  store: WaitingStore,
+  now: () => number,
+): Promise<void> {
+  const before = pressTails.get(store) ?? Promise.resolve();
+  const run = before.catch(() => {}).then(() => press(tab, origin, chrome, store, now));
+  pressTails.set(store, run);
+  return run.finally(() => {
+    if (pressTails.get(store) === run) pressTails.delete(store);
+  });
+}
+
+async function press(
   tab: PressedTab,
   origin: string,
   chrome: Chromeish,
@@ -154,11 +184,12 @@ export async function pressed(
   }
   const receiver = await chrome.openTab("about:blank", tabId);
   const at = now();
+  const nonce = chrome.nonce();
   await store.put(
-    { tabId: receiver, html: got.html, filename: got.filename, at },
+    { tabId: receiver, nonce, html: got.html, filename: got.filename, at },
     { source, tabId: receiver, at },
   );
-  await chrome.navigate(receiver, `${origin}${RECEIVE_PATH}`);
+  await chrome.navigate(receiver, `${origin}${RECEIVE_PATH}?handoff=${nonce}`);
   await chrome.say(tabId, "", IDLE_TITLE);
 }
 
@@ -205,7 +236,10 @@ export async function take(
   }
   if (!origins.includes(url.origin) || url.pathname !== RECEIVE_PATH) return NOTHING;
   if (sender.origin !== undefined && sender.origin !== url.origin) return NOTHING;
-  const entry = await store.take(tabId);
+  const nonces = url.searchParams.getAll("handoff");
+  const nonce = nonces.length === 1 ? nonces[0] : undefined;
+  if (nonce === undefined || !/^[0-9a-f]{32}$/.test(nonce)) return NOTHING;
+  const entry = await store.take(tabId, nonce);
   if (entry === undefined || now() - entry.at > KEEP_MS) return NOTHING;
   return { kind: "page", html: entry.html, filename: entry.filename };
 }

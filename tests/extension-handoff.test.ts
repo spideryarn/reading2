@@ -12,7 +12,8 @@
  */
 import { createHash } from "node:crypto";
 
-import { describe, expect, it } from "vitest";
+import "fake-indexeddb/auto";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DEV_EXTENSION_ID,
@@ -33,12 +34,19 @@ import {
   type Waiting,
   type WaitingStore,
 } from "../extension/src/handoff.js";
+import { HANDOFF_DB_NAME, indexedDbStore } from "../extension/src/store.js";
 import type { PageCapture } from "../src/web/save-page-bookmarklet.js";
-import { receive } from "../src/web/AddFromExtension.js";
+import { receive, uploadInFlight } from "../src/web/AddFromExtension.js";
 import * as web from "../src/web/extension-handoff.js";
 import { EXTENSION_RECEIVE_HREF, parseRoute } from "../src/web/router.js";
 import { MAX_UPLOAD_BYTES } from "../src/uploads.js";
-import { storeVersion, uploadOutcome, versionAbove } from "../scripts/publish-extension.js";
+import {
+  polledUploadOutcome,
+  publishMode,
+  storeVersion,
+  uploadOutcome,
+  versionAbove,
+} from "../scripts/publish-extension.js";
 
 const ORIGIN = "https://www.spideryarn.com";
 const ORIGINS = [ORIGIN];
@@ -54,8 +62,9 @@ function memoryStore(): WaitingStore & { waiting: Map<number, Waiting>; opened: 
       waiting.set(entry.tabId, entry);
       opened.set(o.source, o);
     },
-    async take(tabId) {
+    async take(tabId, nonce) {
       const found = waiting.get(tabId);
+      if (found?.nonce !== nonce) return undefined;
       waiting.delete(tabId);
       return found;
     },
@@ -66,12 +75,130 @@ function memoryStore(): WaitingStore & { waiting: Map<number, Waiting>; opened: 
       waiting.delete(tabId);
       for (const [source, o] of opened) if (o.tabId === tabId) opened.delete(source);
     },
+    async forgetAll() {
+      waiting.clear();
+      opened.clear();
+    },
     async dropOlderThan(before) {
       for (const [k, w] of waiting) if (w.at < before) waiting.delete(k);
       for (const [k, o] of opened) if (o.at < before) opened.delete(k);
     },
   };
 }
+
+function deleteHandoffDatabase(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(HANDOFF_DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("The handoff database was left open"));
+  });
+}
+
+describe.sequential("the real IndexedDB handoff store", () => {
+  beforeEach(deleteHandoffDatabase);
+
+  it("creates both stores, commits writes, closes the database, and takes once", async () => {
+    const close = vi.spyOn(IDBDatabase.prototype, "close");
+    const waiting: Waiting = {
+      tabId: 7,
+      nonce: "0123456789abcdef0123456789abcdef",
+      html: "<!doctype html><p>hi</p>",
+      filename: "Hi.html",
+      at: 10,
+    };
+    const opened: Opened = { source: "https://example.test/a", tabId: 7, at: 10 };
+
+    try {
+      await indexedDbStore.put(waiting, opened);
+      expect(await indexedDbStore.openedFor(opened.source)).toEqual(opened);
+      expect(await indexedDbStore.take(7, "wrong")).toBeUndefined();
+      expect(await indexedDbStore.take(7, waiting.nonce)).toEqual(waiting);
+      expect(await indexedDbStore.take(7, waiting.nonce)).toBeUndefined();
+
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(HANDOFF_DB_NAME, 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      expect([...database.objectStoreNames]).toEqual(["opened", "waiting"]);
+      database.close();
+      expect(close).toHaveBeenCalledTimes(6);
+    } finally {
+      close.mockRestore();
+    }
+  });
+
+  it("makes simultaneous takes atomic", async () => {
+    const waiting: Waiting = {
+      tabId: 8,
+      nonce: "1123456789abcdef0123456789abcdef",
+      html: "<!doctype html><p>hi</p>",
+      filename: "Hi.html",
+      at: 10,
+    };
+    await indexedDbStore.put(waiting, { source: "https://example.test/b", tabId: 8, at: 10 });
+
+    const results = await Promise.all([
+      indexedDbStore.take(8, waiting.nonce),
+      indexedDbStore.take(8, waiting.nonce),
+    ]);
+    expect(results.filter((result) => result !== undefined)).toEqual([waiting]);
+  });
+
+  it("deletes every opened record for a closed tab without deleting another tab's capture", async () => {
+    const first: Waiting = {
+      tabId: 9,
+      nonce: "2123456789abcdef0123456789abcdef",
+      html: "<!doctype html><p>hi</p>",
+      filename: "Hi.html",
+      at: 10,
+    };
+    const other: Waiting = {
+      tabId: 10,
+      nonce: "3123456789abcdef0123456789abcdef",
+      html: "<!doctype html><p>hi</p>",
+      filename: "Hi.html",
+      at: 10,
+    };
+    await indexedDbStore.put(first, { source: "https://example.test/c", tabId: 9, at: 10 });
+    await indexedDbStore.put(other, { source: "https://example.test/d", tabId: 9, at: 10 });
+
+    await indexedDbStore.forgetTab(9);
+    expect(await indexedDbStore.openedFor("https://example.test/c")).toBeUndefined();
+    expect(await indexedDbStore.openedFor("https://example.test/d")).toBeUndefined();
+    expect(await indexedDbStore.take(9, first.nonce)).toBeUndefined();
+    expect(await indexedDbStore.take(10, other.nonce)).toEqual(other);
+  });
+
+  it("expires strictly older records and can clear everything", async () => {
+    const old: Waiting = {
+      tabId: 11,
+      nonce: "4123456789abcdef0123456789abcdef",
+      html: "<!doctype html><p>hi</p>",
+      filename: "Hi.html",
+      at: 19,
+    };
+    const boundary: Waiting = {
+      tabId: 12,
+      nonce: "5123456789abcdef0123456789abcdef",
+      html: "<!doctype html><p>hi</p>",
+      filename: "Hi.html",
+      at: 20,
+    };
+    await indexedDbStore.put(old, { source: "https://example.test/e", tabId: 11, at: 19 });
+    await indexedDbStore.put(boundary, { source: "https://example.test/f", tabId: 12, at: 20 });
+
+    await indexedDbStore.dropOlderThan(20);
+    expect(await indexedDbStore.openedFor("https://example.test/e")).toBeUndefined();
+    expect(await indexedDbStore.take(11, old.nonce)).toBeUndefined();
+    expect(await indexedDbStore.openedFor("https://example.test/f")).toBeDefined();
+    expect(await indexedDbStore.take(12, boundary.nonce)).toEqual(boundary);
+
+    await indexedDbStore.forgetAll();
+    expect(await indexedDbStore.openedFor("https://example.test/f")).toBeUndefined();
+  });
+});
 
 const page: PageCapture = { kind: "page", html: "<!doctype html><p>hi</p>", filename: "Hi.html", bytes: 24 };
 
@@ -81,6 +208,7 @@ function fakeChrome(capture: () => Promise<PageCapture> = async () => page) {
   let next = 100;
   const live = new Set<number>();
   const chrome: Chromeish = {
+    nonce: () => "0123456789abcdef0123456789abcdef",
     async capture(tabId) {
       calls.push(`capture ${tabId}`);
       return capture();
@@ -108,7 +236,7 @@ function fakeChrome(capture: () => Promise<PageCapture> = async () => page) {
 const ask = { type: TAKE };
 const fromReceiver = (tabId: number, extra: Partial<Sender> = {}): Sender => ({
   origin: ORIGIN,
-  url: `${ORIGIN}${RECEIVE_PATH}`,
+  url: `${ORIGIN}${RECEIVE_PATH}?handoff=0123456789abcdef0123456789abcdef`,
   frameId: 0,
   tab: { id: tabId },
   ...extra,
@@ -168,6 +296,17 @@ describe("take: who gets the page", () => {
     expect(both.map((r) => r.kind).sort()).toEqual(["nothing", "page"]);
   });
 
+  it("a different or missing handoff nonce cannot take a stale tab id's page", async () => {
+    for (const url of [
+      `${ORIGIN}${RECEIVE_PATH}?handoff=ffffffffffffffffffffffffffffffff`,
+      `${ORIGIN}${RECEIVE_PATH}`,
+    ]) {
+      const { store, tabId } = await stored();
+      expect(await take(ask, fromReceiver(tabId, { url }), ORIGINS, store, () => 2000)).toEqual({ kind: "nothing" });
+      expect((await take(ask, fromReceiver(tabId), ORIGINS, store, () => 2000)).kind).toBe("page");
+    }
+  });
+
   it("not after KEEP_MS, and just before it", async () => {
     const late = await stored();
     expect((await take(ask, fromReceiver(late.tabId), ORIGINS, late.store, () => 1000 + KEEP_MS + 1)).kind).toBe(
@@ -194,7 +333,7 @@ describe("pressed: what one press does", () => {
     expect(calls).toEqual([
       "capture 7",
       "open about:blank beside 7 -> 100",
-      `navigate 100 ${ORIGIN}${RECEIVE_PATH}`,
+      `navigate 100 ${ORIGIN}${RECEIVE_PATH}?handoff=0123456789abcdef0123456789abcdef`,
       'say 7 "" Add this page to Spideryarn',
     ]);
     expect(store.waiting.get(100)?.html).toBe(page.kind === "page" ? page.html : "");
@@ -208,6 +347,30 @@ describe("pressed: what one press does", () => {
     calls.length = 0;
     await pressed({ id: 7, url: "https://www.cell.com/a#again" }, ORIGIN, chrome, store, () => 2000);
     expect(calls).toEqual(["focus 100"]);
+  });
+
+  it("two presses arriving together still open only one receiving tab", async () => {
+    const store = memoryStore();
+    let release!: () => void;
+    const firstCaptureMayFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let captures = 0;
+    const { chrome, calls } = fakeChrome(async () => {
+      captures += 1;
+      if (captures === 1) await firstCaptureMayFinish;
+      return page;
+    });
+
+    const first = pressed({ id: 7, url: "https://www.cell.com/a" }, ORIGIN, chrome, store, () => 1000);
+    const second = pressed({ id: 7, url: "https://www.cell.com/a" }, ORIGIN, chrome, store, () => 1000);
+    await Promise.resolve();
+    release();
+    await Promise.all([first, second]);
+
+    expect(calls.filter((call) => call.startsWith("capture "))).toHaveLength(1);
+    expect(calls.filter((call) => call.startsWith("open "))).toHaveLength(1);
+    expect(calls).toContain("focus 100");
   });
 
   it("…unless that tab has closed, or KEEP_MS has passed", async () => {
@@ -355,6 +518,18 @@ describe("publishing refuses rather than guesses (F7)", () => {
     expect(uploadOutcome({ uploadState: "FAILED" }, "0.1.0")).toHaveProperty("failed");
     expect(uploadOutcome({}, "0.1.0")).toHaveProperty("failed");
   });
+
+  it("does not treat an item-wide polled success as proof that our upload succeeded", () => {
+    expect(polledUploadOutcome({ lastAsyncUploadState: "SUCCEEDED" }, "0.1.0")).toHaveProperty("failed");
+  });
+
+  it("rejects unknown and incompatible command-line options", () => {
+    expect(publishMode(["--upload-onyl"])).toHaveProperty("failed");
+    expect(publishMode(["--status", "--upload-only"])).toHaveProperty("failed");
+    expect(publishMode([])).toBe("publish");
+    expect(publishMode(["--status"])).toBe("status");
+    expect(publishMode(["--upload-only"])).toBe("upload-only");
+  });
 });
 
 describe("receive: the page is sent only for the reader it was opened for (F1)", () => {
@@ -418,6 +593,28 @@ describe("receive: the page is sent only for the reader it was opened for (F1)",
       }),
     ).toEqual({ kind: "refused", reason: "That upload is still going. Wait for it, or stop it first." });
     expect(went).toEqual([]);
+  });
+
+  it("waits to take the capture while another upload still owns the engine", () => {
+    for (const kind of ["hashing", "granting", "sending", "queueing"] as const) {
+      expect(
+        uploadInFlight({
+          uploadId: null,
+          filename: "earlier.pdf",
+          bytes: 10,
+          phase: kind === "sending" ? { kind, sent: 1 } : { kind },
+        }),
+      ).toBe(true);
+    }
+    expect(uploadInFlight(null)).toBe(false);
+    expect(
+      uploadInFlight({
+        uploadId: null,
+        filename: "earlier.pdf",
+        bytes: 10,
+        phase: { kind: "cancelled" },
+      }),
+    ).toBe(false);
   });
 
   it("no extension, or nothing waiting, is said as such", async () => {

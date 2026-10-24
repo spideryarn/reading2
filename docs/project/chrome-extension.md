@@ -26,18 +26,20 @@ the spike are [261024q](../plans/261024q-chrome-extension-one-click-add-the-page
  the reader presses the button on a tab
    └─ capturePage() runs in that tab only (activeTab): the bookmarklet's own function
         (src/web/save-page-bookmarklet.ts) — the DOM as rendered, addresses made absolute,
-        scripts / hidden and password fields / CSRF metas removed, a saved-from meta added
+        executable scripts and attributes / hidden and password form inputs / CSRF metas removed,
+        a saved-from meta added
    └─ a blank tab opens beside it; the page is stored in the extension's IndexedDB under that
-        tab's id; only then is the tab sent to /add-from-extension
+        tab's id and a fresh handoff nonce; only then is the tab sent to /add-from-extension
  /add-from-extension (src/web/AddFromExtension.tsx), the reader's own session
    └─ chrome.runtime.sendMessage(<an id it trusts>, { type: "spideryarn.take" })
-        the extension answers only the top frame of that very tab, at that path, on our origin,
-        once, within 15 minutes
+        the extension answers only the top frame of that very tab, with that nonce, at that path,
+        on our origin, once, within 15 minutes
    └─ a File → uploadEngine.send() → /add/upload/<id>, the add page with its purpose box
 ```
 
-**The extension holds nothing of the reader's**: no token, no cookie, no key, and it never calls
-our API. The receiving page uploads with the session it already has, through the upload every
+**The extension holds no Spideryarn credential**: no token, no cookie, no key, and it never calls
+our API. It does temporarily hold the captured HTML in its own IndexedDB. The receiving page
+uploads with the session it already has, through the upload every
 file takes ([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). So the new
 untrusted input, the page's HTML, arrives where an uploaded file already arrives, and is treated as
 one ([security-map.md](security-map.md), party 1).
@@ -47,17 +49,19 @@ The checks, each held by `tests/extension-handoff.test.ts` with a positive contr
 - **Who may ask.** Chrome refuses any page not on an origin in the manifest's
   `externally_connectable` (measured: such a page has no `sendMessage` at all) and every other
   extension. The extension then wants the top frame (`frameId` 0) of the tab it opened, at exactly
-  `/add-from-extension`, on exactly one of its origins.
+  `/add-from-extension`, with the capture's unguessable nonce, on exactly one of its origins. A
+  browser restart clears every persisted tab mapping because Chrome tab ids are session-scoped.
 - **Whom the page asks.** Only the ids compiled into it (`trustedExtensionIds` in
   [`src/web/extension-handoff.ts`](../../src/web/extension-handoff.ts)), never one from the
   address: any extension can name our origin in `externally_connectable` without a warning. The
   production build never trusts the dev id, whose key is public.
 - **For whom it uploads.** The page is an add visit (a change of reader stops it), keyed on the
-  reader, and sends only if it is still mounted and the upload engine and the tab both still hold
-  the reader it mounted for (`receive` in AddFromExtension.tsx). A reply that arrives after a change
-  of reader uploads nothing.
-- **Twice.** A second press on the same page focuses the tab the first one opened, for 15 minutes
-  or until that tab closes. Back to `/add-from-extension` in the same tab sends nothing again.
+  reader and remembered in that tab's session storage across sign-in, and sends only if it is still
+  mounted and the upload engine and the tab both still hold the reader it mounted for (`receive` in
+  AddFromExtension.tsx). A reply that arrives after a change of reader uploads nothing.
+- **Twice.** Concurrent presses are serialised, and a second press on the same page focuses the tab
+  the first one opened, for 15 minutes or until that tab closes. Back to `/add-from-extension` in
+  the same tab sends nothing again.
 - **Size.** The upload's 50 MiB, and 60 MiB of JSON, because Chrome carries messages as JSON
   capped at 64 MiB and a quote is two characters of it. A 47 MB page took about 4 s end to end.
 
@@ -120,7 +124,9 @@ spike and its numbers.
 
 Bump `EXTENSION_VERSION` in `extension/manifest.ts`, `npm run extension:build`, then
 `npm run extension:publish` (it refuses unless the version is above the store's, and submits only
-an upload the store says succeeded). Or upload the zip in the dashboard by hand. Each update is
+when the upload response itself says that exact version succeeded). If the upload is processed
+asynchronously, the API exposes no version-bound completion result, so the script stops and asks
+for dashboard verification and publication. Or upload the zip in the dashboard by hand. Each update is
 reviewed, usually within days; Chrome then installs it for every reader by itself within hours.
 **An update that adds a permission disables the extension until each reader accepts it**, so a
 new permission is a product decision, not a line in the manifest.

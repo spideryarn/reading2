@@ -85,9 +85,10 @@ What is new, and is checked:
 
 1. **Who may take a capture.** Only a page on an origin in the extension's allowlist
    (`https://www.spideryarn.com`; in the dev build also `http://localhost:*`), and only from the tab
-   the extension itself opened for that capture. A page on another site cannot even call the
-   extension: `externally_connectable` refuses it before our code runs. A capture not taken in 15
-   minutes is dropped.
+   the extension itself opened for that capture, with the nonce minted for it. A page on another
+   site cannot even call the extension: `externally_connectable` refuses it before our code runs. A
+   capture not taken in 15 minutes is refused; an untaken copy is removed when the receiving tab
+   closes, on the next cleanup after expiry, or when Chrome next starts.
 2. **What our page accepts from the extension.** Only from the extension ids it names, only a reply
    of the expected shape (`html` a string within `MAX_UPLOAD_BYTES`, `title` a short string), and the
    reply is only ever made into a `File` and uploaded, which is what a reader can do with any file.
@@ -147,7 +148,8 @@ unpacked id is stable, a "DEV" badge). No remote code, no framework. The action 
    and the title says why. On Chrome's PDF viewer (a `.pdf` URL, or an injection that fails with
    the PDF viewer's error): open `/add/<url>` instead, our server fetching the PDF as it does today.
 2. Otherwise capture; too big → badge and title say so; otherwise store and open the tab.
-3. `onMessageExternal`: the checks in § What the untrusted HTML meets, then reply once and delete.
+3. `onMessageExternal`: the origin, top-frame, tab, path and nonce checks in § What the untrusted
+   HTML meets, then reply once and delete.
 
 Tests: the background logic as plain functions (Vitest, with a fake `chrome`), the sender checks red
 first (wrong origin, right origin wrong tab, second take, expired); and a real run in Playwright on
@@ -156,8 +158,8 @@ the box with the unpacked dev build (Chromium loads unpacked extensions with
 
 ### Stage 3: the receiving page
 
-Route `{ kind: "add-from-extension" }` at `/add/from-extension`, matched above the general `/add/`
-branch for the reason `add-upload` is (src/web/router.ts). Signed out: the sign-in page, which
+Route `{ kind: "add-from-extension" }` at `/add-from-extension`, outside the general `/add/` branch
+(src/web/router.ts). Signed out: the sign-in page, which
 returns to it in the same tab (`auth-return.ts`), so the tab id still matches. Signed in: ask the
 extension, build the `File`, `uploadEngine.send`, navigate to `/add/upload/<id>` — the add page
 exactly as an upload reaches it. Every other outcome is one plain sentence and a way on: no extension
@@ -195,9 +197,10 @@ taken. **These override the stages above where they differ.**
   `capturePage(maxBytes, messageCap = 0, win = window)`: the extension passes two numbers, the
   bookmarklet and the tests pass a window. Tested by running the built extension in Chromium.
 - **F3 (P1): a frame of our page in a hijacked tab.** The extension also requires
-  `sender.frameId === 0` and the sender URL's path to be exactly `/add-from-extension`. No nonce: a
-  top frame on our origin, in the tab opened for this capture, is the receiver, and a fragment
-  nonce would not survive the sign-in round trip (`SendToSignIn` keeps path and query).
+  `sender.frameId === 0`, the sender URL's path to be exactly `/add-from-extension`, and the query's
+  fresh 128-bit handoff nonce to match. The query survives the sign-in round trip
+  (`SendToSignIn` keeps path and query). The later code review added the nonce because persisted tab
+  ids can be reused after a browser restart.
 - **F4 (P1): no atomic lifecycle.** The tab is opened blank, the capture stored, and only then is
   the tab sent to our page; *take* is one IndexedDB read-write transaction (get and delete);
   expiry is checked on read; `tabs.onRemoved` drops a capture whose tab closed. Tested with two
@@ -213,12 +216,15 @@ taken. **These override the stages above where they differ.**
   can list our origin in `externally_connectable` without a warning.
 - **F7 (P2): the publish command's credential.** One method: a service-account JSON key Greg
   downloads to a path outside the repo (`CWS_SERVICE_ACCOUNT_KEY` names it), a JWT signed with
-  `node:crypto`, exchanged for a one-hour token with the `chromewebstore` scope; upload, then
-  `fetchStatus` until the upload has succeeded with the new version, and only then publish.
+  `node:crypto`, exchanged for a one-hour token with the `chromewebstore` scope; publish only when
+  the upload response itself says the exact new version succeeded. A later review established that
+  `fetchStatus` has no version or operation id, so an asynchronous upload stops for dashboard
+  verification rather than treating item-wide status as proof.
 - **F8 (P1): the disclosures must be exact.** `extension/store/listing.md` holds the single-purpose
   sentence, each permission's justification, the data categories to tick (website content; web
-  browsing activity — the page's address), the retention (15 minutes in the browser; then the
-  reader's own article until they delete it), and the recipients (Spideryarn, and the
+  browsing activity — the page's address — and every sensitive-content category the arbitrary DOM
+  can contain), the 15-minute handoff window and actual cleanup events, the reader's own article
+  until they delete it, and the recipients (Spideryarn, and the
   processors `/privacy` already names). `/privacy` gets the same in plain words.
 - **F9 (P2): JSON can double a page.** Messages are JSON, capped at 64 MiB, and a quote or
   backslash serialises to two characters. `capturePage` also refuses a page whose JSON
@@ -253,6 +259,31 @@ Stages 1–3 and 5 as revised above; Stage 4 asked. The doc is
   press with the first tab open opened nothing and uploaded nothing; signed out, the tab went to
   `/login?next=%2Fadd-from-extension` and after signing in carried on to the article;
   `chrome://version` got badge `!` and no tab.
+
+## Code review fixes, 2026-10-24
+
+The review of commit `9966db02df90` found and fixed the gaps that the plan-stage review could not
+see in the implementation:
+
+- Concurrent action events crossed the check-before-record gap and could create two imports. A
+  per-store promise tail now serialises them; a barrier test was red with two captures first.
+- IndexedDB outlived Chrome's session-scoped tab ids. Each capture now has a fresh nonce, `take` is
+  atomic on tab plus nonce, and browser startup clears old tab mappings.
+- The add-visit reader fence was erased by `/login` and by OAuth's full-page reload. The validated
+  login return counts as the same visit, and the first signed-in reader is held in that receiver
+  tab's session storage. The red test loses the in-memory ref before A→B.
+- An existing upload could make the receiver consume and then refuse the only capture. It now waits
+  before asking; if another upload wins while the reply is in flight, the cached file is unspent and
+  retried when the engine settles.
+- `fetchStatus.lastAsyncUploadState` was treated as this process's upload and supplied the expected
+  version locally. The API provides neither version nor operation id there, so the publisher now
+  fails closed on asynchronous completion and rejects unknown CLI options before any network call.
+- The privacy and store text treated a 15-minute delivery deadline as timed deletion and denied
+  sensitive categories an arbitrary DOM can contain. The disclosures now name the actual cleanup,
+  retention and recipients; the shared capture also removes event handlers and `javascript:` URLs
+  while retaining the MathJax and structured-data scripts the pipeline reads.
+
+The reusable classes and countermeasures are in postmortems `261024f`–`261024k`.
 
 ## Later, not in v1
 

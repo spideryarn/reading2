@@ -208,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "21 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "24 October 2026"');
   });
 
   it("distinguishes the article-free open record from the request log", () => {

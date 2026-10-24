@@ -187,7 +187,7 @@ describe("savePageForSpideryarn", () => {
     );
     expect(html).toContain(`<video poster="https://www.cell.com/article/S0092/poster.jpg">`);
     expect(html).toContain(`href="mailto:someone@example.com"`);
-    expect(html).toContain(`href="javascript:void(0)"`);
+    expect(html).not.toContain(`href="javascript:void(0)"`);
     expect(html).toContain(`src="data:image/png;base64,AAAA"`);
     expect(html).toContain(`href="http://[bad"`);
   });
@@ -259,6 +259,27 @@ describe("savePageForSpideryarn", () => {
     expect(html).toContain(`<input type="button" value="Show note">`);
     expect(html).toContain(`<input type="image" alt="Find">`);
     expect(html).toContain("The cells were cultured");
+  });
+
+  it("removes executable attributes and URLs while keeping data scripts the pipeline reads", async () => {
+    const { saved } = await save(
+      article(
+        `<script type="application/ld+json">{"@type":"Article"}</script>`,
+        `<a href="javascript:steal()" onclick="steal()">link</a>` +
+          `<img src="javascript:steal()" onerror="steal()">` +
+          `<p>The energy is <script type="math/tex">E = mc^2</script>.</p>`,
+      ),
+    );
+    const html = await text(saved.blobs[0]!);
+    expect(html).not.toMatch(/\son[a-z]+=/i);
+    expect(html).not.toMatch(/(?:href|src)="\s*javascript:/i);
+    expect(html).toContain(`<script type="application/ld+json">`);
+    expect(html).toContain(`<script type="math/tex">E = mc^2</script>`);
+
+    const root = page(article()).win;
+    root.document.documentElement.setAttribute("onload", "steal()");
+    const captured = capturePage(MAX_UPLOAD_BYTES, 0, root);
+    expect(captured.kind === "page" && captured.html).not.toContain(`onload="steal()"`);
   });
 
   /*

@@ -59,6 +59,7 @@ export interface ItemStatus {
   submittedItemRevisionStatus?: RevisionStatus;
   lastAsyncUploadState?: string;
   takenDown?: boolean;
+  warned?: boolean;
 }
 
 /** The highest version the store holds, published or submitted. */
@@ -82,6 +83,31 @@ export function uploadOutcome(
     return { failed: `the store has version ${answer.crxVersion ?? "(none)"}, not ${version}` };
   }
   return "done";
+}
+
+/** Interpret the item-wide status returned after an asynchronous upload. It
+ *  can say processing continues, but it cannot prove which upload succeeded:
+ *  `fetchStatus` returns no version or operation id for this field. */
+export function polledUploadOutcome(status: ItemStatus, _version: string): "wait" | { failed: string } {
+  const state = status.lastAsyncUploadState;
+  if (state === "IN_PROGRESS" || state === "UPLOAD_IN_PROGRESS") return "wait";
+  if (state === "SUCCEEDED") {
+    return {
+      failed:
+        "the latest asynchronous upload succeeded, but the store does not identify its version; verify and publish it in the Chrome Web Store dashboard",
+    };
+  }
+  return { failed: `the store says the latest asynchronous upload is ${state ?? "in no state at all"}` };
+}
+
+export type PublishMode = "publish" | "status" | "upload-only";
+
+/** The command's mode. Kept separate so a dangerous typo is testable. */
+export function publishMode(args: readonly string[]): PublishMode | { failed: string } {
+  if (args.length === 0) return "publish";
+  if (args.length === 1 && args[0] === "--status") return "status";
+  if (args.length === 1 && args[0] === "--upload-only") return "upload-only";
+  return { failed: `unknown or incompatible options: ${args.join(" ")}` };
 }
 
 function base64url(data: string | Buffer): string {
@@ -131,6 +157,11 @@ function setting(name: string): string {
 }
 
 async function main(): Promise<void> {
+  const mode = publishMode(process.argv.slice(2));
+  if (typeof mode === "object") {
+    console.error(`Refused: ${mode.failed}.`);
+    process.exit(2);
+  }
   if (PRODUCTION_EXTENSION_ID === null) {
     console.error(
       "PRODUCTION_EXTENSION_ID in src/web/extension-handoff.ts is not set: the store item does not exist yet, " +
@@ -157,9 +188,11 @@ async function main(): Promise<void> {
   console.log(
     `Store: published ${before.publishedItemRevisionStatus?.state ?? "—"}, submitted ${
       before.submittedItemRevisionStatus?.state ?? "—"
-    }, highest version ${theirs ?? "none"}${before.takenDown ? ", TAKEN DOWN" : ""}. Ours: ${EXTENSION_VERSION}.`,
+    }, highest version ${theirs ?? "none"}, latest async upload ${before.lastAsyncUploadState ?? "—"}${
+      before.warned ? ", WARNINGS" : ""
+    }${before.takenDown ? ", TAKEN DOWN" : ""}. Ours: ${EXTENSION_VERSION}.`,
   );
-  if (process.argv.includes("--status")) return;
+  if (mode === "status") return;
 
   if (!versionAbove(EXTENSION_VERSION, theirs)) {
     console.error(`Refused: ${EXTENSION_VERSION} is not above the store's ${theirs}. Bump EXTENSION_VERSION in extension/manifest.ts.`);
@@ -171,35 +204,32 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  let answer = await call<{ uploadState?: string | undefined; crxVersion?: string | undefined }>(
+  const answer = await call<{ uploadState?: string | undefined; crxVersion?: string | undefined }>(
     token,
     "POST",
     `${API}/upload/v2/${item}:upload`,
     readFileSync(zipPath),
   );
-  for (let tries = 0; uploadOutcome(answer, EXTENSION_VERSION) === "wait"; tries++) {
+  let outcome = uploadOutcome(answer, EXTENSION_VERSION);
+  for (let tries = 0; outcome === "wait"; tries++) {
     if (tries === 30) {
       console.error("Refused: the upload was still being processed after five minutes. Run again with --status.");
       process.exit(1);
     }
     await new Promise((r) => setTimeout(r, 10_000));
-    /* `fetchStatus` reports the most recent upload's state but no version for
-       an unsubmitted draft, so a `SUCCEEDED` here is taken as this upload's,
-       the version already checked above it. */
     const now = await status();
-    answer = { uploadState: now.lastAsyncUploadState, crxVersion: EXTENSION_VERSION };
+    outcome = polledUploadOutcome(now, EXTENSION_VERSION);
   }
-  const outcome = uploadOutcome(answer, EXTENSION_VERSION);
   if (typeof outcome === "object") {
     console.error(`Refused to submit: ${outcome.failed}.`);
     process.exit(1);
   }
   console.log(`Uploaded ${EXTENSION_VERSION}.`);
-  if (process.argv.includes("--upload-only")) return;
+  if (mode === "upload-only") return;
 
-  await call(token, "POST", `${API}/v2/${item}:publish`);
-  const after = await status();
-  console.log(`Submitted for review: ${after.submittedItemRevisionStatus?.state ?? "(no state yet)"}.`);
+  const submitted = await call<{ state?: string; warningInfo?: unknown }>(token, "POST", `${API}/v2/${item}:publish`);
+  console.log(`Submitted for review: ${submitted.state ?? "(no state yet)"}.`);
+  if (submitted.warningInfo !== undefined) console.warn(`Store warnings: ${JSON.stringify(submitted.warningInfo)}.`);
 }
 
 function isMain(): boolean {

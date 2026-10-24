@@ -39,6 +39,8 @@ declare const chrome: {
   };
   windows: { update(id: number, d: { focused: boolean }): Promise<unknown> };
   runtime: {
+    onStartup: { addListener(cb: () => void): void };
+    onInstalled: { addListener(cb: () => void): void };
     onMessageExternal: {
       addListener(
         cb: (message: unknown, sender: Parameters<typeof take>[1], reply: (r: unknown) => void) => boolean,
@@ -50,6 +52,10 @@ declare const chrome: {
 const ORIGIN = SPIDERYARN_ORIGINS[0] as string;
 
 const browser: Chromeish = {
+  nonce() {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  },
   async capture(tabId) {
     const [frame] = await chrome.scripting.executeScript({
       target: { tabId },
@@ -84,18 +90,31 @@ const browser: Chromeish = {
   },
 };
 
+/* IndexedDB survives the browser but tab ids do not: Chrome only promises a
+   tab id is unique within one browser session. Clear both halves before this
+   session handles a press or handoff, so an id reused after restart cannot
+   focus an unrelated tab or receive the previous session's page. `onInstalled`
+   also removes entries written by an older extension without handoff nonces. */
+let sessionReady: Promise<void> = Promise.resolve();
+const forgetPreviousSession = () => {
+  sessionReady = indexedDbStore.forgetAll();
+  void sessionReady.catch(() => {});
+};
+chrome.runtime.onStartup.addListener(forgetPreviousSession);
+chrome.runtime.onInstalled.addListener(forgetPreviousSession);
+
 chrome.action.onClicked.addListener((tab) => {
-  void pressed(tab, ORIGIN, browser, indexedDbStore, Date.now);
+  void sessionReady.then(() => pressed(tab, ORIGIN, browser, indexedDbStore, Date.now));
 });
 
 chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
-  void take(message, sender, SPIDERYARN_ORIGINS, indexedDbStore, Date.now).then(reply, () =>
-    reply({ kind: "nothing" }),
-  );
+  void sessionReady
+    .then(() => take(message, sender, SPIDERYARN_ORIGINS, indexedDbStore, Date.now))
+    .then(reply, () => reply({ kind: "nothing" }));
   /* `true`: the reply is sent later, so Chrome keeps the channel open. */
   return true;
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  void indexedDbStore.forgetTab(tabId);
+  void sessionReady.then(() => indexedDbStore.forgetTab(tabId));
 });

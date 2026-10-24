@@ -198,13 +198,17 @@ export function PrivacyPage() {
               docs/plans/261024q-chrome-extension-one-click-add-the-page.md (F8). */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">Pages you add with the Chrome extension</strong> —
-            when you press its button, and only then, the extension copies the page in that tab as
-            your browser shows it, with its address, and passes it to a Spideryarn tab, which adds
-            it to your shelf like a file you uploaded. That can include anything the page shows you,
-            such as your name in the site’s menu; scripts and password and hidden fields are left
-            out. The extension holds the copy in your browser for at most 15 minutes, until the
-            Spideryarn tab takes it, and sends nothing anywhere else. It reads no other tab and
-            nothing in the background, and it has no access to your Spideryarn account.
+            when you press its button, and only then, the extension copies that tab’s rendered HTML
+            and address and passes them to a Spideryarn tab, which adds the page to your shelf like a
+            file you uploaded. The copy can include personalised or sensitive content in the page’s
+            HTML, including content not currently visible; for example, your name in a site’s menu.
+            Executable scripts and attributes, password and hidden form inputs, and most other form
+            values are left out. The Spideryarn tab can take the copy for 15 minutes. The extension
+            removes it when that tab takes it or closes, on its next cleanup after it expires, or
+            when Chrome next starts. Once added, Spideryarn and the processors named below keep and
+            use it like any other article until you delete it. The extension reads no other tab or
+            anything in the background, makes no network request itself, and has no access to your
+            Spideryarn account.
           </li>
           {/* **Quiz answers are on this list since 2026-10-05**, and until then
               the bullet ended "Quiz answers are the exception: they go to a

@@ -48,8 +48,9 @@ export type PageCapture =
  *    says) and written back, and every `<base>` is removed. Not a single
  *    `<base>` instead: with one, the reader resolves an in-page `#fn1` against
  *    it too, and a footnote link would point at the publisher. So an `href`
- *    starting `#` is left exactly as written, as are `javascript:`, `data:`
- *    and `mailto:` addresses and any the URL parser refuses.
+ *    starting `#` is left exactly as written, as are `data:` and `mailto:`
+ *    addresses and any the URL parser refuses. `javascript:` addresses,
+ *    inline event handlers and `srcdoc` are removed with executable scripts.
  * 2. One `<meta charset="utf-8">`, first in `<head>`, every other charset
  *    declaration removed: the file is UTF-8 because a `Blob` of a string always
  *    is, and a page that said `iso-8859-1` would otherwise be decoded by its own
@@ -99,7 +100,7 @@ export function capturePage(
   for (let i = 0; i < bases.length; i++) bases[i]!.remove();
   const absolute = (value: string): string => {
     const v = value.trim();
-    if (v === "" || /^(?:javascript|data|mailto):/i.test(v)) return value;
+    if (v === "" || /^(?:data|mailto):/i.test(v)) return value;
     try {
       return new win.URL(v, base).href;
     } catch (_) {
@@ -154,8 +155,22 @@ export function capturePage(
      attributes are namespace-sensitive in selector engines, while
      `getAttribute("xlink:href")` is the interoperable DOM spelling. */
   const addressed = copy.querySelectorAll("*");
-  for (let i = 0; i < addressed.length; i++) {
-    const el = addressed[i]!;
+  /* `querySelectorAll` excludes `copy` itself; begin at -1 so executable
+     attributes on the root `<html>` element are stripped too. */
+  for (let i = -1; i < addressed.length; i++) {
+    const el = i === -1 ? copy : addressed[i]!;
+    /* A cloned element keeps executable attributes even after its `<script>`
+       children are removed. Walk backwards because NamedNodeMap is live. */
+    for (let a = el.attributes.length - 1; a >= 0; a--) {
+      const attr = el.attributes[a]!;
+      if (
+        attr.name.toLowerCase().indexOf("on") === 0 ||
+        attr.name.toLowerCase() === "srcdoc" ||
+        /^\s*javascript:/i.test(attr.value)
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
     const names = ["src", "href", "poster", "data-src", "xlink:href"];
     for (let n = 0; n < names.length; n++) {
       const value = el.getAttribute(names[n]!);

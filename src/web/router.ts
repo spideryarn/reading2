@@ -157,8 +157,9 @@ export type Route =
    * `/add-from-extension`. See AddFromExtension.tsx.
    *
    * Not under `/add/`, whose branch reads the rest of the path as a stranger's
-   * address, and carrying nothing: the page asks the extension for its capture,
-   * and the extension decides whether this tab may have it.
+   * address. Its query carries only an unguessable handoff nonce: the page asks
+   * the extension for its capture, and the extension decides whether this tab
+   * and nonce may have it.
    * docs/plans/261024q-chrome-extension-one-click-add-the-page.md.
    */
   | { kind: "add-from-extension" }

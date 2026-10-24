@@ -47,16 +47,23 @@ fields and [`/privacy`](https://www.spideryarn.com/privacy) say the same thing. 
   - `activeTab`: To read the page in the tab where the user pressed the button, and only that tab,
     only then. No other tab or site is accessible.
   - `scripting`: To run the function that copies that page (its HTML as rendered, with addresses
-    made absolute and scripts, password and hidden fields removed) in that tab.
+    made absolute and executable scripts and attributes, password and hidden form inputs, and most
+    other form values removed) in that tab.
 - **Remote code**: No, I am not using remote code.
 - **Data usage**, tick:
   - **Website content** (the text, images and HTML of the page the user adds).
   - **Web history**: the address of the page the user adds, which is saved with it as where it
     came from. Nothing else of the browsing history.
-  - Nothing else: no personally identifiable information, health, financial, authentication,
-    personal communications, location or user activity data is collected by the extension.
-    (A page the user adds can show such things, e.g. their name in a site's menu; the description
-    and the privacy policy say so.)
+  - **Personally identifiable information**, **Health information**, **Financial and payment
+    information**, **Personal communications**, **Location**, **Authentication information**, and
+    **User activity**: tick each. The captured HTML is an arbitrary page chosen by the user and can
+    incidentally contain any of them. The extension does not independently seek or track those
+    categories; they are declared because they can be inside the page the user asks it to copy.
+- **Retention**: the Spideryarn tab can take a captured copy for 15 minutes. The extension removes
+  it when that tab takes it or closes, on the next cleanup after expiry, or when Chrome next starts.
+  After upload, Spideryarn keeps it as the user's article until the user deletes it.
+- **Recipients**: the extension makes no network request itself. The Spideryarn tab sends the page
+  to Spideryarn, whose service providers process it as described in the privacy policy.
 - **Certify**: does not sell or transfer data to third parties outside the approved use cases;
   does not use or transfer it for purposes unrelated to the single purpose; does not use or
   transfer it to determine creditworthiness or for lending.

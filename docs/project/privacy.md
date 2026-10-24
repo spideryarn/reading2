@@ -886,14 +886,19 @@ Since 2026-10-24 ([261024q](../plans/261024q-chrome-extension-one-click-add-the-
 `spya-xsfrsg`). One press of its button copies the page in that tab, as the browser shows it,
 with its address, and hands it to a Spideryarn tab, which uploads it as a file. So the page's
 bullet under *What we keep* says what the bookmarklet's Help text already says of a saved page:
-anything the page shows can come with it, scripts and password and hidden fields do not.
+the rendered DOM can contain personalised or sensitive content, including content not currently
+visible; executable scripts and attributes, password and hidden form inputs, and most other form
+values do not come with it.
 
 What the bullet promises, and where each promise is held:
 
 - **Only on a press, only that tab**: the manifest asks for `activeTab` and `scripting` and nothing
   else (`extension/manifest.ts`; `tests/extension-handoff.test.ts` fails on any other
   permission, a host permission or a content script).
-- **At most 15 minutes in the browser**: `KEEP_MS` in `extension/src/handoff.ts`, checked on read.
+- **Available to the receiving tab for 15 minutes**: `KEEP_MS` in `extension/src/handoff.ts`,
+  checked on read. A taken capture and a closed receiving tab are deleted at once. An expired,
+  untaken capture is deleted on the next button press or when Chrome next starts; IndexedDB has no
+  wall-clock deletion of its own.
 - **Nowhere else, and no access to the account**: the extension makes no network request of its
   own; the Spideryarn tab uploads with its own session through the existing upload.
 

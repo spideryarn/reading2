@@ -23,7 +23,13 @@ import { SignedInReader } from "./lib/made-for.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import { AddStopped } from "./AddStopped.js";
-import { type AddVisit, addAddress, nextAddVisit } from "./add-visit.js";
+import {
+  type AddVisit,
+  addAddress,
+  nextAddVisit,
+  recoverExtensionVisit,
+  rememberExtensionVisit,
+} from "./add-visit.js";
 import {
   type AdminPage,
   adminOnly,
@@ -36,7 +42,7 @@ import {
   type Route,
   useRoute,
 } from "./router.js";
-import { takeReturn } from "./auth-return.js";
+import { loginNext, takeReturn } from "./auth-return.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
@@ -198,8 +204,18 @@ export function App() {
    * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 1.
    */
   const addVisitRef = useRef<AddVisit | null>(null);
-  const addVisit = nextAddVisit(addVisitRef.current, addAddress(route), user?.id ?? null);
+  const loginReturn = route.kind === "login" ? loginNext(location.search, CALLBACK_HREF) : null;
+  const address = addAddress(route, loginReturn);
+  let visitStorage: Storage | null = null;
+  try {
+    visitStorage = window.sessionStorage;
+  } catch {
+    /* The ref still protects account changes that do not reload the page. */
+  }
+  const heldVisit = recoverExtensionVisit(addVisitRef.current, address, visitStorage);
+  const addVisit = nextAddVisit(heldVisit, address, user?.id ?? null);
   addVisitRef.current = addVisit;
+  rememberExtensionVisit(addVisit, visitStorage);
 
   /**
    * **Nothing here tells the experimental-features store who is reading.** It

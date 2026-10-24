@@ -10,13 +10,13 @@
  */
 import type { Opened, Waiting, WaitingStore } from "./handoff.js";
 
-const NAME = "spideryarn-handoff";
+export const HANDOFF_DB_NAME = "spideryarn-handoff";
 const WAITING = "waiting";
 const OPENED = "opened";
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(NAME, 1);
+    const req = indexedDB.open(HANDOFF_DB_NAME, 1);
     req.onupgradeneeded = () => {
       const db = req.result;
       db.createObjectStore(WAITING, { keyPath: "tabId" });
@@ -54,13 +54,16 @@ export const indexedDbStore: WaitingStore = {
       return () => undefined;
     }),
 
-  take: (tabId: number) =>
+  take: (tabId: number, nonce: string) =>
     inTransaction("readwrite", (waiting) => {
       let found: Waiting | undefined;
       const req = waiting.get(tabId);
       req.onsuccess = () => {
-        found = req.result as Waiting | undefined;
-        if (found !== undefined) waiting.delete(tabId);
+        const candidate = req.result as Waiting | undefined;
+        if (candidate?.nonce === nonce) {
+          found = candidate;
+          waiting.delete(tabId);
+        }
       };
       return () => found;
     }),
@@ -85,6 +88,13 @@ export const indexedDbStore: WaitingStore = {
         cursor.delete();
         cursor.continue();
       };
+      return () => undefined;
+    }),
+
+  forgetAll: () =>
+    inTransaction("readwrite", (waiting, opened) => {
+      waiting.clear();
+      opened.clear();
       return () => undefined;
     }),
 

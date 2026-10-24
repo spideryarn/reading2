@@ -24,6 +24,7 @@
  * router: tests/add-visit.test.ts.
  */
 import type { Route } from "./router.js";
+import { EXTENSION_RECEIVE_HREF } from "./router.js";
 
 export type AddVisit =
   /** The add page, for `reader`. */
@@ -69,12 +70,54 @@ export function nextAddVisit(
  * The kind is in it, so an upload whose id happened to read like an address
  * could not be taken for that address's visit.
  */
-export function addAddress(route: Route): string | null {
+export function addAddress(route: Route, loginReturn: string | null = null): string | null {
   if (route.kind === "add") return `url ${route.url}`;
   if (route.kind === "add-upload") return `upload ${route.uploadId}`;
   /* The extension's page holds a captured page for the reader it mounted for,
      so it is stopped by a change of reader like the two above (GPT Sol,
      docs/plans/261024q-chrome-extension-one-click-add-the-page.md F1). */
   if (route.kind === "add-from-extension") return "extension";
+  if (route.kind === "login" && loginReturn !== null) {
+    try {
+      const returned = new URL(loginReturn, "https://spideryarn.invalid");
+      if (returned.origin === "https://spideryarn.invalid" && returned.pathname === EXTENSION_RECEIVE_HREF) {
+        return "extension";
+      }
+    } catch {
+      /* `loginReturn` is validated before App passes it; fail closed here too. */
+    }
+  }
   return null;
+}
+
+type VisitStorage = Pick<Storage, "getItem" | "setItem">;
+const EXTENSION_READER = "spideryarn:extension-visit-reader";
+
+/** Recover the reader who first reached this receiver tab. Unlike a React ref,
+ *  sessionStorage survives the full-page OAuth trip but remains scoped to this
+ *  tab. A receiver opened signed out stores nobody; its eventual reader starts
+ *  the visit normally. */
+export function recoverExtensionVisit(
+  held: AddVisit | null,
+  address: string | null,
+  store: VisitStorage | null,
+): AddVisit | null {
+  if (held !== null || address !== "extension" || store === null) return held;
+  try {
+    const reader = store.getItem(EXTENSION_READER);
+    return reader ? { kind: "running", address, reader } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Remember the first signed-in reader synchronously, before an effect can
+ *  redirect or ask the extension. Never overwrite A with B. */
+export function rememberExtensionVisit(visit: AddVisit | null, store: VisitStorage | null): void {
+  if (visit?.kind !== "running" || visit.address !== "extension" || store === null) return;
+  try {
+    if (store.getItem(EXTENSION_READER) === null) store.setItem(EXTENSION_READER, visit.reader);
+  } catch {
+    /* Storage may be unavailable in a privacy mode; the in-memory fence remains. */
+  }
 }
