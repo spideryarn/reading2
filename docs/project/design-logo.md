@@ -15,8 +15,9 @@ records implementation/review evidence.
 The two source treatments are [the detailed wool reader](../../assets/brand/source/reader.png) and
 [its optical SVG companion](../../assets/brand/source/mark.svg). The latter preserves the loop,
 book, free strands and crossed base while removing texture for small wordmarks and favicons.
-It is not a separate brand. [The source prompt](../../assets/brand/source/reader-generation.json)
-distinguishes the final generative cutout from the original opaque selected candidate.
+It is not a separate brand. [The source prompt and history](../../assets/brand/source/reader-generation.json)
+distinguish the current rendering from the original opaque candidate and preserve the later
+refinement toward more similar limb lengths; see the investigation's comparison.
 
 One transparent detailed artwork works on both app themes; the optical companion is one orange
 with transparent negative space. There is no theme-dependent pose or image swap. Opaque light
