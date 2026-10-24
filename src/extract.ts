@@ -53,8 +53,9 @@ import type { WorkId } from "./bibliographic.js";
 import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
-import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, pageOpening } from "./front-matter-authors.js";
+import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, openingHeading, pageOpening } from "./front-matter-authors.js";
 import type { OpeningTitleReader } from "./opening-title.js";
+import { addressDay, datelineDay } from "./page-date.js";
 import type { Author, Meta } from "./types.js";
 
 /**
@@ -172,6 +173,14 @@ export interface ExtractResult {
    * candidate is not a fact until the registry's title agrees.
    */
   ownIds: WorkId[];
+  /**
+   * The day in the page's address, when its markup and dateline gave none.
+   * Beside `meta` and not in it, for the same reason as `ownIds`: it is the
+   * weakest evidence there is, so the step applies it only after the registry
+   * has left the article with no day and no year — src/page-date.ts §
+   * `withAddressDay`.
+   */
+  addressDay?: string;
   /**
    * **The whole standalone page, and it *is* the `extractedHtml` artefact.**
    *
@@ -425,6 +434,8 @@ export function readArticle(
    * records: what the general authors pass reads (src/front-matter-authors.ts).
    */
   opening: OpeningRecord[];
+  /** Whether `opening` starts at the page's main heading (`openingHeading`) rather than the top of its scope. */
+  openingHeaded: boolean;
   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
   ownIds: WorkId[];
   /**
@@ -451,6 +462,7 @@ export function readArticle(
     article: shipped.article,
     authors: shipped.authors,
     opening: shipped.opening,
+    openingHeaded: shipped.openingHeaded,
     ownIds: shipped.ownIds,
     untitled: shipped.untitled,
     refusal: refusalFor(shipped),
@@ -480,6 +492,7 @@ function readingArm(
   challenge: ChallengePage | null;
   authors: Author[] | null;
   opening: OpeningRecord[];
+  openingHeaded: boolean;
   ownIds: WorkId[];
   untitled: boolean;
   notes: NoteStats;
@@ -533,12 +546,14 @@ function readingArm(
   /* Before the parse, which drops a short author list as not prose and takes
      the byline element out of the page: src/front-matter-authors.ts. */
   const opening = pageOpening(dom.window.document);
+  const openingHeaded = openingHeading(dom.window.document) !== null;
   const article = new Readability(dom.window.document).parse();
   return {
     article,
     challenge,
     authors,
     opening,
+    openingHeaded,
     ownIds,
     untitled,
     notes,
@@ -1363,7 +1378,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors: declaredAuthors, opening, ownIds, untitled, refusal, notes, callouts, removed, kept } = readArticle(
+  const { article, authors: declaredAuthors, opening, openingHeaded, ownIds, untitled, refusal, notes, callouts, removed, kept } = readArticle(
     opts.html,
     opts.url,
   );
@@ -1393,7 +1408,11 @@ export async function runExtract(opts: {
      dropped it on the floor. It is the reference frame for every year-less date
      in the piece — the field's note in src/types.ts says why it is not
      `fetchedAt`, and `publicationDate` above why it is not converted to UTC. */
-  const publishedAt = publicationDate(article.publishedTime);
+  /* When the markup states none, the line printed under the title
+     (src/page-date.ts, plan 261024a). The address's day is weaker evidence
+     than the registry's, so it goes back beside `meta` as `addressDay`. */
+  const fetchedAt = new Date().toISOString();
+  const publishedAt = publicationDate(article.publishedTime) ?? datelineDay(opening, openingHeaded, fetchedAt);
   /* The page's own line breaks taken back out — `tidyMetaText` above says why,
      and why it stops there rather than guessing at a missing separator. The
      page's declared author list replaces it where it has dropped somebody,
@@ -1457,15 +1476,17 @@ export async function runExtract(opts: {
        different artefacts, and the round-trip test compares them. An uploaded
        document has no address and must not carry one. */
     ...(opts.url === null ? {} : { url: opts.url }),
-    fetchedAt: new Date().toISOString(),
+    fetchedAt,
     ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
   };
 
+  const fromAddress = publishedAt === undefined ? addressDay(opts.url, fetchedAt) : undefined;
   return {
     slug,
     meta,
     ownIds,
+    ...(fromAddress === undefined ? {} : { addressDay: fromAddress }),
     /* **No byline goes into the page any more** (2026-10-07, `debugPage`).
        While one did, it had to be the byline chosen above and not
        Readability's, which on a LaTeXML page was a cited author or the word
