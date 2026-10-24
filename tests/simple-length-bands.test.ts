@@ -131,19 +131,21 @@ describe("Brief", () => {
   const sha = (text: string) => createHash("sha256").update(text).digest("hex");
   /* Greg, 2026-10-06: "I wanted it to stay short for most articles, but allow
      it to go slightly larger for really long ones (e.g. books)." */
-  it("is asked the same of every piece, books included: about 80 words, the prompt `/9` sent", () => {
+  /* The hash below was `/9`'s and `/12`'s Brief (`d492501b…`) until `/13`
+     (plan 261024x) added the rule on where a link goes, to both levels. */
+  it("is asked the same of every piece, books included: about 80 words, as `/9` asked", () => {
     const usual = SIMPLE_BANDS.map((band) => SIMPLE_SYSTEMS_BY_BAND[band].brief);
     expect(new Set(usual).size).toBe(1);
     /* About 100 and 150 in `simple-prompt/10` and `/11`, for every piece. */
     expect(flat(usual[0]!)).toContain("About 80 words in all, and never more than 130. Shorter is fine;");
-    expect(sha(usual[0]!)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
+    expect(sha(usual[0]!)).toBe("7ad0d611649bb5bf5ae07ea73c4b18b2dfbd1d6be8a53da0c3af6c3f3fd21729");
   });
 
   it("keeps the rejected book increase out of every band", () => {
     for (const band of SIMPLE_BANDS) {
       expect(BRIEF_LENGTH[band]).toMatchObject({ words: 80, never: 130 });
       expect(BRIEF_LENGTH[band].room).toBeUndefined();
-      expect(sha(SIMPLE_SYSTEMS_BY_BAND[band].brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
+      expect(sha(SIMPLE_SYSTEMS_BY_BAND[band].brief)).toBe("7ad0d611649bb5bf5ae07ea73c4b18b2dfbd1d6be8a53da0c3af6c3f3fd21729");
     }
   });
 });

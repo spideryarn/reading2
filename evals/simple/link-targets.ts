@@ -24,6 +24,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadEnvLocal } from "../../src/env.js";
+import { inputFingerprint } from "../../src/simple-summary.js";
 import { blindCoin } from "../plain-words/run.js";
 
 const RESULTS = path.join(import.meta.dirname, "..", "results", "simple");
@@ -54,6 +55,7 @@ interface ArmFile {
   fullerWords?: number;
   brief?: Paragraph[];
   fuller?: Paragraph[];
+  articleHash: string;
   dropped?: Record<string, number>;
   check?: { levels?: Record<string, { result: string; attempts: number; retriedAfterFlag?: boolean }> };
 }
@@ -63,16 +65,23 @@ function readArm(arm: Arm, slug: string): ArmFile | null {
   return fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as ArmFile) : null;
 }
 
-async function blocksOf(): Promise<Map<string, { index: Map<string, number>; text: Map<string, string> }>> {
+interface ArticleBlocks {
+  articleHash: string;
+  index: Map<string, number>;
+  text: Map<string, string>;
+}
+
+async function blocksOf(): Promise<Map<string, ArticleBlocks>> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
   const { closeDb } = await import("../../src/db/client.js");
-  const out = new Map<string, { index: Map<string, number>; text: Map<string, string> }>();
+  const out = new Map<string, ArticleBlocks>();
   await runAsOwner(environmentOwnerId(), async () => {
     for (const slug of SLUGS) {
       const a = await loadArticle(slug);
       out.set(slug, {
+        articleHash: inputFingerprint(a.blocks, a.tree, a.meta),
         index: new Map(a.blocks.map((b, i) => [b.id as string, i])),
         text: new Map(a.blocks.map((b) => [b.id as string, b.text])),
       });
@@ -80,6 +89,12 @@ async function blocksOf(): Promise<Map<string, { index: Map<string, number>; tex
   });
   await closeDb();
   return out;
+}
+
+function assertSameArticle(f: ArmFile, article: ArticleBlocks, arm: Arm, slug: string): void {
+  if (f.articleHash !== article.articleHash) {
+    throw new Error(`${arm} ${slug}: result article ${f.articleHash} does not match the local revision ${article.articleHash}`);
+  }
 }
 
 const inFront = (slug: string, i: number | undefined) =>
@@ -131,13 +146,22 @@ async function table(): Promise<void> {
         rows.push(`| ${arm} | ${slug.slice(0, 22)} | ${f.version} | failed: ${f.error ?? "?"} |||||||||`);
         continue;
       }
-      const ix = blocks.get(slug)!.index;
+      const article = blocks.get(slug)!;
+      assertSameArticle(f, article, arm, slug);
+      const ix = article.index;
       const paper = (FRONT[slug] ?? []).length > 0;
-      const front = (id: string) => inFront(slug, ix.get(id));
+      const front = (id: string) => {
+        const blockIndex = ix.get(id);
+        if (blockIndex === undefined) throw new Error(`${arm} ${slug}: linked block ${id} is absent from the local revision`);
+        return inFront(slug, blockIndex);
+      };
       const dropped = Object.entries(f.dropped ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(", ") || "0";
       for (const level of ["brief", "fuller"] as const) {
         const c = count(f[level] ?? [], front);
-        if (paper) ((totals[arm] ??= { brief: { ...ZERO }, fuller: { ...ZERO } })[level] = add(totals[arm]![level], c));
+        if (paper) {
+          totals[arm] ??= { brief: { ...ZERO }, fuller: { ...ZERO } };
+          totals[arm][level] = add(totals[arm][level], c);
+        }
         const g = f.check?.levels?.[level];
         const guard = g ? `${g.result}${g.attempts > 1 ? `×${g.attempts}` : ""}` : "off";
         const fr = (n: number, d: number) => (paper ? `${n} / ${d}` : `— / ${d}`);
@@ -164,7 +188,7 @@ async function table(): Promise<void> {
   for (const [arm, h] of hashes) console.log(`  ${arm}: ${h.slice(0, 12)}`);
 }
 
-const PASSAGE_CHARS = 500;
+const PASSAGE_CHARS = 300;
 type Level = "brief" | "fuller";
 
 function render(f: ArmFile, level: Level, texts: Map<string, string>): string {
@@ -176,13 +200,21 @@ function render(f: ArmFile, level: Level, texts: Map<string, string>): string {
       .join(" ");
     out.push(sentences, "");
     p.ids.forEach((id, i) => {
-      const t = (texts.get(id) ?? "(missing)").replace(/\s+/g, " ");
+      const passage = texts.get(id);
+      if (passage === undefined) throw new Error(`linked block ${id} is absent from the local revision`);
+      const t = passage.replace(/\s+/g, " ");
       out.push(`> [${i + 1}] ${t.length > PASSAGE_CHARS ? `${t.slice(0, PASSAGE_CHARS)}…` : t}`);
     });
     out.push("");
   }
   return out.join("\n");
 }
+
+/* The first seed from 26102424 that put every kind's newer (or `link0b`) arm
+   on each side no worse than 6–4 in ten and 3–2 in five; 26102424 itself put
+   the Fuller control on one side five times in five. Chosen before any judge
+   read a pair (prompting-guide.md § Measuring, 4). */
+const SEED = 26102440;
 
 async function pairs(): Promise<void> {
   const blocks = await blocksOf();
@@ -195,7 +227,7 @@ async function pairs(): Promise<void> {
     }
   }
   /* Shuffle the order and the sides with the tested coin; the seed is fixed before any judge reads a pair. */
-  const coin = blindCoin(26102424);
+  const coin = blindCoin(Number(process.env.LINK_TARGETS_SEED ?? SEED));
   const order = wanted.map((w) => ({ w, r: Array.from({ length: 12 }, () => coin()).reduce((n, b) => n * 2 + (b ? 1 : 0), 0) }));
   order.sort((a, b) => a.r - b.r);
   const lines = [
@@ -207,6 +239,7 @@ async function pairs(): Promise<void> {
   const key: { id: string; kind: string; level: Level; slug: string; A: Arm; B: Arm }[] = [];
   /* Failed writes are listed, not silently replaced (GPT Sol's plan review, F4). */
   const missing: string[] = [];
+  const byLevel: Record<Level, string[]> = { brief: [], fuller: [] };
   const sides: Record<string, { A: number; B: number }> = {};
   let i = 0;
   for (const { w } of order) {
@@ -216,20 +249,28 @@ async function pairs(): Promise<void> {
       missing.push(`${w.kind} ${w.level} ${w.slug}: ${w.left}${l?.ok ? "" : " failed"} / ${w.right}${r?.ok ? "" : " failed"}`);
       continue;
     }
+    const article = blocks.get(w.slug)!;
+    assertSameArticle(l, article, w.left, w.slug);
+    assertSameArticle(r, article, w.right, w.slug);
     i += 1;
     const id = `P${String(i).padStart(2, "0")}`;
     const flip = coin();
     const [a, b] = flip ? [r, l] : [l, r];
     const [aArm, bArm] = flip ? [w.right, w.left] : [w.left, w.right];
-    (sides[`${w.kind}/${w.level}`] ??= { A: 0, B: 0 })[flip ? "A" : "B"] += 1;
-    const texts = blocks.get(w.slug)!.text;
-    lines.push(`## ${id}`, "", "### Summary A", "", render(a, w.level, texts), "### Summary B", "", render(b, w.level, texts));
+    const sideKey = `${w.kind}/${w.level}`;
+    sides[sideKey] ??= { A: 0, B: 0 };
+    sides[sideKey][flip ? "A" : "B"] += 1;
+    const texts = article.text;
+    byLevel[w.level].push(`## ${id}`, "", "### Summary A", "", render(a, w.level, texts), "### Summary B", "", render(b, w.level, texts));
     key.push({ id, kind: w.kind, level: w.level, slug: w.slug, A: aArm, B: bArm });
   }
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(path.join(OUT, "pairs.md"), lines.join("\n"));
+  /* One file per level, for one judge each: the Fuller pairs alone are most of the words. */
+  for (const level of ["brief", "fuller"] as const) {
+    fs.writeFileSync(path.join(OUT, `pairs-${level}.md`), [...lines.slice(0, 4), ...byLevel[level]].join("\n"));
+  }
   fs.writeFileSync(path.join(OUT, "pairs-key.json"), `${JSON.stringify(key, null, 2)}\n`);
-  console.log(`${i} pairs → ${path.relative(process.cwd(), OUT)}/pairs.md. The right-hand arm of each kind is on side:`);
+  console.log(`${i} pairs → ${path.relative(process.cwd(), OUT)}/pairs-{brief,fuller}.md. The right-hand arm of each kind is on side:`);
   for (const [kind, s] of Object.entries(sides)) console.log(`  ${kind}: A ${s.A}, B ${s.B}`);
   for (const m of missing) console.log(`  not paired: ${m}`);
 }
@@ -253,7 +294,9 @@ function score(file: string): void {
     }
     const won = a.links === "same" ? "same" : a.links === "A" ? k.A : k.B;
     const label = k.kind === "test" ? (won === "same" ? "same" : won.startsWith("link1") ? "new" : "old") : won;
-    const t = (tally[`${k.kind}/${k.level}`] ??= {});
+    const tallyKey = `${k.kind}/${k.level}`;
+    tally[tallyKey] ??= {};
+    const t = tally[tallyKey];
     t[label] = (t[label] ?? 0) + 1;
     for (const [side, arm] of [["A", k.A], ["B", k.B]] as const) {
       const fault = side === "A" ? a.faultA : a.faultB;

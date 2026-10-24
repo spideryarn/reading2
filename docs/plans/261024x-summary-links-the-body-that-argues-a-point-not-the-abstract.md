@@ -136,6 +136,14 @@ Summed over the four papers, both `after` arms against both `before` arms, each 
 The baseline, `link0a` · `link0b`: Brief ¶ ids in the front summary 9/17 · 9/20, Fuller 14/100 ·
 12/100; on the reported article, Fuller sentences 20/33 · 19/32.
 
+## Result
+
+Shipped. [261024f](../investigations/261024f-summary-links-to-the-body-or-the-abstract-measured.md)
+has the numbers: paragraphs with a front-summary link went from 13/16 to 1/16 on Brief and 20/74 to
+2/75 on Fuller; the blind judge preferred the new links 14–4. G1–G4 were met. G5 was missed on two
+counts: the Brief control's 3–0, and a first count of unsupported links (7 new, 4 old) that a
+second count, listing each link, put at 8 and 8.
+
 ## The fold half: Greg's claim, checked
 
 Today's `matter` step, run three times on the local copy of the same article (scratch script, one
