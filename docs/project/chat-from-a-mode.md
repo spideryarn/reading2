@@ -66,7 +66,9 @@ origin (`summary` is reserved in the database CHECK and not built, and since 202
 `chat_threads_origin_summary` lets it carry none of the shape columns); a chat about a passage has an
 *anchor*, not an origin; and a comment's question is linked from the comment's side
 ([comments.md](comments.md#asking-the-model-and-the-link-back)). A citation card's *Does it say
-that?* is the passage kind: anchored on the citing paragraph, fresh each press, and it leaves the
+that?* was the passage kind, fresh each press, until 2026-10-24; it is now both anchored on the citing
+paragraph and given origin `cite-check` (the work's id and that block), so it is one chat per work
+and paragraph, started by a rest on the citation as well as by the press, and it still leaves the
 work's own chat alone ([bibliography.md § Marked in the prose](bibliography.md#marked-in-the-prose-in-every-mode)).
 
 ## One chat per item
