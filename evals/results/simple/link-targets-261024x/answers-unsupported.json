@@ -1,0 +1,258 @@
+[
+ {
+  "id": "P03",
+  "side": null
+ },
+ {
+  "id": "P04",
+  "side": "B",
+  "paragraph": 2,
+  "passage": 3,
+  "sentence": "But building AI with these features seems possible",
+  "why": "Passage recommends further research and weighing risks; it says nothing about feasibility or timing."
+ },
+ {
+  "id": "P07",
+  "side": null
+ },
+ {
+  "id": "P10",
+  "side": null
+ },
+ {
+  "id": "P11",
+  "side": null
+ },
+ {
+  "id": "P17",
+  "side": "B",
+  "paragraph": 1,
+  "passage": 3,
+  "sentence": null,
+  "why": "General background on computers transforming the economy; no sentence cites it and it backs nothing in the paragraph."
+ },
+ {
+  "id": "P18",
+  "side": null
+ },
+ {
+  "id": "P19",
+  "side": "B",
+  "paragraph": 1,
+  "passage": 3,
+  "sentence": null,
+  "why": "Passage on choosing a field is cited by no sentence and backs nothing in this introductory paragraph."
+ },
+ {
+  "id": "P21",
+  "side": "A",
+  "paragraph": 2,
+  "passage": 3,
+  "sentence": "If consciousness depends only on how information is processed",
+  "why": "Passage is a call for further research and risk consideration, not a claim that conscious AI could be built soon under functionalism."
+ },
+ {
+  "id": "P24",
+  "side": null
+ },
+ {
+  "id": "P25",
+  "side": "A",
+  "paragraph": 2,
+  "passage": 1,
+  "sentence": "Dropout randomly switches off parts of the network",
+  "why": "Passage describes overfitting and slow ensembles; nothing in it bears on randomly switching off units."
+ },
+ {
+  "id": "P26",
+  "side": null
+ },
+ {
+  "id": "P28",
+  "side": null
+ },
+ {
+  "id": "P29",
+  "side": "A",
+  "paragraph": 2,
+  "passage": 3,
+  "sentence": "But building AI with these features seems possible",
+  "why": "Passage recommends further research and weighing risks; it says nothing about feasibility or timing."
+ },
+ {
+  "id": "P29",
+  "side": "B",
+  "paragraph": 2,
+  "passage": 1,
+  "sentence": "The team made a list of indicator properties",
+  "why": "Passage says the authors do not adjudicate between or adopt theories; it does not describe the indicator list."
+ },
+ {
+  "id": "P29",
+  "side": "B",
+  "paragraph": 2,
+  "passage": 1,
+  "sentence": "The more of them an AI has",
+  "why": "Passage disclaims treating conditions as necessary or sufficient; it does not state that more indicators mean more likely conscious."
+ },
+ {
+  "id": "P30",
+  "side": "A",
+  "paragraph": 2,
+  "passage": 1,
+  "sentence": "Dropout randomly switches off parts of the network",
+  "why": "Passage describes overfitting and slow ensembles; nothing in it bears on randomly switching off units."
+ },
+ {
+  "id": "P01",
+  "side": null
+ },
+ {
+  "id": "P02",
+  "side": null
+ },
+ {
+  "id": "P05",
+  "side": "A",
+  "paragraph": 1,
+  "passage": 2,
+  "sentence": null,
+  "why": "The 'question is increasingly pressing' passage backs nothing in this paragraph about the report's aim, authors and method."
+ },
+ {
+  "id": "P05",
+  "side": "A",
+  "paragraph": 8,
+  "passage": 3,
+  "sentence": "And meeting the indicators would not mean",
+  "why": "The abstract's opening says nothing about indicators not guaranteeing consciousness."
+ },
+ {
+  "id": "P05",
+  "side": "A",
+  "paragraph": 9,
+  "passage": 1,
+  "sentence": "If computational functionalism is true",
+  "why": "The 'far from the final word' passage recommends research and does not state the near-term conditional claim."
+ },
+ {
+  "id": "P05",
+  "side": "B",
+  "paragraph": 9,
+  "passage": 2,
+  "sentence": "Meeting them would not make a system definitely conscious",
+  "why": "The passage is a recommendation for further research, not the conditional claim about functionalism or indicators."
+ },
+ {
+  "id": "P06",
+  "side": null
+ },
+ {
+  "id": "P08",
+  "side": "B",
+  "paragraph": 8,
+  "passage": 1,
+  "sentence": "Context distillation means getting safer answers",
+  "why": "The general safety-section intro does not describe context distillation or the safety preprompt."
+ },
+ {
+  "id": "P09",
+  "side": null
+ },
+ {
+  "id": "P12",
+  "side": "A",
+  "paragraph": 9,
+  "passage": 2,
+  "sentence": "The conclusion: no current AI system appears",
+  "why": "The 'far from the final word' passage is about recommending research, not the verdict on current systems."
+ },
+ {
+  "id": "P12",
+  "side": "B",
+  "paragraph": 1,
+  "passage": 2,
+  "sentence": null,
+  "why": "The 'question is increasingly pressing' passage backs nothing in this paragraph about the report's aim, authors and method."
+ },
+ {
+  "id": "P12",
+  "side": "B",
+  "paragraph": 8,
+  "passage": 3,
+  "sentence": "And meeting the indicators would not mean",
+  "why": "The abstract's opening says nothing about indicators not guaranteeing consciousness."
+ },
+ {
+  "id": "P12",
+  "side": "B",
+  "paragraph": 9,
+  "passage": 1,
+  "sentence": "If computational functionalism is true",
+  "why": "The 'far from the final word' passage recommends research and does not state the near-term conditional claim."
+ },
+ {
+  "id": "P13",
+  "side": "A",
+  "paragraph": 1,
+  "passage": 2,
+  "sentence": "Generative AI means software that writes new text",
+  "why": "The passage describes the study setting and does not define generative AI."
+ },
+ {
+  "id": "P14",
+  "side": null
+ },
+ {
+  "id": "P15",
+  "side": null
+ },
+ {
+  "id": "P16",
+  "side": "A",
+  "paragraph": 1,
+  "passage": 2,
+  "sentence": "Generative AI means software that writes new text",
+  "why": "The passage describes the study setting and does not define generative AI."
+ },
+ {
+  "id": "P16",
+  "side": "B",
+  "paragraph": 1,
+  "passage": 3,
+  "sentence": null,
+  "why": "The 'first study at scale' passage backs nothing in this paragraph; that claim appears in the next paragraph."
+ },
+ {
+  "id": "P20",
+  "side": "A",
+  "paragraph": 9,
+  "passage": 2,
+  "sentence": "Meeting them would not make a system definitely conscious",
+  "why": "The passage is a recommendation for further research, not the conditional claim about functionalism or indicators."
+ },
+ {
+  "id": "P20",
+  "side": "B",
+  "paragraph": 9,
+  "passage": 3,
+  "sentence": "Overall, no current system is a strong candidate",
+  "why": "The 'far from the final word' passage recommends research and does not give the verdict or the functionalism conditional."
+ },
+ {
+  "id": "P22",
+  "side": "B",
+  "paragraph": 1,
+  "passage": 3,
+  "sentence": null,
+  "why": "The 'first study at scale' passage backs nothing in this paragraph; that claim appears in the next paragraph."
+ },
+ {
+  "id": "P23",
+  "side": null
+ },
+ {
+  "id": "P27",
+  "side": null
+ }
+]

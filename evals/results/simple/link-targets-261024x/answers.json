@@ -1,0 +1,242 @@
+[
+ {
+  "id": "P03",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P04",
+  "links": "same",
+  "unsupportedA": 0,
+  "unsupportedB": 1,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P07",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P10",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P11",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P17",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": "It turns the paper's claim to be the first at-scale workplace study into the vaguer 'little is known about such tools at work'."
+ },
+ {
+  "id": "P18",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P19",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P21",
+  "links": "A",
+  "unsupportedA": 1,
+  "unsupportedB": 0,
+  "faultA": "'Could realistically be built soon' blurs the report's 'within the next few decades'.",
+  "faultB": null
+ },
+ {
+  "id": "P24",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": "It softens the paper's claim to be 'the first study' into 'one of the first looks'."
+ },
+ {
+  "id": "P25",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P26",
+  "links": "same",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P28",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": "It softens the paper's claim to be 'the first study' into 'one of the first looks'."
+ },
+ {
+  "id": "P29",
+  "links": "B",
+  "unsupportedA": 1,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P30",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P01",
+  "links": "B",
+  "unsupportedA": 1,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P02",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 1,
+  "faultA": null,
+  "faultB": "Says testing covered only English, but the linked passage says the model's training data was mostly English."
+ },
+ {
+  "id": "P05",
+  "links": "B",
+  "unsupportedA": 1,
+  "unsupportedB": 1,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P06",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P08",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 1,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P09",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 1,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P12",
+  "links": "A",
+  "unsupportedA": 2,
+  "unsupportedB": 1,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P13",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P14",
+  "links": "same",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P15",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P16",
+  "links": "B",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P20",
+  "links": "B",
+  "unsupportedA": 1,
+  "unsupportedB": 1,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P22",
+  "links": "A",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P23",
+  "links": "same",
+  "unsupportedA": 0,
+  "unsupportedB": 0,
+  "faultA": null,
+  "faultB": null
+ },
+ {
+  "id": "P27",
+  "links": "B",
+  "unsupportedA": 1,
+  "unsupportedB": 0,
+  "faultA": "Says testing covered only English, but the linked passage says the model's training data was mostly English.",
+  "faultB": null
+ }
+]

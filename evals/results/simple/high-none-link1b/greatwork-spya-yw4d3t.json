@@ -1,0 +1,327 @@
+{
+  "arm": "high-none-link1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "greatwork-spya-yw4d3t",
+  "version": "simple-prompt/13",
+  "sourceSha256": "c75d19ae37a81a03d32783f8c4067104a6a19faa03c1403d554f33f62f522543",
+  "at": "2026-10-24T20:35:14.893Z",
+  "bodyWords": 11890,
+  "band": "standard",
+  "bodyBlocks": 330,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "892b882370221bbe",
+  "systemsSha256": "88ec5cc2c899a3d37fdaf0098a9af6b35704e8df1d197f1876db7060a96e2afd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 31179,
+  "costUsd": 0.1109244,
+  "tokens": {
+    "input": 10248,
+    "output": 4006,
+    "reasoning": 1514
+  },
+  "briefReadyMs": 18647,
+  "fullerReadyMs": 31175,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 489,
+  "briefWords": 93,
+  "fuller": [
+    {
+      "text": "This is a long essay by Paul Graham, written in July 2023, about how to do great work in any field. He imagined collecting lists of techniques from many different fields and asked what they would have in common. His answer is that the overlap has a definite shape, and it is more than just \"work hard.\" He writes for readers he assumes are very ambitious.",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-h7wvhs"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long essay by Paul Graham, written in July 2023, about how to do great work in any field.",
+          "id": null
+        },
+        {
+          "text": "He imagined collecting lists of techniques from many different fields and asked what they would have in common.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "His answer is that the overlap has a definite shape, and it is more than just \"work hard.\"",
+          "id": "spya-x22sb9",
+          "key": "more than just \"work hard.\""
+        },
+        {
+          "text": "He writes for readers he assumes are very ambitious.",
+          "id": "spya-h7wvhs"
+        }
+      ]
+    },
+    {
+      "text": "The essay argues from experience and from the lives of people who did great work, not from measured data. It matters, he says, because schools pretend that choosing your life's work is easy. They expect you to pick a field as a teenager, long before you can know what it is like. So when it comes to figuring out what to work on, you are on your own.",
+      "ids": [
+        "spya-kg58at",
+        "spya-nupugj",
+        "spya-cvtr02"
+      ],
+      "sentences": [
+        {
+          "text": "The essay argues from experience and from the lives of people who did great work, not from measured data.",
+          "id": "spya-cvtr02"
+        },
+        {
+          "text": "It matters, he says, because schools pretend that choosing your life's work is easy.",
+          "id": "spya-kg58at"
+        },
+        {
+          "text": "They expect you to pick a field as a teenager, long before you can know what it is like.",
+          "id": "spya-nupugj"
+        },
+        {
+          "text": "So when it comes to figuring out what to work on, you are on your own.",
+          "id": "spya-nupugj"
+        }
+      ]
+    },
+    {
+      "text": "The core of the essay is a recipe in four steps, which he says nearly everyone who did great work followed. Choose a field you have a natural talent for and a deep interest in. Learn enough to reach a frontier, the edge of what anyone knows. Notice the gaps at that edge, which look smooth from far away. Explore the gaps that look most promising.",
+      "ids": [
+        "spya-kr0zrr",
+        "spya-aeqwcs",
+        "spya-uhu9ux"
+      ],
+      "sentences": [
+        {
+          "text": "The core of the essay is a recipe in four steps, which he says nearly everyone who did great work followed.",
+          "id": "spya-kr0zrr",
+          "key": "a recipe in four steps"
+        },
+        {
+          "text": "Choose a field you have a natural talent for and a deep interest in.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Learn enough to reach a frontier, the edge of what anyone knows.",
+          "id": "spya-uhu9ux"
+        },
+        {
+          "text": "Notice the gaps at that edge, which look smooth from far away.",
+          "id": "spya-uhu9ux"
+        },
+        {
+          "text": "Explore the gaps that look most promising.",
+          "id": "spya-kr0zrr"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Choosing is hard because you can only learn what work is like by doing it, sometimes for years. His advice is to guess, start, and favour whatever grows more interesting as you learn more. Rather than making big plans, he suggests \"staying upwind\": at each stage doing what seems most interesting and keeps the best options open.",
+      "ids": [
+        "spya-xyy769",
+        "spya-afr68u",
+        "spya-zzu2w0"
+      ],
+      "sentences": [
+        {
+          "text": "Choosing is hard because you can only learn what work is like by doing it, sometimes for years.",
+          "id": "spya-xyy769"
+        },
+        {
+          "text": "His advice is to guess, start, and favour whatever grows more interesting as you learn more.",
+          "id": "spya-afr68u"
+        },
+        {
+          "text": "Rather than making big plans, he suggests \"staying upwind\": at each stage doing what seems most interesting and keeps the best options open.",
+          "id": "spya-zzu2w0",
+          "key": "\"staying upwind\""
+        }
+      ]
+    },
+    {
+      "text": "On the work itself, he stresses consistency: a page a day becomes a book a year. Starting is harder than continuing, so small tricks to get going are fine. The most dangerous delay is putting off an ambitious project for years, because busy work on something else hides it.",
+      "ids": [
+        "spya-gvh3ek",
+        "spya-c6es2t",
+        "spya-e9jhjz"
+      ],
+      "sentences": [
+        {
+          "text": "On the work itself, he stresses consistency: a page a day becomes a book a year.",
+          "id": "spya-gvh3ek",
+          "key": "consistency"
+        },
+        {
+          "text": "Starting is harder than continuing, so small tricks to get going are fine.",
+          "id": "spya-c6es2t"
+        },
+        {
+          "text": "The most dangerous delay is putting off an ambitious project for years, because busy work on something else hides it.",
+          "id": "spya-e9jhjz"
+        }
+      ]
+    },
+    {
+      "text": "Good new ideas often seem both new and obvious once seen. They are hard to find because you must first fix a broken model, a flawed way of seeing the world. That takes being stricter than others about the facts, plus a willingness to break rules. He adds that the real insight is often in the question, not the answer.",
+      "ids": [
+        "spya-xmnc2p",
+        "spya-xeu6p8",
+        "spya-gh64ss"
+      ],
+      "sentences": [
+        {
+          "text": "Good new ideas often seem both new and obvious once seen.",
+          "id": "spya-xmnc2p"
+        },
+        {
+          "text": "They are hard to find because you must first fix a broken model, a flawed way of seeing the world.",
+          "id": "spya-xmnc2p"
+        },
+        {
+          "text": "That takes being stricter than others about the facts, plus a willingness to break rules.",
+          "id": "spya-xeu6p8"
+        },
+        {
+          "text": "He adds that the real insight is often in the question, not the answer.",
+          "id": "spya-gh64ss"
+        }
+      ]
+    },
+    {
+      "text": "Graham names his own limits. He says great work cannot be precisely defined, since importance is a matter of degree. He cannot prove hard work is needed, though he calls the evidence as strong as the evidence that people die. And he does not know whether originality can be trained, only how to make the most of it.",
+      "ids": [
+        "spya-q93knc",
+        "spya-qnc4ge",
+        "spya-gchmw3"
+      ],
+      "sentences": [
+        {
+          "text": "Graham names his own limits.",
+          "id": null
+        },
+        {
+          "text": "He says great work cannot be precisely defined, since importance is a matter of degree.",
+          "id": "spya-q93knc"
+        },
+        {
+          "text": "He cannot prove hard work is needed, though he calls the evidence as strong as the evidence that people die.",
+          "id": "spya-qnc4ge"
+        },
+        {
+          "text": "And he does not know whether originality can be trained, only how to make the most of it.",
+          "id": "spya-gchmw3"
+        }
+      ]
+    },
+    {
+      "text": "If the secret had to be one word, his bet would be \"curiosity,\" which drives all four steps. He sees great work as the product of ability, interest, effort and luck. Since luck is out of your hands and effort can be assumed, the task is finding work where your ability and interest combine. The discoveries are waiting, he ends, so why not by you?",
+      "ids": [
+        "spya-a8tsmy",
+        "spya-r4vhyb",
+        "spya-kekgyj"
+      ],
+      "sentences": [
+        {
+          "text": "If the secret had to be one word, his bet would be \"curiosity,\" which drives all four steps.",
+          "id": "spya-a8tsmy",
+          "key": "\"curiosity,\""
+        },
+        {
+          "text": "He sees great work as the product of ability, interest, effort and luck.",
+          "id": "spya-r4vhyb"
+        },
+        {
+          "text": "Since luck is out of your hands and effort can be assumed, the task is finding work where your ability and interest combine.",
+          "id": "spya-r4vhyb"
+        },
+        {
+          "text": "The discoveries are waiting, he ends, so why not by you?",
+          "id": "spya-kekgyj"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Paul Graham is a guide to doing great work in any field. He gathered advice from many different fields and looked at what they had in common. He found the shared advice has a clear shape, not just \"work hard.\"",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Paul Graham is a guide to doing great work in any field.",
+          "id": "spya-d7xxxq",
+          "key": "doing great work in any field"
+        },
+        {
+          "text": "He gathered advice from many different fields and looked at what they had in common.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He found the shared advice has a clear shape, not just \"work hard.\"",
+          "id": "spya-x22sb9"
+        }
+      ]
+    },
+    {
+      "text": "His recipe has four steps. First, pick work you are naturally good at and deeply interested in. Next, learn enough to reach the frontier, the edge of what anyone knows. Then notice the gaps there, and explore the promising ones. His main point is that curiosity drives all four steps.",
+      "ids": [
+        "spya-kr0zrr",
+        "spya-aeqwcs",
+        "spya-cfv9ys"
+      ],
+      "sentences": [
+        {
+          "text": "His recipe has four steps.",
+          "id": "spya-kr0zrr",
+          "key": "four steps"
+        },
+        {
+          "text": "First, pick work you are naturally good at and deeply interested in.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Next, learn enough to reach the frontier, the edge of what anyone knows.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "Then notice the gaps there, and explore the promising ones.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "His main point is that curiosity drives all four steps.",
+          "id": "spya-cfv9ys",
+          "key": "curiosity drives all four steps"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

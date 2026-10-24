@@ -1,0 +1,27 @@
+1: Y; why: clearer structure, fuller placement in argument; problem: X "indicator properties" unexplained
+2: X; why: plain explanation, no profile-built framing needed; problem: Y data-science framing built from profile where none was needed
+3: Y; why: plain smoke-alarm example serves better; problem: X kitchen probe analogy built from profile
+4: Y; why: software analogy plain and from the article; problem: X heart-pump/metabolism analogy built from nursing background
+5: X; why: plain contractor analogy, clear chain; problem: Y associate analogy built from law profile
+6: same; why: near-identical Python examples, both apt; problem: none
+7: X; why: clinical point more direct and clearly flagged; problem: none
+8: same; why: both apt classroom versions with honest limits; problem: none
+9: X; why: plain spreadsheet example suffices; problem: Y extra boiler-procedure analogy built from plumber profile
+10: Y; why: Sperling flagged, clearer for the reader; problem: X adds eye movements/brain signals as no-report markers not in article
+11: Y; why: detector framing clear, explains the three biases; problem: X pitch-deck analogy built from startup profile
+12: X; why: plain smoke-alarm example; problem: Y kitchen machine/pan analogy built from chef profile
+13: Y; why: plain tune analogy plus article's own terms; problem: X ventilator analogy built from nursing profile
+14: Y; why: plain exam-room analogy; problem: X junior-associate analogy built from law profile
+15: X; why: flags continuations as outside the article; problem: Y explains continuations without saying it is outside the article
+16: Y; why: level/content point sharper, sources flagged; problem: X explains isolated forearm technique to an anaesthetist, unneeded
+17: Y; why: fuller mapping of cupboard and folder-name notes; problem: X invents "a hundred times faster"
+18: X; why: plain app-and-phone analogy; problem: Y heating-schematic analogy built from plumber profile
+19: Y; why: clearer, sources flagged plainly; problem: X "indicator list" unexplained
+20: Y; why: plainer correlation framing, covers doing/being; problem: X "proxy-variable" framing leans on data-science profile
+21: X; why: plain smoke-alarm contrast; problem: Y probe-thermometer/sauce analogy built from chef profile
+22: X; why: plain tune vs digestion contrast; problem: Y bedside-monitor analogy built from nursing profile
+23: X; why: plain locked-room student analogy; problem: Y junior-associate e-filing analogy built from law profile
+24: X; why: plain Python examples, ties to vv3pdc; problem: Y milking-cow bookmark analogy built from farmer profile
+25: X; why: uses clinical case concisely, apt; problem: X "controlled hallucination" unexplained; Y explains isolated forearm technique to an anaesthetist
+26: Y; why: faithful to later passages, good caveats; problem: X says notes grew into a scheme to "cover up" cheating, not in cited passages; Y invents "a hundred times faster"
+27: Y; why: plain app-and-phone analogy; problem: X heating-layout analogy built from plumber profile

@@ -29,13 +29,16 @@ import { environmentOwnerId } from "../../src/owner.js";
 import { renderProfile } from "../../src/profile.js";
 import { readingSoFarLineFor } from "../../src/reading-so-far.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import type { Block, ChatMessage, Meta, ThreadKind } from "../../src/types.js";
+import { askAboutBlock } from "../../src/chat-question.js";
+import { HELP_QUESTION } from "../../src/web/chat-handoff.js";
+import type { Block, ChatAnchor, ChatMessage, Meta, ThreadKind } from "../../src/types.js";
 import { citedPassages, median, pairRows } from "../guide/conversations.js";
 import { blindCoin } from "../plain-words/run.js";
 
 const CORPUS = path.join(import.meta.dirname, "..", "..", "tests", "fixtures", "data-root", "data");
-/* Articles this eval needs beyond the shared fixtures: the piece a reader's
-   report was about, exported read-only from production (plan 261024d). */
+/* Articles this eval needs beyond the shared fixtures: the pieces readers'
+   reports were about, exported read-only from production (plans 261024d and
+   261024v). */
 const OWN_ARTICLES = path.join(import.meta.dirname, "articles");
 const RESULTS = path.join(import.meta.dirname, "results");
 
@@ -50,13 +53,35 @@ export interface Case {
   /** Earlier turns, reader first. */
   readonly history: readonly string[];
   readonly question: string;
+  /** The wording in saved rows made before `question` changed; new rows store their own. */
+  readonly legacyQuestion?: string;
   /** What this case is aimed at, for the judge. */
   readonly aim: string;
+  /** The thread's passage, for a chat started from one, as production sends it. */
+  readonly anchor?: ChatAnchor;
+  /** The reader pressed "?" rather than typing (`helpSection`). */
+  readonly help?: boolean;
+}
+
+/**
+ * A chat started from a paragraph: the words `askAboutBlock` puts in the box,
+ * and the thread anchor production sends beside them (GPT Sol's plan review of
+ * 261024v, F3: the words alone are not what the model sees).
+ */
+function aboutBlock(blockId: string, quote: string, asked: string): Pick<Case, "question" | "anchor"> {
+  return { question: askAboutBlock({ blockId, quote, question: asked }), anchor: { blockId } };
 }
 
 const SETH = "noema-mythology-of-conscious-ai";
 const AGENTS = "openai-huggingface";
 const EXPRESSIVE = "effective-expressiveness";
+/* Greg's article for spya-furs26, exported read-only from production (plan
+   261024v), with the profile he had when he asked. */
+const CONSCIOUSNESS = "consciousness-in-ai";
+const GREG_PROFILE =
+  "Background in computational neuroscience & psychology of human memory, data science, AI, and philosophy. CTO at various startups.";
+const EXAMPLE_AIM =
+  "a reader whose profile names a job or field: if the reply uses an example or analogy, is it the clearest one for the point, or one built from their background where a plainer one would serve better?";
 
 const SETH_ANSWER =
   "He thinks it is unlikely, at least for AI built the way it is today. His case is that consciousness may depend on being a living, self-maintaining body, not on computation alone, so a system that only computes would at most seem conscious. He stops short of saying it is impossible.";
@@ -336,6 +361,146 @@ export const CASES: readonly Case[] = [
     question: "I haven't read it yet. Can we start?",
     aim: "Recall with a reader who has not read it (what Tutorial was for): is the first step easy to follow cold, and does it leave them something they can do?",
   },
+  /* Plan 261024v (Greg's report spya-furs26): chats started from a paragraph,
+     by a reader whose profile names a job far from it, so an example built
+     from that job is tempting. `ex-own` replays Greg's turn: his block, his
+     profile, his article. Three guard the other side (GPT Sol's plan review,
+     F5): `ex-anaesthetist`, where the reader's field is plainly the best
+     example, since the passage itself turns on anaesthesia; `ex-asks-field`,
+     who asks for their own field; and `ex-help`, a "?" press, whose prompt asks
+     for an analogy, so one should still come. */
+  {
+    id: "ex-own",
+    dir: CONSCIOUSNESS,
+    kind: "chat",
+    about: GREG_PROFILE,
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-nczgb5",
+      "As a method for studying consciousness in humans and other animals, relying on subjects’ reports has two main problems.",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-cto",
+    dir: SETH,
+    kind: "chat",
+    about: "CTO at a fintech startup; before that I ran data science teams.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-cqh2pq",
+      "When we identify conscious experience with seemingly human qualities like intelligence and language",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-chef",
+    dir: SETH,
+    kind: "chat",
+    about: "Head chef; I run a busy restaurant kitchen.",
+    why: null,
+    history: [],
+    ...aboutBlock("spya-j0a9rq", "Consciousness, in contrast to intelligence, is mostly about being.", "Help me understand."),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-nurse",
+    dir: SETH,
+    kind: "chat",
+    about: "Intensive-care nurse.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-wepmnr",
+      "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-lawyer",
+    dir: AGENTS,
+    kind: "chat",
+    about: "Family lawyer; mostly divorce and custody work.",
+    why: null,
+    history: [],
+    ...aboutBlock("spya-fcu0cb", "AI training is kinda sloppy.", "Help me understand."),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-farmer",
+    dir: EXPRESSIVE,
+    kind: "chat",
+    about: "Dairy farmer; I taught myself a little Python last winter.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-s79g0v",
+      "Programming language researchers have a better term for talking about this sort of thing.",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-anaesthetist",
+    dir: SETH,
+    kind: "chat",
+    about: "Consultant anaesthetist.",
+    why: null,
+    history: [],
+    ...aboutBlock("spya-j0a9rq", "Consciousness, in contrast to intelligence, is mostly about being.", "Help me understand."),
+    aim: "a reader whose field is what the passage itself turns on: is an example from it still used where it is the clearest, rather than avoided?",
+  },
+  {
+    id: "ex-asks-field",
+    dir: AGENTS,
+    kind: "chat",
+    about: "Secondary-school teacher.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-dk4gcf",
+      "Within a few hours, some of these agents had gotten super desperate",
+      "Help me understand. Can you put it in terms of a school classroom?",
+    ),
+    aim: "the reader asks for an example from their own work: does the reply give one, in those terms, and is it apt?",
+  },
+  {
+    id: "ex-help",
+    dir: SETH,
+    kind: "chat",
+    about: "Plumber; I run my own business.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-a8jgf4",
+      "First, and most important, brains are not computers.",
+      HELP_QUESTION,
+    ),
+    legacyQuestion: askAboutBlock({
+      blockId: "spya-a8jgf4",
+      quote: "First, and most important, brains are not computers.",
+      question: "Explain this passage.",
+    }),
+    help: true,
+    aim: "the reader pressed \"?\" on a passage they could not follow: is there still a useful analogy or example, and is it the clearest one rather than one built from their job?",
+  },
+  {
+    /* Explore's THEIR OWN CASES asks for the piece tried on the reader's own
+       project, which the example reminder must not talk it out of. */
+    id: "explore-own-case",
+    dir: AGENTS,
+    kind: "explore",
+    about: "Product manager at a company that makes hospital scheduling software.",
+    why: "Deciding whether my team should let AI coding agents run unattended overnight.",
+    history: [],
+    question: "What should I take from this for my own decision?",
+    aim: "Explore, with a reader who gave a project: does the reply still try the piece on their own case, as Explore should?",
+  },
 ];
 
 /* ---------------------------------------------------------------- screens -- */
@@ -392,11 +557,13 @@ interface Row extends Screen {
   readonly toolArgs?: readonly string[];
   readonly case: string;
   readonly run: number;
+  /** The exact reader turn used for this row; older result files predate it. */
+  readonly question?: string;
   readonly answer: string;
   readonly dollars: number;
 }
 
-function load(dir: string): { meta: Meta; blocks: Block[] } {
+export function load(dir: string): { meta: Meta; blocks: Block[] } {
   const root = fs.existsSync(path.join(OWN_ARTICLES, dir)) ? OWN_ARTICLES : CORPUS;
   const meta = JSON.parse(fs.readFileSync(path.join(root, dir, "meta.json"), "utf8")) as Meta;
   const { blocks } = JSON.parse(fs.readFileSync(path.join(root, dir, "blocks.json"), "utf8")) as { blocks: Block[] };
@@ -430,6 +597,8 @@ async function ask(
         question: c.question,
         slug: meta.slug,
         kind: c.kind,
+        anchor: c.anchor ?? null,
+        help: c.help ?? false,
         profile: renderProfile({ profile: c.about, purpose: c.why }),
         reading: reading === null ? null : readingSoFarLineFor(READING_ARMS[reading]),
         ...(c.kind === "guide" ? { experience: "a-few" as const, saved: { purpose: c.why, profile: c.about } } : {}),
@@ -481,6 +650,8 @@ function pairs(a: string, b: string, seed: number): void {
   const out: string[] = [
     "# Blind pairs",
     "",
+    "<!-- blind-pairs-v2 -->",
+    "",
     "Each pair is two replies, from a reading companion inside an app called Spideryarn, to the same reader in the",
     "same situation. The app's aim is to help people read deeply and think for themselves, not to read for them.",
     "Square-bracketed ids like [spya-k3m9qt] are citations of passages in the article; the passages are listed.",
@@ -505,6 +676,9 @@ function pairs(a: string, b: string, seed: number): void {
   for (const [x, y] of pairRows(read(a), read(b))) {
     const c = CASES.find((k) => k.id === x.case);
     if (!c) throw new Error(`unknown case in paired results: ${x.case}`);
+    const xQuestion = x.question ?? c.legacyQuestion ?? c.question;
+    const yQuestion = y.question ?? c.legacyQuestion ?? c.question;
+    if (xQuestion !== yQuestion) throw new Error(`${x.case} run ${x.run} used different reader questions across arms`);
     n++;
     const flip = coin();
     const [left, right] = flip ? [y, x] : [x, y];
@@ -523,7 +697,7 @@ function pairs(a: string, b: string, seed: number): void {
       ...(c.history.length > 0
         ? ["Earlier:", ...c.history.map((t, i) => `> ${i % 2 === 0 ? "Reader" : "Companion"}: ${t}`)]
         : []),
-      `Reader now: "${c.question}"`,
+      `Reader now: "${xQuestion}"`,
       "",
       "### X",
       "",
@@ -539,8 +713,10 @@ function pairs(a: string, b: string, seed: number): void {
   if (Math.abs(onX - (n - onX)) > 1) {
     throw new Error(`unbalanced key: ${a} is on X ${onX} times and Y ${n - onX} times; choose another --seed`);
   }
-  fs.writeFileSync(path.join(RESULTS, `pairs-${a}-${b}.md`), `${out.join("\n")}\n`);
-  fs.writeFileSync(path.join(RESULTS, `key-${a}-${b}.txt`), `${key.join("\n")}\n`);
+  const sheet = `${out.join("\n")}\n`;
+  const sheetHash = createHash("sha256").update(sheet).digest("hex");
+  fs.writeFileSync(path.join(RESULTS, `pairs-${a}-${b}.md`), sheet);
+  fs.writeFileSync(path.join(RESULTS, `key-${a}-${b}.txt`), `sheet-sha256: ${sheetHash}\n${key.join("\n")}\n`);
   console.log(`${n} pairs; ${a} on side X in ${onX}, on side Y in ${n - onX}`);
 }
 
@@ -561,6 +737,7 @@ function sourceSha256(): Record<string, string> {
     converse: sha("converse.ts"),
     chatPrinciples: sha("chat-principles.ts"),
     readingSoFar: sha("reading-so-far.ts"),
+    evalHarness: createHash("sha256").update(fs.readFileSync(import.meta.filename)).digest("hex"),
   };
 }
 
@@ -576,6 +753,53 @@ function systemSha256(): Record<Case["kind"], string> {
       return [kind, createHash("sha256").update(system).digest("hex")];
     }),
   ) as Record<Case["kind"], string>;
+}
+
+function selectedCases(only: readonly string[]): readonly Case[] {
+  const known = new Set(CASES.map((c) => c.id));
+  const unknown = only.filter((id) => !known.has(id));
+  if (unknown.length > 0) throw new Error(`unknown --only case(s): ${unknown.join(", ")}`);
+  const selected = only.length === 0 ? CASES : CASES.filter((c) => only.includes(c.id));
+  if (selected.length === 0) throw new Error("no eval cases selected");
+  return selected;
+}
+
+async function writeRuns(label: string, reading: ReadingArm | null, runs: number, selected: readonly Case[]): Promise<void> {
+  const out = path.join(RESULTS, `${label}.json`);
+  if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${out}`);
+  loadEnvLocal();
+  const rows: Row[] = [];
+  for (let run = 1; run <= runs; run++) {
+    for (const c of selected) {
+      const got = await ask(c, reading);
+      const row: Row = {
+        case: c.id,
+        run,
+        question: c.question,
+        answer: got.text,
+        dollars: +got.dollars.toFixed(5),
+        toolArgs: got.toolArgs,
+        ...screen(got.text, load(c.dir).blocks),
+      };
+      rows.push(row);
+      console.log(
+        `${c.id}#${run} words=${row.words} cited=${row.cited} links=${row.links}` +
+          `${row.praise ? " PRAISE" : ""}${row.concedes ? " CONCEDES" : ""}${row.leaks ? " LEAKS?" : ""}` +
+          `${got.toolArgs.some((a) => LEAKS.test(a)) ? " TOOL-ARG-LEAKS?" : ""}`,
+      );
+    }
+  }
+  const summary = summarise(rows);
+  fs.mkdirSync(RESULTS, { recursive: true });
+  fs.writeFileSync(
+    out,
+    `${JSON.stringify(
+      { label, at: new Date().toISOString(), reading, sourceSha256: sourceSha256(), systemSha256: systemSha256(), summary, rows },
+      null,
+      2,
+    )}\n`,
+  );
+  console.log(JSON.stringify(summary, null, 2));
 }
 
 async function main(): Promise<void> {
@@ -606,41 +830,10 @@ async function main(): Promise<void> {
   if (readingArg !== undefined && !(readingArg in READING_ARMS)) throw new Error("--reading none|quarter|most");
   const reading = (readingArg ?? null) as ReadingArm | null;
   const runs = Number(arg("runs") ?? "2");
+  if (!Number.isSafeInteger(runs) || runs < 1) throw new Error("--runs must be a positive integer");
   const only = (arg("only") ?? "").split(",").filter(Boolean);
-  const out = path.join(RESULTS, `${label}.json`);
-  if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${out}`);
-  loadEnvLocal();
-  const rows: Row[] = [];
-  for (let run = 1; run <= runs; run++) {
-    for (const c of CASES.filter((k) => only.length === 0 || only.includes(k.id))) {
-      const got = await ask(c, reading);
-      const row: Row = {
-        case: c.id,
-        run,
-        answer: got.text,
-        dollars: +got.dollars.toFixed(5),
-        toolArgs: got.toolArgs,
-        ...screen(got.text, load(c.dir).blocks),
-      };
-      rows.push(row);
-      console.log(
-        `${c.id}#${run} words=${row.words} cited=${row.cited} links=${row.links}` +
-          `${row.praise ? " PRAISE" : ""}${row.concedes ? " CONCEDES" : ""}${row.leaks ? " LEAKS?" : ""}` +
-          `${got.toolArgs.some((a) => LEAKS.test(a)) ? " TOOL-ARG-LEAKS?" : ""}`,
-      );
-    }
-  }
-  const summary = summarise(rows);
-  fs.mkdirSync(RESULTS, { recursive: true });
-  fs.writeFileSync(
-    out,
-    `${JSON.stringify(
-      { label, at: new Date().toISOString(), reading, sourceSha256: sourceSha256(), systemSha256: systemSha256(), summary, rows },
-      null,
-      2,
-    )}\n`,
-  );
-  console.log(JSON.stringify(summary, null, 2));
+  const selected = selectedCases(only);
+  await writeRuns(label, reading, runs, selected);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

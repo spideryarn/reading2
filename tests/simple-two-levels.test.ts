@@ -306,12 +306,15 @@ describe("Brief's and Fuller's prompts", () => {
      `/12` (plan 261005b § Brief by band) asks Brief for about 80 words again:
      **Brief's hash is `/7` to `/9`'s once more** (it was `d31a28ec…` in `/10`
      and `/11`) and Fuller's did not move. The book increase missed its
-     shipping rule; tests/simple-length-bands.test.ts pins 80 in every band. */
-  it("are the bytes `simple-prompt/12` shipped, for a piece of standard length", () => {
+     shipping rule; tests/simple-length-bands.test.ts pins 80 in every band.
+     `/13` (plan 261024x) tells both levels that an id is a link the reader
+     follows, so to prefer the body over the abstract or executive summary:
+     **both hashes moved** (Brief's was `d492501b…`, Fuller's `4e926dfd…`). */
+  it("are the bytes `simple-prompt/13` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/12");
-    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
-    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("4e926dfd865ec4f38113261df9b2311717cee65fd1cd5a3c767183acaaee06a7");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/13");
+    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("7ad0d611649bb5bf5ae07ea73c4b18b2dfbd1d6be8a53da0c3af6c3f3fd21729");
+    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("f46ef73cb80754d23eb1f19fcf905034453fc12c28a6d5ce6fdcd76beaa0b6cb");
   });
 
   /* These hold the two things about `/11`'s Fuller that a reader of the prompt
@@ -368,7 +371,7 @@ describe("an unforced Summary preserves usable words for the same article", () =
       expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
     }
   });
-  it("does not make a `/9` row stale: `/10` and `/11` changed the prompt and not what it is written from", async () => {
+  it("does not make a `/9` row stale: later prompts changed the wording and not what it is written from", async () => {
     const { store, row } = storedRow();
     const tree = { ...ARTICLE.tree, nodes: {} };
     const banded = inputFingerprint(BLOCKS, tree, ARTICLE.meta, "simple-prompt/9");

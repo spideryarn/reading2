@@ -1,0 +1,381 @@
+{
+  "arm": "high-none-link0b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "arxiv-2307-09288v2-spya-smdqsk",
+  "version": "simple-prompt/12",
+  "sourceSha256": "525e97af9b0ee15d35746e51afc9feb88ab0c9f2f90877d31ae99af836d6f84c",
+  "at": "2026-10-24T20:29:32.170Z",
+  "bodyWords": 40720,
+  "band": "book",
+  "bodyBlocks": 749,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "feb0c50264f2d3e2",
+  "systemsSha256": "cfaa00690d0744ed54310ad2b3bf3f5d24669a8527abaa397ae065b018d94a01",
+  "power": "high",
+  "guard": true,
+  "wallMs": 52753,
+  "costUsd": 0.1829228,
+  "tokens": {
+    "input": 13448,
+    "output": 6288,
+    "reasoning": 2694
+  },
+  "briefReadyMs": 21230,
+  "fullerReadyMs": 52749,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 822,
+  "briefWords": 94,
+  "fuller": [
+    {
+      "text": "This paper from Meta describes how its team built and released Llama 2, a family of large language models: programs trained on huge amounts of text to predict and write language. The models range from 7 billion to 70 billion parameters, the adjustable numbers inside a model that training tunes. Alongside the base models comes Llama 2-Chat, a version further trained to hold conversations. The 7B, 13B and 70B versions are released for research and commercial use; a 34B version is reported but held back for lack of time to safety-test it.",
+      "ids": [
+        "spya-wzepkq",
+        "spya-t4y0n3",
+        "spya-medac0"
+      ],
+      "sentences": [
+        {
+          "text": "This paper from Meta describes how its team built and released Llama 2, a family of large language models: programs trained on huge amounts of text to predict and write language.",
+          "id": "spya-wzepkq",
+          "key": "Llama 2, a family of large language models"
+        },
+        {
+          "text": "The models range from 7 billion to 70 billion parameters, the adjustable numbers inside a model that training tunes.",
+          "id": "spya-wzepkq"
+        },
+        {
+          "text": "Alongside the base models comes Llama 2-Chat, a version further trained to hold conversations.",
+          "id": "spya-t4y0n3",
+          "key": "Llama 2-Chat"
+        },
+        {
+          "text": "The 7B, 13B and 70B versions are released for research and commercial use; a 34B version is reported but held back for lack of time to safety-test it.",
+          "id": "spya-medac0"
+        }
+      ]
+    },
+    {
+      "text": "The authors say earlier openly released models matched closed rivals on raw ability, yet none could replace polished chat products like ChatGPT, BARD and Claude. Those products are heavily tuned to match human preferences, which is costly and rarely explained in public. By describing their tuning and safety methods in detail, the authors hope others can reproduce and improve such models more responsibly.",
+      "ids": [
+        "spya-hkx0fh",
+        "spya-t4y0n3"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say earlier openly released models matched closed rivals on raw ability, yet none could replace polished chat products like ChatGPT, BARD and Claude.",
+          "id": "spya-hkx0fh"
+        },
+        {
+          "text": "Those products are heavily tuned to match human preferences, which is costly and rarely explained in public.",
+          "id": "spya-hkx0fh"
+        },
+        {
+          "text": "By describing their tuning and safety methods in detail, the authors hope others can reproduce and improve such models more responsibly.",
+          "id": "spya-t4y0n3"
+        }
+      ]
+    },
+    {
+      "text": "The first stage, pretraining, taught the model general language from 2 trillion tokens, which are words or word pieces, drawn from public sources. No data from Meta's products or users was included, and sites heavy with personal information were removed. Compared with the first Llama, the team used 40% more data and doubled how much text the model can read at once, to 4,096 tokens. On standard tests, the 70B model came close to GPT-3.5 on general knowledge and school math, but lagged clearly on coding and stayed well behind GPT-4.",
+      "ids": [
+        "spya-zz00th",
+        "spya-kqdeda",
+        "spya-n8q325"
+      ],
+      "sentences": [
+        {
+          "text": "The first stage, pretraining, taught the model general language from 2 trillion tokens, which are words or word pieces, drawn from public sources.",
+          "id": "spya-zz00th"
+        },
+        {
+          "text": "No data from Meta's products or users was included, and sites heavy with personal information were removed.",
+          "id": "spya-zz00th"
+        },
+        {
+          "text": "Compared with the first Llama, the team used 40% more data and doubled how much text the model can read at once, to 4,096 tokens.",
+          "id": "spya-kqdeda"
+        },
+        {
+          "text": "On standard tests, the 70B model came close to GPT-3.5 on general knowledge and school math, but lagged clearly on coding and stayed well behind GPT-4.",
+          "id": "spya-n8q325"
+        }
+      ]
+    },
+    {
+      "text": "Next came supervised fine-tuning, where the model is trained further on example prompts paired with good answers written by people. The team found that a small set of high-quality examples beat millions of mixed-quality ones, and stopped after 27,540 examples. They were surprised that the tuned model's own answers often rivalled the human-written ones, so they shifted effort to collecting human preferences instead.",
+      "ids": [
+        "spya-tvxrju",
+        "spya-kee6r0"
+      ],
+      "sentences": [
+        {
+          "text": "Next came supervised fine-tuning, where the model is trained further on example prompts paired with good answers written by people.",
+          "id": "spya-tvxrju"
+        },
+        {
+          "text": "The team found that a small set of high-quality examples beat millions of mixed-quality ones, and stopped after 27,540 examples.",
+          "id": "spya-tvxrju",
+          "key": "27,540 examples"
+        },
+        {
+          "text": "They were surprised that the tuned model's own answers often rivalled the human-written ones, so they shifted effort to collecting human preferences instead.",
+          "id": "spya-kee6r0"
+        }
+      ]
+    },
+    {
+      "text": "The core method is reinforcement learning with human feedback (RLHF): people compare two model answers, and the model is pushed toward the kinds they prefer. Annotators wrote a prompt, picked the better of two answers, and rated how much better it was; Meta gathered over 1 million such comparisons. These trained reward models, separate programs that score answers the way people would, and the team built two because helpfulness and safety sometimes pull against each other. On Meta's own test sets, these reward models predicted human choices better than all the alternatives tried, including GPT-4.",
+      "ids": [
+        "spya-uzp9yg",
+        "spya-pxp4yb",
+        "spya-ehjqar"
+      ],
+      "sentences": [
+        {
+          "text": "The core method is reinforcement learning with human feedback (RLHF): people compare two model answers, and the model is pushed toward the kinds they prefer.",
+          "id": "spya-uzp9yg",
+          "key": "reinforcement learning with human feedback (RLHF)"
+        },
+        {
+          "text": "Annotators wrote a prompt, picked the better of two answers, and rated how much better it was; Meta gathered over 1 million such comparisons.",
+          "id": "spya-uzp9yg"
+        },
+        {
+          "text": "These trained reward models, separate programs that score answers the way people would, and the team built two because helpfulness and safety sometimes pull against each other.",
+          "id": "spya-pxp4yb"
+        },
+        {
+          "text": "On Meta's own test sets, these reward models predicted human choices better than all the alternatives tried, including GPT-4.",
+          "id": "spya-ehjqar"
+        }
+      ]
+    },
+    {
+      "text": "Training ran in five rounds, each using fresh preference data gathered from the latest model. One technique, rejection sampling, has the model write several answers to each prompt and then trains it on the one the reward model scores highest. From the fourth round on, this was combined with PPO, a standard method that nudges the model step by step toward higher reward scores. The team also introduced Ghost Attention, a trick that helps the model keep obeying an opening instruction, such as \"act as Napoleon\", across many turns.",
+      "ids": [
+        "spya-gy5c53",
+        "spya-c68aux",
+        "spya-vstfdg"
+      ],
+      "sentences": [
+        {
+          "text": "Training ran in five rounds, each using fresh preference data gathered from the latest model.",
+          "id": null
+        },
+        {
+          "text": "One technique, rejection sampling, has the model write several answers to each prompt and then trains it on the one the reward model scores highest.",
+          "id": "spya-gy5c53"
+        },
+        {
+          "text": "From the fourth round on, this was combined with PPO, a standard method that nudges the model step by step toward higher reward scores.",
+          "id": "spya-c68aux"
+        },
+        {
+          "text": "The team also introduced Ghost Attention, a trick that helps the model keep obeying an opening instruction, such as \"act as Napoleon\", across many turns.",
+          "id": "spya-vstfdg"
+        }
+      ]
+    },
+    {
+      "text": "In human tests on about 4,000 prompts, Llama 2-Chat beat other open chat models by wide margins, with the 34B version winning over 75% of the time against similar-sized rivals. Against ChatGPT, the 70B model won 36% of comparisons and tied 31.5%. The authors warn that the prompts held no coding or reasoning tasks, only final turns were judged, and such ratings are subjective and noisy.",
+      "ids": [
+        "spya-audu77",
+        "spya-puzb2k",
+        "spya-q9tm6u"
+      ],
+      "sentences": [
+        {
+          "text": "In human tests on about 4,000 prompts, Llama 2-Chat beat other open chat models by wide margins, with the 34B version winning over 75% of the time against similar-sized rivals.",
+          "id": "spya-audu77"
+        },
+        {
+          "text": "Against ChatGPT, the 70B model won 36% of comparisons and tied 31.5%.",
+          "id": "spya-puzb2k",
+          "key": "won 36% of comparisons and tied 31.5%"
+        },
+        {
+          "text": "The authors warn that the prompts held no coding or reasoning tasks, only final turns were judged, and such ratings are subjective and noisy.",
+          "id": "spya-q9tm6u"
+        }
+      ]
+    },
+    {
+      "text": "Safety was built in through three added steps. Safety fine-tuning trained the model on tricky prompts paired with safe, written answers. Safety RLHF used a dedicated safety reward model and harder adversarial prompts, meaning prompts designed to provoke bad behaviour. Context distillation had the model answer with a safety reminder attached, then trained it to give those safer answers without the reminder.",
+      "ids": [
+        "spya-nqj5u4",
+        "spya-zhykxp",
+        "spya-q2gtjx"
+      ],
+      "sentences": [
+        {
+          "text": "Safety was built in through three added steps.",
+          "id": null
+        },
+        {
+          "text": "Safety fine-tuning trained the model on tricky prompts paired with safe, written answers.",
+          "id": "spya-nqj5u4"
+        },
+        {
+          "text": "Safety RLHF used a dedicated safety reward model and harder adversarial prompts, meaning prompts designed to provoke bad behaviour.",
+          "id": "spya-zhykxp"
+        },
+        {
+          "text": "Context distillation had the model answer with a safety reminder attached, then trained it to give those safer answers without the reminder.",
+          "id": "spya-q2gtjx"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Over 350 people did red teaming, deliberately trying to make the model misbehave, and their findings fed back into training. On about 2,000 adversarial prompts, Llama 2-Chat had a similar or lower rate of safety violations than the other models tested, though the authors stress the ratings are subjective. For the 70B model, toxic outputs fell from 24.60% to 0.01% after tuning, and truthful, informative answers rose from 50.18% to 64.14%.",
+      "ids": [
+        "spya-x8d82t",
+        "spya-qqcs50",
+        "spya-vgsgvt"
+      ],
+      "sentences": [
+        {
+          "text": "Over 350 people did red teaming, deliberately trying to make the model misbehave, and their findings fed back into training.",
+          "id": "spya-x8d82t"
+        },
+        {
+          "text": "On about 2,000 adversarial prompts, Llama 2-Chat had a similar or lower rate of safety violations than the other models tested, though the authors stress the ratings are subjective.",
+          "id": "spya-qqcs50"
+        },
+        {
+          "text": "For the 70B model, toxic outputs fell from 24.60% to 0.01% after tuning, and truthful, informative answers rose from 50.18% to 64.14%.",
+          "id": "spya-vgsgvt",
+          "key": "24.60% to 0.01%"
+        }
+      ]
+    },
+    {
+      "text": "Adding more safety data made the model much safer while its average helpfulness score stayed flat. But false refusals, wrongly declining harmless requests, rose; they stayed rare on ordinary prompts, about 0.05%, but were far more common on harmless prompts containing scary words like \"bomb\". The team also noticed RLHF taught the model to vary its answers for creative prompts while giving consistent answers to factual ones.",
+      "ids": [
+        "spya-wxq0rk",
+        "spya-gm6ftp",
+        "spya-zvsqvt"
+      ],
+      "sentences": [
+        {
+          "text": "Adding more safety data made the model much safer while its average helpfulness score stayed flat.",
+          "id": "spya-wxq0rk"
+        },
+        {
+          "text": "But false refusals, wrongly declining harmless requests, rose; they stayed rare on ordinary prompts, about 0.05%, but were far more common on harmless prompts containing scary words like \"bomb\".",
+          "id": "spya-gm6ftp",
+          "key": "false refusals"
+        },
+        {
+          "text": "The team also noticed RLHF taught the model to vary its answers for creative prompts while giving consistent answers to factual ones.",
+          "id": "spya-zvsqvt"
+        }
+      ]
+    },
+    {
+      "text": "The authors admit the models mostly know English, can make things up, and sometimes act overly cautious. Testing so far covered only English, so other languages remain fragile and should be used with care. Their conclusion: Llama 2 competes with open chat models and matches some closed ones on their tests, while trailing GPT-4, and they release it openly to speed safer research.",
+      "ids": [
+        "spya-v5tqva",
+        "spya-a434at",
+        "spya-m0han4"
+      ],
+      "sentences": [
+        {
+          "text": "The authors admit the models mostly know English, can make things up, and sometimes act overly cautious.",
+          "id": "spya-a434at"
+        },
+        {
+          "text": "Testing so far covered only English, so other languages remain fragile and should be used with care.",
+          "id": "spya-v5tqva"
+        },
+        {
+          "text": "Their conclusion: Llama 2 competes with open chat models and matches some closed ones on their tests, while trailing GPT-4, and they release it openly to speed safer research.",
+          "id": "spya-m0han4"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This paper presents Llama 2, a family of AI programs that read and write text. Its chat versions, called Llama 2-Chat, are tuned for back-and-forth conversation. The best chat AIs are closed, and how they are made is often kept secret. The team shares its models and methods so others can build on them.",
+      "ids": [
+        "spya-wzepkq",
+        "spya-hkx0fh"
+      ],
+      "sentences": [
+        {
+          "text": "This paper presents Llama 2, a family of AI programs that read and write text.",
+          "id": "spya-wzepkq",
+          "key": "Llama 2"
+        },
+        {
+          "text": "Its chat versions, called Llama 2-Chat, are tuned for back-and-forth conversation.",
+          "id": "spya-wzepkq",
+          "key": "Llama 2-Chat"
+        },
+        {
+          "text": "The best chat AIs are closed, and how they are made is often kept secret.",
+          "id": "spya-hkx0fh"
+        },
+        {
+          "text": "The team shares its models and methods so others can build on them.",
+          "id": "spya-wzepkq"
+        }
+      ]
+    },
+    {
+      "text": "Llama 2-Chat beat other open chat models on most of the tests tried. In people's ratings, it may match some closed models, though it still trails GPT-4. The authors believe sharing such models openly, when done safely, will benefit society.",
+      "ids": [
+        "spya-t4y0n3",
+        "spya-m0han4",
+        "spya-c4nkzs"
+      ],
+      "sentences": [
+        {
+          "text": "Llama 2-Chat beat other open chat models on most of the tests tried.",
+          "id": "spya-t4y0n3",
+          "key": "beat other open chat models"
+        },
+        {
+          "text": "In people's ratings, it may match some closed models, though it still trails GPT-4.",
+          "id": "spya-m0han4"
+        },
+        {
+          "text": "The authors believe sharing such models openly, when done safely, will benefit society.",
+          "id": "spya-c4nkzs"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

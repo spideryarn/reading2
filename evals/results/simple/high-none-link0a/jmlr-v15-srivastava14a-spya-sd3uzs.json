@@ -1,0 +1,306 @@
+{
+  "arm": "high-none-link0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+  "version": "simple-prompt/12",
+  "sourceSha256": "525e97af9b0ee15d35746e51afc9feb88ab0c9f2f90877d31ae99af836d6f84c",
+  "at": "2026-10-24T20:27:39.054Z",
+  "bodyWords": 11518,
+  "band": "standard",
+  "bodyBlocks": 199,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "02e3b8b7ae181f23",
+  "systemsSha256": "c5fa0839739a1ebefa4883ba8968567f8b3063f38bf9d067ae12529fccab6bd6",
+  "power": "high",
+  "guard": true,
+  "wallMs": 92966,
+  "costUsd": 0.3661666,
+  "tokens": {
+    "input": 21141,
+    "output": 10134,
+    "reasoning": 5425
+  },
+  "briefReadyMs": 19883,
+  "fullerReadyMs": 92958,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 555,
+  "briefWords": 90,
+  "fuller": [
+    {
+      "text": "This paper introduces dropout, a simple trick for training neural networks: computer models built from many small connected parts, called units, that learn from examples. Its target is overfitting, when a model learns quirks of its training examples that do not hold for new data. The authors test dropout on images, speech, text and genetics data.",
+      "ids": [
+        "spya-bbgfuu",
+        "spya-qnbgwu"
+      ],
+      "sentences": [
+        {
+          "text": "This paper introduces dropout, a simple trick for training neural networks: computer models built from many small connected parts, called units, that learn from examples.",
+          "id": "spya-bbgfuu",
+          "key": "dropout"
+        },
+        {
+          "text": "Its target is overfitting, when a model learns quirks of its training examples that do not hold for new data.",
+          "id": "spya-qnbgwu"
+        },
+        {
+          "text": "The authors test dropout on images, speech, text and genetics data.",
+          "id": "spya-bbgfuu"
+        }
+      ]
+    },
+    {
+      "text": "A known cure for overfitting is to average the answers of many different models. With large neural networks this is very costly: each takes a lot of computing to train, may need lots of data, and is slow to use. The authors want to get close to the ideal of averaging every possible model, but with far less computing.",
+      "ids": [
+        "spya-abqyg3",
+        "spya-k9tfne"
+      ],
+      "sentences": [
+        {
+          "text": "A known cure for overfitting is to average the answers of many different models.",
+          "id": "spya-abqyg3"
+        },
+        {
+          "text": "With large neural networks this is very costly: each takes a lot of computing to train, may need lots of data, and is slow to use.",
+          "id": "spya-abqyg3"
+        },
+        {
+          "text": "The authors want to get close to the ideal of averaging every possible model, but with far less computing.",
+          "id": "spya-k9tfne"
+        }
+      ]
+    },
+    {
+      "text": "During training, dropout randomly switches off units, along with their connections, afresh for each training example. Each unit is kept with a fixed chance p, often 0.5 for inner units and closer to 1 for input units. Each switch-off pattern gives a smaller \"thinned\" network, so n units hold 2^n thinned networks sharing the same connection strengths, called weights. At test time nothing is dropped; instead each unit's outgoing weights are multiplied by p, which roughly averages all the thinned networks at once.",
+      "ids": [
+        "spya-uaykbu",
+        "spya-ajkrbc",
+        "spya-e06uf7"
+      ],
+      "sentences": [
+        {
+          "text": "During training, dropout randomly switches off units, along with their connections, afresh for each training example.",
+          "id": "spya-uaykbu"
+        },
+        {
+          "text": "Each unit is kept with a fixed chance p, often 0.5 for inner units and closer to 1 for input units.",
+          "id": "spya-uaykbu",
+          "key": "kept with a fixed chance p"
+        },
+        {
+          "text": "Each switch-off pattern gives a smaller \"thinned\" network, so n units hold 2^n thinned networks sharing the same connection strengths, called weights.",
+          "id": "spya-ajkrbc"
+        },
+        {
+          "text": "At test time nothing is dropped; instead each unit's outgoing weights are multiplied by p, which roughly averages all the thinned networks at once.",
+          "id": "spya-e06uf7",
+          "key": "outgoing weights are multiplied by p"
+        }
+      ]
+    },
+    {
+      "text": "The idea comes partly from a theory of why sex helps evolution: genes must work well with random partners, not one fixed set. In the same way, a unit cannot count on particular other units being present. This blocks co-adaptations, where units only work as a group by fixing each other's mistakes, a habit that tends not to carry over to new data.",
+      "ids": [
+        "spya-u4jpws",
+        "spya-jepmcf"
+      ],
+      "sentences": [
+        {
+          "text": "The idea comes partly from a theory of why sex helps evolution: genes must work well with random partners, not one fixed set.",
+          "id": "spya-u4jpws"
+        },
+        {
+          "text": "In the same way, a unit cannot count on particular other units being present.",
+          "id": "spya-jepmcf"
+        },
+        {
+          "text": "This blocks co-adaptations, where units only work as a group by fixing each other's mistakes, a habit that tends not to carry over to new data.",
+          "id": "spya-jepmcf",
+          "key": "co-adaptations"
+        }
+      ]
+    },
+    {
+      "text": "On image tasks, dropout cut the error rate, the share of wrong answers, compared with networks trained without it. On MNIST, a set of handwritten digits, error fell from 1.60% to 1.35%, and to 0.95% with bigger networks and a cap on weight size. On SVHN, photos of house numbers, error fell from 3.95% to 2.55% with dropout in every layer. On CIFAR-10, small photos in 10 classes, error fell from 14.98% to 12.61%; on CIFAR-100, with 100 classes, from 43.48% to 37.20%.",
+      "ids": [
+        "spya-ujw3t8",
+        "spya-y4ktr9",
+        "spya-r5fx4a"
+      ],
+      "sentences": [
+        {
+          "text": "On image tasks, dropout cut the error rate, the share of wrong answers, compared with networks trained without it.",
+          "id": null
+        },
+        {
+          "text": "On MNIST, a set of handwritten digits, error fell from 1.60% to 1.35%, and to 0.95% with bigger networks and a cap on weight size.",
+          "id": "spya-ujw3t8",
+          "key": "from 1.60% to 1.35%"
+        },
+        {
+          "text": "On SVHN, photos of house numbers, error fell from 3.95% to 2.55% with dropout in every layer.",
+          "id": "spya-y4ktr9"
+        },
+        {
+          "text": "On CIFAR-10, small photos in 10 classes, error fell from 14.98% to 12.61%; on CIFAR-100, with 100 classes, from 43.48% to 37.20%.",
+          "id": "spya-r5fx4a"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "A dropout network won the 2012 ImageNet photo contest with a test error of about 16%, against about 26% for the best other methods. Here error means the right label was missing from the model's top five guesses. In speech recognition, a 6-layer network's error on speech sounds dropped from 23.4% to 21.8%. For sorting news articles by topic, the gain was smaller, from 31.05% to 29.62%.",
+      "ids": [
+        "spya-r83ww8",
+        "spya-zrxrs4",
+        "spya-emxnp0"
+      ],
+      "sentences": [
+        {
+          "text": "A dropout network won the 2012 ImageNet photo contest with a test error of about 16%, against about 26% for the best other methods.",
+          "id": "spya-r83ww8",
+          "key": "about 16%, against about 26%"
+        },
+        {
+          "text": "Here error means the right label was missing from the model's top five guesses.",
+          "id": "spya-r83ww8"
+        },
+        {
+          "text": "In speech recognition, a 6-layer network's error on speech sounds dropped from 23.4% to 21.8%.",
+          "id": "spya-zrxrs4"
+        },
+        {
+          "text": "For sorting news articles by topic, the gain was smaller, from 31.05% to 29.62%.",
+          "id": "spya-emxnp0"
+        }
+      ]
+    },
+    {
+      "text": "Looking inside, units trained with dropout picked up clear features such as edges, strokes and spots, while units without it looked meaningless alone. Gains depended on data size: none with 100 or 500 examples, then rising and later falling as data grew. Averaging about 50 randomly thinned networks matched the weight-scaling shortcut, suggesting the shortcut is a fair stand-in for the true average.",
+      "ids": [
+        "spya-dnh5e5",
+        "spya-hq23s9",
+        "spya-y607uy"
+      ],
+      "sentences": [
+        {
+          "text": "Looking inside, units trained with dropout picked up clear features such as edges, strokes and spots, while units without it looked meaningless alone.",
+          "id": "spya-dnh5e5"
+        },
+        {
+          "text": "Gains depended on data size: none with 100 or 500 examples, then rising and later falling as data grew.",
+          "id": "spya-hq23s9"
+        },
+        {
+          "text": "Averaging about 50 randomly thinned networks matched the weight-scaling shortcut, suggesting the shortcut is a fair stand-in for the true average.",
+          "id": "spya-y607uy"
+        }
+      ]
+    },
+    {
+      "text": "On a small genetics data set, Bayesian neural networks, which weight each model by how well it fits the data, still beat dropout, 623 to 567 on a fit score. Dropout networks also take 2 to 3 times longer to train, because the random switching makes each learning step noisy. Even so, the authors conclude that dropout is a general method for reducing overfitting, not tied to any one field. They name speeding it up as a direction for future work.",
+      "ids": [
+        "spya-yek3wg",
+        "spya-ax6584",
+        "spya-f8dckz"
+      ],
+      "sentences": [
+        {
+          "text": "On a small genetics data set, Bayesian neural networks, which weight each model by how well it fits the data, still beat dropout, 623 to 567 on a fit score.",
+          "id": "spya-yek3wg"
+        },
+        {
+          "text": "Dropout networks also take 2 to 3 times longer to train, because the random switching makes each learning step noisy.",
+          "id": "spya-ax6584",
+          "key": "2 to 3 times longer to train"
+        },
+        {
+          "text": "Even so, the authors conclude that dropout is a general method for reducing overfitting, not tied to any one field.",
+          "id": "spya-f8dckz"
+        },
+        {
+          "text": "They name speeding it up as a direction for future work.",
+          "id": "spya-ax6584"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This paper introduces dropout, a new way to train neural networks, which are computer programs that learn from examples. Big networks often memorize their practice examples and then do poorly on new ones.",
+      "ids": [
+        "spya-bbgfuu",
+        "spya-qnbgwu"
+      ],
+      "sentences": [
+        {
+          "text": "This paper introduces dropout, a new way to train neural networks, which are computer programs that learn from examples.",
+          "id": "spya-bbgfuu",
+          "key": "dropout"
+        },
+        {
+          "text": "Big networks often memorize their practice examples and then do poorly on new ones.",
+          "id": "spya-qnbgwu"
+        }
+      ]
+    },
+    {
+      "text": "Dropout randomly switches off parts of the network while it learns. So no part can lean too hard on the others to fix its mistakes. In tests on pictures, speech, text and genes, it helped the networks do better on new examples. The authors conclude dropout is a general trick, not tied to one kind of task.",
+      "ids": [
+        "spya-bbgfuu",
+        "spya-jepmcf",
+        "spya-f8dckz"
+      ],
+      "sentences": [
+        {
+          "text": "Dropout randomly switches off parts of the network while it learns.",
+          "id": "spya-bbgfuu",
+          "key": "randomly switches off parts of the network"
+        },
+        {
+          "text": "So no part can lean too hard on the others to fix its mistakes.",
+          "id": "spya-jepmcf"
+        },
+        {
+          "text": "In tests on pictures, speech, text and genes, it helped the networks do better on new examples.",
+          "id": "spya-f8dckz"
+        },
+        {
+          "text": "The authors conclude dropout is a general trick, not tied to one kind of task.",
+          "id": "spya-f8dckz",
+          "key": "a general trick"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": true,
+        "stored": 2
+      }
+    }
+  }
+}

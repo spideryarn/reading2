@@ -176,7 +176,10 @@ not carry it yet. The plan and the measurement:
 [261020d](../plans/261020d-principles-every-chat-shares.md) and
 [261020a](../investigations/261020a-chat-principles-measured.md). The clause on what the model
 brings in, and why its wording is concrete (the abstract one showed no clear change):
-[261024a](../investigations/261024a-chats-give-the-background-measured.md).
+[261024a](../investigations/261024a-chats-give-the-background-measured.md). The sentence on
+choosing the clearest example rather than one from the reader's job needed an echo beside the
+profile to work (`withExampleReminder` in `src/converse.ts`, conversations only):
+[261024e](../investigations/261024e-chat-examples-not-the-reader-s-field-measured.md).
 
 ## What the model writes back
 

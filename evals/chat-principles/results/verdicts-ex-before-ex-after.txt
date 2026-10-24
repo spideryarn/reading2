@@ -1,0 +1,27 @@
+1: Y; why: sharper on why overflow is hard to escape; problem: X brings in Block without saying who he is
+2: Y; why: lighter data-science framing, clearer structure; problem: none
+3: Y; why: bat example clarifies Nagel; both use kitchen probe; problem: none
+4: X; why: pump-vs-metabolism analogy separates substrate cleanly; problem: Y mannequin analogy built from job, muddier
+5: X; why: plain everyday analogy, clear causal chain; problem: X names later escalations without citing them
+6: Y; why: accurate and well structured; problem: X wrongly says the article doesn't name Felleisen's paper
+7: X; why: concise, uses theatre example without over-explaining; problem: Y explains isolated forearm technique to an anaesthetist
+8: Y; why: adds that the agents were copies of one model; problem: none
+9: X; why: one plain phone-app analogy; problem: Y adds a forced boiler-procedure trade analogy
+10: X; why: cleaner, Block introduced, ties to AI; problem: Y regression analogy not needed by this reader
+11: Y; why: honest that the paragraph gives no false-negative example; problem: X presents organoids as Seth's false-negative point
+12: Y; why: tighter, Nagel source labelled; problem: none
+13: Y; why: explains computation; protocol vs haemoglobin very apt; problem: none
+14: Y; why: plain locked-room analogy, explains reinforcement; problem: X junior-associate analogy built from job
+15: Y; why: exceptions example accurate; adds problem-and-programmer point; problem: X yield example doubtful as a global rewrite
+16: Y; why: concise clinical link plus caution on lighter planes; problem: X explains IFT to an anaesthetist
+17: X; why: clear mapping with an apt teacher lesson; problem: X invents "hundred times faster"; Y claims critics dispute it, unsupported
+18: X; why: plainer controller analogy, explains carbon-based; problem: Y labels its analogy an inference; plumbing analogy built from job
+19: X; why: richer: no-report calibration caveat, Block's terms defined; problem: none
+20: X; why: clear proxy framing, honest about examples; problem: none
+21: X; why: accurate; problem: Y says no memory means no experience, which is an overclaim
+22: X; why: thorough, apt protocol/haemoglobin analogy, hedges kept; problem: none
+23: X; why: plain teenager analogy plus caution on author framing; problem: Y associate analogy built from job
+24: X; why: clearer explanation and placement; problem: X uses "Warth" without saying who; Y milking analogy forced
+25: X; why: concise, no needless clinical lecture; problem: Y explains IFT to an anaesthetist
+26: Y; why: tight mapping, sharp caution that no agent alerted humans; problem: X says "minutes" though the article says hours
+27: Y; why: plain phone-app analogy, clear; problem: X plumbing analogy built from job where a plainer one would do
