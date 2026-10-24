@@ -170,7 +170,7 @@ section, framed as the spirit behind the rules below, so a prompt's own, more sp
 win. Its broad intent deliberately overlaps the detailed sections above, but it does not copy their
 mechanics: each line leaves the how to `CLAIM_ORIGINS`, `widerWorld`, `plainWords` and
 `PROFILE_RULES`. `tests/chat-principles.test.ts` holds which kinds carry it (Referee's
-find-reviewers is exempt, with its reason) and keeps it under 200 words. Live's spoken prompts do
+find-reviewers is exempt, with its reason) and keeps it short; the word budget is the test's. Live's spoken prompts do
 not carry it yet. The plan and the measurement:
 [261020d](../plans/261020d-principles-every-chat-shares.md) and
 [261020a](../investigations/261020a-chat-principles-measured.md).
