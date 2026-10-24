@@ -54,7 +54,8 @@ export function Link({ href, onClick, scroll, ...rest }: Props) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (rest.target && rest.target !== "_self") return;
     event.preventDefault();
-    navigate(href, scroll === false ? { scroll: false } : {});
+    if (scroll === false) navigate(href, { scroll: false });
+    else navigate(href);
   }
   return <a href={href} onClick={handle} {...rest} />;
 }

@@ -71,7 +71,7 @@ simply not in the set.
   Explore also sees the reader's conversations (its notes digest) but its panel is handed only its
   own conversation, so it has no set to check against; that would mean passing the list down to
   Learn and a prompt change there. Deferred, with a queue entry.
-- **Passed over: a Markdown link** `[earlier conversation](?thread=…)`. That is the model writing an
+- **Passed over: a Markdown link** whose address the model writes itself (`?thread=…`). That is the model writing an
   address, which is exactly what the untrusted-output rule says not to trust, and it would need a
   second allowlist (`ownLink`) for a shape the citation path already handles.
 - **Passed over: a server-side rewrite** of the answer to insert links. The stored answer stays the
@@ -111,8 +111,10 @@ conversation [spya-thra33] already gave three weak spots."* The opening behaviou
 
 ## Progress
 
-- [ ] plan reviewed by GPT Sol
-- [ ] built, gates green
-- [ ] code reviewed by GPT Sol
-- [ ] browser check
-- [ ] docs: chat-tools.md, url-state.md; note in docs/user-feedback/
+- [x] plan reviewed by GPT Sol (F1–F4 taken: chat-only gating, no scroll on a press, collisions
+      counted on the server, the agreement test extended)
+- [x] built, gates green
+- [x] code reviewed by GPT Sol: ready; its C1–C3 fixed in the stage
+- [x] browser check (Sonnet, Playwright, local DB): band and floating chat, link, Back, no scroll,
+      unknown id stays text, no console errors
+- [x] docs: chat-tools.md, url-state.md; note in docs/user-feedback/; Explore queued as `qi-j4m4ffyb`
