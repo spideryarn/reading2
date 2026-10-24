@@ -354,6 +354,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "dig-no-search": "retry",
   /* *Ask about Spideryarn* — src/help-chat-call.ts. */
   "help-resting": "blocked",
+  /* A citation's automatic *Does it say that?*, everybody's day used — src/cite-check.ts. */
+  "cite-check-resting": "blocked",
   "cite-lookup-failed": "retry",
   "cite-gone": "blocked",
   "guess-resting": "blocked",
@@ -7215,7 +7217,9 @@ export const CITE_CHECK_BUSY =
 /** The 503 of the four, so it carries a code, as `HELP_CHAT_RESTING` does. */
 export const CITE_CHECK_RESTING: ReaderFacingFailure = {
   kind: "blocked",
-  message: "Automatic checks are paused for today. Press Does it say that? to ask anyway. [cite-check-resting]",
+  message:
+    "Automatic checks are paused for everyone today, and resting here again will get the same answer. " +
+    "Press Does it say that? to ask anyway. [cite-check-resting]",
 };
 /**
  * A *Does it say that?* chat the current citation list does not back: the

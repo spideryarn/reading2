@@ -590,7 +590,7 @@ describe("refusals", () => {
   const capped: [string, number, string][] = [
     ["hour", 429, "That's 8 automatic checks in the last hour. Press Does it say that? to ask anyway."],
     ["day", 429, "You've had today's 20 automatic checks. Press Does it say that? to ask anyway."],
-    ["global", 503, "Automatic checks are paused for today. Press Does it say that? to ask anyway. [cite-check-resting]"],
+    ["global", 503, "Automatic checks are paused for everyone today, and resting here again will get the same answer. Press Does it say that? to ask anyway. [cite-check-resting]"],
   ];
   for (const [reason, status, sentence] of capped) {
     it(`draws the ${reason} cap's sentence and asks nothing more`, async () => {

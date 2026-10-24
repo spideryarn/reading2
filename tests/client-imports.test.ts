@@ -143,6 +143,10 @@ const SHARED = new Set([
      F15 on the Skim build so the client copy could go; it imports types
      and nothing else. See src/section-path.ts. */
   "section-path.js",
+  /* The question a citation's *Does it say that?* asks, which the server
+     builds too and refuses a different one (plan 261024m, GPT Sol's C4).
+     One copy for both sides; it imports nothing. See src/chat-question.ts. */
+  "chat-question.js",
   /* Which stops each pass of a Skim route walks — the band walks it and the
      server's growth rule checks routes against it, so one definition rather
      than two that could drift. Imports types and nothing else.
