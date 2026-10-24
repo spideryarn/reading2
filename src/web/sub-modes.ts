@@ -1,7 +1,7 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
  * band: Learn's Recall | Explore | Quiz, Diagram's five pictures, Referee's six views,
- * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Sources' Bibliography |
+ * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded | Hover, Sources' Bibliography |
  * Not cited | Links | Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):

@@ -47,7 +47,8 @@ live.
 
 ## Fisheye and Expanded
 
-Two views, chosen by chips in the band's head row and kept in `?structure=`
+Two views (and a third behind the experimental switch, [§ Hover](#hover-an-experiment)), chosen by
+chips in the band's head row and kept in `?structure=`
 ([url-state.md](url-state.md)). **Fisheye**, the default, is everything below: the two faces, each
 opened up around where you are reading. **Expanded** is one list in every band width — every part
 and every section under it, at any depth, each with its gist, and each part's arc — and its list
