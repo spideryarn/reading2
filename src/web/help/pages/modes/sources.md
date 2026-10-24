@@ -1,5 +1,5 @@
 ---
-keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat
+keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier
 related: mode-referee, faq-beyond-the-article
 ---
 
@@ -209,6 +209,14 @@ for that.
 - Coming back to Investigate opens your newest of those conversations beside it, so you carry on
   where you left off. Close it to see the questions; it stays closed until you next come back.
 - Only whoever added the article has Investigate: visitors to a shared article have no chat.
+- **Where this piece sits** (experimental: shown only with Experimental features on) is at the top
+  of Investigate. Press **Search the literature** and, over a few minutes, an AI plans a dozen or so
+  web searches from the piece, reads what they find and the later papers that cite it, and lists
+  the passages later work challenges, supports or has moved on from, each with its sources and what
+  they say, checked against the source’s own words. Its press sends the piece to an AI, sends the
+  searches that AI writes to a web search engine, and sends its DOI or title to a public index of
+  papers. Finding nothing does not mean there is nothing.
+  Its questions appear as **Suggested for this piece**; only you see any of it.
 
 ![The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work](../images/mode-sources-claims.png "Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.")
 

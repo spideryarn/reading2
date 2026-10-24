@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { previewLogoAnimation } from "../scripts/preview-logo-animation.js";
 
@@ -42,6 +43,29 @@ describe("static animation proof command", () => {
     expect(await previewLogoAnimation({ outputPath, check: true })).toBe(outputPath);
     expect(await readFile(outputPath)).toEqual(generated);
     expect((await stat(outputPath)).mtimeMs).toBe(before.mtimeMs);
+  });
+
+  it("keeps equivalent proof bytes in both modes and rejects changed animation geometry", async () => {
+    const outputPath = path.join(temporary, "equivalent.png");
+    await previewLogoAnimation({ outputPath });
+    const image = await loadImage(await readFile(outputPath));
+    const canvas = createCanvas(image.width, image.height);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0);
+    // Opaque header background: drift one red channel by two levels.
+    ctx.fillStyle = "#262321";
+    ctx.fillRect(0, 0, 1, 1);
+    const drifted = canvas.toBuffer("image/png");
+    await writeFile(outputPath, drifted);
+    await utimes(outputPath, 1_000, 1_000);
+    const before = await stat(outputPath);
+    await previewLogoAnimation({ outputPath, check: true });
+    await previewLogoAnimation({ outputPath });
+    expect(await readFile(outputPath)).toEqual(drifted);
+    expect((await stat(outputPath)).mtimeMs).toBe(before.mtimeMs);
+    const changed = `${css}\n.spya-semaphore .logo-mark::before { transform-origin: 0 0; }`;
+    await expect(previewLogoAnimation({ outputPath, check: true, cssText: changed })).rejects.toThrow(/proof is stale/);
+    expect(await readFile(outputPath)).toEqual(drifted);
   });
 
   it.each([

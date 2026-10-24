@@ -54,7 +54,7 @@
  */
 
 import { useQueryState } from "nuqs";
-import { useMemo, useRef } from "react";
+import { type ComponentProps, useEffect, useMemo, useRef } from "react";
 import type { BlockId } from "../../../types.js";
 import type { PublicBibliography, PublicReception, PublicSourcesClaimList } from "../../../public-types.js";
 import {
@@ -91,6 +91,8 @@ import { LinksPanel } from "../../LinksPanel.js";
 import { useRelatedWork } from "../../useRelatedWork.js";
 import { NotCitedPanel } from "../../NotCitedPanel.js";
 import { InvestigatePanel, type SourcesInvestigateChats } from "../../InvestigatePanel.js";
+import { useExperimental } from "../../useExperimental.js";
+import { useSituate } from "../../useSituate.js";
 
 /** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
 function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
@@ -127,6 +129,8 @@ export function SourcesBand({
   onCiteFocusTaken,
   claimFocus,
   onClaimFocusTaken,
+  findingFocus = null,
+  onFindingFocusTaken,
   onOpenWork,
 }: {
   slug: string;
@@ -158,6 +162,9 @@ export function SourcesBand({
   /** One claim to bring into view in Claims, once (ReceptionAndClaimsPanel § `Props.focus`). */
   claimFocus: ItemFocus | null;
   onClaimFocusTaken(focus: ItemFocus): void;
+  /** One Situate finding to bring into view in Investigate's dossier, once (plan 261024o; SituateDossier § `focus`). */
+  findingFocus?: ItemFocus | null;
+  onFindingFocusTaken?: (focus: ItemFocus) => void;
   /** Open Bibliography on one work — Claims' *Cited in this paragraph* (Reader.tsx § `openBibliographyWork`). */
   onOpenWork(workId: string): void;
 }) {
@@ -224,7 +231,9 @@ export function SourcesBand({
        never buys it (plan 261020n). */
     case "investigate":
       return (
-        <InvestigatePanel
+        <InvestigateBand
+          slug={slug}
+          onJump={onJump}
           head={head}
           chats={investigateChats}
           claims={
@@ -233,6 +242,8 @@ export function SourcesBand({
               : listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList })
           }
           works={bibliography.bibliography?.citations ?? null}
+          findingFocus={findingFocus}
+          onFindingFocusTaken={onFindingFocusTaken}
         />
       );
     case "reception":
@@ -258,6 +269,45 @@ export function SourcesBand({
       return unhandled;
     }
   }
+}
+
+type InvestigateProps = Omit<ComponentProps<typeof InvestigatePanel>, "situate" | "findingFocus" | "onFindingFocusTaken"> & {
+  /** Only with the switch on is there a dossier to land in; off, it is handed back unserved. */
+  findingFocus: ItemFocus | null;
+  onFindingFocusTaken: ((focus: ItemFocus) => void) | undefined;
+};
+
+/**
+ * **Investigate, with *Where this piece sits* when the experimental switch is
+ * on** (plan 261024o; docs/project/experimental-features.md). Only the owner's
+ * band reaches here, and only with the switch on is `useSituate` mounted, so
+ * an owner with it off, like a visitor, never asks for the dossier or polls
+ * for its job. Flipping the switch while on Investigate remounts the panel;
+ * the arrival's reopening of the newest chat then runs once more, which
+ * opens a stored conversation and sends nothing.
+ */
+function InvestigateBand({ slug, findingFocus, onFindingFocusTaken, ...props }: InvestigateProps & { slug: string }) {
+  const { on } = useExperimental();
+  /* With the switch off there is no dossier, so a finding's focus has nowhere
+     to land: hand it back, so it cannot wait for the switch. */
+  useEffect(() => {
+    if (!on && findingFocus) onFindingFocusTaken?.(findingFocus);
+  }, [on, findingFocus, onFindingFocusTaken]);
+  return on ? (
+    <InvestigateWithSituate
+      slug={slug}
+      {...props}
+      findingFocus={findingFocus}
+      onFindingFocusTaken={onFindingFocusTaken}
+    />
+  ) : (
+    <InvestigatePanel {...props} situate={null} />
+  );
+}
+
+function InvestigateWithSituate({ slug, ...props }: InvestigateProps & { slug: string }) {
+  const situate = useSituate(slug);
+  return <InvestigatePanel {...props} situate={situate} />;
 }
 
 /**

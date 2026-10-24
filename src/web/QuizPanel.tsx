@@ -106,9 +106,11 @@ import {
   SendHorizontal,
   TriangleAlert,
 } from "lucide-react";
-import type { BlockId, Quiz, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
-import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
+import type { BlockId, Quiz, QuizOrigin, QuizQuestion, QuizQuestionId, QuizVerdict, ThreadSummary } from "../types.js";
+import { MAX_QUIZ_ANSWER_CHARS, originName } from "../types.js";
 import { discussQuizMark } from "./chat-handoff.js";
+import { OPEN_QUIZ_MARK_CHAT, OriginChatMark } from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
 import { showPremise } from "./quiz-ladder.js";
 import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./quiz-sections.js";
 import type { Section } from "./position.js";
@@ -152,6 +154,17 @@ import { dictationReporter } from "./dictation-report.js";
 export interface QuizArrival {
   readonly batchId: string;
   readonly questionId: QuizQuestionId;
+}
+
+/**
+ * **The chats started from a mark, and the way to open one** — `ItemChats`'
+ * two read halves (OriginChat.tsx), for Quiz (plan 261024i, stage 2). The
+ * start is `onDiscuss`, which takes the seed as well as the origin.
+ */
+export interface QuizMarkChats {
+  /** The reading view's thread summaries, which `Reader` owns and keeps current. */
+  summaries: readonly ThreadSummary[];
+  onOpen(threadId: string): void;
 }
 
 /**
@@ -377,6 +390,7 @@ export function QuizPanel({
   onJump,
   onArrowKeys,
   onDiscuss,
+  chats,
 }: {
   owner: UseQuiz;
   /** A question pressed in the prose, to go to — `QuizArrival`. */
@@ -409,10 +423,14 @@ export function QuizPanel({
   onArrowKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
   /**
    * **Discuss this in chat**: hands `Reader` the composer seed for a fresh
-   * chat — the question, the answer and the mark (`discussQuizMark`). Absent,
-   * no button is drawn. Greg, spya-jvsv3q; plan 261018b stage 2.
+   * chat — the question, the answer and the mark (`discussQuizMark`) — and
+   * the mark's origin, or `null` for a mark that was not stored and so has no
+   * row to name. Absent, no button is drawn. Greg, spya-jvsv3q; plan 261018b
+   * stage 2, and plan 261024i stage 2 for the origin.
    */
-  onDiscuss?: ((seed: string) => void) | undefined;
+  onDiscuss?: ((seed: string, origin: QuizOrigin | null) => void) | undefined;
+  /** The chats about this article's marks, for the shown mark's own — `QuizMarkChats`. */
+  chats?: QuizMarkChats | undefined;
 }) {
   useRenderCount("QuizPanel");
   const { quiz, attempt, answered } = owner;
@@ -785,6 +803,20 @@ export function QuizPanel({
 
   const marking = attempt?.questionId === question?.id && attempt?.status === "marking";
   const mine = question && attempt?.questionId === question.id ? attempt : null;
+  /* **The shown mark's origin, and its chat** (plan 261024i, stage 2; Greg's
+     B on q-nvxfwx). A mark is one stored attempt, so an earlier answer's chat
+     is not this one's: it stays in Chat's list and is not drawn here. */
+  const markOrigin: QuizOrigin | null =
+    quiz && question && mine?.status === "done" && mine.attemptId !== undefined
+      ? {
+          mode: "quiz",
+          batchId: quiz.batchId,
+          itemId: question.id,
+          attemptId: mine.attemptId,
+          quote: originName(question.question),
+        }
+      : null;
+  const markChat = markOrigin && chats ? threadForOrigin(chats.summaries, markOrigin) : undefined;
   const tooLong = typed.length > MAX_QUIZ_ANSWER_CHARS;
 
   /**
@@ -1421,7 +1453,10 @@ export function QuizPanel({
                       not "the discussion so far", and Try again is the press
                       for it. Waits rather than sends, like Summary's paragraph
                       button: what was confusing is the reader's to say. */}
-                  {onDiscuss && mine?.status === "done" && mine.reply.trim() !== "" && (
+                  {/* And only while the mark has no chat: then its mark,
+                      below this row, is the way back (Glossary's rule,
+                      OriginChat.tsx). */}
+                  {onDiscuss && !markChat && mine?.status === "done" && mine.reply.trim() !== "" && (
                     <Tooltip
                       content={
                         <ControlTip
@@ -1439,6 +1474,7 @@ export function QuizPanel({
                         onClick={() =>
                           onDiscuss(
                             discussQuizMark({ question: question.question, answer: mine.answer, mark: mine.reply }),
+                            markOrigin,
                           )
                         }
                       >
@@ -1447,6 +1483,17 @@ export function QuizPanel({
                     </Tooltip>
                   )}
                 </div>
+
+                {/* On its own line, never inside the row above, which does
+                    not wrap (GPT Sol's F5 on plan 261024i). */}
+                {markChat && chats && (
+                  <OriginChatMark
+                    chat={markChat}
+                    label={OPEN_QUIZ_MARK_CHAT}
+                    className="quiz-mark-chat"
+                    onOpen={chats.onOpen}
+                  />
+                )}
 
                 <ReferenceAnswer
                   question={question}

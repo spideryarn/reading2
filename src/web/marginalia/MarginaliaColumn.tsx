@@ -33,6 +33,11 @@ import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { BlockId, CitedWork, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
 import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
+import { useSituateRead } from "../useSituate.js";
+import { useExperimental } from "../useExperimental.js";
+import { SITUATE_FINDING_LABEL, sourceHost } from "../situate-dossier.js";
+import { dayOf } from "../relative-time.js";
+import { isWebUrl } from "../../urls.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
 import { byLineOf, CiteBlurb } from "../BibliographyPanel.js";
@@ -48,7 +53,9 @@ import {
   DRAWN_RELATIONS,
   type DrawnRelation,
   type HeadStep,
+  type LiteratureItem,
   type MarginClaim,
+  type MarginLiterature,
   type MarginEntry,
   type MarginaliaNote,
   layoutNotes,
@@ -118,6 +125,7 @@ export function MarginNotesSlot({
   viewer,
   onOpenAsked,
   onJump,
+  onOpenFinding,
 }: {
   /** The block these notes sit beside — whose markup a note's quote is drawn from (plan 261009k). */
   blockId: BlockId;
@@ -128,10 +136,19 @@ export function MarginNotesSlot({
   onOpenAsked?: ((id: string) => void) | undefined;
   /** Follow a generated note to the exact checked words in its other passage. */
   onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
+  /** Open Sources › Investigate on one Situate finding (plan 261024o). Owner only. */
+  onOpenFinding?: ((findingId: string) => void) | undefined;
 }) {
   return (
     <NoteBoundary>
-      <MarginNotes blockId={blockId} notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} onJump={onJump} />
+      <MarginNotes
+        blockId={blockId}
+        notes={notes}
+        viewer={viewer}
+        onOpenAsked={onOpenAsked}
+        onJump={onJump}
+        onOpenFinding={onOpenFinding}
+      />
     </NoteBoundary>
   );
 }
@@ -298,12 +315,14 @@ function MarginNotes({
   viewer,
   onOpenAsked,
   onJump,
+  onOpenFinding,
 }: {
   blockId: BlockId;
   notes: readonly MarginaliaNote[];
   viewer: "owner" | "visitor";
   onOpenAsked?: ((id: string) => void) | undefined;
   onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
+  onOpenFinding?: ((findingId: string) => void) | undefined;
 }) {
   useRenderCount("MarginNotes");
   return (
@@ -324,6 +343,8 @@ function MarginNotes({
             return <TimelineNote key="timeline" blockId={blockId} items={note.items} />;
           case "reception":
             return <ReceptionNote key="reception" items={note.items} />;
+          case "literature":
+            return <LiteratureNote key="literature" items={note.items} onOpenFinding={onOpenFinding} />;
           case "citation":
             return <CitationNote key="citation" blockId={blockId} items={note.items} />;
           case "comment":
@@ -357,6 +378,7 @@ function ShutNote({
   lineVoice,
   children,
   lineOnly = false,
+  when,
 }: {
   kind: string;
   stamp: string;
@@ -380,6 +402,8 @@ function ShutNote({
       visual only. A lone comment that is only its words (report spya-a0wpv4,
       plan 261006i). `children` is not read. */
   lineOnly?: boolean;
+  /** When the item was made, for the card's origin line (tips.ts § `margTipHow`). */
+  when?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
@@ -410,7 +434,7 @@ function ShutNote({
   }
   if (children === null) {
     return (
-      <p className="marg-shut" data-kind={kind} data-marg-tip={tipKey} data-marg-voice={lineVoice}>
+      <p className="marg-shut" data-kind={kind} data-marg-tip={tipKey} data-marg-voice={lineVoice} data-marg-when={when}>
         {label}
       </p>
     );
@@ -423,6 +447,7 @@ function ShutNote({
       className="marg-shut-button"
       data-marg-tip={tipKey}
       data-marg-voice={lineVoice}
+      data-marg-when={when}
       data-open={open ? "" : undefined}
       aria-expanded={open}
       aria-controls={panel}
@@ -656,6 +681,105 @@ function ReceptionNote({ items }: { items: readonly MarginClaim[] }) {
       ))}
     </ShutNote>
   );
+}
+
+/**
+ * **What a search of the literature found about this passage** — Situate's
+ * findings (plan 261024o § Marginalia), one shut line per block like every
+ * other mode's items: the stamp of the strongest finding (notes.ts §
+ * `strongestFirst`) and its note's opening, or a count. Opened, each finding's
+ * note in the model's face, its sources as links out, and a quiet *From the
+ * web*. *Open in Sources* lands on the finding in Investigate's dossier.
+ *
+ * **Every word here is text, never markup**: the note is the model's, a
+ * source's title a stranger page's (SituateDossier.tsx says the same).
+ */
+function LiteratureNote({
+  items,
+  onOpenFinding,
+}: {
+  items: readonly LiteratureItem[];
+  onOpenFinding?: ((findingId: string) => void) | undefined;
+}) {
+  const shut = literatureShut(items);
+  if (shut === null) return null;
+  const only = items.length === 1;
+  return (
+    <ShutNote
+      kind="literature"
+      stamp={shut.stamp}
+      tip="literature"
+      line={shut.line}
+      lineVoice={shut.lineVoice}
+      when={dayOf(items[0]?.searchedAt)}
+    >
+      {items.map(({ finding }) => (
+        <div key={finding.id} className="marg-open-item" data-finding={finding.id}>
+          {/* A lone finding's note is its line, which wraps when open: not said twice. */}
+          {!only && (
+            <p className="marg-open-head">
+              <span className="marg-stamp">{findingLabel(finding.kind)}</span>{" "}
+              <span className={voiceClass("ai")}>{finding.note}</span>
+            </p>
+          )}
+          <p className="marg-literature-sources">
+            {finding.sources.map((source, i) => {
+              /* The step admits only web URLs, but this is the active sink:
+                 re-check a carried, imported or damaged row exactly as the
+                 dossier does, so a stored scheme cannot become a live link. */
+              const href = isWebUrl(source.url) ? source.url : null;
+              const title = source.title.trim() || sourceHost(source.url);
+              return (
+                <Fragment key={source.url}>
+                  {i > 0 && " · "}
+                  {href !== null ? (
+                    <a href={href} target="_blank" rel="noreferrer noopener" data-tip={href}>
+                      {title}
+                    </a>
+                  ) : (
+                    <span>{title}</span>
+                  )}
+                </Fragment>
+              );
+            })}
+          </p>
+          <p className="marg-literature-foot">
+            <span className="marg-literature-from">
+              From the web{finding.strength === "suggestive" ? " · suggestive" : ""}
+            </span>
+            {onOpenFinding && (
+              <>
+                {" "}
+                <button type="button" className="linky marg-literature-open" onClick={() => onOpenFinding(finding.id)}>
+                  Open in Sources
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+      ))}
+    </ShutNote>
+  );
+}
+
+/** A finding kind's stamp, read through `ownLabel`: a kind from a newer server is its own word. */
+const findingLabel = (kind: string): string => ownLabel(SITUATE_FINDING_LABEL, kind) ?? plainWords(kind);
+
+/**
+ * **A literature line, shut**: the strongest finding's stamp and the opening
+ * of its note, in the model's face; or, for several, the strongest's stamp and
+ * a count in ours (*2 from the literature*). `items` arrive strongest first
+ * (notes.ts § `strongestFirst`). Null for none, which notes.ts never hands here.
+ */
+export function literatureShut(
+  items: readonly Pick<LiteratureItem, "finding">[],
+): { stamp: string; line: string; lineVoice: Voice } | null {
+  const first = items[0];
+  if (first === undefined) return null;
+  const stamp = findingLabel(first.finding.kind);
+  return items.length === 1
+    ? { stamp, line: first.finding.note, lineVoice: "ai" }
+    : { stamp, line: `${items.length} from the literature`, lineVoice: "ui" };
 }
 
 /**
@@ -1048,6 +1172,8 @@ export type MarginFeed = {
   relations: RelationsByBlock;
   /** The notes the relations call wrote (plan 261011o). */
   notes: MarginNotesList;
+  /** Situate's findings, with the experimental switch on (plan 261024o). */
+  literature: MarginLiterature | null;
 };
 
 export const NO_OWNER_FEED: MarginFeed = {
@@ -1057,6 +1183,7 @@ export const NO_OWNER_FEED: MarginFeed = {
   claims: null,
   relations: null,
   notes: null,
+  literature: null,
 };
 
 /**
@@ -1110,10 +1237,40 @@ export function OwnerMarginFeed({
     timelineRead.status === "ready" && !timelineRead.stale ? (timelineRead.timeline?.events ?? null) : null;
   const claims =
     receptionRead.status === "ready" && !receptionRead.stale ? (receptionRead.reception?.claims.rows ?? null) : null;
+  /* **Situate's findings, only with the experimental switch on** (plan
+     261024o): its read is a component of its own, mounted only then, so with
+     the switch off nothing asks `/api/situate`. */
+  const { on: experimental } = useExperimental();
+  const [literature, setLiterature] = useState<MarginLiterature | null>(null);
   useEffect(() => {
-    onFeed({ ideas, faq, timeline, claims, relations, notes });
-  }, [ideas, faq, timeline, claims, relations, notes, onFeed]);
+    onFeed({ ideas, faq, timeline, claims, relations, notes, literature });
+  }, [ideas, faq, timeline, claims, relations, notes, literature, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
+  return experimental ? <SituateMarginFeed slug={slug} onLiterature={setLiterature} /> : null;
+}
+
+/**
+ * **Situate's findings, read and never made** — `useSituateRead`, the read
+ * half with no job under it, and `useStepFinished` for a search finished while
+ * the column is open. A stale dossier (the article moved under it) is not
+ * drawn, as no stale list is. Unmounted, it hands back none.
+ */
+function SituateMarginFeed({
+  slug,
+  onLiterature,
+}: {
+  slug: string;
+  onLiterature(literature: MarginLiterature | null): void;
+}) {
+  const read = useSituateRead(slug);
+  useStepFinished(slug, "situate", read.refresh);
+  const made = read.status === "ready" && !read.stale ? read.situate : null;
+  const findings = made?.findings ?? null;
+  const searchedAt = made?.generatedAt ?? null;
+  useEffect(() => {
+    onLiterature(findings !== null && searchedAt !== null ? { findings, searchedAt } : null);
+  }, [findings, searchedAt, onLiterature]);
+  useEffect(() => () => onLiterature(null), [onLiterature]);
   return null;
 }
 

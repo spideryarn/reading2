@@ -1,6 +1,6 @@
 {
-  "id": "40ba2e7a-16fd-4c53-8ef4-eba778c80776",
-  "prevId": "0e2d649b-0bf5-487d-96d8-2b7cb66839d5",
+  "id": "951908c4-1b3b-4fb0-b70a-940fe1373dea",
+  "prevId": "7195c716-096d-40f7-af44-18a0d43ccad2",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3916,6 +3916,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "origin_batch_id": {
+          "name": "origin_batch_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "origin_attempt_id": {
+          "name": "origin_attempt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3963,34 +3975,6 @@
           ],
           "isUnique": true,
           "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'guide'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "chat_threads_one_cite_check": {
-          "name": "chat_threads_one_cite_check",
-          "columns": [
-            {
-              "expression": "article_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "origin_item_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "origin_block_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"spideryarn\".\"chat_threads\".\"origin_mode\" = 'cite-check'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4048,6 +4032,26 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "chat_threads_origin_quiz_attempt_fk": {
+          "name": "chat_threads_origin_quiz_attempt_fk",
+          "tableFrom": "chat_threads",
+          "tableTo": "quiz_attempts",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id",
+            "origin_attempt_id",
+            "origin_batch_id",
+            "origin_item_id"
+          ],
+          "columnsTo": [
+            "article_id",
+            "id",
+            "batch_id",
+            "question_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "chat_threads_origin_identity_fk": {
           "name": "chat_threads_origin_identity_fk",
           "tableFrom": "chat_threads",
@@ -4099,7 +4103,7 @@
         },
         "chat_threads_origin_mode": {
           "name": "chat_threads_origin_mode",
-          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','cite-check')"
+          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz')"
         },
         "chat_threads_origin_none": {
           "name": "chat_threads_origin_none",
@@ -4121,9 +4125,13 @@
           "name": "chat_threads_origin_item",
           "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" not in ('glossary','citations','bibliography','ideas') or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is not null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_lens\" is null)"
         },
-        "chat_threads_origin_cite_check": {
-          "name": "chat_threads_origin_cite_check",
-          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is distinct from 'cite-check' or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is not null and \"spideryarn\".\"chat_threads\".\"origin_lens\" is null)"
+        "chat_threads_origin_quiz": {
+          "name": "chat_threads_origin_quiz",
+          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is distinct from 'quiz' or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is not null and \"spideryarn\".\"chat_threads\".\"origin_batch_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_attempt_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_lens\" is null)"
+        },
+        "chat_threads_origin_quiz_only": {
+          "name": "chat_threads_origin_quiz_only",
+          "value": "(\"spideryarn\".\"chat_threads\".\"origin_batch_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_attempt_id\" is null) or \"spideryarn\".\"chat_threads\".\"origin_mode\" is not distinct from 'quiz'"
         },
         "chat_threads_origin_summary": {
           "name": "chat_threads_origin_summary",
@@ -7671,7 +7679,18 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "quiz_attempts_attempt_identity": {
+          "name": "quiz_attempts_attempt_identity",
+          "nullsNotDistinct": false,
+          "columns": [
+            "article_id",
+            "id",
+            "batch_id",
+            "question_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "quiz_attempts_answer_length": {
@@ -7775,7 +7794,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate', 'cite-check')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate')"
         }
       },
       "isRLSEnabled": false

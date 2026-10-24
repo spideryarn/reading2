@@ -570,7 +570,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     evidence: "static-only",
     reason:
       "`chat_threads.origin_*` at the route, in the store and in the export: what the wire may " +
-      "carry, that a thread's origin is set once, and that the four columns round-trip. It seeds " +
+      "carry, that a thread's origin is set once, and that all origin columns round-trip. It seeds " +
       "through `scratchArticleInPg`; what it still reaches is the seeder's copy step and the " +
       "ledger row the stubbed model call records.",
   },
@@ -3880,6 +3880,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      refusal is the owner filter and not a missing slug. 261011ac. */
   "tests/related-work-pg.test.ts": {
     "00000000-0000-4000-8000-0000ca401e11": { kind: "seeded" },
+  },
+  /* A second reader, seeded, whose allowance spend shows the automatic
+     cite-check start's global cap is everybody's. 261024m. */
+  "tests/chat-origin-route.test.ts": {
+    "00000000-0000-4000-8000-00000000c17e": { kind: "seeded" },
   },
   "tests/cited-in-spideryarn-pg.test.ts": {
     "00000000-0000-4000-8000-00000c17e0a1": { kind: "seeded" },

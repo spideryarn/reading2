@@ -1,8 +1,8 @@
 /**
  * **A chat started from an item in a mode: the button that starts one, and
  * the mark that reopens it.** Shared by Debate's claims, Glossary's entries,
- * Bibliography's rows and Ideas' rows (since plan 261009k), so they are one
- * design and not four copies.
+ * Bibliography's rows, Ideas' rows (since plan 261009k) and Quiz's marks
+ * (since plan 261024i), so they are one design and not five copies.
  *
  * - `OriginChatMark` is the way back: the chat's count of questions and its
  *   gist (the latest answer's opening until one exists). A press opens that
@@ -59,6 +59,8 @@ export const ASK_IDEA_IN_CHAT = "Ask about this idea in chat";
 export const OPEN_ENTRY_CHAT = "Open the chat about this term";
 export const OPEN_WORK_CHAT = "Open the chat about this work";
 export const OPEN_IDEA_CHAT = "Open the chat about this idea";
+/** And on a quiz question's mark (plan 261024i, stage 2): the chat is about the mark, not the question. */
+export const OPEN_QUIZ_MARK_CHAT = "Open the chat about this mark";
 
 /** What the button's card says under its name: where the press goes, and that the press is the Send (since 2026-10-06, plan 261006j). */
 export const ASK_IN_CHAT_SAYS = "Opens a new chat and asks a question about it straight away.";

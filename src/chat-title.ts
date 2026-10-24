@@ -38,6 +38,8 @@ export function titleFromOrigin(origin: ThreadOrigin): string {
     /* The work's title: the question is the same for every one of them. */
     case "cite-check":
       return titleFrom(`Does it say that? ${origin.quote}`);
+    case "quiz":
+      return titleFrom(`Quiz: ${origin.quote}`);
     default: {
       const never: never = origin;
       return never;

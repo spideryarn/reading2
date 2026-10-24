@@ -506,6 +506,7 @@ import type {
   ChatAnchor,
   ThreadOrigin,
   CiteCheckOrigin,
+  QuizOrigin,
   ChatThread,
   Comment,
   FeedbackEnvironment,
@@ -561,6 +562,7 @@ import {
   isThreadKind,
   MAX_LENS_CHARS,
   MAX_ORIGIN_NAME_CHARS,
+  originName,
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
   currentOriginMode,
@@ -2766,9 +2768,9 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
          `alive()`: a mark that finished is kept whether or not anybody is
          still there to hear so. The catch reports the failure and nothing
          else — `captureFailure` gets the slug and the phase, never the words. */
-      let answeredAt: string | null = null;
+      let kept: { id: string; answeredAt: string } | null = null;
       try {
-        answeredAt = await quizAttemptStore.record(slug, {
+        kept = await quizAttemptStore.record(slug, {
           batchId: found.quiz.batchId,
           questionId: question.id,
           question: question.question,
@@ -2782,7 +2784,9 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
         reply: event.reply,
         model: event.model,
         ...(event.verdict ? { verdict: event.verdict } : {}),
-        ...(answeredAt ? { answeredAt } : { kept: false }),
+        /* The row's id beside its time: what *Discuss this in chat* names
+           the mark by (`QuizOrigin`, plan 261024i stage 2). */
+        ...(kept ? { answeredAt: kept.answeredAt, attemptId: kept.id } : { kept: false }),
       });
     }
   } catch (err) {
@@ -3700,14 +3704,14 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (origin !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
     throw httpError(400, "Only a chat can be started from an item in another mode");
   }
-  const wantedOrigin = parseOrigin(origin);
+  const sentOrigin = parseOrigin(origin);
   /* **A citation's *Does it say that?*** (plan 261024m): the paragraph it
      checks is the chat's anchor, the whole paragraph, so the origin and the
      anchor cannot disagree about which one. Its question is the server's to
      check (below), so nothing else may change what is asked or how: not the
      "?" prompt, not other articles. `auto` belongs to this turn and no other.
      All before `loadArticle`, so a bad body is a plain 400. */
-  const citeCheck = wantedOrigin?.mode === "cite-check" ? wantedOrigin : null;
+  const citeCheck = sentOrigin?.mode === "cite-check" ? sentOrigin : null;
   if (auto === true && citeCheck === null) {
     throw httpError(400, "auto only applies to the turn that starts a cite-check chat");
   }
@@ -3787,12 +3791,28 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      those. This is where the rest is caught — and it is done after
      `loadArticle` because it needs the blocks. */
   if (wanted) await checkAnchor(wanted, article.blocks);
+  /* **A quiz mark is read from its row, and the row says what it was.** The
+     attempt must be this article's, with this batch and question (the
+     composite key would refuse it too, as a 500 out of a transaction), and the
+     stored quote is the question as the attempt kept it, never the request's:
+     it titles the chat and names it in the list (GPT Sol's F3 on plan 261024i
+     stage 2). */
+  let wantedOrigin = sentOrigin;
+  if (sentOrigin?.mode === "quiz") {
+    const question = await quizAttemptStore.questionOf(slug, sentOrigin);
+    if (question === null) {
+      throw httpError(400, "origin.attemptId is not a kept mark of this question in this article");
+    }
+    wantedOrigin = { ...sentOrigin, quote: originName(question) };
+  }
   /* A claim's block is one of this article's. The foreign key would say so
      too, as a 500 out of a transaction. The quote is not compared with the
      block: it is a snapshot of the item's words, kept for the list to show.
-     **Only a claim names a block.** A lens has none, and a glossary entry or
-     a cited work is an id this server never dereferences (plan 261006d, D3):
-     a made-up one gives its owner a chat with no mark, and nothing else. */
+     **Only a claim's block is checked here.** A lens has none, and a glossary
+     entry or a cited work is an id this server never dereferences (plan
+     261006d, D3): a made-up one gives its owner a chat with no mark, and
+     nothing else. A cite-check's block is the anchor's, checked with it, and
+     its work is checked against the Bibliography (`admitCiteCheckTurn`). */
   if (
     wantedOrigin &&
     isClaimOrigin(wantedOrigin) &&
@@ -5548,6 +5568,8 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
       return parseItemOrigin(built, origin as Record<string, unknown>);
     case "cite-check":
       return parseCiteCheckOrigin(origin as Record<string, unknown>);
+    case "quiz":
+      return parseQuizOrigin(origin as Record<string, unknown>);
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
     default:
       return built satisfies never;
@@ -5605,6 +5627,36 @@ function parseCiteCheckOrigin(body: Record<string, unknown>): ThreadOrigin {
     throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
   }
   return { mode: "cite-check", itemId, blockId, quote };
+}
+
+/**
+ * **A quiz mark's origin**: its batch, its question and its attempt (plan
+ * 261024i, stage 2). Shape only, here; the caller reads the attempt, refuses
+ * one this article does not have, and replaces `quote` with the question the
+ * attempt kept. The quote is still required, so a body is one shape whatever
+ * its mode, and is held to `parseItemOrigin`'s cap.
+ */
+function parseQuizOrigin(body: Record<string, unknown>): QuizOrigin {
+  const { batchId, itemId, attemptId, quote, blockId, lens } = body;
+  if (blockId !== undefined || lens !== undefined) {
+    throw httpError(400, "a quiz origin is a batchId, an itemId, an attemptId and a quote, with no blockId and no lens");
+  }
+  if (typeof batchId !== "string" || !isSpideryarnId(batchId)) {
+    throw httpError(400, "origin.batchId must be a quiz batch id");
+  }
+  if (typeof itemId !== "string" || !isSpideryarnId(itemId)) {
+    throw httpError(400, "origin.itemId must be a question id");
+  }
+  if (typeof attemptId !== "string" || !isUuid(attemptId)) {
+    throw httpError(400, "origin.attemptId must be a uuid");
+  }
+  if (typeof quote !== "string" || quote.trim() === "") {
+    throw httpError(400, "origin.quote must be a non-empty string");
+  }
+  if (quote.length > MAX_ORIGIN_NAME_CHARS) {
+    throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
+  }
+  return { mode: "quiz", batchId, itemId, attemptId, quote };
 }
 
 /**

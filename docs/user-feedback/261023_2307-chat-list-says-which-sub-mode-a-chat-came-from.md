@@ -1,7 +1,7 @@
 ---
 reports: spya-twsm7t
 ending: shipped
-comment: Chat's list now says Investigate (or Claims, Glossary…) under each chat started there. Quiz's Discuss in chat is still a plain chat: the Feedback dialog asks you which way to take it.
+comment: Chat's list now says Investigate (or Claims, Glossary, Quiz…) under each chat started there. A chat from a Quiz mark goes back to its question, and the question shows it.
 ---
 # Chat's list says which sub-mode a chat came from
 
@@ -31,7 +31,10 @@ the place under its title, in the chip's own words: *Investigate*, *Claims*, *Bi
 
 - **Quiz's *Discuss this in chat***: queue item `qi-g3neq83r`, waiting on question `q-nvxfwx`. A
   Quiz question's id repeats across batches, so this needs a database column and a choice about
-  what the mark on the question means.
+  what the mark on the question means. **Built on 2026-10-24** after Greg chose B
+  (`spya-yq6h67`, queue item `qi-t5nvqqen`): the chat is tied to one mark, Chat's list says
+  *Quiz*, the chat goes back to its question, and the question shows that mark's chat. Plan
+  261024i § Stage 2.
 - **Summary's *Ask about a paragraph***: already queued, `qi-vj7p4sbh`, waiting on Greg's earlier
   question.
 

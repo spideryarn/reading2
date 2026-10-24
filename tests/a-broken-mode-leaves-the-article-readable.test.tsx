@@ -496,8 +496,9 @@ function reply(url: string, method: string): Response {
      reason: citations since plan 261006g, and Simple, FAQ, Timeline and
      Debate since 261006h, each of which the fall-through's `{}` is now a
      reported fault for rather than an `undefined` quietly published — and
-     Tweets, Relations, Skim, Sketch and Illustrated since 261007n. */
-  if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|reception|sources-claims|tweets|relations|skim|sketch|illustrated)\//.test(url)) {
+     Tweets, Relations, Skim, Sketch and Illustrated since 261007n, and
+     Situate since 261024o (the margin reads it with the switch on). */
+  if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|reception|sources-claims|tweets|relations|skim|sketch|illustrated|situate)\//.test(url)) {
     return new Response(null, { status: 404 });
   }
   /* **Arc too since 261007n, but as one that is there**: a missing arc starts

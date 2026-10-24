@@ -6,7 +6,8 @@
  * `record` **appends**: a second answer to a question is a second row, never
  * an update, so when each try happened is kept. It names no time — the
  * database stamps `created_at` — and hands that time back, because it is the
- * one the client orders this answer by against what a later read returns.
+ * one the client orders this answer by against what a later read returns —
+ * and the row's id, which a chat about this mark names (`QuizOrigin`).
  *
  * `latestForBatch` is `select distinct on (question_id)` over one batch, newest
  * first: the rows of a batch that *Write them again* has replaced are still in
@@ -29,7 +30,7 @@ import { guardDbStore } from "./db-errors.js";
 import { articleIdForOwned } from "./pg.js";
 
 const rawPgQuizAttemptStore: QuizAttemptStore = {
-  async record(slug, attempt): Promise<string> {
+  async record(slug, attempt) {
     /* Owner-scoped: a slug the caller does not own is a 404 here, as everywhere. */
     const articleId = await articleIdForOwned(slug);
     const [row] = await getDb()
@@ -42,9 +43,9 @@ const rawPgQuizAttemptStore: QuizAttemptStore = {
         answer: attempt.answer,
         reply: attempt.reply,
       })
-      .returning({ createdAt: quizAttempts.createdAt });
+      .returning({ id: quizAttempts.id, createdAt: quizAttempts.createdAt });
     if (!row) throw new Error("the quiz attempt insert returned no row");
-    return row.createdAt.toISOString();
+    return { id: row.id, answeredAt: row.createdAt.toISOString() };
   },
 
   async latestForBatch(slug, batchId): Promise<QuizKeptAnswer[]> {
@@ -52,6 +53,7 @@ const rawPgQuizAttemptStore: QuizAttemptStore = {
     const rows = await getDb()
       .selectDistinctOn([quizAttempts.questionId], {
         questionId: quizAttempts.questionId,
+        attemptId: quizAttempts.id,
         answer: quizAttempts.answer,
         reply: quizAttempts.reply,
         createdAt: quizAttempts.createdAt,
@@ -62,10 +64,27 @@ const rawPgQuizAttemptStore: QuizAttemptStore = {
       .orderBy(quizAttempts.questionId, desc(quizAttempts.createdAt), desc(quizAttempts.id));
     return rows.map((row) => ({
       questionId: row.questionId,
+      attemptId: row.attemptId,
       answer: row.answer,
       reply: row.reply,
       answeredAt: row.createdAt.toISOString(),
     }));
+  },
+
+  async questionOf(slug, mark) {
+    const articleId = await articleIdForOwned(slug);
+    const [row] = await getDb()
+      .select({ question: quizAttempts.question })
+      .from(quizAttempts)
+      .where(
+        and(
+          eq(quizAttempts.articleId, articleId),
+          eq(quizAttempts.id, mark.attemptId),
+          eq(quizAttempts.batchId, mark.batchId),
+          eq(quizAttempts.questionId, mark.itemId),
+        ),
+      );
+    return row?.question ?? null;
   },
 };
 

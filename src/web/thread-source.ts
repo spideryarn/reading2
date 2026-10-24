@@ -18,7 +18,7 @@
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
 import { type ChatThread, isLensOrigin, type LearnKind, type ThreadKind, type ThreadOrigin } from "../types.js";
-import { CHAT_FROM_WORDS, type ChatFrom, type LearnView, type SourcesView } from "./params.js";
+import { CHAT_FROM_WORDS, type ChatFrom, type LearnView } from "./params.js";
 import { LEARN_SUB_MODES, SOURCES_SUB_MODES, type SubMode, subModeWords } from "./sub-modes.js";
 
 /** The parts of Learn that are a conversation: every part but Quiz. */
@@ -87,6 +87,8 @@ export const SOURCE_CITED_WORK = `Started from a cited work in ${SOURCES_IN} ${S
 export const SOURCE_CITE_CHECK = "Started from Does it say that? on a citation";
 /** And for one started from an idea's *Ask in chat* (plan 261009k, stage 3). */
 export const SOURCE_IDEA = "Started from an idea";
+/** And for one started from a mark's *Discuss this in chat* in Learn › Quiz (plan 261024i, stage 2). */
+export const SOURCE_QUIZ_MARK = `Started from a mark in ${MODE_LABEL.learn} › ${LEARN_SUB_MODES.quiz.label}`;
 
 /** …and for a chat anchored to a block or to words in one: the "?" and a comment's question. */
 export const SOURCE_PASSAGE = "About a passage";
@@ -143,7 +145,12 @@ export const GUIDE_LABEL = "Guide";
  * mode and its sub-mode cannot disagree. Only the arms an origin can come
  * from today, since each mode here must also be a filter word (`ChatFrom`).
  */
-export type OriginPlace = { mode: "glossary" | "ideas" } | Extract<SubMode, { mode: "sources" }>;
+export type OriginPlace =
+  | { mode: "glossary" | "ideas" }
+  | Extract<SubMode, { mode: "sources" }>
+  /* Quiz alone of Learn's: a mark's chat. Recall and Explore are Learn kinds,
+     not origins. A narrowing of `SubMode`'s Learn arm, so it is still one. */
+  | { mode: "learn"; view: Extract<LearnView, "quiz"> };
 
 export function originPlace(origin: ThreadOrigin): OriginPlace {
   switch (origin.mode) {
@@ -159,6 +166,10 @@ export function originPlace(origin: ThreadOrigin): OriginPlace {
       return { mode: "sources", view: "investigate" };
     case "sources-claims":
       return { mode: "sources", view: "claims" };
+    /* A mark in Quiz. Learn's place and filter word, but a `chat`-kind
+       thread, so the row opens in Chat (`threadSource` gives it no `learn`). */
+    case "quiz":
+      return { mode: "learn", view: "quiz" };
     default:
       return origin satisfies never;
   }
@@ -190,6 +201,10 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
       /* The quote is the work's title as it was when the chat started. */
       case "cite-check":
         return { ...at, label: SOURCE_CITE_CHECK, quote: origin.quote };
+      /* The question's words. No `learn`: that field sends a row to Learn,
+         and this is a chat, opened in Chat like any other. */
+      case "quiz":
+        return { ...at, label: SOURCE_QUIZ_MARK, quote: origin.quote };
       default:
         return origin satisfies never;
     }
@@ -268,8 +283,8 @@ export function narrowed<T extends SourcedThread>(threads: readonly T[], from: C
  */
 export interface OriginBackWords {
   mode: Mode;
-  /** Sources' sub-mode the press opens, on a Sources origin and no other. */
-  view?: SourcesView;
+  /** The sub-mode the press opens: Sources' on a Sources origin, Quiz on a mark, none otherwise. */
+  view?: Extract<OriginPlace, { view: unknown }>["view"];
   /**
    * The word on the button the press lands on: the mode's (*Glossary*), or
    * for Sources its sub-mode's (*Bibliography*, *Claims*, *Investigate*),

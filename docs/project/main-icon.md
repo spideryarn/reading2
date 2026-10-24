@@ -53,7 +53,10 @@ between those installed-icon exports.
    The aliases in [package.json](../../package.json) own the command sequence and focused test list.
    `brand:update` rebuilds PNG/ICO, both size-review sheets and the static animation proof, then
    the social card. `brand:check` checks
-   PNG/ICO/proof byte freshness and the focused image, animation, metadata and doc contracts.
+   PNG/ICO/proof freshness and the focused image, animation, metadata and doc contracts.
+   Freshness compares decoded pixels within a small tolerance, not bytes, so the Mac and the Linux
+   box agree. An equivalent committed file is left byte for byte, so regenerating on the other
+   machine changes nothing ([postmortem](../postmortems/261024f-a-byte-exact-freshness-check-on-a-platform-dependent-renderer.md)).
    Its OG tests check structure, dimensions and size budget; they **cannot detect an outdated
    illustration inside an otherwise valid OG image**. Use `brand:update` when artwork changes.
 4. Inspect the proofs below, then check silhouette-dependent animation geometry. Run the broader
@@ -66,8 +69,8 @@ Regeneration makes no AI calls. It needs the lockfile's installed canvas/ICO dep
 Geist font (`npm ci`). The [OG renderer](../../scripts/make-og-card.ts), also available as
 `npm run brand:og`, additionally needs the system Chrome selected by `chromePath()` in
 [browser-sign-in.ts](../../scripts/browser-sign-in.ts). This is an image renderer, not a live app
-or signed-in browser check. Byte comparison is a same-runtime check; cross-OS/font/Chrome
-screenshot byte identity is not promised. The [library decision](../investigations/261024a-spideryarn-logo-character-intent-and-selection.md#regenerationlibrary-decision)
+or signed-in browser check. Cross-OS/font/Chrome byte identity is not promised, which is why the
+canvas checks compare pixels. The OG card is not freshness-checked at all. The [library decision](../investigations/261024a-spideryarn-logo-character-intent-and-selection.md#regenerationlibrary-decision)
 explains why the existing canvas dependency and a small ICO library were sufficient.
 
 ## Native-size review

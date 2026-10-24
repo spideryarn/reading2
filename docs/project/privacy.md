@@ -28,6 +28,8 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
+- [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's press
+- [§ The Chrome extension](#the-chrome-extension) — what one press takes, and where it goes
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
 - [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
@@ -835,6 +837,31 @@ the article (deletion, export). Never shown to a visitor. The page says it in th
 paragraph and in Haiku's clause; `tests/privacy-page.test.ts` holds both, and `LAST_UPDATED` moved to
 19 October 2026.
 
+## Search the literature
+
+**Added 2026-10-24**, with [sources.md § Where this piece sits](sources.md#where-this-piece-sits)
+([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md),
+[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, at the top
+of Sources › Investigate and behind the experimental switch, searches **the article itself**: a
+model (Claude Sonnet, through OpenRouter) is shown the fenced title, headings, opening and the works
+Bibliography says it leans on, and writes a dozen or so short searches. Each search goes through
+OpenRouter to Exa (the quick-tier model running it sees the search too); Exa receives the query, not
+a separate copy of the title or passage. OpenAlex is asked for the papers that cite the piece by its
+DOI, or the words of its title, as Reception's *Cited by* asks it. The final Claude Sonnet read,
+again through OpenRouter, receives the whole fenced article, the search results, public abstracts
+from OpenAlex and the checked abstract words already stored for cited works. The reader's profile
+block — *About you* and/or *Why you are reading this piece* — is shown only to that final read, for
+ranking and questions, and never becomes a search (the plan's review, S4).
+
+So the press says what leaves before it is pressed (`SITUATE_DISCLOSURE`,
+[`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts)), and the page says *"When you
+press Search the literature, in Sources’ Investigate (an experimental feature), your article is
+searched for in the wider literature"*, then names the planner, Exa, OpenAlex and final read, in the
+indexes paragraph beside the cited-work search, whose *"never the article’s text"* stays true of
+that search alone. The dossier is stored on the article's
+revision (`article_revisions.situate`), goes with the article, and is never shown to a visitor.
+`LAST_UPDATED` moved to 24 October 2026, and `tests/privacy-page.test.ts` holds the sentence.
+
 ## A claim typed into Sources › Claims
 
 **Added 2026-10-09**, with [reception.md § Checking the claims you pick](reception.md#checking-the-claims-you-pick)
@@ -878,6 +905,31 @@ What the code has to keep true for the page to stay honest:
 
 `tests/privacy-page.test.ts` holds the page to it: the old sentence must be gone and the new clause
 there.
+
+## The Chrome extension
+
+Since 2026-10-24 ([261024q](../plans/261024q-chrome-extension-one-click-add-the-page.md); report
+`spya-xsfrsg`). One press of its button copies the page in that tab, as the browser shows it,
+with its address, and hands it to a Spideryarn tab, which uploads it as a file. So the page's
+bullet under *What we keep* says what the bookmarklet's Help text already says of a saved page:
+the rendered DOM can contain personalised or sensitive content, including content not currently
+visible; executable scripts and attributes, password and hidden form inputs, and most other form
+values do not come with it.
+
+What the bullet promises, and where each promise is held:
+
+- **Only on a press, only that tab**: the manifest asks for `activeTab` and `scripting` and nothing
+  else (`extension/manifest.ts`; `tests/extension-handoff.test.ts` fails on any other
+  permission, a host permission or a content script).
+- **Available to the receiving tab for 15 minutes**: `KEEP_MS` in `extension/src/handoff.ts`,
+  checked on read. A taken capture and a closed receiving tab are deleted at once. An expired,
+  untaken capture is deleted on the next button press or when Chrome next starts; IndexedDB has no
+  wall-clock deletion of its own.
+- **Nowhere else, and no access to the account**: the extension makes no network request of its
+  own; the Spideryarn tab uploads with its own session through the existing upload.
+
+The Chrome Web Store's privacy fields and its listing must say the same; the wording for them is
+`extension/store/listing.md`. Change the three together.
 
 ## The guide is told how many other articles you have opened
 

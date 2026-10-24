@@ -339,9 +339,19 @@ Sol reviews and the browser check:
   needs to be a way to turn the discussion so far into a chat thread and continue it."* The press
   opens a fresh chat in Chat's band with the question, the answer and the mark quoted in the
   composer (`discussQuizMark` in [`chat-handoff.ts`](../../src/web/chat-handoff.ts)), and waits for
-  the reader to say what they want to ask, as Summary's paragraph button does. A plain chat: no
-  origin is stored, so the question shows no mark of it
+  the reader to say what they want to ask, as Summary's paragraph button does
   ([261018b](../plans/261018b-quiz-mark-room-to-think-and-discuss-a-mark-in-chat.md)).
+- **And the chat remembers the mark** (since 2026-10-24). Greg chose B on question q-nvxfwx:
+  Chat's list says *Quiz* on the row, the open chat has *Back to "…" in Quiz*, and the step shows
+  the chat started about that mark (its gist, one press to reopen it) on its own line under the
+  row, in the Discuss button's place. It is tied to **one mark**, the stored attempt: answer
+  again and the new mark has its own Discuss and its own chat, and the older chat stays in
+  Chat's list. A mark that could not be stored (`kept: false`) has no row to name, so its chat is
+  a plain one. The way back lands on the question while its batch is current, and opens Quiz as
+  usual once *Write them again* has replaced it. The shape is
+  [chat-from-a-mode.md § Which modes have it](chat-from-a-mode.md#which-modes-have-it); the plan
+  is [261024i](../plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md) §
+  Stage 2.
 - **The mark's ceiling covers its thinking too.** `MARK_MAX_TOKENS` is 4,000 since 2026-10-18; at
   1,200 a Sonnet 5.5 mark on a whole book spent 832 tokens thinking and was cut off
   (`[ai-mark-cut-off]`, spya-ag4hsu, same plan).

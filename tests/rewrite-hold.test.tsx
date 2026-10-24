@@ -97,6 +97,26 @@ vi.mock("../src/web/lib/offline-store.js", () => ({
   forgetUser: () => {},
 }));
 
+/* The experimental switch, on only for a row that says so (`Row.experimental`):
+   Investigate's *Where this piece sits* is drawn only with it on
+   (SourcesMode.tsx § `InvestigateBand`). Off for every other row, as the real
+   store is with nobody signed in. */
+let experimentalOn = false;
+vi.mock("../src/web/useExperimental.js", () => ({
+  useExperimental: () => ({
+    on: experimentalOn,
+    since: experimentalOn ? "2026-10-01T00:00:00.000Z" : null,
+    loaded: true,
+    signedIn: true,
+    stale: false,
+    set: async () => ({ kind: "saved" as const }),
+    saving: false,
+    error: null,
+    loadError: null,
+    reload() {},
+  }),
+}));
+
 vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({ dictation: { supported: false }, readOnly: false, busy: false, toggle: () => {} }),
 }));
@@ -231,6 +251,8 @@ interface Row {
    * names the route alone, which is the request this file is about.
    */
   also?: Record<string, unknown>;
+  /** The band draws this row's artefact only with the experimental switch on. */
+  experimental?: boolean;
 }
 
 const noop = () => {};
@@ -881,6 +903,63 @@ const ROWS: Row[] = [
     waiting: "The new route hasn't loaded yet.",
     readAgain: "Try again",
   },
+  /* Sources > Investigate's *Where this piece sits* (plan 261024o): the
+     owner's, behind the experimental switch. Its forced verb is *Search
+     again*, on the stale banner or at the dossier's foot; its clock,
+     `generatedAt`, is its identity. */
+  {
+    name: "Where this piece sits",
+    hook: "useSituate.ts",
+    step: "situate",
+    path: "/api/situate/",
+    search: "?sources=investigate",
+    experimental: true,
+    body: (which, { stale }) => ({
+      situate: {
+        ...stamp(which, false),
+        version: "situate/1",
+        kind: "empirical",
+        year: 2020,
+        angle: "since",
+        outcome: "read",
+        overview: "The rig is still cited, and argued with.",
+        findings: [
+          {
+            id: "spya-sit234",
+            kind: "challenged",
+            blockId: "spya-bbbbbb",
+            quote: "The instrument was built first",
+            note: `${SAYS[which]}: a replication found the calibration drifted.`,
+            strength: "strong",
+            sources: [
+              {
+                origin: "web",
+                url: "https://example.org/leiden",
+                title: "The Leiden replication",
+                quote: "We could not reproduce the calibration at all.",
+              },
+            ],
+          },
+        ],
+        questions: [],
+        searched: { queries: [], pages: 1, citers: 0, cited: 0 },
+        counts: {
+          written: 1, kept: 1, malformed: 0, unknownBlock: 0, unquoted: 0, unknownSource: 0, sourceUnquoted: 0,
+          noSource: 0, citationRule: 0, perBlock: 0, overCap: 0, duplicate: 0, queriesRefused: 0,
+        },
+      },
+      stale,
+      outdated: false,
+      profileChanged: false,
+    }),
+    mount: (show) => createElement(SourcesOuter, { show }),
+    verb: "Search again",
+    shape: ON_THE_BANNER,
+    forced: ["Search again"],
+    direct: [{ label: "Search again", stale: true }],
+    waiting: "The new search hasn't loaded yet.",
+    readAgain: "Try again",
+  },
 ];
 
 /* --------------------------------------------------------------- the harness -- */
@@ -976,6 +1055,7 @@ const usual = (): Shape => row.shape ?? PROFILED;
 
 function start(which: Row, shape: Shape = which.shape ?? PROFILED) {
   row = which;
+  experimentalOn = which.experimental === true;
   path = `${row.path}${SLUG}`;
   serve = () => json(row.body("old", shape));
 }
@@ -985,6 +1065,7 @@ const finishJob = (status: Job["status"] = "done") => {
 
 beforeEach(() => {
   SLUG = ORIGINAL_SLUG;
+  experimentalOn = false;
   jobs = [];
   posted.length = 0;
   retried.length = 0;

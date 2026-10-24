@@ -1,6 +1,6 @@
 -- A citation's *Does it say that?* becomes a thread origin: plan 261024m stage 1
 -- (docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md).
--- Additive: the origin-mode CHECK widened to admit 'cite-check', that mode's
+-- Additive: the origin-mode CHECK widened to admit 'cite-check' (alongside 'quiz', plan 261024i), that mode's
 -- shape CHECK (work id, citing block, title snapshot, no lens), a partial unique
 -- index so an article holds one such chat per work and block (the route's 409 is
 -- the first line; this is the backstop), and the rate-limit CHECK widened to
@@ -12,5 +12,5 @@ ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_mod
 ALTER TABLE "spideryarn"."rate_limit_events" DROP CONSTRAINT "rate_limit_events_bucket";--> statement-breakpoint
 CREATE UNIQUE INDEX "chat_threads_one_cite_check" ON "spideryarn"."chat_threads" USING btree ("article_id","origin_item_id","origin_block_id") WHERE "spideryarn"."chat_threads"."origin_mode" = 'cite-check';--> statement-breakpoint
 ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_cite_check" CHECK ("spideryarn"."chat_threads"."origin_mode" is distinct from 'cite-check' or ("spideryarn"."chat_threads"."origin_item_id" is not null and "spideryarn"."chat_threads"."origin_block_id" is not null and "spideryarn"."chat_threads"."origin_quote" is not null and "spideryarn"."chat_threads"."origin_lens" is null));--> statement-breakpoint
-ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_mode" CHECK ("spideryarn"."chat_threads"."origin_mode" is null or "spideryarn"."chat_threads"."origin_mode" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','cite-check'));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_mode" CHECK ("spideryarn"."chat_threads"."origin_mode" is null or "spideryarn"."chat_threads"."origin_mode" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check'));--> statement-breakpoint
 ALTER TABLE "spideryarn"."rate_limit_events" ADD CONSTRAINT "rate_limit_events_bucket" CHECK ("spideryarn"."rate_limit_events"."bucket" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate', 'cite-check'));

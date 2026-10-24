@@ -365,10 +365,15 @@ function answerTurn(body: { threadId: string; question: string; origin?: ThreadO
   return new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
+/** The reader's experimental switch: off unless a test turns it on (§ Where this piece sits). */
+let experimentalSince: string | null = null;
+
 function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
-  if (url === "/api/reader") return json({ experimentalSince: null });
+  if (url === "/api/reader") return json({ experimentalSince });
+  /* Nobody has searched the literature for this one (`200 null`, the none-yet answer). */
+  if (url === `/api/situate/${SLUG}`) return json(null);
   if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
   if (url === `/api/sources-claims/${SLUG}`) return json({ claimList: CLAIM_LIST, stale: false, outdated: false });
   if (url === `/api/bibliography/${SLUG}`) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
@@ -394,6 +399,7 @@ function reply(url: string, method: string, body: unknown): Response {
 
 const { App } = await import("../src/web/App.js");
 const { SOURCES_INVESTIGATE_SUGGESTED } = await import("../src/web/InvestigatePanel.js");
+const { SITUATE_RUN } = await import("../src/web/situate-dossier.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 const activation = await import("../src/web/activation.js");
 
@@ -411,6 +417,7 @@ beforeEach(() => {
   nextAnswer = "";
   minted = 0;
   summaryGate = null;
+  experimentalSince = null;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -957,5 +964,32 @@ describe("asking a question in Sources › Investigate", () => {
     const sent = chatPosts()[0]?.body as { question: string; origin: ThreadOrigin };
     expect(sent.question).toBe(askAboutCitedWork(WORK, []));
     expect(sent.origin).toEqual({ mode: "bibliography", itemId: WORK.id, quote: WORK.title });
+  });
+});
+
+/* Plan 261024o § Stages, 2: *Where this piece sits* is the owner's, behind the
+   experimental switch. With it off, Investigate never asks for the dossier;
+   with it on, it asks, draws the press, and still buys nothing on arrival. */
+describe("Where this piece sits, at the top of Investigate", () => {
+  const situateReads = () => trace.filter((r) => r.url === `/api/situate/${SLUG}`);
+  const dossier = () => host.querySelector<HTMLElement>(".mode-band .investigate-situate");
+
+  it("is neither asked for nor drawn with the experimental switch off", async () => {
+    who.set(OWNER);
+    await open("?mode=sources&sources=investigate");
+    await until(() => investigateRows("").length > 0, "Investigate's questions");
+    await settle(4);
+    expect(dossier()).toBeNull();
+    expect(situateReads()).toEqual([]);
+  });
+
+  it("with it on, reads the dossier, offers the press, and starts nothing on arrival", async () => {
+    experimentalSince = "2026-10-01T00:00:00.000Z";
+    who.set(OWNER);
+    await open("?mode=sources&sources=investigate");
+    await until(() => dossier()?.querySelector("button") != null, "the dossier's press");
+    expect(situateReads().length).toBeGreaterThan(0);
+    expect(dossier()?.textContent).toContain(SITUATE_RUN);
+    expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"), "no job on arrival").toEqual([]);
   });
 });

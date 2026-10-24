@@ -42,6 +42,8 @@
     "build:client": "vite build && tsx scripts/build-site-pages.ts",
     "build:api": "vite build --config vite.api.config.ts",
     "build:fleet": "vite build --config vite.fleet.config.ts",
+    "extension:build": "tsx scripts/build-extension.ts",
+    "extension:publish": "tsx scripts/publish-extension.ts",
     "build": "npm run build:client && npm run build:api",
     "validate-tree": "tsx src/validate-tree.ts",
     "structure:flatten": "tsx src/structure-flatten.ts",

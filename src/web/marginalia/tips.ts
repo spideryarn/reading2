@@ -28,6 +28,7 @@ export type MargTipKey =
   | "faq"
   | "timeline"
   | "reception"
+  | "literature"
   | "comment-own"
   | "comment-owner";
 
@@ -61,6 +62,14 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "Others say",
     what: "A page elsewhere on the web that responds to a claim made in this passage, and how it bears on it.",
     how: "From Sources' Claims. AI searched the web and judged how the page bears on the claim. The quote is the page's own words; where the page had no usable title, AI wrote the headline, in the AI's typeface.",
+  },
+  /* Situate (plan 261024o): the one kind whose words come from outside the
+     article and outside any mode the reader ran by hand. When the search ran
+     is the line's own (`data-marg-when`), added by `margTipHow`. */
+  literature: {
+    head: "From the literature",
+    what: "Later work that bears on this passage: work that challenges or supports it, what has happened since, or a citation or an omission worth checking. Press this line to open it; its sources are links, and Open in Sources shows it in Investigate.",
+    how: "From Sources › Investigate's Where this piece sits. AI searched the web and the papers that cite this piece, and wrote each note from what it found; every source's quote was checked against that source's own text, but the judgement is the AI's.",
   },
   "comment-own": {
     head: "Yours",
@@ -149,6 +158,16 @@ export const NOTE_TIPS: Record<MarginNoteKind, MargTip & { stamp: string }> = {
 
 /** The words after an origin note's text: whose they are, and that nothing checked them. */
 export const SOURCE_NOTE_LABEL = "AI memory, unchecked";
+
+/**
+ * **A card's origin line, with when its item was made**, for a line that
+ * carries the day as `data-marg-when` (BlockLinkCard.tsx). Only the
+ * *literature* line does today: a search's findings age, and the card is
+ * where a reader asks how old they are.
+ */
+export function margTipHow(tip: MargTip, when: string | null): string {
+  return when === null || when.trim() === "" ? tip.how : `${tip.how} Searched ${when}.`;
+}
 
 export function isMargTipKey(key: string | null): key is MargTipKey {
   return key !== null && Object.hasOwn(MARG_TIPS, key);

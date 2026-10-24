@@ -113,6 +113,26 @@ describe("threadSource", () => {
     });
   });
 
+  /* Plan 261024i, stage 2: a mark discussed in chat says *Quiz*, under
+     Learn's icon and filter, and has no `learn`, so it opens in Chat. */
+  it("names a quiz mark's chat as Quiz's, under Learn, and leaves it a chat", () => {
+    const mark: ThreadOrigin = {
+      mode: "quiz",
+      batchId: "spya-bat111",
+      itemId: "spya-qqq111",
+      attemptId: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a04",
+      quote: "What does the author mean by order?",
+    };
+    expect(threadSource(t("chat", { origin: mark }))).toEqual({
+      from: "learn",
+      mode: "learn",
+      label: "Started from a mark in Learn › Quiz",
+      place: "Quiz",
+      quote: "What does the author mean by order?",
+    });
+    expect(chatFrom(t("chat", { origin: mark }))).toBe("learn");
+  });
+
   it("places no passage chat and no plain chat", () => {
     expect(threadSource(t("chat", { anchor: QUOTED }))?.place).toBeUndefined();
     expect(threadSource(t("chat"))?.place).toBeUndefined();
@@ -225,6 +245,24 @@ describe("originBack", () => {
       modeLabel: "Ideas",
       quote: "An idea",
       text: "Back to “An idea” in Ideas",
+    });
+  });
+
+  it("goes back to a quiz mark in Quiz, under Learn", () => {
+    expect(
+      originBack({
+        mode: "quiz",
+        batchId: "spya-bat111",
+        itemId: "spya-qqq111",
+        attemptId: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a04",
+        quote: "Why order?",
+      }),
+    ).toEqual({
+      mode: "learn",
+      view: "quiz",
+      modeLabel: "Quiz",
+      quote: "Why order?",
+      text: "Back to “Why order?” in Quiz",
     });
   });
 

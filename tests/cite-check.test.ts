@@ -46,7 +46,7 @@ describe("the cite-check identity", () => {
     expect(sameOrigin({ mode: "bibliography", itemId: WORK, quote: CHECK.quote }, CHECK)).toBe(false);
   });
 
-  it("round-trips through the five columns, and a half row reads as no origin", () => {
+  it("round-trips through the seven columns, and a half row reads as no origin", () => {
     const columns = originColumns(CHECK);
     expect(columns).toEqual({
       originMode: "cite-check",
@@ -54,6 +54,8 @@ describe("the cite-check identity", () => {
       originBlockId: BLOCK,
       originQuote: CHECK.quote,
       originLens: null,
+      originBatchId: null,
+      originAttemptId: null,
     });
     expect(originFromColumns(columns)).toEqual({ origin: CHECK });
     expect(originFromColumns({ ...columns, originBlockId: null })).toEqual({});

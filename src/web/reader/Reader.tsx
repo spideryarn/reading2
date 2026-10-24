@@ -32,6 +32,7 @@ import {
   type BlockId,
   type CitedWork,
   type ClaimOrigin,
+  type QuizOrigin,
   type GlossaryEntry,
   type Idea,
   MAX_LENS_CHARS,
@@ -105,6 +106,7 @@ import {
   askToCheckClaim,
 } from "../chat-handoff.js";
 import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
+import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
 import { questionsByAnchor } from "../quiz-anchors.js";
@@ -1197,19 +1199,26 @@ export function Reader({
     [handToChat],
   );
   /* Quiz's *Discuss this in chat* (plan 261018b): the question, the answer
-     and the mark, quoted, waiting for what the reader wants to ask. A plain
-     chat, like the paragraph's: no origin is stored. */
-  const discussQuizMarkInChat = useCallback((seed: string) => handToChat(seed, "wait"), [handToChat]);
+     and the mark, quoted, waiting for what the reader wants to ask. Since plan
+     261024i (stage 2) it stores the mark as its origin, when the mark was
+     stored and so has a row to name; wrapped in `reopenItemChat` below as
+     `discussQuizMark`, so a mark has one chat. */
+  const startQuizMarkChat = useCallback(
+    (seed: string, origin: QuizOrigin | null) => handToChat(seed, "wait", origin ?? undefined),
+    [handToChat],
+  );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
   /**
-   * **An item's chat between its first press and the summaries hearing of
-   * it** (plan 261010s, GPT Sol's F1 on the plan). `reopenItemChat` finds an
-   * item's chat in `chatSummaries`, which are re-read only when the reader
-   * leaves Chat or a turn settles; a second press inside that window would
-   * otherwise start a second chat. The band names the thread here as it
-   * sends, and again if the server corrects the id; an entry goes once the
-   * summaries carry that id, and from then on they are the record.
-  */
+   * **An immediately sent item's chat between its first press and the
+   * summaries hearing of it** (plan 261010s, GPT Sol's F1 on the plan).
+   * `reopenItemChat` finds an item's chat in `chatSummaries`, which are re-read
+   * only when the reader leaves Chat or a turn settles; a second press inside
+   * that window would otherwise start a second chat. The band names a direct
+   * handoff's thread here as it sends, and again if the server corrects the id;
+   * an entry goes once the summaries carry that id, and from then on they are
+   * the record. A waiting Quiz handoff has no `onHandoffThread`; its durable
+   * draft-origin bridge is `chatDraftsFor(slug)` below.
+   */
   const handedItemChats = useRef<{ origin: ThreadOrigin; id: string }[]>([]);
   const handedItemChatsSlug = useRef(slug);
   const handoffThread = useCallback(
@@ -1254,9 +1263,21 @@ export function Reader({
       (handed) => handed.id !== id || !sameOrigin(handed.origin, origin),
     );
     if (origin.mode === "cite-check") owner?.chatAnchors.drop(id);
+    refusedHandoffs.current.add(id);
   }, [owner, slug]);
+  /**
+   * **A handoff the server refused is not the item's chat**, though its draft
+   * still holds the origin (so a resend from that composer keeps it). The
+   * drafts bridge in `reopenItemChat` passes over these ids, and the next
+   * press starts a real chat, as it did before the bridge existed (plan
+   * 261024i stage 2's code review).
+   */
+  const refusedHandoffs = useRef(new Set<string>());
   useEffect(() => {
-    if (handedItemChatsSlug.current !== slug) handedItemChats.current = [];
+    if (handedItemChatsSlug.current !== slug) {
+      handedItemChats.current = [];
+      refusedHandoffs.current = new Set();
+    }
     handedItemChatsSlug.current = slug;
   }, [slug]);
   /* **And a handoff chat mode never took does not wait for the next visit.** The
@@ -1732,6 +1753,10 @@ export function Reader({
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
+  /* A Situate finding in Investigate's dossier (plan 261024o), asked for by a
+     margin *literature* line's *Open in Sources*. */
+  const [findingFocus, setFindingFocus] = useState<ItemFocus | null>(null);
+  const findingFocusTaken = useCallback((taken: ItemFocus) => setFindingFocus(focusTaken(taken)), []);
   /**
    * **Open Glossary on one term and bring its row into view** — the prose
    * card's *Open in Glossary* and its second tap, and a chat's way back to a
@@ -1776,6 +1801,9 @@ export function Reader({
           break;
         case "claim":
           setClaimFocus(null);
+          break;
+        case "finding":
+          setFindingFocus(null);
           break;
         default: {
           const unhandled: never = slot;
@@ -1829,6 +1857,26 @@ export function Reader({
    * the card's button is (the visitor's card gets `null`).
    */
   const findWebNote = owner?.bibliography.findWebNote;
+  /**
+   * **Open Investigate on one Situate finding** — a margin *literature*
+   * line's *Open in Sources* (plan 261024o § Marginalia). The focus and the
+   * move in one tick, as `openBibliographyWork` does; the dossier lands on the
+   * finding once it has drawn it (SituateDossier.tsx, `data-finding`), and a
+   * finding a newer search has replaced is dropped there, opening on the list.
+   * This is a destination press, not a chat's way back: an open conversation
+   * is cleared so it cannot cover the row, and Investigate's arrival does not
+   * reopen another while the focus is being served.
+   */
+  const openFindingInSources = useCallback(
+    (findingId: string) => {
+      setBandAway(false);
+      setFindingFocus(focusOn(findingId));
+      if (mode !== "sources" || sourcesView !== "investigate" || thread !== null) {
+        void setSourcesWay({ mode: "sources", sources: "investigate", thread: null }, { history: "push" });
+      }
+    },
+    [mode, sourcesView, thread, setSourcesWay],
+  );
   const openCitedWorkFromCard = useMemo(
     () => openFromCiteCard(openBibliographyWork, findWebNote),
     [openBibliographyWork, findWebNote],
@@ -1907,13 +1955,19 @@ export function Reader({
             { history: "push" },
           );
           return;
+        /* A quiz mark lands on its question while its batch is the one on
+           screen; once *Write them again* has replaced it, `QuizArrival` is
+           ignored and Quiz opens as it would (plan 261024i, stage 2). */
+        case "quiz":
+          openQuizAt(origin.batchId, origin.itemId);
+          return;
         default: {
           const never: never = origin;
           return never;
         }
       }
     },
-    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, setThread],
+    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, setThread, openQuizAt],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -2650,6 +2704,7 @@ export function Reader({
    */
   const marginViewer = capability.kind === "owner" ? "owner" : "visitor";
   const openAskedFromMargin = marginViewer === "owner" ? openAskedFromDrawer : undefined;
+  const openFindingFromMargin = marginViewer === "owner" ? openFindingInSources : undefined;
   const marginNotes = useMemo(() => {
     if (!marginRoom) return null;
     const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
@@ -2658,6 +2713,8 @@ export function Reader({
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
       relations: isOwner ? ownerFeed.relations : null,
       notes: isOwner ? ownerFeed.notes : null,
+      /* The owner's only, with the switch on: the feed reads it only then (plan 261024o). */
+      literature: isOwner ? ownerFeed.literature : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2685,6 +2742,7 @@ export function Reader({
             viewer={marginViewer}
             onOpenAsked={openAskedFromMargin}
             onJump={jumpTo}
+            onOpenFinding={openFindingFromMargin}
           />
         </>,
       );
@@ -2717,12 +2775,14 @@ export function Reader({
     isOwner,
     ownerFeed.relations,
     ownerFeed.notes,
+    ownerFeed.literature,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
     askedList,
     marginViewer,
     openAskedFromMargin,
+    openFindingFromMargin,
     jumpTo,
     chatCardBlock,
     chatCardThread,
@@ -2856,22 +2916,35 @@ export function Reader({
    * paragraph button, which records no origin.
    */
   useEffect(() => {
-    if (handedItemChats.current.length === 0) return;
     const known = new Set(chatSummaries.map((s) => s.id));
-    handedItemChats.current = handedItemChats.current.filter((h) => !known.has(h.id));
-  }, [chatSummaries]);
+    if (handedItemChats.current.length > 0) {
+      handedItemChats.current = handedItemChats.current.filter((h) => !known.has(h.id));
+    }
+    /* Waiting handoffs are not in `handedItemChats`: they become a stored
+       thread only when the reader later sends the seeded question. Their
+       draft origin is the bridge across that send and any corrected id, and
+       can go only once this same summary list has learned the thread. */
+    const drafts = chatDraftsFor(slug);
+    for (const id of known) drafts.clearOrigin(id);
+  }, [chatSummaries, slug]);
   const reopenItemChat = useCallback(
     (origin: ThreadOrigin | undefined): boolean => {
       if (!origin) return false;
-      const id =
+      const known =
         threadForOrigin(chatSummaries, origin)?.id ??
         handedItemChats.current.find((h) => sameOrigin(h.origin, origin))?.id;
+      /* A draft's chat may not be stored yet, and its composer lives in Chat's
+         band, so it opens there rather than beside the mode. */
+      const draft = known
+        ? undefined
+        : chatDraftsFor(slug).threadForOrigin(origin, (id) => refusedHandoffs.current.has(id));
+      const id = known ?? draft;
       if (!id) return false;
-      if (mode === "learn" || mode === "chat") showBand("chat");
+      if (draft || mode === "learn" || mode === "chat") showBand("chat");
       openClaimChat(id);
       return true;
     },
-    [chatSummaries, mode, showBand, openClaimChat],
+    [chatSummaries, mode, showBand, openClaimChat, slug],
   );
   /* **Open a thread where *Ask in chat* reopens an item's chat** — beside the
      mode, or in Chat's band from Chat and Learn. A citation card's *Continue
@@ -2952,6 +3025,33 @@ export function Reader({
       if (!reopenItemChat(itemOrigin("ideas", idea.id, idea.name))) askIdeaInChat(idea);
     },
     [reopenItemChat, askIdeaInChat],
+  );
+  /* A mark's chat, reopened if it has one. A mark that was not stored has no
+     origin, so it always starts a plain chat, as every mark did before plan
+     261024i. The draft-origin bridge lets a second press reopen the same
+     composer before its first send and after sending while the stored summary
+     is still refreshing. */
+  const discussQuizMark = useCallback(
+    (seed: string, origin: QuizOrigin | null) => {
+      if (!reopenItemChat(origin ?? undefined)) startQuizMarkChat(seed, origin);
+    },
+    [reopenItemChat, startQuizMarkChat],
+  );
+  /* Quiz is inside Learn, where the floating chat card is deliberately not
+     drawn: a mark's own chat therefore has to open in Chat's band. This is
+     the same Learn exception as `reopenItemChat` and
+     `openAskedFromDrawer`; `openClaimChat` alone would write `?thread=` while
+     leaving Quiz on screen, so the press would appear to do nothing. */
+  const openQuizMarkChat = useCallback(
+    (threadId: string) => {
+      showBand("chat");
+      openClaimChat(threadId);
+    },
+    [showBand, openClaimChat],
+  );
+  const quizChats = useMemo(
+    () => ({ summaries: chatSummaries, onOpen: openQuizMarkChat }),
+    [chatSummaries, openQuizMarkChat],
   );
   const checkClaim = useCallback(
     (origin: ClaimOrigin) => {
@@ -3753,7 +3853,8 @@ export function Reader({
             sections={quizSections}
             onJump={bandJump}
             onQuizKeys={onQuizKeys}
-            onDiscussQuizMark={discussQuizMarkInChat}
+            onDiscussQuizMark={discussQuizMark}
+            quizChats={quizChats}
           />
         ) : null;
       case "glossary":
@@ -4024,6 +4125,8 @@ export function Reader({
             onCiteFocusTaken={citeFocusTaken}
             claimFocus={claimFocus}
             onClaimFocusTaken={claimFocusTaken}
+            findingFocus={findingFocus}
+            onFindingFocusTaken={findingFocusTaken}
             onOpenWork={openBibliographyWork}
           />
         );

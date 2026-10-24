@@ -63,7 +63,7 @@
  */
 import { MessagesSquare } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { CitedWork, ClaimOrigin, ListedClaim, ThreadSummary } from "../types.js";
+import type { BlockId, CitedWork, ClaimOrigin, ListedClaim, ThreadSummary } from "../types.js";
 import { MAX_LENS_CHARS } from "../types.js";
 import { MODE_LABEL } from "../title-text.js";
 import { shortTitle, workShortName } from "./cited-in-paragraph.js";
@@ -73,6 +73,9 @@ import { OPEN_WORK_CHAT, OriginChatMark, originChatTip } from "./OriginChat.js";
 import { SOURCES_CLAIMS_OPEN_CLAIM_CHAT } from "./ReceptionAndClaimsPanel.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { itemOrigin } from "./chat-handoff.js";
+import { SituateDossier, SituateQuestions } from "./SituateDossier.js";
+import type { UseSituate } from "./useSituate.js";
+import type { ItemFocus } from "./item-focus.js";
 
 /**
  * **What Investigate's rows are handed**: the reading view's thread summaries, the
@@ -166,6 +169,10 @@ export function InvestigatePanel({
   chats,
   claims,
   works,
+  situate = null,
+  onJump,
+  findingFocus = null,
+  onFindingFocusTaken,
 }: {
   /** Sources' chip row (SourcesMode.tsx § `SourcesViews`), drawn as this band's header. */
   head: ReactNode;
@@ -174,22 +181,63 @@ export function InvestigatePanel({
   claims: readonly ListedClaim[] | null;
   /** Bibliography's works, else `null`. */
   works: readonly CitedWork[] | null;
+  /**
+   * *Where this piece sits* (SituateDossier.tsx, plan 261024o): the owner's
+   * dossier with the experimental switch on, else `null`, and then neither the
+   * section nor *Suggested for this piece* is drawn (SourcesMode.tsx §
+   * `InvestigateBand`).
+   */
+  situate?: UseSituate | null;
+  /** A finding's jump to its passage. Needed only with `situate`. */
+  onJump?: (id: BlockId) => void;
+  /** One finding to bring into view, once — a margin line's *Open in Sources* (SituateDossier § `focus`). */
+  findingFocus?: ItemFocus | null;
+  onFindingFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }) {
   const shownClaims = investigateClaims(claims);
   const shownWorks = investigateWorks(works);
-  useReopenNewest(chats);
+  /* A margin press has already said what this visit is for. Do not put the
+     newest conversation over the finding it asked us to show. */
+  useReopenNewest(chats, findingFocus !== null);
+  const pieceQuestions = situate?.status === "ready" ? (situate.situate?.questions ?? []) : [];
   return (
     <ModeSurface
       label={MODE_LABEL.sources}
       feature="gloss investigate sources"
       mode="sources"
-      about={<p>{SOURCES_INVESTIGATE_ABOUT}</p>}
+      about={
+        <>
+          <p>{SOURCES_INVESTIGATE_ABOUT}</p>
+          {situate && <p>{SOURCES_INVESTIGATE_SITUATE_ABOUT}</p>}
+        </>
+      }
       head={head}
     >
       <QuestionBox onQuestion={chats.onQuestion} />
       <div className="tl-scroll investigate-scroll">
+        {/* **Where this piece sits** first (plan 261024o): the owner's
+            dossier, behind the experimental switch. Inside the scroll rather
+            than above the box, so a long dossier scrolls instead of pushing
+            the box and the rest off the band. */}
+        {situate && (
+          <SituateDossier
+            owner={situate}
+            chats={{ summaries: chats.summaries, onQuestion: chats.onQuestion, onOpen: chats.onOpen }}
+            onJump={onJump ?? noJump}
+            focus={findingFocus}
+            onFocusTaken={onFindingFocusTaken}
+          />
+        )}
+
         {/* The reader's own conversations before ours (plan 261021b). */}
         <YourQuestions chats={chats} />
+
+        {/* The model's questions for this piece, above the fixed five (plan
+            261024o); each a press, as they are. */}
+        <SituateQuestions
+          questions={pieceQuestions}
+          row={(question) => <InvestigateRow onPress={() => chats.onQuestion(question)}>{question}</InvestigateRow>}
+        />
 
         <section className="investigate-section" aria-labelledby="investigate-suggested-head">
           <h3 id="investigate-suggested-head" className="rcp-group-head investigate-head">
@@ -300,14 +348,20 @@ export function InvestigatePanel({
  *   unsent passage chat, whose words live only in the dialog; a note; or an
  *   annotation in progress. Any of these decides the visit at once, before
  *   the summaries arrive (GPT Sol's F1 and F2 on the plan; built-code review).
+ * - **Nor over a finding focus**: *Open in Sources* from the margin has
+ *   already chosen the visit's destination. Its row lands and flashes; the
+ *   automatic conversation would cover or compete with that answer.
  * - It opens a stored conversation and sends nothing.
  */
-function useReopenNewest(chats: SourcesInvestigateChats): void {
-  const decided = useRef(false);
+function useReopenNewest(chats: SourcesInvestigateChats, landingOnFinding: boolean): void {
+  /* Initialising from the render closes the first-mount gap. Testing the prop
+     again in the effect also covers a focus that arrives after the panel
+     mounted while summaries were loading. */
+  const decided = useRef(landingOnFinding);
   const { loaded, occupied, summaries, onOpen } = chats;
   useEffect(() => {
     if (decided.current) return;
-    if (occupied) {
+    if (occupied || landingOnFinding) {
       decided.current = true;
       return;
     }
@@ -315,12 +369,18 @@ function useReopenNewest(chats: SourcesInvestigateChats): void {
     decided.current = true;
     const newest = lensThreads(summaries)[0];
     if (newest) onOpen(newest.id);
-  }, [loaded, occupied, summaries, onOpen]);
+  }, [loaded, occupied, summaries, onOpen, landingOnFinding]);
 }
 
 /** The (i)'s paragraph: where the questions come from, and what a press costs. */
 export const SOURCES_INVESTIGATE_ABOUT =
   "Each press opens Chat and asks one question with a web search, the same as Ask in chat anywhere else. The questions about claims come from Claims' list once you have made it, and the works are the ones Bibliography says the piece leans on most. No AI writes these questions.";
+
+/** The (i)'s second paragraph, with the dossier on screen: who wrote it, and from what. */
+export const SOURCES_INVESTIGATE_SITUATE_ABOUT =
+  "Where this piece sits is experimental. An AI plans web searches from the piece, reads what they find and the later papers that cite it, and notes the passages later work bears on; every quote is checked against its source by the app, not the AI. The questions under Suggested for this piece are written by the same AI.";
+
+function noJump(): void {}
 
 /**
  * **A question that sends on a press**: Chat's two bubbles and the words.

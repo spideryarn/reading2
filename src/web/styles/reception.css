@@ -399,6 +399,87 @@
   .investigate-yours-more { min-height: max(40px, 2.5rem); }
 }
 
+/* **Where this piece sits** — Investigate's dossier (SituateDossier.tsx, plan
+   261024o). Group heads and the source quote reuse Reception's `.rcp-group-head`
+   and `.rcp-quote`; what is here is placement, and the few parts with no
+   sibling to borrow from. */
+.situate-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.situate-experimental { font-weight: 400; letter-spacing: 0.04em; }
+.situate-before { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; padding: 0.2rem 0 0.4rem; }
+.situate-what,
+.situate-disclosure,
+.situate-working { margin: 0; }
+.situate-headline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0.25rem;
+  color: var(--ink);
+  font-size: var(--type-item);
+  font-weight: 600;
+}
+.situate-overview { margin: 0 0 0.35rem; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.5; }
+.situate-group { padding-top: 0.1rem; }
+.situate-group-head { cursor: help; }
+.situate-findings,
+.situate-sources,
+.situate-queries { margin: 0; padding: 0; list-style: none; }
+.situate-finding { padding: 0.35rem 0; border-top: 1px solid var(--rule); }
+.situate-finding:first-child { border-top: none; }
+.situate-finding-head { display: flex; align-items: baseline; gap: 0.35rem; margin: 0; }
+.situate-finding-head > .situate-quote { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.situate-finding-head > :not(.situate-quote) { flex: none; }
+.situate-chat { margin-left: 0.2rem; }
+.situate-note { margin: 0.2rem 0 0; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.45; }
+.situate-strength { color: var(--ink-faint); font-family: var(--font-ui); }
+.situate-sources { margin-top: 0.2rem; }
+.situate-source { padding: 0.1rem 0; font-size: max(var(--text-min), 0.82rem); }
+.situate-source-link {
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.situate-source-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.situate-source-link:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+.situate-source-link svg { display: inline; margin-left: 0.25rem; vertical-align: -1px; opacity: 0.7; }
+.situate-source-host { color: var(--ink-faint); }
+.situate-source-toggle,
+.situate-searched-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  cursor: pointer;
+}
+.situate-source-toggle > svg,
+.situate-searched-toggle > svg { transition: transform 0.15s; }
+.situate-source-toggle[aria-expanded="true"] > svg,
+.situate-searched-toggle[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.situate-source-toggle:focus-visible,
+.situate-searched-toggle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .situate-source-toggle:hover,
+  .situate-searched-toggle:hover { color: var(--ink); }
+}
+.situate-searched-wrap { padding: 0.45rem 0 0.2rem; border-top: 1px solid var(--rule); margin-top: 0.3rem; }
+.situate-searched-toggle { margin-left: 0; font-size: max(var(--text-min), 0.8rem); text-align: left; }
+.situate-searched { padding: 0.3rem 0 0 1rem; font-size: max(var(--text-min), 0.8rem); }
+.situate-query { padding: 0.08rem 0; }
+.situate-query-q { color: var(--ink-soft); }
+.situate-query-meta { color: var(--ink-faint); }
+.situate-again { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.35rem 0 0.2rem; }
+.situate-when { font-size: max(var(--text-min), 0.78rem); }
+@media (any-pointer: coarse) {
+  .situate-source-toggle,
+  .situate-searched-toggle { min-height: max(40px, 2.5rem); }
+}
+
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no
    page that responds to a piece is this mode's commonest correct output, so it
    gets the ordinary quiet ink and ordinary padding — dimming it further, or

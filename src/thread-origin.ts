@@ -1,5 +1,5 @@
 /**
- * **A thread's origin, between `ThreadOrigin` and its five columns** on
+ * **A thread's origin, between `ThreadOrigin` and its seven columns** on
  * `chat_threads` — both directions, in one file.
  *
  * The store, the export and the test seeder each name a thread's fields by
@@ -13,13 +13,15 @@
  */
 import { currentOriginMode, type ThreadOrigin } from "./types.js";
 
-/** The five columns, as a row holds them. */
+/** The seven columns, as a row holds them. The last two are a quiz mark's (plan 261024i, stage 2). */
 export interface OriginColumns {
   originMode: string | null;
   originItemId: string | null;
   originBlockId: string | null;
   originQuote: string | null;
   originLens: string | null;
+  originBatchId: string | null;
+  originAttemptId: string | null;
 }
 
 const NO_ORIGIN: OriginColumns = {
@@ -28,6 +30,8 @@ const NO_ORIGIN: OriginColumns = {
   originBlockId: null,
   originQuote: null,
   originLens: null,
+  originBatchId: null,
+  originAttemptId: null,
 };
 
 /** What to write for a thread. All null for a thread with no origin. */
@@ -54,6 +58,16 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
         originBlockId: origin.blockId,
         originQuote: origin.quote,
       };
+    case "quiz":
+      /* A mark: the question's id and words, its batch and its attempt. */
+      return {
+        ...NO_ORIGIN,
+        originMode: "quiz",
+        originItemId: origin.itemId,
+        originQuote: origin.quote,
+        originBatchId: origin.batchId,
+        originAttemptId: origin.attemptId,
+      };
     default:
       return origin satisfies never;
   }
@@ -68,18 +82,33 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  * row that is not one shape exactly, which the CHECKs refuse
  * (`chat_threads_origin_reception`, `chat_threads_origin_sources_claims`,
  * `chat_threads_origin_debate`, `chat_threads_origin_item`,
- * `chat_threads_origin_cite_check`); half of one is
+ * `chat_threads_origin_cite_check`, `chat_threads_origin_quiz`); half of one is
  * never read as the whole.
  *
  * **Not exhaustive by construction**: `originMode` is a string out of a
  * database, so a new arm of the union has to be added here by hand.
  */
 export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin } {
-  const { originItemId: itemId, originBlockId: blockId, originQuote: quote, originLens: lens } = row;
+  const {
+    originItemId: itemId,
+    originBlockId: blockId,
+    originQuote: quote,
+    originLens: lens,
+    originBatchId: batchId,
+    originAttemptId: attemptId,
+  } = row;
   /* A row written before 2026-10-09 may say `citations`, read as
      `bibliography`, or `debate`, read by its shape as `reception` (a lens) or
      `sources-claims` (a claim) — `currentOriginMode`, plan 261009w. */
   const mode = currentOriginMode(row.originMode, lens);
+  if (mode === "quiz") {
+    if (itemId === null || quote === null || batchId === null || attemptId === null || blockId !== null || lens !== null) {
+      return {};
+    }
+    return { origin: { mode: "quiz", batchId, itemId, attemptId, quote } };
+  }
+  /* Only a quiz mark names a batch or an attempt (`chat_threads_origin_quiz_only`). */
+  if (batchId !== null || attemptId !== null) return {};
   if (mode === "glossary" || mode === "bibliography" || mode === "ideas") {
     if (itemId === null || quote === null || blockId !== null || lens !== null) return {};
     return { origin: { mode, itemId, quote } };
