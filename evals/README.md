@@ -149,6 +149,21 @@ it earns its place: a `mustNotContain` needle that is not on the page is satisfi
 deletes the article, so every needle has to be findable in the fixture's own bytes. It caught five
 on the day it was written.
 
+## `multi-page/` — is this page only part of its piece, and which links carry the rest?
+
+```
+npx tsx evals/multi-page/run.ts --runs=3 --models=haiku --out=output/multi-page-eval/<name>
+npx tsx evals/multi-page/run.ts --corpus=evals/multi-page/holdout --gold=evals/multi-page/holdout-gold.json --runs=3 --models=haiku --out=…
+npx tsx evals/multi-page/run.ts --rescore=evals/multi-page/results/<dir>   # free: re-scores against today's gold
+```
+
+The judge in [`src/multi-page.ts`](../src/multi-page.ts), on page 1 of 32 real pages committed
+gzipped (9 that must be followed, 15 that must not, 8 borderlines), plus a 13-page held-out set
+gathered after the prompt was frozen. It scores the decision and, for the pieces that continue,
+the pages picked against gold: recall, precision, and whether every page came in order. About
+$0.02 a Haiku run of three. The write-up is
+[261024c](../docs/investigations/261024c-multi-page-articles-readability-and-a-cheap-judge.md).
+
 ## `prompt-caching.ts` — is the article actually being cached?
 
 ```

@@ -293,6 +293,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* A paper's title, read off its opening inside `extract` when its `<title>`
      is known not to be it. src/opening-title.ts. */
   "opening-title": "step-driven",
+  /* Whether a fetched web page continues on others, asked inside `fetch`.
+     src/multi-page.ts. */
+  "multi-page": "step-driven",
   /* An article's front and back matter, found inside the `matter` step
      (plan 261018a). src/matter.ts. */
   matter: "step-driven",

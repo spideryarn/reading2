@@ -61,6 +61,7 @@ import { decodeAuthors } from "../authors.js";
 import type { Db } from "../db/client.js";
 import { inBatches } from "../db/insert-batches.js";
 import {
+  articleRevisionParts,
   articleRevisions,
   articles,
   blockIdentities,
@@ -72,7 +73,7 @@ import { blockOf } from "./block-rows.js";
 import { ACTIVE_REVISION_COLUMNS, type ActiveRevisionRow } from "./revision-columns.js";
 import { siteFor } from "./artifact-storage.js";
 import { CONTENT_TYPE } from "./blobs.js";
-import type { DocumentKind, RawManifest } from "../fetch.js";
+import type { DocumentKind, RawManifest, RawPart } from "../fetch.js";
 import { plainTitle } from "../html.js";
 import { log } from "../log.js";
 import { structureHash } from "../source-hash.js";
@@ -371,7 +372,7 @@ function rawKindOf(row: RevisionRow): DocumentKind | null {
  * this takes a second row. `raw_sources.bytes` describes the object at
  * `storedSha256`, and it is the only place that number lives.
  */
-function readRaw(row: RevisionRow, source: { bytes: number } | null): RawManifest | null {
+function readRaw(row: RevisionRow, source: { bytes: number } | null, parts: RawPart[]): RawManifest | null {
   const kind = rawKindOf(row);
   if (!kind) return null;
   const fetchedAt = row.fetchedAt ?? row.createdAt;
@@ -396,8 +397,30 @@ function readRaw(row: RevisionRow, source: { bytes: number } | null): RawManifes
     ...(row.rawSourceSha256 === null ? {} : { storedSha256: row.rawSourceSha256 }),
     ...(source === null ? {} : { storedBytes: source.bytes }),
     ...(row.rawPages === null ? {} : { pages: row.rawPages }),
+    /* Absent for a single page, never an empty list: `RawManifest.parts`. */
+    ...(parts.length === 0 ? {} : { parts }),
     fetchedAt: fetchedAt.toISOString(),
   };
+}
+
+/**
+ * **This revision's further pages, in order** — `article_revision_parts` joined
+ * to the `raw_sources` row each names, for its stored size. Plan 261024p.
+ *
+ * `order by ordinal`, for the reason blocks are: the rows carry their place and
+ * nothing else does.
+ */
+export async function partsFor(exec: Executor, revisionId: string): Promise<RawPart[]> {
+  const rows = await exec
+    .select({ url: articleRevisionParts.url, storedSha256: articleRevisionParts.rawSourceSha256, storedBytes: rawSources.bytes })
+    .from(articleRevisionParts)
+    .innerJoin(
+      rawSources,
+      and(eq(rawSources.sha256, articleRevisionParts.rawSourceSha256), eq(rawSources.kind, articleRevisionParts.rawSourceKind)),
+    )
+    .where(eq(articleRevisionParts.revisionId, revisionId))
+    .orderBy(asc(articleRevisionParts.ordinal));
+  return rows;
 }
 
 /** The `raw_sources` row this revision points at, if it points at one. */
@@ -569,7 +592,7 @@ export async function readArtefactOutcome<K extends ArtifactKind>(
     if (site.at === "column") return row[site.column];
     if (site.of === "meta") return readMeta(ref, row);
     if (site.of === "readingDifficulty") return readReadingDifficulty(exec, row);
-    return readRaw(row, await sourceRowFor(exec, row));
+    return readRaw(row, await sourceRowFor(exec, row), await partsFor(exec, row.id));
   })();
 
   if (value === null || value === undefined) return { state: "absent" };
@@ -1131,6 +1154,7 @@ export class RawSourceDisagrees extends Error {
 async function writeRawSource(
   tx: Tx,
   slug: string,
+  revisionId: string,
   manifest: RawManifest,
 ): Promise<Partial<typeof articleRevisions.$inferInsert>> {
   const { storedSha256, kind } = manifest;
@@ -1144,14 +1168,78 @@ async function writeRawSource(
     throw new NoStoredDocument(slug);
   }
 
+  await recordRawSource(tx, slug, { sha256: storedSha256, kind, bytes: manifest.storedBytes, fetchedAt: manifest.fetchedAt });
+  await writeRawParts(tx, slug, revisionId, manifest);
+
+  const columns: Partial<typeof articleRevisions.$inferInsert> = {
+    requestedUrl: manifest.requestedUrl ?? null,
+    finalUrl: manifest.url ?? null,
+    fetchedAt: new Date(manifest.fetchedAt),
+    rawContentType: manifest.contentType,
+    rawEncoding: manifest.encoding,
+    rawSha256: manifest.sha256,
+    rawByteCount: manifest.bytes,
+    /* Null unless stage 1 counted pages for these bytes, so a re-fetch that
+       turned a PDF into a web page clears the old count rather than keeping it. */
+    rawPages: manifest.pages ?? null,
+    rawFilename: manifest.filename ?? null,
+    /* **Null unless this manifest carries one**, so a new upload without the
+       meta clears an old claim rather than inheriting it: the claim belongs to
+       these bytes. A force-extract does not come through here and keeps it
+       (`savedFromUrl: "carry"`, src/store/pg-revisions.ts). */
+    savedFromUrl: manifest.savedFrom ?? null,
+    rawSourceSha256: storedSha256,
+    rawSourceKind: kind,
+  };
+  const written = Object.keys(columns);
+  const missing = RAW_COLUMNS.filter((c) => !written.includes(c));
+  if (missing.length) throw new Error(`raw write is missing ${missing.join(", ")}`);
+  return columns;
+}
+
+/**
+ * **The further pages, replaced whole**: this revision's `article_revision_parts`
+ * rows become exactly `manifest.parts`, in order, each with its `raw_sources`
+ * row recorded first for the foreign key, by the same insert-and-compare as
+ * page 1's. A manifest with no parts clears them, so a re-fetch that finds a
+ * single page does not keep last time's chapters. Plan 261024p.
+ */
+async function writeRawParts(tx: Tx, slug: string, revisionId: string, manifest: RawManifest): Promise<void> {
+  await tx.delete(articleRevisionParts).where(eq(articleRevisionParts.revisionId, revisionId));
+  const parts = manifest.parts ?? [];
+  for (const part of parts) {
+    await recordRawSource(tx, slug, { sha256: part.storedSha256, kind: "html", bytes: part.storedBytes, fetchedAt: manifest.fetchedAt });
+  }
+  if (parts.length === 0) return;
+  await tx.insert(articleRevisionParts).values(
+    parts.map((part, i) => ({
+      revisionId,
+      ordinal: i + 1,
+      url: part.url,
+      rawSourceSha256: part.storedSha256,
+      rawSourceKind: "html",
+    })),
+  );
+}
+
+/**
+ * One document's `raw_sources` row: inserted if absent, then read back and
+ * compared — `writeRawSource`'s header has why it is this shape and no other.
+ */
+async function recordRawSource(
+  tx: Tx,
+  slug: string,
+  source: { sha256: string; kind: DocumentKind; bytes: number; fetchedAt: string },
+): Promise<void> {
+  const { sha256: storedSha256, kind } = source;
   await tx
     .insert(rawSources)
     .values({
       sha256: storedSha256,
       kind,
-      bytes: manifest.storedBytes,
+      bytes: source.bytes,
       contentType: CONTENT_TYPE[kind],
-      verifiedAt: new Date(manifest.fetchedAt),
+      verifiedAt: new Date(source.fetchedAt),
     })
     /* **Targeted at the primary key**, so this swallows the one conflict it is
        about and nothing else. An untargeted `do nothing` would also absorb a
@@ -1184,8 +1272,8 @@ async function writeRawSource(
   }
 
   const differences: string[] = [];
-  if (stored.bytes !== manifest.storedBytes) {
-    differences.push(`${stored.bytes} bytes and this says ${manifest.storedBytes}`);
+  if (stored.bytes !== source.bytes) {
+    differences.push(`${stored.bytes} bytes and this says ${source.bytes}`);
   }
   if (stored.contentType !== CONTENT_TYPE[kind]) {
     differences.push(`content type ${stored.contentType} and this kind is ${CONTENT_TYPE[kind]}`);
@@ -1193,31 +1281,6 @@ async function writeRawSource(
   if (differences.length) {
     throw new RawSourceDisagrees(storedSha256, kind, differences.join(", and "));
   }
-
-  const columns: Partial<typeof articleRevisions.$inferInsert> = {
-    requestedUrl: manifest.requestedUrl ?? null,
-    finalUrl: manifest.url ?? null,
-    fetchedAt: new Date(manifest.fetchedAt),
-    rawContentType: manifest.contentType,
-    rawEncoding: manifest.encoding,
-    rawSha256: manifest.sha256,
-    rawByteCount: manifest.bytes,
-    /* Null unless stage 1 counted pages for these bytes, so a re-fetch that
-       turned a PDF into a web page clears the old count rather than keeping it. */
-    rawPages: manifest.pages ?? null,
-    rawFilename: manifest.filename ?? null,
-    /* **Null unless this manifest carries one**, so a new upload without the
-       meta clears an old claim rather than inheriting it: the claim belongs to
-       these bytes. A force-extract does not come through here and keeps it
-       (`savedFromUrl: "carry"`, src/store/pg-revisions.ts). */
-    savedFromUrl: manifest.savedFrom ?? null,
-    rawSourceSha256: storedSha256,
-    rawSourceKind: kind,
-  };
-  const written = Object.keys(columns);
-  const missing = RAW_COLUMNS.filter((c) => !written.includes(c));
-  if (missing.length) throw new Error(`raw write is missing ${missing.join(", ")}`);
-  return columns;
 }
 
 /**
@@ -1469,7 +1532,7 @@ export async function writeArtefacts(
     } else if (site.of === "readingDifficulty") {
       columns = { ...columns, ...readingDifficultyColumns(value as StoredReadingDifficulty) };
     } else {
-      columns = { ...columns, ...(await writeRawSource(tx, slug, value as RawManifest)) };
+      columns = { ...columns, ...(await writeRawSource(tx, slug, ref.revisionId, value as RawManifest)) };
     }
   }
 

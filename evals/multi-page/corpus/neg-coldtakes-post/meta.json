@@ -1,0 +1,10 @@
+{
+ "url": "https://www.cold-takes.com/this-cant-go-on/",
+ "label": "single",
+ "pages": [
+  "https://www.cold-takes.com/this-cant-go-on/"
+ ],
+ "mechanism": "fooler: \"previous piece\" link and Part-N series links",
+ "ssr": true,
+ "notes": "single post 19k chars; borderline series member"
+}

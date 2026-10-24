@@ -3793,6 +3793,50 @@ export const rawSources = spideryarn.table(
   ],
 );
 
+/**
+ * **The further pages of a piece spread over several**, in reading order — the
+ * pages stage 1 followed from the first one (src/follow-pages.ts, plan
+ * docs/plans/261024p-a-multi-page-article-imports-from-its-first-page.md).
+ *
+ * Page 1 is not here: it stays the revision's own `raw_source_sha256`, byte for
+ * byte, so every reader of the source that does not know about parts reads
+ * page 1, which is what it read before. Each further page is its own
+ * content-addressed object, stored exactly as page 1 is, with its own `<head>`
+ * and its own address; a stitched document lost each later page's `<style>`
+ * (GPT Sol's plan review, F2). No row: a single page, which is most of them.
+ *
+ * Nothing in a page can forge a row. They exist only as rows we wrote, from the
+ * links the model picked by id, after `fetchDocument` and the same-site check.
+ */
+export const articleRevisionParts = spideryarn.table(
+  "article_revision_parts",
+  {
+    revisionId: uuid("revision_id")
+      .notNull()
+      .references(() => articleRevisions.id, { onDelete: "cascade" }),
+    /** 1 for the first page after page 1, in the judge's order. */
+    ordinal: integer("ordinal").notNull(),
+    /** Where the page's fetch ended, after redirects: the base its links resolve against. */
+    url: text("url").notNull(),
+    rawSourceSha256: text("raw_source_sha256").notNull(),
+    rawSourceKind: text("raw_source_kind").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.revisionId, t.ordinal] }),
+    check("article_revision_parts_ordinal", sql`${t.ordinal} >= 1`),
+    /* Only a web page is followed, so only a web page is a part. */
+    check("article_revision_parts_kind", sql`${t.rawSourceKind} = 'html'`),
+    check("article_revision_parts_url", sql`${t.url} ~ '^https?://'`),
+    /** No `onDelete`, for the reason `article_revisions_raw_source_fk` gives. */
+    foreignKey({
+      name: "article_revision_parts_raw_source_fk",
+      columns: [t.rawSourceSha256, t.rawSourceKind],
+      foreignColumns: [rawSources.sha256, rawSources.kind],
+    }),
+  ],
+);
+
 /* --------------------------------------------------- realtime sessions -- */
 
 /**

@@ -1,0 +1,13 @@
+{
+ "url": "https://keepthefuturehuman.ai/",
+ "label": "multi",
+ "pages": [
+  "https://keepthefuturehuman.ai/",
+  "https://keepthefuturehuman.ai/essay/"
+ ],
+ "mechanism": "landing → /essay/ → chapter pages; page 1 links /essay/ in its menu and chapter 4 and 8 in teaser sections",
+ "ssr": true,
+ "notes": "p1 ~3.6k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

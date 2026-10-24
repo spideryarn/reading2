@@ -1,0 +1,18 @@
+{
+ "url": "https://www.narrowpath.co/",
+ "label": "multi",
+ "pages": [
+  "https://www.narrowpath.co/",
+  "https://www.narrowpath.co/introduction",
+  "https://www.narrowpath.co/phase-0",
+  "https://www.narrowpath.co/phase-1",
+  "https://www.narrowpath.co/phase-2",
+  "https://www.narrowpath.co/what-success-looks-like",
+  "https://www.narrowpath.co/annexes"
+ ],
+ "mechanism": "Framer microsite nav listing the parts",
+ "ssr": true,
+ "notes": "p1 ~1.9k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

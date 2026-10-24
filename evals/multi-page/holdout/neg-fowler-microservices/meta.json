@@ -1,0 +1,12 @@
+{
+ "url": "https://martinfowler.com/articles/microservices.html",
+ "label": "single",
+ "pages": [
+  "https://martinfowler.com/articles/microservices.html"
+ ],
+ "mechanism": "in-page anchors, cited links, sidebar asides",
+ "ssr": true,
+ "notes": "p1 ~34k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

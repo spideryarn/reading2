@@ -1,0 +1,19 @@
+{
+ "url": "https://www.guru3d.com/review/nzxt-s5-rgb-review/",
+ "label": "multi",
+ "pages": [
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/",
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/page-2/",
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/page-3/",
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/page-4/",
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/page-5/",
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/page-6/",
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/page-7/",
+  "https://www.guru3d.com/review/nzxt-s5-rgb-review/page-8/"
+ ],
+ "mechanism": "contents dropdown (ul.ct-publish-toc-menu) linking /page-2/ … /page-8/, 'Next Page', plus ?print",
+ "ssr": true,
+ "notes": "p1 ~3.8k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

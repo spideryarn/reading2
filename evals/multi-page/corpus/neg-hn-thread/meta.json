@@ -1,0 +1,10 @@
+{
+ "url": "https://news.ycombinator.com/item?id=8863",
+ "label": "single",
+ "pages": [
+  "https://news.ycombinator.com/item?id=8863"
+ ],
+ "mechanism": "fooler: comment thread; no More link at this size",
+ "ssr": true,
+ "notes": "single page, 28k chars; larger threads do paginate with ?p=2 (not saved)"
+}

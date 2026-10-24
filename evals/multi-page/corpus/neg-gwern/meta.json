@@ -1,0 +1,10 @@
+{
+ "url": "https://gwern.net/scaling-hypothesis",
+ "label": "single",
+ "pages": [
+  "https://gwern.net/scaling-hypothesis"
+ ],
+ "mechanism": "fooler: huge in-page anchor TOC",
+ "ssr": true,
+ "notes": "single, 105k chars"
+}

@@ -1,0 +1,11 @@
+{
+ "url": "https://en.wikibooks.org/wiki/Haskell/Getting_set_up",
+ "label": "multi",
+ "pages": [
+  "https://en.wikibooks.org/wiki/Haskell/Getting_set_up",
+  "https://en.wikibooks.org/wiki/Haskell/Next_steps"
+ ],
+ "mechanism": "wiki book navbox template; \"Next steps\" link, no rel",
+ "ssr": true,
+ "notes": "weak: pages are separate wiki chapters"
+}
