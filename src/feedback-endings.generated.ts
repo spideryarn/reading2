@@ -810,7 +810,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-qxh28e": "Word (.docx), Markdown and text uploads are in. Still queued: pictures from Word files, and .odt/.rtf/.epub/.doc/.tex.",
   "spya-qxufp9": "Declined: one model call writes the article's tree and these summaries together, and Structure, the shelf and hover cards need the tree as soon as the article opens. Deferring them means splitting that stage.",
   "spya-rbp55k": "The line is said once above the list now. A chat's summary shows wherever Ask in chat has an item to put it on; Summary's paragraph and Quotes, Timeline and FAQ are still queued.",
-  "spya-rg5kk6": "Re-read in production on 23 October: the page 43 line, the page 95 passage and notes 21–93 are back. 5 of your 7 bookmarks now point at changed paragraphs; whether to move them is asked separately.",
+  "spya-rg5kk6": "Re-read in production on 23 October: the page 43 line, the page 95 passage and notes 21–93 are back. On 24 October your bookmarks and reading time were moved onto the new paragraphs: 6 bookmarks, all in place.",
   "spya-rvj2p7": "Shipped: a short article whose suggested links all pointed at the next paragraph no longer fails; the step is now called \"Adding cross-references\", and a failed extra says the article is unchanged.",
   "spya-s6qhzv": "The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).",
   "spya-s8pf4r": "The marks were already on your paper's two parts but too faint to see; now darker and bigger. Tables were already in Skim's Figures; a table published as a picture now counts as a table too.",

@@ -1,10 +1,11 @@
 ---
 id: q-xns4gt
 report: spya-rg5kk6
-status: open
+status: answered
 asked: 2026-10-23
 title: Re-point 5 bookmarks and some reading time to the re-read Order of Time's new paragraphs?
-refs: q-qbfjje · spya-j4zg9m · qi-2f92byjb · qi-gw4kwnea · docs/plans/261023c-re-read-the-order-of-time-from-its-pdf-in-production.md · docs/user-feedback/261019_0755-a-line-at-the-top-of-a-pdf-chunk-is-no-longer-lost-silently.md · docs/project/block-ids.md
+refs: q-qbfjje · spya-j4zg9m · qi-2f92byjb · qi-gw4kwnea · qi-34x4k9wt · docs/plans/261024g-repoint-greg-s-bookmarks-and-reading-time-on-the-re-read-order-of-time.md · docs/plans/261023c-re-read-the-order-of-time-from-its-pdf-in-production.md · docs/user-feedback/261019_0755-a-line-at-the-top-of-a-pdf-chunk-is-no-longer-lost-silently.md · docs/project/block-ids.md
+acted: spya-zhgwnd
 ---
 The Order of Time has been re-read for you, and the missing line, passage and notes are back. But 5 of your 7 bookmarks on it now say "no longer in this version of the article", although the paragraphs are all still there. Shall I move them, and your reading time, onto the new paragraphs?
 
@@ -29,3 +30,9 @@ The five bookmarks, and where each would go:
 5. "The structure of the cones can even be such that…": now split in two; it goes to the first part, which holds about two thirds of it.
 
 The rule behind it is deliberate: a paragraph whose words changed gets a new id, because attaching a note to text that no longer says what you marked is worse than losing the anchor. So the general fix, keeping ids across a re-read when a paragraph only grew or was joined, is a separate decision. I have queued it as a proposal, not asked it here. Your last reading position in this browser may also have pointed at one of the changed paragraphs; if so, the book will open at the top once.
+
+Greg's reply, 2026-10-23 (spya-zhgwnd, in the Feedback dialog), choosing A:
+
+> A Yes, update if possible. Fix anything that you can if it's not too complicated. But if stuff breaks, then just remove it. I'm not super fussed about preserving everything.
+
+Acted on, 2026-10-24 at 02:59 UTC (queue item qi-34x4k9wt): done. You now have 6 bookmarks on the book, all on paragraphs that exist. Four were moved. The fifth went because the paragraph it would land on already carries the bookmark that came from the paragraph it was joined to. The split one (5 above) went to the first part, "…like this:", which is where its mark was drawn. That part holds about a third of the old paragraph, not two thirds as this question said. The re-read put the figure between the two halves. Reading time moved for 77 of the 85 places, added to any time you have spent there since the re-read. The other 8 had nowhere to go and were removed, 33.5 seconds in all: the stray note numbers and a stray copy of the chapter 10 heading. Which old id went where is in docs/plans/261024g-undo.json. The plan: docs/plans/261024g-repoint-greg-s-bookmarks-and-reading-time-on-the-re-read-order-of-time.md.
