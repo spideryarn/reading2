@@ -142,7 +142,7 @@ export const TOPIC_SET_RATE_POLICY: RatePolicy = {
 
 export interface ShelfTopicSetDeps {
   store: ShelfTermsStore;
-  allowance: FetchAllowanceStore;
+  allowance: Pick<FetchAllowanceStore, "take" | "finish">;
   /** Today's phrase pills for this scope, never refreshing anything. */
   fallback: (archived: boolean) => Promise<LibraryTermsResponse>;
   /** Fill the exact-copy hashes over active + archived; returns how many remain. */

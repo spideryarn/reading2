@@ -720,7 +720,7 @@ link.
 Greg's 4B on [q-fkq30v](../user-feedback/questions/q-fkq30v.md): *does the cited work say that?*, at
 the citing sentence. A press starts a fresh chat anchored on that paragraph, with no origin, so it is
 not the work's one chat and a second paragraph is a second question. The question names the work,
-fenced (`askDoesItSayThat` in [`chat-handoff.ts`](../../src/web/chat-handoff.ts)), and chat answers
+fenced (`askDoesItSayThat` in [`chat-question.ts`](../../src/chat-question.ts)), and chat answers
 it by reading the paper with `read_cited_work`
 ([chat-tools.md § Reading a cited paper](chat-tools.md#reading-a-cited-paper-read_cited_work)),
 which is Dig deeper's paper read, offered to chat. A text button, one tap for a finger, owner only

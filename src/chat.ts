@@ -320,6 +320,17 @@ export function withTurn(
      `thread.id` is then the existing one, which is what the route's `begin`
      frame reports and the client follows. */
   const existing = targetOf(threads, threadId, kind);
+  /* **A citation's *Does it say that?* is one chat per work and paragraph,
+     and only the turn that creates it carries its origin** (plan 261024m,
+     GPT Sol's C1). The route refuses a second with this same error before it
+     takes an allowance; this decides it again under the article row lock,
+     which is what makes two servers or two tabs resting at once buy one turn.
+     Any thread with the identity refuses it, including the one this turn
+     names: a resent first turn must not append a second paid question. */
+  if (origin?.mode === "cite-check") {
+    const held = threads.find((t) => t.origin !== undefined && sameOrigin(t.origin, origin));
+    if (held) throw new CiteCheckExists(held.id);
+  }
   /* **A thread is one kind for life.** Refused rather than ignored, and refused
      here rather than only in the route, because the route's `inTurnOrder` is a
      per-process convenience and this runs inside the Postgres transaction. See
@@ -673,6 +684,34 @@ export class ChatConflict extends Error {
 }
 
 /**
+ * **This work and paragraph already have their *Does it say that?* chat** —
+ * the 409 that carries its id, so the card or the button can open or show it
+ * instead of starting a second (plan 261024m, GPT Sol's C1).
+ *
+ * A `ChatConflict`, so everything that answers a conflict still does, with
+ * its own `status` and one declared field. `threadId` is ours (a minted id),
+ * never the reader's words, so it is safe on the wire and in a log; the
+ * route's error handler reads it by this class alone (`declaredFields`).
+ * Thrown by the route before any allowance, by `withTurn` inside the store's
+ * transaction, and by `pgChatStore.begin` for the unique index's violation.
+ */
+export class CiteCheckExists extends ChatConflict {
+  readonly status = 409;
+  readonly threadId: string;
+  constructor(threadId: string) {
+    super(CITE_CHECK_EXISTS);
+    this.name = "CiteCheckExists";
+    this.threadId = threadId;
+  }
+}
+
+/** What `CiteCheckExists` says. Fixed: no title, no words of the article's. */
+export const CITE_CHECK_EXISTS = "This citation already has its Does it say that? chat";
+/** What an edit of a cite-check's first question is refused with (`withEdit`). */
+export const CITE_CHECK_FIRST_QUESTION_FIXED =
+  "This chat checks one citation, so its first question can't be changed. Ask a new question below it instead.";
+
+/**
  * A new turn carrying first-turn-only metadata on an existing thread: a 400,
  * matching the route, where `ChatConflict` is a 409.
  *
@@ -861,6 +900,14 @@ export function withEdit(
   if (index < 0) throw new ChatConflict("That message is not in this conversation.");
   const target = existing.messages[index];
   if (target?.role !== "user") throw new ChatConflict("Only your own questions can be edited.");
+  /* **A citation's check is its first question** (plan 261024m, C5): the
+     origin says *Does it say that?* was asked of this work about this
+     paragraph, and the card shows the answer to it. Rewriting that question
+     would leave the identity on a different conversation. Retry is fine; a
+     later question may be edited as usual. */
+  if (index === 0 && existing.origin?.mode === "cite-check") {
+    throw new ChatConflict(CITE_CHECK_FIRST_QUESTION_FIXED);
+  }
   const user: ChatMessage = { ...target, text: question, editedAt: at };
   const reply: ChatMessage = {
     /* Minted against **every** id in the file, including the ones this edit is

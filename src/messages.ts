@@ -7199,6 +7199,33 @@ export const HELP_CHAT_RESTING: ReaderFacingFailure = {
 };
 
 /**
+ * **A citation's automatic *Does it say that?* refused by its allowance**
+ * (`CITE_CHECK_RATE_POLICY`, src/cite-check.ts, plan 261024m § At a cap). A
+ * rest on the card starts the check; these say why one did not, and that the
+ * button still asks, because a press is never capped. The numbers are the
+ * policy's (8 an hour, 20 a day): change them together.
+ */
+export const CITE_CHECK_HOUR =
+  "That's 8 automatic checks in the last hour. Press Does it say that? to ask anyway.";
+export const CITE_CHECK_DAY =
+  "You've had today's 20 automatic checks. Press Does it say that? to ask anyway.";
+/** Two already running for this reader. The card draws nothing for it; the next rest tries again. */
+export const CITE_CHECK_BUSY =
+  "Two automatic checks are already running. Press Does it say that? to ask anyway.";
+/** The 503 of the four, so it carries a code, as `HELP_CHAT_RESTING` does. */
+export const CITE_CHECK_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message: "Automatic checks are paused for today. Press Does it say that? to ask anyway. [cite-check-resting]",
+};
+/**
+ * A *Does it say that?* chat the current citation list does not back: the
+ * list changed since the page loaded (rerun, stale, the work gone, or the
+ * paragraph no longer citing it). Nothing was asked or spent.
+ */
+export const CITE_CHECK_STALE =
+  "This citation has changed since the page loaded, so nothing was asked. Reload the page and try again.";
+
+/**
  * **The forced search did not happen, or nobody can say it did** — the search
  * step's usage reported zero searches, or no count at all (src/dig-deeper.ts §
  * `searchFirst`). The press stops before the answer, because an answer under a

@@ -409,7 +409,7 @@ describe("the allowance", () => {
       admitDig({
         take: async (bucket) => {
           taken.push(bucket);
-          return { kind };
+          return kind === "rate" ? { kind, reason: "hour" } : { kind };
         },
         finish: async () => {},
       }),

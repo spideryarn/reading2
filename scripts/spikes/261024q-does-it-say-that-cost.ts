@@ -27,7 +27,7 @@ import { loadEnvLocal } from "../../src/env.js";
 import { articlePower } from "../../src/models.js";
 import { environmentOwnerId, type OwnerId, runAsOwner } from "../../src/owner.js";
 import { loadArticle, loadBibliography } from "../../src/store/index.js";
-import { askAboutBlock, askDoesItSayThat } from "../../src/web/chat-handoff.js";
+import { askAboutBlock, askDoesItSayThat } from "../../src/chat-question.js";
 import { localTarget } from "../../evals/cost/harness.js";
 
 interface Turn {

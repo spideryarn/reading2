@@ -62,13 +62,12 @@ import {
 } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import {
-  askAboutBlock,
   askAboutCitedWork,
   askAboutGlossaryEntry,
   askAboutIdea,
-  askDoesItSayThat,
   CITED_WORK_QUESTION,
 } from "../src/web/chat-handoff.js";
+import { askAboutBlock, askDoesItSayThat } from "../src/chat-question.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
 
 const who = vi.hoisted(() => {

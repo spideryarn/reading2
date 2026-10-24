@@ -93,7 +93,7 @@ describe("Dig deeper on a glossary entry", () => {
     ["concurrency", 429],
     ["global", 503],
   ] as const)("refuses on %s before any model call", async (kind, status) => {
-    const h = harness({ kind });
+    const h = harness(kind === "rate" ? { kind, reason: "hour" } : { kind });
     await expect(h.prepare("harness", entry.id)).rejects.toMatchObject({ status });
     expect(h.order).toEqual(["take:dig-deeper"]);
   });

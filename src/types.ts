@@ -4599,7 +4599,13 @@ export type ChatAnchor =
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | BibliographyOrigin | IdeasOrigin;
+export type ThreadOrigin =
+  | ClaimOrigin
+  | LensOrigin
+  | GlossaryOrigin
+  | BibliographyOrigin
+  | IdeasOrigin
+  | CiteCheckOrigin;
 
 /** One of Sources › Claims' claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
@@ -4643,6 +4649,27 @@ export type BibliographyOrigin = { mode: "bibliography"; itemId: string; quote: 
 export type IdeasOrigin = { mode: "ideas"; itemId: string; quote: string };
 
 /**
+ * **A citation's *Does it say that?*: one cited work, in one paragraph that
+ * cites it** (plan docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md).
+ * Started by a mouse resting on the citation's card, or by the card's button.
+ *
+ * **Its identity is the pair `(itemId, blockId)`**: the work's id (inherited
+ * across Bibliography reruns by its dedupe key) and the citing block's stable
+ * id, so one chat per inherited work id and block (`sameOrigin`). A rerun that
+ * re-mints the work's id can make a second one; accepted (the plan's C11).
+ * The database holds it to one per article with a partial unique index
+ * (`chat_threads_one_cite_check`), and the route and `withTurn` refuse a
+ * second with `CiteCheckExists`, which carries the first's id.
+ *
+ * `quote` is a snapshot of the work's title cut by `originName`, as for a
+ * cited work's own origin; it is not compared. The thread is also anchored on
+ * `blockId`, and its first question is the one the server builds
+ * (`askDoesItSayThatAboutBlock`, src/chat-question.ts), so the origin always
+ * means that question was asked.
+ */
+export type CiteCheckOrigin = { mode: "cite-check"; itemId: string; blockId: BlockId; quote: string };
+
+/**
  * The most the name snapshot of a glossary, citations or ideas origin may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
@@ -4681,7 +4708,7 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas", "cite-check"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * **An origin mode's old word, and the mode it is now.** A chat started from a
@@ -4751,6 +4778,9 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
       return b.mode === "reception" && a.lens === b.lens;
     case "sources-claims":
       return b.mode === "sources-claims" && a.blockId === b.blockId && a.quote === b.quote;
+    /* The work and the paragraph; the title snapshot is not compared. */
+    case "cite-check":
+      return b.mode === "cite-check" && a.itemId === b.itemId && a.blockId === b.blockId;
     default:
       return a satisfies never;
   }

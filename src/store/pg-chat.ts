@@ -65,6 +65,7 @@ import { and, asc, eq, gt, gte, isNull, lt, notInArray, or, sql } from "drizzle-
 import {
   CHAT_SWEPT,
   ChatTurnRefused,
+  CiteCheckExists,
   requireTail,
   titleFrom,
   withDeleteFrom,
@@ -82,7 +83,9 @@ import type {
   Citation,
   ChatMessage,
   ChatThread,
+  CiteCheckOrigin,
   LearnStance,
+  ThreadOrigin,
   ToolRun,
 } from "../types.js";
 import { storedThreadKind } from "../types.js";
@@ -102,7 +105,7 @@ import {
   MENTIONS_QUESTION_FULL,
   MENTIONS_THREAD_FULL,
 } from "../chat-mention-limits.js";
-import { guardDbStore } from "./db-errors.js";
+import { guardDbStore, violatesConstraint } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow } from "./pg.js";
 
@@ -414,6 +417,47 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
     });
 }
 
+/** The partial unique index that holds a cite-check to one per work and block (src/db/schema.ts). */
+export const CITE_CHECK_INDEX = "chat_threads_one_cite_check";
+
+/**
+ * **A violation of `chat_threads_one_cite_check`, as the refusal it means** —
+ * `CiteCheckExists` carrying the thread that holds the identity — or `null`
+ * when `err` is anything else, or the holder has gone again (then the caller
+ * rethrows the original, a real failure).
+ *
+ * The backstop's backstop: `withTurn` already refuses a second cite-check from
+ * the snapshot read under the article row lock, so this is reached only if
+ * that read ever misses a committed row. Read by name, before the guard
+ * scrubs the constraint away (`violatesConstraint`, src/store/db-errors.ts).
+ * Plan 261024m, GPT Sol's C1: never a 500.
+ */
+export async function citeCheckConflictOf(
+  err: unknown,
+  articleId: string,
+  origin: ThreadOrigin | undefined,
+): Promise<CiteCheckExists | null> {
+  if (origin?.mode !== "cite-check" || !violatesConstraint(err, CITE_CHECK_INDEX)) return null;
+  const holder = await citeCheckHolder(articleId, origin);
+  return holder === null ? null : new CiteCheckExists(holder);
+}
+
+async function citeCheckHolder(articleId: string, origin: CiteCheckOrigin): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ id: chatThreads.id })
+    .from(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.articleId, articleId),
+        eq(chatThreads.originMode, "cite-check"),
+        eq(chatThreads.originItemId, origin.itemId),
+        eq(chatThreads.originBlockId, origin.blockId),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
 const rawPgChatStore: ChatStore = {
   async load(slug: string): Promise<ChatThread[]> {
     return threadsFor(await articleIdForOwned(slug));
@@ -429,46 +473,55 @@ const rawPgChatStore: ChatStore = {
     const at = now();
     const attempt = randomUUID();
 
-    const out = await db.transaction(async (tx) => {
-      await lockArticleRow(tx, articleId);
-      const threads = await threadsFor(articleId, tx);
-      const { thread, user, reply } = withTurn(threads, turn, at);
+    let out: Awaited<ReturnType<ChatStore["begin"]>>;
+    try {
+      out = await db.transaction(async (tx) => {
+        await lockArticleRow(tx, articleId);
+        const threads = await threadsFor(articleId, tx);
+        const { thread, user, reply } = withTurn(threads, turn, at);
 
-      await upsertThread(tx, articleId, thread);
-      /* The two new messages are the last two of the array the pure function
-         produced, so their ordinals are its last two indices. Reading them off
-         the array rather than counting rows is what keeps one definition of
-         "where this message sits". */
-      const base = thread.messages.length - 2;
-      await tx
-        .insert(chatMessages)
-        .values([
-          messageRow(articleId, thread.id, user, base),
-          // Only the reply carries an attempt: the question is already written.
-          messageRow(articleId, thread.id, reply, base + 1, attempt),
-        ]);
-      /* **The articles this question brings in**, under the question row
-         just written, in this transaction: a turn and its mentions land
-         together or not at all. The thread limit is decided here, against
-         what the locked thread already holds, as well as by the route (which
-         gives the sentence first but reads outside this lock). A mention of
-         an article the thread already holds takes no new place. Plan
-         docs/plans/261012d-chat-at-mention-your-own-articles.md § 2. */
-      const mentions = turn.mentions ?? [];
-      if (mentions.length > 0) {
-        /* The route gives this refusal early, but the store owns the invariant
-           too. Keep it under the article lock with the per-thread check: an
-           internal caller cannot write a turn the HTTP path would refuse. */
-        if (mentions.length > MENTIONS_MAX_PER_QUESTION) {
-          throw new ChatTurnRefused(MENTIONS_QUESTION_FULL);
+        await upsertThread(tx, articleId, thread);
+        /* The two new messages are the last two of the array the pure function
+           produced, so their ordinals are its last two indices. Reading them off
+           the array rather than counting rows is what keeps one definition of
+           "where this message sits". */
+        const base = thread.messages.length - 2;
+        await tx
+          .insert(chatMessages)
+          .values([
+            messageRow(articleId, thread.id, user, base),
+            // Only the reply carries an attempt: the question is already written.
+            messageRow(articleId, thread.id, reply, base + 1, attempt),
+          ]);
+        /* **The articles this question brings in**, under the question row
+           just written, in this transaction: a turn and its mentions land
+           together or not at all. The thread limit is decided here, against
+           what the locked thread already holds, as well as by the route (which
+           gives the sentence first but reads outside this lock). A mention of
+           an article the thread already holds takes no new place. Plan
+           docs/plans/261012d-chat-at-mention-your-own-articles.md § 2. */
+        const mentions = turn.mentions ?? [];
+        if (mentions.length > 0) {
+          /* The route gives this refusal early, but the store owns the invariant
+             too. Keep it under the article lock with the per-thread check: an
+             internal caller cannot write a turn the HTTP path would refuse. */
+          if (mentions.length > MENTIONS_MAX_PER_QUESTION) {
+            throw new ChatTurnRefused(MENTIONS_QUESTION_FULL);
+          }
+          const held = await heldMentionKeys(tx, articleId, thread.id);
+          for (const m of mentions) held.add(mentionKey(m.articleId, m.title));
+          if (held.size > MENTIONS_MAX_PER_THREAD) throw new ChatTurnRefused(MENTIONS_THREAD_FULL);
+          await insertMentions(tx, articleId, thread.id, user.id, mentions);
         }
-        const held = await heldMentionKeys(tx, articleId, thread.id);
-        for (const m of mentions) held.add(mentionKey(m.articleId, m.title));
-        if (held.size > MENTIONS_MAX_PER_THREAD) throw new ChatTurnRefused(MENTIONS_THREAD_FULL);
-        await insertMentions(tx, articleId, thread.id, user.id, mentions);
-      }
-      return { thread, user, reply, attempt };
-    }, READ_COMMITTED);
+        return { thread, user, reply, attempt };
+      }, READ_COMMITTED);
+    } catch (err) {
+      /* The cite-check index, read by name, as the refusal the route and
+         `withTurn` give (plan 261024m, C1); anything else is what it was. */
+      const conflict = await citeCheckConflictOf(err, articleId, turn.origin);
+      if (conflict) throw conflict;
+      throw err;
+    }
 
     logger.info(
       { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },

@@ -96,16 +96,15 @@ import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
   citingSentences,
-  askDoesItSayThat,
   askAboutGlossaryEntry,
   askAboutIdea,
-  askAboutBlock,
   askAboutTerm,
   itemOrigin,
   askReceptionThroughLens,
   askInSources,
   askToCheckClaim,
 } from "../chat-handoff.js";
+import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
 import { questionsByAnchor } from "../quiz-anchors.js";
@@ -1844,6 +1843,9 @@ export function Reader({
         /* Bibliography's cited work (its origin said `citations` until 2026-10-09,
            plan 261009w; the server reads that word as this one). */
         case "bibliography":
+        /* A citation's *Does it say that?* goes back to the work it checked,
+           where its row in Bibliography lists the paragraphs that cite it. */
+        case "cite-check":
           openBibliographyWork(origin.itemId);
           return;
         case "ideas":

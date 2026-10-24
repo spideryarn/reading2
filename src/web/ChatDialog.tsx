@@ -66,7 +66,8 @@ import { Composer, Conversation, type SendHow } from "./ChatPanel.js";
 import type { PickedMention } from "./mentions.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { answerOpening } from "../answer-opening.js";
-import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
+import { HELP_QUESTION } from "./chat-handoff.js";
+import { askAboutBlock } from "../chat-question.js";
 import { shortBlockId } from "./BlockRef.js";
 import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 /* **The client's own creation window, imported rather than restated.** This
