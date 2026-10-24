@@ -1,0 +1,349 @@
+{
+  "arm": "high-none-link1a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "nber-w31161-spya-dkgc83",
+  "version": "simple-prompt/13",
+  "sourceSha256": "c75d19ae37a81a03d32783f8c4067104a6a19faa03c1403d554f33f62f522543",
+  "at": "2026-10-24T20:33:47.844Z",
+  "bodyWords": 15466,
+  "band": "long",
+  "bodyBlocks": 220,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "befaba74749a9dcc",
+  "systemsSha256": "c88afd9f8ceacc36fe6b18db2bbe9ac327726fa070044a96358715d2afb5d88e",
+  "power": "high",
+  "guard": true,
+  "wallMs": 54362,
+  "costUsd": 0.13229,
+  "tokens": {
+    "input": 12718,
+    "output": 5100,
+    "reasoning": 2156
+  },
+  "briefReadyMs": 21441,
+  "fullerReadyMs": 54358,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 686,
+  "briefWords": 90,
+  "fuller": [
+    {
+      "text": "This paper asks what happens when ordinary workers get a generative AI helper on the job. Generative AI means software that writes new text after learning patterns from huge amounts of existing text. The authors study about 5,000 customer support agents at a large US software firm as a chat assistant was rolled out to them step by step. They say it is the first study of generative AI used at scale in a real workplace.",
+      "ids": [
+        "spya-gc9783",
+        "spya-yfurna"
+      ],
+      "sentences": [
+        {
+          "text": "This paper asks what happens when ordinary workers get a generative AI helper on the job.",
+          "id": null
+        },
+        {
+          "text": "Generative AI means software that writes new text after learning patterns from huge amounts of existing text.",
+          "id": null
+        },
+        {
+          "text": "The authors study about 5,000 customer support agents at a large US software firm as a chat assistant was rolled out to them step by step.",
+          "id": "spya-gc9783"
+        },
+        {
+          "text": "They say it is the first study of generative AI used at scale in a real workplace.",
+          "id": "spya-yfurna",
+          "key": "first study of generative AI used at scale"
+        }
+      ]
+    },
+    {
+      "text": "The authors argue this matters because older computer programs needed exact, written-out instructions. So they struggled with work built on tacit knowledge, meaning know-how people pick up from experience but cannot fully put into words. AI learns from examples instead, including examples of top workers doing a task well, so it may pass their habits on to weaker workers. Earlier waves of computers mostly helped high-skill workers, so the authors ask whether this new tool might help a different group.",
+      "ids": [
+        "spya-rfqusq",
+        "spya-naa47a",
+        "spya-hmqn56"
+      ],
+      "sentences": [
+        {
+          "text": "The authors argue this matters because older computer programs needed exact, written-out instructions.",
+          "id": "spya-rfqusq"
+        },
+        {
+          "text": "So they struggled with work built on tacit knowledge, meaning know-how people pick up from experience but cannot fully put into words.",
+          "id": "spya-rfqusq",
+          "key": "tacit knowledge"
+        },
+        {
+          "text": "AI learns from examples instead, including examples of top workers doing a task well, so it may pass their habits on to weaker workers.",
+          "id": "spya-naa47a"
+        },
+        {
+          "text": "Earlier waves of computers mostly helped high-skill workers, so the authors ask whether this new tool might help a different group.",
+          "id": "spya-hmqn56"
+        }
+      ]
+    },
+    {
+      "text": "The tool is built on a version of GPT and further trained on past chats labeled by outcome, such as whether the problem was fixed. It watches each chat and suggests replies and links to help documents, but only the agent sees them and can ignore them. Because agents got access at different times, the authors could compare each agent's results before and after access against agents without it. This method is called difference-in-differences, and the comparisons also account for the calendar month and how long each agent had worked there.",
+      "ids": [
+        "spya-b4ds8r",
+        "spya-nyamy7",
+        "spya-r006w5"
+      ],
+      "sentences": [
+        {
+          "text": "The tool is built on a version of GPT and further trained on past chats labeled by outcome, such as whether the problem was fixed.",
+          "id": "spya-b4ds8r"
+        },
+        {
+          "text": "It watches each chat and suggests replies and links to help documents, but only the agent sees them and can ignore them.",
+          "id": "spya-nyamy7"
+        },
+        {
+          "text": "Because agents got access at different times, the authors could compare each agent's results before and after access against agents without it.",
+          "id": "spya-r006w5"
+        },
+        {
+          "text": "This method is called difference-in-differences, and the comparisons also account for the calendar month and how long each agent had worked there.",
+          "id": "spya-r006w5",
+          "key": "difference-in-differences"
+        }
+      ]
+    },
+    {
+      "text": "The main measure is resolutions per hour: how many customer problems an agent successfully solves in an hour. With the AI, this rose by 0.30 chats an hour, or about 14%. Chats got 3.8 minutes shorter, and agents handled about 14% more chats per hour, partly by juggling several at once. The share of problems solved rose only slightly, by 1.3 percentage points, and customer survey scores did not change.",
+      "ids": [
+        "spya-sc3j5y",
+        "spya-sevzu3",
+        "spya-vpyejh"
+      ],
+      "sentences": [
+        {
+          "text": "The main measure is resolutions per hour: how many customer problems an agent successfully solves in an hour.",
+          "id": "spya-sc3j5y"
+        },
+        {
+          "text": "With the AI, this rose by 0.30 chats an hour, or about 14%.",
+          "id": "spya-sc3j5y",
+          "key": "about 14%"
+        },
+        {
+          "text": "Chats got 3.8 minutes shorter, and agents handled about 14% more chats per hour, partly by juggling several at once.",
+          "id": "spya-sevzu3"
+        },
+        {
+          "text": "The share of problems solved rose only slightly, by 1.3 percentage points, and customer survey scores did not change.",
+          "id": "spya-vpyejh"
+        }
+      ]
+    },
+    {
+      "text": "The gains were very uneven across workers. Agents in the lowest fifth for skill before the AI arrived solved 34% more problems per hour. The most skilled agents gained nothing on this measure. They even saw small drops in problem solving and customer satisfaction, perhaps because the suggestions distracted them or tempted them to take the faster option.",
+      "ids": [
+        "spya-qb6xjf",
+        "spya-cfrbxa"
+      ],
+      "sentences": [
+        {
+          "text": "The gains were very uneven across workers.",
+          "id": null
+        },
+        {
+          "text": "Agents in the lowest fifth for skill before the AI arrived solved 34% more problems per hour.",
+          "id": "spya-qb6xjf",
+          "key": "34% more problems per hour"
+        },
+        {
+          "text": "The most skilled agents gained nothing on this measure.",
+          "id": "spya-qb6xjf"
+        },
+        {
+          "text": "They even saw small drops in problem solving and customer satisfaction, perhaps because the suggestions distracted them or tempted them to take the faster option.",
+          "id": "spya-cfrbxa"
+        }
+      ]
+    },
+    {
+      "text": "New agents gained the most: those with under a month on the job improved by about 46%, while those with over a year saw no effect. Without the AI, new agents took eight to ten months to reach 2.5 resolutions per hour. With it from the start, they got there in about two months. The authors say the AI helps newer workers move faster down the experience curve, the usual path of getting better with practice.",
+      "ids": [
+        "spya-auzxac",
+        "spya-jmqtkn",
+        "spya-bffqk2"
+      ],
+      "sentences": [
+        {
+          "text": "New agents gained the most: those with under a month on the job improved by about 46%, while those with over a year saw no effect.",
+          "id": "spya-auzxac"
+        },
+        {
+          "text": "Without the AI, new agents took eight to ten months to reach 2.5 resolutions per hour.",
+          "id": "spya-jmqtkn"
+        },
+        {
+          "text": "With it from the start, they got there in about two months.",
+          "id": "spya-jmqtkn"
+        },
+        {
+          "text": "The authors say the AI helps newer workers move faster down the experience curve, the usual path of getting better with practice.",
+          "id": "spya-bffqk2",
+          "key": "move faster down the experience curve"
+        }
+      ]
+    },
+    {
+      "text": "To see why the tool helps, the authors looked at three kinds of evidence. Agents who followed the suggestions more gained more: about 25% for the closest followers, against 10% for those who followed least. During outages, when the software broke and gave no suggestions, agents with months of AI use still handled chats faster than before, hinting they had learned. Comparing the wording of chats, low- and high-skill agents grew more alike, with a similarity score rising from 0.55 to 0.61 on a 0-to-1 scale.",
+      "ids": [
+        "spya-mp473w",
+        "spya-jhjk2m",
+        "spya-buny07"
+      ],
+      "sentences": [
+        {
+          "text": "To see why the tool helps, the authors looked at three kinds of evidence.",
+          "id": null
+        },
+        {
+          "text": "Agents who followed the suggestions more gained more: about 25% for the closest followers, against 10% for those who followed least.",
+          "id": "spya-mp473w"
+        },
+        {
+          "text": "During outages, when the software broke and gave no suggestions, agents with months of AI use still handled chats faster than before, hinting they had learned.",
+          "id": "spya-jhjk2m"
+        },
+        {
+          "text": "Comparing the wording of chats, low- and high-skill agents grew more alike, with a similarity score rising from 0.55 to 0.61 on a 0-to-1 scale.",
+          "id": "spya-buny07"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The paper also looks at what the work felt like. Customers wrote more kindly, with their mood score rising 0.18 points on a scale from minus 1 to 1, about half the usual spread. Requests to speak to a manager fell by almost 25%. Among agents with under six months on the job, quitting fell by about 40%, though the authors warn this result is less certain than the others.",
+      "ids": [
+        "spya-ndnues",
+        "spya-y3yxwe",
+        "spya-krqm5r"
+      ],
+      "sentences": [
+        {
+          "text": "The paper also looks at what the work felt like.",
+          "id": null
+        },
+        {
+          "text": "Customers wrote more kindly, with their mood score rising 0.18 points on a scale from minus 1 to 1, about half the usual spread.",
+          "id": "spya-ndnues"
+        },
+        {
+          "text": "Requests to speak to a manager fell by almost 25%.",
+          "id": "spya-y3yxwe"
+        },
+        {
+          "text": "Among agents with under six months on the job, quitting fell by about 40%, though the authors warn this result is less certain than the others.",
+          "id": "spya-krqm5r"
+        }
+      ]
+    },
+    {
+      "text": "The authors conclude that generative AI can raise productivity, with the biggest help going to newer and less skilled workers. They stress their data cannot show effects on wages, how many workers firms will hire, or what skills they will want. They also note that top workers supply much of what the AI learns from but gain little, raising the question of how to pay them for it. Results may differ in jobs where products or problems change quickly.",
+      "ids": [
+        "spya-a0nfx2",
+        "spya-myf7jd",
+        "spya-mpc5zp"
+      ],
+      "sentences": [
+        {
+          "text": "The authors conclude that generative AI can raise productivity, with the biggest help going to newer and less skilled workers.",
+          "id": null
+        },
+        {
+          "text": "They stress their data cannot show effects on wages, how many workers firms will hire, or what skills they will want.",
+          "id": "spya-a0nfx2"
+        },
+        {
+          "text": "They also note that top workers supply much of what the AI learns from but gain little, raising the question of how to pay them for it.",
+          "id": "spya-myf7jd",
+          "key": "how to pay them for it"
+        },
+        {
+          "text": "Results may differ in jobs where products or problems change quickly.",
+          "id": "spya-mpc5zp"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This paper studies a large company that gave its customer support workers an AI helper. The helper is generative AI, a program that writes new text, here suggesting replies during chats. The authors say it is the first study of such a tool used widely at real jobs.",
+      "ids": [
+        "spya-gc9783",
+        "spya-yfurna"
+      ],
+      "sentences": [
+        {
+          "text": "This paper studies a large company that gave its customer support workers an AI helper.",
+          "id": "spya-gc9783"
+        },
+        {
+          "text": "The helper is generative AI, a program that writes new text, here suggesting replies during chats.",
+          "id": "spya-gc9783",
+          "key": "generative AI"
+        },
+        {
+          "text": "The authors say it is the first study of such a tool used widely at real jobs.",
+          "id": "spya-yfurna"
+        }
+      ]
+    },
+    {
+      "text": "Workers with the helper solved 14% more customer problems per hour. New and less skilled workers gained most, about 34%, while the most skilled workers barely changed. The authors suggest the AI may pass the best workers' habits on to everyone else.",
+      "ids": [
+        "spya-sc3j5y",
+        "spya-qb6xjf",
+        "spya-uxeaaw"
+      ],
+      "sentences": [
+        {
+          "text": "Workers with the helper solved 14% more customer problems per hour.",
+          "id": "spya-sc3j5y",
+          "key": "14% more customer problems per hour"
+        },
+        {
+          "text": "New and less skilled workers gained most, about 34%, while the most skilled workers barely changed.",
+          "id": "spya-qb6xjf",
+          "key": "less skilled workers gained most"
+        },
+        {
+          "text": "The authors suggest the AI may pass the best workers' habits on to everyone else.",
+          "id": "spya-uxeaaw"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

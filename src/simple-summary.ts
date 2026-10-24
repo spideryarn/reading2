@@ -224,8 +224,14 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * (plan 261005b § Brief by band). Greg's intent remains a slightly larger
  * Brief for very long pieces, once supported by evidence. Fuller is `/11`
  * byte for byte in every band. Outdated and not rewritten, as before.
+ *
+ * `simple-prompt/13` (2026-10-24): a paragraph's ids are links a reader
+ * follows, so among the blocks that support it, prefer where the body lays the
+ * point out over the abstract or a front executive summary; never a merely
+ * related block to avoid them (Greg, spya-hnw9xq; plan 261024x). Both levels
+ * moved. Outdated and not rewritten, as before.
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/12";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/13";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -643,6 +649,15 @@ Every paragraph lists the ids of the one to three blocks of the article above
 that best support it. "ids" MUST be ids listed in the article; never invent one.
 A paragraph with no id that checks out is thrown away — so a paragraph about
 why it matters has to rest on where the piece says why it matters.
+
+An id is a link: the reader presses it to go and read more. So every block
+you choose must support the paragraph, and among the blocks that do, prefer
+the ones where the body of the piece lays the point out — argues it, gives
+its evidence, describes its method — over the piece's abstract or an
+executive summary at its start, which only state it in brief. Never choose a
+block that is merely nearby, or about a related point, to avoid them; and
+where the piece makes a point only in its abstract or executive summary, cite
+that.
 
 Then write the paragraph as its sentences, in order, one sentence to each
 "text". Give each sentence the "id" of the one block, from that paragraph's own

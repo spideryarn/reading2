@@ -16,6 +16,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   audioConstraint,
+  idealConstraint,
   judgeFallback,
   labelled,
   rememberDeviceLabel,
@@ -156,6 +157,19 @@ describe("listing the inputs", () => {
       },
     });
     expect(await listInputs()).toEqual([]);
+  });
+});
+
+/* The press's own request, off Chromium (plan 261024z): one request whatever
+   happened to the device, so it is never refused for a missing id and never
+   spends the gesture on one. */
+describe("the constraint asked inside the press", () => {
+  it("names a pick as the ideal, never exact", () => {
+    expect(idealConstraint("airpods")).toEqual({ audio: { deviceId: { ideal: "airpods" } } });
+  });
+
+  it("asks plainly with nothing picked", () => {
+    expect(idealConstraint(null)).toEqual({ audio: true });
   });
 });
 

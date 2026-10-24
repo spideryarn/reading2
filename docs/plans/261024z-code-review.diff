@@ -1,0 +1,773 @@
+diff --git a/docs/project/dictation.md b/docs/project/dictation.md
+index 76dcab488..f0dd00f3a 100644
+--- a/docs/project/dictation.md
++++ b/docs/project/dictation.md
+@@ -926,6 +926,24 @@ Feedback draft itself is the next step, and is named in the plan.
+     source, and what a reader can try on the phone:
+     [261008d](../plans/261008d-dictation-button-holds-still-and-why-the-iphone-asks-again.md).
+ 
++    **And an iPad asked on every press, a few minutes apart.** Greg, 2026-10-24, `spya-wembb7`:
++    *"Every time I click on the dictate button in a chat, it asks me for permission to use the
++    microphone, whereas somehow the feedback dialog seems to remember permission."* The two boxes
++    share every line of this code. The production logs showed chat presses 3 minutes apart, each
++    prompted, and a Feedback press 10 seconds after a chat dictation, not prompted: the 1-minute
++    rule, as if the request had no gesture. Feedback remembered nothing; it was simply used inside
++    the minute. Ours reached `getUserMedia` after the microphone lock and a device listing, and
++    whether the shipped WebKit carries the click across those is version-dependent. So **off
++    Chromium the press now asks for the microphone itself, synchronously, whenever nobody else
++    holds it** (`earlyRequest` in [`useDictation.ts`](../../src/web/useDictation.ts)). A picked
++    microphone is asked for as `ideal`, so that no listing has to come first and a vanished id
++    cannot spend the press (`idealConstraint`). Expected: no prompt within 10 minutes of the last
++    dictation in a sitting. Not yet run on an iPad.
++    **Still waiting, so still exposed:** a press in chat while Live is running or connecting,
++    because dictation starts only once Live has stopped. And Live itself has the same lock, then
++    listing, then request shape, unchanged.
++    [261024z](../plans/261024z-dictation-asks-for-the-microphone-inside-the-press.md).
++
+ ## The codes
+ 
+ Every reader-facing sentence here ends in a bracketed code, per
+diff --git a/src/web/mic-devices.ts b/src/web/mic-devices.ts
+index e061480eb..ade5cc744 100644
+--- a/src/web/mic-devices.ts
++++ b/src/web/mic-devices.ts
+@@ -189,6 +189,29 @@ export function audioConstraint(preferred: string | null, defaultListed = false)
+   return defaultListed ? { audio: { deviceId: { exact: "default" } } } : { audio: true };
+ }
+ 
++/**
++ * **The constraint for a request made inside the press, off Chromium** —
++ * `ideal`, where `audioConstraint` above insists on `exact`.
++ *
++ * That request exists so that WebKit counts it as the reader's gesture
++ * (useDictation.ts § earlyRequest; plan 261024z), and a click buys one such
++ * request. `exact` for an id that has gone is refused without a prompt and
++ * spends it (plan 261008d), and checking first means listing the devices, an
++ * await that is the very thing the early request is avoiding. `ideal` never
++ * refuses, so it is the press's only request whatever happened to the device.
++ *
++ * `exact`'s case against `ideal` was measured on Chromium, where `ideal` lost
++ * to Chrome's own choice (plan 261001q), and this is never used there. On
++ * WebKit 26.5 (Playwright, its four mock microphones, 2026-10-24) `ideal`
++ * opened the named device four times in four, and a missing id opened one
++ * anyway. The silent substitution `exact` guards against is caught after the
++ * fact instead: the caller compares the opened track's id with the pick and,
++ * if they differ, runs the same `judgeFallback` check as after a refusal.
++ */
++export function idealConstraint(preferred: string | null): MediaStreamConstraints {
++  return preferred ? { audio: { deviceId: { ideal: preferred } } } : { audio: true };
++}
++
+ /**
+  * Whether the browser lists an input with the id `"default"` — Chromium's
+  * system-default input, for `audioConstraint`.
+diff --git a/src/web/mic-lock.ts b/src/web/mic-lock.ts
+index c27bd7e05..843011779 100644
+--- a/src/web/mic-lock.ts
++++ b/src/web/mic-lock.ts
+@@ -67,9 +67,13 @@ let latest: MicClaim | null = null;
+ /**
+  * Take the page's microphone, waiting for everyone before you to let go.
+  *
+- * **Await this before `getUserMedia`, not after.** The whole value of it is the
++ * **Take this before `getUserMedia`, not after.** The whole value of it is the
+  * gap it closes, and a claim taken after the device is already open is a claim
+- * on something that has already gone wrong.
++ * on something that has already gone wrong. The claim is installed before the
++ * first await, so calling it is taking it. Await it before opening too — with
++ * one exception: when `microphoneFree()` said nobody held the microphone just
++ * before the call, there is nothing to wait for, and a WebKit press may then
++ * open the device in the same click (useDictation.ts § earlyRequest).
+  */
+ export async function claimMicrophone(claim: MicClaim): Promise<void> {
+   const before = queue;
+@@ -84,6 +88,9 @@ export async function claimMicrophone(claim: MicClaim): Promise<void> {
+     () => claim.released,
+     () => claim.released,
+   ).catch(() => {});
++  outstanding.add(claim);
++  const gone = () => void outstanding.delete(claim);
++  claim.released.then(gone, gone);
+   if (previous) previous.stop();
+   try {
+     await before;
+@@ -103,8 +110,30 @@ export function releaseMicrophone(claim: MicClaim): void {
+   if (latest === claim) latest = null;
+ }
+ 
++/**
++ * Every claim taken and not yet released — what `microphoneFree` asks about.
++ * A set rather than a count, so a release that settles after a test's reset
++ * cannot drive it below zero.
++ */
++const outstanding = new Set<MicClaim>();
++
++/**
++ * **Whether a claim taken now would have nobody to wait for.**
++ *
++ * Synchronous, for the one caller that cannot await: a press on WebKit, which
++ * asks for the microphone inside the click so that the request counts as the
++ * reader's gesture (useDictation.ts § earlyRequest; plan 261024z). That is only
++ * safe when no other holder can still have a track, because WebKit runs one
++ * capture at a time — so anything outstanding, even a claim that is only
++ * stopping, sends the press down the ordinary path that waits.
++ */
++export function microphoneFree(): boolean {
++  return outstanding.size === 0;
++}
++
+ /** For tests: forget every claim. Never called by the app. */
+ export function resetMicrophoneLock(): void {
+   latest = null;
+   queue = Promise.resolve();
++  outstanding.clear();
+ }
+diff --git a/src/web/useDictation.ts b/src/web/useDictation.ts
+index 8860e99b6..2b7707b12 100644
+--- a/src/web/useDictation.ts
++++ b/src/web/useDictation.ts
+@@ -119,13 +119,14 @@ import {
+   type TranscriptionResult,
+   micErrorName,
+ } from "./transcriber.js";
+-import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js";
++import { type MicClaim, claimMicrophone, microphoneFree, releaseMicrophone } from "./mic-lock.js";
+ import { MIC_NONE, MIC_REFUSED, verdictFor } from "./dictation-errors.js";
+ import {
+   audioConstraint,
+   chosenInputListed,
+   defaultInputListed,
+   deviceMissing,
++  idealConstraint,
+   judgeFallback,
+   labelled,
+   listInputs,
+@@ -535,6 +536,13 @@ interface Session<C> {
+    */
+   claim: MicClaim;
+   freed: () => void;
++  /**
++   * **A request made inside the press and not yet settled** (`earlyRequest`).
++   * While it is pending `track` is still null, so `finish` cannot stop what it
++   * will open — it stops it when it arrives instead, and only then frees the
++   * claim. Cleared the moment `beginCapture` returns.
++   */
++  early: EarlyRequest | null;
+   /**
+    * Aborts every transcription request this session starts — one per part.
+    *
+@@ -991,10 +999,18 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
+        to stop and, because that holder was still registered, stopped the
+        session that was replacing it. `tests/dictation-recording.test.ts` caught
+        it; nothing on screen would have. */
+-    const free = () => {
++    const pending = s.early;
++    s.early = null;
++    const release = () => {
+       releaseMicrophone(s.claim);
+       s.freed();
+     };
++    /* A request still opening holds the device the moment it lands, so the
++       next claimant waits for it to land and be stopped (`Session.early`). */
++    const free = () => {
++      if (pending) void discardEarly(pending).then(release);
++      else release();
++    };
+ 
+     if (quiet) {
+       s.upload.abort();
+@@ -1358,6 +1374,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
+          that no field can be forgotten, and these two have to refer to it. */
+       claim: null as unknown as MicClaim,
+       freed: () => {},
++      early: null,
+     };
+     /**
+      * The tape ran out, so the dictation is over.
+@@ -1675,17 +1692,30 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
+        this hook stays mounted. The strip must describe the preference this
+        press actually read, rather than the value from this hook's first render. */
+     setDeviceId(preferred);
++    /* **The claim before `getUserMedia`, and that is the whole point** — the
++       gap this closes is between one instance opening a device and another
++       instance still holding one, and a claim taken afterwards is a claim on
++       something that has already gone wrong. If another box on this page was
++       dictating, it is asked to stop the ordinary way (keeping its words) and
++       this waits for its track actually to go. GPT Sol's plan review, item 1.
++
++       `claimMicrophone` installs the claim before its first await, so it is
++       taken here, synchronously, and awaited below. Whether anybody held the
++       microphone is read just before: with nobody to wait for, the request
++       is made now, still inside the press (`earlyRequest`, plan 261024z), and
++       the session owns it from this line. */
++    const free = microphoneFree();
++    const claimed = claimMicrophone(s.claim);
++    const early = free ? earlyRequest(preferred) : null;
++    s.early = early;
+     void (async () => {
+-      /* **Before `getUserMedia`, and that is the whole point** — the gap this
+-         closes is between one instance opening a device and another instance
+-         still holding one, and a claim taken afterwards is a claim on something
+-         that has already gone wrong. If another box on this page was dictating,
+-         it is asked to stop the ordinary way (keeping its words) and this waits
+-         for its track actually to go. GPT Sol's plan review, item 1. */
+-      await claimMicrophone(s.claim);
++      await claimed;
+       if (session.current !== s || s.finished) {
+-        releaseMicrophone(s.claim);
+-        s.freed();
++        /* Free only once whatever the early request opened is stopped. */
++        void discardEarly(early).then(() => {
++          releaseMicrophone(s.claim);
++          s.freed();
++        });
+         return;
+       }
+       const outcome = await beginCapture(
+@@ -1693,7 +1723,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
+         r,
+         () => session.current === s && !s.finished,
+         preferred,
++        early,
+       );
++      /* Settled: its track is `outcome`'s now, or stopped, or never came. */
++      s.early = null;
+       if (session.current !== s || s.finished) {
+         /* The reader stopped, or moved on, while the microphone was opening.
+            `beginCapture` has already released anything it opened. */
+@@ -2414,6 +2447,73 @@ function probeIsSafe(): boolean {
+   return data?.brands?.some(({ brand }) => brand === "Chromium") ?? false;
+ }
+ 
++/** A `getUserMedia` made inside the press, which its session owns until it adopts the track. */
++interface EarlyRequest {
++  stream: Promise<MediaStream>;
++}
++
++/**
++ * **Ask for the microphone inside the press, where that is safe.**
++ *
++ * WebKit counts a request as the reader's gesture only if it can still see the
++ * click when `getUserMedia` is called, and a gesture-privileged request reuses
++ * the page's grant for ten minutes after the last capture where any other is
++ * prompted again after **one** on iOS and iPadOS
++ * (`UserMediaPermissionRequestManagerProxy::hasGrantedRequest`). Ours used to
++ * come after the microphone lock and a device listing. On Greg's iPad, chat
++ * presses three minutes apart were each prompted, and a Feedback press ten
++ * seconds after a dictation was not (spya-wembb7) — consistent with the
++ * one-minute rule, so with the gesture having been lost on the way. Current
++ * WebKit source says it should survive those awaits; which WebKit his iPadOS
++ * has, nobody here can say. A request made synchronously in the click is
++ * privileged on every version, so the press makes it itself and `beginCapture`
++ * awaits it in place of its own. Plan 261024z.
++ *
++ * Only where nothing the ordinary path waits for could change the request:
++ *
++ * - **Not on Chromium**, where the probe must run before any device opens, the
++ *   system default is asked for by name after a listing, and the site's
++ *   permission is kept anyway so the gesture buys nothing.
++ * - **Nobody else held the microphone** — decided by the caller, which takes
++ *   its claim first (`microphoneFree`, then `claimMicrophone`, then this):
++ *   WebKit runs one capture at a time, so a press while another box is
++ *   dictating, or one that is still stopping, waits for it as before.
++ *
++ * A picked microphone is asked for by `ideal`, not `exact`
++ * (mic-devices.ts § idealConstraint), so no listing has to come first.
++ *
++ * Null means "take the ordinary path". A non-null one is the session's to stop
++ * on every way out until it adopts the track: `finish` does it for a session
++ * that ends while the request is pending, `discardEarly` for the rest.
++ */
++function earlyRequest(preferred: string | null): EarlyRequest | null {
++  if (probeIsSafe()) return null;
++  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return null;
++  try {
++    const stream = navigator.mediaDevices.getUserMedia(idealConstraint(preferred));
++    /* Its refusal is read where it is awaited; this only stops one that is
++       discarded unread from surfacing as unhandled. */
++    stream.catch(() => {});
++    return { stream };
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * Stop whatever an early request opens, for a session that will not use it.
++ * Resolves once that is done, which is when the device is really free.
++ */
++function discardEarly(early: EarlyRequest | null): Promise<void> {
++  if (!early) return Promise.resolve();
++  return early.stream.then(
++    (stream) => {
++      for (const t of stream.getTracks()) t.stop();
++    },
++    () => {},
++  );
++}
++
+ /**
+  * How long to wait for an aborted probe recogniser to say it has let go.
+  *
+@@ -2423,6 +2523,35 @@ function probeIsSafe(): boolean {
+  */
+ const PROBE_RELEASE_MS = 200;
+ 
++/**
++ * `beginCapture` for a request already made inside the press (`earlyRequest`).
++ *
++ * One request, so no fallbacks: `ideal` does not refuse for a missing device
++ * (mic-devices.ts § idealConstraint), and any refusal it does give is the
++ * reader's answer. No recogniser either, since this is never Chromium. Whether
++ * the pick was honoured is read off the track that opened; when it was not,
++ * the caller runs the same name check (`judgeFallback`) as after a fallback.
++ */
++async function adoptEarly(
++  early: EarlyRequest,
++  stillWanted: () => boolean,
++  preferred: string | null,
++): Promise<CaptureOutcome> {
++  let track: MediaStreamTrack | null;
++  try {
++    track = (await early.stream).getAudioTracks()[0] ?? null;
++  } catch (err) {
++    return { kind: "failed", micError: micErrorName(err) };
++  }
++  if (!track) return { kind: "failed", micError: "no-track" };
++  if (!stillWanted()) {
++    // The reader stopped while we were opening. Do not leave the device on.
++    track.stop();
++    return { kind: "failed", micError: null };
++  }
++  return { kind: "started", track, live: false, honoured: preferred === null || openedId(track) === preferred };
++}
++
+ /**
+  * Open the microphone, and start the recogniser on it where that is possible.
+  *
+@@ -2437,7 +2566,11 @@ async function beginCapture(
+   r: Recognition | null,
+   stillWanted: () => boolean,
+   preferred: string | null,
++  /** The request `start` already made inside the press, which this owns from here. */
++  early: EarlyRequest | null = null,
+ ): Promise<CaptureOutcome> {
++  /* The request is already made, and only where there is no probe to ask. */
++  if (early) return adoptEarly(early, stillWanted, preferred);
+   /* **No recogniser at all is a perfectly good dictation** — Firefox — so this
+      is a `false` rather than a refusal. The track still opens, the recorder
+      still runs, and the transcript is still what the reader gets. */
+diff --git a/tests/dictation-phases.test.ts b/tests/dictation-phases.test.ts
+index 2f1fdd47d..5665e194d 100644
+--- a/tests/dictation-phases.test.ts
++++ b/tests/dictation-phases.test.ts
+@@ -30,7 +30,7 @@
+ import { act, createElement, type ReactNode } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+-import { resetMicrophoneLock } from "../src/web/mic-lock.js";
++import { microphoneFree, resetMicrophoneLock } from "../src/web/mic-lock.js";
+ import { sendForTranscription } from "../src/web/dictation-upload.js";
+ import { useDictation } from "../src/web/useDictation.js";
+ 
+@@ -60,6 +60,8 @@ let gumRequests: MediaStreamConstraints[] = [];
+ /** The `"default"` input is listed but gone by the time it is opened. */
+ let defaultVanishes = false;
+ let gumRejects = false;
++/** Per `getUserMedia` call: was this page's microphone claim already taken? */
++let claimHeldAtRequest: boolean[] = [];
+ /**
+  * The machine's microphones, for the remembered-device cases (spya-k3q9mc).
+  * `defaultInput` is what `{ audio: true }` opens; an `exact` request for an id
+@@ -201,10 +203,14 @@ function fakeTrack(device: { deviceId: string; label: string } | null = null) {
+       if (name === "ended") endedListeners.push(fn);
+     },
+     removeEventListener: () => {},
++    /* Counted once, as a real track ends once: a second `stop()` on an ended
++       track does nothing, and the hook may stop one from two places. */
+     stop: () => {
++      if (track.readyState === "ended") return;
++      track.readyState = "ended";
+       tracksStopped++;
+     },
+-  } as unknown as MediaStreamTrack;
++  } as unknown as { readyState: string } & MediaStreamTrack;
+   tracksHandedOut.push(track);
+   return track;
+ }
+@@ -322,20 +328,27 @@ function install(Ctor: typeof FakeRecognition) {
+       getUserMedia: async (c: MediaStreamConstraints) => {
+         gumCalls++;
+         gumRequests.push(c);
++        claimHeldAtRequest.push(!microphoneFree());
+         if (gumRejects) throw new DOMException("denied", "NotAllowedError");
+         const audio = c.audio;
+-        const exact =
++        const wanted =
+           typeof audio === "object" && audio && typeof audio.deviceId === "object"
+-            ? (audio.deviceId as { exact?: string }).exact
+-            : undefined;
++            ? (audio.deviceId as { exact?: string; ideal?: string })
++            : {};
++        const exact = wanted.exact;
++        /* `ideal` the way WebKit does it: the named device when it is there,
++           and otherwise the default rather than a refusal (measured on WebKit
++           26.5, plan 261024z). */
+         const device = exact
+           ? inputs.find((d) => d.deviceId === exact && !(defaultVanishes && exact === "default"))
+-          : defaultInput;
++          : (inputs.find((d) => d.deviceId === wanted.ideal) ?? defaultInput);
+         if (exact && !device) throw { name: "OverconstrainedError", constraint: "deviceId" };
+-        return {
+-          getAudioTracks: () => [fakeTrack(device ?? null)],
+-          getTracks: () => [fakeTrack(device ?? null)],
+-        };
++        /* **One track per stream**, made lazily and the same object from both
++           methods: a stream that minted a new track on every call let a test
++           "stop" a track the hook never had. GPT Sol's plan review of 261024z. */
++        let track: MediaStreamTrack | null = null;
++        const one = () => (track ??= fakeTrack(device ?? null));
++        return { getAudioTracks: () => [one()], getTracks: () => [one()] };
+       },
+       enumerateDevices: async () => {
+         enumerationCalls += 1;
+@@ -473,6 +486,7 @@ beforeEach(() => {
+   built = [];
+   gumCalls = 0;
+   gumRequests = [];
++  claimHeldAtRequest = [];
+   defaultVanishes = false;
+   gumRejects = false;
+   inputs = [];
+@@ -637,9 +651,9 @@ describe("the tape starts with the track", () => {
+     });
+     inputs = [{ deviceId: "airpods-today", label: "AirPods Pro" }];
+     defaultInput = inputs[0] ?? null;
+-    /* The first listing finds the choice missing (261008d), the second picks
+-       the system-default route; the third is the one after the track opened. */
+-    holdEnumerationAt = 3;
++    /* Since plan 261024z Safari asks inside the press, with no listing before
++       it, so the first listing is the one after the track opened. */
++    holdEnumerationAt = 1;
+     const h = drive();
+     act(() => h.get().toggle());
+     await settleCapture();
+@@ -1757,3 +1771,228 @@ describe("the remembered microphone", () => {
+     h.unmount();
+   });
+ });
++
++/* ------------------------------------------- the request inside the press -- */
++
++/**
++ * **On WebKit the microphone is asked for inside the press, not after it.**
++ *
++ * Greg's iPad, 2026-10-24 (spya-wembb7): every chat press prompted, three
++ * minutes apart, while a Feedback press ten seconds after a dictation did not.
++ * WebKit reuses a grant without a prompt for ten minutes after capture when the
++ * request is gesture-privileged, and for **one minute** on iOS and iPadOS when
++ * it is not — and ours came after the microphone lock and a device listing,
++ * which the logs say cost it the gesture. A request made synchronously in the
++ * click handler is privileged on every WebKit, however promise propagation
++ * works. docs/plans/261024z-dictation-asks-for-the-microphone-inside-the-press.md.
++ *
++ * "Inside the press" is checked inside the same synchronous `act` callback as
++ * the `toggle()`, before any microtask can run: the property is the call's
++ * position, which no amount of settling afterwards can show.
++ */
++describe("the request inside the press", () => {
++  function store(entries: Record<string, string>) {
++    const map = new Map(Object.entries(entries));
++    vi.stubGlobal("localStorage", {
++      getItem: (k: string) => map.get(k) ?? null,
++      setItem: (k: string, v: string) => void map.set(k, v),
++      removeItem: (k: string) => void map.delete(k),
++    });
++    return map;
++  }
++  /** `toggle()`, and how many `getUserMedia` calls had been made when it returned. */
++  function press(h: ReturnType<typeof drive>): number {
++    let during = -1;
++    act(() => {
++      h.get().toggle();
++      during = gumCalls;
++    });
++    return during;
++  }
++
++  it("asks inside the press on Safari, with nothing picked", async () => {
++    useSafari();
++    store({});
++    const h = drive();
++    expect(press(h)).toBe(1);
++    await settleCapture();
++    expect(gumCalls, "the early request is the only request").toBe(1);
++    expect(gumRequests[0]).toEqual({ audio: true });
++    expect(h.get().phase).toBe("listening");
++    h.unmount();
++  });
++
++  it("asks inside every press of a sitting, not only the first", async () => {
++    useSafari();
++    store({});
++    const h = drive();
++    for (let n = 1; n <= 2; n++) {
++      expect(press(h), `press ${n}`).toBe(n);
++      await settleCapture();
++      talkFor(4000);
++      act(() => h.get().toggle());
++      await drain();
++    }
++    h.unmount();
++  });
++
++  it("leaves Chromium's order alone: the probe, then the request", async () => {
++    store({});
++    const h = drive();
++    expect(press(h)).toBe(0);
++    await settleCapture();
++    expect(gumCalls).toBe(1);
++    expect(h.get().liveText).toBe(true);
++    h.unmount();
++  });
++
++  it("waits for another box that holds the microphone, as before", async () => {
++    useSafari();
++    store({});
++    const first = drive();
++    expect(press(first)).toBe(1);
++    await settleCapture();
++    expect(first.get().phase).toBe("listening");
++    const second = drive();
++    expect(press(second), "a second capture while the first is live").toBe(1);
++    await drain();
++    await settleCapture();
++    expect(first.get().phase).not.toBe("listening");
++    expect(second.get().phase).toBe("listening");
++    expect(gumCalls).toBe(2);
++    first.unmount();
++    second.unmount();
++  });
++
++  it("stops what the early request opens when Stop comes first", async () => {
++    useSafari();
++    store({});
++    const h = drive();
++    act(() => {
++      h.get().toggle();
++      h.get().toggle();
++    });
++    await settleCapture();
++    await drain();
++    expect(gumCalls).toBe(1);
++    expect(tracksHandedOut).toHaveLength(1);
++    expect(tracksStopped, "a microphone left on after Stop").toBe(1);
++    expect(h.get().phase).toBe("idle");
++    h.unmount();
++  });
++
++  it("takes its claim before it asks", async () => {
++    useSafari();
++    store({});
++    const h = drive();
++    press(h);
++    await settleCapture();
++    expect(claimHeldAtRequest, "the request came before the page's claim").toEqual([true]);
++    h.unmount();
++  });
++
++  it("frees the microphone after a refusal, and says why", async () => {
++    useSafari();
++    store({});
++    gumRejects = true;
++    const h = drive();
++    expect(press(h)).toBe(1);
++    await settleCapture();
++    await drain();
++    expect(gumCalls, "a refusal is the reader's answer, not a reason to ask again").toBe(1);
++    expect(h.get().error).toContain("[mic-refused]");
++    expect(h.get().phase).toBe("idle");
++    expect(microphoneFree()).toBe(true);
++    h.unmount();
++  });
++
++  it("holds the claim until a pending request has landed and been stopped", async () => {
++    /* A second box pressed while the first press's request is still opening:
++       the first is asked to stop, and the second must not ask until whatever
++       the first's request opened has been stopped. WebKit runs one capture at a
++       time. */
++    useSafari();
++    store({});
++    const first = drive();
++    const second = drive();
++    act(() => {
++      first.get().toggle();
++      second.get().toggle();
++    });
++    expect(gumCalls, "the second press found the microphone claimed").toBe(1);
++    await settleCapture();
++    await drain();
++    await settleCapture();
++    expect(gumCalls).toBe(2);
++    expect(tracksStopped, "the first press's track, stopped before the second asked").toBe(1);
++    expect(second.get().phase).toBe("listening");
++    first.unmount();
++    second.unmount();
++  });
++
++  it("asks inside the press on Firefox too", async () => {
++    vi.unstubAllGlobals();
++    vi.stubGlobal("requestAnimationFrame", () => 1);
++    vi.stubGlobal("cancelAnimationFrame", () => {});
++    install(ChromiumRecognition);
++    vi.stubGlobal("SpeechRecognition", undefined);
++    vi.stubGlobal("webkitSpeechRecognition", undefined);
++    chromiumEngine(false);
++    store({});
++    const h = drive();
++    expect(press(h)).toBe(1);
++    await settleCapture();
++    expect(h.get().phase).toBe("listening");
++    h.unmount();
++  });
++
++  describe("with a microphone picked", () => {
++    const AIRPODS = { deviceId: "airpods-today", label: "AirPods Pro" };
++    const PAD = { deviceId: "ipad-mic", label: "iPad Microphone" };
++    const PICKED = { "spya.dictation.deviceId": "airpods-today", "spya.dictation.deviceLabel": "AirPods Pro" };
++
++    it("asks for it inside the press, as the ideal, and is honoured", async () => {
++      useSafari();
++      store(PICKED);
++      inputs = [AIRPODS, PAD];
++      defaultInput = PAD;
++      const h = drive();
++      expect(press(h)).toBe(1);
++      await settleCapture();
++      expect(gumRequests).toEqual([{ audio: { deviceId: { ideal: "airpods-today" } } }]);
++      expect(h.get().deviceUnavailable).toBe(false);
++      h.unmount();
++    });
++
++    it("says so when it has gone, with the one request the press bought", async () => {
++      /* `exact` here would be refused and spend the gesture, leaving the
++         default to an unprivileged second request (plan 261008d). */
++      useSafari();
++      store(PICKED);
++      inputs = [PAD];
++      defaultInput = PAD;
++      const h = drive();
++      expect(press(h)).toBe(1);
++      await settleCapture();
++      await drain();
++      expect(gumCalls).toBe(1);
++      expect(h.get().phase).toBe("listening");
++      expect(h.get().deviceUnavailable).toEqual({ wanted: "AirPods Pro" });
++      h.unmount();
++    });
++
++    it("adopts its new id when the same microphone opened under one", async () => {
++      useSafari();
++      const saved = store({ ...PICKED, "spya.dictation.deviceId": "airpods-yesterday" });
++      inputs = [AIRPODS, PAD];
++      defaultInput = AIRPODS;
++      const h = drive();
++      expect(press(h)).toBe(1);
++      await settleCapture();
++      await drain();
++      expect(h.get().deviceUnavailable).toBe(false);
++      expect(saved.get("spya.dictation.deviceId")).toBe("airpods-today");
++      h.unmount();
++    });
++  });
++});
+diff --git a/tests/dictation-report.test.tsx b/tests/dictation-report.test.tsx
+index aeb6b112f..b715868be 100644
+--- a/tests/dictation-report.test.tsx
++++ b/tests/dictation-report.test.tsx
+@@ -181,6 +181,21 @@ async function press(h: ReturnType<typeof drive>) {
+ /* ------------------------------------------------------------- the tests -- */
+ 
+ describe("a microphone that will not open", () => {
++  /**
++   * **The fallback chain is the ordinary path's, so these run on it.** Off
++   * Chromium a press with nobody else on the microphone asks once, inside the
++   * press, as `ideal`, and has no chain to fall down (plan 261024z). The chain
++   * is still what Chromium does, and what any browser does when the press had
++   * to wait for another holder, so it is pinned here on Chromium's engine brand
++   * — with no recogniser stubbed, so there is no probe either.
++   */
++  function ordinaryPath() {
++    Object.defineProperty(navigator, "userAgentData", {
++      configurable: true,
++      value: { brands: [{ brand: "Chromium", version: "151" }], mobile: false, platform: "macOS" },
++    });
++  }
++
+   it.each([
+     ["NotAllowedError", MIC_REFUSED],
+     ["SecurityError", MIC_REFUSED],
+@@ -212,6 +227,7 @@ describe("a microphone that will not open", () => {
+   /* GPT Sol's plan review, F3: once a missing device has sent it down the
+      fallback, the reason that counts is the last request's, not the first. */
+   it("a chosen microphone gone, then the default refused, is reported as the refusal", async () => {
++    ordinaryPath();
+     const h = drive();
+     act(() => h.get().chooseDevice("gone"));
+     await settle();
+@@ -233,6 +249,7 @@ describe("a microphone that will not open", () => {
+   });
+ 
+   it("a fallback that opens a stream with no audio track is `no-track`, not the earlier refusal", async () => {
++    ordinaryPath();
+     const h = drive();
+     act(() => h.get().chooseDevice("gone"));
+     await settle();
+@@ -244,6 +261,7 @@ describe("a microphone that will not open", () => {
+   });
+ 
+   it("keeps the final refusal through the complete chosen/default/unconstrained chain", async () => {
++    ordinaryPath();
+     Object.defineProperty(navigator, "mediaDevices", {
+       configurable: true,
+       value: {
+@@ -266,6 +284,7 @@ describe("a microphone that will not open", () => {
+   });
+ 
+   it("a final unconstrained stream with no audio track is `no-track`", async () => {
++    ordinaryPath();
+     Object.defineProperty(navigator, "mediaDevices", {
+       configurable: true,
+       value: {
+diff --git a/tests/mic-devices.test.ts b/tests/mic-devices.test.ts
+index 024c08942..82f9d653f 100644
+--- a/tests/mic-devices.test.ts
++++ b/tests/mic-devices.test.ts
+@@ -16,6 +16,7 @@
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import {
+   audioConstraint,
++  idealConstraint,
+   judgeFallback,
+   labelled,
+   rememberDeviceLabel,
+@@ -159,6 +160,19 @@ describe("listing the inputs", () => {
+   });
+ });
+ 
++/* The press's own request, off Chromium (plan 261024z): one request whatever
++   happened to the device, so it is never refused for a missing id and never
++   spends the gesture on one. */
++describe("the constraint asked inside the press", () => {
++  it("names a pick as the ideal, never exact", () => {
++    expect(idealConstraint("airpods")).toEqual({ audio: { deviceId: { ideal: "airpods" } } });
++  });
++
++  it("asks plainly with nothing picked", () => {
++    expect(idealConstraint(null)).toEqual({ audio: true });
++  });
++});
++
+ describe("what to call it on screen", () => {
+   it("uses the browser's own name, which is the one in the system settings", () => {
+     expect(labelled({ label: "Microsoft Teams Audio Device (Virtual)" } as MediaStreamTrack)).toBe(

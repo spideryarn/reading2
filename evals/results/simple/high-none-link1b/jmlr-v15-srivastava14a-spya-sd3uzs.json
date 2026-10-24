@@ -1,0 +1,310 @@
+{
+  "arm": "high-none-link1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+  "version": "simple-prompt/13",
+  "sourceSha256": "c75d19ae37a81a03d32783f8c4067104a6a19faa03c1403d554f33f62f522543",
+  "at": "2026-10-24T20:35:13.613Z",
+  "bodyWords": 11518,
+  "band": "standard",
+  "bodyBlocks": 199,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "02e3b8b7ae181f23",
+  "systemsSha256": "88ec5cc2c899a3d37fdaf0098a9af6b35704e8df1d197f1876db7060a96e2afd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 77666,
+  "costUsd": 0.1965196,
+  "tokens": {
+    "input": 13334,
+    "output": 8658,
+    "reasoning": 5927
+  },
+  "briefReadyMs": 23146,
+  "fullerReadyMs": 77661,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 625,
+  "briefWords": 95,
+  "fuller": [
+    {
+      "text": "This research paper introduces dropout, a method for training neural networks, which are programs made of many simple connected units that learn from examples. Big networks with many layers can learn very complicated links between inputs and outputs. With limited training data, though, some of those links are just chance quirks of the examples, so they fail on new data; this is called overfitting.",
+      "ids": [
+        "spya-qnbgwu",
+        "spya-uaykbu"
+      ],
+      "sentences": [
+        {
+          "text": "This research paper introduces dropout, a method for training neural networks, which are programs made of many simple connected units that learn from examples.",
+          "id": "spya-uaykbu",
+          "key": "introduces dropout"
+        },
+        {
+          "text": "Big networks with many layers can learn very complicated links between inputs and outputs.",
+          "id": "spya-qnbgwu"
+        },
+        {
+          "text": "With limited training data, though, some of those links are just chance quirks of the examples, so they fail on new data; this is called overfitting.",
+          "id": "spya-qnbgwu",
+          "key": "overfitting"
+        }
+      ]
+    },
+    {
+      "text": "Averaging the answers of many different models nearly always helps, and the ideal would weigh every possible version of a network by how likely it is. For large networks this is far too costly: each one needs lots of computing, tuning and data, and running many at once is too slow. The authors want to get close to that ideal using much less computing.",
+      "ids": [
+        "spya-k9tfne",
+        "spya-abqyg3"
+      ],
+      "sentences": [
+        {
+          "text": "Averaging the answers of many different models nearly always helps, and the ideal would weigh every possible version of a network by how likely it is.",
+          "id": "spya-k9tfne"
+        },
+        {
+          "text": "For large networks this is far too costly: each one needs lots of computing, tuning and data, and running many at once is too slow.",
+          "id": "spya-abqyg3"
+        },
+        {
+          "text": "The authors want to get close to that ideal using much less computing.",
+          "id": "spya-k9tfne"
+        }
+      ]
+    },
+    {
+      "text": "During training, each unit is randomly switched off, or dropped, along with its connections, whose strengths (called weights) are what the network learns. Each unit is kept with a fixed chance p, often 0.5 for hidden units between input and output, and closer to 1 for input units. So each training example trains a different thinned network, and a network of n units contains 2^n thinned networks that all share the same weights. At test time nothing is dropped; instead each weight is multiplied by p, which roughly averages all the thinned networks in one go.",
+      "ids": [
+        "spya-uaykbu",
+        "spya-ajkrbc",
+        "spya-e06uf7"
+      ],
+      "sentences": [
+        {
+          "text": "During training, each unit is randomly switched off, or dropped, along with its connections, whose strengths (called weights) are what the network learns.",
+          "id": "spya-uaykbu"
+        },
+        {
+          "text": "Each unit is kept with a fixed chance p, often 0.5 for hidden units between input and output, and closer to 1 for input units.",
+          "id": "spya-uaykbu"
+        },
+        {
+          "text": "So each training example trains a different thinned network, and a network of n units contains 2^n thinned networks that all share the same weights.",
+          "id": "spya-ajkrbc"
+        },
+        {
+          "text": "At test time nothing is dropped; instead each weight is multiplied by p, which roughly averages all the thinned networks in one go.",
+          "id": "spya-e06uf7",
+          "key": "each weight is multiplied by p"
+        }
+      ]
+    },
+    {
+      "text": "The authors argue that normal training lets units build co-adaptations: fragile teamwork where units fix each other's mistakes in ways that fail on new data. Dropout makes any partner unreliable, so each unit must be useful on its own, much as one theory of sex in evolution says genes must work with random partners. In a test on handwritten digits, units trained without dropout showed no clear pattern alone, while dropout units picked up edges, strokes and spots.",
+      "ids": [
+        "spya-jepmcf",
+        "spya-u4jpws",
+        "spya-dnh5e5"
+      ],
+      "sentences": [
+        {
+          "text": "The authors argue that normal training lets units build co-adaptations: fragile teamwork where units fix each other's mistakes in ways that fail on new data.",
+          "id": "spya-jepmcf",
+          "key": "co-adaptations"
+        },
+        {
+          "text": "Dropout makes any partner unreliable, so each unit must be useful on its own, much as one theory of sex in evolution says genes must work with random partners.",
+          "id": "spya-u4jpws"
+        },
+        {
+          "text": "In a test on handwritten digits, units trained without dropout showed no clear pattern alone, while dropout units picked up edges, strokes and spots.",
+          "id": "spya-dnh5e5"
+        }
+      ]
+    },
+    {
+      "text": "Tests on image collections, scored by the percent of pictures labelled wrongly, showed large gains. On MNIST, a set of handwritten digits, error fell from 1.60% to 1.35% with dropout, and to 0.95% with bigger networks and extra changes. On SVHN, photos of house numbers, error fell from 3.95% to 2.55% when dropout was used in every layer. On ImageNet, a huge photo set, the 2012 contest-winning dropout model missed the right answer in its top five guesses about 16% of the time, versus 26% for rivals.",
+      "ids": [
+        "spya-ujw3t8",
+        "spya-y4ktr9",
+        "spya-r83ww8"
+      ],
+      "sentences": [
+        {
+          "text": "Tests on image collections, scored by the percent of pictures labelled wrongly, showed large gains.",
+          "id": null
+        },
+        {
+          "text": "On MNIST, a set of handwritten digits, error fell from 1.60% to 1.35% with dropout, and to 0.95% with bigger networks and extra changes.",
+          "id": "spya-ujw3t8"
+        },
+        {
+          "text": "On SVHN, photos of house numbers, error fell from 3.95% to 2.55% when dropout was used in every layer.",
+          "id": "spya-y4ktr9"
+        },
+        {
+          "text": "On ImageNet, a huge photo set, the 2012 contest-winning dropout model missed the right answer in its top five guesses about 16% of the time, versus 26% for rivals.",
+          "id": "spya-r83ww8",
+          "key": "about 16% of the time, versus 26%"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Gains also showed up in speech, text and genetics, though less evenly. On TIMIT, a speech recognition test, the share of wrongly recognised speech sounds fell from 23.4% to 21.8%. Sorting news articles into topics improved only from 31.05% to 29.62% error, a much smaller gain than for images and speech. On a small genetics task, dropout beat ordinary networks and all other methods except Bayesian neural networks, a slower but more principled way of averaging models.",
+      "ids": [
+        "spya-zrxrs4",
+        "spya-emxnp0",
+        "spya-yek3wg"
+      ],
+      "sentences": [
+        {
+          "text": "Gains also showed up in speech, text and genetics, though less evenly.",
+          "id": null
+        },
+        {
+          "text": "On TIMIT, a speech recognition test, the share of wrongly recognised speech sounds fell from 23.4% to 21.8%.",
+          "id": "spya-zrxrs4"
+        },
+        {
+          "text": "Sorting news articles into topics improved only from 31.05% to 29.62% error, a much smaller gain than for images and speech.",
+          "id": "spya-emxnp0"
+        },
+        {
+          "text": "On a small genetics task, dropout beat ordinary networks and all other methods except Bayesian neural networks, a slower but more principled way of averaging models.",
+          "id": "spya-yek3wg"
+        }
+      ]
+    },
+    {
+      "text": "Further checks probed how dropout behaves. Averaging about 50 randomly thinned networks per test case was needed to match the cheap weight-scaling trick, suggesting the trick is a good stand-in for the true average. With only 100 or 500 training digits, dropout gave no gain; the benefit grew with more data, then shrank once data was plentiful. Dropout also made fewer units strongly active at once, without any rule asking for it.",
+      "ids": [
+        "spya-y607uy",
+        "spya-hq23s9",
+        "spya-vep9js"
+      ],
+      "sentences": [
+        {
+          "text": "Further checks probed how dropout behaves.",
+          "id": null
+        },
+        {
+          "text": "Averaging about 50 randomly thinned networks per test case was needed to match the cheap weight-scaling trick, suggesting the trick is a good stand-in for the true average.",
+          "id": "spya-y607uy"
+        },
+        {
+          "text": "With only 100 or 500 training digits, dropout gave no gain; the benefit grew with more data, then shrank once data was plentiful.",
+          "id": "spya-hq23s9"
+        },
+        {
+          "text": "Dropout also made fewer units strongly active at once, without any rule asking for it.",
+          "id": "spya-vep9js"
+        }
+      ]
+    },
+    {
+      "text": "The authors name one main drawback: a dropout network usually takes 2 to 3 times longer to train, because each update trains a different random network. For linear regression, a simple straight-line-style model, averaging out the randomness by maths gives a fixed penalty on large weights, a known method called ridge regression. Their main conclusion is that dropout is a general technique, not tied to one field, that clearly improved neural networks on every data set tried. Making it faster to train is left as future work.",
+      "ids": [
+        "spya-ax6584",
+        "spya-c7bvua",
+        "spya-f8dckz"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name one main drawback: a dropout network usually takes 2 to 3 times longer to train, because each update trains a different random network.",
+          "id": "spya-ax6584",
+          "key": "2 to 3 times longer to train"
+        },
+        {
+          "text": "For linear regression, a simple straight-line-style model, averaging out the randomness by maths gives a fixed penalty on large weights, a known method called ridge regression.",
+          "id": "spya-c7bvua"
+        },
+        {
+          "text": "Their main conclusion is that dropout is a general technique, not tied to one field, that clearly improved neural networks on every data set tried.",
+          "id": "spya-f8dckz"
+        },
+        {
+          "text": "Making it faster to train is left as future work.",
+          "id": "spya-ax6584"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This paper presents dropout, a simple trick for training neural networks, which are computer programs that learn from examples. Big networks often memorize quirks of their practice examples, so they do worse on new ones. Dropout fights this by randomly switching off parts of the network during training.",
+      "ids": [
+        "spya-qnbgwu",
+        "spya-uaykbu"
+      ],
+      "sentences": [
+        {
+          "text": "This paper presents dropout, a simple trick for training neural networks, which are computer programs that learn from examples.",
+          "id": "spya-uaykbu",
+          "key": "dropout, a simple trick"
+        },
+        {
+          "text": "Big networks often memorize quirks of their practice examples, so they do worse on new ones.",
+          "id": "spya-qnbgwu"
+        },
+        {
+          "text": "Dropout fights this by randomly switching off parts of the network during training.",
+          "id": "spya-uaykbu",
+          "key": "randomly switching off parts of the network"
+        }
+      ]
+    },
+    {
+      "text": "Because no part can count on the others, each part must learn something useful by itself. In tests on pictures, speech, text and genetics, dropout made networks better on every data set. The authors conclude it is a general method, not tied to one kind of task.",
+      "ids": [
+        "spya-jepmcf",
+        "spya-kqq35z",
+        "spya-f8dckz"
+      ],
+      "sentences": [
+        {
+          "text": "Because no part can count on the others, each part must learn something useful by itself.",
+          "id": "spya-jepmcf"
+        },
+        {
+          "text": "In tests on pictures, speech, text and genetics, dropout made networks better on every data set.",
+          "id": "spya-kqq35z",
+          "key": "better on every data set"
+        },
+        {
+          "text": "The authors conclude it is a general method, not tied to one kind of task.",
+          "id": "spya-f8dckz"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}
