@@ -23,8 +23,8 @@
  *    (src/ai-spend.ts § `collectSpend`). Attribution is explicit — the
  *    administrator and the article's slug — and the sink is the ledger.
  * 3. **Claim, then call.** `claimLookup` writes that collector's own run id
- *    (`currentSpend().runId`) onto the row before any provider request; false
- *    means another run has it, or it was finished as stale, and nothing is
+ *    (`currentSpend().runId`), and the guidance in force, onto the row before
+ *    any provider request; `not-claimed` means another run has it, or it was finished as stale, and nothing is
  *    called. So `ai_calls.run_id` names exactly this run's calls.
  * 4. **Finish.** `runAuthorLookup` never throws on a provider failure; its
  *    result maps onto `finishLookup`'s union. Anything unexpected — a database
@@ -136,16 +136,16 @@ async function runLookup(lookupId: string, deps: StartAuthorLookupDeps): Promise
     async () => {
       const runId = currentSpend()?.runId;
       if (!runId) throw new Error("author lookup: no spend collector open inside its own collectSpend");
-      /* Greg's guidance for the message, read as the lookup is claimed and
-         recorded on its row (plan 261024f, R5). */
-      const guidance = await pgAuthorGiftStore.currentGuidance();
-      if (!(await pgAuthorGiftStore.claimLookup(lookupId, runId, guidance?.id ?? null))) {
+      /* Greg's guidance for the message, chosen and recorded atomically with
+         the claim (plan 261024f, R5). */
+      const claim = await pgAuthorGiftStore.claimLookup(lookupId, runId);
+      if (claim.kind === "not-claimed") {
         logger.info({ lookupId }, "an author lookup was already claimed or finished; nothing called");
         return;
       }
       const result = await runAuthorLookup(loaded.input, {
         ...(deps.call ? { call: deps.call } : {}),
-        guidance: guidance?.guidance ?? null,
+        guidance: claim.guidance?.guidance ?? null,
       });
       const finished = await pgAuthorGiftStore.finishLookup(lookupId, lookupResultFor(result));
       logger.info({ lookupId, runId, outcome: result.outcome, finish: finished.kind }, "author lookup finished");

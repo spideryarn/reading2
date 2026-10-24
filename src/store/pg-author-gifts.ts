@@ -44,7 +44,14 @@ import {
 import { RECIPIENT_NAME_MAX, cleanRecipientName, starterOwnerOf } from "../admin-vouchers.js";
 import { getDb } from "../db/client.js";
 import { FROM } from "../email.js";
-import { articleRevisions, articles, authorGiftGuidance, authorGifts, authorLookups, billingVouchers } from "../db/schema.js";
+import {
+  articleRevisions,
+  articles,
+  authorGiftGuidance,
+  authorGifts,
+  authorLookups,
+  billingVouchers,
+} from "../db/schema.js";
 import { isSlug } from "../ingest.js";
 import { log } from "../log.js";
 import { type OwnerId, runAsOwner } from "../owner.js";
@@ -476,21 +483,42 @@ export async function lookupSubject(lookupId: string): Promise<LookupSubject | n
   return row ? { ...row, createdBy: row.createdBy as OwnerId } : null;
 }
 
+export type LookupClaim =
+  | { readonly kind: "claimed"; readonly guidance: GuidanceRow | null }
+  | { readonly kind: "not-claimed" };
+
 /**
  * **Claim a pending lookup for one run, before spending anything** (R2-F5,
- * R2-F6). True when this call set `run_id`; false when the row is finished,
- * already claimed, or gone — and then the caller makes no call at all.
- * `runId` is the fresh collector's own id, so `ai_calls.run_id` names exactly
- * this run's calls.
+ * R2-F6). `claimed` when this call set `run_id`; `not-claimed` when the row is
+ * finished, already claimed, or gone — and then the caller makes no call at
+ * all. `runId` is the fresh collector's own id, so `ai_calls.run_id` names
+ * exactly this run's calls.
+ *
+ * The guidance the run uses is chosen and recorded **in the same statement**
+ * (plan 261024f, R5): a Save that commits before it wins, one after belongs to
+ * later lookups. A separate read first would let a lookup claimed after a Save
+ * still run with the guidance before it (261024f code review).
  */
-export async function claimLookup(lookupId: string, runId: string, guidanceId: string | null = null): Promise<boolean> {
-  const claimed = await getDb()
+export async function claimLookup(lookupId: string, runId: string): Promise<LookupClaim> {
+  const db = getDb();
+  const [claimed] = await db
     .update(authorLookups)
-    /* The guidance it runs with, recorded as it is claimed (plan 261024f, R5). */
-    .set({ runId, guidanceId })
+    .set({
+      runId,
+      guidanceId: sql`(select ${authorGiftGuidance.id} from ${authorGiftGuidance}
+        order by ${authorGiftGuidance.createdAt} desc, ${authorGiftGuidance.id} desc limit 1)`,
+    })
     .where(and(eq(authorLookups.id, lookupId), isNull(authorLookups.outcome), isNull(authorLookups.runId)))
-    .returning({ id: authorLookups.id });
-  return claimed.length === 1;
+    .returning({ guidanceId: authorLookups.guidanceId });
+  if (!claimed) return { kind: "not-claimed" };
+  if (claimed.guidanceId === null) return { kind: "claimed", guidance: null };
+  const [guidance] = await db
+    .select({ id: authorGiftGuidance.id, guidance: authorGiftGuidance.guidance, createdAt: authorGiftGuidance.createdAt })
+    .from(authorGiftGuidance)
+    .where(eq(authorGiftGuidance.id, claimed.guidanceId))
+    .limit(1);
+  if (!guidance) throw new Error(`claimed author lookup ${lookupId} names missing guidance ${claimed.guidanceId}`);
+  return { kind: "claimed", guidance: { ...guidance, createdAt: guidance.createdAt.toISOString() } };
 }
 
 /**
@@ -1016,6 +1044,7 @@ export async function patchAuthorGift(id: string, patch: AuthorGiftPatch): Promi
 
 export type PreviewAnswer =
   | { readonly kind: "preview"; readonly preview: AuthorGiftEmailPreview }
+  | { readonly kind: "starter-refused"; readonly reason: Exclude<StarterRefusal, "link-off"> }
   | { readonly kind: "not-found" };
 
 /**
@@ -1026,11 +1055,14 @@ export type PreviewAnswer =
  * Rendered by `giftMessage`, the function Send's `createVoucher` renders with,
  * from the same inputs it reads: the draft's fields, the audience
  * `giftAudienceFor` finds for the address, and the starter article's revision
- * title read as its owner through the same `starter_slug`. **Never the key**:
- * the starter's address is `STARTER_LINK_PLACEHOLDER`, and nothing here reads
- * the private link (voucher-starter.ts is that read's caller, and only for the
- * email itself). An article that cannot be read now is left out, as Send would
- * refuse it. Only the text part goes back, never the HTML.
+ * title read through `loadArticleIdentity`, once the gift's own article id and
+ * frozen slug are confirmed to name the same article. **Never the key**: the
+ * starter's address is
+ * `STARTER_LINK_PLACEHOLDER`, and nothing here reads the private link
+ * (voucher-starter.ts is that read's caller, and only for the email itself).
+ * An article that Send would refuse as absent or unpublished is refused here
+ * too, rather than manufacturing an email with no starter. Only the text part
+ * goes back, never the HTML.
  *
  * A read: nothing is written and nothing is queued.
  */
@@ -1043,12 +1075,31 @@ export async function previewAuthorGiftEmail(id: string): Promise<PreviewAnswer>
       articles: authorGifts.articles,
       starterSlug: authorGifts.starterSlug,
       createdBy: authorGifts.createdBy,
+      articleThere: articles.id,
+      processing: articles.processing,
+      currentRevisionId: articles.currentRevisionId,
     })
     .from(authorGifts)
+    /* Send resolves by the frozen slug as the gift's creator, then pins that
+       resolution to article_id. These join conditions ask the same identity
+       question without touching the share token. */
+    .leftJoin(
+      articles,
+      and(
+        eq(articles.id, authorGifts.articleId),
+        eq(articles.slug, authorGifts.starterSlug),
+        eq(articles.ownerId, authorGifts.createdBy),
+      ),
+    )
     .where(eq(authorGifts.id, id))
     .limit(1);
   if (!gift) return { kind: "not-found" };
-
+  if (gift.articleThere === null) return { kind: "starter-refused", reason: "absent" };
+  if (gift.processing === "minimal" || gift.currentRevisionId === null) {
+    return { kind: "starter-refused", reason: "unpublished" };
+  }
+  /* The title through the read Send takes it from (voucher-starter.ts), so the
+     two cannot disagree about which title an article has. */
   const title = await runAsOwner(gift.createdBy as OwnerId, async () => {
     try {
       return (await pgArticleReader.loadArticleIdentity(gift.starterSlug)).title;
@@ -1058,6 +1109,7 @@ export async function previewAuthorGiftEmail(id: string): Promise<PreviewAnswer>
       throw err;
     }
   });
+  if (title === null) return { kind: "starter-refused", reason: "absent" };
   let audience: GiftAudience = { kind: "invite" };
   if (gift.email !== null) {
     try {
@@ -1070,7 +1122,7 @@ export async function previewAuthorGiftEmail(id: string): Promise<PreviewAnswer>
   const message = giftMessage(gift.articles, audience, {
     recipientName: gift.recipientName,
     recipientNote: gift.recipientNote,
-    starter: title === null ? null : { title, url: STARTER_LINK_PLACEHOLDER },
+    starter: { title, url: STARTER_LINK_PLACEHOLDER },
   });
   return {
     kind: "preview",

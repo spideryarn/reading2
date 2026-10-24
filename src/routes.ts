@@ -10453,6 +10453,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!isUuid(id)) throw httpError(400, "id must be a uuid");
       const answer = await pgAuthorGiftStore.previewAuthorGiftEmail(id);
       if (answer.kind === "not-found") throw httpError(404, "There is no such author gift.");
+      if (answer.kind === "starter-refused") throw starterRefused(answer.reason);
       /* An address, and a note to somebody. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, answer.preview satisfies AuthorGiftEmailPreview);

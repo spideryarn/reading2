@@ -562,19 +562,29 @@ function GiftFields({ gift, withNote }: { gift: AdminAuthorGift; withNote: boole
  * lookup filling an address. The small print names the two things that can
  * still differ at Send.
  */
-function EmailPreview({ gift }: { gift: AdminAuthorGift }) {
-  const [answer, setAnswer] = useState<EmailPreviewAnswer | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `updatedAt` is the trigger, not an input — every edit, and every lookup that fills a field, moves it, and the email has to be asked for again then.
+function useEmailPreview(gift: AdminAuthorGift | null, refresh: number): EmailPreviewAnswer | null {
+  /* A result belongs only to the content that asked for it, so an edit hides
+     the old answer at once, before the new one arrives (261024f code review).
+     Content, not object identity: the list's poll hands every card a new
+     object, and must not reload every email. The title is a live preview
+     input but does not move `author_gifts.updated_at`. */
+  const key = gift === null ? null : `${gift.id}\n${gift.updatedAt}\n${gift.starter.title ?? ""}\n${refresh}`;
+  const giftId = gift?.id ?? null;
+  const [resolved, setResolved] = useState<{ readonly key: string; readonly answer: EmailPreviewAnswer } | null>(null);
   useEffect(() => {
+    if (giftId === null || key === null) return;
     let live = true;
-    void fetchEmailPreview(gift.id).then((a) => {
-      if (live) setAnswer(a);
+    void fetchEmailPreview(giftId).then((a) => {
+      if (live) setResolved({ key, answer: a });
     });
     return () => {
       live = false;
     };
-  }, [gift.id, gift.updatedAt]);
+  }, [giftId, key]);
+  return key !== null && resolved?.key === key ? resolved.answer : null;
+}
 
+function EmailPreview({ answer, retry }: { answer: EmailPreviewAnswer | null; retry: () => void }) {
   return (
     <section
       aria-label="The email, if you sent it now"
@@ -584,9 +594,12 @@ function EmailPreview({ gift }: { gift: AdminAuthorGift }) {
       {answer === null ? (
         <p className="tw:m-0 tw:text-ink-faint">Loading the email…</p>
       ) : answer.kind === "failed" ? (
-        <p className="tw:m-0 tw:text-danger">
-          Could not show the email: {answer.message}
-        </p>
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          <p className="tw:m-0 tw:text-danger">Could not show the email: {answer.message}</p>
+          <button type="button" onClick={retry} className={BUTTON}>
+            Try again
+          </button>
+        </div>
       ) : (
         <>
           <dl className="tw:m-0 tw:grid tw:grid-cols-[auto_1fr] tw:gap-x-3 tw:gap-y-1">
@@ -657,6 +670,7 @@ function GiftActions({
   gift,
   busy,
   running,
+  preview,
   onSend,
   onEdit,
   onDiscard,
@@ -666,6 +680,7 @@ function GiftActions({
   gift: AdminAuthorGift;
   busy: boolean;
   running: boolean;
+  preview: EmailPreviewAnswer | null;
   onSend: () => void;
   onEdit: () => void;
   onDiscard: () => void;
@@ -680,6 +695,10 @@ function GiftActions({
       ? "Send waits for an address: add one with Edit."
       : running
         ? "Send waits for the lookup to finish, so you can review what it found first."
+        : preview === null
+          ? "Send waits until the email above has loaded."
+          : preview.kind === "failed"
+            ? "Send waits until the email above can be shown."
         : null;
   if (!canSend) return null;
   return (
@@ -793,6 +812,10 @@ function GiftCard({
   const [said, setSaid] = useState<string | null>(null);
   /* The inline *Delete for good?* on a discarded gift's line (plan 261024f § D1). */
   const [deleting, setDeleting] = useState(false);
+  /* Incremented for Try again and whenever Send opens its confirmation. The
+     latter asks the server again for mutable audience/title inputs, and the
+     final Send waits until that fresh email has actually been shown. */
+  const [previewRefresh, setPreviewRefresh] = useState(0);
   /* **Whether a finished gift is open** (plan 261020ab, P1-03 and P2-02 of its
      review): what the person chose with Show or Hide in this pointing context.
      A fresh pointer supersedes an earlier Hide, but Hide still works after the
@@ -807,6 +830,8 @@ function GiftCard({
   const running = gift.lookups.some((l) => lookupPending(l, now));
   const title = gift.starter.title;
   const shown = canSend && confirming ? confirming : gift;
+  const preview = useEmailPreview(canSend ? shown : null, previewRefresh);
+  const previewReady = preview?.kind === "preview";
   const bodyId = `${authorGiftAnchor(gift.id)}-body`;
 
   /* A gift sent or discarded elsewhere no longer has anything to confirm.
@@ -830,7 +855,7 @@ function GiftCard({
   }
 
   async function sendNow() {
-    if (busy || running || confirming === null || (needsRights && !rights)) return;
+    if (busy || running || confirming === null || !previewReady || (needsRights && !rights)) return;
     setBusy(true);
     setSaid(null);
     const answer = await hooks.send(confirming, { rightsConfirmed: needsRights && rights });
@@ -947,7 +972,7 @@ function GiftCard({
       <div id={bodyId} hidden={!open}>
         <GiftFields gift={shown} withNote={!canSend} />
         {/* The email itself, for a gift that can still be sent (plan 261024f § D2). */}
-        {canSend && <EmailPreview gift={shown} />}
+        {canSend && <EmailPreview answer={preview} retry={() => setPreviewRefresh((n) => n + 1)} />}
 
         {editing && draft ? (
           <DraftEditor
@@ -990,7 +1015,7 @@ function GiftCard({
                 variant="outline"
                 size="sm"
                 className="tone-positive"
-                disabled={busy || running || (needsRights && !rights)}
+                disabled={busy || running || !previewReady || (needsRights && !rights)}
                 onClick={() => void sendNow()}
               >
                 {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${confirming.email}`}
@@ -1005,11 +1030,13 @@ function GiftCard({
             gift={gift}
             busy={busy}
             running={running}
+            preview={preview}
             onSend={() => {
               setRefusal(null);
               /* A fresh confirmation starts unticked: a tick belongs to the one it was given in. */
               setRights(false);
               setConfirming(gift);
+              setPreviewRefresh((n) => n + 1);
             }}
             onEdit={() => {
               setRefusal(null);

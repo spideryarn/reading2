@@ -1050,7 +1050,8 @@ deleted, because its voucher is a billing record
 [marketing-author-gifts.md](marketing-author-gifts.md); the plan, its two reviews and every
 decision are [261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).
 
-**A draft is not a voucher.** It is a row of `author_gifts` (one per article, for good), and it
+**A draft is not a voucher.** It is a row of `author_gifts` (at most one current row per article;
+a permanently deleted discarded draft leaves room for another), and it
 becomes a voucher only on *Send*, through the same `createVoucher` the create form uses, with an id
 minted when the draft was made — so a repeated *Send* is that function's replay and queues one email.
 Until then nothing in `billing_vouchers`, the claim, the entitlement or the email queue can see it.
@@ -1065,7 +1066,7 @@ is how the section reads each lookup's cost from the ledger.
 | `GET /api/admin/author-gifts` | every gift with its derived status (draft, sending, sent, discarded), fields, notes, each field's source lookup, and every lookup with its cost — `private, no-store` |
 | `PATCH /api/admin/author-gifts/:id` | `{ email, recipientName, recipientNote, articles, notes, discarded }`, the voucher's own field rules; once *Send* has started only `notes`. Editing the address or name clears its lookup as the source |
 | `DELETE /api/admin/author-gifts/:id` | a **discarded** gift, deleted with its lookups under its row lock → `200`; a draft, a half-sent or a sent gift `409`, an unknown one `404` (261024f § D1) |
-| `GET /api/admin/author-gifts/:id/email` | the email the gift would send if sent now: `{ from, to, subject, text, audience }`, rendered by `giftMessage` from the draft's fields, `giftAudienceFor` and the starter's revision title, with `[the private link to this article]` where the link goes. It never reads the key (the preview's resolver does not touch `pgShareLinkStore`), and never returns HTML (261024f § D2, R2, R3) |
+| `GET /api/admin/author-gifts/:id/email` | the email the gift would send if sent now: `{ from, to, subject, text, audience }`, rendered by `giftMessage` from the draft's fields, `giftAudienceFor` and the starter's revision title, with `[the private link to this article]` where the link goes. It never reads the key (the title comes from `loadArticleIdentity`, as Send takes it; nothing here touches `pgShareLinkStore`), never returns HTML, and refuses an absent, replaced or unpublished starter as Send does (261024f § D2, R2, R3) |
 | `GET`, `PUT /api/admin/author-gift-guidance` | Greg's guidance for the lookup's suggested message: `{ guidance, builtIn, fixedPrompt, updatedAt }`; `PUT { guidance: string \| null }` adds a row to `author_gift_guidance` (insert-only, newest wins; null is *the built-in text*), at most 4,000 characters (261024f § D4, R5) |
 | `POST /api/admin/author-gifts/:id/send` | freezes the draft under an attempt token, then `createVoucher`; the gift email is scheduled after a create *or* a replay, and a starter that cannot be linked now unfreezes only that attempt (409). The page sends `{ expected: { email, recipientName, recipientNote, articles } }`, what its confirmation showed, and a gift that no longer matches (an agent edited it meanwhile) is a 409 with nothing made (261010i). `rightsConfirmed: true` is the confirmation's tick, shown when the list says `starter.linkable: false`: only a fresh create's `link-off`, never a replay, may make the article's private link before retrying `createVoucher`. The link write locks the slug and rechecks the gift's article id, attempt and absent voucher; a slug since taken by another is `absent` (261010r) |
 
@@ -1083,8 +1084,9 @@ stranger's article; that residual risk is accepted and written up in the plan's 
 *"I'm confused about what is notes and what's an actual email that it would send"*. A draft's card
 draws *The email, if you sent it now* (from, to, subject, and the plain-text body, from
 `GET …/email` above), with *Edit the email* opening the editor whose boxes say where each lands;
-the Send confirmation asks to send *the email above*; the notes are titled *Private notes — never
-sent*. **The lookup's suggested message is offered, never applied**: it is kept on the lookup's row
+the Send confirmation asks the server for a fresh copy and waits until *the email above* is shown;
+the notes are titled *Private notes — never sent*. **The lookup's suggested message is offered,
+never applied**: it is kept on the lookup's row
 (`author_lookups.suggested_message`) and shown under the email with *Use as your message*, which
 opens the editor with it in the message box for Greg to edit and save. So model prose reaches an
 email only through his own Save, and D7's acceptance is unchanged (261024f, R1).

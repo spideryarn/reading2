@@ -122,6 +122,7 @@ let sendAnswer: Answer;
 let lookupAnswer: Answer;
 let highPowerAnswer: Answer;
 let heldWrite: Promise<Response> | null;
+let heldPreview: Promise<Response> | null;
 let previewAnswer: (g: AdminAuthorGift) => Answer;
 
 beforeEach(() => {
@@ -133,6 +134,7 @@ beforeEach(() => {
   lookupAnswer = { status: 202, body: { lookupId: LOOKUP } };
   highPowerAnswer = { status: 200, body: { highPower: true, queued: 0 } };
   heldWrite = null;
+  heldPreview = null;
   previewAnswer = (g) => ({
     status: 200,
     body: {
@@ -157,6 +159,7 @@ beforeEach(() => {
     if (method === "POST" && url === "/api/admin/author-gifts") return json(ensureAnswer);
     /* The email preview (plan 261024f § D2): the server's renderer stood in for by the fields it reads. */
     if (method === "GET" && url.endsWith("/email")) {
+      if (heldPreview !== null) return heldPreview;
       const shown = giftsAnswer().find((g) => url === `/api/admin/author-gifts/${g.id}/email`);
       if (!shown) return json({ status: 404, body: { error: "There is no such author gift." } });
       return json(previewAnswer(shown));
@@ -870,6 +873,97 @@ describe("Author gifts", () => {
     /* The notes say what they are. */
     expect(card(DRAFT)?.textContent).toContain("Private notes");
     expect(card(DRAFT)?.textContent).toContain("never sent");
+  });
+
+  it("hides an old email while a changed gift's preview loads, and does not let that unreviewed gift be sent", async () => {
+    let shown = gift({ email: "ann@example.test", recipientNote: "Old message." });
+    giftsAnswer = () => [shown];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("Old message.");
+
+    let release: ((response: Response) => void) | undefined;
+    heldPreview = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    shown = gift({
+      email: "ann@example.test",
+      recipientNote: "New message.",
+      updatedAt: "2026-10-09T10:01:00Z",
+    });
+    await act(async () => button(section(), "Refresh")?.click());
+    await settle();
+
+    expect(c?.querySelector("[data-email-body]")).toBeNull();
+    expect(c?.textContent).toContain("Loading the email…");
+    expect((button(c, "Send") as HTMLButtonElement | undefined)?.disabled).toBe(true);
+
+    release?.(
+      new Response(
+        JSON.stringify({
+          from: "Spideryarn <hello@spideryarn.com>",
+          to: "ann@example.test",
+          subject: "A gift of 20 free articles on Spideryarn",
+          text: "New message.",
+          audience: "invite",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    heldPreview = null;
+    await settle();
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("New message.");
+    expect(c?.querySelector("[data-email-body]")?.textContent).not.toContain("Old message.");
+    expect((button(c, "Send") as HTMLButtonElement | undefined)?.disabled).toBe(false);
+  });
+
+  it("keeps the email through a reload that changed nothing, as the list's poll does", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test", recipientNote: "Steady." })];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("Steady.");
+
+    /* Any new request for the email would hang here and show the loading line. */
+    heldPreview = new Promise<Response>(() => {});
+    await act(async () => button(section(), "Refresh")?.click());
+    await settle();
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("Steady.");
+    expect((button(c, "Send") as HTMLButtonElement | undefined)?.disabled).toBe(false);
+  });
+
+  it("refreshes the preview for the confirmation and waits for it before the final Send", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test", recipientNote: "Ready." })];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+
+    let release: ((response: Response) => void) | undefined;
+    heldPreview = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    await act(async () => button(c, "Send")?.click());
+    await settle();
+    expect(c?.textContent).toContain("Loading the email…");
+    expect((button(c, "Send to ann@example.test") as HTMLButtonElement | undefined)?.disabled).toBe(true);
+    expect(writes()).toEqual([]);
+
+    release?.(
+      new Response(
+        JSON.stringify({
+          from: "Spideryarn <hello@spideryarn.com>",
+          to: "ann@example.test",
+          subject: "A gift of 20 free articles on Spideryarn",
+          text: "Ready.",
+          audience: "invite",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    heldPreview = null;
+    await settle();
+    expect((button(c, "Send to ann@example.test") as HTMLButtonElement | undefined)?.disabled).toBe(false);
   });
 
   /* Plan 261024f, R1: the lookup's message is offered, never applied. */

@@ -74,10 +74,12 @@ so they can use chat and every mode on it as its owner. It moves by itself only 
 of his own notes or chats on it; otherwise he moves it on `/admin/articles`
 ([261011n](../plans/261011n-author-gift-link-and-article-ownership-transfer.md)).
 
-**Since 2026-10-24 each draft shows the email it would send**, word for word, from whom and to
-whom, with the lookup's suggested message offered beside it rather than put in it; the way the
-lookup writes that message is Greg's to edit on the Drafts tab; and a discarded draft can be
-deleted for good
+**Since 2026-10-24 each draft shows the email it would send now**, from whom and to whom, with the
+private article address represented by a placeholder. The confirmation fetches it afresh before
+Send; the recipient's account status and the article's title are live inputs and can still change
+before the email is queued. The lookup's suggested message is offered beside it rather than put in
+it; the way the lookup writes that message is Greg's to edit on the Drafts tab; and a discarded
+draft can be deleted for good
 ([261024f](../plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md)).
 
 **Since 2026-10-21 every gifted article gets its main modes**, so the author opens one that is ready,

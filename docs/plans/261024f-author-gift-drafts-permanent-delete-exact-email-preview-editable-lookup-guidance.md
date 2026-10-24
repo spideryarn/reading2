@@ -212,3 +212,26 @@ findings are taken:
   the lookup's 1,200-character cap); *Use as your message* puts it in the editor, where an
   over-long one is shown with its count and refused by the server's own rule on Save rather than
   cut silently.
+
+## Code review (GPT Sol), and what was kept
+
+[261024f-code-review-sol.md](261024f-code-review-sol.md). Sol fixed what it found in place; each
+fix was read and the gates re-run.
+
+- **Kept: a stale or failed preview could be sent.** The preview is keyed on the gift's content
+  (`id`, `updatedAt`, the starter's title) and a refresh counter, so an edit hides the old email at
+  once; opening Send's confirmation fetches it again, and the final Send waits for it. Changed
+  after review: Sol also keyed on the gift *object*, which the list's poll replaces every few
+  seconds while a lookup runs, so every card's email would have reloaded and flashed on each poll.
+  Keyed on content only, with a test that a no-change reload keeps the email (red against the
+  object key).
+- **Kept: the preview could name a different article** once the frozen slug named another one.
+  The preview now confirms the gift's `article_id`, slug and owner name the same article and
+  refuses an absent or unpublished one as Send does (409). Changed after review: Sol computed the
+  title in its own SQL, a second copy of `loadArticleIdentity`'s rule; the title is read through
+  `loadArticleIdentity` again, as Send reads it.
+- **Kept: a guidance Save could lose a race with a lookup's claim.** The guidance is now chosen in
+  the claim's own `UPDATE`. Changed after review: one `claimLookup` returning
+  `claimed | not-claimed` with its guidance, rather than two claim functions.
+- **Kept:** the docs no longer say "word for word" or "one per article, for good", and the delete
+  test proves the lookup's spend survives in `ai_calls`.

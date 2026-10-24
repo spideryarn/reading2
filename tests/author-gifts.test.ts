@@ -996,6 +996,11 @@ describe("DELETE /api/admin/author-gifts/:id", () => {
   it("deletes a discarded gift with its lookups, and leaves the article and the spend", async () => {
     const mine = await seed("delete");
     const { id, lookupId } = await ensured(mine);
+    const run = randomUUID();
+    runIds.push(run);
+    expect((await claimLookup(lookupId, run)).kind).toBe("claimed");
+    const spend = aiCall(run);
+    await getDb().insert(aiCalls).values(aiCallInsertValues(spend, null));
     await settle(lookupId);
     expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { discarded: true })).status).toBe(200);
 
@@ -1005,6 +1010,8 @@ describe("DELETE /api/admin/author-gifts/:id", () => {
     const gifts = await pool.query("select id from spideryarn.author_gifts where id = $1", [id]);
     expect(gifts.rows).toEqual([]);
     expect(await lookupsOf(id)).toEqual([]);
+    const ledger = await pool.query("select id from spideryarn.ai_calls where id = $1", [spend.id]);
+    expect(ledger.rows).toEqual([{ id: spend.id }]);
     const article = await pool.query("select id from spideryarn.articles where id = $1", [mine.id]);
     expect(article.rows).toHaveLength(1);
 
@@ -1111,6 +1118,22 @@ describe("GET /api/admin/author-gifts/:id/email", () => {
     expect(String(reply.body.text)).not.toContain("Dear ");
     expect((await drive("GET", `/api/admin/author-gifts/${randomUUID()}/email`, null)).status).toBe(404);
     expect((await drive("GET", "/api/admin/author-gifts/nope/email", null)).status).toBe(400);
+  });
+
+  it("refuses a starter whose frozen slug no longer names the gift's article, as Send does", async () => {
+    const mine = await seed("preview-moved", { linkOn: true });
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("preview-moved") },
+    });
+    const id = String(made.body.id);
+    await pool.query("update spideryarn.articles set slug = $2 where id = $1", [mine.id, `${mine.slug}-renamed`]);
+
+    const preview = await drive("GET", `/api/admin/author-gifts/${id}/email`, null);
+    expect(preview.status).toBe(400);
+    expect(String(preview.body.error)).toMatch(/not one of yours/i);
   });
 });
 
@@ -1320,12 +1343,12 @@ describe("the lookup's store transactions", () => {
     const mine = await seed("claim");
     const { lookupId } = await ensured(mine);
     const run = randomUUID();
-    expect(await claimLookup(lookupId, run)).toBe(true);
-    expect(await claimLookup(lookupId, randomUUID())).toBe(false);
+    expect((await claimLookup(lookupId, run)).kind).toBe("claimed");
+    expect((await claimLookup(lookupId, randomUUID())).kind).toBe("not-claimed");
     const [row] = (await pool.query("select run_id from spideryarn.author_lookups where id = $1", [lookupId])).rows;
     expect(row).toEqual({ run_id: run });
     await settle(lookupId);
-    expect(await claimLookup(lookupId, randomUUID())).toBe(false);
+    expect((await claimLookup(lookupId, randomUUID())).kind).toBe("not-claimed");
   });
 
   it("fills only the empty fields, records itself as their source, and appends to the notes", async () => {
@@ -1461,7 +1484,7 @@ describe("GET /api/admin/author-gifts", () => {
     const { id, lookupId } = await ensured(mine);
     const run = randomUUID();
     runIds.push(run);
-    expect(await claimLookup(lookupId, run)).toBe(true);
+    expect((await claimLookup(lookupId, run)).kind).toBe("claimed");
     for (const over of [
       { creditsUsedNanos: 1500 },
       { creditsUsedNanos: 2500 },
