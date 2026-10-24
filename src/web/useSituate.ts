@@ -65,7 +65,7 @@ export interface UseSituate extends Omit<SituateRead, "reload" | "fresh"> {
   failed: StepFailure | null;
   /** `StepJob.stalled`: this tab can see the job and cannot move it. */
   stalled: boolean;
-  /** `StepJob.starting`: the POST has gone and the queue has not seen it yet. */
+  /** The POST is not in the queue yet, or a finished job's fresh read has not landed. */
   starting: boolean;
   /**
    * **Search the literature if nobody has** — unforced, for *Search the
@@ -159,8 +159,21 @@ export function useSituate(slug: string): UseSituate {
   const read = useSituateRead(slug);
   const { refresh } = read;
 
-  /* `refresh`, not `reload`: a finished job has just written a new dossier. */
-  const queue = useStepJob(slug, "situate", refresh, "watches-queue");
+  /* `refresh`, not `reload`: a finished job has just written a new dossier.
+     Between the job leaving the queue and that read landing, the section is
+     still working: without `landing` it drew the before-run press for a beat
+     (stage 4's browser run). Cleared however the read ends. */
+  /* Key the wait to both this read generation and this completion. The hook
+     instance survives an in-place slug change, including A -> B -> A, and an
+     old read may settle after a new one's; neither fact belongs to the visit
+     now on screen. `refresh` changes identity when the read re-keys. */
+  const [landing, setLanding] = useState<{ read: SituateRead["refresh"] } | null>(null);
+  const finished = useCallback(() => {
+    const mine = { read: refresh };
+    setLanding(mine);
+    void refresh().finally(() => setLanding((current) => (current === mine ? null : current)));
+  }, [refresh]);
+  const queue = useStepJob(slug, "situate", finished, "watches-queue");
 
   const ensure = useCallback(async () => {
     await queue.start({});
@@ -191,7 +204,7 @@ export function useSituate(slug: string): UseSituate {
     job: queue.job,
     failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
-    starting: queue.starting,
+    starting: queue.starting || landing?.read === refresh,
     rewriting: hold.rewriting,
     refresh,
     retryRead: read.retryRead,
