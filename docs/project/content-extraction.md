@@ -885,6 +885,35 @@ Metadata page show it one name at a time (`src/web/AuthorNames.tsx`); a page wit
 keeps its byline as one string. The reasoning, and what a visitor does not get yet, are in
 [../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).
 
+## A web page's publication day, when its markup states none
+
+Readability's `publishedTime` comes from `article:published_time` or JSON-LD `datePublished`, and
+many blogs declare neither. Since 2026-10-24 two more sources follow, both in
+[`src/page-date.ts`](../../src/page-date.ts), both code rather than a model, and each gives a
+whole day or nothing: a day that exists, from 1990 on, and no later than the calendar day at the
+fetch instant in UTC+14 (the earliest place a new day begins).
+
+- **The line printed under the title**, into `Meta.publishedAt` at stage 2. It is read only when
+  the opening starts at the page's `<h1>`. The heading itself, captions, lists, tables and later
+  headings do not count. A line counts only when all of it is a date, with at most *Published* or
+  *Posted on* in front, so *Updated 2 Nov 2025* and *Conference | 2 Nov 2025* are not datelines.
+- **The page's address** (`/2025/11/02/`, a `2025-11-02` segment, or a conventional
+  `2025-11-02-slug`). This is the weakest evidence: a path can be a filing scheme, or the day of
+  the event the piece is about. So
+  it goes back beside `meta` (`ExtractResult.addressDay`), and the step applies it **after the
+  registry below**, only when that left no day and no year.
+
+The markup still wins whenever it states a date.
+
+> Why doesn't this show an estimated publication date? … it should be obvious from the publication
+> slug in the URL, for example, what the publication date is. So that should be part of our import
+> process.
+>
+> — Greg, 2026-10-23 (report `spya-gapqbt`)
+
+There is no model for this, though Greg remembered one; the plan says why not yet:
+[261024a](../plans/261024a-a-web-page-with-no-date-tag-gets-its-publication-date-from-its-dateline-or-its-address.md).
+
 ## The journal and the publication day, from a registry
 
 > It would be great if the metadata page also somehow figured out and listed the publication date.

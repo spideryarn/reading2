@@ -153,6 +153,70 @@ describe("what stage 2 writes", () => {
   });
 });
 
+/* Plan 261024a: a page whose markup states no date, read off the line under
+   its title and then its address. The shape is mariozechner.at's own, the page
+   report spya-gapqbt was filed on: no `article:published_time`, no JSON-LD. */
+describe("a page whose markup states no date", () => {
+  const MARIO = "https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/";
+  const titled = (head: string, dateline: string) => `<!doctype html>
+<html lang="en">
+<head><title>What if you don't need MCP at all?</title><meta property="og:type" content="article">${head}</head>
+<body><main><article>
+<h1 style="margin-top: 0rem;">What if you don't need MCP at all?</h1>
+${dateline}
+<figure><img src="media/header.png"><figcaption>One chonky MCP server</figcaption></figure>
+${prose(8)}
+</article></main></body>
+</html>`;
+  const DATELINE = '<p class="text-xs italic" style="color: var(--dimmed-text-color);">2025-11-02</p>';
+  const extract = (html: string, url: string) => runExtract({ html, url, slug: "s" });
+  const DATED_ADDRESS = "https://example.test/2024/03/14/a-post/";
+
+  it("takes the dateline under the title (the reported page)", async () => {
+    const result = await extract(titled("", DATELINE), MARIO);
+    expect(result.meta.publishedAt).toBe("2025-11-02");
+    /* The address agrees, and is not offered: the dateline settled it. */
+    expect(result.addressDay).toBeUndefined();
+  });
+
+  it("hands the address's day back beside meta, not in it, when there is no dateline", async () => {
+    /* Not in `meta`: the registry gets its turn first (src/page-date.ts § withAddressDay). */
+    const result = await extract(titled("", ""), DATED_ADDRESS);
+    expect("publishedAt" in result.meta).toBe(false);
+    expect(result.addressDay).toBe("2024-03-14");
+  });
+
+  it("prefers the dateline to the address when they disagree", async () => {
+    const result = await extract(titled("", DATELINE), DATED_ADDRESS);
+    expect(result.meta.publishedAt).toBe("2025-11-02");
+    expect(result.addressDay).toBeUndefined();
+  });
+
+  it("keeps the markup's date over both", async () => {
+    const head = '<meta property="article:published_time" content="2025-11-03T08:00:00+01:00">';
+    const result = await extract(titled(head, DATELINE), DATED_ADDRESS);
+    expect(result.meta.publishedAt).toBe("2025-11-03T08:00:00+01:00");
+    expect(result.addressDay).toBeUndefined();
+  });
+
+  it("reads no dateline off a page with no <h1>", async () => {
+    const headless = titled("", DATELINE).replace(/<h1[^>]*>.*?<\/h1>/u, "");
+    expect(headless).not.toContain("<h1");
+    expect("publishedAt" in (await extract(headless, SOURCE)).meta).toBe(false);
+  });
+
+  it("does not mistake a date-only figure caption for a dateline", async () => {
+    const caption = "<figure><img src=\"event.png\"><figcaption>2025-11-02</figcaption></figure>";
+    expect("publishedAt" in (await extract(titled("", caption), SOURCE)).meta).toBe(false);
+  });
+
+  it("still states nothing with no dateline at an undated address", async () => {
+    const result = await extract(titled("", ""), SOURCE);
+    expect("publishedAt" in result.meta).toBe(false);
+    expect("addressDay" in result).toBe(false);
+  });
+});
+
 describe("the date in the fingerprint", () => {
   const BLOCKS: BlockFingerprint[] = [{ id: "spya-aaaaaa", text: "One paragraph." }];
   const TREE = {
