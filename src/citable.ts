@@ -89,6 +89,27 @@ const OPAQUE = new Set(["link", "linkReference", "image", "imageReference"]);
 export const MAX_BLOCK_DEPTH = 12;
 
 /**
+ * **A run of ids the renderer draws together** — a bracket of nothing but ids,
+ * or a bare run. Its shape, and the two bugs that bought it, are in
+ * src/web/citations.ts § `splitCitations`, which uses this; it is here so the
+ * server's counters can see the same runs (plan 261024u: an id the renderer
+ * cannot attribute makes it leave its whole run as text).
+ */
+export const CITATION_RUN =
+  /\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]|spya-[a-z0-9]{6}(?:[,;]?\s+spya-[a-z0-9]{6})*/g;
+
+/**
+ * The id-shaped strings of each run in `answer`'s citable text, run by run.
+ *
+ * One flat string where the renderer sees text nodes, so two runs a code span
+ * or a link separates can read here as one. It matters only to a run holding
+ * an id the renderer cannot attribute, which takes an id collision.
+ */
+export function citationRuns(answer: string): string[][] {
+  return [...citableText(answer).matchAll(CITATION_RUN)].map((m) => m[0].match(/spya-[a-z0-9]{6}/g) ?? []);
+}
+
+/**
  * The answer with everything uncitable blanked, character for character.
  *
  * **Spaces rather than deletion**, so every offset in the string is unchanged

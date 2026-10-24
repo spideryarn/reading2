@@ -34,9 +34,16 @@ type Props = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "title"> & {
      token. The thread page now writes on arrival, so it went with its caller.
      If something needs to know about the *navigation* rather than the *click*
      again, 260906b § Stage 2 is the design. */
+  /**
+   * `false` to leave the page where it is: a link that changes only what a
+   * band shows on the page the reader is already on, such as an answer's link
+   * to another of their conversations (ThreadRef.tsx), where the article must
+   * not jump to the top. `navigate`'s own option.
+   */
+  scroll?: boolean;
 };
 
-export function Link({ href, onClick, ...rest }: Props) {
+export function Link({ href, onClick, scroll, ...rest }: Props) {
   function handle(event: MouseEvent<HTMLAnchorElement>) {
     onClick?.(event);
     // Every one of these means the reader asked for something other than
@@ -47,7 +54,7 @@ export function Link({ href, onClick, ...rest }: Props) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (rest.target && rest.target !== "_self") return;
     event.preventDefault();
-    navigate(href);
+    navigate(href, scroll === false ? { scroll: false } : {});
   }
   return <a href={href} onClick={handle} {...rest} />;
 }
