@@ -1,0 +1,14 @@
+1. **High — a faded term also fades a plain comment’s underline.** Comment and term marks merge into one `<mark>`. `mark.term` supplies the border colour, while `mark.cmt.term` restores only solid/1px, not the colour. Late occurrences would therefore make a reader’s clickable comment nearly invisible, contrary to the plan’s “unchanged” claim. Preserve the comment colour explicitly and add an overlap test. [annotations.css](/var/tmp/spideryarn-worktrees/fbhtsjmf-glossary-underline-fade/src/web/styles/annotations.css:142) [plan](/var/tmp/spideryarn-worktrees/fbhtsjmf-glossary-underline-fade/docs/plans/261024s-a-glossary-underline-fades-with-each-repeat-of-its-term.md:46)
+
+2. **Medium — masthead-echo blocks still consume counts.** `matterStretches` deliberately removes echo rows, but those rows remain in `article.blocks`; their masthead copy has no term mark/card. Excluding only matter-stretch IDs lets an unmarked title occurrence fade the first marked body occurrence. Union `echo` into the excluded IDs. [matter-view.ts](/var/tmp/spideryarn-worktrees/fbhtsjmf-glossary-underline-fade/src/web/matter-view.ts:80) [TableView.tsx](/var/tmp/spideryarn-worktrees/fbhtsjmf-glossary-underline-fade/src/web/TableView.tsx:786)
+
+3. **Medium — the test plan misses important contracts.**
+
+   - The proposed CSS breaks the existing `quote-fill.test.ts` parser; the targeted run failed 1/47 because it expects literal `70%`. [quote-fill.test.ts](/var/tmp/spideryarn-worktrees/fbhtsjmf-glossary-underline-fade/tests/quote-fill.test.ts:205)
+   - One occurrence per block does not prove the rejected per-block behavior. Test two occurrences—canonical and alias—in one block, then verify the next block is occurrence three.
+   - Add a `TableView` test proving stretch IDs are flattened, passed through, and included in memo dependencies.
+   - Add a browser computed-style check for n=1/4/8 and hover/pressed restoration; the planned regex could pass while the CSS silently paints nothing.
+
+4. **Low — one rationale claim is false.** The n=3→4 drop is `0.771→0.500`, or `0.271`, not “at most a quarter.” The function itself is otherwise a good fit for the requested plateau and five-to-ten-occurrence fade. [plan](/var/tmp/spideryarn-worktrees/fbhtsjmf-glossary-underline-fade/docs/plans/261024s-a-glossary-underline-fades-with-each-repeat-of-its-term.md:39)
+
+No additional rendering path needs changing: all reading modes and visitors share `TableView`; exports and model inputs do not render these marks; `/design`’s full-strength specimen remains a valid first occurrence. Classification-based matter skipping is preferable to reacting to open/closed state, which would renumber the body. The `calc()` percentage inside `color-mix()` is valid and already has an equivalent precedent in `logo-animations.css`.
