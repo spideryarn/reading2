@@ -412,6 +412,7 @@ let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
 let refuseNextSend = false;
+let conflictCiteCheckId: string | null = null;
 /** When set, the summaries are this list and not the server's: a re-read that has not caught up yet. */
 let frozenSummaries: ChatThread[] | null = null;
 let bibliographyMayReply: Promise<void> | null = null;
@@ -489,6 +490,10 @@ function reply(url: string, method: string, body: unknown): Response {
       refuseNextSend = false;
       return json({ error: "Send refused for this test" }, 400);
     }
+    const sent = body as { origin?: ThreadOrigin };
+    if (conflictCiteCheckId && sent.origin?.mode === "cite-check") {
+      return json({ error: "A chat already exists.", threadId: conflictCiteCheckId }, 409);
+    }
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
   }
   if (method === "POST") return new Response(null, { status: 204 });
@@ -525,6 +530,7 @@ beforeEach(() => {
   nextAnswer = "";
   minted = 0;
   refuseNextSend = false;
+  conflictCiteCheckId = null;
   frozenSummaries = null;
   bibliographyMayReply = null;
   who.set(null);
@@ -1064,6 +1070,24 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
     await act(async () => button.click());
     await until(() => param("thread") === "spya-srvx35" && dialog() !== null, "the earlier check");
     expect(chatPosts(), "no new question").toHaveLength(0);
+  });
+
+  it("Does it say that? adopts a check another tab created after this tab's summary read", async () => {
+    who.set(OWNER);
+    const existing = startedFrom(
+      "spya-srvx36",
+      { mode: "cite-check", itemId: WORK, blockId: "spya-bbbbbb", quote: WORK_TITLE },
+      "The other tab's answer.",
+    );
+    server.push(existing);
+    frozenSummaries = server.filter((thread) => thread.id !== existing.id);
+    conflictCiteCheckId = existing.id;
+    await open("?mode=sources");
+    const button = await card(".prose mark.cite", ".prose-card-cite-check");
+    await act(async () => button.click());
+    await until(() => param("thread") === existing.id, "the existing check's id after the 409");
+    await until(() => (dialog()?.textContent ?? "").includes("The other tab's answer."), "the existing check after the 409");
+    expect(chatPosts(), "the deliberate press made only its one attempt").toHaveLength(1);
   });
 
   /* GPT Sol's F1 on plan 261010s: still in Chat, the summaries have not been

@@ -1218,10 +1218,30 @@ export function Reader({
       if (taken.target === "chat" && taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
       const origin = taken.target === "chat" ? taken.origin : undefined;
       if (origin) {
+        const previous = handedItemChats.current.find((h) => sameOrigin(h.origin, origin));
         handedItemChats.current = [
           ...handedItemChats.current.filter((h) => !sameOrigin(h.origin, origin)),
           { origin, id },
         ];
+        /* A cite-check's card reads chatAnchors directly, unlike the item
+           buttons' short-lived bridge above. Tell it about a manual press as
+           soon as Chat names the thread, including a server id correction. */
+        if (origin.mode === "cite-check") {
+          if (previous && previous.id !== id) owner?.chatAnchors.rename(previous.id, id);
+          else if (!previous) {
+            const now = new Date().toISOString();
+            owner?.chatAnchors.add({
+              id,
+              title: taken.question.slice(0, 60),
+              createdAt: now,
+              updatedAt: now,
+              anchor: { blockId: origin.blockId },
+              origin,
+              kind: "chat",
+              turns: 1,
+            });
+          }
+        }
       }
     },
     [owner, slug],
@@ -1233,7 +1253,8 @@ export function Reader({
     handedItemChats.current = handedItemChats.current.filter(
       (handed) => handed.id !== id || !sameOrigin(handed.origin, origin),
     );
-  }, [slug]);
+    if (origin.mode === "cite-check") owner?.chatAnchors.drop(id);
+  }, [owner, slug]);
   useEffect(() => {
     if (handedItemChatsSlug.current !== slug) handedItemChats.current = [];
     handedItemChatsSlug.current = slug;
@@ -2880,8 +2901,9 @@ export function Reader({
         return;
       }
       if ("wait" in decided) {
-        void decided.wait.then((id) => {
-          if (id) openThreadInChat(id);
+        void decided.wait.then((after) => {
+          if ("open" in after) openThreadInChat(after.open);
+          else if ("start" in after) startCiteCheckChat(work, blockId);
         });
         return;
       }
@@ -2900,9 +2922,15 @@ export function Reader({
   const citeCheckSenders = useMemo<CiteCheckSenders | null>(
     () =>
       owner && viewAsNonce() === null
-        ? { slug, summaries: chatSummaries, summariesLoaded: chatSummariesLoaded, onContinue: openThreadInChat }
+        ? {
+            slug,
+            summaries: chatSummaries,
+            summariesLoaded: chatSummariesLoaded,
+            onContinue: openThreadInChat,
+            onRefresh: () => refreshChats?.(),
+          }
         : null,
-    [owner, slug, chatSummaries, chatSummariesLoaded, openThreadInChat],
+    [owner, slug, chatSummaries, chatSummariesLoaded, openThreadInChat, refreshChats],
   );
   const askEntry = useCallback(
     (entry: Pick<GlossaryEntry, "id" | "name">) => {

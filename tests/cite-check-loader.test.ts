@@ -13,6 +13,7 @@ const server = vi.hoisted(() => ({
   posts: 0,
   /** The next POST's answer; `null` holds the request open. */
   reply: null as null | { status: number; body: unknown },
+  respond: null as ((response: Response) => void) | null,
 }));
 
 vi.mock("../src/web/lib/api.js", async (importOriginal) => {
@@ -22,7 +23,11 @@ vi.mock("../src/web/lib/api.js", async (importOriginal) => {
     apiFetch: (_url: string, init?: RequestInit) => {
       if ((init?.method ?? "GET") === "GET") return Promise.resolve(Response.json({ threads: [] }));
       server.posts++;
-      if (server.reply === null) return new Promise<Response>(() => {});
+      if (server.reply === null) {
+        return new Promise<Response>((resolve) => {
+          server.respond = resolve;
+        });
+      }
       return Promise.resolve(
         new Response(JSON.stringify(server.reply.body), {
           status: server.reply.status,
@@ -45,7 +50,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 const { runTurn } = await import("../src/web/chat/effects.js");
 type TurnSink = import("../src/web/chat/effects.js").TurnSink;
-const { forgetCiteChecks, startCiteCheck, MAX_IN_FLIGHT } = await import("../src/web/cite-check.js");
+const { forgetCiteChecks, pressCiteCheck, startCiteCheck, MAX_IN_FLIGHT } = await import("../src/web/cite-check.js");
 
 const THREAD = "spya-th7ead";
 
@@ -71,6 +76,7 @@ function recorder() {
 beforeEach(() => {
   server.posts = 0;
   server.reply = null;
+  server.respond = null;
   forgetCiteChecks();
 });
 
@@ -131,5 +137,37 @@ describe("the loader", () => {
     startCiteCheck(key("spya-w00001"), work("spya-w00001"), { auto: true });
     await settle();
     expect(server.posts).toBe(1);
+  });
+
+  it("hands a press the thread named by a racing 409", async () => {
+    const k = key("spya-w00001");
+    startCiteCheck(k, work(k.workId), { auto: true });
+    await settle();
+    const decision = pressCiteCheck(k);
+    expect("wait" in decision).toBe(true);
+    if (!("wait" in decision)) throw new Error("the press did not wait");
+    server.respond?.(
+      new Response(JSON.stringify({ error: "Exists.", threadId: THREAD }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await expect(decision.wait).resolves.toEqual({ open: THREAD });
+  });
+
+  it("hands a capped pre-begin automatic start back to the deliberate press", async () => {
+    const k = key("spya-w00001");
+    startCiteCheck(k, work(k.workId), { auto: true });
+    await settle();
+    const decision = pressCiteCheck(k);
+    expect("wait" in decision).toBe(true);
+    if (!("wait" in decision)) throw new Error("the press did not wait");
+    server.respond?.(
+      new Response(JSON.stringify({ error: "Capped.", reason: "hour" }), {
+        status: 429,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await expect(decision.wait).resolves.toEqual({ start: true });
   });
 });

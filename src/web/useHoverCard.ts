@@ -193,11 +193,14 @@ export interface HoverTarget<T> {
   data: T;
   /**
    * **A finger opened it**: a tap's reveal, not a pointer's rest or a
-   * keyboard's focus. Fixed when the card opens; a pointer arriving later
-   * does not change it. A citation's card starts *Does it say that?* by
+   * keyboard's focus. A mouse that later rests on the same target takes the
+   * card over and clears this; from then on the citation has received the
+   * mouse rest C8 requires. A citation's card starts *Does it say that?* by
    * itself only when this is false (plan 261024m, C8).
    */
   byTouch: boolean;
+  /** The pointer/focus is still on this target or its card; false during close/swap grace. */
+  engaged: boolean;
 }
 
 export interface UseHoverCard<T> {
@@ -414,6 +417,7 @@ export function useHoverCard<T>({
     const close = () => {
       disarm();
       clearTimeout(closeTimer);
+      setShown((was) => (was?.engaged ? { ...was, engaged: false } : was));
       if (!currentRef.current) return; // nothing open — the disarm above was the whole job
       closeTimer = setTimeout(shut, HOVER_DELAY.close);
     };
@@ -432,6 +436,9 @@ export function useHoverCard<T>({
         // over from the finger that may have opened it — otherwise a scroll
         // would dismiss a card a pointer is resting on. GPT Sol, 2026-08-27.
         byTouchRef.current = false;
+        setShown((was) =>
+          was?.el === el && (was.byTouch || !was.engaged) ? { ...was, byTouch: false, engaged: true } : was,
+        );
         disarm();
         clearTimeout(closeTimer);
         return;
@@ -439,6 +446,7 @@ export function useHoverCard<T>({
       if (el === pending) return; // its timer is already running
       disarm();
       clearTimeout(closeTimer);
+      setShown((was) => (was?.engaged ? { ...was, engaged: false } : was));
       pending = el;
       openTimer = setTimeout(() => {
         pending = null;
@@ -450,7 +458,7 @@ export function useHoverCard<T>({
         // A pointer opened this one, whatever opened the last one.
         byTouchRef.current = false;
         refs.setPositionReference(el);
-        setShown({ el, data, byTouch: false });
+        setShown({ el, data, byTouch: false, engaged: true });
       }, wait);
     };
 
@@ -475,6 +483,7 @@ export function useHoverCard<T>({
       if (target?.closest?.(`.${CARD_CLASS}`)) {
         disarm();
         clearTimeout(closeTimer);
+        setShown((was) => (was && !was.engaged ? { ...was, engaged: true } : was));
         return;
       }
       const hit = target?.closest?.(selector) as HTMLElement | null;
@@ -708,7 +717,7 @@ export function useHoverCard<T>({
            "nothing" — two glossary terms overlapping one phrase have no order
            worth committing to. So the consumer closes the card if it acts.
            Raised by a GPT Sol review, 2026-08-27. */
-        commitRef.current?.({ el: hit, data, byTouch: true });
+        commitRef.current?.({ el: hit, data, byTouch: true, engaged: true });
         return;
       }
       reveal(hit, data);
@@ -723,7 +732,7 @@ export function useHoverCard<T>({
       currentRef.current = hit;
       byTouchRef.current = true;
       refs.setPositionReference(hit);
-      setShown({ el: hit, data, byTouch: true });
+      setShown({ el: hit, data, byTouch: true, engaged: true });
     };
 
     /**
@@ -881,7 +890,7 @@ export function useHoverCard<T>({
          reader was looking at that card when they pressed. */
       if (press && hit === press.open) {
         // The consumer closes the card if it acts — see `onCommit`.
-        commitRef.current?.({ el: hit, data, byTouch: true });
+        commitRef.current?.({ el: hit, data, byTouch: true, engaged: true });
         return;
       }
       reveal(hit, data);
@@ -991,6 +1000,7 @@ export function useHoverCard<T>({
       if ((event.target as Element | null)?.closest?.(`.${CARD_CLASS}`)) {
         disarm();
         clearTimeout(closeTimer);
+        setShown((was) => (was && !was.engaged ? { ...was, engaged: true } : was));
         return;
       }
       const hit = (event.target as Element | null)?.closest?.(selector) as HTMLElement | null;

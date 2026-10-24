@@ -32,6 +32,7 @@ const server = vi.hoisted(() => ({
   threads: [] as unknown[],
   posts: [] as Record<string, unknown>[],
   gets: 0,
+  failGets: 0,
   /** `"stream"`, or a refusal to answer with. */
   reply: "stream" as "stream" | { status: number; body: unknown },
   push: null as ((event: string, data: unknown) => void) | null,
@@ -46,6 +47,10 @@ vi.mock("../src/web/lib/api.js", async (importOriginal) => {
       if (url !== `/api/chat/${SLUG}`) throw new Error(`the test made an unexpected request: ${url}`);
       if ((init?.method ?? "GET") === "GET") {
         server.gets++;
+        if (server.failGets > 0) {
+          server.failGets--;
+          return Response.json({ error: "Temporarily unavailable." }, { status: 503 });
+        }
         return Response.json({ threads: server.threads });
       }
       server.posts.push(JSON.parse(String(init?.body)));
@@ -151,6 +156,7 @@ const WORKS = [TULVING, KAPLAN, HOFFMANN];
 
 const continued: string[] = [];
 const pressed: [string, BlockId][] = [];
+const refreshed: string[] = [];
 /** What the harness's *Does it say that?* press decided, as Reader's `checkCitedWork` would. */
 const decisions: unknown[] = [];
 
@@ -216,6 +222,7 @@ const senders = (summaries: ThreadSummary[] = [], loaded = true): CiteCheckSende
   summaries,
   summariesLoaded: loaded,
   onContinue: (id) => void continued.push(id),
+  onRefresh: () => void refreshed.push("refresh"),
 });
 
 let host: HTMLDivElement;
@@ -330,12 +337,14 @@ beforeEach(() => {
   server.threads = [];
   server.posts = [];
   server.gets = 0;
+  server.failGets = 0;
   server.reply = "stream";
   server.push = null;
   server.end = null;
   continued.length = 0;
   pressed.length = 0;
   decisions.length = 0;
+  refreshed.length = 0;
   forgetCiteChecks();
   host = document.createElement("div");
   document.body.append(host);
@@ -379,6 +388,17 @@ describe("when the check starts", () => {
     expect(server.posts).toEqual([]);
   });
 
+  it("sends nothing when the pointer leaves in the card's visual close delay", async () => {
+    paint();
+    await hover(tulvingMark());
+    await wait(1999);
+    act(() => pointer("pointerover", document.body));
+    await wait(1);
+    expect(server.posts, "the close hysteresis counted as resting on the citation").toEqual([]);
+    await wait(1000);
+    expect(server.posts).toEqual([]);
+  });
+
   it("sends nothing on a card naming two works", async () => {
     paint();
     await hover(twoWorkMark());
@@ -413,6 +433,15 @@ describe("when the check starts", () => {
     expect(pressButton()).toBeDefined();
     await wait(3000);
     expect(server.posts).toEqual([]);
+  });
+
+  it("starts after a mouse takes over the same card a finger opened", async () => {
+    paint();
+    tap(tulvingMark());
+    expect(card()).not.toBeNull();
+    act(() => pointer("pointerover", tulvingMark()));
+    await wait(2000);
+    expect(server.posts).toHaveLength(1);
   });
 });
 
@@ -473,6 +502,25 @@ describe("while it runs, and after", () => {
     expect(caret()).toBeNull();
   });
 
+  it("drops an off-card finished answer when refreshed summaries say its thread was deleted", async () => {
+    paint();
+    await restOnTulving();
+    await act(async () => server.push?.("begin", { threadId: THREAD, title: "t", messageId: "spya-a00001" }));
+    await leave(tulvingMark());
+    await act(async () => {
+      server.push?.("done", { text: "An answer deleted in Chat." });
+      server.end?.();
+    });
+    await settle();
+    paint(senders([], true));
+    await hover(tulvingMark());
+    expect(answer()?.textContent ?? "", "the deleted thread's cached answer returned").not.toContain(
+      "An answer deleted in Chat.",
+    );
+    await wait(2000);
+    expect(server.posts, "the deleted key did not become startable again").toHaveLength(2);
+  });
+
   it("draws a chat the summaries already hold, read from the server, without a send", async () => {
     const stored = storedThread("Yes: section 2 says exactly this.");
     server.threads = [stored];
@@ -483,6 +531,45 @@ describe("while it runs, and after", () => {
     expect(server.gets).toBe(1);
     expect(answer()?.textContent).toContain("Yes: section 2 says exactly this.");
     expect(continueButton()).toBeDefined();
+  });
+
+  it("stops polling an elsewhere answer when the card closes, and resumes on return", async () => {
+    const stored = storedThread("", "pending");
+    server.threads = [stored];
+    paint(senders([summaryOf(stored)]));
+    await hover(tulvingMark());
+    await settle();
+    expect(server.gets).toBe(1);
+    await leave(tulvingMark());
+    await wait(5000);
+    expect(server.gets, "a closed card kept polling").toBe(1);
+    await hover(tulvingMark());
+    await settle();
+    expect(server.gets, "returning did not resume the lookup").toBe(2);
+  });
+
+  it("retries an existing thread after a transient read failure", async () => {
+    const stored = storedThread("The recovered answer.");
+    server.threads = [stored];
+    server.failGets = 1;
+    paint(senders([summaryOf(stored)]));
+    await hover(tulvingMark());
+    await settle();
+    expect(server.gets).toBe(1);
+    await leave(tulvingMark());
+    await hover(tulvingMark());
+    await settle();
+    expect(server.gets, "the failed read suppressed every later read").toBe(2);
+    expect(answer()?.textContent).toContain("The recovered answer.");
+  });
+
+  it("refreshes stale summaries when their full thread is missing", async () => {
+    const missing = storedThread("gone");
+    paint(senders([summaryOf(missing)]));
+    await hover(tulvingMark());
+    await settle();
+    expect(server.gets).toBe(1);
+    expect(refreshed, "the stale summary was left in place").toEqual(["refresh"]);
   });
 
   it("a failure draws its one line, with Continue in Chat when there is a chat", async () => {
@@ -518,6 +605,21 @@ describe("refusals", () => {
       expect(line()).toBe(sentence);
     });
   }
+
+  it("tries an hourly cap again after its rolling window has passed", async () => {
+    server.reply = {
+      status: 429,
+      body: { error: "That's 8 automatic checks in the last hour.", reason: "hour" },
+    };
+    paint();
+    await restOnTulving();
+    expect(server.posts).toHaveLength(1);
+    await leave(tulvingMark());
+    await wait(60 * 60 * 1000 + 1);
+    server.reply = "stream";
+    await restOnTulving();
+    expect(server.posts, "the expired cap stayed for the life of the tab").toHaveLength(2);
+  });
 
   it("draws nothing when two are already running (busy), and the next rest tries again", async () => {
     server.reply = { status: 429, body: { error: "Two automatic checks are already running.", reason: "busy" } };
@@ -594,11 +696,11 @@ describe("the Does it say that? press", () => {
     paint();
     await restOnTulving();
     act(() => pressButton()?.click());
-    const decided = decisions[0] as { wait: Promise<string | null> };
+    const decided = decisions[0] as { wait: Promise<{ open: string }> };
     expect(decided.wait).toBeInstanceOf(Promise);
     await act(async () => server.push?.("begin", { threadId: THREAD, title: "t", messageId: "spya-a00001" }));
     await settle();
-    await expect(decided.wait).resolves.toBe(THREAD);
+    await expect(decided.wait).resolves.toEqual({ open: THREAD });
     expect(server.posts).toHaveLength(1);
   });
 });

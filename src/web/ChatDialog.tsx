@@ -326,6 +326,7 @@ export function ChatDialog({
     threads,
     loaded,
     loadFailed,
+    reload,
     recovering,
     send,
     retry,
@@ -1021,6 +1022,33 @@ export function ChatDialog({
         ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
         /* A citation's *Does it say that?*: its identity (plan 261024m). */
         ...(target.origin ? { origin: target.origin } : {}),
+        ...(target.origin?.mode === "cite-check"
+          ? {
+              onRefused: (refusal) => {
+                if (!refusal.threadId) return;
+                drafts.dropThread(id);
+                onDropped(id);
+                /* The summary read can legitimately lag the 409: that is the
+                   cross-tab race this refusal reports. Keep the dialog's
+                   target resolvable while its full-thread reload catches up,
+                   just as the optimistic summary below keeps a newly minted
+                   thread resolvable before the first `begin`. */
+                const now = new Date().toISOString();
+                onCreated({
+                  id: refusal.threadId,
+                  title: text.slice(0, 60),
+                  createdAt: now,
+                  updatedAt: now,
+                  anchor: target.anchor,
+                  origin: target.origin!,
+                  kind: "chat",
+                  turns: 1,
+                });
+                onThread(refusal.threadId);
+                reload();
+              },
+            }
+          : {}),
         /* The shared Composer saw how these words arrived. Keep that fact on
            the question just as the full Chat panel does; handed-over and
            automatically sent drafts call `ask` without it and stay unknown. */
@@ -1053,7 +1081,7 @@ export function ChatDialog({
         ...(target.origin ? { origin: target.origin } : {}),
       });
     },
-    [target, send, at, onThread, onCreated, onRenamed, drafts],
+    [target, send, at, onThread, onCreated, onDropped, onRenamed, reload, drafts],
   );
 
   /**

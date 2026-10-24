@@ -160,6 +160,7 @@ import {
   scheduleCiteCheck,
   syncCiteCheck,
   useCiteCheck,
+  watchCiteCheck,
 } from "./cite-check.js";
 import { threadForOrigin } from "./useChatAnchors.js";
 import { viewAsNonce } from "./lib/view-as.js";
@@ -179,6 +180,8 @@ export interface CiteCheckSenders {
   summariesLoaded: boolean;
   /** *Continue in Chat*: open this thread where *Ask in chat* reopens an item's chat. */
   onContinue(threadId: string): void;
+  /** A full thread named by the summaries was missing; refresh those summaries. */
+  onRefresh(): void;
 }
 
 /** The section's button that opens the check's thread in Chat. */
@@ -910,7 +913,7 @@ function HoverCard({
               /* Only where the card names this one work — a phrase citing two
                  does not start two — and a finger did not open it (C8). */
               check={
-                citeCheck && cited.length === 1 && !shown.byTouch
+                citeCheck && cited.length === 1 && !shown.byTouch && shown.engaged
                   ? {
                       senders: citeCheck,
                       blocks: blockText,
@@ -2569,6 +2572,7 @@ function CiteCheckSection({
   const existing = threadForOrigin(senders.summaries, citeCheckOrigin(work, blockId));
   const existingId = existing?.id;
   const existingAt = existing?.updatedAt;
+  useEffect(() => watchCiteCheck(key), [key]);
   /* The summaries are the record once a chat exists (C5): read it, again when
      it moves, and let it go when they no longer list it. */
   useEffect(() => {
@@ -2576,8 +2580,9 @@ function CiteCheckSection({
       key,
       existingId !== undefined && existingAt !== undefined ? { id: existingId, updatedAt: existingAt } : undefined,
       senders.summariesLoaded,
+      senders.onRefresh,
     );
-  }, [key, existingId, existingAt, senders.summariesLoaded]);
+  }, [key, existingId, existingAt, senders.summariesLoaded, senders.onRefresh]);
   /* The rest. Not while a chat is known: then there is nothing to start. */
   const startable = existingId === undefined;
   // biome-ignore lint/correctness/useExhaustiveDependencies: the work's title and authors build the question; its id is in `key`, and a re-render with the same work must not restart the rest.

@@ -55,6 +55,8 @@ export const MAX_IN_FLIGHT = 2;
 /** Between looks at an answer still being written elsewhere, and how many. */
 export const CITE_CHECK_POLL_MS = 4000;
 const MAX_POLLS = 60;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 /** The activity line before anything else is known (C9). */
 export const CITE_CHECK_READING = "Reading…";
@@ -134,7 +136,13 @@ interface Entry {
   /** The pending automatic start, if a card is resting. */
   timer: ReturnType<typeof setTimeout> | null;
   /** Presses waiting for an in-flight start's thread id. */
-  begunWaiters: ((threadId: string | null) => void)[];
+  begunWaiters: ((decision: CiteCheckPressResolution) => void)[];
+  /** Open card sections for this key; elsewhere polling exists only for them. */
+  watchers: number;
+  /** A thread began here and should appear in the next fresh summary list. */
+  expected: boolean;
+  /** When a kept refusal may be tried again. */
+  retryAt: number | null;
 }
 
 const entries = new Map<string, Entry>();
@@ -161,6 +169,9 @@ function entryFor(key: CiteCheckKey): Entry {
       pressed: false,
       timer: null,
       begunWaiters: [],
+      watchers: 0,
+      expected: false,
+      retryAt: null,
     };
     entries.set(k, entry);
   }
@@ -213,6 +224,18 @@ export function onCiteCheckThread(listener: (event: CiteCheckThreadEvent) => voi
   return () => threadListeners.delete(listener);
 }
 
+/** Keep elsewhere polling alive only while at least one card for this key is open. */
+export function watchCiteCheck(key: CiteCheckKey): () => void {
+  const entry = entryFor(key);
+  entry.watchers += 1;
+  return () => {
+    entry.watchers = Math.max(0, entry.watchers - 1);
+    if (entry.watchers === 0 && !entry.own && (entry.view.kind === "idle" || entry.view.kind === "elsewhere")) {
+      entry.readFor = null;
+    }
+  };
+}
+
 /**
  * **Start the check after the rest**, unless it has a reason not to: returns
  * the cancel, which the card calls on unmount or a change of key. Once the
@@ -220,6 +243,10 @@ export function onCiteCheckThread(listener: (event: CiteCheckThreadEvent) => voi
  */
 export function scheduleCiteCheck(key: CiteCheckKey, work: CiteCheckWork, delayMs = CITE_CHECK_REST_MS): () => void {
   const entry = entryFor(key);
+  if (entry.view.kind === "said" && entry.retryAt !== null && Date.now() >= entry.retryAt) {
+    entry.view = CITE_CHECK_IDLE;
+    entry.retryAt = null;
+  }
   if (entry.pressed || entry.view.kind !== "idle" || entry.own) return () => {};
   if (entry.timer !== null) clearTimeout(entry.timer);
   const gen = generation;
@@ -265,8 +292,9 @@ export function startCiteCheck(key: CiteCheckKey, work: CiteCheckWork, opts: { a
     if (gen === generation) inFlight -= 1;
     if (!live()) return;
     entry.own = false;
-    const waiters = entry.begunWaiters.splice(0);
-    for (const wake of waiters) wake(threadId);
+  };
+  const answerPresses = (decision: CiteCheckPressResolution) => {
+    for (const wake of entry.begunWaiters.splice(0)) wake(decision);
   };
   setView(entry, { kind: "streaming", threadId: null, text: "", activity: CITE_CHECK_READING });
   /* *Reading…* until a tool says what it is doing; that tool's words while
@@ -291,9 +319,9 @@ export function startCiteCheck(key: CiteCheckKey, work: CiteCheckWork, opts: { a
     began: (begun) => {
       if (!live()) return;
       threadId = begun.threadId;
+      entry.expected = true;
       draw();
-      const waiters = entry.begunWaiters.splice(0);
-      for (const wake of waiters) wake(threadId);
+      answerPresses({ open: threadId });
       tellThread({ threadId, phase: "begun" });
     },
     delta: (more) => {
@@ -311,6 +339,7 @@ export function startCiteCheck(key: CiteCheckKey, work: CiteCheckWork, opts: { a
       settle();
       if (!live()) return;
       if (id === null) {
+        answerPresses({ start: true });
         setView(entry, { kind: "failed", threadId: null });
         return;
       }
@@ -322,12 +351,15 @@ export function startCiteCheck(key: CiteCheckKey, work: CiteCheckWork, opts: { a
       const id = threadId;
       settle();
       if (!live()) return;
+      if (id === null) answerPresses({ start: true });
       setView(entry, { kind: "failed", threadId: id });
       if (id !== null) tellThread({ threadId: id, phase: "settled" });
     },
     refused: (error, refusal) => {
       settle();
       if (!live()) return;
+      if (refusal.status === 409 && refusal.threadId !== undefined) answerPresses({ open: refusal.threadId });
+      else answerPresses({ start: true });
       refusedWith(key, entry, error, refusal);
     },
     disconnected: () => {
@@ -338,6 +370,7 @@ export function startCiteCheck(key: CiteCheckKey, work: CiteCheckWork, opts: { a
       settle();
       if (!live()) return;
       if (id === null) {
+        answerPresses({ start: true });
         setView(entry, { kind: "failed", threadId: null });
         return;
       }
@@ -352,8 +385,10 @@ function refusedWith(key: CiteCheckKey, entry: Entry, error: string, refusal: Tu
   /* Somebody already has a chat for this work and paragraph — another tab, a
      press, a rest the summaries had not heard of. Adopt it: nothing was spent. */
   if (refusal.status === 409 && refusal.threadId !== undefined) {
+    entry.expected = true;
     entry.view = CITE_CHECK_IDLE;
     void readThread(key, entry, refusal.threadId, null, 0);
+    tellThread({ threadId: refusal.threadId, phase: "begun" });
     emit();
     return;
   }
@@ -366,6 +401,12 @@ function refusedWith(key: CiteCheckKey, entry: Entry, error: string, refusal: Tu
   /* A cap (hour, day, everybody's day) or a stale citation: the server's
      sentence for the reader, drawn as it came. */
   if (refusal.reason !== undefined || refusal.status === 409) {
+    entry.retryAt =
+      refusal.reason === "hour"
+        ? Date.now() + HOUR_MS
+        : refusal.reason === "day" || refusal.reason === "global"
+          ? Date.now() + DAY_MS
+          : Date.now();
     setView(entry, { kind: "said", message: error });
     return;
   }
@@ -381,8 +422,9 @@ function forgetEntry(key: CiteCheckKey, entry: Entry): void {
 
 /**
  * **The thread's first answer, from the server.** Pending: drawn as being
- * written elsewhere, and looked at again. Missing: the entry goes, so the next
- * rest may start one. A failed read keeps whatever was drawn.
+ * written elsewhere, and looked at again while the card remains open. Missing:
+ * the stale summary is refreshed before this key can become startable. A
+ * failed read keeps whatever was drawn and may be retried.
  */
 async function readThread(
   key: CiteCheckKey,
@@ -390,17 +432,36 @@ async function readThread(
   threadId: string,
   updatedAt: string | null,
   polls: number,
+  onMissing?: () => void,
 ): Promise<void> {
+  if (entry.watchers === 0) {
+    entry.readFor = null;
+    return;
+  }
   const gen = generation;
   const stamp = `${threadId}@${updatedAt ?? "?"}`;
   entry.readFor = stamp;
-  const live = () => gen === generation && entries.get(keyOf(key)) === entry && !entry.own && entry.readFor === stamp;
+  const current = () => gen === generation && entries.get(keyOf(key)) === entry && !entry.own;
+  const live = () => current() && entry.readFor === stamp;
   const listed = await askForThreads(key.slug);
   if (!live()) return;
-  if (!listed.ok) return;
+  if (!listed.ok) {
+    entry.readFor = null;
+    if (polls < MAX_POLLS) {
+      setTimeout(() => {
+        if (current() && entry.watchers > 0 && entry.readFor === null) {
+          void readThread(key, entry, threadId, updatedAt, polls + 1, onMissing);
+        }
+      }, CITE_CHECK_POLL_MS);
+    }
+    return;
+  }
   const thread = listed.threads.find((t) => t.id === threadId);
   if (!thread) {
-    forgetEntry(key, entry);
+    entry.view = CITE_CHECK_IDLE;
+    emit();
+    if (onMissing) onMissing();
+    else tellThread({ threadId, phase: "settled" });
     return;
   }
   const answer = thread.messages.find((m) => m.role === "assistant");
@@ -419,7 +480,7 @@ async function readThread(
     return;
   }
   setTimeout(() => {
-    if (live()) void readThread(key, entry, threadId, updatedAt, polls + 1);
+    if (live() && entry.watchers > 0) void readThread(key, entry, threadId, updatedAt, polls + 1, onMissing);
   }, CITE_CHECK_POLL_MS);
 }
 
@@ -432,6 +493,7 @@ export function syncCiteCheck(
   key: CiteCheckKey,
   summary: { id: string; updatedAt: string } | undefined,
   loaded: boolean,
+  onMissing?: () => void,
 ): void {
   const entry = entries.get(keyOf(key));
   if (summary) {
@@ -446,11 +508,20 @@ export function syncCiteCheck(
       target.readFor = stamp;
       return;
     }
-    void readThread(key, target, summary.id, summary.updatedAt, 0);
+    void readThread(key, target, summary.id, summary.updatedAt, 0, onMissing);
     return;
   }
   /* Listed once and gone now: the chat was deleted, and the key is free. */
-  if (entry && loaded && entry.listed && !entry.own) forgetEntry(key, entry);
+  if (entry && loaded && (entry.listed || entry.expected) && !entry.own) {
+    entry.view = CITE_CHECK_IDLE;
+    entry.readFor = null;
+    entry.listed = false;
+    entry.expected = false;
+    entry.ownSettled = null;
+    entry.pressed = false;
+    entry.retryAt = null;
+    emit();
+  }
 }
 
 /**
@@ -460,9 +531,11 @@ export function syncCiteCheck(
  * do: open a thread this module knows, wait for an in-flight start's thread,
  * or start the chat itself (Reader's own press, which carries the origin).
  */
+export type CiteCheckPressResolution = { open: string } | { start: true } | { cancelled: true };
+
 export function pressCiteCheck(
   key: CiteCheckKey,
-): { open: string } | { wait: Promise<string | null> } | { start: true } {
+): { open: string } | { wait: Promise<CiteCheckPressResolution> } | { start: true } {
   const entry = entryFor(key);
   entry.pressed = true;
   if (entry.timer !== null) {
@@ -482,7 +555,7 @@ export function forgetCiteChecks(): void {
   generation += 1;
   for (const entry of entries.values()) {
     if (entry.timer !== null) clearTimeout(entry.timer);
-    for (const wake of entry.begunWaiters.splice(0)) wake(null);
+    for (const wake of entry.begunWaiters.splice(0)) wake({ cancelled: true });
   }
   entries.clear();
   inFlight = 0;
