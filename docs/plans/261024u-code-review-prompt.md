@@ -2,7 +2,7 @@ Code review of the work for plan docs/plans/261024u-chat-links-the-earlier-conve
 (read it first, and your own plan review beside it: docs/plans/261024u-plan-review-sol.md, whose
 F1–F4 the build answers).
 
-The change is the uncommitted working tree of this worktree against HEAD: `git diff HEAD` plus the
+The change is the commit `d82650926` (`git show d82650926`), including the
 new files `src/web/ThreadRef.tsx`, `src/web/thread-links.ts`, `tests/chat-thread-links.test.ts`,
 `tests/chat-thread-link-band.test.tsx`. Read CLAUDE.md and docs/project/security-map.md for the house
 rules.

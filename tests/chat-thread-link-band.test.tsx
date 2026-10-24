@@ -12,9 +12,11 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { useQueryState } from "nuqs";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
+import { threadParam } from "../src/web/params.js";
 
 let stored: ChatThread[] = [];
 
@@ -59,7 +61,10 @@ vi.mock("../src/web/live/useLiveConversation.js", () => ({
   }),
 }));
 
-const { ConversationBand } = await import("../src/web/modes/conversation/ConversationModes.js");
+const [{ ChatDialog }, { ConversationBand }] = await Promise.all([
+  import("../src/web/ChatDialog.js"),
+  import("../src/web/modes/conversation/ConversationModes.js"),
+]);
 
 const AT = "2026-10-24T17:00:00.000Z";
 const EARLIER: ChatThread = {
@@ -136,10 +141,38 @@ async function mount(): Promise<void> {
           slug: "a-piece",
           blocks: new Map<string, string>(),
           onJump: () => {},
+          onScreen: () => [],
           kind: "chat",
         }),
       ),
     );
+  });
+  await settle();
+}
+
+function FloatingDialog() {
+  const [thread] = useQueryState("thread", threadParam);
+  if (thread === null) return null;
+  return createElement(ChatDialog, {
+    slug: "a-piece",
+    target: { kind: "thread", threadId: thread },
+    at: "spya-bckq23",
+    blocks: new Map<string, string>(),
+    onJump: () => {},
+    onClose: () => {},
+    onThread: () => {},
+    onOpenFull: () => {},
+    onNewConversation: () => {},
+    onCreated: () => {},
+    onDropped: () => {},
+    onRenamed: () => {},
+  });
+}
+
+async function mountFloating(): Promise<void> {
+  history.replaceState(null, "", `/read/a-piece?mode=summary&at=spya-bckq23&thread=${NOW.id}`);
+  await act(async () => {
+    root.render(createElement(NuqsAdapter, null, createElement(FloatingDialog)));
   });
   await settle();
 }
@@ -176,6 +209,29 @@ describe("an answer's mention of an earlier conversation", () => {
     });
     await settle();
     expect(params().get("thread")).toBe(NOW.id);
+    scrolled.mockRestore();
+  });
+
+  it("switches the floating dialog on a press, and Back returns without moving the article", async () => {
+    await mountFloating();
+    const scrolled = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    const earlier = document.querySelector<HTMLAnchorElement>(`a[data-thread-link="${EARLIER.id}"]`);
+    expect(earlier?.getAttribute("href")).toBe(
+      `/read/a-piece?mode=summary&at=spya-bckq23&thread=${EARLIER.id}`,
+    );
+    await act(async () => earlier?.click());
+    await settle();
+    expect(params().get("thread")).toBe(EARLIER.id);
+    expect(params().get("at"), "the article stays where it was").toBe("spya-bckq23");
+    expect(scrolled, "the page is not sent to the top").not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("The earlier answer.");
+    await act(async () => {
+      history.back();
+      await new Promise((go) => setTimeout(go, 20));
+    });
+    await settle();
+    expect(params().get("thread")).toBe(NOW.id);
+    expect(document.body.textContent).toContain("Your earlier conversation on access consciousness");
     scrolled.mockRestore();
   });
 });

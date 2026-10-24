@@ -92,6 +92,23 @@ simply not in the set.
 - Browser (Sonnet subagent): fixture article with two chats; ask in the second about the first's
   topic; press the chip in the band and in the floating chat; Back returns.
 
+## Measured
+
+`evals/chat-other-threads.ts --repeats=3`, 2026-10-24, with the new prompt line (fixture thread A's
+id changed from `spya-thra11` to `spya-thra33`, since a real id has no `1`). $2.71.
+
+| question | arm | right | opened a wrong one | linked it |
+|---|---|---|---|---|
+| weak | gist | 3/3 | 0 | 3/3 |
+| weak | preview | 3/3 | 0 | 3/3 |
+| fn | gist | 3/3 | 0 | 3/3 |
+| fn | preview | 3/3 | 0 | 3/3 |
+| other (should open nothing) | all three | 3/3 | 0 | – |
+
+Every answer that opened the earlier conversation named it by its bracketed id, e.g. *"Your earlier
+conversation [spya-thra33] already gave three weak spots."* The opening behaviour is unchanged from
+261008e's figures (3/3, 3/3, 0/3 opened for the unrelated question).
+
 ## Progress
 
 - [ ] plan reviewed by GPT Sol

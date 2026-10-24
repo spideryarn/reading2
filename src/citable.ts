@@ -48,9 +48,9 @@
  * yields.
  */
 import { fromMarkdown } from "mdast-util-from-markdown";
-import type { ListItem, Nodes, Paragraph, RootContent } from "mdast";
+import type { ListItem, Nodes, Paragraph, RootContent, Text } from "mdast";
 import { splitCommandTokens, tokensOnOwnLine, withoutCommandTokens } from "./command-token.js";
-import { withoutWebLinks } from "./urls.js";
+import { webLinks, withoutWebLinks } from "./urls.js";
 
 /**
  * Nodes whose text is never a citation, because the renderer never chips inside
@@ -100,13 +100,28 @@ export const CITATION_RUN =
 
 /**
  * The id-shaped strings of each run in `answer`'s citable text, run by run.
- *
- * One flat string where the renderer sees text nodes, so two runs a code span
- * or a link separates can read here as one. It matters only to a run holding
- * an id the renderer cannot attribute, which takes an id collision.
+ * Markdown nodes, web links and command tokens stay as boundaries, because
+ * the renderer calls `splitCitations` separately on each side of them. Turning
+ * those boundaries into spaces would join two runs and let a collision in one
+ * suppress a valid chip in the other.
  */
 export function citationRuns(answer: string): string[][] {
-  return [...citableText(answer).matchAll(CITATION_RUN)].map((m) => m[0].match(/spya-[a-z0-9]{6}/g) ?? []);
+  const out: string[][] = [];
+  for (const node of citableNodes(answer)) {
+    let at = 0;
+    const links = webLinks(node.value);
+    for (const link of [...links, { index: node.value.length, end: node.value.length }]) {
+      const prose = node.value.slice(at, link.index);
+      for (const run of splitCommandTokens(prose)) {
+        if (run.kind !== "text") continue;
+        for (const match of run.text.matchAll(CITATION_RUN)) {
+          out.push(match[0].match(/spya-[a-z0-9]{6}/g) ?? []);
+        }
+      }
+      at = link.end;
+    }
+  }
+  return out;
 }
 
 /**
@@ -138,10 +153,25 @@ export function linkFreeProse(answer: string): string {
     if (from === undefined || to === undefined) return;
     for (let i = from; i < to && i < answer.length; i++) kept[i] = answer[i] ?? " ";
   };
+  for (const node of citableNodes(answer)) keep(node);
+  /* A bare address is not a citation either, and `webLinks` in src/urls.ts is
+     the single matcher for that — the renderer runs it over exactly this text
+     (src/web/Cited.tsx § leaf). No `remark-gfm`, so the parser leaves bare
+     addresses in the text nodes for it to find. */
+  return withoutWebLinks(kept.join(""));
+}
+
+/**
+ * The Markdown text nodes in which the renderer offers citation chips.
+ * One walk feeds both the flat counter text above and `citationRuns`, whose
+ * collision rule must preserve the boundaries between those nodes.
+ */
+function citableNodes(answer: string): Text[] {
+  const out: Text[] = [];
   /* A list of work rather than a recursive walk. Block nesting stops at the cap
      below, but `strong` inside `emphasis` inside `strong` has no cap on either
      side, and a walk deep enough to overflow the stack would take the request
-     with it. Order does not matter: every node writes only its own offsets. */
+     with it. */
   const todo: { node: Nodes; opaque: boolean; depth: number }[] = [
     { node: fromMarkdown(answer), opaque: false, depth: 0 },
   ];
@@ -152,22 +182,20 @@ export function linkFreeProse(answer: string): string {
        `depth` moves exactly where the renderer's does — see MAX_BLOCK_DEPTH. */
     if (depth >= MAX_BLOCK_DEPTH) continue;
     if (node.type === "text") {
-      if (!opaque) keep(node);
+      if (!opaque) out.push(node);
       continue;
     }
     if (!("children" in node)) continue;
     const inside = opaque || OPAQUE.has(node.type);
     const deeper =
       node.type === "blockquote" || (node.type === "listItem" && !isOneParagraph(node));
-    for (const child of node.children) {
-      todo.push({ node: child, opaque: inside, depth: deeper ? depth + 1 : depth });
+    /* Reverse onto the stack so the result stays in document order. */
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      const child = node.children[i];
+      if (child) todo.push({ node: child, opaque: inside, depth: deeper ? depth + 1 : depth });
     }
   }
-  /* A bare address is not a citation either, and `webLinks` in src/urls.ts is
-     the single matcher for that — the renderer runs it over exactly this text
-     (src/web/Cited.tsx § leaf). No `remark-gfm`, so the parser leaves bare
-     addresses in the text nodes for it to find. */
-  return withoutWebLinks(kept.join(""));
+  return out;
 }
 
 /** A list item the renderer draws in place, without a level of its own (`drawList`). */
