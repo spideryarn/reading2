@@ -280,6 +280,13 @@ interface MarkBase {
    */
   bare?: boolean;
   /**
+   * How far this occurrence of a glossary term has faded, 0–1 — `term` marks
+   * only, absent meaning full. `termProminence` of how many times the entry
+   * has appeared so far, in document order (Greg, `spya-htsjmf`, 2026-10-24;
+   * plan 261024s). Drawn as `--term-a`.
+   */
+  prominence?: number;
+  /**
    * The accessible name of an `xref` mark — the whole phrase, which the first
    * piece carries as its `aria-label` so a phrase split across an `<em>` is
    * announced whole rather than as its first fragment. `xref` marks only.
@@ -534,7 +541,24 @@ function annotate(html: string, marks: readonly Mark[]): string {
            place for whichever of them did not end there. */
         if (chats.some((m) => m.end === nodeStart + to)) el.setAttribute("data-chat-end", "");
       }
-      if (terms.length > 0) el.setAttribute("data-term", terms.map((m) => m.id).join(" "));
+      /* Every custom property this run carries, written once below the hit
+         branch: a term's fade, then a hit's strength, fill and stripes. */
+      const style: string[] = [];
+      if (terms.length > 0) {
+        el.setAttribute("data-term", terms.map((m) => m.id).join(" "));
+        /* **The fade, as a number** — `--hit-a`'s pattern: the colour is the
+           token's, how far this occurrence has faded is the count's
+           (`termProminence`). The larger wins where two terms share a run, on
+           `strength`'s argument, and full is written as nothing, which is
+           every first occurrence and every article whose terms are rare.
+
+           **Not on a run a comment or a chat shares**: they draw the same
+           `border-bottom`, and fading it would fade the reader's own clickable
+           mark with the term's (GPT Sol, plan review of 261024s). */
+        const prominence = Math.max(...terms.map((m) => clamp(m.prominence ?? 1, 0, 1)));
+        const borderShared = comments.length > 0 || chats.length > 0;
+        if (prominence < 0.995 && !borderShared) style.push(`--term-a:${prominence.toFixed(2)}`);
+      }
       if (hits.length > 0) {
         el.setAttribute("data-hit", hits.map((m) => m.id).join(" "));
         /* **Two kinds of hit share this element, and they are painted
@@ -551,7 +575,6 @@ function annotate(html: string, marks: readonly Mark[]): string {
            its pressed state, and paints nothing — see `Mark.bare`. */
         const washes = hits.filter((m) => m.quoteStroke === undefined && !m.bare);
         const quoted = hits.filter((m) => m.quoteStroke !== undefined);
-        const style: string[] = [];
         if (washes.length > 0) {
           el.setAttribute("data-wash", "");
           /* The outline intensity, as a custom property the stylesheet uses for
@@ -742,6 +765,10 @@ function annotate(html: string, marks: readonly Mark[]): string {
           el.setAttribute("data-dir", dirs.size === 1 ? [...dirs][0]! : "mixed");
         }
       }
+      /* A run with a faded term and no hit: the branch above wrote nothing.
+         (Written there, not here, for a hit, so the attribute order /design's
+         pasted specimens hold is kept.) */
+      if (hits.length === 0 && style.length > 0) el.setAttribute("style", style.join(";"));
       /* Space-separated work ids, as `data-term` is, and for the same reason:
          two works can be cited by one phrase — "(Tulving 1983; Baddeley 1974)"
          is one run of characters naming two — and the hover card draws a
@@ -921,6 +948,34 @@ export interface TermSelection {
   open?: boolean;
 }
 
+const NO_BLOCKS: ReadonlySet<BlockId> = new Set();
+
+/** Where the fade is at half: the fourth occurrence (n − 1 = 3). */
+const TERM_FADE_HALF = 3;
+/** How steep the fall is either side of it. */
+const TERM_FADE_STEEP = 3;
+
+/**
+ * **How strongly the n-th occurrence of a term is underlined**, 1 for the first.
+ *
+ * Greg, 2026-10-24 (`spya-htsjmf`): a term that recurs over and over — *consciousness*
+ * in a paper about consciousness — wears its dotted rule every time, and *"by
+ * the time consciousness has appeared five or ten times, it should basically
+ * not need an orange dotted line"*, by *"a smooth function"*.
+ *
+ * `1 / (1 + ((n − 1) / 3)³)`: 1.00, 0.96, 0.77, 0.50, 0.30, 0.18, …, 0.07 at the
+ * eighth. A plateau then a fall, rather than an exponential's fall from the
+ * start, because the first two or three are the ones teaching that the word
+ * has a card and a reader can miss the first; smooth rather than a cutoff, so
+ * no occurrence vanishes beside a neighbour still clearly drawn. The mark and
+ * its card stay at any value, and hover restores the full rule
+ * (annotations.css § mark.term). docs/plans/261024s-….
+ */
+export function termProminence(n: number): number {
+  if (n <= 1) return 1;
+  return 1 / (1 + ((n - 1) / TERM_FADE_HALF) ** TERM_FADE_STEEP);
+}
+
 /**
  * Every occurrence of every term, as marks, grouped by block.
  *
@@ -948,6 +1003,9 @@ export interface TermSelection {
 export function termMarks(
   blocks: Block[],
   selections: readonly TermSelection[],
+  /** Blocks whose occurrences neither count towards the fade nor fade —
+   *  the folded front and back matter (`termProminence`). */
+  uncounted: ReadonlySet<BlockId> = NO_BLOCKS,
 ): Map<BlockId, Mark[]> {
   const byBlock = new Map<BlockId, Mark[]>();
   if (selections.length === 0) return byBlock;
@@ -967,6 +1025,8 @@ export function termMarks(
     }
   }
 
+  /** How many times each entry has been met so far. */
+  const seen = new Map<string, number>();
   for (const block of blocks) {
     const here = wanted.get(block.id);
     if (!here) continue;
@@ -975,9 +1035,21 @@ export function termMarks(
     // of this file is about what happens when you mix them up.
     const text = renderedText(block.html);
     const marks: Mark[] = [];
+    const counts = !uncounted.has(block.id);
     for (const term of here) {
       for (const span of termSpans(text, term.pattern)) {
-        marks.push({ id: term.id, kind: "term" as const, ...span, ...(term.open ? { open: true } : {}) });
+        /* `blocks` is the article in order, so this is the document order the
+           fade is counted in — per entry, aliases included. */
+        const n = counts ? (seen.get(term.id) ?? 0) + 1 : 1;
+        if (counts) seen.set(term.id, n);
+        const prominence = termProminence(n);
+        marks.push({
+          id: term.id,
+          kind: "term" as const,
+          ...span,
+          ...(term.open ? { open: true } : {}),
+          ...(prominence < 1 ? { prominence } : {}),
+        });
       }
     }
     if (marks.length > 0) byBlock.set(block.id, marks);
