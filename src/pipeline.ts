@@ -148,6 +148,7 @@ import {
   previousBibliographyFrom,
 } from "./bibliography.js";
 import { ownIdsOfPdf, withRegistryFacts, type OwnIds } from "./article-registry.js";
+import { withAddressDay } from "./page-date.js";
 import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
@@ -3326,7 +3327,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
               extractedHtml: result.extractedHtml,
               /* The page's own address and declared DOI: they name this page
                  (src/article-registry.ts § the exception). */
-              meta: await withArticleRegistry(ctx, "extract", kept, { from: "page", ids: result.ownIds }),
+              meta: withAddressDay(
+                await withArticleRegistry(ctx, "extract", kept, { from: "page", ids: result.ownIds }),
+                /* Last, and only into an article left with no date at all (plan 261024a). */
+                result.addressDay,
+              ),
             },
             detail: result.meta.title,
           };
@@ -6172,7 +6177,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      replaces the list. */
   crossrefs: {
     name: "crossrefs",
-    label: "Linking the article to itself",
+    /* *Linking the article to itself* until 2026-10-24, which a reader could
+       not parse (spya-rvj2p7); now the name Metadata's AI processing gives it. */
+    label: "Adding cross-references",
     produces: ["crossrefs"],
     /**
      * The exact body-only article rendering and top-level skeleton the request

@@ -32,7 +32,7 @@ import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { removePlatformFurniture } from "./furniture.js";
-import { latexmlAuthorNames, latexmlUntitled, prepareLatexml, untitledLatexmlMarkup } from "./latexml.js";
+import { latexmlAuthorNames, latexmlTitleText, latexmlUntitled, prepareLatexml, untitledLatexmlMarkup } from "./latexml.js";
 import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
@@ -53,8 +53,9 @@ import type { WorkId } from "./bibliographic.js";
 import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
-import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, pageOpening } from "./front-matter-authors.js";
+import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, openingHeading, pageOpening } from "./front-matter-authors.js";
 import type { OpeningTitleReader } from "./opening-title.js";
+import { addressDay, datelineDay } from "./page-date.js";
 import type { Author, Meta } from "./types.js";
 
 /**
@@ -172,6 +173,14 @@ export interface ExtractResult {
    * candidate is not a fact until the registry's title agrees.
    */
   ownIds: WorkId[];
+  /**
+   * The day in the page's address, when its markup and dateline gave none.
+   * Beside `meta` and not in it, for the same reason as `ownIds`: it is the
+   * weakest evidence there is, so the step applies it only after the registry
+   * has left the article with no day and no year — src/page-date.ts §
+   * `withAddressDay`.
+   */
+  addressDay?: string;
   /**
    * **The whole standalone page, and it *is* the `extractedHtml` artefact.**
    *
@@ -425,6 +434,8 @@ export function readArticle(
    * records: what the general authors pass reads (src/front-matter-authors.ts).
    */
   opening: OpeningRecord[];
+  /** Whether `opening` starts at the page's main heading (`openingHeading`) rather than the top of its scope. */
+  openingHeaded: boolean;
   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
   ownIds: WorkId[];
   /**
@@ -433,6 +444,12 @@ export function readArticle(
    * `latexmlUntitled`. `runExtract` does not use it.
    */
   untitled: boolean;
+  /**
+   * A LaTeXML document title as the page draws it, line breaks as spaces —
+   * src/latexml.ts § `latexmlTitleText`. `runExtract` may put back the break's
+   * space or a prefix Readability demonstrably cut at a colon.
+   */
+  drawnTitle: ReturnType<typeof latexmlTitleText>;
   refusal: TooLittleTextToRead | ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
@@ -451,8 +468,10 @@ export function readArticle(
     article: shipped.article,
     authors: shipped.authors,
     opening: shipped.opening,
+    openingHeaded: shipped.openingHeaded,
     ownIds: shipped.ownIds,
     untitled: shipped.untitled,
+    drawnTitle: shipped.drawnTitle,
     refusal: refusalFor(shipped),
     notes: shipped.notes,
     callouts: shipped.callouts,
@@ -480,8 +499,10 @@ function readingArm(
   challenge: ChallengePage | null;
   authors: Author[] | null;
   opening: OpeningRecord[];
+  openingHeaded: boolean;
   ownIds: WorkId[];
   untitled: boolean;
+  drawnTitle: ReturnType<typeof latexmlTitleText>;
   notes: NoteStats;
   callouts: CalloutStats;
   removed: ExtractRemovals;
@@ -517,6 +538,8 @@ function readingArm(
      may use the weaker markup signal only to distrust its own title; the
      source-gated LaTeXML rewrites above remain source-gated. */
   const untitled = url === null ? untitledLatexmlMarkup(dom.window.document) : latexmlUntitled(dom.window.document);
+  /* And the title as drawn, before anything rewrites the title block. */
+  const drawnTitle = latexmlTitleText(dom.window.document);
   /* And what the page hides from its reader, before `prepareDocument` un-hides
      collapsed sections for Readability: the opening below leaves it out. */
   markHidden(dom.window.document);
@@ -533,14 +556,17 @@ function readingArm(
   /* Before the parse, which drops a short author list as not prose and takes
      the byline element out of the page: src/front-matter-authors.ts. */
   const opening = pageOpening(dom.window.document);
+  const openingHeaded = openingHeading(dom.window.document) !== null;
   const article = new Readability(dom.window.document).parse();
   return {
     article,
     challenge,
     authors,
     opening,
+    openingHeaded,
     ownIds,
     untitled,
+    drawnTitle,
     notes,
     callouts,
     removed,
@@ -1294,6 +1320,28 @@ export class TooLittleTextToRead extends Error {
 const MIGHT_HOLD_MATHS = /<math[\s>]|math\/tex/iu;
 
 /**
+ * **A LaTeXML paper's title as its heading draws it, line breaks as spaces**,
+ * over Readability's — only when the page's `<title>` agreed with the heading
+ * (src/latexml.ts § `latexmlTitleText`) and Readability's title is either that
+ * `<title>` or its exact suffix after `: `. So what changes is a space
+ * LaTeXML's `<title>` deleted (`Evaluating AGENTS.md:Are …`, report
+ * spya-whpceg) or the prefix Readability cut off as a site's name (`Tree of
+ * Thoughts:`). A title Readability took from metadata is left as it was,
+ * unless it is exactly that suffix: then the page states the whole title
+ * twice, and that is shelved. Kept free of Readability's list of metadata
+ * keys on purpose (plan 261024b § After the code review).
+ * docs/plans/261024b-an-arxiv-title-keeps-the-space-its-line-break-stood-for.md.
+ */
+function asDrawn(title: string | null | undefined, drawn: ReturnType<typeof latexmlTitleText>): string | null | undefined {
+  if (!drawn || typeof title !== "string") return title;
+  const readabilityTitle = title.replace(/\s+/g, " ").trim();
+  return readabilityTitle === drawn.head ||
+    (readabilityTitle !== "" && drawn.head.endsWith(`: ${readabilityTitle}`))
+    ? drawn.drawn
+    : title;
+}
+
+/**
  * An untitled LaTeXML paper's title when nothing could read one off its
  * opening: `arXiv:2308.08708` from the page's own ids, or `null` for the slug.
  * Plan 261017a.
@@ -1363,7 +1411,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors: declaredAuthors, opening, ownIds, untitled, refusal, notes, callouts, removed, kept } = readArticle(
+  const { article, authors: declaredAuthors, opening, openingHeaded, ownIds, untitled, drawnTitle, refusal, notes, callouts, removed, kept } = readArticle(
     opts.html,
     opts.url,
   );
@@ -1393,7 +1441,11 @@ export async function runExtract(opts: {
      dropped it on the floor. It is the reference frame for every year-less date
      in the piece — the field's note in src/types.ts says why it is not
      `fetchedAt`, and `publicationDate` above why it is not converted to UTC. */
-  const publishedAt = publicationDate(article.publishedTime);
+  /* When the markup states none, the line printed under the title
+     (src/page-date.ts, plan 261024a). The address's day is weaker evidence
+     than the registry's, so it goes back beside `meta` as `addressDay`. */
+  const fetchedAt = new Date().toISOString();
+  const publishedAt = publicationDate(article.publishedTime) ?? datelineDay(opening, openingHeaded, fetchedAt);
   /* The page's own line breaks taken back out — `tidyMetaText` above says why,
      and why it stops there rather than guessing at a missing separator. The
      page's declared author list replaces it where it has dropped somebody,
@@ -1427,7 +1479,7 @@ export async function runExtract(opts: {
      plainly one, and LaTeXML's guess looks like a title. Plan 261017a. */
   const declaredTitle = untitled
     ? ((await opts.titleFromOpening?.(opening)) ?? untitledPlaceholder(ownIds))
-    : article.title;
+    : asDrawn(article.title, drawnTitle);
   const title = typeof declaredTitle === "string" ? plainTitle(declaredTitle) : declaredTitle;
   const meta: Meta = {
     slug,
@@ -1457,15 +1509,17 @@ export async function runExtract(opts: {
        different artefacts, and the round-trip test compares them. An uploaded
        document has no address and must not carry one. */
     ...(opts.url === null ? {} : { url: opts.url }),
-    fetchedAt: new Date().toISOString(),
+    fetchedAt,
     ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
   };
 
+  const fromAddress = publishedAt === undefined ? addressDay(opts.url, fetchedAt) : undefined;
   return {
     slug,
     meta,
     ownIds,
+    ...(fromAddress === undefined ? {} : { addressDay: fromAddress }),
     /* **No byline goes into the page any more** (2026-10-07, `debugPage`).
        While one did, it had to be the byline chosen above and not
        Readability's, which on a LaTeXML page was a cited author or the word

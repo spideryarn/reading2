@@ -1,0 +1,18 @@
+1: Y; why: Searle source flagged as memory, names functionalist reply, sharper seminar point; problem: Y glosses computational functionalism to a philosopher of mind; X glosses Bostrom's hypothesis to an expert
+2: X; why: corrects both earlier overclaims plainly, Friston introduced and flagged; problem: Y keeps "nearer enactivism" and adds "life-mind continuity tradition" unexplained and unsupported by the article
+3: Y; why: brings in a named thinker (Seemann, introduced) and data, sharper tension with Warth; problem: Y MultiPL-E benchmark not explained; X study and HN commenter thin, unidentified
+4: Y; why: ties closeness of mapping to Prolog example, clear Graham contrast, primary sources; problem: Y "Blub" left unexplained; X Iverson introduction garbled
+5: X; why: focused, accurate, question tied to argument structure; problem: X Leonard Dung not said who; Y Bratton not introduced, "about 50 replies" link points to a single reply
+6: Y; why: richer comparison, Koch quote tied to simulation point, critics named; problem: Y "IIT is his closest ally" stated as fact rather than inference
+7: X; why: careful, sourced, honest about what it could not confirm, relevant Searle-IIT exchange; problem: Y "that third argument" has no referent, Nature comment via aggregator only
+8: Y; why: introduces Block and Tononi, ties objection to third argument, Seth's own count; problem: X David Reichert not introduced, odd hraness.com source for the paper
+9: X; why: better "other side" pick paired with minority admission; problem: X the 2024 AI welfare article is unnamed with no authors; Y Bostrom and his paper not identified
+10: Y; why: clearer crux (digestion vs calculation), Searle flagged from memory; problem: both gloss computational functionalism and biological naturalism to a philosopher of mind; X names Chalmers without memory flag
+11: Y; why: grounds the enactivism link in the article's own mention, hedges noted; problem: X leaves the earlier enactivism claim uncorrected; Y Friston not said who
+12: Y; why: splits Warth's test into reach, success, cost; honest about only seeing a comment; problem: Y MirrorCode paper not explained; X Dan Luu not introduced
+13: Y; why: every person introduced, Perlis source flagged from memory; problem: X Iverson and Green/Petre not said who
+14: X; why: objections grounded in specific article claims, clear structure; problem: X Johannes Kleiner not introduced; Y David Reichert and LessWrong not introduced
+15: Y; why: pitched to a perception neuroscientist, IIT flagged as memory, clean; problem: X garbled quoted fragment, Tononi/Koch claim unsourced
+16: X; why: clear, honest about partial list, Dung paper linked to IIT neatly; problem: X Richards and Agüera y Arcas not introduced; Y garbled "concession in the same section as his BBS reply", Chiang and Kleiner not introduced, explains BBS to an expert
+17: Y; why: hands back to the reader to say what they took, Saad introduced; problem: X Mark Solms not introduced; Y Saad point sourced from a comments page
+18: X; why: notes the prize comes from the publisher, not an outside reader; problem: none

@@ -195,8 +195,11 @@ them. The same narrow exception registers `[auth-down]` and
 `mic-` family in the one way that matters: they carry **no bracketed code at
 all**. They live in [`src/job-state.ts`](../../src/job-state.ts) —
 `WAITING_TO_CONTINUE`, `TAKING_LONGER`, `STOPPING_AFTER_STEP`, `STOP_CAME_TOO_LATE`, `KEEP_A_TAB_OPEN`,
-`DRIVER_STALLED`, `RUNNING_A_WHILE` and `STEP_USUALLY_ABOUT_A_MINUTE` — beside `displayJob`,
-which is the one place that decides what state an import is in.
+`DRIVER_STALLED`, `RUNNING_A_WHILE`, `STEP_USUALLY_ABOUT_A_MINUTE` and `ARTICLE_UNAFFECTED` —
+beside `displayJob`, which is the one place that decides what state an import is in.
+`ARTICLE_UNAFFECTED` is the one drawn under a failure, and it is still not one: it is the fact a
+failed automatic-extra job's own message cannot state, that the article is as it was
+([261024c](../plans/261024c-a-failed-optional-step-after-import-reads-as-optional-and-crossrefs-keeps-an-all-nearby-answer-as-empty.md)).
 
 Not in `src/messages.ts` for the same reason as the `mic-` family: that file is
 about **failures a model call can return**, and *"Waiting to continue."* is not a

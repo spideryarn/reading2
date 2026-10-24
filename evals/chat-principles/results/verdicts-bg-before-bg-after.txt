@@ -1,0 +1,18 @@
+1: Y; why: names functionalist reply, seminar-ready flags; problem: X inference "no independent force" sits awkwardly against Seth's own claim; Y "reproduces the formal structure" not in article
+2: X; why: fuller correction, LLM gap, sourced; problem: Y "life–mind continuity tradition" unexplained and re-asserts enactivism placement the article doesn't make
+3: Y; why: explains MultiPL-E, ties to Prolog/C passage; problem: X leans on an anonymous HN commenter
+4: Y; why: sharper Graham contrast, cites Warth's own gap; problem: none
+5: X; why: clear three-way grouping tied to text; problem: X Bradford Saad not introduced; Y Benjamin Bratton not introduced
+6: Y; why: sourced IIT contrast, cites his hardware hedge; problem: X "GWT" abbreviation unexplained, IIT point from memory; Y Koch not introduced (minor for expert)
+7: X; why: coherent, pitched to expert, honest gaps; problem: Y Richards and Agüera y Arcas not introduced, explains homeostasis to an expert, Gilly critique attributed muddily
+8: Y; why: fits Recall, hands back to reader; problem: X quiz instead of inviting their take, David Reichert and LessWrong not introduced
+9: Y; why: names an identifiable work; problem: X recommends an unnamed "research paper"; Y Bostrom not introduced
+10: Y; why: two jobs separated, sharp seminar tension; problem: X Chalmers' view only gestured at; Y Searle fire line from memory unflagged
+11: same; why: both clear, corrected, hedged; problem: none
+12: Y; why: concrete findings, honest about source; problem: X Dan Luu and Terhechte not introduced, 2026 paper cited with no finding; Y MirrorCode paper not explained
+13: Y; why: Graham/Green contrast, Iverson identified; problem: none
+14: X; why: objections tied to article passages; problem: X Johannes Kleiner not introduced; Y LessWrong not explained
+15: X; why: per-theory map, sourced IIT; problem: neither briefly reminds what each theory says; Y IIT claim from memory
+16: X; why: cleaner, examples clearly attributed; problem: Y Gilly attribution muddled, "The stuff matters" linked to unrelated substack
+17: Y; why: shorter, explains term, prompts thinking; problem: X quiz instead of inviting their take, Mark Solms not introduced; Y LessWrong and Saad not introduced
+18: X; why: answers the reading question with identified work; problem: Y gives no reading suggestion

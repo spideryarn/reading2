@@ -45,6 +45,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
+  ARTICLE_UNAFFECTED,
   DRIVER_STALLED,
   KEEP_A_TAB_OPEN,
   RUNNING_A_WHILE,
@@ -349,6 +350,27 @@ it("says when the Stop came too late, and says nothing of a Stop on an ordinary 
   expect(host.textContent).toContain(STOP_CAME_TOO_LATE);
   card(job({ status: "done", steps, finishedAt: ago(1_000) }));
   expect(host.textContent).not.toContain(STOP_CAME_TOO_LATE);
+});
+
+/**
+ * **A failed automatic-extra job says the article is fine, on the card** (plan
+ * 261024c, spya-rvj2p7). Greg saw only the failed step's message and read it as
+ * the import having failed. A failed import says nothing of the kind.
+ */
+it("says the article is unchanged under a failed automatic extra, and not under a failed import", () => {
+  const failed: JobStep = {
+    name: "crossrefs",
+    label: "Adding cross-references",
+    status: "error",
+    error: "Adding cross-references did not finish. [jb-step-again]",
+  };
+  card(job({ status: "error", failureKind: "retry", steps: [failed], finishedAt: ago(1_000) }));
+  expect(row("Adding cross-references")?.textContent).toContain("did not finish");
+  expect(host.textContent).toContain(ARTICLE_UNAFFECTED);
+
+  const fetchFailed: JobStep = { name: "fetch", label: "Fetching the page", status: "error", error: "No." };
+  card(job({ status: "error", failureKind: "retry", steps: [fetchFailed], finishedAt: ago(1_000) }));
+  expect(host.textContent).not.toContain(ARTICLE_UNAFFECTED);
 });
 
 /**

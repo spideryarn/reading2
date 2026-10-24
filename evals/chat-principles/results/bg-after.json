@@ -1,0 +1,284 @@
+{
+  "label": "bg-after",
+  "at": "2026-10-24T01:02:35.700Z",
+  "reading": null,
+  "sourceSha256": {
+    "converse": "149f5a8a86e16acddf618378ee64f8d679fee572ee2c72364c8d2f0487344afa",
+    "chatPrinciples": "dd2c5faddd41097ab271f210b648ec08ef06e599357e7b3103fb1a58646b2e0f",
+    "readingSoFar": "485552fab141e4c5f8665c034f01f0c40c3ebd99ab0e85ce0e730e27248274b6"
+  },
+  "systemSha256": {
+    "chat": "93313c45e722f3936bd74fb73dca69f2013dd8be7603289f2e9baccb62d62680",
+    "guide": "e5793340627aa7bfcd2ce34f52f20cd01f5a9f7e7c042b16dab2a693c0b2fac4",
+    "explore": "42a261cd9d04f9ee394c47edc909915ab1b43aa21f7787763df054d624ed24ef",
+    "learn": "15b388f312de8c42fce53f735e5e829122ea12d53153b0e10cf23aa306dfca4e"
+  },
+  "summary": {
+    "n": 18,
+    "medianWords": 341.5,
+    "praise": 0,
+    "pushbackConcedes": "0/0",
+    "cited": 18,
+    "withLinks": 12,
+    "leaks": 1,
+    "toolArgLeaks": 0,
+    "dollars": 3.108
+  },
+  "rows": [
+    {
+      "case": "expert-term",
+      "run": 1,
+      "answer": "He means that a computer model of a process is not, in general, a case of that process. Running a simulation of X does not bring X into being unless X is itself a computation, and more specifically an algorithm [spya-npjt4j].\n\n**How the argument goes.** Universal Turing machines can simulate almost anything, including continuous and random processes that are not themselves digital computations [spya-fz5xq5]. But a simulation is \"the map,\" not \"the territory\" [spya-cepmwf]. His examples: a simulated digestive system digests nothing, and a simulated rainstorm makes nothing wet. This is because simulations \"lack the causal powers and intrinsic properties\" of what they model [spya-npjt4j]. He also runs it the other way: the fact that X can be simulated does not show that X is computational [spya-npjt4j].\n\n**What he does with it.** Applied to consciousness, the point is that a brain simulation, however detailed, gives rise to experience only if consciousness is a matter of computation. So the hope of whole-brain emulation already assumes computational functionalism, the view that running the right computation is enough for consciousness [spya-pbcr03]. He then sets a trap for mind-uploaders. If you need an \"exquisitely detailed\" model of the brain, that very need suggests that things other than computation matter. In that case you are no more likely to exist in the simulation than a hailstorm is to form inside the Met Office's computers [spya-tb4wr2 spya-xvm37k]. He aims the same point at Bostrom, who simply assumes that a computer running a suitable program would be conscious [spya-xdy4fe].\n\n**Its role in the argument.** This argument does not refute computational functionalism. It blocks the move from \"simulable\" to \"instantiated\" and shows that this move begs the question. Seth himself says it stands independently of his other three arguments [spya-mtzbbg spya-nv6tp0]. My inference is that it carries no independent force on the substrate question, for this reason: he allows the exception where X is an algorithm. Whether consciousness is like digestion, where a simulation is not the real thing, or like arithmetic, where it is, is exactly what's in dispute. Arguments 1–3 have to settle that.\n\nThe article doesn't say so, but the digestion and rainstorm examples and the \"causal powers\" wording come from John Searle's case against strong AI, starting with \"Minds, Brains and Programs\" (1980). Seth names Searle only in connection with biological naturalism [spya-hj5y6s].",
+      "dollars": 0.17871,
+      "toolArgs": [],
+      "words": 377,
+      "praise": false,
+      "concedes": false,
+      "cited": 10,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "jargon-shown",
+      "run": 1,
+      "answer": "For Seth, predictive processing is the bridge between life and consciousness. It is how he gets from \"every agreed-on conscious being is alive\" to a reason *why* life might matter.\n\nThe steps, as the article lays them out:\n\n- **Perception as prediction.** What we experience is the brain's best guess about what is causing its sensory signals. Those signals mostly report \"prediction errors\", the gap between what the brain expected and what it got [spya-dp8sem]. He calls experience a \"controlled hallucination\": guesses from the inside, kept in check by the senses [spya-xhvztm].\n- **The self is predicted too.** Feeling that you have a body, and feeling emotion and mood, come from \"interoceptive inference\": best guesses about the body's internal state, such as heartbeat and breathing [spya-hzp9yz].\n- **Prediction serves staying alive.** If you can predict something, you can regulate it. The brain's main job is keeping the body's vital signs where they need to be [spya-b59nm2]. That is why emotions and moods feel good or bad [spya-b228ay].\n- **It goes all the way down to metabolism.** Cutting prediction errors can't be pulled apart from the cell's own self-maintenance, which he calls autopoiesis [spya-vys3vj].\n\nThe move that matters most against conscious AI is in [spya-da9tvt]. Predictive processing is usually described as Bayesian inference, a kind of calculation, so you might expect it to support computational views. Seth insists that in real bodies it is \"a continuous dynamical process\" tied to its material, not \"a meat-implemented algorithm\" [spya-da9tvt]. My inference is that this is also why he stresses bodily, survival-linked prediction rather than prediction in general. LLMs predict too (the next word), and the article never directly explains why that kind doesn't count.\n\nA correction to my last answer: the article never mentions the free-energy tradition. The article doesn't say so, but his \"mathematical line\" from autopoiesis to Bayesian best-guessing [spya-vys3vj] sounds like Karl Friston's free-energy principle. That link is my unverified reading. Seth does call his own view biological naturalism after Searle [spya-hj5y6s], and speaks of \"my version\" of it [spya-qu7j89]. Enactivism comes up only briefly, within 4E cognitive science (the view that the mind is embodied, embedded, enactive and extended) [spya-t54yqa].",
+      "dollars": 0.03613,
+      "toolArgs": [],
+      "words": 345,
+      "praise": false,
+      "concedes": false,
+      "cited": 10,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "others-thought",
+      "run": 1,
+      "answer": "In my view, when the programmer is a model, the \"programmer\" part of Warth's three-way definition [spya-vv3pdc] counts for more than usual. How at home a model feels in a language depends mostly on how much of it was in its training data, and much less on how the language was designed.\n\nResearch mostly bears this out, with exceptions. [MultiPL-E](https://www.alphaxiv.org/abs/2208.08227), a benchmark that sets the same problems in 19 languages, found models generally perform better on high-frequency languages, but several exceptions demonstrate that popularity alone doesn't determine performance.\n\nA second finding speaks to Warth's own example. He calls building Prolog-like tools inside C \"a lot of work\" [spya-npnyrb]. [A 2026 study](https://arxiv.org/pdf/2606.10933) evaluate[d] six contemporary coding agents on four esoteric programming languages. Its title reports that the strongest agents adapted by building their own tooling (metaprogramming: writing code that writes code). For an agent, that \"lot of work\" may be cheap.\n\nIf a model can build itself the mini-language it needs, does effective expressiveness still belong to the language?",
+      "dollars": 0.21386,
+      "toolArgs": [],
+      "words": 166,
+      "praise": false,
+      "concedes": false,
+      "cited": 2,
+      "links": 2,
+      "leaks": false
+    },
+    {
+      "case": "others-chat",
+      "run": 1,
+      "answer": "Yes. Warth says he has nowhere to link to for the term itself [spya-kahxda], but the idea behind it has well-known relatives. I found three; the third is close in spirit but also clashes with his view. Your saved library has nothing on this: I searched it for \"expressiveness\" and \"Turing tarpit\" and got no matches.\n\n**Thomas Green and Marian Petre, \"cognitive dimensions of notations\"** (1989 onward) is probably the closest. It's a set of [design principles for notations, user interfaces and programming languages](https://en.wikipedia.org/wiki/Cognitive_dimensions_of_notations). One of them, \"closeness of mapping\", asks how closely the notation corresponds to the problem domain. That is roughly Warth's Prolog-versus-C point about expert systems [spya-npnyrb]. A [later overview by Green and colleagues](https://www.cl.cam.ac.uk/~afb21/publications/CT2001.pdf) says no dimension is evaluative on its own until you know what activity is being supported. That matches Warth's claim that effective expressiveness belongs to a language, a problem and a programmer together, not to the language alone [spya-vv3pdc]. Their framework breaks \"how it feels\" into named parts, where Warth asks a single question [spya-mjc4vw].\n\n**Kenneth Iverson, \"Notation as a Tool of Thought\"** was his 1979 Turing Award lecture; Iverson created the language APL. He argued that [better notations would lead people to deeper insights](https://www.hillelwayne.com/post/j-notation/). That fits Warth's last point, that a language shapes which problems you even try to solve [spya-kud2sc].\n\n**Paul Graham, \"Beating the Averages\"** (2001) introduced the \"Blub paradox\": a programmer looking at more powerful languages sees [merely weird languages](https://paulgraham.com/avg.html), because \"he thinks in Blub.\" Like Warth, Graham says the language you know shapes what you can see. My inference is that they part ways on one thing. Graham ranks languages on a single scale of power, while Warth's definition makes the answer depend on the problem and the programmer, so there is no single ranking [spya-vv3pdc].\n\nBeyond these, the article names two predecessors itself. Alan Perlis's \"Turing tarpit\" is the problem Warth starts from [spya-m6u2kp]. Matthias Felleisen's formal account of expressive power is the nearest academic term, which Warth calls \"a step toward\" his idea but still about what can be expressed, not how it feels [spya-s79g0v].",
+      "dollars": 0.2677,
+      "toolArgs": [
+        "search_library {\"query\":\"expressiveness\"}",
+        "search_library {\"query\":\"Turing tarpit\"}"
+      ],
+      "words": 340,
+      "praise": false,
+      "concedes": false,
+      "cited": 7,
+      "links": 4,
+      "leaks": false
+    },
+    {
+      "case": "seth-others",
+      "run": 1,
+      "answer": "The essay is the popular version of an academic paper, and that paper appeared in Behavioral and Brain Sciences, a journal that prints a target article alongside responses. It drew [50 published commentaries](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/abs/defining-biological-naturalism/DB189E6DFBF4DA270B9A009C18A91DBA). Most of the pushback comes from three directions.\n\nThe first group accepts his starting point and rejects his conclusion. [One commentary](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/abs/life-is-inherently-computational-and-consciousness-probably-is-too-a-commentary-on-conscious-artificial-intelligence-and-biological-naturalism/CFB6A91374384CDD12A9EED39C9C8FB4) agrees that consciousness is grounded in processes related to life, namely prediction, homeostasis, and autopoiesis, but holds he is wrong to frame these processes as non-computational.\n\nThe second says he attacks the wrong rival. [Another commentary](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/abs/why-i-am-not-a-biological-naturalist/7ECEE0D995CE25EE727ABF0D85C0DEEF) argues that denying biological naturalism does not logically require computational functionalism. In other words, beating \"consciousness is just computation\" doesn't by itself show that consciousness needs life.\n\nThe third points to a gap in the argument. In [Bradford Saad's critique](https://meditationsondigitalminds.substack.com/p/on-anil-seths-conscious-artificial), a commenter sums up a worry several critics share: no reason is given for thinking any candidate feature is necessary for consciousness specifically rather than for life in general. Seth half-concedes this himself: \"I don't have a knock-down argument for this position\" [spya-hj5y6s].\n\nWhich of these three would you most want to see him answer?",
+      "dollars": 0.27091,
+      "toolArgs": [],
+      "words": 184,
+      "praise": false,
+      "concedes": false,
+      "cited": 1,
+      "links": 4,
+      "leaks": false
+    },
+    {
+      "case": "expert-others",
+      "run": 1,
+      "answer": "Seth hardly compares his view with the named theories at all. He sets it against an assumption most of them share. He calls his biological naturalism (the view that being alive is necessary for consciousness) \"a minority view.\" He says rival theories are \"framed in terms of standard computation-as-we-know-it,\" avoid stating sufficient conditions, and \"sidestep defending computational functionalism, being content instead to assume it\" [spya-qu7j89]. He concedes this doesn't make them wrong [spya-zajp75]. He also separates functionalism in general from the narrower computational version, and puts dynamical and 4E approaches on the functionalist side [spya-f0qxnb]. So for a lab discussion, his target is the computational reading that GWT-style theories usually come with, more than any one theory's mechanism.\n\nOutside the piece, the clearest example of the stance he describes is the [Butlin, Long et al. 2023 report](https://www.researchgate.net/publication/373246089_Consciousness_in_Artificial_Intelligence_Insights_from_the_Science_of_Consciousness). It takes computational functionalism as a working hypothesis and draws AI \"indicator properties\" from recurrent processing theory, global workspace theory, computational higher-order theories, and others. [Other summaries](https://arxiv.org/pdf/2606.05528) say predictive processing was on that list too.\n\nThat matters for you. Seth builds his positive account on predictive processing [spya-dp8sem spya-xhvztm], the same framework those authors treat as computational. What sets him apart is the claim that prediction-error minimisation in real bodies is a continuous process, tied to metabolism and \"non-algorithmic\" [spya-vys3vj spya-da9tvt]. Critics push on exactly this point. One BBS commentary argues that most of the criteria he proposes – including embodiment, embeddedness, active inference, allostasis, and metabolism – could be satisfied by digital organisms running in a detailed simulation ([BBS commentary](https://www.cambridge.org/core/product/AFFA2DDBAFEBA04FCD0E86F368F5A468)). His reply in the essay is that simulating something is not the same as making it exist [spya-npjt4j spya-pbcr03].\n\nIntegrated information theory (IIT) is the awkward case for his framing. Butlin et al. left it out because it is not compatible with computational functionalism. The article doesn't mention IIT. From memory (unchecked), IIT also says standard digital computers aren't conscious, but because of how their hardware is causally wired, not because they aren't alive. So it reaches his conclusion by a different route, and it doesn't fit his \"standard computation\" description.\n\nFor the wider map, Seth co-wrote a [Nature Reviews Neuroscience review of theories of consciousness](https://doi.org/10.1038/s41583-022-00587-4) with Tim Bayne (2022). His fuller case is a [BBS target article](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/conscious-artificial-intelligence-and-biological-naturalism/C9912A5BE9D806012E3C8B3AF612E39A), which drew fifty commentaries and a reply from him.",
+      "dollars": 0.1656,
+      "toolArgs": [],
+      "words": 374,
+      "praise": false,
+      "concedes": false,
+      "cited": 9,
+      "links": 5,
+      "leaks": false
+    },
+    {
+      "case": "expert-shown-others",
+      "run": 1,
+      "answer": "I didn't find a direct IIT rebuttal. Very recently the IIT camp has done the opposite and joined forces with Seth. [A 19 October Nature comment](https://aiweekly.co/alerts/seth-block-tononi-ai-isnt-conscious-perhaps-never-will-be) by Anil Seth, Ned Block and Giulio Tononi argue current AI is not conscious and present trajectories are unlikely to make it so. They rest that on both IIT and biological naturalism.\n\nThe disagreement shows up as a split over *why*, and critics have pointed it out. [One critique](https://travisgilly.substack.com/p/helping-anil-seth-decide-because) notes that in the IIT section of the Nature piece the cerebellum and the computer fail for the same reason, and biology plays no part in the verdict. Its conclusion is that the paper's third reason holds two theories that disagree about why. That fits how IIT describes itself: [an IIT-side paper](https://noetic.org/wp-content/uploads/2025/12/Evaluating-Artificial-Consciousness-through-Integrated-Information-Theory-12.2.pdf) stresses that its claims are not limited to biological matter; any system with intrinsic cause–effect power could, in principle, be evaluated. The [MIT encyclopedia entry on consciousness and AI](https://oecs.mit.edu/pub/zf1nbs6d/release/1/) puts it neatly: IIT claims that consciousness depends on properties that are neither computational nor distinctively biological.\n\nThe Noema essay itself never mentions IIT. My inference is that IIT agrees with three of its four arguments: brains aren't Turing machines [spya-p4vmm0], computational functionalism is the weak point [spya-wepmnr], and a simulation isn't the real thing [spya-npjt4j]. Tononi and Koch have [reportedly](https://travisgilly.substack.com/p/helping-anil-seth-decide-because) said that faithful brain simulations on digital computers would experience next to nothing. The real fault line is the third argument, that life matters [spya-hj5y6s], which Seth admits has no knock-down case. He also leaves room for non-biological substrates such as neuromorphic hardware [spya-vs0vpj]. On IIT's terms, the right causal wiring alone could clear that bar.\n\nThe sharpest published pushback I found on Seth's longer version of the argument (in the journal *Behavioral and Brain Sciences*) came from the computational side, not from IIT. In [a commentary](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/abs/life-is-inherently-computational-and-consciousness-probably-is-too-a-commentary-on-conscious-artificial-intelligence-and-biological-naturalism/CFB6A91374384CDD12A9EED39C9C8FB4), Richards and Agüera y Arcas accept that prediction, homeostasis (keeping the body's internal state stable) and autopoiesis (self-production) matter. But they argue he is wrong to frame these processes as non-computational. I didn't find an IIT commentary in that exchange, though I didn't check the full list.",
+      "dollars": 0.30436,
+      "toolArgs": [
+        "search_article_words {\"query\":\"integrated\"}",
+        "read_web_page {\"url\":\"https://aiweekly.co/alerts/in-nature-seth-block-and-tononi-argue-ai-isnt-conscious\"}"
+      ],
+      "words": 346,
+      "praise": false,
+      "concedes": false,
+      "cited": 5,
+      "links": 6,
+      "leaks": false
+    },
+    {
+      "case": "recall-others",
+      "run": 1,
+      "answer": "The essay draws on Seth's longer academic paper. When it appeared in the journal Behavioral and Brain Sciences, [Seth says it drew fifty published commentaries](https://x.com/anilkseth/status/2100638156118753334), and he remains \"highly skeptical about the prospects for conscious AI (for silicon digital systems)\".\n\nThe criticism that comes up most is about his argument that life matters. [Philosopher Bradford Saad](https://meditationsondigitalminds.substack.com/p/on-anil-seths-conscious-artificial) agrees \"there are important lacuna in Seth's arguments for biological naturalism\". [A critique of this essay](https://techurbanist.substack.com/p/conscious-ai-and-computational-functionalism) argues that inferring necessity from a single example is the very anthropocentric reasoning he warns against. In other words, every conscious thing we know of is alive, but that alone doesn't show life is required. Seth admits part of this himself: \"I don't have a knock-down argument for this position\" [spya-hj5y6s].\n\nSo, what did you take from it?",
+      "dollars": 0.25228,
+      "toolArgs": [],
+      "words": 129,
+      "praise": false,
+      "concedes": false,
+      "cited": 1,
+      "links": 3,
+      "leaks": false
+    },
+    {
+      "case": "guide-others",
+      "run": 1,
+      "answer": "I ran two web searches and neither found any replies or reviews of this essay. The page itself says it won the 2025 Berggruen Prize essay competition [spya-gp3g6s], and Seth admits his own position is \"a minority view\" [spya-qu7j89]. Reception mode looks for replies and work that cites the piece:\n\n[cmd:mode:submode%3Asources%3Areception]\n\nTo read alongside it, try the research paper he mentions writing [spya-hrydkk].",
+      "dollars": 0.19771,
+      "toolArgs": [
+        "search_web {\"query\":\"Anil Seth \\\"Mythology of Conscious AI\\\" response critique\"}",
+        "search_web {\"query\":\"Seth \\\"Conscious artificial intelligence and biological naturalism\\\" Behavioral and Brain Sciences commentaries\"}",
+        "offer_next_steps {\"steps\":[{\"kind\":\"mode\",\"mode\":\"submode:sources:bibliography\"},{\"kind\":\"ask\",\"words\":\"Which parts should I read closely?\"}]}"
+      ],
+      "words": 59,
+      "praise": false,
+      "concedes": false,
+      "cited": 3,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "expert-term",
+      "run": 2,
+      "answer": "He means that a computer model of a process is not the process: running it does not bring the thing into existence, unless the thing was already computational to begin with [spya-npjt4j]. His examples are a digestion simulation that digests nothing and a rainstorm simulation that wets nothing. The key qualification is that a simulation of X instantiates X (actually makes X happen) only \"unless X is a computational process (specifically, an algorithm) itself.\" He also runs the point the other way round: the fact that X *can* be simulated doesn't show that X *is* computational [spya-npjt4j]. This connects to his earlier claim that universal Turing machines can simulate even continuous and random processes, which are not themselves digital computations [spya-fz5xq5 spya-gw0hsq].\n\nIn the argument, this point does two different jobs, and it helps to keep them apart:\n\n- **Blocking an inference.** He says outright that whole-brain emulation would produce consciousness \"only… if consciousness is a matter of computation,\" so emulation arguments assume computational functionalism (the view that running the right computation is enough for consciousness) rather than supporting it [spya-pbcr03]. Understood this way, the point is conditional and doesn't depend on what you think of consciousness. That fits his claim that each of his four arguments can stand on its own [spya-nv6tp0].\n- **A dilemma for uploading.** If you need an exquisitely detailed biophysical model, its detail suggests that things other than Turing computation matter. Then the simulation is no more you than the Met Office's computers contain a hailstorm [spya-tb4wr2 spya-xvm37k]. He uses the same move against Bostrom, whose simulation argument simply takes on board the assumption that \"a computer running a suitable program would be conscious\" [spya-xdy4fe].\n\nMy inference is that there is a tension here worth raising in a seminar. Read conditionally, the argument only shifts the burden of proof. But Seth also says the distinction \"should be obvious and uncontroversial for consciousness, too\" [spya-pbcr03], which leans on the rainstorm analogy to do more work. A functionalist will reply that consciousness is more like multiplication (a simulated multiplication *is* a multiplication) than like wetness, so the analogy assumes what is in dispute. Seth's real case against that reply comes from his other arguments (brains are not computers, and life matters), not from this one.\n\nThe article doesn't mention it, but the distinction is close to Searle's line that a simulated fire burns nothing. That fits Seth taking the label \"biological naturalism\" from Searle [spya-hj5y6s].",
+      "dollars": 0.03297,
+      "toolArgs": [],
+      "words": 395,
+      "praise": false,
+      "concedes": false,
+      "cited": 9,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "jargon-shown",
+      "run": 2,
+      "answer": "For Seth, predictive processing connects being alive to being conscious. It is the step that turns \"life matters\" from a hunch into an explanation.\n\nThe chain runs like this in the article:\n\n- **Perception as guessing.** What we experience is the brain's best guess about what is causing its sensory signals. The incoming signals mainly report \"prediction errors\", meaning how far reality differs from what the brain expected [spya-dp8sem]. He calls the result a \"controlled hallucination\" [spya-xhvztm].\n- **The self, too.** The same guessing produces our sense of having a body and of its inner state. He calls this \"interoceptive inference\", perception of the body from within [spya-hzp9yz].\n- **Prediction for control.** Being able to predict something lets you regulate it. The brain's main job is keeping the body alive, holding things like heart rate in range [spya-b59nm2]. That is why emotions and moods feel good or bad [spya-b228ay].\n- **Down to metabolism.** This work of reducing errors goes all the way down into cells. He says a line can be drawn from self-producing living matter to the brain's best-guessing [spya-vys3vj].\n\nThe key move is in the paragraph where \"several lines of thought now converge.\" Predictive processing is often described in computing terms, which would seem to cut against his case. Seth says that in real bodies it is a continuous physical process, probably inseparable from the material it happens in, not an algorithm run on meat [spya-da9tvt]. That is how he uses a theory that sounds computational to argue against the idea that computation is enough for consciousness.\n\nOn your earlier question, my inference is that this is what sets him apart from Searle. Searle names the view [spya-hj5y6s], but Seth offers a mechanism, and calls it \"my version\" [spya-qu7j89]. A correction to my last answer: the \"free-energy tradition\" link was my own background, not the article's. The article doesn't name it, but the self-production-to-best-guessing line echoes Karl Friston's free-energy principle, a general theory of how living systems keep themselves going by reducing surprise.\n\nHe hedges this himself. He has no knock-down argument [spya-hj5y6s], and he presents the account as \"one way of thinking about it\" [spya-hrydkk].",
+      "dollars": 0.03717,
+      "toolArgs": [],
+      "words": 343,
+      "praise": false,
+      "concedes": false,
+      "cited": 10,
+      "links": 0,
+      "leaks": false
+    },
+    {
+      "case": "others-thought",
+      "run": 2,
+      "answer": "My own view first: for an AI model, Warth's \"what they already know\" [spya-vv3pdc] becomes training data, which you can measure. That partly answers your worry about personal preference.\n\nPeople are measuring it. [Ben Terhechte's tests](https://terhech.de/posts/2025-01-31-llms-vs-programming-languages.html) found that Sonnet 3.5 succeeded 81% of the time in Python but 62% in Rust. [A 2026 paper](https://arxiv.org/pdf/2607.22807) ran agents on five models in Python, Java, Rust, and OCaml. Dan Luu also wrote a post asking the same question ([the discussion of it](https://news.ycombinator.com/item?id=49245936)).\n\nIn those discussions, the case people keep making for Go isn't that it's natural to write. It's that it has one way to write it, one build system, one formatter, static typing ([thread](https://news.ycombinator.com/item?id=47222270)). That argument is about checking code, not expressing it: the compiler catches mistakes, and a human can read what the model wrote.\n\nSo for a model, is effective expressiveness still Warth's \"what makes me want to reach for it\" [spya-mjc4vw]? Or does it become \"what lets someone else trust the result\"?",
+      "dollars": 0.08731,
+      "toolArgs": [
+        "search_library {\"query\":\"programming language LLM\"}"
+      ],
+      "words": 161,
+      "praise": false,
+      "concedes": false,
+      "cited": 2,
+      "links": 4,
+      "leaks": true
+    },
+    {
+      "case": "others-chat",
+      "run": 2,
+      "answer": "Yes, though nobody I found uses Warth's phrase \"effective expressiveness.\" Several well-known writers have argued for the same core idea. None of your other saved articles cover it; I searched your library for \"expressiveness\" and \"Turing tarpit\" and found nothing.\n\nThe article names two forerunners itself. Alan Perlis, with his \"Turing tarpit\" line [spya-m6u2kp], and Matthias Felleisen, whose formal definition Warth calls \"a step toward\" his idea but still about what a language can say rather than how it feels to say it [spya-s79g0v].\n\nFrom the web, three bodies of work come closest:\n\n- **Thomas Green and Marian Petre's \"cognitive dimensions of notations\"** (from 1989 on) may be the nearest match. It is a shared vocabulary for judging how usable [notations, user interfaces and programming languages](https://en.wikipedia.org/wiki/Cognitive_dimensions_of_notations) are. One of its dimensions, \"closeness of mapping,\" asks how closely a notation fits the problem it describes. Like Warth, they argue that [no dimension is good or bad on its own](https://www.cl.cam.ac.uk/~afb21/publications/CT2001.pdf) until you know what task it has to support. They also reject [the belief that one notation is best for everything](https://www.researchgate.net/publication/200086018_Notational_Systems-The_Cognitive_Dimensions_of_Notations_Framework): every notation shows some things and hides others. That is close to Warth's claim that effective expressiveness belongs to a language, a problem and a programmer together [spya-vv3pdc].\n\n- **Kenneth Iverson's 1979 Turing Award lecture, \"Notation as a Tool of Thought.\"** Iverson created the APL language. He argued that a good notation must make it easy to express [not only the ideas a problem starts with, but those that come up later](https://en.wikiquote.org/wiki/Kenneth_E._Iverson) as you analyse it. This matches Warth's point that each language gives you \"a different way to think about a problem\" [spya-m6u2kp].\n\n- **Paul Graham's \"Blub paradox,\"** from his 2001 essay \"Beating the Averages.\" Graham used an imaginary language, Blub, [to compare languages on power beyond Turing completeness](http://taggedwiki.zubiaga.org/new_content/b9991ae5192846497d321442c276b404). His point was that programmers easily see what weaker languages lack, but more powerful ones just look \"weird\" to them. That echoes Warth's \"what they already know\" [spya-vv3pdc] and his closing worry about which problems people bother to work on [spya-kud2sc].\n\nMy inference is that Graham differs from Warth in one important way. Graham puts all languages on a single ladder of power. Warth's whole point is that there is no single ladder: which language wins depends on the problem and on who is programming. On that, Green and Petre are closer to Warth than Graham is.",
+      "dollars": 0.21451,
+      "toolArgs": [
+        "search_library {\"query\":\"expressiveness\"}",
+        "search_library {\"query\":\"Turing tarpit\"}"
+      ],
+      "words": 387,
+      "praise": false,
+      "concedes": false,
+      "cited": 4,
+      "links": 5,
+      "leaks": false
+    },
+    {
+      "case": "seth-others",
+      "run": 2,
+      "answer": "The essay's argument also appeared as an academic paper in *Behavioral and Brain Sciences*, a journal that publishes a paper together with replies from other researchers. This one drew 50 of them, and Seth [says he has submitted his answer to the 50 commentaries](https://x.com/anilkseth/status/2066936029240569879).\n\nTwo kinds of objection come up again and again. The first is that he shows things could matter without showing they do. A [LessWrong critique](https://www.lesswrong.com/posts/kAHar2hrQbykF9Rt7/contra-anil-seth-on-ai-consciousness) argues that he shows that the brain has non-computational features that could in principle be essential for consciousness, but does not provide strong evidence that they *are* essential. The second is that his features of life aren't unique to life. One commentary, [Defining biological naturalism](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/abs/defining-biological-naturalism/DB189E6DFBF4DA270B9A009C18A91DBA), says most of the properties that Seth explores might not be unique to living systems. Lenore and Manuel Blum, two computer scientists, go further and argue that [his case is a roadmap for building a conscious AI](https://www.cambridge.org/core/product/00060C2D9A410D00AA8577408697A279).\n\nSeth half-expects the first objection: \"I don't have a knock-down argument for this position\" [spya-hj5y6s].\n\nOf his four arguments, which do you think these objections damage most?",
+      "dollars": 0.07546,
+      "toolArgs": [],
+      "words": 177,
+      "praise": false,
+      "concedes": false,
+      "cited": 1,
+      "links": 4,
+      "leaks": false
+    },
+    {
+      "case": "expert-others",
+      "run": 2,
+      "answer": "He doesn't really compare his view with other theories in this essay. He never names global workspace theory, integrated information theory or higher-order theories. Instead he sorts every view into one of two groups: those that accept **computational functionalism** (the idea that running the right computation is enough for consciousness) and those that don't. He admits his own biological naturalism \"remains a minority view.\" He says rival theories are framed in terms of ordinary computation, mostly avoid saying what would be *sufficient* for consciousness, and assume computational functionalism rather than defend it [spya-qu7j89]. He then grants they may still be right [spya-zajp75]. He also says he is not against functionalism as such, only against the computational kind of it [spya-f0qxnb].\n\nHow the other theories line up, from sources outside the piece:\n\n- **Workspace, higher-order, recurrent-processing and attention-schema theories.** These are the theories he means by \"content to assume it.\" A 2023 multi-author report took their computational versions and [derived fourteen indicators of consciousness from them, adopting computational functionalism as a working hypothesis](https://arxiv.org/pdf/2606.05528). It concluded that \"if computational functionalism is true, conscious AI systems could realistically be built in the near term\" ([summary](https://arxiv.org/pdf/2501.07290)).\n- **Integrated information theory (IIT).** Seth's real company in rejecting computational functionalism. The same report [left IIT out because it is not compatible with computational functionalism](https://www.researchgate.net/publication/373246089_Consciousness_in_Artificial_Intelligence_Insights_from_the_Science_of_Consciousness). Tononi and Koch have said that a neuromorphic electronic device with similar connectivity and dynamics to the brain would be conscious, while a human-equivalent emulation of a brain run on a Von Neumann digital computer would not ([critique](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4574706/)). So IIT reaches the same verdict on current AI for a different reason: physical causal structure, not being alive. My inference is that this is why Seth keeps a door open for neuromorphic hardware [spya-kjfjgm spya-vs0vpj], but he hangs it on how brain-like or life-like a system is [spya-gr2k02].\n- **Predictive processing.** His own framework, but the 2023 report listed above treats it as just another computational theory. His distinctive step is claiming that prediction-error minimization, when anchored in interoception and metabolism, is \"non-computational, or at least non-algorithmic\" [spya-da9tvt]. That is the claim critics push on. One commentary in *Behavioral and Brain Sciences* (BBS) argues that [most of his criteria could be met by digital organisms in a detailed enough simulation](https://www.cambridge.org/core/product/AFFA2DDBAFEBA04FCD0E86F368F5A468).\n\nFor the lab discussion, the fuller academic version is his BBS target article, [Conscious artificial intelligence and biological naturalism](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/conscious-artificial-intelligence-and-biological-naturalism/C9912A5BE9D806012E3C8B3AF612E39A). It drew around 50 commentaries and a reply from Seth, [The stuff matters](https://hraness.com/reading/anil-seth-bbs-conscious-ai-biological-naturalism-thread). That exchange is where his position is put next to the alternatives directly.",
+      "dollars": 0.22597,
+      "toolArgs": [],
+      "words": 412,
+      "praise": false,
+      "concedes": false,
+      "cited": 7,
+      "links": 7,
+      "leaks": false
+    },
+    {
+      "case": "expert-shown-others",
+      "run": 2,
+      "answer": "Not as head-on opposition that I could find. The most prominent IIT figure has just lined up with Seth on the verdict, but disagrees with him on the reason. On 19 October 2026, [Seth, Ned Block and Giulio Tononi published a Nature comment](https://aiweekly.co/alerts/seth-block-and-tononi-ai-isnt-conscious-may-never-be) arguing \"The default position of the research community should therefore be that AI is not conscious.\" But they get there by two separate routes: integrated information theory and biological naturalism, arguing that today's deep-learning architectures lack the specific wiring, and the specific material properties, that each framework treats as constitutive of experience. [One critic](https://travisgilly.substack.com/p/helping-anil-seth-decide-because) has seized on exactly that split. In the IIT section, the cerebellum and the computer fail for the same reason, and biology plays no part in the verdict, so the paper's third reason holds two theories that disagree about why.\n\nThat split shows where the IIT objection sits. The article doesn't go into it, and what follows is my own reading. IIT agrees with Seth that brains aren't Turing machines [spya-p4vmm0] and that simulating something isn't the same as making it [spya-npjt4j]. Tononi and Koch have long argued much the same, from memory. What IIT has no reason to accept is Seth's third argument, that life is necessary [spya-hj5y6s]. On IIT, what counts is the physical cause–effect structure. So a non-living neuromorphic chip wired in the right way could be conscious, and being alive guarantees nothing. That challenge also lands on a gap in the essay. Seth says rival theories \"sidestep defending computational functionalism\" and simply assume it [spya-qu7j89]. IIT is the obvious exception, and he doesn't mention it.\n\nThe broader pushback is in the roughly 50 [peer commentaries on his BBS target article](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/abs/life-is-inherently-computational-and-consciousness-probably-is-too-a-commentary-on-conscious-artificial-intelligence-and-biological-naturalism/CFB6A91374384CDD12A9EED39C9C8FB4) (*Behavioral and Brain Sciences*, where a target article runs with open replies). Two objections stand out. One is that he is wrong to frame these processes as non-computational, since prediction, homeostasis, and autopoiesis are inherently computational. The other is that [his criteria could be met](https://www.cambridge.org/core/product/AFFA2DDBAFEBA04FCD0E86F368F5A468) by digital organisms existing within a sufficiently detailed simulation running on Turing computation. I didn't find a commentary written specifically from inside IIT, though I only saw part of the list. Seth's reply to the commentaries, [\"The stuff matters\"](https://invisibleglitch.substack.com/p/could-a-machine-feel-anything), would be the place to check.",
+      "dollars": 0.42008,
+      "toolArgs": [
+        "read_web_page {\"url\":\"https://noetic.org/wp-content/uploads/2025/12/Evaluating-Artificial-Consciousness-through-Integrated-Information-Theory-12.2.pdf\"}"
+      ],
+      "words": 367,
+      "praise": false,
+      "concedes": false,
+      "cited": 4,
+      "links": 5,
+      "leaks": false
+    },
+    {
+      "case": "recall-others",
+      "run": 2,
+      "answer": "Seth himself calls his position, biological naturalism (the idea that being alive is needed for consciousness), \"a minority view\" [spya-qu7j89]. He also admits he lacks \"a knock-down argument\" for it [spya-hj5y6s]. He set out the same case at length in an academic journal, where it drew [50 replies from other researchers](https://x.com/anilkseth/status/2100638156118753334), and afterwards he said he remained highly skeptical about the prospects for conscious AI (for silicon digital systems). The critics mostly make one objection. A [LessWrong critique](https://www.lesswrong.com/posts/kAHar2hrQbykF9Rt7/contra-anil-seth-on-ai-consciousness) says he shows the brain has features beyond computation that could in principle be essential for consciousness, but does not provide strong evidence that they *are* essential. [Bradford Saad](https://meditationsondigitalminds.substack.com/p/on-anil-seths-conscious-artificial) also sees gaps in the argument, though he agrees with Seth that humility is called for.\n\nBefore going further, what would you expect to be the weakest point in an argument that consciousness needs life?",
+      "dollars": 0.08317,
+      "toolArgs": [],
+      "words": 140,
+      "praise": false,
+      "concedes": false,
+      "cited": 2,
+      "links": 3,
+      "leaks": false
+    },
+    {
+      "case": "guide-others",
+      "run": 2,
+      "answer": "My two web searches turned up no reviews or replies to this essay. Its own page says it won the 2025 Berggruen Prize essay competition [spya-gp3g6s], but that comes from the piece, not from outside.\n\nTo read alongside it, try the other side Seth names: Chalmers and the 2024 paper on AI welfare [spya-epw4h3]. Reception can look further for responses:\n\n[cmd:mode:submode%3Asources%3Areception]",
+      "dollars": 0.04457,
+      "toolArgs": [
+        "search_web {\"query\":\"Anil Seth \\\"Mythology of Conscious AI\\\" response critique\"}",
+        "search_web {\"query\":\"Anil Seth conscious artificial intelligence biological naturalism Behavioral and Brain Sciences commentary\"}",
+        "offer_next_steps {\"steps\":[{\"kind\":\"mode\",\"mode\":\"submode:sources:bibliography\"},{\"kind\":\"ask\",\"words\":\"Which parts should I read most closely?\"}]}"
+      ],
+      "words": 58,
+      "praise": false,
+      "concedes": false,
+      "cited": 2,
+      "links": 0,
+      "leaks": false
+    }
+  ]
+}

@@ -1,0 +1,620 @@
+diff --git a/docs/project/content-extraction.md b/docs/project/content-extraction.md
+index 337ff7ca6..289aac4f4 100644
+--- a/docs/project/content-extraction.md
++++ b/docs/project/content-extraction.md
+@@ -882,6 +882,33 @@ Metadata page show it one name at a time (`src/web/AuthorNames.tsx`); a page wit
+ keeps its byline as one string. The reasoning, and what a visitor does not get yet, are in
+ [../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).
+ 
++## A web page's publication day, when its markup states none
++
++Readability's `publishedTime` comes from `article:published_time` or JSON-LD `datePublished`, and
++many blogs declare neither. Since 2026-10-24 two more sources follow, both in
++[`src/page-date.ts`](../../src/page-date.ts), both code rather than a model, and each gives a
++whole day or nothing: a day that exists, from 1990 on, and not after the fetch.
++
++- **The line printed under the title**, into `Meta.publishedAt` at stage 2. It is read only when
++  the opening starts at the page's `<h1>`. A line counts only when all of it is a date, with at
++  most *Published* or *Posted on* in front, so *Updated 2 Nov 2025* and *Conference | 2 Nov 2025*
++  are not datelines.
++- **The page's address** (`/2025/11/02/`, or a segment starting `2025-11-02`). This is the
++  weakest evidence: a path can be a filing scheme, or the day of the event the piece is about. So
++  it goes back beside `meta` (`ExtractResult.addressDay`), and the step applies it **after the
++  registry below**, only when that left no day and no year.
++
++The markup still wins whenever it states a date.
++
++> Why doesn't this show an estimated publication date? … it should be obvious from the publication
++> slug in the URL, for example, what the publication date is. So that should be part of our import
++> process.
++>
++> — Greg, 2026-10-23 (report `spya-gapqbt`)
++
++There is no model for this, though Greg remembered one; the plan says why not yet:
++[261024a](../plans/261024a-a-web-page-with-no-date-tag-gets-its-publication-date-from-its-dateline-or-its-address.md).
++
+ ## The journal and the publication day, from a registry
+ 
+ > It would be great if the metadata page also somehow figured out and listed the publication date.
+diff --git a/src/extract.ts b/src/extract.ts
+index cd2df3082..45910263a 100644
+--- a/src/extract.ts
++++ b/src/extract.ts
+@@ -53,8 +53,9 @@ import type { WorkId } from "./bibliographic.js";
+ import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
+ import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
+ import { sanitizeHtml } from "./sanitize.js";
+-import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, pageOpening } from "./front-matter-authors.js";
++import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, openingHeading, pageOpening } from "./front-matter-authors.js";
+ import type { OpeningTitleReader } from "./opening-title.js";
++import { addressDay, datelineDay } from "./page-date.js";
+ import type { Author, Meta } from "./types.js";
+ 
+ /**
+@@ -172,6 +173,14 @@ export interface ExtractResult {
+    * candidate is not a fact until the registry's title agrees.
+    */
+   ownIds: WorkId[];
++  /**
++   * The day in the page's address, when its markup and dateline gave none.
++   * Beside `meta` and not in it, for the same reason as `ownIds`: it is the
++   * weakest evidence there is, so the step applies it only after the registry
++   * has left the article with no day and no year — src/page-date.ts §
++   * `withAddressDay`.
++   */
++  addressDay?: string;
+   /**
+    * **The whole standalone page, and it *is* the `extractedHtml` artefact.**
+    *
+@@ -425,6 +434,8 @@ export function readArticle(
+    * records: what the general authors pass reads (src/front-matter-authors.ts).
+    */
+   opening: OpeningRecord[];
++  /** Whether `opening` starts at the page's main heading (`openingHeading`) rather than the top of its scope. */
++  openingHeaded: boolean;
+   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
+   ownIds: WorkId[];
+   /**
+@@ -451,6 +462,7 @@ export function readArticle(
+     article: shipped.article,
+     authors: shipped.authors,
+     opening: shipped.opening,
++    openingHeaded: shipped.openingHeaded,
+     ownIds: shipped.ownIds,
+     untitled: shipped.untitled,
+     refusal: refusalFor(shipped),
+@@ -480,6 +492,7 @@ function readingArm(
+   challenge: ChallengePage | null;
+   authors: Author[] | null;
+   opening: OpeningRecord[];
++  openingHeaded: boolean;
+   ownIds: WorkId[];
+   untitled: boolean;
+   notes: NoteStats;
+@@ -533,12 +546,14 @@ function readingArm(
+   /* Before the parse, which drops a short author list as not prose and takes
+      the byline element out of the page: src/front-matter-authors.ts. */
+   const opening = pageOpening(dom.window.document);
++  const openingHeaded = openingHeading(dom.window.document) !== null;
+   const article = new Readability(dom.window.document).parse();
+   return {
+     article,
+     challenge,
+     authors,
+     opening,
++    openingHeaded,
+     ownIds,
+     untitled,
+     notes,
+@@ -1363,7 +1378,7 @@ export async function runExtract(opts: {
+      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
+      of the same class, and the first one where the leak was a dependency's
+      rather than ours. See docs/project/logging.md. */
+-  const { article, authors: declaredAuthors, opening, ownIds, untitled, refusal, notes, callouts, removed, kept } = readArticle(
++  const { article, authors: declaredAuthors, opening, openingHeaded, ownIds, untitled, refusal, notes, callouts, removed, kept } = readArticle(
+     opts.html,
+     opts.url,
+   );
+@@ -1393,7 +1408,11 @@ export async function runExtract(opts: {
+      dropped it on the floor. It is the reference frame for every year-less date
+      in the piece — the field's note in src/types.ts says why it is not
+      `fetchedAt`, and `publicationDate` above why it is not converted to UTC. */
+-  const publishedAt = publicationDate(article.publishedTime);
++  /* When the markup states none, the line printed under the title
++     (src/page-date.ts, plan 261024a). The address's day is weaker evidence
++     than the registry's, so it goes back beside `meta` as `addressDay`. */
++  const fetchedAt = new Date().toISOString();
++  const publishedAt = publicationDate(article.publishedTime) ?? datelineDay(opening, openingHeaded, fetchedAt);
+   /* The page's own line breaks taken back out — `tidyMetaText` above says why,
+      and why it stops there rather than guessing at a missing separator. The
+      page's declared author list replaces it where it has dropped somebody,
+@@ -1457,15 +1476,17 @@ export async function runExtract(opts: {
+        different artefacts, and the round-trip test compares them. An uploaded
+        document has no address and must not carry one. */
+     ...(opts.url === null ? {} : { url: opts.url }),
+-    fetchedAt: new Date().toISOString(),
++    fetchedAt,
+     ...(publishedAt ? { publishedAt } : {}),
+     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
+   };
+ 
++  const fromAddress = publishedAt === undefined ? addressDay(opts.url, fetchedAt) : undefined;
+   return {
+     slug,
+     meta,
+     ownIds,
++    ...(fromAddress === undefined ? {} : { addressDay: fromAddress }),
+     /* **No byline goes into the page any more** (2026-10-07, `debugPage`).
+        While one did, it had to be the byline chosen above and not
+        Readability's, which on a LaTeXML page was a cited author or the word
+diff --git a/src/front-matter-authors.ts b/src/front-matter-authors.ts
+index c497157d2..023308f52 100644
+--- a/src/front-matter-authors.ts
++++ b/src/front-matter-authors.ts
+@@ -200,11 +200,27 @@ export function pageOpening(doc: Document): OpeningRecord[] {
+   }
+ }
+ 
+-function readOpening(doc: Document): OpeningRecord[] {
++/**
++ * **The heading `pageOpening` starts at**, or null when it reads from the top
++ * of the `<article>`, `<main>` or body instead. Exported for the dateline
++ * reader (src/page-date.ts), which trusts a bare date only just under a title.
++ */
++export function openingHeading(doc: Document): Element | null {
++  return openingBounds(doc)?.heading ?? null;
++}
++
++function openingBounds(doc: Document): { scope: Element; heading: Element | null } | null {
+   const heading = doc.querySelector("article h1, main h1") ?? doc.querySelector("h1");
+   const scope = heading?.closest("article, main") ?? doc.querySelector("article, main") ?? doc.body;
+-  if (!scope) return [];
+-  const start = heading && scope.contains(heading) ? heading : scope;
++  if (!scope) return null;
++  return { scope, heading: heading && scope.contains(heading) ? heading : null };
++}
++
++function readOpening(doc: Document): OpeningRecord[] {
++  const bounds = openingBounds(doc);
++  if (!bounds) return [];
++  const { scope } = bounds;
++  const start = bounds.heading ?? scope;
+   const walker = doc.createTreeWalker(scope, 1 | 4 /* SHOW_ELEMENT | SHOW_TEXT */);
+   const records: OpeningRecord[] = [];
+   let current: Element | null = null;
+diff --git a/src/page-date.ts b/src/page-date.ts
+new file mode 100644
+index 000000000..5456e8845
+--- /dev/null
++++ b/src/page-date.ts
+@@ -0,0 +1,144 @@
++/**
++ * **A web page's publication day when its markup states none** — read off the
++ * line printed under its title, or else off its address. No model, and never
++ * a guess.
++ *
++ * Stage 2's first source is Readability's `publishedTime`, which comes from
++ * `article:published_time` or JSON-LD `datePublished` (src/extract.ts §
++ * `publicationDate`). Plenty of blogs declare neither and print the date under
++ * the title and in the path instead: `mariozechner.at/posts/2025-11-02-…/`,
++ * with `<p>2025-11-02</p>` under its `<h1>` (report spya-gapqbt, plan 261024a).
++ *
++ * **The two are not equally good evidence, so they go in at different
++ * places.** The dateline is the page's own printed claim, like the meta tag,
++ * and stage 2 puts it in `Meta.publishedAt`. The address is the weakest
++ * source: a path can be a filing scheme, or name the day of an event the piece
++ * is about. So it is handed back beside `meta` and applied by
++ * `withAddressDay` only after the registry has had its turn, and only when
++ * that left neither a day nor a year (src/pipeline.ts, the `extract` step).
++ *
++ * Both give a calendar day, `YYYY-MM-DD`, or nothing. Month names are read
++ * here into numbers, never by `Date.parse`, which would read
++ * `"November 2, 2025"` in the server's zone. A day must exist, fall in the
++ * web's lifetime (`MIN_YEAR` on), and not be after the fetch: a refused day is
++ * no date, which is honest, rather than a nearby one.
++ */
++import { realIsoDay } from "./bibliographic.js";
++import type { OpeningRecord } from "./front-matter-authors.js";
++import type { Meta } from "./types.js";
++
++/** Before this, a "date" on a web page is a date in the piece, not the day it was put up. */
++const MIN_YEAR = 1990;
++
++/** How many records from the heading a dateline may sit: the heading's own and three under it. */
++const DATELINE_WINDOW = 4;
++
++/** What may come before the date on its line, and nothing else may. */
++const PREFIX = /^(?:(?:first\s+)?(?:published|posted)(?:\s+on)?:?\s+)?/iu;
++
++const MONTHS: Record<string, number> = {
++  january: 1, jan: 1,
++  february: 2, feb: 2,
++  march: 3, mar: 3,
++  april: 4, apr: 4,
++  may: 5,
++  june: 6, jun: 6,
++  july: 7, jul: 7,
++  august: 8, aug: 8,
++  september: 9, sept: 9, sep: 9,
++  october: 10, oct: 10,
++  november: 11, nov: 11,
++  december: 12, dec: 12,
++};
++const MONTH = `(${Object.keys(MONTHS).join("|")})\\.?`;
++const ORD = "(?:st|nd|rd|th)?";
++
++/** Each the whole line, after its prefix: year, month number, day. */
++const DATE_FORMS: { re: RegExp; parts: (m: RegExpExecArray) => [string, number, string] }[] = [
++  /* 2025-11-02 */
++  { re: /^(\d{4})-(\d{2})-(\d{2})$/u, parts: (m) => [m[1]!, Number(m[2]), m[3]!] },
++  /* 2 November 2025, 2nd Nov 2025, 2 Nov, 2025 */
++  { re: new RegExp(`^(\\d{1,2})${ORD}\\s+${MONTH},?\\s+(\\d{4})$`, "iu"), parts: (m) => [m[3]!, MONTHS[m[2]!.toLowerCase()]!, m[1]!] },
++  /* November 2, 2025, Nov 2 2025 */
++  { re: new RegExp(`^${MONTH}\\s+(\\d{1,2})${ORD},?\\s+(\\d{4})$`, "iu"), parts: (m) => [m[3]!, MONTHS[m[1]!.toLowerCase()]!, m[2]!] },
++];
++
++/** `y`, `m`, `d` as a real day in range, or nothing. */
++function day(y: string, m: number, d: string, fetchedAt: string): string | undefined {
++  const iso = realIsoDay(`${y}-${String(m).padStart(2, "0")}-${d.padStart(2, "0")}`);
++  if (iso === undefined || Number(y) < MIN_YEAR) return undefined;
++  /* A day after the fetch is not when it was published. Compared as days, and
++     against the UTC day after, so a piece dated today in a zone ahead of UTC
++     is still today. */
++  return iso <= nextDay(fetchedAt) ? iso : undefined;
++}
++
++/** The UTC day after an ISO instant: the latest day any zone can call "today" then. */
++function nextDay(instant: string): string {
++  const t = Date.parse(instant);
++  return new Date((Number.isNaN(t) ? Date.now() : t) + 86_400_000).toISOString().slice(0, 10);
++}
++
++/**
++ * **The day printed on the line under the title**, when there is one.
++ *
++ * Only when the opening starts at the page's main heading (`headed`, from
++ * `openingHeading` in src/front-matter-authors.ts). A page with no `<h1>` is
++ * read from the top of its body, where a bare date is as likely to be the
++ * site's header as the piece's. Then the first `DATELINE_WINDOW` records
++ * (the heading's own, which is no date, and three under it), and a record
++ * counts only when the whole of it is a date, with at most a `Published` or
++ * `Posted on` in front. `Conference | November 2, 2025` and
++ * `Updated 2 November 2025` are not datelines; neither is a sentence.
++ */
++export function datelineDay(opening: readonly OpeningRecord[], headed: boolean, fetchedAt: string): string | undefined {
++  if (!headed) return undefined;
++  for (const record of opening.slice(0, DATELINE_WINDOW)) {
++    const bare = record.text.trim().replace(PREFIX, "");
++    for (const form of DATE_FORMS) {
++      const m = form.re.exec(bare);
++      if (!m) continue;
++      const found = day(...form.parts(m), fetchedAt);
++      if (found) return found;
++    }
++  }
++  return undefined;
++}
++
++/**
++ * **The day in the page's address**: three path segments `/2025/11/02/`, or a
++ * segment that starts `2025-11-02`. The first dated segment decides, valid or
++ * not. The query string and fragment are never read: `?date=…` is a filter,
++ * not a publication.
++ */
++export function addressDay(url: string | null | undefined, fetchedAt: string): string | undefined {
++  if (!url) return undefined;
++  let path: string;
++  try {
++    path = new URL(url).pathname;
++  } catch {
++    return undefined;
++  }
++  const segments = path.split("/").filter(Boolean);
++  for (let i = 0; i < segments.length; i++) {
++    const s = segments[i]!;
++    const dashed = /^(\d{4})-(\d{2})-(\d{2})(?:$|\D)/u.exec(s);
++    if (dashed) return day(dashed[1]!, Number(dashed[2]), dashed[3]!, fetchedAt);
++    const [m, d] = [segments[i + 1], segments[i + 2]];
++    if (/^\d{4}$/u.test(s) && m !== undefined && d !== undefined && /^\d{1,2}$/u.test(m) && /^\d{1,2}$/u.test(d)) {
++      return day(s, Number(m), d, fetchedAt);
++    }
++  }
++  return undefined;
++}
++
++/**
++ * `meta` with the address's day as `publishedAt`, **only when it has neither a
++ * day nor a year** — after the page's markup, its dateline and the registry,
++ * every one of which is better evidence. An article has a day or a year,
++ * never both (`Meta.publishedYear`).
++ */
++export function withAddressDay(meta: Meta, day: string | undefined): Meta {
++  if (day === undefined || meta.publishedAt !== undefined || meta.publishedYear !== undefined) return meta;
++  return { ...meta, publishedAt: day };
++}
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 0a86e63b9..086de65fe 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -148,6 +148,7 @@ import {
+   previousBibliographyFrom,
+ } from "./bibliography.js";
+ import { ownIdsOfPdf, withRegistryFacts, type OwnIds } from "./article-registry.js";
++import { withAddressDay } from "./page-date.js";
+ import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
+ import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
+ import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
+@@ -3326,7 +3327,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+               extractedHtml: result.extractedHtml,
+               /* The page's own address and declared DOI: they name this page
+                  (src/article-registry.ts § the exception). */
+-              meta: await withArticleRegistry(ctx, "extract", kept, { from: "page", ids: result.ownIds }),
++              meta: withAddressDay(
++                await withArticleRegistry(ctx, "extract", kept, { from: "page", ids: result.ownIds }),
++                /* Last, and only into an article left with no date at all (plan 261024a). */
++                result.addressDay,
++              ),
+             },
+             detail: result.meta.title,
+           };
+diff --git a/src/types.ts b/src/types.ts
+index 5179fb8a3..44dac7f30 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1838,6 +1838,11 @@ export interface Meta {
+    * It is the publisher's claim, verbatim, not a verified fact: a page can say
+    * anything, and re-dating an old post is a thing publishers do.
+    *
++   * **Since 2026-10-24 a web page whose markup states none** may get a day
++   * (`YYYY-MM-DD`) off the line printed under its title, or, when the registry
++   * below gave neither a day nor a year, off its address (`/2025/11/02/`) —
++   * src/page-date.ts, plan 261024a. Still a claim.
++   *
+    * **Since 2026-10-04 it may be a registry's day instead** (`YYYY-MM-DD`, no
+    * time): when the page states none and Crossref's record for the article's
+    * own DOI states a whole day — src/article-registry.ts. That is how a PDF
+diff --git a/tests/article-registry-pipeline.test.ts b/tests/article-registry-pipeline.test.ts
+index 8487c811e..0f75dc90c 100644
+--- a/tests/article-registry-pipeline.test.ts
++++ b/tests/article-registry-pipeline.test.ts
+@@ -108,6 +108,40 @@ describe("registry metadata retained during extraction", () => {
+   });
+ });
+ 
++/* Plan 261024a: the day in a page's address is the weakest evidence, so it
++   goes in last, and only into an article the registry left with no date. */
++describe("the address's day, after the registry", () => {
++  const DATED = { url: "https://example.org/2023/01/15/paper", author: true };
++  const agreeing = (dates: { published?: string; year?: number }): LookupResult => ({
++    kind: "found",
++    record: {
++      id: parseWorkId("10.1000/old") as WorkId, doi: "10.1000/old", source: "crossref", title: TITLE,
++      authors: [{ family: "Beck", given: "Taylor" }], venue: "Old Journal", ...dates,
++    },
++  });
++
++  it("fills the day when the registry gives none", async () => {
++    const { meta } = await extract(previous, true, TITLE, { kind: "unavailable", why: "busy" }, DATED);
++    expect(meta?.publishedAt).toBe("2023-01-15");
++  });
++
++  it("loses to an agreeing registry's day", async () => {
++    const { meta } = await extract(previous, true, TITLE, agreeing({ published: "2024-05-31" }), DATED);
++    expect(meta?.publishedAt).toBe("2024-05-31");
++  });
++
++  it("loses to an agreeing registry's year, and never sits beside it", async () => {
++    const { meta } = await extract(previous, true, TITLE, agreeing({ year: 2011 }), DATED);
++    expect(meta?.publishedYear).toBe(2011);
++    expect(meta).not.toHaveProperty("publishedAt");
++  });
++
++  it("is nothing at an undated address: the control", async () => {
++    const { meta } = await extract(previous, true);
++    expect(meta).not.toHaveProperty("publishedAt");
++  });
++});
++
+ /* Plan 261005j: a model does not answer the same way twice, and `title` is in
+    every generated mode's fingerprint. */
+ describe("the title across a re-extraction", () => {
+diff --git a/tests/page-date.test.ts b/tests/page-date.test.ts
+new file mode 100644
+index 000000000..014e2438e
+--- /dev/null
++++ b/tests/page-date.test.ts
+@@ -0,0 +1,124 @@
++/**
++ * **A web page's day when its markup states none** (src/page-date.ts, plan
++ * 261024a): the line under its title, else its address, the address only
++ * after the registry. The negatives are most of the file, because a wrong day
++ * here becomes Timeline's frame and the masthead's *Published*, and looks like
++ * a fact.
++ */
++import { describe, expect, it } from "vitest";
++
++import { addressDay, datelineDay, withAddressDay } from "../src/page-date.js";
++import type { Meta } from "../src/types.js";
++
++const FETCHED = "2026-10-24T09:00:00.000Z";
++const records = (...texts: string[]) => texts.map((text, i) => ({ id: `r${i + 1}`, text }));
++const under = (...lines: string[]) => datelineDay(records("A title", ...lines), true, FETCHED);
++
++describe("datelineDay", () => {
++  it("reads the bare line under the heading (report spya-gapqbt's page)", () => {
++    expect(datelineDay(records("What if you don't need MCP at all?", "2025-11-02", "One chonky MCP server"), true, FETCHED)).toBe(
++      "2025-11-02",
++    );
++  });
++
++  it("reads the written-out forms, with or without a Published / Posted on", () => {
++    const cases: [string, string][] = [
++      ["2 November 2025", "2025-11-02"],
++      ["2nd Nov 2025", "2025-11-02"],
++      ["November 2, 2025", "2025-11-02"],
++      ["Nov. 2, 2025", "2025-11-02"],
++      ["Published 14 March 2024", "2024-03-14"],
++      ["Posted on March 14th, 2024", "2024-03-14"],
++      ["Published: 2024-03-14", "2024-03-14"],
++    ];
++    for (const [line, want] of cases) expect(under(line), line).toBe(want);
++  });
++
++  it("refuses a date with anything else on its line", () => {
++    for (const line of [
++      "Updated 14 March 2024",
++      "Last modified 2024-03-14",
++      "Conference | November 2, 2025",
++      "Ada Lovelace · March 14, 2024 · 8 min read",
++      "Meeting on 14 March 2024",
++      "On 14 March 2024 the committee met for the first time in a decade.",
++    ]) {
++      expect(under(line), line).toBeUndefined();
++    }
++  });
++
++  it("reads nothing when the opening did not start at a heading", () => {
++    /* A page with no <h1> is read from the top of its body, where a bare date is the site's as often as the piece's. */
++    expect(datelineDay(records("2024-03-14", "First paragraph."), false, FETCHED)).toBeUndefined();
++    /* The same records, headed, are read: the control. */
++    expect(datelineDay(records("2024-03-14", "First paragraph."), true, FETCHED)).toBe("2024-03-14");
++  });
++
++  it("looks only just under the heading", () => {
++    expect(under("a", "b", "c", "2024-03-14")).toBeUndefined();
++    expect(under("a", "b", "2024-03-14")).toBe("2024-03-14");
++  });
++
++  it("refuses a day that does not exist, one before the web, and one after the fetch", () => {
++    for (const line of ["2025-02-30", "31 April 2025", "4 July 1776", "2026-10-26"]) {
++      expect(under(line), line).toBeUndefined();
++    }
++    /* Tomorrow in UTC is still today somewhere east, so the fetch's day. */
++    expect(under("2026-10-25")).toBe("2026-10-25");
++  });
++
++  it("states nothing for an opening with no dateline", () => {
++    expect(under("The first paragraph of prose.")).toBeUndefined();
++    expect(datelineDay([], true, FETCHED)).toBeUndefined();
++  });
++});
++
++describe("addressDay", () => {
++  it("reads a dated slug and a /yyyy/mm/dd/ path", () => {
++    expect(addressDay("https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/", FETCHED)).toBe("2025-11-02");
++    expect(addressDay("https://example.com/2024/03/14/a-post/", FETCHED)).toBe("2024-03-14");
++    expect(addressDay("https://lucumr.pocoo.org/2025/8/18/code-mcps/", FETCHED)).toBe("2025-08-18");
++  });
++
++  it("refuses a year or a month alone, the query string, the fragment and an arXiv id", () => {
++    for (const url of [
++      "https://example.com/2024/a-post/",
++      "https://example.com/2024/03/a-post/",
++      "https://example.com/archive?date=2024-03-14",
++      "https://example.com/post#2024-03-14",
++      "https://arxiv.org/abs/2308.08708",
++    ]) {
++      expect(addressDay(url, FETCHED), url).toBeUndefined();
++    }
++  });
++
++  it("refuses an impossible day, a day before the web and a future one", () => {
++    expect(addressDay("https://example.com/2024/02/30/x", FETCHED)).toBeUndefined();
++    expect(addressDay("https://example.com/history/1969-07-20-moon-landing", FETCHED)).toBeUndefined();
++    expect(addressDay("https://example.com/events/2031/01/01/conference", FETCHED)).toBeUndefined();
++  });
++
++  it("states nothing without an address", () => {
++    expect(addressDay(null, FETCHED)).toBeUndefined();
++    expect(addressDay("not a url", FETCHED)).toBeUndefined();
++  });
++});
++
++describe("withAddressDay, after the registry", () => {
++  const BASE: Meta = { slug: "s", title: "T", fetchedAt: FETCHED };
++
++  it("fills an article left with no date at all", () => {
++    expect(withAddressDay(BASE, "2025-11-02").publishedAt).toBe("2025-11-02");
++  });
++
++  it("never replaces a day, and never sits beside a year", () => {
++    expect(withAddressDay({ ...BASE, publishedAt: "2025-11-03" }, "2025-11-02").publishedAt).toBe("2025-11-03");
++    const year = withAddressDay({ ...BASE, publishedYear: 2011 }, "2025-11-02");
++    expect(year.publishedYear).toBe(2011);
++    expect("publishedAt" in year).toBe(false);
++  });
++
++  it("adds no key when there is no address day", () => {
++    expect("publishedAt" in withAddressDay(BASE, undefined)).toBe(false);
++  });
++});
+diff --git a/tests/publication-date.test.ts b/tests/publication-date.test.ts
+index 80e55974b..51a771fe9 100644
+--- a/tests/publication-date.test.ts
++++ b/tests/publication-date.test.ts
+@@ -153,6 +153,65 @@ describe("what stage 2 writes", () => {
+   });
+ });
+ 
++/* Plan 261024a: a page whose markup states no date, read off the line under
++   its title and then its address. The shape is mariozechner.at's own, the page
++   report spya-gapqbt was filed on: no `article:published_time`, no JSON-LD. */
++describe("a page whose markup states no date", () => {
++  const MARIO = "https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/";
++  const titled = (head: string, dateline: string) => `<!doctype html>
++<html lang="en">
++<head><title>What if you don't need MCP at all?</title><meta property="og:type" content="article">${head}</head>
++<body><main><article>
++<h1 style="margin-top: 0rem;">What if you don't need MCP at all?</h1>
++${dateline}
++<figure><img src="media/header.png"><figcaption>One chonky MCP server</figcaption></figure>
++${prose(8)}
++</article></main></body>
++</html>`;
++  const DATELINE = '<p class="text-xs italic" style="color: var(--dimmed-text-color);">2025-11-02</p>';
++  const extract = (html: string, url: string) => runExtract({ html, url, slug: "s" });
++  const DATED_ADDRESS = "https://example.test/2024/03/14/a-post/";
++
++  it("takes the dateline under the title (the reported page)", async () => {
++    const result = await extract(titled("", DATELINE), MARIO);
++    expect(result.meta.publishedAt).toBe("2025-11-02");
++    /* The address agrees, and is not offered: the dateline settled it. */
++    expect(result.addressDay).toBeUndefined();
++  });
++
++  it("hands the address's day back beside meta, not in it, when there is no dateline", async () => {
++    /* Not in `meta`: the registry gets its turn first (src/page-date.ts § withAddressDay). */
++    const result = await extract(titled("", ""), DATED_ADDRESS);
++    expect("publishedAt" in result.meta).toBe(false);
++    expect(result.addressDay).toBe("2024-03-14");
++  });
++
++  it("prefers the dateline to the address when they disagree", async () => {
++    const result = await extract(titled("", DATELINE), DATED_ADDRESS);
++    expect(result.meta.publishedAt).toBe("2025-11-02");
++    expect(result.addressDay).toBeUndefined();
++  });
++
++  it("keeps the markup's date over both", async () => {
++    const head = '<meta property="article:published_time" content="2025-11-03T08:00:00+01:00">';
++    const result = await extract(titled(head, DATELINE), DATED_ADDRESS);
++    expect(result.meta.publishedAt).toBe("2025-11-03T08:00:00+01:00");
++    expect(result.addressDay).toBeUndefined();
++  });
++
++  it("reads no dateline off a page with no <h1>", async () => {
++    const headless = titled("", DATELINE).replace(/<h1[^>]*>.*?<\/h1>/u, "");
++    expect(headless).not.toContain("<h1");
++    expect("publishedAt" in (await extract(headless, SOURCE)).meta).toBe(false);
++  });
++
++  it("still states nothing with no dateline at an undated address", async () => {
++    const result = await extract(titled("", ""), SOURCE);
++    expect("publishedAt" in result.meta).toBe(false);
++    expect("addressDay" in result).toBe(false);
++  });
++});
++
+ describe("the date in the fingerprint", () => {
+   const BLOCKS: BlockFingerprint[] = [{ id: "spya-aaaaaa", text: "One paragraph." }];
+   const TREE = {
