@@ -33,6 +33,7 @@ cannot express. `npm run ingest -- <url>` runs it, and everything after it.
 - [§ What stage 1 leaves behind](#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk) — the stored object and manifest; `npm run fetch` is gone
 - [§ A paper source](#a-paper-source-one-paper-several-addresses) — a DOI or landing page leading to the paper
 - [§ A paper a site refuses](#a-paper-a-site-refuses-europe-pmcs-free-copy) — Europe PMC's free copy, and the original failure on any miss
+- [§ A piece across several pages](#a-piece-across-several-pages-the-pages-page-1-points-to) — a front page that links its chapters, followed by a cheap judge
 - [§ Not everything gets fetched](#not-everything-gets-fetched-rawmanifest-has-an-origin) — uploads and `RawManifest.origin`
 - [§ The user-agent question](#the-user-agent-question) — why we send what we send
 - [§ Addresses we won't dial](#addresses-we-wont-dial) — SSRF and private addresses
@@ -704,6 +705,41 @@ sentence for sentence. A 404, a timeout and everything else never ask.
 
 The plan, the spikes and the review that shaped it:
 [261018j](../plans/261018j-a-refused-paper-read-from-europe-pmc-and-a-saved-page-keeps-its-address.md).
+
+## A piece across several pages: the pages page 1 points to
+
+> I would like to be able to import this article just by feeding it the front page and trusting that
+> the LLM will do the right thing.
+>
+> — Greg, 2026-10-23, report spya-qkyukr
+
+Since 2026-10-24 a fetched web page — not a paper source, not a converted one, not an upload — is
+asked one question before it is stored: *is this page only part of its piece, and which of its own
+links carry the rest?* The judge is Haiku (`src/multi-page.ts`, job `multi-page`): it sees
+`readArticle`'s text of page 1, head and tail, and page 1's links to the same site under ids of
+ours, and answers with ids, never addresses. About $0.0005 and two seconds a page; no links, no
+call; any failure of the call imports page 1 alone, exactly as before.
+
+When it says yes, `followPages` (`src/follow-pages.ts`) fetches the named pages **one at a time,
+through `fetchDocument`**, so every rule in this doc applies to each. A page is kept only if it is
+still the same site after its redirects (`sameSite`: the host with or without `www.`, the same
+port, never https down to http) and HTML; anything else is skipped and counted. At most 20 pages,
+**30 MB across them, reserved before each fetch** (each is capped at what is left), and two minutes
+in all. The job card says `… KB, 4 pages`, or `3 of 4 pages` when some were skipped.
+
+**Each page is stored as its own object**, exactly as page 1 is, and listed in order in
+`article_revision_parts`; the manifest carries them as `parts`. Page 1 stays the revision's own
+source byte for byte, so anything that reads the raw source without knowing about parts reads
+page 1, as it did. Stage 2 reads them all
+([content-extraction.md § A piece across several pages](content-extraction.md#a-piece-across-several-pages-each-page-read-alone-then-joined)),
+and so does the injection scan of the source, each page against its own CSS.
+
+Only page 1's links are followed: a piece whose page 1 links to the next page only, and that one to
+the next, comes in partial (a known gap). Why one object per page and not one stitched document,
+what was measured, and what was passed over:
+[261024p](../plans/261024p-a-multi-page-article-imports-from-its-first-page.md) and
+[261024c](../investigations/261024c-multi-page-articles-readability-and-a-cheap-judge.md). What a
+hostile page can do with it: [security-risks.md § R32](security-risks.md#r32).
 
 ## Not everything gets fetched: `RawManifest` has an origin
 

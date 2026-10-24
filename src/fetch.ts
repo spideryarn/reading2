@@ -854,6 +854,8 @@ export interface FetchOptions {
   userAgent?: string;
   /** Cancellation from above — the ingest queue's, in practice. */
   signal?: AbortSignal;
+  /** Called for every response-body byte read, including attempts that later fail. */
+  onBytesRead?: (bytes: number) => void;
   /**
    * Asked exactly once, after the first target has passed its address guard and
    * immediately before this logical fetch's first HTTP request. `false` stops
@@ -877,6 +879,7 @@ interface Resolved {
   maxRedirects: number;
   userAgent: string;
   signal: AbortSignal | null;
+  onBytesRead: ((bytes: number) => void) | null;
   beforeFirstRequest: (() => boolean) | null;
   fetchImpl: FetchLike;
   sleep: (ms: number) => Promise<void>;
@@ -909,6 +912,7 @@ function withDefaults(options: FetchOptions): Resolved {
     maxRedirects: bounded(options.maxRedirects, DEFAULTS.maxRedirects, 0, 20),
     userAgent: options.userAgent ?? DEFAULTS.userAgent,
     signal: options.signal ?? null,
+    onBytesRead: options.onBytesRead ?? null,
     beforeFirstRequest: options.beforeFirstRequest ?? null,
     fetchImpl: options.fetchImpl ?? ((url, init) => fetch(url, init)),
     sleep: options.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms))),
@@ -1231,11 +1235,17 @@ export function pinnedAgent(pinned: Map<string, readonly string[]>): Agent & {
  * the store's own read since 2026-10-04 so that there is one size guard rather
  * than two. This is the fetch's half: what "too big" is called here.
  */
-export async function readCapped(body: ReadableStream<Uint8Array> | null, maxBytes: number, url: string): Promise<Uint8Array> {
+export async function readCapped(
+  body: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+  url: string,
+  onBytesRead?: (bytes: number) => void,
+): Promise<Uint8Array> {
   return readStreamCapped(
     body,
     maxBytes,
     () => new FetchFailure("too-large", url, `That page is over the ${Math.round(maxBytes / (1024 * 1024))} MB limit.`),
+    onBytesRead,
   );
 }
 
@@ -2526,7 +2536,7 @@ async function readBody(res: Response, finalUrl: string, opts: Resolved): Promis
      and no way to tell from the outside. What the check bought was skipping a
      download the cap already bounds at 50 MiB — a few seconds, against a class
      of bug nobody could diagnose. */
-  const bytes = await readCapped(res.body, opts.maxBytes, finalUrl);
+  const bytes = await readCapped(res.body, opts.maxBytes, finalUrl, opts.onBytesRead ?? undefined);
   if (bytes.byteLength === 0) {
     throw new FetchFailure("empty", finalUrl, "That page came back empty.");
   }

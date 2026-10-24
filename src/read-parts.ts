@@ -169,7 +169,7 @@ function joinContents(
   };
 
   const first = parse(firstContent);
-  const taken = { notes: noteIdsIn(first), contexts: contextIdsIn(first) };
+  const taken = { notes: noteIdsIn(first), contexts: contextIdsIn(first), anchors: anchorNamesIn(first) };
   const pages: DocumentFragment[] = [first];
   for (const part of later) {
     const fragment = parse(part.content);
@@ -267,6 +267,19 @@ function contextIdsIn(root: ParentNode): Set<string> {
   return out;
 }
 
+function anchorNamesIn(root: ParentNode): Set<string> {
+  const out = new Set<string>();
+  for (const el of Array.from(root.querySelectorAll("[id], a[name], map[name]"))) {
+    const id = el.getAttribute("id");
+    if (id) out.add(id);
+    if (el.tagName === "A" || el.tagName === "MAP") {
+      const name = el.getAttribute("name");
+      if (name) out.add(name);
+    }
+  }
+  return out;
+}
+
 function decodeFragment(fragment: string): string {
   try {
     return decodeURIComponent(fragment);
@@ -299,22 +312,28 @@ function decodeFragment(fragment: string): string {
 export function namespaceAnchors(
   root: ParentNode,
   prefix: string,
-  taken: { notes: Set<string>; contexts: Set<string> },
+  taken: { notes: Set<string>; contexts: Set<string>; anchors: Set<string> },
 ): void {
   const elements = Array.from(root.querySelectorAll("*"));
 
   /* This page's own note ids, so a suffix never lands on one of them. */
   const own = noteIdsIn(root);
-  const reserved = new Set([...taken.notes, ...own]);
+  const reserved = new Set(taken.anchors);
   const renamed = new Map<string, string>();
+  const ordinary = (value: string): string => {
+    if (!reserved.has(value)) return value;
+    for (let n = 2; ; n++) if (!reserved.has(`${value}-${n}`)) return `${value}-${n}`;
+  };
   const rename = (name: string): void => {
     if (renamed.has(name)) return;
     if (own.has(name)) {
-      const to = taken.notes.has(name) ? nextFree(name, NOTE_BASE, reserved) : name;
+      const to = nextFree(name, NOTE_BASE, reserved);
       reserved.add(to);
       renamed.set(name, to);
     } else {
-      renamed.set(name, prefix + name);
+      const to = ordinary(prefix + name);
+      reserved.add(to);
+      renamed.set(name, to);
     }
   };
   for (const el of elements) {
@@ -322,8 +341,15 @@ export function namespaceAnchors(
     if (id) rename(id);
     if ((el.tagName === "A" || el.tagName === "MAP") && el.getAttribute("name")) rename(el.getAttribute("name")!);
   }
-  const ref = (fragment: string): string =>
-    renamed.get(fragment) ?? renamed.get(decodeFragment(fragment)) ?? prefix + fragment;
+  const ref = (fragment: string): string => {
+    const decoded = decodeFragment(fragment);
+    const found = renamed.get(fragment) ?? renamed.get(decoded);
+    if (found !== undefined) return found;
+    const to = ordinary(prefix + fragment);
+    reserved.add(to);
+    renamed.set(fragment, to);
+    return to;
+  };
 
   const noteStamps = [NOTE_ATTR, REF_ATTR, BACK_ATTR];
   for (const el of elements) {
@@ -353,6 +379,7 @@ export function namespaceAnchors(
     }
   }
   for (const name of own) taken.notes.add(renamed.get(name) ?? name);
+  for (const name of reserved) taken.anchors.add(name);
 
   /* Callout context ids: a value, not an anchor, so nothing links to them —
      only renamed where an earlier page has the same one. */

@@ -40,7 +40,10 @@ export const MAX_PARTS_BYTES = 30 * 1024 * 1024;
 export const FOLLOW_BUDGET_MS = 120_000;
 
 /** How the fetch step fetches: `fetchDocument` (src/fetch.ts), with the byte cap this reserves. */
-export type PageFetcher = (url: string, options: { signal: AbortSignal; maxBytes: number }) => Promise<FetchedDocument>;
+export type PageFetcher = (
+  url: string,
+  options: { signal: AbortSignal; maxBytes: number; onBytesRead?: (bytes: number) => void },
+) => Promise<FetchedDocument>;
 
 /** Why a page the judge picked was not kept. Counted for the log, never written to the article. */
 export type SkipReason = "failed" | "not-html" | "off-site" | "duplicate" | "budget" | "out-of-time";
@@ -64,6 +67,8 @@ export interface FollowDeps {
   budgetBytes?: number;
   /** For a test. Absent, `FOLLOW_BUDGET_MS`. */
   budgetMs?: number;
+  /** For a test. Absent, the judge's `TIMEOUT_MS`. */
+  judgeTimeoutMs?: number;
 }
 
 /** The job was told to stop: rethrow, whatever we were in the middle of. */
@@ -86,7 +91,11 @@ export async function followPages(page1: FetchedHtml, deps: FollowDeps): Promise
 
   let verdict: MultiPageVerdict;
   try {
-    verdict = await judgeMultiPage(page, links, { signal: deps.signal, ...(deps.gateway ? { gateway: deps.gateway } : {}) });
+    verdict = await judgeMultiPage(page, links, {
+      signal: deps.signal,
+      ...(deps.gateway ? { gateway: deps.gateway } : {}),
+      ...(deps.judgeTimeoutMs === undefined ? {} : { timeoutMs: deps.judgeTimeoutMs }),
+    });
   } catch (err) {
     stopIfAsked(deps.signal);
     return { judged: "failed", error: err instanceof Error ? err.name : typeof err };
@@ -134,8 +143,20 @@ async function fetchOne(run: Run, url: string): Promise<{ kept: FetchedHtml } | 
   const left = run.budget - run.used;
   if (left < 1) return { skip: "budget" };
   let doc: FetchedDocument;
+  let accounted = 0;
   try {
-    doc = await run.deps.fetchDocument(url, { signal: run.signal, maxBytes: left });
+    doc = await run.deps.fetchDocument(url, {
+      signal: run.signal,
+      maxBytes: left,
+      onBytesRead: (bytes) => {
+        accounted += bytes;
+        run.used = Math.min(run.budget, run.used + bytes);
+        /* `fetchDocument` may retry. Its per-attempt cap is not an aggregate
+           cap, so stop the logical fetch if earlier failed attempts plus this
+           chunk have spent the reservation. */
+        if (accounted > left) throw new FetchFailure("too-large", url, "The continuation-page byte budget was spent.");
+      },
+    });
   } catch (err) {
     stopIfAsked(run.deps.signal);
     /* A page over what was left spent it: it was read up to the cap. */
@@ -145,11 +166,13 @@ async function fetchOne(run: Run, url: string): Promise<{ kept: FetchedHtml } | 
   /* Counted whether it is kept or not: it was downloaded. A fetcher that
      handed back more than it was allowed has spent the lot, and the page is not
      kept, so the total held can never pass the budget. */
-  if (doc.bytes.byteLength > left) {
+  if (doc.bytes.byteLength > left || accounted > left) {
     run.used = run.budget;
     return { skip: "budget" };
   }
-  run.used += doc.bytes.byteLength;
+  /* Injected test fetchers need not implement the byte observer. Production's
+     fetchDocument does, including for failed attempts; fill only the gap. */
+  run.used = Math.min(run.budget, run.used + Math.max(0, doc.bytes.byteLength - accounted));
   if (doc.kind !== "html") return { skip: "not-html" };
   const final = URL.canParse(doc.url) ? new URL(doc.url) : null;
   /* **After its redirects**, and against page 1's own final address. */

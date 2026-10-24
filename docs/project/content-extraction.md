@@ -32,6 +32,7 @@ For background on why Readability was chosen over alternatives (trafilatura, def
 - [§ Two extractors, one artefact](#two-extractors-one-artefact) — the PDF extractor beside Readability
 - [§ A LaTeXML page: arXiv's HTML](#a-latexml-page-arxivs-html) — arXiv/ar5iv pages
 - [§ Stage 2 and the document with no address](#stage-2-and-the-document-with-no-address) — uploaded files
+- [§ A piece across several pages](#a-piece-across-several-pages-each-page-read-alone-then-joined) — the pages stage 1 followed, read one by one and joined
 - [§ The three ways this stage refuses](#the-three-ways-this-stage-refuses) — a page rejected as no article, too short, or a bot check; adding a bot-check provider
 - [§ The one thing this pipeline deletes](#the-one-thing-this-pipeline-deletes) — what is removed on purpose
 - [§ The one thing this pipeline protects](#the-one-thing-this-pipeline-protects) — what must survive extraction
@@ -423,6 +424,32 @@ shelf (`slugForUrlKey`), and that is all;
 For a fetched page, since 2026-10-05, the base is the URL stage 1 *ended up* at after redirects
 (`manifest.url`, which `fetchDocument` reports), not the one that was typed; the job's own address
 is used only where the manifest has none (the `extract` step in [`src/pipeline.ts`](../../src/pipeline.ts)).
+
+## A piece across several pages: each page read alone, then joined
+
+When stage 1 followed a piece's further pages
+([fetching.md § A piece across several pages](fetching.md#a-piece-across-several-pages-the-pages-page-1-points-to)),
+`runExtract` hands them to **`readParts`** ([`src/read-parts.ts`](../../src/read-parts.ts)), which
+returns exactly what `readArticle` does. **Gluing the pages into one document does not work**:
+Readability picks one best container and kept one chapter of superdark's three, measured. So:
+
+- **Each page through `readArticle` alone**, against its own address. Page 1 gives the title, the
+  authors, the date and every refusal; a later page that is a bot check or that Readability
+  declines is dropped and logged, not fatal.
+- **No heading of ours.** A heading we wrote would be an author's heading by stage 3, in Structure
+  and in the reading view. The one put back is the page's *own* main `<h1>`, which Readability drops
+  when it matches the title, as an `<h2>`, and only when the page's text does not already open
+  with it.
+- **Each later page's anchors are prefixed** `p2-`, `p3-`…, and every same-page reference with
+  them, so a link lands in its own page and a dead one stays dead. Note ids and callout context
+  ids, whose shapes stage 3 checks, take the next free counter instead.
+- **One notes region at the end**, each page's notes moved with the heading that introduced them;
+  one container per page reads as stranded notes to `splitBlocks`.
+- **No deduplication**: a box repeated on every page stays, as the lesser harm.
+- **The floor is on the joined text**, so a short landing page followed by its chapters is read.
+
+A link from one page to another by its full address stays a link out. The plan and the review
+that reshaped it: [261024p](../plans/261024p-a-multi-page-article-imports-from-its-first-page.md).
 
 ## The three ways this stage refuses
 

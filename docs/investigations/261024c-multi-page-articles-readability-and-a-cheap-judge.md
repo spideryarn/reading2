@@ -239,6 +239,17 @@ on a gold label that is a product choice. The prompt was not changed for these f
 - **No question to the reader.** Greg's own reason, and nothing here argued against it.
 - **Follow only page 1's links** for now; a chain is a known gap (thecompendium.ai; and keepthefuturehuman.ai in the held-out set, where it
 also leads the judge to the wrong pages).
+- **Shipped with the held-out misses, not held for them.** On the held-out set the judge never
+  followed a page it should not have (0 of 21), and every miss leaves the reader with page 1 —
+  exactly today's import. The one case that does worse than today is keepthefuturehuman.ai on 2 of
+  3 runs: two teaser chapters joined to a landing page. That shape (a landing page whose full text
+  is one link further on) is the chain gap above, and closing it is a second call, not a prompt
+  tweak tuned to one site after the fact.
+- **A forum thread is not followed.** The prompt says comment pages and reply pagination do not
+  continue a piece, and on the held-out Arch Linux thread the judge did as told. Spideryarn reads
+  pieces of writing, and Readability drops readers' comments on every pass
+  ([content-extraction.md § Readers' comments](../project/content-extraction.md#readers-comments-left-out-on-every-pass));
+  a thread's later pages are the same material. Recorded as a choice, not asked.
 
 ## What was ruled out
 

@@ -196,6 +196,17 @@ describe("later pages' anchors are namespaced", () => {
     expect(blocks.find((b) => b.text.includes("the start of this chapter"))!.html).toContain(`href="#${litIntro.id}"`);
   });
 
+  it("stage 3 cannot be steered to a page-1 decoy using the predictable prefix", () => {
+    const decoy = { ...landing, html: landing.html.replace('<h2 id="method">', '<p id="p2-intro">PAGE ONE DECOY</p><h2 id="method">') };
+    const result = readParts(decoy, [one], quiet());
+    const blocks = blocksOf(result.article?.content ?? "");
+    const real = blocks.find((b) => b.text === "Introduction to the dark coast")!;
+    const citing = blocks.find((b) => b.text.includes("the introduction,"))!;
+    const decoyBlock = blocks.find((b) => b.text === "PAGE ONE DECOY")!;
+    expect(citing.html).toContain(`href="#${real.id}"`);
+    expect(citing.html).not.toContain(`href="#${decoyBlock.id}"`);
+  });
+
   it("names, ARIA id-lists and url(#…) follow the same map", () => {
     const { doc } = joined();
     expect(doc.querySelector('a[name="p2-old-anchor"]')).not.toBeNull();
@@ -209,7 +220,7 @@ describe("later pages' anchors are namespaced", () => {
 });
 
 describe("namespaceAnchors on its own", () => {
-  const fresh = () => ({ notes: new Set<string>(), contexts: new Set<string>() });
+  const fresh = () => ({ notes: new Set<string>(), contexts: new Set<string>(), anchors: new Set<string>() });
 
   it("rewrites every same-document reference, defined on the page or not", () => {
     const root = body(
@@ -241,8 +252,30 @@ describe("namespaceAnchors on its own", () => {
     expect(root.querySelector("a")?.getAttribute("href")).toBe("#p2-spya-note-0123456789");
   });
 
+  it("cannot reuse an ordinary anchor that an earlier page preclaimed", () => {
+    const root = body(`<p id="target">real target</p><a href="#target">go</a><a href="#gone">dead</a>`);
+    const taken = { ...fresh(), anchors: new Set(["p2-target", "p2-gone"]) };
+    namespaceAnchors(root, "p2-", taken);
+    expect(root.querySelector("p")?.id).toBe("p2-target-2");
+    expect(root.querySelector('a[href*="target"]')?.getAttribute("href")).toBe("#p2-target-2");
+    expect(root.querySelector('a[href*="gone"]')?.getAttribute("href")).toBe("#p2-gone-2");
+  });
+
+  it("cannot reuse an ordinary earlier-page anchor for a stamped note", () => {
+    const root = body(
+      `<a id="spya-note-ref-0123456789" data-spya-note-ref="spya-note-0123456789" href="#spya-note-0123456789">1</a>` +
+        `<li id="spya-note-0123456789" data-spya-note="spya-note-0123456789">note</li>`,
+    );
+    const taken = { ...fresh(), anchors: new Set(["spya-note-0123456789"]) };
+    namespaceAnchors(root, "p2-", taken);
+    const note = root.querySelector("li")!;
+    expect(note.id).toBe("spya-note-0123456789-2");
+    expect(note.getAttribute("data-spya-note")).toBe(note.id);
+    expect(root.querySelector("a")?.getAttribute("href")).toBe(`#${note.id}`);
+  });
+
   it("suffixes a colliding callout context id, and leaves a fresh one alone", () => {
-    const taken = { notes: new Set<string>(), contexts: new Set(["c-0123456789"]) };
+    const taken = { notes: new Set<string>(), contexts: new Set(["c-0123456789"]), anchors: new Set<string>() };
     const root = body(
       `<div data-spya-callout="c-0123456789"><p data-spya-callout="c-0123456789">a</p></div>` +
         `<div data-spya-callout="c-abcdef0123"><p data-spya-callout="c-abcdef0123">b</p></div>`,

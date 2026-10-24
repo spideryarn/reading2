@@ -251,12 +251,12 @@ import type {
 import { isUsableSimpleSummary } from "../types.js";
 import { structureCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
-import type { ArticleReader, RawSource, SourcePart } from "./contracts.js";
+import type { ArticleReader, RawSource, SourcePages, SourcePart } from "./contracts.js";
 import { ArtefactNotMadeYet } from "./artefact-not-made-yet.js";
 import { BibliographyListNotFound } from "./bibliography-list-not-found.js";
 import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
-import { readRawDocument } from "./raw-document.js";
+import { RawObjectTooLarge, readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { tagsForArticles } from "./tag-rows.js";
 import { compareTags } from "../tags.js";
@@ -2084,7 +2084,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
      is in the `sources` bucket, which is not a table; `raw_sources` is the row
      describing it. This said `article_revisions.raw_bytes` until 2026-09-01,
      when the column that held the document itself was dropped. */
-  fetch: ["article_revisions.raw_source_sha256", "raw_sources"],
+  fetch: ["article_revisions.raw_source_sha256", "article_revision_parts", "raw_sources"],
   /* The meta columns `extract` also writes, and the two only a minimal paper has. */
   metadata: ["article_revisions.title", "article_revisions.abstract", "article_revisions.doi"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
@@ -2956,23 +2956,67 @@ const rawPgArticleReader: ArticleReader = {
     return { bytes: document.bytes, kind: document.kind, filename: found.revision.rawFilename };
   },
 
-  async loadSourceParts(slug: string): Promise<SourcePart[]> {
+  /**
+   * **Page 1 and its later pages, pinned to one revision.** The revision row
+   * (through `currentRevisionQuery`, so owner-scoped by `ownedSlug` exactly as
+   * `loadSource` is) and its part rows are read in one read-only `repeatable
+   * read` snapshot, so a refresh landing between them cannot pair one
+   * revision's page 1 with another's later pages. The bytes are fetched after
+   * it: every reference is content-addressed, so what the snapshot named
+   * cannot change under it. Contracts.ts has the budget's rules.
+   */
+  async loadSourcePages(slug: string, options: { maxBytes?: number } = {}): Promise<SourcePages | null> {
     requireSlug(slug);
-    const found = await currentRevision(slug, "rawSource");
-    if (!found) throw notFound(slug);
-    const rows = await getDb()
-      .select({ url: articleRevisionParts.url, rawSourceSha256: articleRevisionParts.rawSourceSha256, rawSourceKind: articleRevisionParts.rawSourceKind })
-      .from(articleRevisionParts)
-      .where(eq(articleRevisionParts.revisionId, found.revision.id))
-      .orderBy(asc(articleRevisionParts.ordinal));
+    const pinned = await getDb().transaction(async (tx) => {
+      const rows = await currentRevisionQuery(tx, slug, "rawSource");
+      const found = rows[0] as { revision: RevisionRowFor<"rawSource"> } | undefined;
+      if (!found) return undefined;
+      const parts = await tx
+        .select({
+          ordinal: articleRevisionParts.ordinal,
+          url: articleRevisionParts.url,
+          rawSourceSha256: articleRevisionParts.rawSourceSha256,
+          rawSourceKind: articleRevisionParts.rawSourceKind,
+        })
+        .from(articleRevisionParts)
+        .where(eq(articleRevisionParts.revisionId, found.revision.id))
+        .orderBy(asc(articleRevisionParts.ordinal));
+      return { revision: found.revision, parts };
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    if (!pinned) throw notFound(slug);
+
     const sources = postgresBlobStore("the Postgres store serves an article's source document");
+    const document = await readRawDocument(slug, pinned.revision, sources, options);
+    if (!document) return null;
+    const source: RawSource = { bytes: document.bytes, kind: document.kind, filename: pinned.revision.rawFilename };
+
+    const budget = options.maxBytes;
+    let spent = document.bytes.byteLength;
     const parts: SourcePart[] = [];
-    for (const row of rows) {
-      /* The same read as page 1's, so a missing or wrong object throws rather than shrinking the list. */
-      const document = await readRawDocument(slug, row, sources);
-      if (document) parts.push({ url: row.url, bytes: document.bytes });
+    for (const row of pinned.parts) {
+      /* `ordinal` 1 is the first page after page 1. */
+      const page = row.ordinal + 1;
+      if (budget === undefined) {
+        /* The same read as page 1's, so a missing or wrong object throws rather than shrinking the list. */
+        const part = await readRawDocument(slug, row, sources);
+        if (part) parts.push({ page, url: row.url, bytes: part.bytes });
+        continue;
+      }
+      const left = budget - spent;
+      if (left <= 0) continue;
+      try {
+        /* Refused on the object's size before it is downloaded, as page 1's is. */
+        const part = await readRawDocument(slug, row, sources, { maxBytes: left });
+        if (!part) continue;
+        parts.push({ page, url: row.url, bytes: part.bytes });
+        spent += part.bytes.byteLength;
+      } catch (err) {
+        /* Over what is left of the budget: left out, and a later, smaller page may still fit. */
+        if (err instanceof RawObjectTooLarge) continue;
+        throw err;
+      }
     }
-    return parts;
+    return { source, parts, partCount: pinned.parts.length };
   },
 
   async loadArticle(slug: string): Promise<Article> {

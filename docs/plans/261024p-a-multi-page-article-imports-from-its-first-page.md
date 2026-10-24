@@ -91,13 +91,17 @@ construction, and an upload has nothing to follow):
    is not HTML, or duplicates one already held is **skipped**. **A shared budget of
    `MAX_PARTS_BYTES`** (30 MB across the continuation pages; one bucket object is capped at 50 MiB,
    and the largest page in the corpus is 2.2 MB) is reserved before each fetch, not checked after:
-   each fetch is capped at what is left, so the total can never pass it (Sol F6).
+   each fetch is capped at what is left, so the total can never pass it (Sol F6). *As built*, the pages are
+   fetched one at a time — four at once would have to split the budget four ways up front — under
+   a two-minute limit for all of them (`FOLLOW_BUDGET_MS`), so twenty slow pages cannot use up the
+   step's own.
 4. **Each continuation page is stored as its own source object**, exactly as page 1 is — the same
    content-addressed `raw_sources` row and bucket object, its own `<head>`, its own CSS, its own
    address. A child table **`article_revision_parts`** (`revision_id`, `ordinal` from 1, `url` the
    final address, `raw_source_sha256` + `raw_source_kind` a foreign key onto `raw_sources`; primary
    key `(revision_id, ordinal)`) lists them in order; the manifest gains `parts: {url, storedSha256,
-   sha256, bytes}[]` read from it. One additive migration.
+   storedBytes}[]` read from it (*as built*: nothing reads a part's network hash or byte count, so
+   neither is kept). One additive migration.
 5. The step's `detail`: `fetchDetail` plus *"4 pages"* (or *"3 of 4 pages"*).
 
 **Why per-page objects, not one stitched document.** The revision's own `storedSha256` is still page

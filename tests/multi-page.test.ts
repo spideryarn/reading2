@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { CHAT_REASONING } from "../src/ai-call.js";
 import {
   MAX_CONTINUATION_PAGES,
+  MAX_REQUEST_CHARS,
   judgeMultiPage,
   multiPageRequest,
   pageKey,
@@ -127,5 +128,26 @@ describe("judgeMultiPage and its request", () => {
     const body = multiPageRequest({ url: PAGE, title: null, text: `${"a ".repeat(2000)}THE END` }, links);
     const payload = JSON.parse(String((body.messages as { content: string }[])[1]!.content));
     expect(payload.text_end).toMatch(/THE END$/);
+  });
+
+  it("bounds hostile titles and addresses without changing the fetch URL map", () => {
+    const long = "x".repeat(1_000_000);
+    const hostile = pageLinks(`<title>${long}</title><a href="/${long}">chapter</a>`, PAGE, null);
+    expect(hostile[0]!.url.length).toBeGreaterThan(1_000_000);
+    const body = multiPageRequest({ url: PAGE, title: long, text: "abstract" }, hostile);
+    const content = String((body.messages as { content: string }[])[1]!.content);
+    expect(content.length).toBeLessThanOrEqual(MAX_REQUEST_CHARS);
+    expect(JSON.parse(content).links[0].href.length).toBeLessThan(1_000);
+  });
+
+  it("refuses before the call if JSON escaping pushes the whole request over its cap", () => {
+    const hostile = Array.from({ length: 250 }, (_, i) => ({
+      id: `L${i + 1}`,
+      url: `${PAGE}p/${i}`,
+      text: "\u0001".repeat(90),
+      inArticle: true,
+      where: "\u0002".repeat(60),
+    }));
+    expect(() => multiPageRequest({ url: PAGE, title: "title", text: "abstract" }, hostile)).toThrow(/input limit/);
   });
 });

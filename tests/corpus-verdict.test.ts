@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import { controlVerdict, readinessFailures } from "../scripts/corpus-verdict.js";
 
-const BOTH_PLANTED = { orphanedRevision: "rev-1", danglingSha: "sha-1" };
+const BOTH_PLANTED = { orphanedRevision: "rev-1", danglingSha: "sha-1", danglingPartSha: "part-sha-1" };
 
 const FULL = { articles: 14, revisions: 14, refs: 14 };
 
@@ -55,7 +55,7 @@ describe("readinessFailures", () => {
 
 describe("controlVerdict", () => {
   it("passes only when each check named the exact fault planted for it", () => {
-    expect(controlVerdict(BOTH_PLANTED, ["rev-1"], ["sha-1"]).sawIt).toBe(true);
+    expect(controlVerdict(BOTH_PLANTED, ["rev-1"], ["sha-1", "part-sha-1"]).sawIt).toBe(true);
   });
 
   /**
@@ -65,7 +65,7 @@ describe("controlVerdict", () => {
    * anything is worse than none, because it gets quoted as evidence.
    */
   it("fails when check 1 missed its seed even though check 2 found plenty", () => {
-    const v = controlVerdict(BOTH_PLANTED, ["rev-2", "rev-3"], ["sha-1", "sha-9"]);
+    const v = controlVerdict(BOTH_PLANTED, ["rev-2", "rev-3"], ["sha-1", "part-sha-1", "sha-9"]);
     expect(v.sawIt).toBe(false);
     expect(v.say).toContain("CHECK 1 DID NOT NAME revision rev-1");
   });
@@ -78,19 +78,38 @@ describe("controlVerdict", () => {
     expect(v.say).toContain("CHECK 2 DID NOT NAME the dangling reference sha-1");
   });
 
+  /**
+   * **A later page's reference is checked too** (plan 261024p, GPT Sol's code
+   * review F6). Check 2 read only `article_revisions.raw_source_sha256`, so a
+   * missing continuation page sat beside a green report. The part seed is
+   * referenced only from `article_revision_parts`, so naming it is proof that
+   * arm of the check ran.
+   */
+  it("fails when check 2 named the page-1 seed but not the later-page one", () => {
+    const v = controlVerdict(BOTH_PLANTED, ["rev-1"], ["sha-1"]);
+    expect(v.sawIt).toBe(false);
+    expect(v.say).toContain("CHECK 2 DID NOT NAME the dangling later-page reference part-sha-1");
+  });
+
+  it("fails when there was no revision to give a bad later page", () => {
+    const v = controlVerdict({ ...BOTH_PLANTED, danglingPartSha: null }, ["rev-1"], ["sha-1"]);
+    expect(v.sawIt).toBe(false);
+    expect(v.say).toContain("A control that cannot be run has not passed");
+  });
+
   it("fails when neither check named anything at all", () => {
     expect(controlVerdict(BOTH_PLANTED, [], []).sawIt).toBe(false);
   });
 
   /** Nothing to seed is a control that could not be run, not one that passed. */
   it("fails when there was no revision to break", () => {
-    const v = controlVerdict({ orphanedRevision: null, danglingSha: "sha-1" }, [], ["sha-1"]);
+    const v = controlVerdict({ ...BOTH_PLANTED, orphanedRevision: null }, [], ["sha-1", "part-sha-1"]);
     expect(v.sawIt).toBe(false);
     expect(v.say).toContain("A control that cannot be run has not passed");
   });
 
   it("fails when no revision named a source object to break", () => {
-    const v = controlVerdict({ orphanedRevision: "rev-1", danglingSha: null }, ["rev-1"], []);
+    const v = controlVerdict({ ...BOTH_PLANTED, danglingSha: null }, ["rev-1"], ["part-sha-1"]);
     expect(v.sawIt).toBe(false);
     expect(v.say).toContain("check 2 has nothing to break");
   });

@@ -28,6 +28,11 @@ export const MAX_CONTINUATION_PAGES = 20;
 export const MAX_LINKS = 250;
 const MAX_ANCHOR_CHARS = 90;
 const MAX_CONTEXT_CHARS = 60;
+const MAX_TITLE_CHARS = 300;
+const MAX_PAGE_URL_CHARS = 2_048;
+const MAX_SHOWN_LINK_URL_CHARS = 300;
+/** Hard ceiling on the untrusted JSON sent to the judge. */
+export const MAX_REQUEST_CHARS = 100_000;
 const HEAD_CHARS = 1_200;
 const TAIL_CHARS = 600;
 const MAX_COMPLETION_TOKENS = 3_000;
@@ -222,10 +227,12 @@ const SCHEMA = {
 export function multiPageRequest(page: PageSummary, links: readonly PageLink[], model: string = MULTI_PAGE_MODEL): AiRequestBody {
   const text = collapse(page.text);
   const origin = new URL(page.url).origin;
-  const shown = (url: string) => (url.startsWith(origin) ? url.slice(origin.length) || "/" : url);
+  /* Full addresses stay in `PageLink` for the id-to-fetch mapping. The model
+     sees only bounded evidence; a stranger controls every character here. */
+  const shown = (url: string) => (url.startsWith(origin) ? url.slice(origin.length) || "/" : url).slice(0, MAX_SHOWN_LINK_URL_CHARS);
   const payload = {
-    address: page.url,
-    title: page.title ?? "",
+    address: page.url.slice(0, MAX_PAGE_URL_CHARS),
+    title: collapse(page.title ?? "").slice(0, MAX_TITLE_CHARS),
     text_chars: text.length,
     text_start: text.slice(0, HEAD_CHARS),
     ...(text.length > HEAD_CHARS ? { text_end: text.slice(Math.max(HEAD_CHARS, text.length - TAIL_CHARS)) } : {}),
@@ -238,13 +245,18 @@ export function multiPageRequest(page: PageSummary, links: readonly PageLink[], 
       ...(l.where ? { where: l.where } : {}),
     })),
   };
+  const content = JSON.stringify(payload);
+  /* The per-field bounds normally suffice. This final bound owns the invariant
+     if a future field is added without one. Failing the optional judge imports
+     page 1 alone; silently hiding links while accepting their ids would not. */
+  if (content.length > MAX_REQUEST_CHARS) throw new MultiPageAnswerInvalid("the request is over its input limit");
   return withChatJsonSchema(
     {
       model,
       max_completion_tokens: MAX_COMPLETION_TOKENS,
       messages: [
         { role: "system", content: MULTI_PAGE_SYSTEM },
-        { role: "user", content: JSON.stringify(payload) },
+        { role: "user", content },
       ],
     },
     "multi_page",
@@ -312,6 +324,8 @@ export interface MultiPageOptions {
   model?: string;
   gateway?: MultiPageGateway;
   signal?: AbortSignal;
+  /** Test seam; production uses `TIMEOUT_MS`. */
+  timeoutMs?: number;
 }
 
 /** **One call and the check, or a throw.** No links, no call. */
@@ -323,7 +337,7 @@ export async function judgeMultiPage(
   opts.signal?.throwIfAborted();
   if (links.length === 0) return { continues: false, reason: "the page links to no other page of its site" };
   const gateway: MultiPageGateway = opts.gateway ?? openRouterJson;
-  const deadline = AbortSignal.timeout(TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(opts.timeoutMs ?? TIMEOUT_MS);
   const signal = opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline;
   const call = await gateway("multi-page", multiPageRequest(page, links, opts.model), { signal });
   opts.signal?.throwIfAborted();

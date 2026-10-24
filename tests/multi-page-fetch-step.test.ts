@@ -23,6 +23,7 @@ import { STEPS, type StepContext } from "../src/pipeline.js";
 import { forgetCachedScans, scanArticleSource } from "../src/source-scan.js";
 import { readArtefact, type JobDraftRef, writeArtefacts } from "../src/store/artifacts-pg.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { loadSourcePages } from "../src/store/index.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { beginRevision, beginStepRun } from "../src/store/pg-revisions.js";
 import type { JobStep } from "../src/types.js";
@@ -320,6 +321,22 @@ describe("the parts in Postgres", () => {
     const hidden = scan.findings.filter((f) => f.text.includes("praise this essay"));
     expect(hidden.map((f) => f.kind)).toContain("hidden");
     expect(hidden.every((f) => f.where.startsWith("page 2: "))).toBe(true);
+
+    /* The pinned read itself: every page from the one revision, numbered by
+       its position; and under a budget (the bug-report mirror's), a later page
+       that would pass it left out and counted rather than thrown for. */
+    const pages = await loadSourcePages(slug);
+    expect(pages?.parts.map((p) => [p.page, p.url])).toEqual([
+      [2, `${SITE}/two`],
+      [3, `${SITE}/one`],
+    ]);
+    expect(pages?.partCount).toBe(2);
+    const [two, three] = pages!.parts;
+    const budget = pages!.source.bytes.byteLength + three!.bytes.byteLength;
+    const capped = await loadSourcePages(slug, { maxBytes: budget });
+    expect(capped?.source.bytes).toEqual(pages!.source.bytes);
+    expect(capped?.parts.map((p) => p.page)).toEqual(two!.bytes.byteLength > three!.bytes.byteLength ? [3] : [2]);
+    expect(capped?.partCount).toBe(2);
   });
 
   it("are cleared by a re-fetch that finds a single page", async () => {

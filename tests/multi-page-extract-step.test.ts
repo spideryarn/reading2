@@ -7,7 +7,7 @@
  * tests/multi-page-fetch-step.test.ts.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { RawManifest, RawPart } from "../src/fetch.js";
+import { RawDocumentUnavailable, type RawManifest, type RawPart } from "../src/fetch.js";
 
 vi.mock("../src/fetch.js", async (original) => ({
   ...(await original<typeof import("../src/fetch.js")>()),
@@ -44,7 +44,7 @@ const PARTS: Record<string, string> = {
   [`${SITE}/chapters/two`]: chapter("II", "fig-two.png"),
 };
 
-async function extracted(parts: RawPart[] | undefined): Promise<string> {
+async function extracted(parts: RawPart[] | undefined, readPart?: () => Promise<Uint8Array>): Promise<string> {
   const store = memoryArtefacts();
   store.plant("s", "fetch", "raw", {
     kind: "html",
@@ -55,7 +55,9 @@ async function extracted(parts: RawPart[] | undefined): Promise<string> {
     ...(parts === undefined ? {} : { parts }),
   } as RawManifest);
   vi.mocked(readRawBytes).mockResolvedValue(new TextEncoder().encode(LANDING));
-  vi.mocked(readPartBytes).mockImplementation(async (part) => new TextEncoder().encode(PARTS[part.url]!));
+  vi.mocked(readPartBytes).mockImplementation(
+    readPart ?? (async (part) => new TextEncoder().encode(PARTS[part.url]!)),
+  );
   vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue({ kind: "unavailable", why: "busy" });
   vi.spyOn(titleTidiers, "import").mockImplementation(ruleTitleTidier);
   const result = await STEPS.extract.run(
@@ -85,5 +87,15 @@ describe("an article stage 1 followed across pages", () => {
     expect(refused).not.toBeNull();
     expect(String((refused as Error).message)).toMatch(/less than its own threshold/);
     expect(vi.mocked(readPartBytes)).not.toHaveBeenCalled();
+  });
+
+  it("fails the whole extraction when a continuation object is missing", async () => {
+    const err = await extracted([part(`${SITE}/one`)], async () => {
+      throw new RawDocumentUnavailable("missing", "fixed diagnostic");
+    }).then(() => null, (caught: unknown) => caught);
+    expect(err).toMatchObject({
+      failureKind: "blocked",
+      readerFailure: { message: expect.stringContaining("nothing left to build the article from") },
+    });
   });
 });

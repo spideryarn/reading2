@@ -949,6 +949,11 @@ Nothing new leaves the browser and the Postgres row is unchanged:
 
 - **`source.pdf` or `source.html`** — the original document, up to **10 MiB**, which keeps the
   whole event under Sentry's 20 MB envelope limit so a big file cannot cost the reader's words.
+  For a piece the site split over several pages
+  ([plan 261024p](../plans/261024p-a-multi-page-article-imports-from-its-first-page.md)), each
+  later page goes too, as `source.part-2.html`, `source.part-3.html`, … — numbered by page, all
+  read from one revision, and **inside the same 10 MiB**: a page that would pass it is left out,
+  and a `source_parts` tag (`attached/total`, `0/0` for one page) says how many went.
 - **`article.json`** — the payload the reading page loaded plus a field-by-field pick of its
   metadata, up to **5 MiB of UTF-8**. Never the reader's profile or purpose.
 

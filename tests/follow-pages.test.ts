@@ -117,6 +117,22 @@ describe("when the judge is asked, and what it is told", () => {
     }
   });
 
+  it("imports page 1 alone when the active judge call reaches its deadline", async () => {
+    const gateway: MultiPageGateway = async (_job, _body, options) =>
+      await new Promise((_resolve, reject) => {
+        const stop = () => reject(options.signal?.reason);
+        if (options.signal?.aborted) stop();
+        else options.signal?.addEventListener("abort", stop, { once: true });
+      });
+    const out = await followPages(PAGE1, {
+      signal: signal(),
+      fetchDocument: network({}).fetchDocument,
+      gateway,
+      judgeTimeoutMs: 5,
+    });
+    expect(out).toMatchObject({ judged: "failed" });
+  });
+
   it("stops when the job is told to, rather than carrying on alone", async () => {
     const stop = new AbortController();
     const gateway: MultiPageGateway = async () => {
@@ -232,5 +248,59 @@ describe("the shared byte budget", () => {
     if (out.judged !== "continues") throw new Error(`judged ${out.judged}`);
     expect(net.asked.map((a) => a.url)).toEqual([`${SITE}/one`]);
     expect(out.skipped).toEqual({ failed: 1, budget: 1 });
+  });
+
+  it("charges bytes read by a failed fetch before continuing", async () => {
+    const asked: number[] = [];
+    const fetchDocument: PageFetcher = async (url, options) => {
+      asked.push(options.maxBytes);
+      if (url.endsWith("/one")) {
+        options.onBytesRead?.(700);
+        throw new FetchFailure("unsupported-type", url, "unsupported");
+      }
+      return sized(url, 300);
+    };
+    const out = await followPages(PAGE1, {
+      signal: signal(),
+      fetchDocument,
+      gateway: judge({ continues: true, pages: [L.one, L.two] }).gateway,
+      budgetBytes: 1000,
+    });
+    expect(asked).toEqual([1000, 300]);
+    expect(out).toMatchObject({ judged: "continues", skipped: { failed: 1 } });
+  });
+});
+
+describe("the continuation deadline and cancellation", () => {
+  const waitForAbort: PageFetcher = async (_url, options) =>
+    await new Promise<FetchedDocument>((_resolve, reject) => {
+      const stop = () => reject(options.signal.reason);
+      if (options.signal.aborted) stop();
+      else options.signal.addEventListener("abort", stop, { once: true });
+    });
+
+  it("stops an active continuation fetch at the wall-clock deadline", async () => {
+    const out = await followPages(PAGE1, {
+      signal: signal(),
+      fetchDocument: waitForAbort,
+      gateway: judge({ continues: true, pages: [L.one] }).gateway,
+      budgetMs: 5,
+    });
+    expect(out).toEqual({ judged: "continues", picked: 1, pages: [], skipped: { "out-of-time": 1 } });
+  });
+
+  it("rethrows cancellation received during a continuation fetch", async () => {
+    const controller = new AbortController();
+    const fetchDocument: PageFetcher = async (url, options) => {
+      queueMicrotask(() => controller.abort(new Error("job stopped")));
+      return waitForAbort(url, options);
+    };
+    await expect(
+      followPages(PAGE1, {
+        signal: controller.signal,
+        fetchDocument,
+        gateway: judge({ continues: true, pages: [L.one] }).gateway,
+      }),
+    ).rejects.toThrow("job stopped");
   });
 });
