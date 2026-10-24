@@ -515,6 +515,19 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   /* The notes on cited works, asked for on an article with no Bibliography.
      See `CITATION_BLURBS_NO_BIBLIOGRAPHY`. */
   "jb-no-bibliography": "blocked",
+  /* *Search the literature* (the `situate` step, plan 261024o). The three
+     ways a run stops before its read — too few usable searches planned, too
+     few searches that ran, no claim search that found anything — are `retry`:
+     another plan and another round of searches may well go through. The
+     allowance's three refusals: one already running is `retry`; this
+     owner's hour or day spent, and everybody's day spent, are `blocked`
+     until the window moves. See `SITUATE_*` below. */
+  "jb-situate-plan": "retry",
+  "jb-situate-searches": "retry",
+  "jb-situate-claims": "retry",
+  "jb-situate-busy": "retry",
+  "jb-situate-limited": "blocked",
+  "jb-situate-resting": "blocked",
   /* A step that reads the structure, on an article still showing the stand-in
      outline it opened with. See `STRUCTURE_NOT_BUILT`. */
   "jb-no-structure": "blocked",
@@ -1702,6 +1715,63 @@ export const CITATION_BLURBS_NO_BIBLIOGRAPHY: ReaderFacingFailure = {
     "There is no list of the works this article cites yet, and the notes on them are written from " +
     "that list. Make the Bibliography first, in Sources, and the notes follow it. Until there is " +
     "one, this will come back the same way. [jb-no-bibliography]",
+};
+
+/**
+ * ***Search the literature* stopped before it read anything** (the `situate`
+ * step, plan 261024o): the plan of searches came back with too few usable ones,
+ * or none about the piece's claims. Nothing was searched, so nothing was paid
+ * for beyond the plan.
+ */
+export const SITUATE_TOO_FEW_SEARCHES: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The plan for searching the literature did not come back with enough usable searches, so " +
+    "none was sent. Try again: another go plans afresh. [jb-situate-plan]",
+};
+
+/**
+ * **Fewer than half the searches ran** (S2). Said as a failure rather than
+ * stored as "nothing found": a run that read nothing must not look like a run
+ * that found nothing.
+ */
+export const SITUATE_SEARCHES_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Most of the web searches did not go through this time, so nothing was read and nothing " +
+    "was kept. Try again in a little while. [jb-situate-searches]",
+};
+
+/** **No search about the piece's claims found anything** (S2): the claims are what the margin is for. */
+export const SITUATE_CLAIMS_NOT_FOUND: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "None of the searches about this piece's claims found anything, so it was not read against " +
+    "the literature this time. Another try plans different searches. [jb-situate-claims]",
+};
+
+/** The allowance (`SITUATE_RATE_POLICY`): one at a time for each reader. */
+export const SITUATE_BUSY: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "A search of the literature is already running for you. When it has finished, try again. " +
+    "[jb-situate-busy]",
+};
+
+/** The allowance: this reader's hour or day is spent. */
+export const SITUATE_LIMITED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "You have used this hour's or this day's searches of the literature, so trying again now " +
+    "will not help. It can run again later. [jb-situate-limited]",
+};
+
+/** The allowance's fuse: everybody's day is spent. */
+export const SITUATE_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Searching the literature is resting for today, because a lot of it has been done, so trying " +
+    "again now will not help. It will be back tomorrow. [jb-situate-resting]",
 };
 
 /**

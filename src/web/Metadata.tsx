@@ -416,6 +416,11 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      choose its own. The only line of this file stage 3b touches, because this
      record is total over `StepName`. */
   "citation-blurbs": Link2,
+  /* Other people's words again, as `reception`'s: what the literature says
+     about the piece. Reused rather than a new import; the only line of this
+     file plan 261024o's server stage touches, because this record is total
+     over `StepName`. Stage 2 draws the dossier and may choose its own. */
+  situate: MessagesSquare,
   /* The arrow the block-link card already draws for a jump (ProseHoverCard.tsx):
      what a cross-reference does is take you to another block of the piece.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

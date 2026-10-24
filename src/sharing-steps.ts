@@ -105,6 +105,10 @@ export const STEP_SHARING = {
      identity, so a list remade mid-run would leave notes about rows that
      are no longer there. */
   "citation-blurbs": { column: "citationBlurbs", reads: ["bibliography"] },
+  /* Reads the Bibliography (the works it leans on, for the plan) and the notes
+     on them (the cited works' own abstract words, for the read), and writes
+     its own column. Plan 261024o. */
+  situate: { column: "situate", reads: ["bibliography", "citation-blurbs"] },
   crossrefs: { column: "crossrefs", reads: [] },
   simple: { column: "simpleSummary", reads: [] },
 } as const satisfies Record<StepName, "exclusive" | SharingPolicy>;

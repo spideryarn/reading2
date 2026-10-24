@@ -153,6 +153,11 @@ import {
 } from "../src/source-hash.js";
 import { parseJsonFrom } from "../src/parse-json.js";
 import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsInputHash, sourcePolicy } from "../src/citation-blurbs-identity.js";
+import {
+  emptyCounts as emptySituateCounts,
+  inputFingerprint as situateFingerprint,
+  PROMPT_VERSION as SITUATE_PROMPT_VERSION,
+} from "../src/situate.js";
 import { optionalSources } from "../src/registry-keys.js";
 import { CITATION_BLURBS_MODEL } from "../src/models.js";
 import { articleText, articleWithIds } from "../src/article-prompt.js";
@@ -703,6 +708,27 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     counts: {},
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
+  });
+  /* **Nothing found**, which `SHAPE.situate` accepts: every search ran and
+     found nothing is a real answer (plan 261024o, S2). `null` profile, for
+     `skim`'s reason below: `ctxOf` carries none, and the stamp compares it. */
+  store.plant(SLUG, "situate", "situate", {
+    version: SITUATE_PROMPT_VERSION,
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: situateFingerprint(BLOCKS, TREE, META),
+    profileHash: null,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+    kind: "other",
+    year: null,
+    angle: "now",
+    outcome: "nothing-found",
+    overview: "",
+    findings: [],
+    questions: [],
+    searched: { queries: [], pages: 0, citers: 0, cited: 0 },
+    counts: emptySituateCounts(),
   });
   /* **An EMPTY list**, which `SHAPE.crossrefs` accepts, as `faq`'s: nothing in
      the piece worth linking is a real answer. */

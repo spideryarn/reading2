@@ -21,9 +21,9 @@ const url = prod?.values.DATABASE_URL;
 if (!url) throw new Error("no DATABASE_URL in .env.prod");
 const ssl = sslDecisionFor(url);
 if (ssl.mode !== "verified") throw new Error(`TLS not verified: ${ssl.why}`);
-const config = { ...toClientConfig(parseConnectionString(url)), ssl: ssl.ssl } as pg.ClientConfig;
-console.log(`Target: ${prod?.file} → ${config.host}`);
-const client = new pg.Client(config);
+const parsed = toClientConfig(parseConnectionString(url)) as pg.ClientConfig;
+console.log(`Target: ${prod?.file} → ${parsed.host}`);
+const client = new pg.Client({ ...parsed, ssl: ssl.ssl });
 await client.connect();
 try {
   await client.query("begin transaction read only");
