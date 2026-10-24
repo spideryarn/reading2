@@ -449,6 +449,20 @@ opened. Four things follow, and three of them are the interesting part:
   45% — because [cross-references](cross-references.md) had arrived as a heavier dotted line and
   Greg could not tell the two apart, and wanted the glossary the more prominent (spya-sxvq2j,
   [261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
+  **And fainter each time the same term comes back**, since 2026-10-24:
+
+  > So by the time consciousness has appeared five or ten times, it should basically not need an
+  > orange dotted line. […] maybe it should be a smooth function.
+  >
+  > — Greg, 2026-10-24 (`spya-htsjmf`)
+
+  Each entry's occurrences are counted in document order and the n-th is drawn at
+  `1 / (1 + ((n − 1) / 3)³)` of the full rule: 1, 0.96, 0.77, half at the fourth, under a tenth by
+  the eighth (`termProminence` in [`annotate.ts`](../../src/web/annotate.ts), written as
+  `--term-a`). The mark, its card and its cursor stay; hover and the pressed states draw it in
+  full. Occurrences in folded [front and back matter](front-and-back-matter.md) neither count nor
+  fade, so the body's first is the first. Why this curve and not an exponential or a cutoff:
+  [261024s](../plans/261024s-a-glossary-underline-fades-with-each-repeat-of-its-term.md).
 - **Being selected had to stop meaning "having a mark"**, because everything has one now. It means a
   *different* mark — `mark.term[data-term-open]`, which is exactly what the open comment and the pressed
   search hit already do. `open` on `TermSelection` carries it.

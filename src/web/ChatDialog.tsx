@@ -86,10 +86,12 @@ import { withVoice } from "./voice.js";
  * What the panel is open on.
  *
  * `draft` is a passage the reader has selected or a paragraph they pressed,
- * with no conversation behind it yet — nothing is stored, and closing it costs
- * nothing. `thread` is a conversation that exists. The two are one union
- * because they occupy one slot and the transition between them has to be
- * atomic: the ask box does not close and a panel open, it becomes one.
+ * with no conversation behind it yet — no conversation is stored, and closing
+ * it costs nothing. Its unsent words are kept locally by block so closing the
+ * panel does not throw them away. `thread` is a conversation that exists. The
+ * two are one union because they occupy one slot and the transition between
+ * them has to be atomic: the ask box does not close and a panel open, it
+ * becomes one.
  */
 export type ChatTarget =
   | {
@@ -359,19 +361,33 @@ export function ChatDialog({
      words are the article's (src/web/chat-draft.ts), the same entry Chat
      mode's composer reads and writes, because the two are one conversation
      seen from two places and never at once: entering Chat unmounts this
-     dialog, and leaving Chat can mount it on the conversation that was open.
+     dialog, and a pasted address or Back can mount it on that conversation.
      Two private copies would be two different half-questions, and a delete
      pressed here would leave Chat's copy behind for a conversation that is
      gone. GPT Sol's review of
      docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md,
      F5. A passage draft is about a paragraph and belongs to no conversation
-     yet, so it stays here. */
+     yet, so it stays here — mirrored into the store by its block
+     (`drafts.passage`), because a mode switch closes this dialog and its
+     words must not go with it (plan 261024r, GPT Sol's F1). A question handed
+     in with the press wins over words kept from before. */
   const drafts = chatDraftsFor(slug);
   const draftTarget = target.kind === "draft" ? `draft:${target.anchor.blockId}` : `thread:${target.threadId}`;
   /* A question that is sent as the panel opens (`sendNow`) is not also left
      in the box to be sent again. */
-  const initialDraft = target.kind === "draft" && !target.sendNow ? (target.question ?? "") : "";
+  const passageBlock = target.kind === "draft" ? target.anchor.blockId : null;
+  const initialDraft =
+    target.kind === "draft" && !target.sendNow
+      ? (target.question ?? drafts.passage(target.anchor.blockId) ?? "")
+      : "";
   const [draftState, setDraftState] = useState(() => ({ target: draftTarget, text: initialDraft }));
+  /* A handed-in question is the new draft even if the reader closes without
+     editing it. Automatically sent questions are turns of their own and do
+     not erase different words the reader had left unsent for this passage. */
+  useEffect(() => {
+    if (target.kind !== "draft" || target.sendNow || target.question === undefined) return;
+    drafts.setPassage(target.anchor.blockId, target.question);
+  }, [target, drafts]);
   const threadTarget = target.kind === "thread" ? target.threadId : null;
   const draft =
     threadTarget !== null
@@ -382,9 +398,12 @@ export function ChatDialog({
   const setDraft = useCallback(
     (text: string) => {
       if (threadTarget !== null) drafts.setThread(threadTarget, text);
-      else setDraftState({ target: draftTarget, text });
+      else {
+        setDraftState({ target: draftTarget, text });
+        if (passageBlock !== null) drafts.setPassage(passageBlock, text);
+      }
     },
-    [draftTarget, threadTarget, drafts],
+    [draftTarget, threadTarget, passageBlock, drafts],
   );
   /* The conversation's "Bringing in" row is kept beside its words, so it
      crosses to and from the panel with them (Composer § `draftMentions`). A
@@ -1397,6 +1416,11 @@ export function ChatDialog({
             /* Always a chat. This dialog is what a selection in the prose opens,
                and a Learn turn cannot be anchored to one. */
           kind="chat"
+            /* What an answer that mentions an earlier conversation may link
+               to (plan 261024u): every one this article has, from the server.
+               Only when the stored thread really is a chat, whose prompt is
+               the one handed their ids. */
+            everyThread={thread.kind === "chat" ? threads : undefined}
         />
         ) : loadFailed ? (
           /* **A request that failed is not a conversation that is gone**, and
@@ -1428,6 +1452,7 @@ export function ChatDialog({
             the same contradiction one row down. */}
         {sendsItself ? null : target.kind === "draft" ? (
           <Composer
+            key={draftTarget}
             slug={slug}
             keepAs={`chat:${slug}:${draftTarget}`}
             onSend={ask}

@@ -58,9 +58,18 @@ import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import { BlockRef } from "./BlockRef.js";
 import { MAX_BLOCK_DEPTH } from "../citable.js";
 import { chipFor } from "./chat-commands.js";
-import { type CrossArticles, NO_CROSS, quotesBefore, splitCitations, splitLinks } from "./citations.js";
+import {
+  type CrossArticles,
+  NO_CROSS,
+  NO_THREADS,
+  quotesBefore,
+  splitCitations,
+  splitLinks,
+  type ThreadLink,
+} from "./citations.js";
 import { CommandChip } from "./CommandChip.js";
 import { CrossArticleRef } from "./CrossArticleRef.js";
+import { ThreadRef } from "./ThreadRef.js";
 import type { CommandExecutor } from "./command-proposal.js";
 import type { JumpAim } from "./flash.js";
 import {
@@ -84,6 +93,13 @@ interface Props {
    * else, and then every id is the open article's or nobody's, as before.
    */
   cross?: CrossArticles | undefined;
+  /**
+   * **The reader's other conversations an answer may link to**, by id — a
+   * chat's alone (plan 261024u). An id in it is a chip that opens that
+   * conversation (ThreadRef.tsx); absent everywhere else, and then a
+   * conversation id stays the characters the model wrote.
+   */
+  threadLinks?: ReadonlyMap<string, ThreadLink> | undefined;
   /**
    * `aim` arrives only from a chip whose sentence quotes the article, and
    * carries the quoted words so the landing can paint them rather than the
@@ -149,6 +165,7 @@ interface Props {
 interface Ctx {
   blocks: Map<string, string>;
   cross: CrossArticles;
+  threadLinks: ReadonlyMap<string, ThreadLink>;
   onJump(id: BlockId, aim?: JumpAim): void;
   links: boolean;
   commands: CommandExecutor | undefined;
@@ -191,6 +208,7 @@ function Drawn({
   text,
   blocks,
   cross = NO_CROSS,
+  threadLinks = NO_THREADS,
   onJump,
   partial = false,
   links = false,
@@ -207,6 +225,7 @@ function Drawn({
   const ctx: Ctx = {
     blocks,
     cross,
+    threadLinks,
     onJump,
     links,
     commands,
@@ -659,11 +678,26 @@ function cited(text: string, ctx: Ctx, edges: Edges, end: boolean): ReactNode {
  * and one that has none washes whole, as before.
  */
 function citations(text: string, ctx: Ctx): ReactNode {
-  const segs = splitCitations(text, ctx.blocks, ctx.cross);
+  const segs = splitCitations(text, ctx.blocks, ctx.cross, ctx.threadLinks);
   return segs.map((seg, i) => {
     if (seg.kind === "text") {
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
       return <Fragment key={`s${i}`}>{seg.text}</Fragment>;
+    }
+    if (seg.kind === "thread") {
+      /* Another of the reader's conversations: a link to it, never a jump in
+         this article (ThreadRef.tsx). */
+      return (
+        <span
+          className={["cite-chips", ctx.className].filter(Boolean).join(" ")}
+          // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+          key={`c${i}`}
+        >
+          {seg.links.map((link) => (
+            <ThreadRef key={link.id} link={link} />
+          ))}
+        </span>
+      );
     }
     if (seg.kind === "cross") {
       /* Another article brought into the conversation: its own chip, never

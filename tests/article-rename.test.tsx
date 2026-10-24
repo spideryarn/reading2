@@ -405,7 +405,13 @@ describe("renaming from the metadata page", () => {
        address, including the ones where pressing it PATCHes a row that does not
        exist. GPT Sol, 2026-08-27. */
     let answer: ((r: Response) => void) | null = null;
-    apiFetch.mockImplementation(() => new Promise<Response>((r) => (answer = r)));
+    /* The metadata read only: the page's other reads (reading time, since
+       261024t) would otherwise take `answer` and leave this one unanswered. */
+    apiFetch.mockImplementation((path: unknown) =>
+      String(path).startsWith("/api/metadata/")
+        ? new Promise<Response>((r) => (answer = r))
+        : new Promise<Response>(() => {}),
+    );
     await act(async () => {
       root.render(
         <Metadata

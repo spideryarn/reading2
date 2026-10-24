@@ -60,7 +60,9 @@ const m = (role: "user" | "assistant", text: string): ChatMessage => ({
 });
 
 const A: ChatThread = {
-  id: "spya-thra11",
+  /* A real id's shape (src/ids.ts has no `1`), so the panel would draw the
+     answer's mention of it as a link (plan 261024u). */
+  id: "spya-thra33",
   title: "What is the bit about the cinnamon bun for?",
   createdAt: "2026-10-07T10:00:00.000Z",
   updatedAt: "2026-10-07T10:20:00.000Z",
@@ -164,11 +166,19 @@ async function main(): Promise<void> {
         q.expect === null ? !r.opened.some((o) => o.startsWith("spya-thr")) : r.opened.includes(q.expect),
       ).length;
       const wrong = runs.filter((r) => r.opened.some((o) => o.startsWith("spya-thr") && o !== q.expect)).length;
-      rows.push(`| ${key} | ${arm} | ${right}/${repeats} | ${wrong} | ${runs.map((r) => r.opened.join("+") || "–").join(" · ")} |`);
+      /* Plan 261024u: of the runs that opened the right conversation, how many
+         named it by its id in the answer, which is what the panel links. */
+      const openedRight = runs.filter((r) => q.expect !== null && r.opened.includes(q.expect));
+      const linked = openedRight.filter((r) => q.expect !== null && r.text.includes(q.expect)).length;
+      rows.push(
+        `| ${key} | ${arm} | ${right}/${repeats} | ${wrong} | ${q.expect === null ? "–" : `${linked}/${openedRight.length}`} | ${runs.map((r) => r.opened.join("+") || "–").join(" · ")} |`,
+      );
       for (const r of runs) console.log(`\n--- ${key} / ${arm} / opened ${r.opened.join("+") || "nothing"}\n${r.text.slice(0, 600)}`);
     }
   }
-  console.log("\n| question | arm | right | opened a wrong one | opened per run |\n|---|---|---|---|---|");
+  console.log(
+    "\n| question | arm | right | opened a wrong one | linked it | opened per run |\n|---|---|---|---|---|---|",
+  );
   for (const r of rows) console.log(r);
 }
 

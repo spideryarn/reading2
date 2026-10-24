@@ -465,12 +465,12 @@ describe("Ask in chat, from the glossary's refusal", () => {
     expect(composer()?.value).toBe("");
   });
 
-  it("leaves the floating chat draft the reader already had where it was", async () => {
+  it("keeps the glossary's question out of the floating chat draft the reader already had", async () => {
     who.set(OWNER);
     await open("?mode=glossary");
 
-    /* A draft about the paragraph, opened from its gutter — the one kind of
-       chat draft that survives a mode switch, because `Reader` holds it. */
+    /* A draft about the paragraph, opened from its gutter. `Reader` holds it,
+       and since plan 261024r a switch to another mode closes it. */
     const chip = host.querySelector<HTMLButtonElement>(
       'tr[data-block="spya-bbbbbb"] button[aria-label="Chat with the AI about this paragraph"]',
     );
@@ -489,12 +489,19 @@ describe("Ask in chat, from the glossary's refusal", () => {
     ]);
     expect((chatPosts()[0]?.body as { anchor?: unknown }).anchor, "not to the paragraph's draft").toBeUndefined();
 
-    /* Back out to the glossary: the floating draft is there again, about the
-       same paragraph, and carries none of the glossary's question. */
+    /* Back out to the glossary: leaving Chat closed the floating draft
+       (Greg, spya-mj4b56), and the paragraph's button opens it again, about
+       the same paragraph, carrying none of the glossary's question. */
     const glossary = modeDoor(host, MODE_LABEL.glossary);
     await act(async () => glossary?.click());
     await until(() => param("mode") === "glossary");
-    expect(floating()?.textContent ?? "", "the floating draft came back").toContain(PARAGRAPH);
+    expect(floating(), "the switch closed the floating draft").toBeNull();
+    const again = host.querySelector<HTMLButtonElement>(
+      'tr[data-block="spya-bbbbbb"] button[aria-label="Chat with the AI about this paragraph"]',
+    );
+    await act(async () => again?.click());
+    await settle();
+    expect(floating()?.textContent ?? "", "the paragraph's draft opens again").toContain(PARAGRAPH);
     expect(floating()?.textContent ?? "").not.toContain("axiom");
     expect(chatApiPosts(), "and the draft itself sent nothing: the one request is the glossary's").toHaveLength(1);
   });

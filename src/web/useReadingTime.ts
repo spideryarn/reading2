@@ -130,6 +130,65 @@ async function waitForReadingTimeWrites(path: string): Promise<void> {
    (src/reading-so-far.ts, plan 261020ac). */
 export type { ReadingTimeStatus } from "./reading-time.js";
 
+/** The whole article's total, for the metadata page. */
+export type TimeSpentReading =
+  | { kind: "loading" }
+  | { kind: "ready"; seconds: number }
+  | { kind: "failed" }
+  | { kind: "viewing-as" };
+
+/**
+ * **How long the reader has spent on the whole article**, in seconds — the
+ * sum of every stored block, those a re-read has since retired included,
+ * because the question is time spent on this article, not coverage of today's
+ * body. docs/plans/261024t-metadata-shows-time-spent-reading.md (spya-db7w6f).
+ *
+ * Waits for any write still in flight first: stepping from the reader to the
+ * metadata page unmounts the reader, whose cleanup sends its last seconds, and
+ * a GET that overtook it would show a total up to a minute short.
+ *
+ * Owner only, by where it is mounted — `Metadata`, never `PublicMetadataPage` —
+ * and the route is owner-scoped regardless. **Not read while viewing as
+ * another reader**, as `useReadingTime` draws nothing then: the route would
+ * allow it, but the spine shows an administrator none of the subject's reading
+ * time, and this is not the place to start (GPT Sol's plan review, F1).
+ *
+ * Not in the offline cache's `CACHEABLE` (lib/api.ts), on purpose: offline the
+ * row says it could not be read rather than showing an old total as current.
+ */
+export function useTimeSpentReading(slug: string): TimeSpentReading {
+  const viewingAs = viewAsNonce() !== null;
+  const [state, setState] = useState<{ slug: string; load: TimeSpentReading }>({
+    slug,
+    load: { kind: "loading" },
+  });
+  useEffect(() => {
+    if (viewingAs) return;
+    let live = true;
+    const path = readingTimePath(slug);
+    void (async () => {
+      try {
+        await waitForReadingTimeWrites(path);
+        /* StrictMode's discarded first mount stops here rather than spending a GET. */
+        if (!live) return;
+        const body = await readJson<{ seconds: Record<BlockId, number> }>(await apiFetch(path));
+        let seconds = 0;
+        for (const s of Object.values(body.seconds ?? {})) {
+          if (typeof s === "number" && Number.isFinite(s) && s > 0) seconds += s;
+        }
+        if (live) setState({ slug, load: { kind: "ready", seconds } });
+      } catch {
+        if (live) setState({ slug, load: { kind: "failed" } });
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [slug, viewingAs]);
+  if (viewingAs) return { kind: "viewing-as" };
+  return state.slug === slug ? state.load : { kind: "loading" };
+}
+
 /** What one block has had, and what it takes to read, in seconds. */
 export interface BlockReadingTime {
   seconds: number;

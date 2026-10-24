@@ -18,12 +18,15 @@
  * the page, and the next reader found these words in their box on the same
  * slug. `forgetOnReaderChange`, at the bottom of this file.
  *
- * ## The four things it holds (and, since 2026-10-05, a pending origin: see `ChatDrafts.origin`; since 2026-10-12, a Chat box's "Bringing in" row beside its words: `ChatDrafts.threadMentions`)
+ * ## The five things it holds (plus the pending origin and "Bringing in" row:
+ * see `ChatDrafts.origin` and `ChatDrafts.threadMentions`)
  *
  * - **A Chat conversation's unsent words**, by conversation id. Written by the
  *   panel's composer and by the floating dialog's (its conversation arm, not
  *   its passage arm), so the words follow the reader between the two.
  * - **The box under Chat's list**, one string: it belongs to no conversation.
+ * - **A passage chat's unsent words**, by block id, before it has a
+ *   conversation.
  * - **Learn's unsent words, by kind** — Recall and Explore are
  *   each one conversation per article, and the band decides which conversation
  *   that is, so the words are handed to whichever it selects.
@@ -104,6 +107,17 @@ export interface ChatDrafts {
   listMentions(): readonly PickedMention[];
   setListMentions(picked: readonly PickedMention[]): void;
 
+  /**
+   * **A passage chat's unsent words, by its block** — the floating chat's
+   * draft arm, before there is a conversation to keep them under. A mode
+   * switch closes that chat (plan 261024r), and they lived only in its state;
+   * kept here, the block's chat button brings them back. Apart from `thread`
+   * on purpose: a block id is not a conversation, and Chat's arrival reads
+   * every id in that map as one.
+   */
+  passage(blockId: string): string | undefined;
+  setPassage(blockId: string, text: string): void;
+
   /** Recall's or Explore's unsent words. */
   learn(kind: LearnKind): string;
   setLearn(kind: LearnKind, text: string): void;
@@ -127,7 +141,7 @@ export interface ChatDrafts {
   guide(): string | undefined;
   setGuide(id: string): void;
 
-  /** Whether any of the three boxes holds words — more than spaces — right now. */
+  /** Whether any box holds words — more than spaces — right now. */
   holdsWords(): boolean;
 }
 
@@ -143,6 +157,7 @@ export function createChatDrafts(): ChatDrafts {
   let list = "";
   let listRow: readonly PickedMention[] = [];
   const learnDrafts = new Map<LearnKind, string>();
+  const passages = new Map<string, string>();
   let destination: string | null | undefined;
   let guide: string | undefined;
   return {
@@ -205,6 +220,10 @@ export function createChatDrafts(): ChatDrafts {
     setListMentions(picked) {
       listRow = picked;
     },
+    passage: (blockId) => passages.get(blockId),
+    setPassage(blockId, text) {
+      passages.set(blockId, text);
+    },
     learn: (kind) => learnDrafts.get(kind) ?? "",
     setLearn(kind, text) {
       learnDrafts.set(kind, text);
@@ -218,7 +237,9 @@ export function createChatDrafts(): ChatDrafts {
         for (const text of texts) if (text.trim() !== "") return true;
         return false;
       };
-      return list.trim() !== "" || some(threads.values()) || some(learnDrafts.values());
+      return (
+        list.trim() !== "" || some(threads.values()) || some(learnDrafts.values()) || some(passages.values())
+      );
     },
   };
 }

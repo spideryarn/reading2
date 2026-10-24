@@ -395,7 +395,7 @@ describe("splitCitations — the block ids in an answer, found and checked", () 
   const split = (para: string) => splitCitations(para, known);
   /** A compact shape for reading a result: "text" or "cite:id,id". */
   const shape = (para: string) =>
-    split(para).map((s) => (s.kind === "text" ? s.text : `cite:${s.ids.join(",")}`));
+    split(para).map((s) => (s.kind === "text" ? s.text : `cite:${(s.kind === "thread" ? s.links.map((l) => l.id) : s.ids).join(",")}`));
 
   it("pulls one bracketed id out of a sentence", () => {
     expect(shape("He rejects it [spya-k3m9qt].")).toEqual([
@@ -474,7 +474,7 @@ describe("splitCitations — the block ids in an answer, found and checked", () 
 describe("splitCitations — the bug the space-eating pattern had", () => {
   const known = new Set(["spya-k3m9qt"]);
   const shape = (para: string) =>
-    splitCitations(para, known).map((s) => (s.kind === "text" ? s.text : `cite:${s.ids.join(",")}`));
+    splitCitations(para, known).map((s) => (s.kind === "text" ? s.text : `cite:${(s.kind === "thread" ? s.links.map((l) => l.id) : s.ids).join(",")}`));
 
   /* The first version of the pattern let its optional whitespace match OUTSIDE
      the brackets, so a bare id swallowed the spaces around it and rendered as
@@ -518,7 +518,7 @@ describe("splitCitations — the bug the space-eating pattern had", () => {
 describe("splitCitations — prose inside brackets, and duplicates", () => {
   const known = new Set(["spya-k3m9qt", "spya-p7w2dn"]);
   const shape = (para: string) =>
-    splitCitations(para, known).map((s) => (s.kind === "text" ? s.text : `cite:${s.ids.join(",")}`));
+    splitCitations(para, known).map((s) => (s.kind === "text" ? s.text : `cite:${(s.kind === "thread" ? s.links.map((l) => l.id) : s.ids).join(",")}`));
 
   /* The parser used to match ANY short bracketed run and replace the whole
      thing with chips, so a bracket holding an id and prose lost the prose:

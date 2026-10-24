@@ -3285,7 +3285,10 @@ async function chatReadingSoFar(slug: string, blocks: readonly Block[]): Promise
  * still offered and says so honestly if it fails too. Logged: the slug and
  * counts, never a title or a gist.
  */
-async function chatOthers(slug: string, thread: Pick<ChatThread, "id" | "kind">): Promise<string | null> {
+async function chatOthers(
+  slug: string,
+  thread: Pick<ChatThread, "id" | "kind">,
+): Promise<{ content: string; ids: string[] } | null> {
   if (thread.kind !== "chat") return null;
   try {
     const section = otherConversationsSection(await chatStore.load(slug), thread.id);
@@ -3294,7 +3297,7 @@ async function chatOthers(slug: string, thread: Pick<ChatThread, "id" | "kind">)
       { slug, conversations: section.total, conversationsShown: section.shown, chars: section.content.length },
       "chat: the reader's other conversations go with the turn",
     );
-    return section.content;
+    return { content: section.content, ids: section.ids };
   } catch (err) {
     const status = (err as { status?: unknown } | null)?.status;
     log("model").warn(
@@ -4148,6 +4151,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        read that fails sends no line rather than "little or none": a failed
        read and nothing read are different facts. */
     const reading = thread.kind === "candidates" ? null : await chatReadingSoFar(slug, article.blocks);
+    const others = await chatOthers(slug, thread);
     for await (const event of converse({
       power: powerOf(article),
       meta: article.meta,
@@ -4203,8 +4207,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          with what it covered — so a new conversation can build on an earlier
          one (plan 261008e). From the stored thread's kind and id, like
          `notes`. `null` for every other kind, for a reader with no other
-         conversation here, and when they could not be read. */
-      others: await chatOthers(slug, thread),
+         conversation here, and when they could not be read. Their ids go
+         beside it, so a bracketed one is counted as a link to that
+         conversation rather than an invented block id (plan 261024u). */
+      others: others?.content ?? null,
+      otherThreadIds: others?.ids ?? [],
       /* **How much the reader has used Spideryarn, on every guide turn**, from
          the stored thread's kind like `notes` above. `null` for every other
          kind, and for a guide turn whose count could not be read. */

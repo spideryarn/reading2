@@ -23,9 +23,10 @@
  *  - `unknownIds` and `snippet` — the counter and the hover card.
  */
 import { ID_PATTERN, ID_PREFIX } from "../ids.js";
-import { citableText } from "../citable.js";
+import { CITATION_RUN, citableText } from "../citable.js";
 import { webLinks } from "../urls.js";
 import type { MentionedArticleView } from "../types.js";
+import type { LearnConversationView } from "./thread-source.js";
 
 /**
  * Whatever can answer "is this one of the article's blocks?".
@@ -105,13 +106,42 @@ export function crossArticles(
 }
 
 /**
- * A run of prose, a run of the open article's ids the model cited together, or
- * a run of one mentioned article's ids.
+ * **One of the reader's own conversations about this article**, as a chip
+ * needs it — plan docs/plans/261024u-chat-links-the-earlier-conversation-it-mentions.md.
+ * Built from the threads the server listed for the signed-in owner
+ * (thread-links.ts § `threadLinks`), never from anything the model wrote: the
+ * model's bracket only selects the id.
+ */
+export interface ThreadLink {
+  id: string;
+  /** What the reader's list calls it. */
+  title: string;
+  /** Which band opens it (thread-links.ts § `threadHref`). */
+  target: ThreadTarget;
+}
+
+/**
+ * Which band opens a conversation. A chat opens wherever chats are drawn now
+ * (Chat's band, or the floating chat); the guide in Chat's band; a Recall or
+ * Explore conversation in its part of Learn.
+ */
+export type ThreadTarget =
+  | { band: "here" }
+  | { band: "chat" }
+  | { band: "learn"; view: LearnConversationView };
+
+/** No conversations to link: every conversation id stays the characters the model wrote. */
+export const NO_THREADS: ReadonlyMap<string, ThreadLink> = new Map();
+
+/**
+ * A run of prose, a run of the open article's ids the model cited together, a
+ * run of one mentioned article's ids, or a run of the reader's conversations.
  */
 export type Segment =
   | { kind: "text"; text: string }
   | { kind: "cite"; ids: string[] }
-  | { kind: "cross"; ids: string[]; source: CrossSource };
+  | { kind: "cross"; ids: string[]; source: CrossSource }
+  | { kind: "thread"; links: ThreadLink[] };
 
 /** A run of prose, or an address the model wants the reader to be able to press. */
 export type LinkRun =
@@ -197,9 +227,11 @@ export function splitLinks(para: string, partial = false): LinkRun[] {
  * that drops the brackets still gets working links and one that writes
  * `[see above]` does not get a broken one. `ID_PATTERN` does the real checking:
  * "looks like an id" and "is one of ours" are different questions.
+ *
+ * The pattern lives in src/citable.ts since 2026-10-24, so the server's
+ * counters find the same runs (plan 261024u).
  */
-const CITED =
-  /\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]|spya-[a-z0-9]{6}(?:[,;]?\s+spya-[a-z0-9]{6})*/g;
+const CITED = CITATION_RUN;
 
 /** Every id-shaped string inside one match. */
 const ID_SHAPED = /spya-[a-z0-9]{6}/g;
@@ -224,7 +256,18 @@ const ID_SHAPED = /spya-[a-z0-9]{6}/g;
  * Empty text segments are never emitted, so a paragraph that is nothing but a
  * citation does not come back with empty strings on either side of it.
  */
-export function splitCitations(para: string, known: Known, cross: CrossArticles = NO_CROSS): Segment[] {
+export function splitCitations(
+  para: string,
+  known: Known,
+  cross: CrossArticles = NO_CROSS,
+  threads: ReadonlyMap<string, ThreadLink> = NO_THREADS,
+): Segment[] {
+  /* **A conversation id is drawn only when no passage claims it.** Thread and
+     block ids come from one mint (src/ids.ts), so a collision is very unlikely,
+     but a chip that might open a conversation when the model meant a paragraph
+     is the `CrossArticles` case again: text. */
+  const clash = (id: string) =>
+    threads.has(id) && (known.has(id) || cross.byId.has(id) || cross.ambiguous.has(id));
   const out: Segment[] = [];
   let last = 0;
   const push = (text: string) => {
@@ -243,12 +286,14 @@ export function splitCitations(para: string, known: Known, cross: CrossArticles 
     /* A collision is evidence that this whole citation run has no unambiguous
        provenance. Keep the run exactly as the model wrote it, rather than
        linking its other ids while silently deleting the colliding one. */
-    if (shaped.some((id) => cross.ambiguous.has(id))) continue;
+    if (shaped.some((id) => cross.ambiguous.has(id) || clash(id))) continue;
     const usable = [
       ...new Set(
         shaped.filter(
           (id) =>
-            ID_PATTERN.test(id) && !cross.ambiguous.has(id) && (known.has(id) || cross.byId.has(id)),
+            ID_PATTERN.test(id) &&
+            !cross.ambiguous.has(id) &&
+            (known.has(id) || cross.byId.has(id) || threads.has(id)),
         ),
       ),
     ];
@@ -257,20 +302,39 @@ export function splitCitations(para: string, known: Known, cross: CrossArticles 
     if (usable.length === 0) continue;
     push(para.slice(last, match.index));
     last = match.index + match[0].length;
-    /* One run, split by article in the order each first appears: the open
-       article's ids as they always were, each mentioned article's as its own. */
-    const groups = new Map<string, Exclude<Segment, { kind: "text" }>>();
-    for (const id of usable) {
-      const source = known.has(id) ? undefined : cross.byId.get(id);
-      const key = source ? `x:${source.slug}` : "open";
-      const group = groups.get(key);
-      if (group) group.ids.push(id);
-      else groups.set(key, source ? { kind: "cross", ids: [id], source } : { kind: "cite", ids: [id] });
-    }
-    out.push(...groups.values());
+    out.push(...grouped(usable, known, cross, threads));
   }
   push(para.slice(last));
   return out;
+}
+
+/**
+ * One run, split by article in the order each first appears: the open
+ * article's ids as they always were, each mentioned article's as its own, and
+ * the reader's conversations as one more group. Every id is usable by now.
+ */
+function grouped(
+  usable: readonly string[],
+  known: Known,
+  cross: CrossArticles,
+  threads: ReadonlyMap<string, ThreadLink>,
+): Exclude<Segment, { kind: "text" }>[] {
+  const groups = new Map<string, Exclude<Segment, { kind: "text" }>>();
+  for (const id of usable) {
+    const link = known.has(id) || cross.byId.has(id) ? undefined : threads.get(id);
+    if (link) {
+      const group = groups.get("thread");
+      if (group?.kind === "thread") group.links.push(link);
+      else groups.set("thread", { kind: "thread", links: [link] });
+      continue;
+    }
+    const source = known.has(id) ? undefined : cross.byId.get(id);
+    const key = source ? `x:${source.slug}` : "open";
+    const group = groups.get(key);
+    if (group?.kind === "cite" || group?.kind === "cross") group.ids.push(id);
+    else groups.set(key, source ? { kind: "cross", ids: [id], source } : { kind: "cite", ids: [id] });
+  }
+  return [...groups.values()];
 }
 
 /**

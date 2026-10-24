@@ -19,6 +19,7 @@ import {
   renderedText,
   resolveMark,
   termMarks,
+  termProminence,
   type Mark,
   type MarkKind,
 } from "../src/web/annotate.js";
@@ -473,6 +474,140 @@ describe("termMarks", () => {
     expect(both?.getAttribute("data-comment")).toBe("c1");
     expect(both?.getAttribute("data-term")).toBe("spya-termid");
     expect(host.querySelectorAll("mark mark")).toHaveLength(0);
+  });
+
+  /* ------------------------------------------------ the fade, per repeat --
+     Greg, 2026-10-24 (spya-htsjmf): a term that recurs over and over should
+     lose its underline smoothly, in document order. Plan 261024s. */
+
+  const repeats = Array.from({ length: 8 }, (_, i) => ({
+    id: `spya-rep00${i}`,
+    tag: "p",
+    kind: "text" as const,
+    text: "Consciousness, again.",
+    words: 2,
+    html: "<p>Consciousness, again.</p>",
+    gistable: true,
+  }));
+  const consciousness = {
+    id: "spya-consc1",
+    forms: ["consciousness"],
+    blocks: repeats.map((b) => b.id),
+  };
+
+  const parse = (out: string) => {
+    const host = document.createElement("div");
+    host.innerHTML = out;
+    return host;
+  };
+
+  it("fades a term's underline with each repeat, in document order", () => {
+    const found = termMarks(repeats, [consciousness]);
+    const prominence = repeats.map((b) => found.get(b.id)?.[0]?.prominence ?? 1);
+    expect(prominence[0]).toBe(1);
+    for (let i = 1; i < prominence.length; i++) {
+      expect(prominence[i]!).toBeLessThan(prominence[i - 1]!);
+    }
+    // Where the plan says it lands: half at the fourth, all but gone by the eighth.
+    expect(prominence[3]).toBeCloseTo(0.5, 2);
+    expect(prominence[7]!).toBeLessThan(0.1);
+    expect(termProminence(2)).toBeGreaterThan(0.9);
+  });
+
+  it("counts each entry on its own", () => {
+    const other = { id: "spya-again1", forms: ["again"], blocks: [repeats[5]!.id] };
+    const marks = termMarks(repeats, [consciousness, other]).get(repeats[5]!.id)!;
+    expect(marks.find((m) => m.id === "spya-again1")?.prominence ?? 1).toBe(1);
+    expect(marks.find((m) => m.id === "spya-consc1")?.prominence ?? 1).toBeLessThan(0.3);
+  });
+
+  it("neither counts nor fades an occurrence in folded matter", () => {
+    // The abstract is folded on arrival; counted, the body would open with
+    // the term already at half.
+    const matter = new Set([repeats[0]!.id, repeats[1]!.id]);
+    const found = termMarks(repeats, [consciousness], matter);
+    expect(found.get(repeats[0]!.id)?.[0]?.prominence ?? 1).toBe(1);
+    expect(found.get(repeats[1]!.id)?.[0]?.prominence ?? 1).toBe(1);
+    expect(found.get(repeats[2]!.id)?.[0]?.prominence ?? 1).toBe(1);
+    expect(found.get(repeats[3]!.id)?.[0]?.prominence).toBeCloseTo(termProminence(2), 5);
+  });
+
+  it("writes the fade as --term-a, only below full, and the larger of two wins", () => {
+    const found = termMarks(repeats, [consciousness]);
+    const first = parse(annotateHtml(repeats[0]!.html, found.get(repeats[0]!.id)!));
+    expect(first.querySelector("mark.term")?.getAttribute("style")).toBeNull();
+    const fifth = parse(annotateHtml(repeats[4]!.html, found.get(repeats[4]!.id)!));
+    expect(fifth.querySelector("mark.term")?.getAttribute("style")).toBe(
+      `--term-a:${termProminence(5).toFixed(2)}`,
+    );
+    const fresh = { id: "spya-fresh1", forms: ["consciousness"], blocks: [repeats[4]!.id] };
+    const both = termMarks(repeats, [consciousness, fresh]).get(repeats[4]!.id)!;
+    const shared = parse(annotateHtml(repeats[4]!.html, both));
+    expect(shared.querySelector("mark.term")?.getAttribute("style")).toBeNull();
+  });
+
+  it("keeps both variables when a faded term shares a run with a hit", () => {
+    const marks = termMarks(repeats, [consciousness]).get(repeats[4]!.id)!;
+    const term = marks[0]!;
+    const host = parse(
+      annotateHtml(repeats[4]!.html, [
+        ...marks,
+        { id: "h1", start: term.start, end: term.end, kind: "hit", strength: 0.4 },
+      ]),
+    );
+    expect(host.querySelector("mark.term.hit")?.getAttribute("style")).toBe(
+      `--term-a:${termProminence(5).toFixed(2)};--hit-a:0.400`,
+    );
+  });
+
+  it("counts every occurrence, aliases included, not every block", () => {
+    const twice = {
+      id: "spya-twice1",
+      tag: "p",
+      kind: "text" as const,
+      text: "Consciousness, or awareness.",
+      words: 3,
+      html: "<p>Consciousness, or awareness.</p>",
+      gistable: true,
+    };
+    const article = [twice, repeats[0]!];
+    const entry = { id: "spya-consc1", forms: ["consciousness", "awareness"], blocks: [twice.id, repeats[0]!.id] };
+    const found = termMarks(article, [entry]);
+    expect(found.get(twice.id)!.map((m) => m.prominence ?? 1)).toEqual([1, termProminence(2)]);
+    expect(found.get(repeats[0]!.id)?.[0]?.prominence).toBeCloseTo(termProminence(3), 5);
+  });
+
+  it.each([
+    ["comment", undefined, "cmt"],
+    ["chat", "chat" as const, "chat"],
+  ])("does not fade a %s underline along with a term it shares", (_name, kind, className) => {
+    // One <mark>, one border-bottom: fading it would fade the reader's own mark
+    // (Sol, plan review of 261024s).
+    const marks = termMarks(repeats, [consciousness]).get(repeats[6]!.id)!;
+    const text = renderedText(repeats[6]!.html);
+    const host = parse(
+      annotateHtml(repeats[6]!.html, [
+        { id: "c1", start: 0, end: text.length, ...(kind ? { kind } : {}) },
+        ...marks,
+      ]),
+    );
+    expect(host.querySelector(`mark.${className}.term`)?.getAttribute("style")).toBeNull();
+  });
+
+  it("draws the faded rule and restores it on hover, press and tap", () => {
+    const css = readerCssNoComments();
+    expect(css).toMatch(
+      /mark\.term\s*\{[^}]*border-bottom:\s*2px dotted\s*color-mix\(in oklab,\s*var\(--highlight\)\s*calc\(70% \* var\(--term-a,\s*1\)\),\s*transparent\)/,
+    );
+    expect(css).toMatch(
+      /mark\.term:hover\s*\{[^}]*border-bottom-color:\s*color-mix\(in oklab,\s*var\(--highlight\) 90%,\s*transparent\)/,
+    );
+    expect(css).toMatch(
+      /mark\.term\[data-term-open\]\s*\{[^}]*border-bottom-color:\s*var\(--highlight\)/,
+    );
+    expect(css).toMatch(
+      /mark\.term\[data-hover-tap\]\s*\{[^}]*border-bottom-color:\s*var\(--highlight\)/,
+    );
   });
 });
 

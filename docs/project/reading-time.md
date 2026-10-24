@@ -171,6 +171,11 @@ experimental features off" pins it through the real `App`.
   [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md). Anything
   finer sent to a model rewrites `/privacy` first ([privacy.md § Reading time](privacy.md#reading-time)).
 
+- **The Metadata page**, since 2026-10-24: *Your reading* says the whole article's total, every
+  stored block summed, as "about 14 min" — owner only, nothing under view-as, and it waits for the
+  reader's last write before reading. `useReadingTime.ts` § `useTimeSpentReading`; Greg's report
+  `spya-db7w6f`; plan [261024t](../plans/261024t-metadata-shows-time-spent-reading.md).
+
 ## Not built
 
 - **A way to switch it off, and a way to erase it** — the obvious next step now that every owner

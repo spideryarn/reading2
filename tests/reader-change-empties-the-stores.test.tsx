@@ -159,9 +159,11 @@ describe("when another reader's session arrives", () => {
   it("the unsent chat words are gone before the listener returns", () => {
     chatDraftsFor(SLUG).setList("A's question, half typed");
     chatDraftsFor(SLUG).setLearn("learn", "What A remembers");
+    chatDraftsFor(SLUG).setPassage("spya-passag", "What A was asking about this passage");
     tell("SIGNED_IN", sessionOf("B"));
     expect(chatDraftsFor(SLUG).list()).toBe("");
     expect(chatDraftsFor(SLUG).learn("learn")).toBe("");
+    expect(chatDraftsFor(SLUG).passage("spya-passag")).toBeUndefined();
     expect(anyChatDraftHeld()).toBe(false);
   });
 

@@ -500,9 +500,20 @@ const INDEX_ROW_KEY =
 export function otherConversationsSection(
   threads: readonly ChatThread[],
   currentThreadId: string | undefined,
-): { content: string; total: number; shown: number } | null {
+): {
+  content: string;
+  total: number;
+  shown: number;
+  /**
+   * Every conversation the model may name, shown or not: the answer's counters
+   * (src/converse.ts § `threadCitations`) read a bracketed one as a link to the
+   * conversation rather than an invented block id (plan 261024u).
+   */
+  ids: string[];
+} | null {
   const index = threadIndexRows(threads, currentThreadId);
   if (index.total === 0) return null;
+  const ids = eligible(threads, currentThreadId).map((t) => t.id);
   const render = () =>
     [
       `THE READER'S OTHER CONVERSATIONS about this article: ${count(index.total, "conversation")}` +
@@ -521,7 +532,7 @@ export function otherConversationsSection(
     index.cut = true;
     content = render();
   }
-  return { content, total: index.total, shown: index.rows.length };
+  return { content, total: index.total, shown: index.rows.length, ids };
 }
 
 /* -------------------------------------------------------- one conversation -- */

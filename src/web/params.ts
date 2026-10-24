@@ -1605,8 +1605,9 @@ export const bearsParam = createParser<SourcesClaimsBears>({
  * **Which of Reception's threads narrows the list** — `?receptionthread=<theme id>` or
  * `?receptionthread=key` for the key sources (plan 260930j, SPIDERYARN-READING2-6M).
  *
- * Not `?thread=`, which is the open conversation and survives a mode switch
- * like every parameter. A theme id is a `mintId`, so anything that is neither
+ * Not `?thread=`, which is the open conversation. A reader's switch of mode
+ * clears it unless the destination is Chat or deliberately chooses its own
+ * conversation (Reader.tsx § `leaveTheChat`). A theme id is a `mintId`, so anything that is neither
  * that shape nor `key` parses to `null`. A well-formed id this debate does not
  * have — a link from before a re-run — gets through here and is read as *no
  * filter* by `selectedThread` (reception-threads.ts). `replace`, like `?bears=`:

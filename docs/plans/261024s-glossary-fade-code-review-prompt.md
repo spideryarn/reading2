@@ -1,0 +1,5 @@
+Review the built code for plan docs/plans/261024s-a-glossary-underline-fades-with-each-repeat-of-its-term.md (it records your plan review's findings and how each was handled). The diff is docs/plans/261024s-glossary-fade-code-review.diff (src/web/annotate.ts, src/web/TableView.tsx, src/web/styles/annotations.css, tests/annotate.test.ts, tests/quote-fill.test.ts).
+
+Look for correctness bugs: wrong count order, a run whose fade is silently not drawn or drawn where it should not be (comments, chats, pressed/hover/tap states, overlapping terms), the `style` attribute hoist in annotateHtml changing any other mark's output, memo dependencies in TableView, anything the tests do not actually prove.
+
+House rule: fix what you find inside this scope directly in the working tree (keep edits minimal, match the surrounding comment style), then run `npx vitest run tests/annotate.test.ts tests/quote-fill.test.ts` and `npm run typecheck`. Do not commit. Report each finding, what you changed for it, and anything wider you did not change, ranked by severity. If you find nothing, say so explicitly.
