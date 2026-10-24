@@ -4670,7 +4670,7 @@ export const chatThreads = spideryarn.table(
 
     /**
      * **Where the conversation was started from, when that was an item in
-     * another mode** — `ThreadOrigin` in src/types.ts, as five columns
+     * another mode** — `ThreadOrigin` in src/types.ts, as seven columns
      * (docs/project/sql.md: columns over JSON). All null for every other
      * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
      *
@@ -4694,6 +4694,12 @@ export const chatThreads = spideryarn.table(
      *   (`LensOrigin`; plan 261005k, A). The reader's words: never logged. A
      *   `reception` origin has this and a `sources-claims` origin a block and a
      *   quote; an old `debate` origin has one or the other, never both.
+     * - `origin_batch_id` and `origin_attempt_id`: a `quiz` origin's batch and
+     *   the `quiz_attempts` row it is about (`QuizOrigin`; plan 261024i,
+     *   stage 2). Its question id is `origin_item_id` and its question
+     *   `origin_quote`. Null on every other mode
+     *   (`chat_threads_origin_quiz_only`), and held to the attempt by
+     *   `chat_threads_origin_quiz_attempt_fk`.
      *
      * Written **on insert only**, like the anchor and the kind:
      * `upsertThread`'s conflict clause does not name them.
@@ -4703,6 +4709,8 @@ export const chatThreads = spideryarn.table(
     originBlockId: text("origin_block_id"),
     originQuote: text("origin_quote"),
     originLens: text("origin_lens"),
+    originBatchId: text("origin_batch_id"),
+    originAttemptId: uuid("origin_attempt_id"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -4744,9 +4752,10 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz')`,
     ),
-    /* No mode, no origin: the other four columns mean nothing without it. */
+    /* No mode, no origin: the original four shape columns mean nothing
+       without it. The two Quiz columns have their own null-safe check below. */
     check(
       "chat_threads_origin_none",
       sql`${t.originMode} is not null or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is null)`,
@@ -4779,6 +4788,33 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_item",
       sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
     ),
+    /* A mark in Learn › Quiz: the question's id and words, its batch, and the
+       attempt it is about; no block, no lens (plan 261024i, stage 2). */
+    check(
+      "chat_threads_origin_quiz",
+      sql`${t.originMode} is distinct from 'quiz' or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBatchId} is not null and ${t.originAttemptId} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+    ),
+    /* And only a quiz origin names a batch or an attempt. A null mode is not
+       `quiz`, so this also covers "no mode, no origin". */
+    check(
+      "chat_threads_origin_quiz_only",
+      /* `is not distinct from`, not `=`: with no mode, `= 'quiz'` is null,
+         and a CHECK that is null passes, so a batch with no mode got in. */
+      sql`(${t.originBatchId} is null and ${t.originAttemptId} is null) or ${t.originMode} is not distinct from 'quiz'`,
+    ),
+    /* **The mark, with its batch and question, on this article** — so the
+       copies the row keeps for the way back cannot disagree with the attempt.
+       MATCH SIMPLE, so a row with these null (every other origin) is not
+       checked. No `on delete`: an attempt goes only with its article, whose
+       cascade takes the thread in the same statement, or in a transfer, which
+       deletes `chat_threads` before `quiz_attempts` (`READER_STATE`,
+       src/admin-articles.ts). A delete of a discussed attempt alone is
+       refused, and that is the point. */
+    foreignKey({
+      name: "chat_threads_origin_quiz_attempt_fk",
+      columns: [t.articleId, t.originAttemptId, t.originBatchId, t.originItemId],
+      foreignColumns: [quizAttempts.articleId, quizAttempts.id, quizAttempts.batchId, quizAttempts.questionId],
+    }),
     /* `summary`, which the list above reserves, has no shape of its own yet,
        so it carries none of the shape columns and cannot get one by accident
        before it is built (plan 261009k, GPT Sol's F8). Null-safe, like the
@@ -6198,6 +6234,10 @@ export const quizAttempts = spideryarn.table(
     check("quiz_attempts_answer_length", sql`char_length(${t.answer}) between 1 and 1000000`),
     /** The one read: this batch's latest answer to each question. */
     index("quiz_attempts_latest").on(t.articleId, t.batchId, t.questionId, t.createdAt.desc()),
+    /* Trivially unique, since `id` is the key: it is what
+       `chat_threads_origin_quiz_attempt_fk` points at, so a chat about a mark
+       carries that mark's article, batch and question exactly. */
+    unique("quiz_attempts_attempt_identity").on(t.articleId, t.id, t.batchId, t.questionId),
   ],
 );
 

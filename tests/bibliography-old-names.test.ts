@@ -141,7 +141,7 @@ describe("job ingress, for a tab that still names `citations`", () => {
 
 describe("a chat's origin, as an old row or an old tab spells it", () => {
   it("reads a stored `citations` origin as Bibliography's", () => {
-    const row = { originMode: "citations", originItemId: WORK, originBlockId: null, originQuote: "A work", originLens: null };
+    const row = { originMode: "citations", originItemId: WORK, originBlockId: null, originQuote: "A work", originLens: null, originBatchId: null, originAttemptId: null };
     expect(originFromColumns(row)).toEqual({ origin: { mode: "bibliography", itemId: WORK, quote: "A work" } });
   });
 

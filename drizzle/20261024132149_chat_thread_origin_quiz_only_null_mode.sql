@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_quiz_only";--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_quiz_only" CHECK (("spideryarn"."chat_threads"."origin_batch_id" is null and "spideryarn"."chat_threads"."origin_attempt_id" is null) or "spideryarn"."chat_threads"."origin_mode" is not distinct from 'quiz');

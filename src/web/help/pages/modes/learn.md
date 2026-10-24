@@ -56,8 +56,14 @@ that only asks what you meant needs no link.
 
 A Quiz mark says what you got, what is missing and where to look. There is no score. **Show a
 reference answer** is one good answer, not the only right one; if it and the article disagree, the
-article wins. Your answers and marks are not saved once you leave the page — only the questions are
-kept.
+article wins. Your answers and their marks are kept, so they are still there when you come back;
+**Write them again** starts a new set of questions with none answered.
+
+Under a mark, the two bubbles (**Discuss this in chat**) open a new chat with the question, your
+answer and the mark already in the box, for you to add what you want to ask. That chat remembers
+the mark: Chat's list says **Quiz** on it, the chat has a line that takes you back to the
+question, and the question shows the chat under that mark. Answer again and the new mark gets its
+own chat.
 
 Once a quiz exists, each question also appears as a faint line in the text after the passage it is
 about, in every mode. Press it to answer.

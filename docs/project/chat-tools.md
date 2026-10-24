@@ -687,7 +687,8 @@ From 2026-10-01 it showed chats only.
   opens. A plain chat has none.
 - **The place a row came from is said in words too**, since 2026-10-24: the meta line under the
   title starts with the chip you would press to get there (*Investigate*, *Claims*,
-  *Bibliography*, *Glossary*, *Ideas*). Until then only the icon's card named the sub-mode, and an
+  *Bibliography*, *Glossary*, *Ideas*, and since stage 2 *Quiz*, for a mark discussed in chat,
+  under Learn's icon and the *Learn* filter but opened in Chat like any chat). Until then only the icon's card named the sub-mode, and an
   Investigate chat looked like any other Sources one. Greg, 2026-10-23 (spya-twsm7t): *"if I look
   at it in the chat list of threads, it should be clear that it came from the investigate
   submode"*. A Learn row's title already says it, so the meta line does not repeat it; a passage

@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "21 October 2026";
+const LAST_UPDATED = "24 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -190,6 +190,25 @@ export function PrivacyPage() {
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">The articles you add</strong> — we fetch the page
             you point us at and store its text and images. A PDF you upload is stored as a file.
+          </li>
+          {/* **The Chrome extension**, since 2026-10-24: the store requires a
+              privacy policy that says exactly what an extension takes, and this
+              is the one its listing links to. Kept in step with
+              extension/store/listing.md and docs/project/privacy.md.
+              docs/plans/261024q-chrome-extension-one-click-add-the-page.md (F8). */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">Pages you add with the Chrome extension</strong> —
+            when you press its button, and only then, the extension copies that tab’s rendered HTML
+            and address and passes them to a Spideryarn tab, which adds the page to your shelf like a
+            file you uploaded. The copy can include personalised or sensitive content in the page’s
+            HTML, including content not currently visible; for example, your name in a site’s menu.
+            Executable scripts and attributes, password and hidden form inputs, and most other form
+            values are left out. The Spideryarn tab can take the copy for 15 minutes. The extension
+            removes it when that tab takes it or closes, on its next cleanup after it expires, or
+            when Chrome next starts. Once added, Spideryarn and the processors named below keep and
+            use it like any other article until you delete it. The extension reads no other tab or
+            anything in the background, makes no network request itself, and has no access to your
+            Spideryarn account.
           </li>
           {/* **Quiz answers are on this list since 2026-10-05**, and until then
               the bullet ended "Quiz answers are the exception: they go to a
@@ -481,6 +500,20 @@ export function PrivacyPage() {
           When you open a cited work that has no note in Sources, from its card in the article, the
           web is searched once for that work’s own page: the search is sent its title, authors, year
           and DOI or arXiv identifier, and never the article’s text.
+          {/* Plan 261024o (src/situate.ts, src/situate-citers.ts): the owner's
+              press on Search the literature, behind the experimental switch.
+              The searches are planned by a model from the fenced title,
+              headings and opening, never the profile, and each is one forced
+              Exa search through OpenRouter; the citing works are OpenAlex's,
+              found by the DOI or the title as Cited by finds them.
+              docs/project/privacy.md § Search the literature. */}{" "}
+          When you press Search the literature, in Sources’ Investigate (an experimental feature),
+          your article is searched for in the wider literature. Its title, headings, opening and
+          details of works it cites go through OpenRouter to an AI that writes a dozen or so short
+          searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is
+          sent the article’s DOI, or the words of its title, to find papers that cite it. The whole
+          article, the search results, public abstracts, and what you wrote about yourself or why
+          you are reading then go through OpenRouter to the AI that writes the dossier.
         </p>
         <p>
           {/* **The honest version of the training question.** Everything here

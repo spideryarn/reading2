@@ -74,6 +74,9 @@
  * wrote this note (2026-09-01);
  * docs/plans/260901b-committed-fixture-corpus.md.
  */
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import { eq } from "drizzle-orm";
 
 import { loadThreads } from "../../src/chat.js";
@@ -86,6 +89,7 @@ import {
   chatThreads,
   comments as commentsTable,
   glossaryLookups,
+  quizAttempts,
   searchRuns,
 } from "../../src/db/schema.js";
 import { loadLookups } from "../../src/glossary-lookups.js";
@@ -239,6 +243,50 @@ export async function seedCommentsFromFiles(slug: string): Promise<SeededComment
   return { inserted: anchored.length, unanchored: unanchored.map((c) => c.id) };
 }
 
+/** Read the Quiz rows a chat restore may depend on; absent in older fixtures. */
+async function quizAttemptRows(
+  slug: string,
+  articleId: string,
+): Promise<(typeof quizAttempts.$inferInsert)[] | undefined> {
+  let attemptFile: unknown;
+  try {
+    attemptFile = JSON.parse(
+      await readFile(path.join(process.cwd(), "data", slug, "quiz-attempts.json"), "utf8"),
+    ) as unknown;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (attemptFile === undefined) return undefined;
+  const attempts = (attemptFile as { attempts?: unknown }).attempts;
+  if (!Array.isArray(attempts)) throw new Error(`${slug}/quiz-attempts.json has no attempts array`);
+  return attempts.map((value, index) => {
+    const row = (value ?? {}) as Record<string, unknown>;
+    const required = ["batchId", "questionId", "question", "answer", "reply", "createdAt"] as const;
+    for (const field of required) {
+      if (typeof row[field] !== "string") {
+        throw new Error(`${slug}/quiz-attempts.json attempt ${index} has no string ${field}`);
+      }
+    }
+    const createdAt = new Date(row.createdAt as string);
+    if (Number.isNaN(createdAt.getTime())) {
+      throw new Error(`${slug}/quiz-attempts.json attempt ${index} has an invalid createdAt`);
+    }
+    if (row.id !== undefined && typeof row.id !== "string") {
+      throw new Error(`${slug}/quiz-attempts.json attempt ${index} has a non-string id`);
+    }
+    return {
+      ...(typeof row.id === "string" ? { id: row.id } : {}),
+      articleId,
+      batchId: row.batchId as string,
+      questionId: row.questionId as string,
+      question: row.question as string,
+      answer: row.answer as string,
+      reply: row.reply as string,
+      createdAt,
+    };
+  });
+}
+
 /**
  * Copy `data/<slug>/chat.json` into `chat_threads` and `chat_messages`.
  *
@@ -261,6 +309,19 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
 
   await db.delete(chatMessages).where(eq(chatMessages.articleId, articleId));
   await db.delete(chatThreads).where(eq(chatThreads.articleId, articleId));
+
+  /* A Quiz-origin thread points at the exact mark it discusses. The rollback
+     writes those rows beside chat.json, so restore them after the old threads
+     are gone and before the new ones arrive. Files written before Quiz chats
+     had origins may omit both the file and each row's id: no file leaves the
+     existing attempts alone; a row with no id takes the column default. A
+     current Quiz-origin chat over such an old row then fails loudly at its
+     foreign key instead of being restored as a plain chat. */
+  const attemptRows = await quizAttemptRows(slug, articleId);
+  if (attemptRows !== undefined) {
+    await db.delete(quizAttempts).where(eq(quizAttempts.articleId, articleId));
+    if (attemptRows.length > 0) await db.insert(quizAttempts).values(attemptRows);
+  }
 
   /* An origin's block points at an identity through the same kind of foreign
      key (`chat_threads_origin_identity_fk`), so it is minted here too. Only a

@@ -40,5 +40,10 @@ pressing **Marginalia** again swaps the notes in for it.
   the work, its entry in the references and every passage that cites it. Opened, it can also show a
   short note on what the cited work says, written by AI from the work's abstract and checked
   against it.
+- **Challenged, Supported, Since, Citation?, Not cited? or Reception** (experimental: shown only
+  with Experimental features on) is what a search of the literature found about the passage, once
+  you have run **Where this piece sits** in [Sources](/help/mode-sources) › Investigate. Opened, it
+  shows the AI's note on each finding and the pages it rests on; **Open in Sources** shows the
+  finding in Investigate.
 - Point at a line that is cut short to read the whole of it.
 - The top of the column shows where you are, and where the argument has got to.

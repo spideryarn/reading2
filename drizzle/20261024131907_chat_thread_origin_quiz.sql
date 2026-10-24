@@ -1,0 +1,10 @@
+-- The unique constraint first: the foreign key after it points at those four columns, and
+-- Postgres refuses a key with no unique constraint to match (drizzle wrote them the other way round).
+ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_mode";--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "origin_batch_id" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "origin_attempt_id" uuid;--> statement-breakpoint
+ALTER TABLE "spideryarn"."quiz_attempts" ADD CONSTRAINT "quiz_attempts_attempt_identity" UNIQUE("article_id","id","batch_id","question_id");--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_quiz_attempt_fk" FOREIGN KEY ("article_id","origin_attempt_id","origin_batch_id","origin_item_id") REFERENCES "spideryarn"."quiz_attempts"("article_id","id","batch_id","question_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_quiz" CHECK ("spideryarn"."chat_threads"."origin_mode" is distinct from 'quiz' or ("spideryarn"."chat_threads"."origin_item_id" is not null and "spideryarn"."chat_threads"."origin_quote" is not null and "spideryarn"."chat_threads"."origin_batch_id" is not null and "spideryarn"."chat_threads"."origin_attempt_id" is not null and "spideryarn"."chat_threads"."origin_block_id" is null and "spideryarn"."chat_threads"."origin_lens" is null));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_quiz_only" CHECK (("spideryarn"."chat_threads"."origin_batch_id" is null and "spideryarn"."chat_threads"."origin_attempt_id" is null) or "spideryarn"."chat_threads"."origin_mode" = 'quiz');--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_mode" CHECK ("spideryarn"."chat_threads"."origin_mode" is null or "spideryarn"."chat_threads"."origin_mode" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz'));

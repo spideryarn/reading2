@@ -205,7 +205,7 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s entry's orig
   });
 
   it("goes to its own columns and back", () => {
-    const NONE = { originMode: null, originItemId: null, originBlockId: null, originQuote: null, originLens: null };
+    const NONE = { originMode: null, originItemId: null, originBlockId: null, originQuote: null, originLens: null, originBatchId: null, originAttemptId: null };
     expect(originColumns(ITEM)).toEqual({ ...NONE, originMode: mode, originItemId: "spya-ttm222", originQuote: "qualia" });
     expect(originFromColumns(originColumns(ITEM))).toEqual({ origin: ITEM });
     /* Rows the new CHECK refuses: half of one is never read as the whole. */
@@ -264,7 +264,7 @@ describe("lensThreads", () => {
  * a shape lost here is lost in all three.
  */
 describe("the origin's columns, both ways", () => {
-  const NONE = { originMode: null, originItemId: null, originBlockId: null, originQuote: null, originLens: null };
+  const NONE = { originMode: null, originItemId: null, originBlockId: null, originQuote: null, originLens: null, originBatchId: null, originAttemptId: null };
 
   it("writes a claim as a block and a quote, with no lens", () => {
     expect(originColumns(CLAIM)).toEqual({
@@ -296,5 +296,76 @@ describe("the origin's columns, both ways", () => {
     expect(originFromColumns({ ...mixed, originMode: "debate" })).toEqual({});
     expect(originFromColumns({ ...NONE, originMode: "reception" })).toEqual({});
     expect(originFromColumns({ ...NONE, originMode: "summary", originLens: "an angle" })).toEqual({});
+  });
+});
+
+/**
+ * **A quiz mark** (plan 261024i, stage 2; Greg's B on q-nvxfwx). Not one of
+ * the item origins above: a question id repeats across batches, so the
+ * attempt is the identity, and the batch and question are copies of its row.
+ */
+describe("a quiz mark's origin", () => {
+  const NONE = {
+    originMode: null,
+    originItemId: null,
+    originBlockId: null,
+    originQuote: null,
+    originLens: null,
+    originBatchId: null,
+    originAttemptId: null,
+  };
+  const ATTEMPT = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a03";
+  const MARK: ThreadOrigin = {
+    mode: "quiz",
+    batchId: "spya-bat111",
+    itemId: "spya-qqq111",
+    attemptId: ATTEMPT,
+    quote: "What does the author mean by order?",
+  };
+
+  it("is the same mark only when it is the same attempt", () => {
+    expect(sameOrigin(MARK, { ...MARK, quote: "reworded" })).toBe(true);
+    expect(sameOrigin(MARK, { ...MARK, attemptId: "7f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a03" })).toBe(false);
+    expect(sameOrigin(MARK, { mode: "glossary", itemId: "spya-qqq111", quote: "x" })).toBe(false);
+    expect(sameOrigin({ mode: "glossary", itemId: "spya-qqq111", quote: "x" }, MARK)).toBe(false);
+  });
+
+  it("keeps the same question id in two batches apart, because each answer is its own attempt", () => {
+    const later: ThreadOrigin = {
+      ...MARK,
+      batchId: "spya-bat222",
+      attemptId: "8f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    };
+    const list = [summary({ id: "spya-aaa333", origin: MARK }), summary({ id: "spya-aaa444", origin: later })];
+    expect(threadForOrigin(list, MARK)?.id).toBe("spya-aaa333");
+    expect(threadForOrigin(list, later)?.id).toBe("spya-aaa444");
+  });
+
+  it("is neither a claim nor a lens", () => {
+    expect(isClaimOrigin(MARK)).toBe(false);
+    expect(isLensOrigin(MARK)).toBe(false);
+  });
+
+  it("goes to its own columns and back", () => {
+    expect(originColumns(MARK)).toEqual({
+      ...NONE,
+      originMode: "quiz",
+      originItemId: "spya-qqq111",
+      originQuote: "What does the author mean by order?",
+      originBatchId: "spya-bat111",
+      originAttemptId: ATTEMPT,
+    });
+    expect(originFromColumns(originColumns(MARK))).toEqual({ origin: MARK });
+  });
+
+  it("reads half a mark as no origin, and a batch or attempt on any other mode as none", () => {
+    const whole = originColumns(MARK);
+    expect(originFromColumns({ ...whole, originAttemptId: null })).toEqual({});
+    expect(originFromColumns({ ...whole, originBatchId: null })).toEqual({});
+    expect(originFromColumns({ ...whole, originItemId: null })).toEqual({});
+    expect(originFromColumns({ ...whole, originBlockId: BLOCK })).toEqual({});
+    const item = originColumns({ mode: "glossary", itemId: "spya-ttm222", quote: "qualia" });
+    expect(originFromColumns({ ...item, originAttemptId: ATTEMPT })).toEqual({});
+    expect(originFromColumns({ ...item, originBatchId: "spya-bat111" })).toEqual({});
   });
 });

@@ -189,17 +189,17 @@ describe("job ingress, for a tab that still names `debate` or `debate-claims`", 
 
 describe("a chat's origin, as an old row or an old tab spells it", () => {
   it("reads a stored `debate` claim as a Sources › Claims origin", () => {
-    const row = { originMode: "debate", originItemId: null, originBlockId: BLOCK, originQuote: "A claim", originLens: null };
+    const row = { originMode: "debate", originItemId: null, originBlockId: BLOCK, originQuote: "A claim", originLens: null, originBatchId: null, originAttemptId: null };
     expect(originFromColumns(row)).toEqual({ origin: { mode: "sources-claims", blockId: BLOCK, quote: "A claim" } });
   });
 
   it("reads a stored `debate` lens as a Reception origin", () => {
-    const row = { originMode: "debate", originItemId: null, originBlockId: null, originQuote: null, originLens: "an angle" };
+    const row = { originMode: "debate", originItemId: null, originBlockId: null, originQuote: null, originLens: "an angle", originBatchId: null, originAttemptId: null };
     expect(originFromColumns(row)).toEqual({ origin: { mode: "reception", lens: "an angle" } });
   });
 
   it("reads a stored `debate` row that is neither shape as no origin", () => {
-    const row = { originMode: "debate", originItemId: null, originBlockId: BLOCK, originQuote: null, originLens: "an angle" };
+    const row = { originMode: "debate", originItemId: null, originBlockId: BLOCK, originQuote: null, originLens: "an angle", originBatchId: null, originAttemptId: null };
     expect(originFromColumns(row)).toEqual({});
   });
 

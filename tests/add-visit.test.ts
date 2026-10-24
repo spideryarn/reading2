@@ -10,7 +10,13 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { addAddress, nextAddVisit, type AddVisit } from "../src/web/add-visit.js";
+import {
+  addAddress,
+  nextAddVisit,
+  type AddVisit,
+  recoverExtensionVisit,
+  rememberExtensionVisit,
+} from "../src/web/add-visit.js";
 
 const PAPER = "url https://example.com/paper";
 const OTHER = "url https://example.com/other";
@@ -89,5 +95,33 @@ describe("addAddress", () => {
     expect(addAddress({ kind: "add", url: "https://example.com/paper" })).toBe(PAPER);
     expect(addAddress({ kind: "add-upload", uploadId: "up-1" })).toBe("upload up-1");
     expect(addAddress({ kind: "library" })).toBeNull();
+  });
+
+  it("keeps an extension visit through its forced login detour, then stops it for another reader", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    let address = addAddress({ kind: "add-from-extension" });
+    let visit = nextAddVisit(recoverExtensionVisit(null, address, storage), address, "A");
+    rememberExtensionVisit(visit, storage);
+
+    /* A full OAuth navigation loses App's ref; the tab-scoped record does not. */
+    visit = null;
+    address = addAddress({ kind: "login" }, "/add-from-extension?handoff=0123456789abcdef0123456789abcdef");
+    visit = nextAddVisit(
+      recoverExtensionVisit(visit, address, storage),
+      address,
+      null,
+    );
+    expect(visit).toEqual({ kind: "running", address: "extension", reader: "A" });
+    visit = nextAddVisit(visit, address, "B");
+    expect(visit).toEqual({ kind: "stopped", address: "extension" });
+
+    visit = null;
+    address = addAddress({ kind: "add-from-extension" });
+    visit = nextAddVisit(recoverExtensionVisit(visit, address, storage), address, "B");
+    expect(visit).toEqual({ kind: "stopped", address: "extension" });
   });
 });

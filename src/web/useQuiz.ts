@@ -147,6 +147,13 @@ export interface Attempt {
    */
   restored?: true;
   /**
+   * **The stored row this mark is**, `quiz_attempts.id`: what *Discuss this in
+   * chat* names it by, so the chat is about this mark and no other
+   * (`QuizOrigin`; plan 261024i, stage 2). Absent on a mark that was not
+   * stored, and on one from a server that did not say.
+   */
+  attemptId?: string;
+  /**
    * **The mark finished and the server could not store it.** It is on screen
    * and in this visit's record, and it will not be there after a reload — the
    * panel says so under the mark. Absent on every mark that was stored.
@@ -165,6 +172,8 @@ export interface KeptAnswer {
   answeredAt: string;
   /** False when the server said it could not store this one — `Attempt.notSaved`. */
   saved: boolean;
+  /** The row's id, `Attempt.attemptId`; `null` when there is no row to name. */
+  attemptId: string | null;
 }
 
 export interface UseQuiz {
@@ -313,7 +322,7 @@ export interface QuizRead {
   noteMark(
     batchId: string,
     questionId: QuizQuestionId,
-    mark: { answer: string; reply: string; answeredAt: string | null },
+    mark: { answer: string; reply: string; answeredAt: string | null; attemptId: string | null },
   ): void;
 }
 
@@ -341,7 +350,7 @@ function keptFromServer(attempts: unknown): Map<QuizQuestionId, KeptAnswer> | nu
   if (!Array.isArray(attempts)) return null;
   const out = new Map<QuizQuestionId, KeptAnswer>();
   for (const one of attempts as unknown[]) {
-    const { questionId, answer, reply, answeredAt } = (one ?? {}) as Record<string, unknown>;
+    const { questionId, attemptId, answer, reply, answeredAt } = (one ?? {}) as Record<string, unknown>;
     if (
       typeof questionId !== "string" ||
       typeof answer !== "string" ||
@@ -351,7 +360,15 @@ function keptFromServer(attempts: unknown): Map<QuizQuestionId, KeptAnswer> | nu
     ) {
       continue;
     }
-    out.set(questionId, { answer, reply, answeredAt, saved: true });
+    /* An attempt id that is not a string is a server from before plan 261024i:
+       the answer is still kept, and its Discuss records no origin. */
+    out.set(questionId, {
+      answer,
+      reply,
+      answeredAt,
+      saved: true,
+      attemptId: typeof attemptId === "string" && attemptId !== "" ? attemptId : null,
+    });
   }
   return out;
 }
@@ -424,6 +441,7 @@ export function useQuizRead(slug: string): QuizRead {
           reply: mark.reply,
           answeredAt,
           saved: mark.answeredAt !== null,
+          attemptId: mark.answeredAt !== null ? mark.attemptId : null,
         });
         return { key, byQuestion, known: true };
       });
@@ -690,6 +708,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
         error: null,
         restored: true,
         ...(one.saved ? {} : { notSaved: true as const }),
+        ...(one.attemptId !== null ? { attemptId: one.attemptId } : {}),
       });
     },
     [kept],
@@ -739,7 +758,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
         /* **The reply is what `readAnswerStream` returns**, and it returns only
            on a `done` frame. There is no other road to the two lines below,
            which is the whole of the terminal contract as the client keeps it. */
-        const { reply, verdict, answeredAt } = await readAnswerStream(
+        const { reply, verdict, answeredAt, attemptId } = await readAnswerStream(
           res.body,
           {
             delta: (text) => {
@@ -751,6 +770,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
                 reply?: unknown;
                 verdict?: unknown;
                 answeredAt?: unknown;
+                attemptId?: unknown;
                 kept?: unknown;
               } | null;
               /* **Stored only if the server gave the row's time and did not
@@ -776,10 +796,14 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
                  `done` still hands back what the reader watched arrive — and is
                  never the "could not read" refusal an `undefined` here means. */
               const whole = sent?.reply;
+              /* The row's id, only beside a stored row's time. */
+              const id = sent?.attemptId;
+              const attemptId = answeredAt !== null && typeof id === "string" && id !== "" ? id : null;
               return {
                 reply: typeof whole === "string" && whole.trim() ? whole : partial,
                 verdict,
                 answeredAt,
+                attemptId,
               };
             },
           },
@@ -793,10 +817,11 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
           error: null,
           ...(verdict ? { verdict } : {}),
           ...(answeredAt === null ? { notSaved: true as const } : {}),
+          ...(attemptId !== null ? { attemptId } : {}),
         });
         /* **The tick, and what Next → Previous puts back** — stored or not: a
            mark the reader watched finish is theirs for this visit either way. */
-        noteMark(batchId, questionId, { answer, reply, answeredAt });
+        noteMark(batchId, questionId, { answer, reply, answeredAt, attemptId });
         if (answeredAt !== null) {
           /* **Read the quiz again, behind the screen, because the offline copy
              of it is now out of date.** `apiFetch` deliberately does not throw

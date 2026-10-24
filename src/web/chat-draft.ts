@@ -43,7 +43,7 @@
  * revokes on the first typed or spoken submission, not something worked out
  * from the words or from a missing row, and once revoked it stays revoked.
  */
-import type { LearnKind, ThreadOrigin } from "../types.js";
+import { sameOrigin, type LearnKind, type ThreadOrigin } from "../types.js";
 import type { PickedMention } from "./mentions.js";
 import { forgetOnReaderChange } from "./lib/reader-change.js";
 
@@ -58,11 +58,18 @@ export interface ChatDrafts {
    * It is not part of the words. Typing, clearing the box and submitting leave
    * it alone; `moveThread` carries it and `dropThread` forgets it. The band
    * sends it with the conversation's questions until the server has the
-   * thread, then clears it. The acknowledged thread carries its own origin
-   * (`ConversationBand` § `pendingOrigin`). `clearOrigin` also forgets an id
-   * the server replaced.
+   * thread. Reader clears it once the item modes' summary list has that
+   * thread; until then it is their bridge to an unsent or just-sent chat.
+   * The acknowledged thread carries its own origin (`ConversationBand` §
+   * `pendingOrigin`).
    */
   origin(id: string): ThreadOrigin | undefined;
+  /**
+   * The pending or not-yet-summarised conversation about this exact item,
+   * passing over any id `skip` names (a handoff the server refused: Reader §
+   * `refusedHandoffs`).
+   */
+  threadForOrigin(origin: ThreadOrigin, skip?: (id: string) => boolean): string | undefined;
   setOrigin(id: string, origin: ThreadOrigin): void;
   clearOrigin(id: string): void;
 
@@ -172,6 +179,10 @@ export function createChatDrafts(): ChatDrafts {
       if (guide === from) guide = to;
     },
     origin: (id) => origins.get(id),
+    threadForOrigin(origin, skip) {
+      for (const [id, held] of origins) if (sameOrigin(held, origin) && !skip?.(id)) return id;
+      return undefined;
+    },
     setOrigin(id, origin) {
       origins.set(id, origin);
     },

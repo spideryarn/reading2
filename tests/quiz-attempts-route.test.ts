@@ -287,10 +287,13 @@ describe("a finished mark is kept", () => {
     });
     /* The database's time for the row, not a clock in the route. */
     expect(marked.done?.answeredAt).toBe(row?.createdAt.toISOString());
+    /* And the row's id, which a chat about this mark names (plan 261024i, stage 2). */
+    expect(marked.done?.attemptId).toBe(row?.id);
 
     expect((await read(SLUG)).json?.attempts).toEqual([
       {
         questionId: mine?.quiz.questions[0]?.id,
+        attemptId: row?.id,
         answer: "It says the quoted thing.",
         reply: "You have the main point [spya-aaaaaa].",
         answeredAt: row?.createdAt.toISOString(),
@@ -341,6 +344,7 @@ describe("a finished mark is kept", () => {
     expect(marked.done).toMatchObject({ reply: "You have the main point.", kept: false });
     /* No row, so no row's time: the client stamps this one itself. */
     expect(marked.done?.answeredAt).toBeUndefined();
+    expect(marked.done?.attemptId).toBeUndefined();
     expect(await rowsOf(mine)).toEqual([]);
   });
 

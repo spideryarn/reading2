@@ -78,6 +78,9 @@ that tells them apart.
 
 ## Stage 2: Quiz's *Discuss this in chat* records where it came from
 
+> **Superseded by [§ Stage 2, rewritten after Greg chose B](#stage-2-rewritten-after-greg-chose-b)**
+> below. This first draft is kept for GPT Sol's review of it, which the rewrite answers.
+
 This is the one sub-mode that starts a chat and records nothing
 ([quiz.md](../project/quiz.md), *a plain chat: no origin is stored*, plan
 [261018b](261018b-quiz-mark-room-to-think-and-discuss-a-mark-in-chat.md)). Greg's *"any submodes
@@ -127,16 +130,161 @@ missing piece, and a waiting draft does carry its origin into the send.
 **So this plan ships stage 1 only.** Stage 2 is queue item `qi-g3neq83r`, waiting on question
 `q-nvxfwx`.
 
+## Stage 2, rewritten after Greg chose B
+
+Question [q-nvxfwx](../user-feedback/questions/q-nvxfwx.md), queue item `qi-t5nvqqen`:
+
+> B
+>
+> — Greg, 2026-10-24 (spya-yq6h67), choosing *"A, and the question in Quiz also shows the chat you
+> started about that mark (its gist, one press to reopen it) … If you answer again and get a new
+> mark, that new mark has its own Discuss button and its own chat."*
+
+It also covers `qi-8bh8r2vg` (*Quiz: a stored origin for a mark discussed in chat*, from report
+`spya-jvsv3q`), which proposed the same work after plan 261018b.
+
+**One chat per mark.** A mark is one row of `quiz_attempts` (append-only), so the chat is tied to
+that row. Pressing *Discuss* again on the same mark reopens its chat, as Glossary's *Ask in chat*
+reopens an entry's. Answering again makes a new row, so a new mark, and its *Discuss* starts a new
+chat. This answers Sol's F2 by the first of its three options.
+
+### D1. The shape
+
+```ts
+export type QuizOrigin = {
+  mode: "quiz";
+  batchId: string;          // Quiz.batchId: question ids repeat across batches (F1)
+  itemId: QuizQuestionId;   // the question, as the other id-shaped origins name their item
+  attemptId: string;        // quiz_attempts.id: the one mark this chat is about (F2)
+  quote: string;            // the question's words, cut by originName
+};
+```
+
+- `sameOrigin` for `quiz`: `b.mode === "quiz" && a.attemptId === b.attemptId`. The attempt
+  implies the batch and the question (D2's foreign key makes that true in the database).
+- `ORIGIN_MODES` gains `quiz`.
+- **Not added to the glossary/bibliography/ideas `describe.each` tables as if it were one of
+  them** (F1): it has its own arm in each test, including two batches that share a question id
+  being two origins.
+
+### D2. The columns
+
+`origin_item_id` holds the question id and `origin_quote` the question, as for an item. Two new
+nullable columns on `chat_threads`: `origin_batch_id text` and `origin_attempt_id uuid`. One
+additive migration:
+
+- `chat_threads_origin_mode` admits `quiz`.
+- **`chat_threads_origin_quiz`**: a `quiz` origin has an item id, a quote, a batch and an attempt,
+  and no block and no lens.
+- **`chat_threads_origin_quiz_only`**: batch and attempt are null on every other mode.
+  (`chat_threads_origin_none` then needs no edit: a null mode cannot be `quiz`.)
+- **A composite foreign key**, `(article_id, origin_attempt_id, origin_batch_id, origin_item_id)`
+  → `quiz_attempts (article_id, id, batch_id, question_id)`, over a new unique constraint on those
+  four columns of `quiz_attempts` (trivially unique, since `id` is the key). So the stored batch
+  and question cannot disagree with the attempt, and the attempt is on the same article. MATCH
+  SIMPLE, so a row with any of them null (every non-Quiz row) is not checked. **No `on delete`
+  action** (NO ACTION, checked at the end of the statement): an attempt is only ever deleted with
+  its article, which cascades the thread in the same statement, or by an ownership transfer,
+  whose `READER_STATE` order deletes `chat_threads` before `quiz_attempts`. A test pins that
+  order.
+- `originColumns` / `originFromColumns` and `OriginColumns` grow the two fields. The other modes
+  write them null and `originFromColumns` refuses a non-quiz row that has them.
+
+**The simpler option passed over**: store only the attempt id and join to `quiz_attempts` on every
+list read for the batch and question. One column fewer, but every reader of a thread (the list, the
+export, the seeder) would need that join or a look-up, and the origin would stop being readable from
+the thread row alone, which every other origin is. The four-column key gives the denormalised copy
+without the risk of it drifting.
+
+### D3. The attempt id reaches the client
+
+- `QuizAttemptStore.record` returns `{ id, answeredAt }` rather than the time alone.
+- The mark route's `done` frame carries `attemptId` beside `answeredAt`; `kept: false` has neither.
+- `QuizKeptAnswer` gains `attemptId`, so a mark restored on coming back can be discussed with its
+  origin and show its chat.
+- `useQuiz` keeps `attemptId: string | null` on a mark. **A mark that was not kept** (the insert
+  failed, `kept: false`) has none, and its *Discuss* starts a plain chat as today. It is the one
+  case left without an origin, and the reason is that there is no row to point at: the mark will not
+  be there after a reload either.
+
+### D4. The route
+
+`parseOrigin` takes `quiz`: `batchId` and `itemId` non-empty strings, `attemptId` a UUID, `quote`
+non-empty and at most `MAX_ORIGIN_NAME_CHARS`. Before the thread is written, the route reads that
+the attempt exists on this article with that batch and question; otherwise it answers 400, so a
+stale or forged origin is a plain refusal rather than a foreign-key 500. The key is the backstop.
+
+### D5. The press
+
+`Reader` gets `discussQuizMark(origin, seed)`: `reopenItemChat(origin)` first, else
+`handToChat(seed, "wait", origin)`. The draft waits in the composer as it does now, and the origin
+waits beside it (`pendingOrigin`), so it is saved with the first send (confirmed by Sol on the plan
+review). `QuizPanel`'s `onDiscuss` passes the origin built from the batch, the question and the
+mark's `attemptId`, or no origin for an unkept mark.
+
+### D6. Quiz lists it
+
+`QuizPanel` takes the raw `chatSummaries` and an `onOpen` through the conversation band (the
+`ItemChats` shape in OriginChat.tsx). When the shown mark has a chat (`threadForOrigin` on its
+origin), the step shows `OriginChatMark` (the bubbles, the turns and the gist) **on its own
+full-width line below the icon row**, not inside the non-wrapping `.quiz-step` row (Sol's F5).
+Chats about earlier answers are not shown on the step. They stay in Chat's list, and the open chat
+quotes the answer it was about. Checked at 390 px wide.
+
+### D7. The list and the way back
+
+- `originPlace` → `{ mode: "learn", view: "quiz" }`; `OriginPlace` gains that arm of `SubMode`
+  (Sol's F4, already taken in Stage 1). The row's filter word is `learn`, its place *Quiz*, its
+  icon Learn's. **The row carries no `learn` field**, which is what makes ChatPanel open a row in
+  Learn (`source?.learn`): a Quiz chat is a `chat`-kind thread and opens in Chat's band.
+- `originBack`: *Back to "…the question…" in Quiz*.
+- `titleFromOrigin`: `Quiz: <question>`.
+- `openOrigin` → `openQuizAt(batchId, itemId)`. That lands on the exact question while the batch
+  is current. Once *Write them again* has replaced it, `QuizArrival` ignores the arrival and Quiz
+  opens normally, which is what the question's Details promised.
+
+### D8. What else hears of it
+
+The 12 steps of [chat-from-a-mode.md § Adding it to another mode](../project/chat-from-a-mode.md#adding-it-to-another-mode),
+including the export (inherits `originFromColumns`), the test seeder, `CHAT_FROM_WORDS` (no change:
+`learn` is already a word), the help page, quiz.md (*a plain chat: no origin is stored* is no
+longer true) and the table in chat-from-a-mode.md.
+
+### GPT Sol's review of the rewrite, and what changed
+
+[261024i-…-stage2-plan-review-sol.md](261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list-stage2-plan-review-sol.md):
+*revise before build*. It found the attempt identity, `sameOrigin` by attempt and the composite
+key sound, and the `from: "learn"` row safe (no `learn` field, so it opens in Chat).
+
+| Finding | What changed |
+|---|---|
+| F1 (blocker): a waiting draft is not registered, so a second press before sending makes a second draft | **Not taken at plan time, and that was wrong; fixed in the code review.** I argued that leaving Chat re-reads the summaries, so no mark could get two stored chats. Sol's code review showed the gap: the band cleared the draft's origin once the thread was named, before the summaries' re-read had landed, so a press in that window minted a second stored chat. Now the draft keeps its origin until Reader's summary list has the thread (`chatDraftsFor(slug).threadForOrigin`, cleared in Reader), and a handoff the server refused is passed over (`refusedHandoffs`), so the next press still starts a real chat |
+| F2 (blocker): the rollback export omits the attempt's id, and the seeder restores no attempts | The export writes each attempt's `id`. The seeder is left as it is: it reads the old file fixtures, none of which has a quiz attempt, and a Quiz-origin thread with no attempt is refused **loudly** by the key, not lost silently. A test exports and re-seeds a Quiz chat over its attempt |
+| F3: the route trusts the request's quote | Taken: the route reads the attempt (`quizAttemptStore.questionOf`) and writes `originName(attempt.question)`. A forged quote is replaced, tested |
+| F4: test the deletes, not only the transfer order | Taken: deleting a discussed attempt alone is refused; deleting the article takes both in one statement; `READER_STATE` deletes threads before attempts |
+| F5: Quiz-specific test arms, not the generic lists | Taken: see Tests below |
+
+**Found while building**: `chat_threads_origin_quiz_only` as first written (`… or origin_mode = 'quiz'`)
+let a row with a batch id and **no** mode through, because with a null mode the comparison is null
+and a null CHECK passes. The test went red on it; the second migration
+(`20261024132149_chat_thread_origin_quiz_only_null_mode`) makes it `is not distinct from`.
+
 ## Tests (red first)
 
 - Stage 1: `tests/thread-source.test.ts` covers `place` for every origin and Learn kind, and none
   for a passage. `originBack` is unchanged for the existing origins. A rendered list
   (`tests/chat-panel*.test.tsx`, whichever already renders rows with sources) shows *Investigate*
   in a lens row's meta line, and no second *Recall* on a Learn row.
-- Stage 2: add `quiz` to the `describe.each` lists in `thread-origin-way-back`,
-  `chat-origin-route`, `chat-origin-transaction` and `chat-handoff`. Add a rendered test: Discuss
-  puts the origin on the pending draft, so sending saves it. The step then shows the mark, and a
-  second press makes a second chat.
+- Stage 2 (as built; the first draft said to add `quiz` to the item `describe.each` lists, which
+  Sol's F5 rightly refused): `tests/thread-origin-way-back.test.ts` § *a quiz mark's origin*
+  (identity by attempt, two batches sharing a question id, the columns both ways, half a mark);
+  `tests/thread-source.test.ts` (*Quiz* under Learn with no `learn`; `originBack`);
+  `tests/chat-origin-route.test.ts` § *a quiz mark's origin* (stored and summarised, the quote
+  from the row, an unknown or mismatched attempt a 400, a malformed one, the 409, the CHECKs and
+  the key, the deletes, export and re-seed); `tests/quiz-attempts-route.test.ts` (`done` and the
+  read carry `attemptId`); `tests/quiz-panel.test.tsx` § *discuss a mark in chat* (the press hands
+  the origin, or none for an unkept mark; the mark's chat replaces the button and opens; an
+  earlier answer's chat is not shown).
 
 ## Progress
 
@@ -144,7 +292,10 @@ missing piece, and a waiting draft does carry its origin into the send.
 - [x] Stage 1: `originPlace` in `thread-source.ts`, `place` on `ThreadSource`, the word in the
       row's meta line (`ChatPanel.tsx`), the help page. Red first in
       `tests/chat-list-sources.test.tsx` § *a row's place, in words*
-- [ ] ~~Stage 2~~: deferred to `qi-g3neq83r` / `q-nvxfwx`
+- [x] ~~Stage 2~~: deferred to `qi-g3neq83r` / `q-nvxfwx`, and **built on 2026-10-24** after
+      Greg chose B (`qi-t5nvqqen`): plan reviewed by Sol (above), two migrations
+      (`20261024131907_chat_thread_origin_quiz`, `20261024132149_chat_thread_origin_quiz_only_null_mode`),
+      docs (chat-from-a-mode.md, quiz.md, chat-tools.md, the Learn and Chat help pages)
 - [x] Browser pass on the box (Sonnet, Playwright): a real Investigate chat's row reads
       *Investigate · 1 turn · just now* at 1440 and at 390, with no overflow and no console
       errors. Shots: `261024i-shot-1-wide.png`, `261024i-shot-2-narrow.png`
@@ -152,5 +303,19 @@ missing piece, and a waiting draft does carry its origin into the send.
       *approve with fixes made*. Its fixes: the time gives way (ellipsis) on a narrow row before
       the place does; tighter tests (the exact markup path, full equality for `originBack`); the
       mode docs and help pages that still said the icon alone marked the row
+- [x] [GPT Sol's stage 2 code review](261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list-stage2-code-review-sol.md):
+      *approve with fixes made*. Its fixes: F1's draft-origin bridge (above); a Quiz mark's chat opened
+      from Learn now switches to Chat's band, where before the press only changed the URL; the
+      seeder restores quiz attempts before threads, and the export test now re-seeds from empty;
+      stale comments. Its bridge broke *forgets a refused handoff* for Glossary, Bibliography and
+      Ideas (the refused draft was reopened); fixed with `refusedHandoffs`
+- [x] Stage 2 browser pass on the box (Sonnet, Playwright), on question 2 of 3 so a landing on
+      question 1 could not pass by accident: Discuss seeds the composer; the list row reads
+      *Quiz: …* / *Quiz · 1 turn · …* and opens in Chat; *Back to “…” in Quiz* lands on question 2;
+      the step shows the mark in Discuss's place and it opens the same chat, visibly; one Quiz row
+      per mark; answering again brings Discuss back with no mark. No overflow at 1440 or 390, no
+      console errors. Shots: `261024i-shot-3-quiz-mark-wide.png`, `261024i-shot-4-quiz-mark-narrow.png`,
+      `261024i-shot-5-chat-list-quiz.png`. Seen and left alone: a list left on the *Chats* filter
+      hides a Quiz row, as it hides every row from a mode
 - [ ] Docs (chat-from-a-mode.md table, quiz.md, chat-tools.md list section, url-state if needed,
       help page), note in docs/user-feedback/, queue item done, pushed to dev

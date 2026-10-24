@@ -12,7 +12,7 @@
  * Nothing reaches the model: `fetch` is stubbed, so `converse` fails on its
  * first call, and every assertion is about what happens before it.
  *
- * The mapping between the four columns and the union is written by hand in
+ * The mapping between the origin columns and the union is written by hand in
  * four places (`upsertThread` and `threadsFor` in src/store/pg-chat.ts,
  * src/store/export.ts, tests/helpers/seed-reader-state.ts), which is how
  * `tools` and `help` were each lost once. So the round trip is asserted
@@ -27,7 +27,8 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { chatThreads } from "../src/db/schema.js";
+import { articles, chatThreads, quizAttempts } from "../src/db/schema.js";
+import { READER_STATE } from "../src/admin-articles.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { ChatThread, ThreadSummary } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -48,7 +49,7 @@ await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore } = await import("../src/store/index.js");
+const { chatStore, quizAttemptStore } = await import("../src/store/index.js");
 const { exportArticle } = await import("../src/store/export.js");
 const { seedChatFromFiles } = await import("./helpers/seed-reader-state.js");
 
@@ -854,6 +855,194 @@ describe("db:export and the origin", () => {
         .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
       expect(restored).toEqual({ mode: "reception", item: null, block: null, quote: null, lens: LENS });
       expect((await stored())?.origin).toEqual(lens());
+    } finally {
+      globalThis.fetch = stub;
+      await rm(exported, { recursive: true, force: true });
+      await rm(out, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * **A quiz mark's origin** (plan 261024i, stage 2; Greg's B on q-nvxfwx).
+ * Not one of the item origins: the attempt is the identity, the route reads
+ * it, and the stored quote is the question the attempt kept. GPT Sol's F3 and
+ * F4 on that plan.
+ */
+describe("a quiz mark's origin", () => {
+  const BATCH = "spya-bat222";
+  const QUESTION = "spya-qqq222";
+  const ASKED = "What does the author mean by order?";
+  const keep = (over: { batchId?: string; questionId?: string } = {}) =>
+    asTestOwner(() =>
+      quizAttemptStore.record(SLUG, {
+        batchId: over.batchId ?? BATCH,
+        questionId: over.questionId ?? QUESTION,
+        question: ASKED,
+        answer: "Time's direction",
+        reply: "Partly.",
+      }),
+    );
+  const mark = (attemptId: string, over: Record<string, unknown> = {}) => ({
+    mode: "quiz",
+    batchId: BATCH,
+    itemId: QUESTION,
+    attemptId,
+    quote: ASKED,
+    ...over,
+  });
+
+  it("stores the mark, and reads it back equal, on the summary too", async () => {
+    const { id } = await keep();
+    const out = await ask({ threadId: THREAD, question: "why only partly?", origin: mark(id) });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect((await stored())?.origin).toEqual(mark(id));
+    expect((await stored())?.title).toBe(`Quiz: ${ASKED}`);
+    const summaries = (await call("GET", `/api/chat/${SLUG}?summary=1`)).body?.threads as ThreadSummary[];
+    expect(summaries.find((t) => t.id === THREAD)?.origin).toEqual(mark(id));
+  });
+
+  it("stores the question the attempt kept, not the one the request sent", async () => {
+    const { id } = await keep();
+    await ask({ threadId: THREAD, question: "why?", origin: mark(id, { quote: "a forged question" }) });
+    expect((await stored())?.origin).toEqual(mark(id));
+  });
+
+  it("refuses an attempt this article does not have, or with another batch or question, as a 400", async () => {
+    const { id } = await keep();
+    const missing = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a01";
+    for (const origin of [
+      mark(missing),
+      mark(id, { batchId: "spya-bat333" }),
+      mark(id, { itemId: "spya-qqq333" }),
+    ]) {
+      const out = await ask({ threadId: THREAD, question: "why?", origin });
+      expect(out.status).toBe(400);
+      expect(JSON.stringify(out.body)).not.toContain(ASKED);
+    }
+    expect(await stored()).toBeUndefined();
+  });
+
+  it("refuses a malformed mark before reading anything", async () => {
+    const { id } = await keep();
+    for (const origin of [
+      mark("not-a-uuid"),
+      mark(id, { batchId: "" }),
+      mark(id, { blockId: BLOCK }),
+      mark(id, { quote: "" }),
+    ]) {
+      expect((await ask({ threadId: THREAD, question: "why?", origin })).status).toBe(400);
+    }
+  });
+
+  it("refuses another mark on its thread with a 409, and lets the same one through", async () => {
+    const first = await keep();
+    const again = await keep();
+    await ask({ threadId: THREAD, question: "why?", origin: mark(first.id) });
+    expect((await ask({ threadId: THREAD, question: "and?", origin: mark(again.id) })).status).toBe(409);
+    expect((await ask({ threadId: THREAD, question: "and?", origin: mark(first.id) })).frames[0]?.event).toBe("begin");
+  });
+
+  it("holds the copies to the attempt, and refuses half a mark, in the database", async () => {
+    const { id } = await keep();
+    const articleId = (article as ScratchArticle).articleId;
+    const insert = (over: Partial<typeof chatThreads.$inferInsert>) =>
+      getDb()
+        .insert(chatThreads)
+        .values({ articleId, id: THREAD, ownerId: TEST_OWNER, title: "by hand", ...over })
+        .then(
+          () => null,
+          (e: unknown) => String((e as { cause?: { message?: string } }).cause?.message ?? e),
+        );
+    const whole = { originMode: "quiz", originItemId: QUESTION, originQuote: ASKED, originBatchId: BATCH, originAttemptId: id };
+    expect(await insert({ ...whole, originBatchId: "spya-bat333" })).toMatch(/chat_threads_origin_quiz_attempt_fk/);
+    expect(await insert({ ...whole, originItemId: "spya-qqq333" })).toMatch(/chat_threads_origin_quiz_attempt_fk/);
+    expect(await insert({ ...whole, originAttemptId: null })).toMatch(/chat_threads_origin_quiz\b/);
+    expect(await insert({ ...whole, originBlockId: BLOCK })).toMatch(/chat_threads_origin_quiz\b/);
+    expect(
+      await insert({ originMode: "glossary", originItemId: "spya-ttm222", originQuote: "q", originBatchId: BATCH }),
+    ).toMatch(/chat_threads_origin_quiz_only/);
+    expect(await insert({ originBatchId: BATCH })).toMatch(/chat_threads_origin_quiz_only/);
+    expect(await insert(whole)).toBeNull();
+  });
+
+  it("refuses to delete a mark a chat is about, and deletes it once the chat has gone", async () => {
+    const { id } = await keep();
+    await ask({ threadId: THREAD, question: "why?", origin: mark(id) });
+    const gone = () => getDb().delete(quizAttempts).where(eq(quizAttempts.id, id));
+    const err: unknown = await gone().then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(String((err as { cause?: { message?: string } } | null)?.cause?.message ?? err)).toMatch(
+      /chat_threads_origin_quiz_attempt_fk/,
+    );
+    await asTestOwner(() => chatStore.remove(SLUG, THREAD));
+    await gone();
+  });
+
+  it("goes with its article, chat and attempt in one statement", async () => {
+    /* The loader stores the raw source, which needs the real fetch. */
+    const stub = globalThis.fetch;
+    globalThis.fetch = realFetch;
+    const doomed = await scratchArticleInPg(`${SLUG}-quiz-doomed`, { ownerId: TEST_OWNER }).finally(() => {
+      globalThis.fetch = stub;
+    });
+    try {
+      const { id } = await asTestOwner(() =>
+        quizAttemptStore.record(doomed.slug, {
+          batchId: BATCH,
+          questionId: QUESTION,
+          question: ASKED,
+          answer: "a",
+          reply: "b",
+        }),
+      );
+      const out = await call("POST", `/api/chat/${doomed.slug}`, {
+        threadId: THREAD,
+        question: "why?",
+        origin: mark(id),
+      });
+      expect(out.frames[0]?.event).toBe("begin");
+      await getDb().delete(articles).where(eq(articles.id, doomed.articleId));
+      expect(await getDb().select().from(quizAttempts).where(eq(quizAttempts.id, id))).toEqual([]);
+    } finally {
+      await doomed.remove();
+    }
+  });
+
+  it("is deleted before the attempts it names when an article changes owner", async () => {
+    const order = READER_STATE.map((kind) => kind.table);
+    expect(order.indexOf("chat_threads")).toBeLessThan(order.indexOf("quiz_attempts"));
+  });
+
+  it("exports the mark and its attempt's id, and the restore puts it back", async () => {
+    const { id } = await keep();
+    await ask({ threadId: THREAD, question: "why?", origin: mark(id) });
+    const out = await mkdtemp(path.join(tmpdir(), "spideryarn-export-quiz-"));
+    const exported = path.join(process.cwd(), "data", SLUG);
+    const stub = globalThis.fetch;
+    globalThis.fetch = realFetch;
+    try {
+      await asTestOwner(() =>
+        exportArticle(SLUG, { dataRoot: path.join(process.cwd(), "data"), outputRoot: path.join(out, "output") }),
+      );
+      const chat = JSON.parse(await readFile(path.join(exported, "chat.json"), "utf8")) as { threads: ChatThread[] };
+      expect(chat.threads.find((t) => t.id === THREAD)?.origin).toEqual(mark(id));
+      const kept = JSON.parse(await readFile(path.join(exported, "quiz-attempts.json"), "utf8")) as {
+        attempts: { id: string }[];
+      };
+      expect(kept.attempts.map((a) => a.id)).toContain(id);
+      /* A real restore has neither row. Remove the thread first because the
+         foreign key correctly refuses the reverse order, then prove the
+         seeder puts the attempt back before the chat that names it. */
+      await asTestOwner(() => chatStore.remove(SLUG, THREAD));
+      await getDb().delete(quizAttempts).where(eq(quizAttempts.id, id));
+      await asTestOwner(() => seedChatFromFiles(SLUG));
+      expect((await stored())?.origin).toEqual(mark(id));
+      expect(await getDb().select({ id: quizAttempts.id }).from(quizAttempts).where(eq(quizAttempts.id, id))).toEqual([
+        { id },
+      ]);
     } finally {
       globalThis.fetch = stub;
       await rm(exported, { recursive: true, force: true });

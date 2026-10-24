@@ -380,13 +380,13 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
       kind: thread.kind,
       /* The write half of the origin; `threadsFor` is the read half. On
          insert only, like the anchor: the conflict clause below does not name
-         these four. */
+         these columns. */
       ...originColumns(thread.origin),
     })
     .onConflictDoUpdate({
       target: [chatThreads.articleId, chatThreads.id],
       /* `created_at` is deliberately absent: a thread is created once. So are
-         the four origin columns, and so are
+         the seven origin columns, and so are
          the three anchor columns, and for the stronger version of the same
          reason — a conversation is about what it started as, and every later
          turn of an anchored thread comes through here. Naming them in `set`
