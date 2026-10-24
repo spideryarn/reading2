@@ -1,10 +1,11 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { JSDOM } from "jsdom";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generateBrandAssets } from "../scripts/generate-brand-assets.js";
+import { RASTER_TOLERANCE, rastersEquivalent } from "../scripts/raster-equivalence.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 let temporary: string;
@@ -139,8 +140,13 @@ describe("brand assets", () => {
   it("is repeatable and detects stale/missing files without rewriting", async () => {
     const names = await generateBrandAssets({ outputDir, check: true });
     const first = await Promise.all(names.map((file) => readFile(path.join(outputDir, file))));
+    await Promise.all(names.map((file) => utimes(path.join(outputDir, file), 1_000, 1_000)));
+    const before = await Promise.all(names.map((file) => stat(path.join(outputDir, file))));
     await generateBrandAssets({ outputDir });
-    for (const [i, file] of names.entries()) expect((await readFile(path.join(outputDir, file))).equals(first[i] ?? Buffer.alloc(0))).toBe(true);
+    for (const [i, file] of names.entries()) {
+      expect((await readFile(path.join(outputDir, file))).equals(first[i] ?? Buffer.alloc(0))).toBe(true);
+      expect((await stat(path.join(outputDir, file))).mtimeMs).toBe(before[i]?.mtimeMs);
+    }
     const corrupted = path.join(outputDir, "favicon-16x16.png");
     await writeFile(corrupted, "deliberately stale");
     await rm(path.join(outputDir, "favicon.ico"));
@@ -160,6 +166,72 @@ describe("brand assets", () => {
       await expect(generateBrandAssets({ readerPath: invalid, outputDir: destination })).rejects.toThrow(/transparent background|no visible artwork/);
       await expect(stat(destination)).rejects.toThrow(/ENOENT/);
     }
+  });
+
+  /* The committed family is rendered on Greg's Mac and checked on the Linux
+     box; Skia antialiases a level or two differently on each. */
+  it("keeps an equivalent committed raster byte for byte, but not a changed source", async () => {
+    const file = path.join(outputDir, "favicon-48x48.png");
+    const { width, data } = await pixels(file);
+    const drifted = createCanvas(width, width);
+    const image = drifted.getContext("2d").createImageData(width, width);
+    image.data.set(data);
+    for (let i = 0; i < image.data.length; i += 4) if (image.data[i + 3] === 255) image.data[i] = Math.max(0, (image.data[i] ?? 0) - 2);
+    drifted.getContext("2d").putImageData(image, 0, 0);
+    const driftedBytes = drifted.toBuffer("image/png");
+    const originalIco = await readFile(path.join(outputDir, "favicon.ico"));
+    await writeFile(file, driftedBytes);
+    await expect(generateBrandAssets({ outputDir, check: true })).rejects.toThrow("stale: favicon.ico.");
+    expect(await readFile(file)).toEqual(driftedBytes);
+    expect(await readFile(path.join(outputDir, "favicon.ico"))).toEqual(originalIco);
+    // The ICO is repacked from the kept frame, as the other machine's would be.
+    await generateBrandAssets({ outputDir });
+    expect((await readFile(file)).equals(driftedBytes)).toBe(true);
+    await expect(generateBrandAssets({ outputDir, check: true })).resolves.toHaveLength(11);
+
+    const changedMark = path.join(temporary, "changed-mark.svg");
+    const svg = await readFile(path.join(ROOT, "assets/brand/source/mark.svg"), "utf8");
+    for (const changed of [svg.replaceAll("#DB8A45", "#DB8A4D"), svg.replace('stroke-width="18"', 'stroke-width="17.5"')]) {
+      expect(changed).not.toBe(svg);
+      await writeFile(changedMark, changed);
+      await expect(generateBrandAssets({ outputDir, markPath: changedMark, check: true }))
+        .rejects.toThrow(/spideryarn-logo.png, favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, favicon.ico/);
+    }
+    await generateBrandAssets({ outputDir });
+  });
+
+  it("treats a shift beyond the tolerance, a resize or undecodable bytes as different", async () => {
+    const canvas = createCanvas(8, 8);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgb(100, 100, 100)";
+    ctx.fillRect(0, 0, 8, 8);
+    const base = canvas.toBuffer("image/png");
+    ctx.fillStyle = `rgb(${100 + RASTER_TOLERANCE}, 100, 100)`;
+    ctx.fillRect(0, 0, 1, 1);
+    expect(await rastersEquivalent(base, canvas.toBuffer("image/png"))).toBe(true);
+    ctx.fillStyle = `rgb(${101 + RASTER_TOLERANCE}, 100, 100)`;
+    ctx.fillRect(0, 0, 1, 1);
+    expect(await rastersEquivalent(base, canvas.toBuffer("image/png"))).toBe(false);
+    expect(await rastersEquivalent(base, createCanvas(8, 9).toBuffer("image/png"))).toBe(false);
+    expect(await rastersEquivalent(base, Buffer.from("not a png"))).toBe(false);
+    expect(await rastersEquivalent(Buffer.from("not a png"), Buffer.from("not a png"))).toBe(false);
+    expect(await rastersEquivalent(Buffer.alloc(0), Buffer.alloc(0))).toBe(false);
+  });
+
+  it("compares premultiplied colour and alpha independently", async () => {
+    function pixel(red: number, alpha: number): Buffer {
+      const canvas = createCanvas(1, 1);
+      const ctx = canvas.getContext("2d");
+      const image = ctx.createImageData(1, 1);
+      image.data.set([red, 0, 0, alpha]);
+      ctx.putImageData(image, 0, 0);
+      return canvas.toBuffer("image/png");
+    }
+    expect(await rastersEquivalent(pixel(0, 1), pixel(255, 1))).toBe(true);
+    expect(await rastersEquivalent(pixel(0, 64), pixel(32, 64))).toBe(false);
+    expect(await rastersEquivalent(pixel(0, 64), pixel(0, 64 + RASTER_TOLERANCE))).toBe(true);
+    expect(await rastersEquivalent(pixel(0, 64), pixel(0, 65 + RASTER_TOLERANCE))).toBe(false);
+    expect(await rastersEquivalent(pixel(0, 0), pixel(255, 0))).toBe(true);
   });
 
   it("keeps the committed public family fresh", async () => {
