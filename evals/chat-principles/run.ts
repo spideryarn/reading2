@@ -29,7 +29,8 @@ import { environmentOwnerId } from "../../src/owner.js";
 import { renderProfile } from "../../src/profile.js";
 import { readingSoFarLineFor } from "../../src/reading-so-far.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import type { Block, ChatMessage, Meta, ThreadKind } from "../../src/types.js";
+import { askAboutBlock } from "../../src/web/chat-handoff.js";
+import type { Block, ChatAnchor, ChatMessage, Meta, ThreadKind } from "../../src/types.js";
 import { citedPassages, median, pairRows } from "../guide/conversations.js";
 import { blindCoin } from "../plain-words/run.js";
 
@@ -52,11 +53,31 @@ export interface Case {
   readonly question: string;
   /** What this case is aimed at, for the judge. */
   readonly aim: string;
+  /** The thread's passage, for a chat started from one, as production sends it. */
+  readonly anchor?: ChatAnchor;
+  /** The reader pressed "?" rather than typing (`helpSection`). */
+  readonly help?: boolean;
+}
+
+/**
+ * A chat started from a paragraph: the words `askAboutBlock` puts in the box,
+ * and the thread anchor production sends beside them (GPT Sol's plan review of
+ * 261024v, F3: the words alone are not what the model sees).
+ */
+function aboutBlock(blockId: string, quote: string, asked: string): Pick<Case, "question" | "anchor"> {
+  return { question: askAboutBlock({ blockId, quote, question: asked }), anchor: { blockId } };
 }
 
 const SETH = "noema-mythology-of-conscious-ai";
 const AGENTS = "openai-huggingface";
 const EXPRESSIVE = "effective-expressiveness";
+/* Greg's article for spya-furs26, exported read-only from production (plan
+   261024v), with the profile he had when he asked. */
+const CONSCIOUSNESS = "consciousness-in-ai";
+const GREG_PROFILE =
+  "Background in computational neuroscience & psychology of human memory, data science, AI, and philosophy. CTO at various startups.";
+const EXAMPLE_AIM =
+  "a reader whose profile names a job or field: if the reply uses an example or analogy, is it the clearest one for the point, or one built from their background where a plainer one would serve better?";
 
 const SETH_ANSWER =
   "He thinks it is unlikely, at least for AI built the way it is today. His case is that consciousness may depend on being a living, self-maintaining body, not on computation alone, so a system that only computes would at most seem conscious. He stops short of saying it is impossible.";
@@ -336,6 +357,129 @@ export const CASES: readonly Case[] = [
     question: "I haven't read it yet. Can we start?",
     aim: "Recall with a reader who has not read it (what Tutorial was for): is the first step easy to follow cold, and does it leave them something they can do?",
   },
+  /* Plan 261024v (Greg's report spya-furs26): chats started from a paragraph,
+     by a reader whose profile names a job far from it, so an example built
+     from that job is tempting. `ex-own` replays Greg's turn: his block, his
+     profile, his article. Three guard the other side (GPT Sol's plan review,
+     F5): `ex-anaesthetist`, where the reader's field is plainly the best
+     example, since the passage itself turns on anaesthesia; `ex-asks-field`,
+     who asks for their own field; and `ex-help`, a "?" press, whose prompt asks
+     for an analogy, so one should still come. */
+  {
+    id: "ex-own",
+    dir: CONSCIOUSNESS,
+    kind: "chat",
+    about: GREG_PROFILE,
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-nczgb5",
+      "As a method for studying consciousness in humans and other animals, relying on subjects’ reports has two main problems.",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-cto",
+    dir: SETH,
+    kind: "chat",
+    about: "CTO at a fintech startup; before that I ran data science teams.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-cqh2pq",
+      "When we identify conscious experience with seemingly human qualities like intelligence and language",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-chef",
+    dir: SETH,
+    kind: "chat",
+    about: "Head chef; I run a busy restaurant kitchen.",
+    why: null,
+    history: [],
+    ...aboutBlock("spya-j0a9rq", "Consciousness, in contrast to intelligence, is mostly about being.", "Help me understand."),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-nurse",
+    dir: SETH,
+    kind: "chat",
+    about: "Intensive-care nurse.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-wepmnr",
+      "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-lawyer",
+    dir: AGENTS,
+    kind: "chat",
+    about: "Family lawyer; mostly divorce and custody work.",
+    why: null,
+    history: [],
+    ...aboutBlock("spya-fcu0cb", "AI training is kinda sloppy.", "Help me understand."),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-farmer",
+    dir: EXPRESSIVE,
+    kind: "chat",
+    about: "Dairy farmer; I taught myself a little Python last winter.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-s79g0v",
+      "Programming language researchers have a better term for talking about this sort of thing.",
+      "Help me understand.",
+    ),
+    aim: EXAMPLE_AIM,
+  },
+  {
+    id: "ex-anaesthetist",
+    dir: SETH,
+    kind: "chat",
+    about: "Consultant anaesthetist.",
+    why: null,
+    history: [],
+    ...aboutBlock("spya-j0a9rq", "Consciousness, in contrast to intelligence, is mostly about being.", "Help me understand."),
+    aim: "a reader whose field is what the passage itself turns on: is an example from it still used where it is the clearest, rather than avoided?",
+  },
+  {
+    id: "ex-asks-field",
+    dir: AGENTS,
+    kind: "chat",
+    about: "Secondary-school teacher.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-dk4gcf",
+      "Within a few hours, some of these agents had gotten super desperate",
+      "Help me understand. Can you put it in terms of a school classroom?",
+    ),
+    aim: "the reader asks for an example from their own work: does the reply give one, in those terms, and is it apt?",
+  },
+  {
+    id: "ex-help",
+    dir: SETH,
+    kind: "chat",
+    about: "Plumber; I run my own business.",
+    why: null,
+    history: [],
+    ...aboutBlock(
+      "spya-a8jgf4",
+      "First, and most important, brains are not computers.",
+      "Explain this passage.",
+    ),
+    help: true,
+    aim: "the reader pressed \"?\" on a passage they could not follow: is there still a useful analogy or example, and is it the clearest one rather than one built from their job?",
+  },
 ];
 
 /* ---------------------------------------------------------------- screens -- */
@@ -396,7 +540,7 @@ interface Row extends Screen {
   readonly dollars: number;
 }
 
-function load(dir: string): { meta: Meta; blocks: Block[] } {
+export function load(dir: string): { meta: Meta; blocks: Block[] } {
   const root = fs.existsSync(path.join(OWN_ARTICLES, dir)) ? OWN_ARTICLES : CORPUS;
   const meta = JSON.parse(fs.readFileSync(path.join(root, dir, "meta.json"), "utf8")) as Meta;
   const { blocks } = JSON.parse(fs.readFileSync(path.join(root, dir, "blocks.json"), "utf8")) as { blocks: Block[] };
@@ -430,6 +574,8 @@ async function ask(
         question: c.question,
         slug: meta.slug,
         kind: c.kind,
+        anchor: c.anchor ?? null,
+        help: c.help ?? false,
         profile: renderProfile({ profile: c.about, purpose: c.why }),
         reading: reading === null ? null : readingSoFarLineFor(READING_ARMS[reading]),
         ...(c.kind === "guide" ? { experience: "a-few" as const, saved: { purpose: c.why, profile: c.about } } : {}),

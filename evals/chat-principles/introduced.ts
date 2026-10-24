@@ -15,6 +15,8 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+import type { Case } from "./run.js";
 import { blindCoin } from "../plain-words/run.js";
 
 const RESULTS = path.join(import.meta.dirname, "results");
@@ -25,22 +27,22 @@ interface Row {
   readonly answer: string;
 }
 
-interface KeyRow {
+export interface KeyRow {
   readonly label: string;
   readonly case: string;
 }
 
-function arg(name: string): string | undefined {
+export function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-function rowsOf(label: string): Row[] {
+export function rowsOf(label: string): Row[] {
   return (JSON.parse(fs.readFileSync(path.join(RESULTS, `${label}.json`), "utf8")) as { rows: Row[] }).rows;
 }
 
 /** Draw an integer uniformly from 0 through `max`, using only the tested coin. */
-function uniformIndex(coin: () => boolean, max: number): number {
+export function uniformIndex(coin: () => boolean, max: number): number {
   const size = max + 1;
   let range = 1;
   let bits = 0;
@@ -57,31 +59,55 @@ function uniformIndex(coin: () => boolean, max: number): number {
   }
 }
 
-async function sheet(labels: string[], seed: number): Promise<void> {
+const HEADER = [
+  "# Introduced or bare",
+  "",
+  "Each reply below is from a reading companion talking to one reader about one article. For each reply, count:",
+  "- brought: people, works, studies, theories and technical terms it brings in from OUTSIDE the article",
+  "  (not the article's own author, not the reader's own words, not terms the reader used first);",
+  "- bare: how many of those it names without saying, near where it names them, who or what they are",
+  "  (\"Dan Luu also wrote a post\" is bare; \"Dan Luu, an engineer who blogs about programming, …\" is not);",
+  "- over: how many things it explains that this reader has plainly shown they already know.",
+  "A link alone is not an introduction. Answer one line per reply, exactly:",
+  "`r<n>: brought <a>; bare <b>; over <c>; bare-names: <comma list or none>`.",
+  "",
+];
+
+/** The result rows of `labels`, each with its arm, kept to `cases` when given. */
+function rowsFor(labels: string[], cases?: ReadonlySet<string>) {
+  return labels.flatMap((label) =>
+    rowsOf(label)
+      .filter((r) => !cases || cases.has(r.case))
+      .map((r) => ({ label, ...r })),
+  );
+}
+
+/**
+ * Every reply from `labels` (only `cases`' when given), shuffled into one blind
+ * sheet under `header`: `<prefix>-<arms>.md`, and its key beside it. Shared
+ * with examples.ts (plan 261024v), which asks a different question.
+ */
+export async function writeSheet(
+  labels: string[],
+  seed: number,
+  prefix: string,
+  header: readonly string[],
+  cases?: ReadonlySet<string>,
+  /** Lines shown between the reader's question and the reply. */
+  context?: (c: Case, answer: string) => readonly string[],
+): Promise<void> {
   /* `run.ts` reaches production's chat and store modules. The tally needs none
      of that; load the cases only for the command that renders them. */
   const { CASES } = await import("./run.js");
   if (new Set(labels).size !== labels.length) throw new Error("each arm may appear only once");
-  const all = labels.flatMap((label) => rowsOf(label).map((r) => ({ label, ...r })));
+  const all = rowsFor(labels, cases);
   /* Fisher–Yates on the tested coin, so the arms interleave. */
   const coin = blindCoin(seed);
   for (let i = all.length - 1; i > 0; i--) {
     const j = uniformIndex(coin, i);
     [all[i], all[j]] = [all[j]!, all[i]!];
   }
-  const out = [
-    "# Introduced or bare",
-    "",
-    "Each reply below is from a reading companion talking to one reader about one article. For each reply, count:",
-    "- brought: people, works, studies, theories and technical terms it brings in from OUTSIDE the article",
-    "  (not the article's own author, not the reader's own words, not terms the reader used first);",
-    "- bare: how many of those it names without saying, near where it names them, who or what they are",
-    "  (\"Dan Luu also wrote a post\" is bare; \"Dan Luu, an engineer who blogs about programming, …\" is not);",
-    "- over: how many things it explains that this reader has plainly shown they already know.",
-    "A link alone is not an introduction. Answer one line per reply, exactly:",
-    "`r<n>: brought <a>; bare <b>; over <c>; bare-names: <comma list or none>`.",
-    "",
-  ];
+  const out = [...header];
   const key: string[] = [];
   all.forEach((r, i) => {
     const c = CASES.find((k) => k.id === r.case);
@@ -94,26 +120,30 @@ async function sheet(labels: string[], seed: number): Promise<void> {
       ...c.history.map((t, k) => `> ${k % 2 === 0 ? "Reader" : "Companion"}: ${t}`),
       `Reader now: "${c.question}"`,
       "",
+      ...(context?.(c, r.answer) ?? []),
       r.answer.trim(),
       "",
     );
   });
   const name = labels.join("-");
-  fs.writeFileSync(path.join(RESULTS, `introduced-${name}.md`), `${out.join("\n")}\n`);
-  fs.writeFileSync(path.join(RESULTS, `introduced-${name}-key.txt`), `${key.join("\n")}\n`);
+  fs.writeFileSync(path.join(RESULTS, `${prefix}-${name}.md`), `${out.join("\n")}\n`);
+  fs.writeFileSync(path.join(RESULTS, `${prefix}-${name}-key.txt`), `${key.join("\n")}\n`);
   console.log(`${all.length} replies`);
 }
 
-function readKey(labels: string[], name: string): Map<string, KeyRow> {
-  const expected = new Set(
-    labels.flatMap((label) => rowsOf(label).map((r) => `${label}\0${r.case}\0${r.run}`)),
-  );
-  const expectedCount = labels.reduce((n, label) => n + rowsOf(label).length, 0);
-  if (expected.size !== expectedCount) throw new Error("an arm contains duplicate case/run rows");
+export function readKey(
+  labels: string[],
+  name: string,
+  prefix = "introduced",
+  cases?: ReadonlySet<string>,
+): Map<string, KeyRow> {
+  const rows = rowsFor(labels, cases);
+  const expected = new Set(rows.map((r) => `${r.label}\0${r.case}\0${r.run}`));
+  if (expected.size !== rows.length) throw new Error("an arm contains duplicate case/run rows");
 
   const key = new Map<string, KeyRow>();
   const keyLines = fs
-    .readFileSync(path.join(RESULTS, `introduced-${name}-key.txt`), "utf8")
+    .readFileSync(path.join(RESULTS, `${prefix}-${name}-key.txt`), "utf8")
     .split("\n")
     .filter((line) => line.trim() !== "");
   for (const [i, line] of keyLines.entries()) {
@@ -175,11 +205,14 @@ function tally(labels: string[]): void {
   }
 }
 
-const sheetArg = arg("sheet");
-const tallyArg = arg("tally");
-if (sheetArg) {
-  const seed = Number(arg("seed") ?? "1");
-  if (!Number.isSafeInteger(seed)) throw new Error("--seed must be an integer");
-  await sheet(sheetArg.split(","), seed);
-} else if (tallyArg) tally(tallyArg.split(","));
-else throw new Error("usage: --sheet a,b[,c] [--seed n] | --tally a,b[,c]");
+/* A guard, so examples.ts (plan 261024v) can borrow the helpers above. */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const sheetArg = arg("sheet");
+  const tallyArg = arg("tally");
+  if (sheetArg) {
+    const seed = Number(arg("seed") ?? "1");
+    if (!Number.isSafeInteger(seed)) throw new Error("--seed must be an integer");
+    await writeSheet(sheetArg.split(","), seed, "introduced", HEADER);
+  } else if (tallyArg) tally(tallyArg.split(","));
+  else throw new Error("usage: --sheet a,b[,c] [--seed n] | --tally a,b[,c]");
+}
