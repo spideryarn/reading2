@@ -1,0 +1,10 @@
+{
+ "url": "https://waitbutwhy.com/2015/01/artificial-intelligence-revolution-1.html",
+ "label": "single",
+ "pages": [
+  "https://waitbutwhy.com/2015/01/artificial-intelligence-revolution-1.html"
+ ],
+ "mechanism": "fooler: \"Part 1\"/\"Part 2\" in title, next-part link; but two separate posts",
+ "ssr": true,
+ "notes": "BORDERLINE: Part 1 is 48k chars standalone; other part https://waitbutwhy.com/2015/01/artificial-intelligence-revolution-2.html (101k) saved only for reference"
+}

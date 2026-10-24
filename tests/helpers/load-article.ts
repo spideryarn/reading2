@@ -121,7 +121,7 @@ import { eq } from "drizzle-orm";
 
 import { getDb } from "../../src/db/client.js";
 import { articles, jobs } from "../../src/db/schema.js";
-import type { RawManifest } from "../../src/fetch.js";
+import { type RawManifest, rawPartFile } from "../../src/fetch.js";
 import { mintId } from "../../src/ids.js";
 import { type OwnerId, currentOwnerId, runAsOwner } from "../../src/owner.js";
 import { fixtureArtefacts } from "./fixture-artefacts.js";
@@ -329,6 +329,19 @@ async function storeRawBytesFor(slug: string, root: string): Promise<void> {
       `${path.join(root, "data", slug)}: raw.json says the stored object is ${manifest.storedSha256}, but ` +
         `${manifest.file} beside it hashes to ${sha256}. One of the two has been edited.`,
     );
+  }
+  /* **And each further page**, which `db:export` writes beside it as
+     `raw.part-<n>.html` (plan 261024p), held to the same rule. */
+  for (const [i, part] of (manifest.parts ?? []).entries()) {
+    const file = rawPartFile(i + 1);
+    const partBytes = await readFile(path.join(root, "data", slug, file));
+    const stored = await storeRawSource(partBytes, "html");
+    if (stored.sha256 !== part.storedSha256) {
+      throw new Error(
+        `${path.join(root, "data", slug)}: raw.json says part ${i + 1} is ${part.storedSha256}, but ` +
+          `${file} beside it hashes to ${stored.sha256}. One of the two has been edited.`,
+      );
+    }
   }
 }
 

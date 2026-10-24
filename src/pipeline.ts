@@ -61,7 +61,9 @@ import {
   fetchDocument,
   fetchEuropePmc,
   type RawManifest,
+  type RawPart,
   RawDocumentUnavailable,
+  readPartBytes,
   readRawBytes,
   storedDocumentBytes,
   uploadedFormat,
@@ -69,6 +71,7 @@ import {
   writeRaw,
 } from "./fetch.js";
 import { findOpenCopy, paperIdsInUrls } from "./europe-pmc.js";
+import { followPages, pagesDetail } from "./follow-pages.js";
 import { JatsRefused, jatsToHtml } from "./jats.js";
 import { convertUpload } from "./upload-convert.js";
 import type { ConvertedFormat } from "./uploads.js";
@@ -3055,6 +3058,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          refused. A web page, Word and Europe PMC's JATS have no count and stay
          one slot. */
       const warning = await priceTheDocument(ctx, store, pages);
+      /* **The further pages of a piece spread over several** (plan 261024p §
+         Stage 1): only for a web page we fetched as it is. A paper source's page
+         and Europe PMC's converted JATS are one document by construction, and an
+         upload never reaches here. After the price, so a refused document asks
+         nothing; before `writeRaw`, so nothing is stored for a step that stops. */
+      const followed =
+        paper === null && !("convertedFrom" in doc) && doc.kind === "html"
+          ? await followPages(doc, { signal: ctx.signal, fetchDocument })
+          : null;
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that
@@ -3066,8 +3078,19 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          seam, which stores the page and describes the XML: src/fetch.ts §
          `ConvertedHtml`. */
       const written = "convertedFrom" in doc ? await writeConvertedRaw(doc) : await writeRaw(doc);
+      /* Each further page its own object, exactly as page 1 is; page 1 stays
+         the manifest's own document, byte for byte. */
+      const parts: RawPart[] = [];
+      for (const part of followed?.judged === "continues" ? followed.pages : []) {
+        const stored = await writeRaw(part);
+        parts.push({ url: part.url, storedSha256: stored.storedSha256, storedBytes: stored.storedBytes });
+      }
       /* What its slots were priced from — `RawManifest.pages`. */
-      const manifest: RawManifest = pages === null ? written : { ...written, pages };
+      const manifest: RawManifest = {
+        ...written,
+        ...(pages === null ? {} : { pages }),
+        ...(parts.length === 0 ? {} : { parts }),
+      };
       const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
          history, and nothing writes one down: the enqueue line in src/jobs.ts
@@ -3085,7 +3108,24 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         { slug: ctx.slug, step: "fetch", host, kb, ...(via === null ? {} : { ...via, tried }) },
         `fetch ${ctx.slug}: ${kb} KB`,
       );
-      return { parts: { raw: manifest }, detail: withWarning(fetchDetail(kb, via), warning) };
+      /* The judge's outcome, in counts and fixed words: never its reason, which
+         is a model's sentence about a stranger's page, and never an address. A
+         failed call is a `warn`, because the page was imported alone and the
+         reader was told nothing. */
+      if (followed?.judged === "failed") {
+        plog.warn(
+          { slug: ctx.slug, step: "fetch", host, error: followed.error },
+          `fetch ${ctx.slug}: the multi-page judge failed, so the page is imported alone`,
+        );
+      } else if (followed?.judged === "continues") {
+        plog.info(
+          { slug: ctx.slug, step: "fetch", host, picked: followed.picked, kept: parts.length, skipped: followed.skipped },
+          `fetch ${ctx.slug}: followed ${parts.length} of ${followed.picked} further pages`,
+        );
+      }
+      const pagesSaid = followed === null ? null : pagesDetail(followed);
+      const detail = pagesSaid === null ? fetchDetail(kb, via) : `${fetchDetail(kb, via)}, ${pagesSaid}`;
+      return { parts: { raw: manifest }, detail: withWarning(detail, warning) };
     },
   },
 
@@ -3196,8 +3236,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         });
       }
       let bytes: Uint8Array;
+      /* The further pages stage 1 followed (plan 261024p), read with page 1
+         and by the same checks, so a missing or damaged one fails the same
+         two ways. */
+      let partBytes: Uint8Array[];
       try {
         bytes = await readRawBytes(manifest, { slug: ctx.slug });
+        partBytes = await Promise.all((manifest.parts ?? []).map((part) => readPartBytes(part, { slug: ctx.slug })));
       } catch (err) {
         /* **Not one message for all three reasons, and the difference is
            whether the reader can do anything.** Retry never re-runs a step that
@@ -3289,10 +3334,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            whatever the publisher served. The manifest records the original
            encoding so that stays visible. */
         const html = new TextDecoder().decode(bytes);
+        const parts = (manifest.parts ?? []).map((part, i) => ({ html: new TextDecoder().decode(partBytes[i]!), url: part.url }));
         try {
           const result = await runExtract({
             html,
             url,
+            parts,
             slug: ctx.slug,
             titleTidier: stepTitleTidier(ctx, store),
             /* Any page's authors and affiliations, read off its opening by one

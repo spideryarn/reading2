@@ -1,0 +1,11 @@
+{
+ "url": "https://eloquentjavascript.net/00_intro.html",
+ "label": "multi",
+ "pages": [
+  "https://eloquentjavascript.net/00_intro.html",
+  "https://eloquentjavascript.net/01_values.html"
+ ],
+ "mechanism": "numbered chapter files + a \u25b8 next-chapter link (no rel)",
+ "ssr": true,
+ "notes": "book; 18k/21k chars per chapter"
+}

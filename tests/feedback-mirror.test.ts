@@ -42,7 +42,7 @@ import {
   guardFeedbackEnvelope,
 } from "../src/feedback-envelope.js";
 import { buildSafeEvent } from "../src/monitoring.js";
-import type { FeedbackReport, RawSource } from "../src/store/contracts.js";
+import type { FeedbackReport, RawSource, SourcePart } from "../src/store/contracts.js";
 import { RawObjectTooLarge } from "../src/store/raw-document.js";
 import type { ArticleMetadata } from "../src/types.js";
 
@@ -62,6 +62,14 @@ let reads = { source: 0, article: 0, metadata: 0 };
 /** The options each source read was handed — where the 10 MiB cap is visible. */
 let sourceOptions: ({ maxBytes?: number } | undefined)[] = [];
 let fakeSource: (slug: string, options?: { maxBytes?: number }) => Promise<RawSource | null>;
+/**
+ * The later pages the pinned read hands back with page 1, and how many the
+ * revision lists. **The fake does not apply the budget**, so the gatherer's
+ * own check on what came back is what these tests see — the same belt and
+ * braces as page 1's.
+ */
+let fakeParts: SourcePart[] = [];
+let fakePartCount: number | null = null;
 let fakeArticle: (slug: string) => Promise<unknown>;
 let fakeMetadata: (slug: string) => Promise<ArticleMetadata>;
 
@@ -69,10 +77,11 @@ vi.mock("../src/store/index.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/store/index.js")>();
   return {
     ...actual,
-    loadSource: async (slug: string, options?: { maxBytes?: number }) => {
+    loadSourcePages: async (slug: string, options?: { maxBytes?: number }) => {
       reads.source += 1;
       sourceOptions.push(options);
-      return fakeSource(slug, options);
+      const source = await fakeSource(slug, options);
+      return source === null ? null : { source, parts: fakeParts, partCount: fakePartCount ?? fakeParts.length };
     },
     loadArticle: async (slug: string) => {
       reads.article += 1;
@@ -247,6 +256,8 @@ beforeEach(() => {
   attempted = [];
   reads = { source: 0, article: 0, metadata: 0 };
   sourceOptions = [];
+  fakeParts = [];
+  fakePartCount = null;
   fakeSource = async (slug) => {
     throw notYours(slug);
   };
@@ -724,6 +735,73 @@ describe("the article, sent with extra diagnostics", () => {
     expect(item?.[0].content_type).toBe("text/plain");
     expect(attachmentBytes(envelope, "source.html")).toEqual(html);
     expect(tagsOf(envelope).source_file).toBe("attached");
+  });
+
+  /**
+   * **Every page of a piece split over several** (plan 261024p; GPT Sol's
+   * code review, F4): a report about page 3 could not be reproduced from
+   * Sentry when only page 1 went. Each later page is its own attachment,
+   * numbered by its page, and the tag says how many went of how many.
+   */
+  it("sends a split piece's later pages as their own files, numbered by page", async () => {
+    const page = (marker: string) => new TextEncoder().encode(`<html><p>${marker}</p></html>`);
+    ownArticle();
+    fakeSource = sourceOf(page("PAGE_ONE"), "html");
+    fakeParts = [
+      { page: 2, url: "https://site.example/2", bytes: page("PAGE_TWO") },
+      { page: 3, url: "https://site.example/3", bytes: page("PAGE_THREE") },
+    ];
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual([
+      "diagnostics.json",
+      "source.html",
+      "source.part-2.html",
+      "source.part-3.html",
+      "article.json",
+    ]);
+    const part = attachmentItems(envelope).find(([header]) => header.filename === "source.part-3.html");
+    expect(part?.[0].content_type).toBe("text/plain");
+    expect(attachmentBytes(envelope, "source.part-3.html")).toEqual(page("PAGE_THREE"));
+    expect(tagsOf(envelope).source_file).toBe("attached");
+    expect(tagsOf(envelope).source_parts).toBe("2/2");
+    const json = JSON.parse(new TextDecoder().decode(attachmentBytes(envelope, "article.json")));
+    expect(json.source.parts).toEqual({ attached: 2, total: 2 });
+  });
+
+  /**
+   * **The 10 MiB is the whole source's, not each page's**, since every page
+   * rides in the one envelope Sentry drops whole past 20 MB. A page that would
+   * pass it is left out and a later one that fits still goes; one the store
+   * already left out (page 3 here) is counted as not sent.
+   */
+  it("keeps every page of the source under the one cap, and counts what it left out", async () => {
+    ownArticle();
+    fakeSource = sourceOf(new Uint8Array(6 * MIB), "html");
+    fakeParts = [
+      { page: 2, url: "https://site.example/2", bytes: new Uint8Array(5 * MIB) },
+      { page: 4, url: "https://site.example/4", bytes: new Uint8Array(3 * MIB) },
+    ];
+    fakePartCount = 3;
+    startSentry();
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+
+    const envelope = envelopes[0]!;
+    expect(attachmentItems(envelope).map(([header]) => header.filename)).toEqual([
+      "diagnostics.json",
+      "source.html",
+      "source.part-4.html",
+      "article.json",
+    ]);
+    const sent = ["source.html", "source.part-4.html"].reduce((n, f) => n + attachmentBytes(envelope, f).byteLength, 0);
+    expect(sent).toBeLessThanOrEqual(10 * MIB);
+    expect(tagsOf(envelope).source_parts).toBe("1/3");
+    const json = JSON.parse(new TextDecoder().decode(attachmentBytes(envelope, "article.json")));
+    expect(json.source).toEqual({ kind: "html", bytes: 6 * MIB, parts: { attached: 1, total: 3 } });
+    /* The cap reached the read as the whole budget. */
+    expect(sourceOptions).toEqual([{ maxBytes: 10 * MIB }]);
   });
 
   it("reads nothing at all when the box is not ticked, and says none", async () => {

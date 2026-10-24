@@ -1,0 +1,16 @@
+{
+ "url": "https://president.jp/articles/-/117568",
+ "label": "multi",
+ "pages": [
+  "https://president.jp/articles/-/117568",
+  "https://president.jp/articles/-/117568?page=2",
+  "https://president.jp/articles/-/117568?page=3",
+  "https://president.jp/articles/-/117568?page=4",
+  "https://president.jp/articles/-/117568?page=5"
+ ],
+ "mechanism": "query-string pagination ?page=2…5 with 次ページ; /articles/print/117568; 次の記事へ to another article",
+ "ssr": true,
+ "notes": "Japanese; p1 ~1.1k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

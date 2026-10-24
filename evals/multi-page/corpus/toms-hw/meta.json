@@ -1,0 +1,14 @@
+{
+ "url": "https://www.tomshardware.com/pc-components/cpus/amd-ryzen-9-9950x-cpu-review",
+ "label": "multi",
+ "pages": [
+  "https://www.tomshardware.com/pc-components/cpus/amd-ryzen-9-9950x-cpu-review",
+  "https://www.tomshardware.com/pc-components/cpus/amd-ryzen-9-9950x-cpu-review/2",
+  "https://www.tomshardware.com/pc-components/cpus/amd-ryzen-9-9950x-cpu-review/3",
+  "https://www.tomshardware.com/pc-components/cpus/amd-ryzen-9-9950x-cpu-review/4",
+  "https://www.tomshardware.com/pc-components/cpus/amd-ryzen-9-9950x-cpu-review/5"
+ ],
+ "mechanism": "<link rel=next>/<link rel=prev> in head + numbered /N pager + \"Next Page\" link + \"Page N:\" TOC",
+ "ssr": true,
+ "notes": "p1 28k chars of prose; 5 pages. NB: ?page=2 just returns page 1 again; the real URL is /2"
+}

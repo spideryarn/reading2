@@ -1,0 +1,10 @@
+{
+ "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)",
+ "label": "single",
+ "pages": [
+  "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)"
+ ],
+ "mechanism": "fooler: in-page TOC anchors, hundreds of numeric footnote links, \"page=\" in Special: URLs",
+ "ssr": true,
+ "notes": "single article 114k chars"
+}

@@ -1,0 +1,12 @@
+{
+ "url": "https://thediplomat.com/2026/08/remembering-a-genocide-the-view-from-the-rohingya-camps/",
+ "label": "single",
+ "pages": [
+  "https://thediplomat.com/2026/08/remembering-a-genocide-the-view-from-the-rohingya-camps/"
+ ],
+ "mechanism": "site navigation and categories",
+ "ssr": true,
+ "notes": "p1 ~6.6k chars",
+ "fetched": "2026-10-24, curl with a Chrome user-agent",
+ "gold": "gold labelled 2026-10-24 by reading page 1 (its text and every link pageLinks shows the judge), before any model run on it"
+}

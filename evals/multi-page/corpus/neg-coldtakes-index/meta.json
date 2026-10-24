@@ -1,0 +1,10 @@
+{
+ "url": "https://www.cold-takes.com/most-important-century/",
+ "label": "single",
+ "pages": [
+  "https://www.cold-takes.com/most-important-century/"
+ ],
+ "mechanism": "fooler: series index page linking many posts, \"Part 1 of 4\" titles",
+ "ssr": true,
+ "notes": "series landing; each post separate"
+}

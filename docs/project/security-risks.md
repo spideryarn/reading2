@@ -83,6 +83,7 @@ carrying R8. A qualification beside an id wins over those words.
 | [R29](#r29) | A hostile article can have the guide write what it holds, About you included, into a web address it then opens | Medium | accepted | none | — |
 | [R30](#r30) | A hostile article can have the guide start one mode's generation, without a press, once a conversation | Low | accepted | none | — |
 | [R31](#r31) | Anybody holding a private link can inflate its signed-out open count, and make one cheap write per request | Low | accepted | throttled in SQL; no request limit | a Vercel firewall rule: ~15 min of Greg's |
+| [R32](#r32) | On a host many authors share, a hostile page can have another author's page on that host imported as its continuation | Low | proposed | none | — |
 
 ## Accepted
 
@@ -477,6 +478,24 @@ on the plan asked for one. **Fix, if wanted:** a Vercel firewall rate-limit rule
 which is infrastructure an agent here may not change. About fifteen minutes of Greg's. Decision:
 **accepted**, Greg, 2026-10-21, reply `spya-ewzccp` to
 [q-wfdr7j](../user-feedback/questions/q-wfdr7j.md): *"A"* (accept it as a low risk; no firewall rule).
+
+### R32
+
+**On a host many authors share, a hostile page can have another author's page imported as its
+continuation.** Low. Since plan
+[261024p](../plans/261024p-a-multi-page-article-imports-from-its-first-page.md) (report
+spya-qkyukr), a fetched web page is shown to a cheap model with its links to *the same site*, and
+the pages it names are fetched and joined to it as one article (`src/multi-page.ts`,
+`src/follow-pages.ts`). "Same site" is the host with or without `www.`, the same port, and never
+https down to http (`sameSite`). On a host where many people publish under paths —
+`medium.com/@a`, `sites.google.com/view/a`, `github.io` is safe, being a host per user — a page
+written to steer the model could have somebody else's public page on that host appended to itself,
+under its own title. What bounds it: the reader asked for the hostile page; what is appended is
+public and is fetched through `fetchDocument`'s guard like any import; the model can name only
+links that are on the page (an id of ours, never an address); at most 20 pages and 30 MB; and the
+appended page is read by the same Readability and injection scan as any page. **Fix, if wanted:**
+a list of shared hosts on which only the page's own path prefix counts as the same site. Not built
+until a reader meets it. Decision: **proposed**, put to Greg in the report's note.
 
 ## From security.md's known gaps
 

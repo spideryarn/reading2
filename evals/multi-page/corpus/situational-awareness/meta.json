@@ -1,0 +1,13 @@
+{
+ "url": "https://situational-awareness.ai/",
+ "label": "multi",
+ "pages": [
+  "https://situational-awareness.ai/",
+  "https://situational-awareness.ai/from-gpt-4-to-agi/",
+  "https://situational-awareness.ai/from-agi-to-superintelligence/",
+  "https://situational-awareness.ai/racing-to-the-trillion-dollar-cluster/"
+ ],
+ "mechanism": "p1 is Introduction (6k chars) with series nav list linking each part; parts have in-text \"next piece\" links",
+ "ssr": true,
+ "notes": "borderline: series = one work (PDF of whole series offered); /introduction/ gave 429 once"
+}

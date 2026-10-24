@@ -222,10 +222,12 @@ function byteLengthOf(attachment: AllowedAttachment): number {
 function tagsFor(
   report: FeedbackReport,
   screenshot: FeedbackScreenshot | null,
-  article: Pick<FeedbackArticle, "sourceFile" | "articleJson">,
+  article: Pick<FeedbackArticle, "sourceFile" | "sourceParts" | "articleJson">,
 ): Partial<Record<Exclude<FeedbackTagKey, "report_id">, FeedbackTagValue>> {
   return {
     source_file: article.sourceFile,
+    /* A split piece's later pages, as `attached/total`: `0/0` for one page. */
+    source_parts: `${article.sourceParts.attached}/${article.sourceParts.total}`,
     article_json: article.articleJson,
     /* `?? ""` rather than dropping the tag: a tag that is sometimes absent is
        a Sentry search that silently misses rows, and an empty string is a
@@ -280,7 +282,7 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
     const article: FeedbackArticle =
       report.consented && report.slug !== null
         ? await gatherFeedbackArticle(report.slug, ARTICLE_GATHER_MS)
-        : { attachments: [], sourceFile: "none", articleJson: "none" };
+        : { attachments: [], sourceFile: "none", sourceParts: { attached: 0, total: 0 }, articleJson: "none" };
 
     /* The blob and the picture ride as envelope attachment items, which
        `client.sendEvent` appends from `hint.attachments` — verified against the
@@ -412,6 +414,7 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
             id: report.id,
             status: status ?? null,
             sourceFile: article.sourceFile,
+            sourceParts: article.sourceParts,
             articleJson: article.articleJson,
             attachmentBytes: attachments.map(byteLengthOf),
           },
@@ -432,6 +435,7 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
           attachments: attachments.length,
           attachmentBytes: attachments.map(byteLengthOf),
           sourceFile: article.sourceFile,
+          sourceParts: article.sourceParts,
           articleJson: article.articleJson,
           marked,
         },
