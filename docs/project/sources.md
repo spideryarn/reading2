@@ -363,8 +363,9 @@ line, from the same two lists in the public payload.
 A chat started from a cited work, a claim or an angle keeps its stored origin as data: `bibliography`
 for a cited work, `sources-claims` for a claim, and `reception` for an angle. The old spellings were
 `citations` for a work and `debate` for both other shapes; old rows are read under the current names.
-Chat's list shows all three under Sources' icon and one `sources` filter;
-the tooltip names the sub-mode (*Started from a claim in Sources › Claims*), and the way back
+Chat's list shows all three under Sources' icon and one `sources` filter; the row names the
+sub-mode in words (*Bibliography*, *Investigate* or *Claims*), the tooltip gives the fuller origin,
+and the way back
 opens that sub-mode: a work on Bibliography with its row in view, a question (an angle, before 2026-10-20) on Investigate, a claim on
 Claims with its row in view ([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,
 Reader.tsx § `openOrigin`, GPT Sol's F5).

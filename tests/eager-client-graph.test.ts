@@ -505,6 +505,13 @@ function why(p: string): string {
  */
 const SHARED_WITH_READER = [
   "src/admin.ts",
+  /* Arrived 2026-10-24 (plan 261024c, spya-rvj2p7), and not zero-cost: it is
+     new to the reader's startup. `job-state.ts` reads `AUTO_MODE_STEPS` to say
+     under a failed extras-only job that the article is unchanged, and the add
+     card that draws it is eager. Accepted because it is a list of seven step
+     names and one small table — a few hundred bytes minified — whose only
+     imports, `step-order.ts` and types, the reader already has. */
+  "src/auto-mode-steps.ts",
   /* Arrived 2026-09-06 by the second of the two zero-cost routes this list's
      header predicts — a module already here gaining an import of its own, not
      an admin file changing. `messages.ts` now imports `readableDay` from it, so

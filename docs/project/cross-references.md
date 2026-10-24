@@ -42,6 +42,15 @@ text, and the model's own string is not kept.
 - no two links overlap;
 - there is a cap on the number of links.
 
+**An answer every row of which is dropped** fails the step, so nothing is written over a good list
+— unless every row was dropped for pointing at its own block or the next. That is the model finding
+nothing worth linking further away, and it is kept as an empty list, as its own `[]` would be. A
+nine-paragraph piece whose three links all pointed next door failed its whole job until 2026-10-24.
+Only that rule is exempt: a phrase of the wrong length or one that occurs twice can be fixed by a
+second attempt, and a one-word phrase is counted as too short before anything asks whether it is
+in the block at all
+([261024c](../plans/261024c-a-failed-optional-step-after-import-reads-as-optional-and-crossrefs-keeps-an-all-nearby-answer-as-empty.md)).
+
 "Exactly once in the rendered text" is the rule the whole feature rests on. The client can mark
 only an occurrence it can find unambiguously, in the text the reader actually sees. That means
 after maths has become MathML. So the server checks with the same finder, over the same text,

@@ -1,0 +1,2103 @@
+diff --git a/docs/project/admin.md b/docs/project/admin.md
+index c96e9af91..d3efd1e88 100644
+--- a/docs/project/admin.md
++++ b/docs/project/admin.md
+@@ -1073,12 +1073,31 @@ is how the section reads each lookup's cost from the ledger.
+ **The lookup** (`src/author-lookup.ts`, `src/author-lookup-start.ts`) is one capable-tier chat call
+ with Exa web search, standard power whatever the article's, in a collector of its own because the
+ request's has closed. **An address fills the draft only if it was seen**: an exact, normalised
+-address token in the extract of the search result the model named, or in the article's own text.
+-Anything else is shown as *suggested, not seen in any result* and never put in the voucher. It fills
+-only empty fields, and appends to the **notes** — free text the administrator also edits, here and by
+-MCP: where the address was seen, who the author is, a suggested message, why this piece. The notes
+-never leave the admin routes. The model can choose up to three searches from a prompt holding a
+-stranger's article; that residual risk is accepted and written up in the plan's D7.
++address token in the article's own text, or in the extract of the search result the model named —
++and, from a search result, only if it is in the author's name, because the search also visits
++colleagues' pages. It fills only empty fields, and appends to the **notes** — free text the
++administrator also edits, here and by MCP: where the address was seen, who the author is, a
++suggested message, why this piece. The notes never leave the admin routes. The model can choose up
++to five searches from a prompt holding a stranger's article; that residual risk is accepted and
++written up in the plan's D7.
++
++**It tries harder when no address was seen** — Greg, 2026-10-23 (#686, `spya-w5yavh`): *"I found
++an email address listed as an image here that I feel like you could have spotted … list a few with
++tooltips for me with a level of confidence for each"*. Since 2026-10-24
++([261024j](../plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md)):
++
++- the search looks for the author's homepage, contact page and, failing those, a colleague's page;
++- **it reads the homepage and contact page itself** (`src/author-page.ts`, through `fetchDocument`'s
++  guards, two pages, one try, 10 s, 2 MB), with each image kept as a marker, so an `@` drawn as an
++  image is read — no model sees the page;
++- every address it did not apply is listed on the run as **Possible addresses — none applied**
++  (`author_lookup_candidates`): written on a page it read, seen in a result but not in the author's
++  name, or a guess from a colleague's address pattern. Each has a chip — *likely*, *possible*,
++  *long shot* — that is **computed, never the model's** (`src/author-candidates.ts`; a guess is at
++  best *possible*, and only when a colleague's seen address follows a name pattern that gives
++  exactly it), and a card saying why and where. **Use this address** puts one in the draft through
++  the ordinary `PATCH`; the address then reads *chosen or typed by you*. Nothing on the list is
++  ever applied or sent without that press.
+ 
+ **The card shows the email itself** since 2026-10-24 — Greg, 2026-10-23 (#687, `spya-nt6hee`):
+ *"I'm confused about what is notes and what's an actual email that it would send"*. A draft's card
+diff --git a/docs/project/marketing-author-gifts.md b/docs/project/marketing-author-gifts.md
+index d82c3da46..15981a640 100644
+--- a/docs/project/marketing-author-gifts.md
++++ b/docs/project/marketing-author-gifts.md
+@@ -81,6 +81,11 @@ before the email is queued. The lookup's suggested message is offered beside it
+ it; the way the lookup writes that message is Greg's to edit on the Drafts tab; and a discarded
+ draft can be deleted for good
+ ([261024f](../plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md)).
++When no address is found, the lookup now reads the author's own page (an `@` drawn as an image
++included) and lists the addresses it did not apply — written on a page, or guessed from a
++colleague's pattern — each marked *likely*, *possible* or *long shot*, for Greg to pick with one
++press ([261024j](../plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md);
++how it works is [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author)).
+ 
+ **Since 2026-10-21 every gifted article gets its main modes**, so the author opens one that is ready,
+ and the Give form offers High-powered AI for it, on by default
+diff --git a/docs/project/security-map.md b/docs/project/security-map.md
+index e641a7be4..eddd4fbb9 100644
+--- a/docs/project/security-map.md
++++ b/docs/project/security-map.md
+@@ -129,6 +129,7 @@ An agent about to edit one of these is editing a defence, not a helper.
+ | [`src/saved-from.ts`](../../src/saved-from.ts) + `savedSource` in [`src/urls.ts`](../../src/urls.ts) | **the saved-from address: a claim out of an uploaded file**, the bookmarklet's `<meta name="spideryarn-saved-from">`, kept as `article_revisions.saved_from_url`. `http(s)`, no credentials, ≤ 2,048 characters, checked on the way in and again on every read. **Shown** ("Saved from &lt;host&gt;", `rel="noopener noreferrer nofollow"`), **matched** only on the uploader's own shelf (`slugForUrlKey` in [`src/store/find-article.ts`](../../src/store/find-article.ts)), through `publicSourceUrl` on a public page ([`src/public/dto.ts`](../../src/public/dto.ts)), and **never fetched**: never `final_url`, never stage 2's base, never Refresh's target. [security-risks.md § R28](security-risks.md#r28) |
+ | [`src/link-previews.ts`](../../src/link-previews.ts) | **the one endpoint a reader's *pointer* can make us fetch a stranger's page with.** Its defence is not the gate but the scope: the caller must own the article *and* the article's own extracted links must contain the URL, before anything is fetched or spent. Authentication alone would make it an open proxy. Plus `fetchDocument`'s complete envelope, a credential refusal, and a per-owner limiter. [links.md](links.md#what-our-own-server-can-reach) |
+ | [`src/link-summary.ts`](../../src/link-summary.ts) | **the one place a stranger's page reaches a model.** Same scope as the row above — own the article, and the URL must be in it — plus the fencing: explicit untrusted-content markers, a system rule that the page is data and never a request, a reminder on the far side of it, every run of `===` rewritten so a page cannot close its own fence, and **no tools on the call**, so there is nothing for an injected instruction to reach. Its own limiter bucket, with a day and a global fuse, because this one spends money. [links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands) |
++| [`src/author-page.ts`](../../src/author-page.ts) | **the author lookup's page read** (admin-only, since 2026-10-24): a model-named homepage or contact page, fetched only if it was one of the search's own results (rule 1 of `src/author-lookup.ts`), through `fetchDocument`, one try, 2 MB, 10 s, two pages. No model reads the page: a deterministic scan lists addresses, which are offered to the administrator and never applied ([261024j](../plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md)) |
+ | [`src/injection-scan.ts`](../../src/injection-scan.ts) | hidden text in the raw source, found before the model reads it. It reports and decides nothing, and it does not read PDFs |
+ | [`src/referee-hidden-check.ts`](../../src/referee-hidden-check.ts) + [`src/scan-groups.ts`](../../src/scan-groups.ts) | **the one place the hidden fragments reach a model**, on the referee's press: capped and fenced where the prompt is built, the answer validated and bound to the rows sent, and drawn as a line under a row that nothing ordering, counting or marking the rows can read. Kept since 2026-10-09, owner-only, and redrawn on reload through the same validator and renderer. [security.md § the manuscript](security.md#hidden-instructions) |
+ | [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only on every read route, no owner ever set. **One write route since 2026-10-21**, matched before the reads with its own POST-only check: `POST /api/public/private-link-opened/:slug?key=`, a signed-out open of a private link counted, 204 whatever happened (Greg's 2C, [261021d](../plans/261021d-admin-sees-a-private-link-s-owner-and-who-opened-it.md); risk [R31](security-risks.md#r31)). See below |
+diff --git a/drizzle/20261024043226_author_lookup_candidates.sql b/drizzle/20261024043226_author_lookup_candidates.sql
+new file mode 100644
+index 000000000..c36f5e2dd
+--- /dev/null
++++ b/drizzle/20261024043226_author_lookup_candidates.sql
+@@ -0,0 +1,24 @@
++CREATE TABLE "spideryarn"."author_lookup_candidates" (
++	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
++	"lookup_id" uuid NOT NULL,
++	"position" integer NOT NULL,
++	"address" text NOT NULL,
++	"kind" text NOT NULL,
++	"confidence" text NOT NULL,
++	"why" text NOT NULL,
++	"source_url" text,
++	"pattern_seen" boolean,
++	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
++	CONSTRAINT "author_lookup_candidates_position_range" CHECK ("spideryarn"."author_lookup_candidates"."position" >= 0),
++	CONSTRAINT "author_lookup_candidates_kind" CHECK ("spideryarn"."author_lookup_candidates"."kind" in ('on-page', 'on-page-disguised', 'in-result', 'guess')),
++	CONSTRAINT "author_lookup_candidates_confidence" CHECK ("spideryarn"."author_lookup_candidates"."confidence" in ('high', 'medium', 'low')),
++	CONSTRAINT "author_lookup_candidates_guess_not_high" CHECK ("spideryarn"."author_lookup_candidates"."kind" <> 'guess' or "spideryarn"."author_lookup_candidates"."confidence" <> 'high'),
++	CONSTRAINT "author_lookup_candidates_pattern_only_guess" CHECK (("spideryarn"."author_lookup_candidates"."pattern_seen" is not null) = ("spideryarn"."author_lookup_candidates"."kind" = 'guess')),
++	CONSTRAINT "author_lookup_candidates_address_normalised" CHECK ("spideryarn"."author_lookup_candidates"."address" = lower(btrim("spideryarn"."author_lookup_candidates"."address")) and "spideryarn"."author_lookup_candidates"."address" like '%_@_%'),
++	CONSTRAINT "author_lookup_candidates_text_lengths" CHECK (char_length("spideryarn"."author_lookup_candidates"."address") <= 10000 and char_length("spideryarn"."author_lookup_candidates"."why") <= 10000
++          and coalesce(char_length("spideryarn"."author_lookup_candidates"."source_url"), 0) <= 10000)
++);
++--> statement-breakpoint
++ALTER TABLE "spideryarn"."author_lookup_candidates" ADD CONSTRAINT "author_lookup_candidates_lookup_id_author_lookups_id_fk" FOREIGN KEY ("lookup_id") REFERENCES "spideryarn"."author_lookups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
++CREATE UNIQUE INDEX "author_lookup_candidates_position" ON "spideryarn"."author_lookup_candidates" USING btree ("lookup_id","position");--> statement-breakpoint
++CREATE UNIQUE INDEX "author_lookup_candidates_address" ON "spideryarn"."author_lookup_candidates" USING btree ("lookup_id","address");
+\ No newline at end of file
+diff --git a/src/admin-author-gifts.ts b/src/admin-author-gifts.ts
+index c39d6cbd2..86dba477c 100644
+--- a/src/admin-author-gifts.ts
++++ b/src/admin-author-gifts.ts
+@@ -74,8 +74,47 @@ export interface AdminAuthorLookup {
+   readonly suggestedMessage: string | null;
+   /** Null until the run claimed the row and could spend. */
+   readonly cost: AuthorLookupCost | null;
++  /** Addresses offered, never applied, best first (plan 261024j). Empty for older runs. */
++  readonly candidates: readonly AdminLookupCandidate[];
+ }
+ 
++/**
++ * How a candidate address was come by (plan 261024j): written plainly on a page
++ * the lookup read, written there in disguise, seen in a search result but not
++ * in the author's name, or guessed.
++ */
++export type CandidateKind = "on-page" | "on-page-disguised" | "in-result" | "guess";
++/** Computed by src/author-candidates.ts, never the model's. Shown as *likely*, *possible*, *long shot*. */
++export type CandidateConfidence = "high" | "medium" | "low";
++
++/** One address a lookup offered, as the card lists it. */
++export interface AdminLookupCandidate {
++  readonly address: string;
++  readonly kind: CandidateKind;
++  readonly confidence: CandidateConfidence;
++  /** Our sentence, not the model's: what it is and what it rests on. */
++  readonly why: string;
++  readonly sourceUrl: string | null;
++  /** A guess only: whether a colleague's pattern reproduced it. */
++  readonly patternSeen: boolean | null;
++}
++
++/**
++ * **How many web searches the lookup's prompt allows** — five since plan
++ * 261024j (#686, "try slightly harder"): the author's homepage, their contact
++ * page and a colleague's page each get one. Asked for, not enforced
++ * (src/author-lookup.ts § Searches), so the card flags a run that ran more.
++ * Here, not in src/author-lookup.ts, so the page reads the same number.
++ */
++export const AUTHOR_LOOKUP_MAX_SEARCHES = 5;
++
++/** The words a confidence is shown in, on the card and in the notes. */
++export const CONFIDENCE_WORDS: Record<CandidateConfidence, string> = {
++  high: "likely",
++  medium: "possible",
++  low: "long shot",
++};
++
+ /** One gift, as `/admin/vouchers`' *Author gifts* draws it. */
+ export interface AdminAuthorGift {
+   readonly id: string;
+diff --git a/src/author-candidates.ts b/src/author-candidates.ts
+new file mode 100644
+index 000000000..58eef7c82
+--- /dev/null
++++ b/src/author-candidates.ts
+@@ -0,0 +1,220 @@
++/**
++ * **The addresses the author lookup offers but never applies** — plan
++ * docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md
++ * § D3, D4 and Revision 1.
++ *
++ * Greg, #686: *"maybe you could have tried to guess, based on other Ink &
++ * Switch people, what the email address might be. And so you could list a few
++ * with tooltips for me with a level of confidence for each."*
++ *
++ * Pure. **Every confidence here is computed, never the model's** (R3): a
++ * model's "high" is only its word, and Greg acts on the chip.
++ *
++ * - written on a page the lookup read (D2): *high* when the address names the
++ *   author, *medium* otherwise — the page was only *taken* for theirs (R2);
++ * - seen in a search result but not in the author's name (R1): *medium*;
++ * - a guess: *medium* only when a colleague's address, seen as a whole token in
++ *   the result the model cited, follows a name pattern that turns the author's
++ *   name into exactly this guess, at the same domain, and that domain is not a
++ *   public mail provider. Every other guess is *low*. No guess is *high*.
++ *
++ * None of these ever fills the draft. *Use this address* on the page is Greg's
++ * own edit, through the ordinary `PATCH`.
++ */
++
++import type { AdminLookupCandidate, CandidateConfidence } from "./admin-author-gifts.js";
++import { addressNamesAuthor, type PageRead } from "./author-page.js";
++import { looksLikeEmail, normaliseEmail } from "./email-address.js";
++
++/** At most this many a lookup (R5). */
++export const CANDIDATES_MAX = 8;
++/** At most this many guesses the model may offer; more are dropped. */
++export const GUESSES_MAX = 3;
++
++/**
++ * One offered address — the wire's shape exactly, so the store writes what the
++ * page reads. `sourceUrl` is the page it was seen on, or the result a guess's
++ * colleague was seen in; null for an unsupported guess.
++ */
++export type AddressCandidate = AdminLookupCandidate;
++
++/* ------------------------------------------------------------- patterns -- */
++
++/** Lower-case letters only, accents folded. */
++function letters(s: string): string {
++  return s
++    .normalize("NFD")
++    .replace(/\p{M}/gu, "")
++    .toLowerCase()
++    .replace(/[^a-z]/g, "");
++}
++
++/** First and last name, folded; null when there are not two. */
++function firstLast(name: string): { f: string; l: string } | null {
++  const words = name
++    .split(/[\s,]+/)
++    .map(letters)
++    .filter((w) => w !== "");
++  const f = words[0];
++  const l = words[words.length - 1];
++  return words.length >= 2 && f && l ? { f, l } : null;
++}
++
++/** The address patterns institutions use, by name. */
++const PATTERNS: Record<string, (f: string, l: string) => string> = {
++  "first.last": (f, l) => `${f}.${l}`,
++  firstlast: (f, l) => `${f}${l}`,
++  first_last: (f, l) => `${f}_${l}`,
++  "first-last": (f, l) => `${f}-${l}`,
++  flast: (f, l) => `${f[0]}${l}`,
++  "f.last": (f, l) => `${f[0]}.${l}`,
++  first: (f) => f,
++  last: (_f, l) => l,
++  lastf: (f, l) => `${l}${f[0]}`,
++  firstl: (f, l) => `${f}${l[0]}`,
++  "last.first": (f, l) => `${l}.${f}`,
++};
++
++/** Which patterns turn this person's name into this local part. */
++export function patternsFor(name: string, local: string): string[] {
++  const n = firstLast(name);
++  if (!n) return [];
++  const want = local.toLowerCase();
++  return Object.entries(PATTERNS)
++    .filter(([, make]) => make(n.f, n.l) === want)
++    .map(([key]) => key);
++}
++
++/** Free mail: the same domain says nothing about an institution's pattern. */
++const PUBLIC_MAIL = new Set([
++  "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com",
++  "icloud.com", "me.com", "mac.com", "protonmail.com", "proton.me", "pm.me", "aol.com", "gmx.com",
++  "gmx.de", "gmx.net", "fastmail.com", "hey.com", "yandex.com", "yandex.ru", "qq.com", "163.com",
++  "mail.com", "zoho.com", "tutanota.com",
++]);
++
++export function isPublicMailDomain(domain: string): boolean {
++  return PUBLIC_MAIL.has(domain.toLowerCase());
++}
++
++/* --------------------------------------------------------------- guesses -- */
++
++/** A guess as the model gave it, after shape checks; the colleague checked against the results. */
++export interface CheckedGuess {
++  readonly address: string;
++  /** The colleague whose address was seen, if the model named one and it checked out. */
++  readonly colleague: { readonly name: string; readonly address: string; readonly sourceUrl: string } | null;
++}
++
++/**
++ * **One guess's confidence and its reason** (R3). `authorName` is the name
++ * the lookup is working from; null makes every guess *low*.
++ */
++export function judgeGuess(guess: CheckedGuess, authorName: string | null): AddressCandidate {
++  const [local = "", domain = ""] = guess.address.split("@");
++  const c = guess.colleague;
++  if (c && authorName) {
++    const [cLocal = "", cDomain = ""] = c.address.split("@");
++    const shared = patternsFor(c.name, cLocal).filter((p) => patternsFor(authorName, local).includes(p));
++    const sameDomain = cDomain === domain;
++    if (shared.length > 0 && sameDomain && !isPublicMailDomain(domain)) {
++      return {
++        address: guess.address,
++        kind: "guess",
++        confidence: "medium",
++        why: `A guess: ${c.name}'s address, ${c.address}, follows the pattern ${shared[0]}, and that pattern gives this one for ${authorName}.`,
++        sourceUrl: c.sourceUrl,
++        patternSeen: true,
++      };
++    }
++    const reason = !sameDomain
++      ? `${c.name}'s address, ${c.address}, is at a different domain`
++      : isPublicMailDomain(domain)
++        ? `${domain} is a public mail service, so a colleague's address there says nothing about this one`
++        : `${c.name}'s address, ${c.address}, does not follow a pattern that gives this one`;
++    return { address: guess.address, kind: "guess", confidence: "low", why: `A long shot: ${reason}.`, sourceUrl: c.sourceUrl, patternSeen: false };
++  }
++  return {
++    address: guess.address,
++    kind: "guess",
++    confidence: "low",
++    why: "A long shot: no colleague's address was seen to support it.",
++    sourceUrl: null,
++    patternSeen: false,
++  };
++}
++
++/* ------------------------------------------------------------- assembly -- */
++
++const RANK: Record<CandidateConfidence, number> = { high: 0, medium: 1, low: 2 };
++
++export interface CandidateSources {
++  /** The name the lookup is working from, for the *names the author* check. */
++  readonly authorName: string | null;
++  /** An address seen in a search result that did not name the author (R1). */
++  readonly seenNotNamed: { readonly address: string; readonly sourceUrl: string } | null;
++  /** The pages read (D2). */
++  readonly pages: readonly PageRead[];
++  readonly guesses: readonly CheckedGuess[];
++  /** Addresses never to list: the one that filled the draft. */
++  readonly exclude: readonly string[];
++}
++
++/** Host and path, for the reason line — the full URL is the source link beside it. */
++function placeOf(url: string): string {
++  try {
++    const u = new URL(url);
++    return `${u.host}${u.pathname === "/" ? "" : u.pathname}`;
++  } catch {
++    return url;
++  }
++}
++
++/**
++ * **Every candidate, best first, each address once, at most
++ * `CANDIDATES_MAX`.** Ties keep the order of the kinds: written on a page,
++ * seen in a result, guessed.
++ */
++export function assembleCandidates(s: CandidateSources): AddressCandidate[] {
++  const out: AddressCandidate[] = [];
++  const seen = new Set(s.exclude.map(normaliseEmail));
++  const push = (c: AddressCandidate) => {
++    const address = normaliseEmail(c.address);
++    if (!looksLikeEmail(address) || seen.has(address)) return;
++    seen.add(address);
++    out.push({ ...c, address });
++  };
++
++  for (const page of s.pages) {
++    if (page.kind !== "read") continue;
++    for (const a of page.addresses) {
++      const named = addressNamesAuthor(a.address, s.authorName);
++      const how = a.disguised ? "written in disguise" : "written";
++      push({
++        address: a.address,
++        kind: a.disguised ? "on-page-disguised" : "on-page",
++        confidence: named ? "high" : "medium",
++        why: `${how[0]?.toUpperCase()}${how.slice(1)} on ${placeOf(page.url)}, the page the lookup took for theirs${named ? ", and in the author's name" : ", but not in the author's name"}.`,
++        sourceUrl: page.url,
++        patternSeen: null,
++      });
++    }
++  }
++  if (s.seenNotNamed) {
++    push({
++      address: s.seenNotNamed.address,
++      kind: "in-result",
++      confidence: "medium",
++      why: `Seen on ${placeOf(s.seenNotNamed.sourceUrl)}, and named by the lookup as theirs, but not in the author's name — it may be a colleague's or a shared inbox.`,
++      sourceUrl: s.seenNotNamed.sourceUrl,
++      patternSeen: null,
++    });
++  }
++  for (const g of s.guesses) push(judgeGuess(g, s.authorName));
++
++  return out
++    .map((c, i) => ({ c, i }))
++    .sort((a, b) => RANK[a.c.confidence] - RANK[b.c.confidence] || a.i - b.i)
++    .map(({ c }) => c)
++    .slice(0, CANDIDATES_MAX);
++}
+diff --git a/src/author-lookup-start.ts b/src/author-lookup-start.ts
+index e047351f3..fdee5d864 100644
+--- a/src/author-lookup-start.ts
++++ b/src/author-lookup-start.ts
+@@ -111,6 +111,7 @@ export function lookupResultFor(result: AuthorLookupResult): LookupResult {
+     model,
+     notes,
+     suggestedMessage: result.suggestedMessage,
++    candidates: result.candidates,
+   };
+ }
+ 
+diff --git a/src/author-lookup.ts b/src/author-lookup.ts
+index 695bc4273..eb2223dd4 100644
+--- a/src/author-lookup.ts
++++ b/src/author-lookup.ts
+@@ -55,7 +55,15 @@
+  * the counts, the model, the time and a failure's status or error name.
+  */
+ 
++import { AUTHOR_LOOKUP_MAX_SEARCHES, CONFIDENCE_WORDS } from "./admin-author-gifts.js";
+ import { type AiRequestBody, type JsonCall, openRouterJson, ProviderRefused } from "./ai-call.js";
++import {
++  type AddressCandidate,
++  assembleCandidates,
++  type CheckedGuess,
++  GUESSES_MAX,
++} from "./author-candidates.js";
++import { addressNamesAuthor, type PageFetch, type PageRead, readAuthorPage } from "./author-page.js";
+ import { log, since } from "./log.js";
+ import { modelFor } from "./models.js";
+ import { collectSearchEvidence, type Usage, whereSearchCountCameFrom } from "./openrouter-stream.js";
+@@ -67,11 +75,11 @@ import { untrusted } from "./untrusted-fence.js";
+ import { hostOf, isWebUrl } from "./urls.js";
+ 
+ /** Results across every search the call runs — a cap on results, not on searches. */
+-export const MAX_TOTAL_RESULTS = 10;
++export const MAX_TOTAL_RESULTS = 15;
+ /** Per search. */
+ export const MAX_RESULTS_PER_SEARCH = 5;
+-/** How many searches the prompt allows. Asked for, not enforced — see the header. */
+-export const MAX_SEARCHES = 3;
++/** How many searches the prompt allows: one number, shared with the page (src/admin-author-gifts.ts says why five). */
++export const MAX_SEARCHES = AUTHOR_LOOKUP_MAX_SEARCHES;
+ /** How much of each end of the article goes in: bios sit at either end. */
+ export const TEXT_END_CHARS = 1_500;
+ /**
+@@ -166,11 +174,15 @@ export function authorLookupFixedPrompt(): string {
+ const FIXED_HEAD = [
+   "You find out who wrote one article, and a way to contact them, for Greg, the person who made Spideryarn (a reading tool).",
+   "Greg may want to send the author a private link to their article in Spideryarn and some free articles to use it on.",
+-  `Run at most ${MAX_SEARCHES} web searches — for example the author's name with the article's title or site, then the author's own page or contact page. Then stop.`,
++  `Run at most ${MAX_SEARCHES} web searches, in this order, and stop as soon as you have the author's own address:`,
++  "  the author's name with the article's title or site; the author's own homepage (a personal site, or their page at their university, lab or company); their contact page;",
++  "  and, if their address is still not written anywhere, a colleague's page at the same institution, to see how addresses are formed there.",
+   "Answer with only a JSON object and nothing else:",
+   '{"author": {"name": "<the author\'s name>", "sourceUrl": "<the URL that shows it>"} or null,',
+   ' "email": {"address": "<an email address>", "sourceUrl": "<the URL where you saw it written>"} or null,',
++  ' "homepageUrl": "<the author\'s own homepage>" or null,',
+   ' "contactUrl": "<a contact page or form for the author>" or null,',
++  ' "guesses": [{"address": "<a likely address for the author>", "colleague": {"name": "<a colleague\'s name>", "address": "<their address, as written>", "sourceUrl": "<the URL where it is written>"} or null}],',
+   ' "aboutAuthor": "<two or three sentences: who the author is, from the search results>",',
+   ' "suggestedMessage": "<a short note Greg might send them>",',
+   ' "whyThisPiece": "<one sentence: why this piece suits a careful, slow reader>",',
+@@ -178,8 +190,11 @@ const FIXED_HEAD = [
+   "",
+   "Rules:",
+   "- Every URL you give must be one of the search results, copied exactly, or the article's own URL given below. Never write a URL from memory.",
+-  "- Give an email address only if it is written in that result's text or in the article. Copy it exactly. Never guess one from a name or a domain.",
++  "- email: give an address only if it is written in that result's text or in the article. Copy it exactly. Never put a guess here; guesses go in guesses.",
+   "  If a page writes it in disguise (\"jane at example dot com\"), you may give it decoded, with that page as its source.",
++  "  It must be the author's own address: never a colleague's, a department's or the publisher's.",
++  `- guesses: only when you found no address for the author; otherwise []. At most ${GUESSES_MAX}. Build each from a pattern you saw:`,
++  "  a colleague's address at the same institution (give the colleague, their address exactly as written, and the result it is in), or the author's own domain (colleague null).",
+   "- The author is the person who wrote the article, not the site, the publisher or someone it quotes. If you cannot tell, author is null.",
+   "- aboutAuthor comes only from the search results and the article, never from memory. Leave it empty if they say nothing.",
+   ...MESSAGE_RULES,
+@@ -286,12 +301,28 @@ export interface AuthorProse {
+ 
+ export type FoundOutcome = "address" | "author" | "nothing";
+ 
++/**
++ * **What the lookup may follow up, and offer but never apply** (plan
++ * 261024j): the page to read for an address the search could not see (D2),
++ * an address seen but not in the author's name (R1), and the checked guesses
++ * (D3). Empty of guesses whenever an address fills the draft (R6).
++ */
++export interface AuthorLeads {
++  /** The name the checks work from, surviving or not. */
++  workingName: string | null;
++  /** A result URL (rule 1) the model called the author's homepage. */
++  homepageUrl: string | null;
++  seenNotNamed: { address: string; sourceUrl: string } | null;
++  guesses: CheckedGuess[];
++}
++
+ export type AuthorJudgement =
+   | { kind: "unreadable"; failure: string; searches: number | null }
+   | {
+       kind: "read";
+       outcome: FoundOutcome;
+       findings: AuthorFindings;
++      leads: AuthorLeads;
+       prose: AuthorProse;
+       /** A name the model gave whose source did not survive — told in the notes as not applied. */
+       unappliedName: string | null;
+@@ -330,11 +361,11 @@ export function judgeAuthorLookup(json: unknown, input: AuthorLookupInput): Auth
+ 
+   const results = new Map<string, SearchEvidence>();
+   collectSearchEvidence(choice?.message?.annotations, results, undefined, { extracts: "all" });
+-  const { findings, unappliedName } = applyAuthorRules(read.parsed, results, input);
++  const { findings, unappliedName, leads } = applyAuthorRules(read.parsed, results, input);
+   const prose = readProse(read.parsed);
+   const outcome: FoundOutcome = findings.email ? "address" : findings.authorName ? "author" : "nothing";
+   const resultHosts = [...new Set([...results.keys()].map(hostOf).filter((h) => h !== ""))];
+-  return { kind: "read", outcome, findings, prose, unappliedName, searches, resultHosts };
++  return { kind: "read", outcome, findings, leads, prose, unappliedName, searches, resultHosts };
+ }
+ 
+ /** The answer's JSON object, or why there is none. */
+@@ -359,7 +390,7 @@ export function applyAuthorRules(
+   parsed: object,
+   results: ReadonlyMap<string, SearchEvidence>,
+   input: AuthorLookupInput,
+-): { findings: AuthorFindings; unappliedName: string | null } {
++): { findings: AuthorFindings; unappliedName: string | null; leads: AuthorLeads } {
+   const ownUrl = input.sourceUrl && isWebUrl(input.sourceUrl) ? input.sourceUrl : null;
+ 
+   /** Rule 1: an exact search-result URL, or the article's own. */
+@@ -380,6 +411,10 @@ export function applyAuthorRules(
+   const authorName = nameOk && nameSource ? rawName : null;
+   const unappliedName = rawName !== "" && authorName === null ? rawName.replace(/\s+/g, " ").slice(0, NAME_MAX) : null;
+ 
++  /* The name the address and guess checks work from: the surviving one, else
++     the model's, else the article's own (plan 261024j, R1). */
++  const workingName = authorName ?? unappliedName ?? input.authors?.[0]?.name ?? input.byline ?? null;
++
+   // Rule 2: the address.
+   const emailObj = field(parsed, "email");
+   const rawAddress = str(field(emailObj, "address"), ADDRESS_MAX).replace(/\s+/g, " ");
+@@ -387,20 +422,61 @@ export function applyAuthorRules(
+   const emailSource = allowed(field(emailObj, "sourceUrl"));
+   const shaped = claimed !== "" && looksLikeEmail(claimed);
+   const seen = shaped && emailSource !== null && emailTokens(textOf(emailSource)).includes(claimed);
++  /* Rule 2, narrowed by plan 261024j R1: the search now visits colleagues'
++     pages, so a real address seen in a result may be someone else's. Seen in
++     the article, it fills as before; seen only in a result, it fills only when
++     it is in the author's name, and is otherwise offered for Greg to choose. */
++  const fills = seen && (emailSource === ownUrl || addressNamesAuthor(claimed, workingName));
++  const seenNotNamed = seen && !fills && emailSource !== null ? { address: claimed, sourceUrl: emailSource } : null;
+ 
+   return {
+     findings: {
+       authorName,
+       authorSourceUrl: authorName ? nameSource : null,
+-      email: seen ? claimed : null,
+-      emailSourceUrl: seen ? emailSource : null,
++      email: fills ? claimed : null,
++      emailSourceUrl: fills ? emailSource : null,
+       suggestedEmail: !seen && rawAddress !== "" ? (shaped ? claimed : rawAddress) : null,
+       contactUrl: allowed(field(parsed, "contactUrl")),
+     },
+     unappliedName,
++    leads: {
++      workingName,
++      homepageUrl: allowed(field(parsed, "homepageUrl")),
++      seenNotNamed,
++      /* R6: guesses only when nothing fills the draft — code, not the prompt's say-so. */
++      guesses: fills ? [] : readGuesses(field(parsed, "guesses"), allowed, textOf),
++    },
+   };
+ }
+ 
++/**
++ * **The model's guesses, shape-checked**, at most `GUESSES_MAX`. A colleague
++ * is kept only when their address is a whole token in the result they are
++ * cited from (rule 1 and rule 2 both); otherwise the guess stays, unsupported.
++ * The confidence is not read here or anywhere: src/author-candidates.ts works
++ * it out (R3).
++ */
++function readGuesses(
++  raw: unknown,
++  allowed: (value: unknown) => string | null,
++  textOf: (url: string) => string,
++): CheckedGuess[] {
++  if (!Array.isArray(raw)) return [];
++  const out: CheckedGuess[] = [];
++  for (const g of raw.slice(0, GUESSES_MAX)) {
++    const address = normaliseEmail(str(field(g, "address"), ADDRESS_MAX));
++    if (!looksLikeEmail(address) || out.some((o) => o.address === address)) continue;
++    const c = field(g, "colleague");
++    const cName = str(field(c, "name"), NAME_MAX).replace(/\s+/g, " ");
++    const cAddress = normaliseEmail(str(field(c, "address"), ADDRESS_MAX));
++    const cSource = allowed(field(c, "sourceUrl"));
++    const colleagueSeen =
++      cName !== "" && looksLikeEmail(cAddress) && cSource !== null && emailTokens(textOf(cSource)).includes(cAddress);
++    out.push({ address, colleague: colleagueSeen ? { name: cName, address: cAddress, sourceUrl: cSource } : null });
++  }
++  return out;
++}
++
+ /** The prose and the model's account of its searches — for the notes only. */
+ function readProse(parsed: object): AuthorProse {
+   const queries = field(parsed, "searchedFor");
+@@ -423,7 +499,7 @@ function readProse(parsed: object): AuthorProse {
+  * **The dated block the store appends to the gift's notes** — plain text, for
+  * Greg only. The store does the appending and the cutting to fit.
+  */
+-export function authorLookupNotes(judged: AuthorJudgement, at: string): string {
++export function authorLookupNotes(judged: AuthorJudgement, at: string, more: FollowUp = NO_FOLLOW_UP): string {
+   /* With the time and "UTC" said: a bare UTC date reads a day off in a London evening. */
+   const head = `— Author lookup, ${at.slice(0, 10)} ${at.slice(11, 16)} UTC —`;
+   if (judged.kind === "unreadable") {
+@@ -433,13 +509,27 @@ export function authorLookupNotes(judged: AuthorJudgement, at: string): string {
+   const lines = [head];
+   if (f.email) lines.push(`Address: ${f.email}, seen at ${f.emailSourceUrl}`);
+   else if (f.suggestedEmail) lines.push(`Suggested address, not seen in any result: ${f.suggestedEmail}`);
+-  else lines.push("No address found.");
++  else if (!judged.leads.seenNotNamed) lines.push("No address found.");
++  if (judged.leads.seenNotNamed) {
++    lines.push(`Address seen at ${judged.leads.seenNotNamed.sourceUrl}, but not in the author's name (not applied): ${judged.leads.seenNotNamed.address}`);
++  }
+   if (f.authorName) lines.push(`Author: ${f.authorName} (${f.authorSourceUrl})`);
+   else if (judged.unappliedName) lines.push(`Named as the author, with no source among the results (not applied): ${judged.unappliedName}`);
+   if (f.contactUrl) lines.push(`Contact page: ${f.contactUrl}`);
+   if (judged.outcome === "nothing" && !f.suggestedEmail && !f.contactUrl && !judged.unappliedName) {
+     lines.push("The lookup found nothing.");
+   }
++  for (const page of more.pages) {
++    lines.push(
++      page.kind === "read"
++        ? `Read ${page.url}: ${page.addresses.length === 0 ? "no address on it" : page.addresses.map((a) => a.address).join(", ")}`
++        : `Could not read ${page.url} (${page.reason})`,
++    );
++  }
++  if (more.candidates.length > 0) {
++    lines.push("", "Possible addresses, none applied — choose one on the card:");
++    for (const c of more.candidates) lines.push(`- ${c.address} (${CONFIDENCE_WORDS[c.confidence]}): ${c.why}`);
++  }
+   if (p.aboutAuthor) lines.push("", `About the author: ${p.aboutAuthor}`);
+   if (p.suggestedMessage) lines.push("", "Suggested message:", p.suggestedMessage);
+   if (p.whyThisPiece) lines.push("", `Why this piece: ${p.whyThisPiece}`);
+@@ -452,6 +542,40 @@ export function authorLookupNotes(judged: AuthorJudgement, at: string): string {
+   return lines.join("\n");
+ }
+ 
++/** What the lookup did after its call: the pages it read and the candidates it offers (plan 261024j). */
++export interface FollowUp {
++  pages: readonly PageRead[];
++  candidates: readonly AddressCandidate[];
++}
++
++const NO_FOLLOW_UP: FollowUp = { pages: [], candidates: [] };
++
++/** At most this many pages are read a lookup: the homepage and the contact page (D2). */
++export const PAGES_MAX = 2;
++
++/**
++ * **Read the author's pages, and gather the candidates** — only when nothing
++ * fills the draft. The pages are the homepage and the contact page, each a
++ * result URL already (rule 1), once each; a page that cannot be read is a line
++ * in the notes.
++ */
++export async function followUp(judged: AuthorJudgement, readPage: (url: string) => Promise<PageRead>): Promise<FollowUp> {
++  if (judged.kind !== "read" || judged.findings.email !== null) return NO_FOLLOW_UP;
++  const urls = [...new Set([judged.leads.homepageUrl, judged.findings.contactUrl].filter((u): u is string => u !== null))].slice(
++    0,
++    PAGES_MAX,
++  );
++  const pages = await Promise.all(urls.map((u) => readPage(u)));
++  const candidates = assembleCandidates({
++    authorName: judged.leads.workingName,
++    seenNotNamed: judged.leads.seenNotNamed,
++    pages,
++    guesses: judged.leads.guesses,
++    exclude: [],
++  });
++  return { pages, candidates };
++}
++
+ /* -------------------------------------------------------- orchestration -- */
+ 
+ /** The model call. Injectable so a test drives every outcome without a network. */
+@@ -465,6 +589,8 @@ export interface AuthorLookupDeps {
+   timeoutMs?: number;
+   /** Greg's guidance for the message, or null for the built-in text (plan 261024f § D4). */
+   guidance?: string | null;
++  /** How a page is fetched for D2 of plan 261024j. Injectable so no test touches the network. */
++  fetchPage?: PageFetch;
+ }
+ 
+ interface LookupCommon {
+@@ -476,6 +602,8 @@ interface LookupCommon {
+   notes: string;
+   /** The model's suggested message, whole, for *Use as your message* (plan 261024f, R1); null when none. */
+   suggestedMessage: string | null;
++  /** Addresses offered, never applied (plan 261024j); empty when one filled the draft or the lookup failed. */
++  candidates: readonly AddressCandidate[];
+ }
+ 
+ /**
+@@ -517,16 +645,18 @@ export async function runAuthorLookup(input: AuthorLookupInput, deps: AuthorLook
+             : "unknown";
+     line.error({ model, ms: since(started), failure }, "an author lookup failed");
+     const judged: AuthorJudgement = { kind: "unreadable", failure, searches: null };
+-    return { outcome: "failed", failure, searches: null, model, notes: authorLookupNotes(judged, now()), suggestedMessage: null };
++    return { outcome: "failed", failure, searches: null, model, notes: authorLookupNotes(judged, now()), suggestedMessage: null, candidates: [] };
+   }
+ 
+   const used = call.answeredBy ?? model;
+   const judged = judgeAuthorLookup(call.json, input);
+-  const notes = authorLookupNotes(judged, now());
+   if (judged.kind === "unreadable") {
++    const notes = authorLookupNotes(judged, now());
+     line.error({ model: used, ms: since(started), failure: judged.failure, searches: judged.searches }, "an author lookup's answer could not be read");
+-    return { outcome: "failed", failure: judged.failure, searches: judged.searches, model: used, notes, suggestedMessage: null };
++    return { outcome: "failed", failure: judged.failure, searches: judged.searches, model: used, notes, suggestedMessage: null, candidates: [] };
+   }
++  const more = await followUp(judged, (url) => readAuthorPage(url, deps.fetchPage));
++  const notes = authorLookupNotes(judged, now(), more);
+   line.info(
+     {
+       model: used,
+@@ -536,9 +666,20 @@ export async function runAuthorLookup(input: AuthorLookupInput, deps: AuthorLook
+       results: judged.resultHosts.length,
+       suggested: judged.findings.suggestedEmail !== null,
+       contact: judged.findings.contactUrl !== null,
++      pagesRead: more.pages.filter((p) => p.kind === "read").length,
++      candidates: more.candidates.length,
+     },
+     "author lookup",
+   );
+   const suggestedMessage = judged.prose.suggestedMessage === "" ? null : judged.prose.suggestedMessage;
+-  return { outcome: judged.outcome, failure: null, ...judged.findings, searches: judged.searches, model: used, notes, suggestedMessage };
++  return {
++    outcome: judged.outcome,
++    failure: null,
++    ...judged.findings,
++    searches: judged.searches,
++    model: used,
++    notes,
++    suggestedMessage,
++    candidates: more.candidates,
++  };
+ }
+diff --git a/src/author-page.ts b/src/author-page.ts
+new file mode 100644
+index 000000000..694668e29
+--- /dev/null
++++ b/src/author-page.ts
+@@ -0,0 +1,236 @@
++/**
++ * **The author's own page, read for an address the search could not see** —
++ * plan docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md § D2.
++ *
++ * The lookup's search sees only the provider's text extracts, and an extract
++ * drops images. Greg's example (#686) wrote `alexwarth`, then an image of an
++ * `@`, then `gmail.com`, in three table cells: no address token anywhere in
++ * the text, so the lookup could not see it. This file fetches the page itself,
++ * renders it to text with each image kept as a marker (an `@` drawn as an
++ * image becomes `[at]`), and scans that text for addresses, plain or
++ * disguised.
++ *
++ * **Deterministic on purpose.** No model reads the page, so a stranger's page
++ * adds no prompt-injection surface: the worst it can do is put a wrong address
++ * among the candidates, which Greg reads, each labelled with where it was
++ * found. Nothing found here fills the draft (§ D2: a homepage can carry a lab
++ * manager's address, and choosing the author's is Greg's).
++ *
++ * The fetch is `fetchDocument`'s, with its scheme list, private-address guard,
++ * redirect limit and size cap (src/chat-tools.ts § readWebPage says why a bare
++ * `fetch` here would be an SSRF hole). A page that cannot be read is a reason,
++ * never a thrown error: the lookup goes on without it.
++ */
++
++import { type FetchOptions, FetchFailure, fetchDocument } from "./fetch.js";
++import { jsdom } from "./jsdom-lazy.js";
++import { looksLikeEmail, normaliseEmail } from "./email-address.js";
++
++/** Per page. Nobody is waiting (it runs after the response), but a stuck host should not hold the lookup. */
++export const PAGE_TIMEOUT_MS = 10_000;
++/** A homepage is small; this is a ceiling against a hostile one. */
++export const PAGE_MAX_BYTES = 2 * 1024 * 1024;
++/** How many distinct addresses one page may contribute. */
++export const PAGE_ADDRESSES_MAX = 6;
++
++/** An image whose name or alt text is an `@`: `at.gif`, `at-sign.png`, `alt="@"`, `arroba.png`. */
++const AT_IMAGE = /^(?:@|at|at[-_ ]?sign|arroba|atmark)(?:\.(?:gif|png|jpe?g|svg|webp|bmp))?$/i;
++/** The same for a `.` drawn as an image. */
++const DOT_IMAGE = /^(?:\.|dot|period|point)(?:\.(?:gif|png|jpe?g|svg|webp|bmp))?$/i;
++
++/** Elements whose text never runs into the next element's. */
++const BREAKS = new Set([
++  "ADDRESS", "ARTICLE", "ASIDE", "BLOCKQUOTE", "BR", "DD", "DIV", "DL", "DT", "FIGCAPTION", "FIGURE",
++  "FOOTER", "FORM", "H1", "H2", "H3", "H4", "H5", "H6", "HEADER", "HR", "LI", "MAIN", "NAV", "OL", "P",
++  "PRE", "SECTION", "TABLE", "TBODY", "TD", "TFOOT", "TH", "THEAD", "TR", "UL",
++]);
++const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD"]);
++
++/** The last path segment of an image's `src`, without its query. */
++function fileName(src: string): string {
++  const path = src.split(/[?#]/)[0] ?? "";
++  const last = path.split("/").pop() ?? "";
++  try {
++    return decodeURIComponent(last);
++  } catch {
++    return last;
++  }
++}
++
++/** What an image stands for in the text: `[at]`, `[dot]`, or a marker naming it. */
++function imageWord(alt: string, src: string): string {
++  const name = fileName(src);
++  for (const label of [alt.trim(), name]) {
++    if (AT_IMAGE.test(label)) return " [at] ";
++    if (DOT_IMAGE.test(label)) return " [dot] ";
++  }
++  return ` [image: ${(alt.trim() || name).slice(0, 60)}] `;
++}
++
++export interface PageText {
++  /** The page as text, whitespace collapsed, images as markers. */
++  readonly text: string;
++  /** Every `mailto:` link's address, as written. */
++  readonly mailtos: readonly string[];
++}
++
++/**
++ * **The page as text, images kept.** jsdom parses (no scripts run, nothing is
++ * fetched); the walk writes text nodes, a space at every block or table cell
++ * so `alexwarth` and `gmail.com` never fuse, and a marker for every image.
++ */
++export function pageText(html: string): PageText {
++  const { JSDOM } = jsdom();
++  const doc = new JSDOM(html).window.document;
++  const parts: string[] = [];
++  const mailtos: string[] = [];
++  const walk = (node: Node): void => {
++    if (node.nodeType === 3) {
++      parts.push(node.textContent ?? "");
++      return;
++    }
++    if (node.nodeType !== 1) return;
++    const el = node as Element;
++    if (SKIP.has(el.tagName)) return;
++    if (el.tagName === "IMG") {
++      parts.push(imageWord(el.getAttribute("alt") ?? "", el.getAttribute("src") ?? ""));
++      return;
++    }
++    if (el.tagName === "A") {
++      const href = el.getAttribute("href") ?? "";
++      if (/^mailto:/i.test(href.trim())) mailtos.push(href.trim().slice(7).split("?")[0] ?? "");
++    }
++    const breaks = BREAKS.has(el.tagName);
++    if (breaks) parts.push(" ");
++    for (const child of el.childNodes) walk(child);
++    if (breaks) parts.push(" ");
++  };
++  if (doc.body) walk(doc.body);
++  return { text: parts.join("").replace(/\s+/g, " ").trim(), mailtos };
++}
++
++/* ------------------------------------------------------------- decoding -- */
++
++const LOCAL = String.raw`[A-Za-z0-9][A-Za-z0-9._%+'-]*`;
++const LABEL = String.raw`[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?`;
++const TLD = String.raw`[A-Za-z]{2,24}`;
++/** `@`, `[at]`, `(at)`, `{at}`, `<at>`, with any spacing. */
++const AT_MARK = String.raw`\s*(?:@|\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|<\s*at\s*>)\s*`;
++/** `.`, `[dot]`, `(dot)`, `{dot}`, ` dot `. */
++const DOT_ANY = String.raw`(?:\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\})\s*|\s+dot\s+|\.)`;
++const DOT_WORD = String.raw`(?:\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\})\s*|\s+dot\s+)`;
++
++/**
++ * A marked *at* takes any dot. A bare ` at ` between words takes only a
++ * spelled-out dot: *"slides available at example.com"* is prose, and *"jane at
++ * example dot com"* is an address.
++ */
++const DISGUISED = new RegExp(
++  String.raw`(?<![A-Za-z0-9._%+'-])(${LOCAL})(?:${AT_MARK}((?:${LABEL}${DOT_ANY})+${TLD})|\s+at\s+((?:${LABEL}${DOT_WORD})+${TLD}))(?![A-Za-z0-9-])`,
++  "gi",
++);
++
++/** Every spelling of a dot, back to `.`. */
++function undot(domain: string): string {
++  return domain.replace(new RegExp(DOT_ANY, "gi"), ".");
++}
++
++export interface PageAddress {
++  /** Normalised. */
++  readonly address: string;
++  /** False when written plainly (or in a `mailto:`); true when it had to be decoded. */
++  readonly disguised: boolean;
++}
++
++/**
++ * **The addresses a page's text holds**, plain first, then decoded, each once,
++ * at most `PAGE_ADDRESSES_MAX`. A plain address the disguise pattern also
++ * matches is reported plain.
++ */
++export function pageAddresses(page: PageText): PageAddress[] {
++  const found = new Map<string, PageAddress>();
++  const add = (raw: string, disguised: boolean) => {
++    const address = normaliseEmail(raw);
++    if (!looksLikeEmail(address) || found.has(address)) return;
++    found.set(address, { address, disguised });
++  };
++  for (const m of page.mailtos) add(m, false);
++  for (const m of page.text.matchAll(/[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g)) add(m[0], false);
++  for (const m of page.text.matchAll(DISGUISED)) {
++    const local = m[1] ?? "";
++    const domain = m[2] ?? m[3] ?? "";
++    add(`${local}@${undot(domain)}`, true);
++  }
++  return [...found.values()].slice(0, PAGE_ADDRESSES_MAX);
++}
++
++/* ----------------------------------------------------------- confidence -- */
++
++/** Lower-case letters only, accents folded: `Müller-Lüdenscheidt` → `mullerludenscheidt`. */
++function letters(s: string): string {
++  return s
++    .normalize("NFD")
++    .replace(/\p{M}/gu, "")
++    .toLowerCase()
++    .replace(/[^a-z]/g, "");
++}
++
++/**
++ * **Whether an address's local part names the author** — their surname or
++ * first name (three letters or more), or their initials with the surname.
++ * `alexwarth` for *Alessandro Warth*: yes, by the surname.
++ */
++export function addressNamesAuthor(address: string, authorName: string | null): boolean {
++  if (!authorName) return false;
++  const local = letters(address.split("@")[0] ?? "");
++  const words = authorName
++    .split(/[\s,]+/)
++    .map(letters)
++    .filter((w) => w !== "");
++  if (local === "" || words.length === 0) return false;
++  if (words.some((w) => w.length >= 3 && local.includes(w))) return true;
++  const surname = words[words.length - 1] ?? "";
++  const initials = words.map((w) => w[0]).join("");
++  return surname.length >= 2 && (local === initials || local.startsWith(`${initials[0] ?? ""}${surname}`));
++}
++
++/* ----------------------------------------------------------------- read -- */
++
++export type PageRead =
++  /** `url` is where the fetch ended, after redirects (plan 261024j, R2): the page the addresses were on. */
++  | { readonly kind: "read"; readonly url: string; readonly addresses: PageAddress[]; readonly text: string }
++  | { readonly kind: "unread"; readonly url: string; readonly reason: string };
++
++/** How a page is fetched. Injectable so a test reads a page without a network. */
++export type PageFetch = (
++  url: string,
++  options: FetchOptions,
++) => Promise<{ kind: "html"; text: string; finalUrl: string } | { kind: "pdf" }>;
++
++const defaultFetch: PageFetch = async (url, options) => {
++  const doc = await fetchDocument(url, options);
++  return doc.kind === "html" ? { kind: "html", text: doc.text, finalUrl: doc.url } : { kind: "pdf" };
++};
++
++/**
++ * **Read one page for addresses. Never throws**; one try, 2 MB, 10 seconds
++ * (plan 261024j, R5): a failure is a short reason
++ * — a fetch failure's code, `not-html`, `timeout` — that the notes say.
++ */
++export async function readAuthorPage(url: string, fetchPage: PageFetch = defaultFetch): Promise<PageRead> {
++  try {
++    const doc = await fetchPage(url, {
++      timeoutMs: PAGE_TIMEOUT_MS,
++      maxBytes: PAGE_MAX_BYTES,
++      attempts: 1,
++      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
++    });
++    if (doc.kind !== "html") return { kind: "unread", url, reason: "not-html" };
++    const page = pageText(doc.text);
++    return { kind: "read", url: doc.finalUrl, addresses: pageAddresses(page), text: page.text };
++  } catch (err) {
++    const reason =
++      err instanceof FetchFailure ? err.code : err instanceof Error ? (err.name === "TimeoutError" ? "timeout" : err.name) : "unknown";
++    return { kind: "unread", url, reason };
++  }
++}
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 887175fc8..7015f644e 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -7798,6 +7798,60 @@ export const authorLookups = spideryarn.table(
+   ],
+ );
+ 
++/**
++ * **The addresses a lookup offered but did not apply** — written on a page it
++ * read, seen in a result but not in the author's name, or guessed from a
++ * colleague's pattern. Greg, 2026-10-23 (#686, spya-w5yavh): *"list a few with
++ * tooltips for me with a level of confidence for each"*. Plan
++ * docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md.
++ *
++ * Nothing here ever fills a draft: *Use this address* on the card is Greg's
++ * own edit. `confidence` is computed by src/author-candidates.ts, never the
++ * model's. Written once, by `finishLookup`, in the finish's transaction.
++ */
++export const authorLookupCandidates = spideryarn.table(
++  "author_lookup_candidates",
++  {
++    id: uuid("id").primaryKey().defaultRandom(),
++    lookupId: uuid("lookup_id")
++      .notNull()
++      .references(() => authorLookups.id, { onDelete: "cascade" }),
++    /** Best first, from 0. */
++    position: integer("position").notNull(),
++    address: text("address").notNull(),
++    kind: text("kind").notNull(),
++    confidence: text("confidence").notNull(),
++    /** Written by our code, not the model: what it is and what it rests on. */
++    why: text("why").notNull(),
++    sourceUrl: text("source_url"),
++    /** A guess only: whether a colleague's pattern reproduced it. */
++    patternSeen: boolean("pattern_seen"),
++    createdAt: createdAt(),
++  },
++  (t) => [
++    uniqueIndex("author_lookup_candidates_position").on(t.lookupId, t.position),
++    uniqueIndex("author_lookup_candidates_address").on(t.lookupId, t.address),
++    check("author_lookup_candidates_position_range", sql`${t.position} >= 0`),
++    check(
++      "author_lookup_candidates_kind",
++      sql`${t.kind} in ('on-page', 'on-page-disguised', 'in-result', 'guess')`,
++    ),
++    check("author_lookup_candidates_confidence", sql`${t.confidence} in ('high', 'medium', 'low')`),
++    /* No guess is ever "likely" (R3), and only a guess has a pattern verdict. */
++    check("author_lookup_candidates_guess_not_high", sql`${t.kind} <> 'guess' or ${t.confidence} <> 'high'`),
++    check("author_lookup_candidates_pattern_only_guess", sql`(${t.patternSeen} is not null) = (${t.kind} = 'guess')`),
++    check(
++      "author_lookup_candidates_address_normalised",
++      sql`${t.address} = lower(btrim(${t.address})) and ${t.address} like '%_@_%'`,
++    ),
++    check(
++      "author_lookup_candidates_text_lengths",
++      sql`char_length(${t.address}) <= 10000 and char_length(${t.why}) <= 10000
++          and coalesce(char_length(${t.sourceUrl}), 0) <= 10000`,
++    ),
++  ],
++);
++
+ /**
+  * **Greg's guidance for the author lookup's suggested message**, edited on
+  * `/admin/vouchers` — Greg, 2026-10-23 (#688, spya-n8ruxv): *"have some kind
+diff --git a/src/mcp/tools.ts b/src/mcp/tools.ts
+index 7169d6a49..ef54bde84 100644
+--- a/src/mcp/tools.ts
++++ b/src/mcp/tools.ts
+@@ -253,6 +253,15 @@ function trimAuthorLookup(l: AdminAuthorLookup) {
+     searches: l.searches,
+     model: l.model,
+     cost: l.cost,
++    /* Field by field, as everything here (plan 261024j): offered, never applied. */
++    candidates: l.candidates.map((c) => ({
++      address: c.address,
++      kind: c.kind,
++      confidence: c.confidence,
++      why: c.why,
++      sourceUrl: c.sourceUrl,
++      patternSeen: c.patternSeen,
++    })),
+   };
+ }
+ 
+diff --git a/src/store/article-rows.ts b/src/store/article-rows.ts
+index 301d5a3fe..8eac79c3f 100644
+--- a/src/store/article-rows.ts
++++ b/src/store/article-rows.ts
+@@ -407,6 +407,23 @@ export const ARTICLE_TABLE_COVERAGE = {
+         "wrote or anything about the piece, so it is kept out of exports.",
+     },
+   },
++  /* The addresses a lookup offered but did not apply — plan 261024j. Rows of
++     an `author_lookups` row, and go where it goes. */
++  author_lookup_candidates: {
++    rollback: {
++      exported: false,
++      why:
++        "The addresses an author lookup offered the administrator without applying — " +
++        "docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md. " +
++        "Belongs to its `author_lookups` row, which is not restored either.",
++    },
++    bundle: {
++      exported: false,
++      why:
++        "Spideryarn's own administrative record about the article, not anything you " +
++        "wrote or anything about the piece, so it is kept out of exports.",
++    },
++  },
+   /* Reached only through `author_lookups.guidance_id` — plan 261024f § D4. Not
+      about any one article at all: the admin's wording for every lookup's message. */
+   author_gift_guidance: {
+diff --git a/src/store/pg-author-gifts.ts b/src/store/pg-author-gifts.ts
+index 57f8f9ded..ceb94919e 100644
+--- a/src/store/pg-author-gifts.ts
++++ b/src/store/pg-author-gifts.ts
+@@ -35,6 +35,7 @@ import {
+   AUTHOR_LOOKUP_STALE_MINUTES,
+   type AdminAuthorGift,
+   type AdminAuthorLookup,
++  type AdminLookupCandidate,
+   type AuthorGiftEmailPreview,
+   STARTER_LINK_PLACEHOLDER,
+   type AuthorGiftSendExpected,
+@@ -49,6 +50,7 @@ import {
+   articles,
+   authorGiftGuidance,
+   authorGifts,
++  authorLookupCandidates,
+   authorLookups,
+   billingVouchers,
+ } from "../db/schema.js";
+@@ -542,6 +544,8 @@ export type LookupResult =
+       readonly notes: string | null;
+       /** Kept on the lookup's row for *Use as your message*; never written into the draft (plan 261024f, R1). */
+       readonly suggestedMessage?: string | null;
++      /** Addresses offered, best first; kept on their own rows, never written into the draft (plan 261024j). */
++      readonly candidates?: readonly AdminLookupCandidate[];
+     }
+   | {
+       readonly kind: "failed";
+@@ -572,6 +576,61 @@ function bounded(value: string | null | undefined): string | null {
+   return points.length > LOOKUP_TEXT_MAX ? points.slice(0, LOOKUP_TEXT_MAX).join("") : value;
+ }
+ 
++const CANDIDATE_KINDS = new Set(["on-page", "on-page-disguised", "in-result", "guess"]);
++const CANDIDATE_CONFIDENCES = new Set(["high", "medium", "low"]);
++/** Per lookup; src/author-candidates.ts caps at the same, this holds it at the door. */
++const CANDIDATES_STORED_MAX = 8;
++
++/**
++ * **The candidates as the table's checks hold them**: normalised, each address
++ * once, a known kind and confidence, a pattern verdict on guesses only, no
++ * guess *likely* (R3, R8). Anything else is dropped, not stored and not thrown.
++ */
++function cleanCandidates(raw: readonly AdminLookupCandidate[]): AdminLookupCandidate[] {
++  const out: AdminLookupCandidate[] = [];
++  for (const c of raw) {
++    const address = normaliseEmail(c.address);
++    if (!looksLikeEmail(address) || !/.@./.test(address) || out.some((o) => o.address === address)) continue;
++    if (!CANDIDATE_KINDS.has(c.kind) || !CANDIDATE_CONFIDENCES.has(c.confidence)) continue;
++    if (c.kind === "guess" && c.confidence === "high") continue;
++    const why = bounded(c.why) ?? "";
++    if (why === "") continue;
++    out.push({
++      address,
++      kind: c.kind,
++      confidence: c.confidence,
++      why,
++      sourceUrl: bounded(c.sourceUrl),
++      patternSeen: c.kind === "guess" ? (c.patternSeen ?? false) : null,
++    });
++    if (out.length === CANDIDATES_STORED_MAX) break;
++  }
++  return out;
++}
++
++/** Each lookup's offered addresses, in their stored order (plan 261024j). */
++async function candidatesByLookup(lookupIds: readonly string[]): Promise<Map<string, AdminLookupCandidate[]>> {
++  const byLookup = new Map<string, AdminLookupCandidate[]>();
++  if (lookupIds.length === 0) return byLookup;
++  const rows = await getDb()
++    .select()
++    .from(authorLookupCandidates)
++    .where(inArray(authorLookupCandidates.lookupId, [...lookupIds]))
++    .orderBy(authorLookupCandidates.lookupId, authorLookupCandidates.position);
++  for (const r of rows) {
++    const c: AdminLookupCandidate = {
++      address: r.address,
++      kind: r.kind as AdminLookupCandidate["kind"],
++      confidence: r.confidence as AdminLookupCandidate["confidence"],
++      why: r.why,
++      sourceUrl: r.sourceUrl,
++      patternSeen: r.patternSeen,
++    };
++    byLookup.set(r.lookupId, [...(byLookup.get(r.lookupId) ?? []), c]);
++  }
++  return byLookup;
++}
++
+ /** An address the draft may take: normalised and address-shaped, or null. */
+ function fillableEmail(raw: string | null): string | null {
+   if (raw === null) return null;
+@@ -660,6 +719,16 @@ export async function finishLookup(lookupId: string, result: LookupResult): Prom
+       .returning({ id: authorLookups.id });
+     if (finished.length === 0) return { kind: "lost" };
+ 
++    /* The offered addresses, on their own rows (plan 261024j). Only after the
++       finish won, so a lost or stale run writes none; whatever the gift's
++       state, since they are the run's record, not the draft's. Each is cleaned
++       to what the table's checks hold, and a bad one is dropped rather than
++       failing the finish. */
++    const offered = cleanCandidates(found?.candidates ?? []);
++    if (offered.length > 0) {
++      await tx.insert(authorLookupCandidates).values(offered.map((c, position) => ({ lookupId, position, ...c })));
++    }
++
+     const none = { email: false, name: false, notes: false } as const;
+     if (gift.sendStartedAt !== null || gift.discardedAt !== null) return { kind: "finished", outcome, applied: none };
+ 
+@@ -749,6 +818,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
+     )
+     .orderBy(desc(authorLookups.createdAt), desc(authorLookups.id));
+   const spend = await spendByRun(lookups.flatMap((l) => (l.runId === null ? [] : [l.runId])));
++  const offered = await candidatesByLookup(lookups.map((l) => l.id));
+ 
+   const byGift = new Map<string, AdminAuthorLookup[]>();
+   for (const l of lookups) {
+@@ -769,6 +839,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
+       searches: l.searches,
+       model: l.model,
+       cost: runSpend,
++      candidates: offered.get(l.id) ?? [],
+     };
+     byGift.set(l.authorGiftId, [...(byGift.get(l.authorGiftId) ?? []), wire]);
+   }
+diff --git a/src/web/AdminAuthorGifts.tsx b/src/web/AdminAuthorGifts.tsx
+index 6bd136f34..86d23d1c2 100644
+--- a/src/web/AdminAuthorGifts.tsx
++++ b/src/web/AdminAuthorGifts.tsx
+@@ -35,7 +35,12 @@ import { formatCostNanos } from "../admin.js";
+ import {
+   type AdminAuthorGift,
+   type AdminAuthorLookup,
++  type AdminLookupCandidate,
++  AUTHOR_LOOKUP_MAX_SEARCHES,
+   type AuthorGiftStatus,
++  type CandidateConfidence,
++  type CandidateKind,
++  CONFIDENCE_WORDS,
+   STARTER_LINK_PLACEHOLDER,
+ } from "../admin-author-gifts.js";
+ import {
+@@ -45,13 +50,14 @@ import {
+   VOUCHER_NOTE_MAX,
+   cleanRecipientName,
+ } from "../admin-vouchers.js";
+-import { addressBoxChange } from "../email-address.js";
++import { addressBoxChange, looksLikeEmail, normaliseEmail } from "../email-address.js";
+ import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
+ import { BUTTON, INPUT, Refusal, StarterOwnerLine, TEXTAREA } from "./admin-vouchers-parts.js";
+ import { AuthorGiftGuidance } from "./AuthorGiftGuidance.js";
+ import { Button } from "./components/ui/button.js";
+ import { exactly } from "./relative-time.js";
+ import { readHref } from "./router.js";
++import { TipNote, Tooltip } from "./Tooltip.js";
+ import {
+   type AuthorGiftPatchInput,
+   type EmailPreviewAnswer,
+@@ -62,8 +68,8 @@ import {
+ import { useNow } from "./useNow.js";
+ import { voiceClass } from "./voice.js";
+ 
+-/** More searches than the prompt allows (D4, D7): flagged on the run. */
+-const SEARCHES_ASKED = 3;
++/** More searches than the prompt allows (D4, D7): flagged on the run. The prompt's own number, not a copy. */
++const SEARCHES_ASKED = AUTHOR_LOOKUP_MAX_SEARCHES;
+ 
+ /** The gift `?gift=<id>` names, or null. A UUID or nothing, so the address cannot put text in an id. */
+ export function giftIdOrNull(id: string | null): string | null {
+@@ -164,7 +170,9 @@ function Provenance({
+   sourceUrl: string | null;
+ }) {
+   if (value === null) return null;
+-  if (lookup === null) return <span className="tw:text-ink-faint"> — typed by you</span>;
++  /* "Chosen" too: *Use this address* on a possible address is an edit of the
++     person's, so it has no lookup behind it (plan 261024j, R9). */
++  if (lookup === null) return <span className="tw:text-ink-faint"> — chosen or typed by you</span>;
+   const when = exactly(lookup.createdAt);
+   return (
+     <span className="tw:text-ink-faint">
+@@ -179,7 +187,112 @@ function Provenance({
+   );
+ }
+ 
+-function LookupLine({ lookup, gift, now }: { lookup: AdminAuthorLookup; gift: AdminAuthorGift; now: number }) {
++/** What a candidate's kind says, in words. */
++const KIND_WORDS: Record<CandidateKind, string> = {
++  "on-page": "written on a page the lookup read",
++  "on-page-disguised": "written in disguise on a page the lookup read",
++  "in-result": "seen in a search result, not in the author's name",
++  guess: "a guess",
++};
++
++/* The theme's own tokens, from strongest to faintest: no traffic-light colours, which the theme does not have. */
++const CHIP: Record<CandidateConfidence, string> = {
++  high: "tw:border tw:border-highlight tw:text-highlight-text",
++  medium: "tw:border tw:border-border tw:text-foreground",
++  low: "tw:border tw:border-dashed tw:border-border tw:text-ink-faint",
++};
++
++/**
++ * **The lookup's possible addresses** — plan 261024j (#686): *"list a few with
++ * tooltips for me with a level of confidence for each"*. Each row is the
++ * address, a chip for how sure the lookup is (computed, never the model's),
++ * and a card with why and where. *Use this address* puts it in the draft
++ * through the ordinary edit; nothing here is ever applied by the lookup.
++ *
++ * The model's old *suggested, not seen* address joins as a long shot when it
++ * is shaped like an address (R7); otherwise `LookupLine` shows it as text.
++ */
++function PossibleAddresses({
++  lookup,
++  gift,
++  chooseAddress,
++}: {
++  lookup: AdminAuthorLookup;
++  gift: AdminAuthorGift;
++  /** Null when the address cannot be changed now: not a draft, an editor open, or busy. */
++  chooseAddress: ((email: string) => void) | null;
++}) {
++  const rows: AdminLookupCandidate[] = [...lookup.candidates];
++  const suggested = lookup.suggestedEmail === null ? null : normaliseEmail(lookup.suggestedEmail);
++  if (suggested !== null && looksLikeEmail(suggested) && !rows.some((c) => c.address === suggested)) {
++    rows.push({
++      address: suggested,
++      kind: "guess",
++      confidence: "low",
++      why: "The lookup gave this address, but it was not written in any search result it was checked against.",
++      sourceUrl: null,
++      patternSeen: false,
++    });
++  }
++  if (rows.length === 0) return null;
++  return (
++    <div className="tw:mt-1">
++      <div>Possible addresses — none applied:</div>
++      <ul aria-label="Possible addresses" className="tw:m-0 tw:list-none tw:p-0">
++        {rows.map((c) => {
++          const current = gift.email === c.address;
++          const card = (
++            <span className="tw:block tw:max-w-80">
++              <TipNote>
++                <strong>
++                  {CONFIDENCE_WORDS[c.confidence]}: {KIND_WORDS[c.kind]}.
++                </strong>{" "}
++                {c.why}
++              </TipNote>
++              {c.sourceUrl && (
++                <TipNote>
++                  <Out href={c.sourceUrl}>{c.sourceUrl}</Out>
++                </TipNote>
++              )}
++            </span>
++          );
++          return (
++            <li key={c.address} className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:py-0.5">
++              <Tooltip placement="bottom" keepSide content={card} interactive={{ label: `About ${c.address}` }}>
++                {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the content, and a keyboard has to reach it */}
++                <span tabIndex={0} className="tw:cursor-help tw:underline tw:decoration-dotted">
++                  {c.address}
++                </span>
++              </Tooltip>
++              <span className={`tw:rounded tw:px-1.5 tw:text-xs ${CHIP[c.confidence]}`}>{CONFIDENCE_WORDS[c.confidence]}</span>
++              {current ? (
++                <em className="tw:text-ink-faint">in the draft</em>
++              ) : (
++                chooseAddress && (
++                  <Button type="button" variant="outline" size="xs" onClick={() => chooseAddress(c.address)}>
++                    {gift.email === null ? "Use this address" : "Use instead"}
++                  </Button>
++                )
++              )}
++            </li>
++          );
++        })}
++      </ul>
++    </div>
++  );
++}
++
++function LookupLine({
++  lookup,
++  gift,
++  now,
++  chooseAddress,
++}: {
++  lookup: AdminAuthorLookup;
++  gift: AdminAuthorGift;
++  now: number;
++  chooseAddress: ((email: string) => void) | null;
++}) {
+   const started = exactly(lookup.createdAt);
+   /* Found, but the gift's field did not take it from this run (D4, R2-F5). */
+   const emailNotApplied = lookup.email !== null && gift.emailLookupId !== lookup.id && lookup.email !== gift.email;
+@@ -215,11 +328,12 @@ function LookupLine({ lookup, gift, now }: { lookup: AdminAuthorLookup; gift: Ad
+           {emailNotApplied && <em> — found, not applied</em>}
+         </div>
+       )}
+-      {lookup.suggestedEmail !== null && (
++      {lookup.suggestedEmail !== null && !looksLikeEmail(normaliseEmail(lookup.suggestedEmail)) && (
+         <div>
+-          {lookup.suggestedEmail} — <em>suggested, not seen in any result</em>
++          {lookup.suggestedEmail} — <em>suggested, not seen in any result, and not shaped like an address</em>
+         </div>
+       )}
++      <PossibleAddresses lookup={lookup} gift={gift} chooseAddress={chooseAddress} />
+       {lookup.contactUrl !== null && (
+         <div>
+           Contact page: <Out href={lookup.contactUrl}>{lookup.contactUrl}</Out>
+@@ -854,6 +968,18 @@ function GiftCard({
+     setRefusal(answer);
+   }
+ 
++  /* *Use this address* on a possible address (plan 261024j): the ordinary
++     edit, on a draft only, and never while the editor is open over the same
++     field. An open Send confirmation closes, since it showed the old address;
++     Send's own `expected` check would refuse it anyway (R9). */
++  const chooseAddress =
++    draft && !editing && !busy
++      ? (email: string) => {
++          setConfirming(null);
++          void attempt(() => hooks.patch(gift.id, { email }));
++        }
++      : null;
++
+   async function sendNow() {
+     if (busy || running || confirming === null || !previewReady || (needsRights && !rights)) return;
+     setBusy(true);
+@@ -1075,7 +1201,7 @@ function GiftCard({
+           ) : (
+             <ul className="tw:m-0 tw:mt-1 tw:list-none tw:p-0">
+               {gift.lookups.map((l) => (
+-                <LookupLine key={l.id} lookup={l} gift={gift} now={now} />
++                <LookupLine key={l.id} lookup={l} gift={gift} now={now} chooseAddress={chooseAddress} />
+               ))}
+             </ul>
+           )}
+diff --git a/tests/admin-author-gifts.test.tsx b/tests/admin-author-gifts.test.tsx
+index 3cbe76eb7..bc54ff8d8 100644
+--- a/tests/admin-author-gifts.test.tsx
++++ b/tests/admin-author-gifts.test.tsx
+@@ -17,7 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
+ import "fake-indexeddb/auto";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ 
+-import type { AdminAuthorGift, AdminAuthorLookup } from "../src/admin-author-gifts.js";
++import type { AdminAuthorGift, AdminAuthorLookup, AdminLookupCandidate } from "../src/admin-author-gifts.js";
+ import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
+ 
+ vi.mock("../src/web/lib/supabase.js", () => ({
+@@ -63,6 +63,7 @@ function lookup(over: Partial<AdminAuthorLookup> = {}): AdminAuthorLookup {
+     searches: 2,
+     model: "anthropic/claude-sonnet",
+     cost: { nanos: 12_340_000, calls: 1, unpricedCalls: 0 },
++    candidates: [],
+     ...over,
+   };
+ }
+@@ -676,7 +677,7 @@ describe("Author gifts", () => {
+     await mount();
+     const c = card(DRAFT);
+     const fields = c?.querySelector("dl")?.textContent ?? "";
+-    expect(fields).toContain("typed@example.test — typed by you");
++    expect(fields).toContain("typed@example.test — chosen or typed by you");
+     expect(fields).toContain("seen at https://example.test/bio");
+     const run = c?.querySelector("ul li")?.textContent ?? "";
+     expect(run).toContain("Address found");
+@@ -701,15 +702,81 @@ describe("Author gifts", () => {
+     expect(card(DRAFT)?.querySelector("dl")?.textContent).toContain("from the lookup");
+   });
+ 
+-  it("labels an address no result showed as suggested, not seen", async () => {
++  it("lists an address no result showed as a long shot, never applied (plan 261024j, R7)", async () => {
+     giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", suggestedEmail: "guess@example.test" })] })];
+     await mount();
+     const run = card(DRAFT)?.querySelector("ul li")?.textContent ?? "";
+     expect(run).toContain("Author found, no address");
+-    expect(run).toContain("guess@example.test — suggested, not seen in any result");
++    expect(run).toContain("Possible addresses — none applied");
++    expect(run).toContain("guess@example.testlong shot");
+   });
+ 
+-  it("says each run's outcome, flags more than three searches, and gives the cost", async () => {
++  it("keeps a suggestion that is not an address as text, with no button to use it (R7)", async () => {
++    giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", suggestedEmail: "ann at example" })] })];
++    await mount();
++    expect(card(DRAFT)?.textContent).toContain("ann at example — suggested, not seen in any result, and not shaped like an address");
++    expect(button(card(DRAFT), "Use this address")).toBeUndefined();
++  });
++
++  describe("possible addresses (plan 261024j)", () => {
++    const offered: AdminLookupCandidate[] = [
++      {
++        address: "alexwarth@gmail.com",
++        kind: "on-page-disguised",
++        confidence: "high",
++        why: "Written in disguise on tinlizzie.org/~awarth/, the page the lookup took for theirs, and in the author's name.",
++        sourceUrl: "https://tinlizzie.org/~awarth/",
++        patternSeen: null,
++      },
++      {
++        address: "alessandro.warth@inkandswitch.com",
++        kind: "guess",
++        confidence: "low",
++        why: "A long shot: no colleague's address was seen to support it.",
++        sourceUrl: null,
++        patternSeen: false,
++      },
++    ];
++
++    it("lists each with its confidence in words, and none is applied", async () => {
++      giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", candidates: offered })] })];
++      await mount();
++      const rows = [...(card(DRAFT)?.querySelectorAll('ul[aria-label="Possible addresses"] > li') ?? [])].map((li) => li.textContent ?? "");
++      expect(rows).toEqual([
++        "alexwarth@gmail.comlikelyUse this address",
++        "alessandro.warth@inkandswitch.comlong shotUse this address",
++      ]);
++      expect(writes()).toEqual([]);
++    });
++
++    it("puts one in the draft only when pressed, through the ordinary edit", async () => {
++      giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", candidates: offered })] })];
++      await mount();
++      await act(async () => button(card(DRAFT), "Use this address")?.click());
++      await settle();
++      expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { email: "alexwarth@gmail.com" } }]);
++    });
++
++    it("says Use instead when the draft has another address, and marks the one it has", async () => {
++      giftsAnswer = () => [gift({ email: "alexwarth@gmail.com", lookups: [lookup({ outcome: "author", candidates: offered })] })];
++      await mount();
++      const rows = [...(card(DRAFT)?.querySelectorAll('ul[aria-label="Possible addresses"] > li') ?? [])].map((li) => li.textContent ?? "");
++      expect(rows).toEqual(["alexwarth@gmail.comlikelyin the draft", "alessandro.warth@inkandswitch.comlong shotUse instead"]);
++    });
++
++    it("offers no button on a gift that is no longer a draft", async () => {
++      giftsAnswer = () => [
++        gift({ id: SENT, status: "sent", voucherId: "v1", lookups: [lookup({ outcome: "author", candidates: offered })] }),
++      ];
++      await mount({ tab: "Given" });
++      const shown = button(host, "Show");
++      if (shown) await act(async () => shown.click());
++      expect(host.textContent).toContain("alexwarth@gmail.com");
++      expect(button(host, "Use this address")).toBeUndefined();
++    });
++  });
++
++  it("says each run's outcome, flags more than five searches, and gives the cost", async () => {
+     const recent = new Date(Date.now() - 30_000).toISOString();
+     const old = new Date(Date.now() - 20 * 60_000).toISOString();
+     giftsAnswer = () => [
+@@ -717,7 +784,7 @@ describe("Author gifts", () => {
+         lookups: [
+           lookup({ id: "r1", outcome: null, finishedAt: null, cost: null, createdAt: recent }),
+           lookup({ id: "r2", outcome: null, finishedAt: null, cost: null, createdAt: old }),
+-          lookup({ id: "r3", outcome: "failed", failure: "503", searches: 5, cost: { nanos: 1_000_000, calls: 2, unpricedCalls: 1 } }),
++          lookup({ id: "r3", outcome: "failed", failure: "503", searches: 6, cost: { nanos: 1_000_000, calls: 2, unpricedCalls: 1 } }),
+           lookup({ id: "r4", outcome: "failed", failure: "stale" }),
+         ],
+       }),
+@@ -728,7 +795,7 @@ describe("Author gifts", () => {
+     expect(runs[0]).toContain("nothing spent yet");
+     expect(runs[1]).toContain("Did not finish");
+     expect(runs[2]).toContain("Failed: 503");
+-    expect(runs[2]).toContain("5 searches — more than the 3 it was allowed");
++    expect(runs[2]).toContain("6 searches — more than the 5 it was allowed");
+     expect(runs[2]).toContain("cost not fully known");
+     expect(runs[3]).toContain("Did not finish");
+     expect(runs[3]).toContain("2 searches · cost: $0.0123 (1 call)");
+diff --git a/tests/author-candidates.test.ts b/tests/author-candidates.test.ts
+new file mode 100644
+index 000000000..b7c7e814c
+--- /dev/null
++++ b/tests/author-candidates.test.ts
+@@ -0,0 +1,99 @@
++/**
++ * **The addresses the lookup offers, and how sure it says it is** —
++ * src/author-candidates.ts, plan
++ * docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md § R3.
++ *
++ * Every confidence is computed here, never the model's, so each rule that
++ * raises one above *long shot* has a case that keeps it down when its
++ * condition fails.
++ */
++import { describe, expect, it } from "vitest";
++
++import { assembleCandidates, CANDIDATES_MAX, judgeGuess, patternsFor } from "../src/author-candidates.js";
++
++const BOB = { name: "Bob Jones", address: "bob.jones@inkandswitch.com", sourceUrl: "https://inkandswitch.com/people" };
++
++describe("patternsFor", () => {
++  it("names the pattern a person's address follows", () => {
++    expect(patternsFor("Bob Jones", "bob.jones")).toEqual(["first.last"]);
++    expect(patternsFor("Bob Jones", "bjones")).toEqual(["flast"]);
++    expect(patternsFor("Bob Jones", "bob")).toEqual(["first"]);
++    expect(patternsFor("Zoë Müller", "zoe.muller")).toEqual(["first.last"]);
++    expect(patternsFor("Bob Jones", "someoneelse")).toEqual([]);
++    expect(patternsFor("Cher", "cher")).toEqual([]);
++  });
++});
++
++describe("judgeGuess", () => {
++  it("is possible when a seen colleague's pattern gives exactly this guess at their domain", () => {
++    const c = judgeGuess({ address: "alessandro.warth@inkandswitch.com", colleague: BOB }, "Alessandro Warth");
++    expect(c).toMatchObject({ confidence: "medium", patternSeen: true, kind: "guess", sourceUrl: BOB.sourceUrl });
++  });
++
++  it("is a long shot when the pattern does not give it", () => {
++    expect(judgeGuess({ address: "awarth@inkandswitch.com", colleague: BOB }, "Alessandro Warth")).toMatchObject({
++      confidence: "low",
++      patternSeen: false,
++    });
++  });
++
++  it("is a long shot at a different domain", () => {
++    expect(judgeGuess({ address: "alessandro.warth@example.org", colleague: BOB }, "Alessandro Warth")).toMatchObject({
++      confidence: "low",
++    });
++  });
++
++  it("is a long shot at a public mail service, however well the pattern fits", () => {
++    const gmailBob = { ...BOB, address: "bob.jones@gmail.com" };
++    const c = judgeGuess({ address: "alessandro.warth@gmail.com", colleague: gmailBob }, "Alessandro Warth");
++    expect(c.confidence).toBe("low");
++    expect(c.why).toContain("public mail service");
++  });
++
++  it("is a long shot with no colleague, or no author name to apply a pattern to", () => {
++    expect(judgeGuess({ address: "a@inkandswitch.com", colleague: null }, "Alessandro Warth").confidence).toBe("low");
++    expect(judgeGuess({ address: "alessandro.warth@inkandswitch.com", colleague: BOB }, null).confidence).toBe("low");
++  });
++});
++
++describe("assembleCandidates", () => {
++  const page = (url: string, addresses: { address: string; disguised: boolean }[]) =>
++    ({ kind: "read", url, addresses, text: "" }) as const;
++
++  it("puts likely before possible before long shot, each address once", () => {
++    const out = assembleCandidates({
++      authorName: "Alessandro Warth",
++      seenNotNamed: { address: "office@inkandswitch.com", sourceUrl: "https://inkandswitch.com/contact" },
++      pages: [
++        page("https://tinlizzie.org/~awarth/", [
++          { address: "labs@tinlizzie.org", disguised: false },
++          { address: "alexwarth@gmail.com", disguised: true },
++        ]),
++      ],
++      guesses: [
++        { address: "zzz@inkandswitch.com", colleague: null },
++        { address: "alexwarth@gmail.com", colleague: null },
++      ],
++      exclude: [],
++    });
++    expect(out.map((c) => [c.address, c.kind, c.confidence])).toEqual([
++      ["alexwarth@gmail.com", "on-page-disguised", "high"],
++      ["labs@tinlizzie.org", "on-page", "medium"],
++      ["office@inkandswitch.com", "in-result", "medium"],
++      ["zzz@inkandswitch.com", "guess", "low"],
++    ]);
++  });
++
++  it("is capped, and never lists an excluded or malformed address", () => {
++    const many = Array.from({ length: 20 }, (_, i) => ({ address: `a${i}@x.example`, disguised: false }));
++    const out = assembleCandidates({
++      authorName: null,
++      seenNotNamed: null,
++      pages: [page("https://x.example/", [...many, { address: "not an address", disguised: false }])],
++      guesses: [],
++      exclude: ["a0@x.example"],
++    });
++    expect(out).toHaveLength(CANDIDATES_MAX);
++    expect(out.map((c) => c.address)).not.toContain("a0@x.example");
++  });
++});
+diff --git a/tests/author-gifts.test.ts b/tests/author-gifts.test.ts
+index 6f91ed08f..065ffde8f 100644
+--- a/tests/author-gifts.test.ts
++++ b/tests/author-gifts.test.ts
+@@ -61,7 +61,7 @@ vi.mock("../src/author-lookup-start.js", () => ({
+ 
+ import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+ import { AUTHOR_GIFT_NOTES_MAX } from "../src/admin-author-gifts.js";
+-import type { AdminAuthorGift } from "../src/admin-author-gifts.js";
++import type { AdminAuthorGift, AdminLookupCandidate } from "../src/admin-author-gifts.js";
+ import type { Verifier } from "../src/auth.js";
+ import { getDb } from "../src/db/client.js";
+ import { aiCalls } from "../src/db/schema.js";
+@@ -1478,6 +1478,74 @@ describe("appendNotes", () => {
+ 
+ /* ------------------------------------------------------------------- list -- */
+ 
++describe("offered addresses (plan 261024j)", () => {
++  const offered = (address: string, over: Partial<AdminLookupCandidate> = {}): AdminLookupCandidate => ({
++    address,
++    kind: "on-page-disguised",
++    confidence: "high",
++    why: "Written in disguise on example.org/~a.",
++    sourceUrl: "https://example.org/~a/",
++    patternSeen: null,
++    ...over,
++  });
++
++  it("are stored in order and listed on the run, never fill the draft, and a bad one is dropped", async () => {
++    const mine = await seed("offered");
++    const { id, lookupId } = await ensured(mine);
++    const answer = await finishLookup(lookupId, {
++      kind: "found",
++      authorName: "Found Name",
++      authorSourceUrl: null,
++      email: null,
++      emailSourceUrl: null,
++      suggestedEmail: null,
++      contactUrl: null,
++      searches: 5,
++      model: null,
++      notes: null,
++      candidates: [
++        offered(" First@Example.org "),
++        offered("guess@example.org", { kind: "guess", confidence: "low", patternSeen: false, sourceUrl: null }),
++        /* A guess may never be likely (R3): dropped, not stored. */
++        offered("bad-guess@example.org", { kind: "guess", confidence: "high", patternSeen: true }),
++        offered("first@example.org"),
++        offered("not an address"),
++      ],
++    });
++    expect(answer).toMatchObject({ kind: "finished", outcome: "author", applied: { email: false } });
++    expect((await giftRow(id)).email).toBeNull();
++
++    const reply = await drive("GET", "/api/admin/author-gifts", null);
++    const run = (reply.body.gifts as AdminAuthorGift[]).find((g) => g.id === id)?.lookups[0];
++    expect(run?.candidates).toEqual([
++      offered("first@example.org"),
++      offered("guess@example.org", { kind: "guess", confidence: "low", patternSeen: false, sourceUrl: null }),
++    ]);
++  });
++
++  it("a lost finish writes none", async () => {
++    const mine = await seed("offered-lost");
++    const { lookupId } = await ensured(mine);
++    await settle(lookupId);
++    const late = await finishLookup(lookupId, {
++      kind: "found",
++      authorName: null,
++      authorSourceUrl: null,
++      email: null,
++      emailSourceUrl: null,
++      suggestedEmail: null,
++      contactUrl: null,
++      searches: null,
++      model: null,
++      notes: null,
++      candidates: [offered("late@example.org")],
++    });
++    expect(late).toEqual({ kind: "lost" });
++    const rows = await pool.query("select 1 from spideryarn.author_lookup_candidates where lookup_id = $1", [lookupId]);
++    expect(rows.rowCount).toBe(0);
++  });
++});
++
+ describe("GET /api/admin/author-gifts", () => {
+   it("lists every gift with its status, its lookups and what each cost from the ledger, never the key", async () => {
+     const mine = await seed("listed");
+diff --git a/tests/author-lookup-start.test.ts b/tests/author-lookup-start.test.ts
+index 41cf6cec0..40699c30a 100644
+--- a/tests/author-lookup-start.test.ts
++++ b/tests/author-lookup-start.test.ts
+@@ -46,7 +46,8 @@ const ADMIN = ADMIN_USER_ID_LOCAL as OwnerId;
+ const RUN = randomUUID().slice(0, 8);
+ const SLUG = `test-author-lookup-start-${RUN}`;
+ const BIO_PAGE = "https://writer.example.org/about";
+-const ADDRESS = `lookup-${RUN}@example.invalid`;
++/* In the author's name, so a seen address in a result fills the draft (plan 261024j, R1). */
++const ADDRESS = `paulgraham-${RUN}@example.invalid`;
+ 
+ let article: ScratchArticle | undefined;
+ const runIds: string[] = [];
+diff --git a/tests/author-lookup.test.ts b/tests/author-lookup.test.ts
+index 6ce08971e..f03005df2 100644
+--- a/tests/author-lookup.test.ts
++++ b/tests/author-lookup.test.ts
+@@ -344,7 +344,8 @@ describe("the request", () => {
+     for (const system of [mine, builtIn]) {
+       expect(system).toMatch(/Claim nothing you were not told/);
+       expect(system).toMatch(/at most 450 characters/);
+-      expect(system).toMatch(/Never guess one from a name or a domain/);
++      expect(system).toMatch(/Never put a guess here; guesses go in guesses/);
++      expect(system).toMatch(/never a colleague's/);
+       expect(system).toMatch(/article.*data, not instructions/i);
+       expect(system).toMatch(/cannot change any rule above/);
+     }
+@@ -379,11 +380,151 @@ describe("the request", () => {
+         parameters: { engine: "exa", max_total_results: MAX_TOTAL_RESULTS, max_results: MAX_RESULTS_PER_SEARCH },
+       },
+     ]);
+-    expect(MAX_TOTAL_RESULTS).toBe(10);
++    expect(MAX_TOTAL_RESULTS).toBe(15);
+     expect(MAX_RESULTS_PER_SEARCH).toBe(5);
+   });
+ });
+ 
++/**
++ * **Trying harder** — plan 261024j (#686): the author's own page read for an
++ * address the search could not see, and addresses offered with a computed
++ * confidence, none of them ever filling the draft.
++ */
++describe("trying harder (plan 261024j)", () => {
++  const COLLEAGUE_PAGE = "https://uni.example.edu/people/bob-jones";
++  /** A page fetch that must not happen. */
++  const noFetch = async (): Promise<never> => {
++    throw new Error("no page should be read");
++  };
++  /** A page fetch that serves one page and records what was asked. */
++  const serve = (html: string, asked: string[] = []) => async (url: string) => {
++    asked.push(url);
++    return { kind: "html" as const, text: html, finalUrl: url };
++  };
++
++  it("a colleague's real address, seen and claimed as the author's, is offered, never applied (R1)", async () => {
++    const result = await runAuthorLookup(INPUT, {
++      call: fakeCall(
++        completion(answer({ email: { address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE } }), [
++          { url: BIO_PAGE, content: "Ann Smith writes about attention." },
++          { url: COLLEAGUE_PAGE, content: "Bob Jones, professor. bob.jones@uni.example.edu" },
++        ]),
++      ),
++      now: NOW,
++      fetchPage: noFetch,
++    });
++    if (result.outcome === "failed") throw new Error("failed");
++    expect(result.email).toBeNull();
++    expect(result.outcome).toBe("author");
++    expect(result.candidates).toEqual([
++      expect.objectContaining({ address: "bob.jones@uni.example.edu", kind: "in-result", confidence: "medium", sourceUrl: COLLEAGUE_PAGE }),
++    ]);
++    expect(result.notes).toContain("not in the author's name (not applied): bob.jones@uni.example.edu");
++  });
++
++  it("an address in the article's own text still fills, whatever its name (rule 2 unchanged there)", async () => {
++    const result = await runAuthorLookup(INPUT, {
++      call: fakeCall(completion(answer({ email: { address: "hello@essays.example.com", sourceUrl: SOURCE } }), [])),
++      now: NOW,
++      fetchPage: noFetch,
++    });
++    if (result.outcome === "failed") throw new Error("failed");
++    expect(result.email).toBe("hello@essays.example.com");
++  });
++
++  it("a seen address in the author's name fills, and its guesses and pages are dropped (R6)", async () => {
++    const result = await runAuthorLookup(INPUT, {
++      call: fakeCall(
++        completion(
++          answer({
++            homepageUrl: BIO_PAGE,
++            guesses: [{ address: "a.smith@uni.example.edu", confidence: "high", colleague: null }],
++          }),
++          [{ url: BIO_PAGE, content: "Mail ann@example.org." }],
++        ),
++      ),
++      now: NOW,
++      fetchPage: noFetch,
++    });
++    if (result.outcome === "failed") throw new Error("failed");
++    expect(result.email).toBe("ann@example.org");
++    expect(result.candidates).toEqual([]);
++  });
++
++  it("reads the homepage when no address was seen, and offers an @ drawn as an image (Greg's example)", async () => {
++    const asked: string[] = [];
++    const result = await runAuthorLookup(INPUT, {
++      call: fakeCall(
++        completion(answer({ email: null, homepageUrl: BIO_PAGE, contactUrl: BIO_PAGE }), [{ url: BIO_PAGE, content: "Ann Smith, writer." }]),
++      ),
++      now: NOW,
++      fetchPage: serve("<table><tr><td>annsmith</td><td><img src=images/at.gif></td><td>gmail.com</td></tr></table>", asked),
++    });
++    if (result.outcome === "failed") throw new Error("failed");
++    /* The same URL as homepage and contact page is read once. */
++    expect(asked).toEqual([BIO_PAGE]);
++    expect(result.email).toBeNull();
++    expect(result.candidates).toEqual([
++      expect.objectContaining({ address: "annsmith@gmail.com", kind: "on-page-disguised", confidence: "high", sourceUrl: BIO_PAGE }),
++    ]);
++    expect(result.notes).toContain(`Read ${BIO_PAGE}: annsmith@gmail.com`);
++  });
++
++  it("never reads a homepage the search did not return (rule 1)", async () => {
++    const asked: string[] = [];
++    await runAuthorLookup(INPUT, {
++      call: fakeCall(completion(answer({ email: null, homepageUrl: "http://169.254.169.254/latest" }), [{ url: BIO_PAGE }])),
++      now: NOW,
++      fetchPage: serve("<p>x</p>", asked),
++    });
++    expect(asked).toEqual([]);
++  });
++
++  it("a page that cannot be read is a line in the notes, not a failed lookup", async () => {
++    const result = await runAuthorLookup(INPUT, {
++      call: fakeCall(completion(answer({ email: null, homepageUrl: BIO_PAGE }), [{ url: BIO_PAGE }])),
++      now: NOW,
++      fetchPage: async () => {
++        throw new TypeError("network down");
++      },
++    });
++    expect(result.outcome).toBe("author");
++    expect(result.notes).toContain(`Could not read ${BIO_PAGE} (TypeError)`);
++  });
++
++  it("a guess's confidence is computed: a checked colleague pattern is possible, anything else a long shot (R3)", async () => {
++    const result = await runAuthorLookup(INPUT, {
++      call: fakeCall(
++        completion(
++          answer({
++            email: null,
++            guesses: [
++              /* Bob Jones → bob.jones, so Ann Smith → ann.smith: possible. */
++              { address: "ann.smith@uni.example.edu", confidence: "low", colleague: { name: "Bob Jones", address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE } },
++              /* The model says high, and no colleague backs it: a long shot. */
++              { address: "asmith@uni.example.edu", confidence: "high", colleague: null },
++              /* A colleague not in the result cited: unsupported. */
++              { address: "smith@uni.example.edu", confidence: "high", colleague: { name: "Cy Lee", address: "lee@uni.example.edu", sourceUrl: COLLEAGUE_PAGE } },
++              { address: "fourth@uni.example.edu", colleague: null },
++            ],
++          }),
++          [{ url: COLLEAGUE_PAGE, content: "Bob Jones: bob.jones@uni.example.edu" }],
++        ),
++      ),
++      now: NOW,
++      fetchPage: noFetch,
++    });
++    if (result.outcome === "failed") throw new Error("failed");
++    expect(result.email).toBeNull();
++    expect(result.candidates.map((c) => [c.address, c.confidence, c.patternSeen])).toEqual([
++      ["ann.smith@uni.example.edu", "medium", true],
++      ["asmith@uni.example.edu", "low", false],
++      ["smith@uni.example.edu", "low", false],
++    ]);
++    expect(result.candidates[0]?.why).toContain("first.last");
++  });
++});
++
+ describe("lookup cost correlation", () => {
+   it("indexes the ledger by the run id used to list each lookup's cost", () => {
+     const indexes = getTableConfig(aiCalls).indexes;
+diff --git a/tests/author-page.test.ts b/tests/author-page.test.ts
+new file mode 100644
+index 000000000..d79d87605
+--- /dev/null
++++ b/tests/author-page.test.ts
+@@ -0,0 +1,91 @@
++/**
++ * **Reading the author's own page for an address** — src/author-page.ts,
++ * plan docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md § D2.
++ *
++ * The first case is Greg's example (#686), the markup as fetched on
++ * 2026-10-24: the `@` is an image between two table cells.
++ */
++import { describe, expect, it } from "vitest";
++
++import { addressNamesAuthor, pageAddresses, pageText, readAuthorPage } from "../src/author-page.js";
++import { FetchFailure } from "../src/fetch.js";
++
++const addresses = (html: string) => pageAddresses(pageText(html)).map((a) => `${a.address}${a.disguised ? " (decoded)" : ""}`);
++
++describe("pageAddresses", () => {
++  it("reads an @ drawn as an image between table cells — Greg's example", () => {
++    const html = `<html><body>Los Angeles, CA 90024<br><br>
++      <table cellpadding=0 cellspacing=0>
++        <tr><td>alexwarth</td><td><img src=images/at.gif></td><td>gmail.com</td></tr>
++      </table><br><img border=0 src=images/new.gif></body></html>`;
++    expect(addresses(html)).toEqual(["alexwarth@gmail.com (decoded)"]);
++  });
++
++  it("reads an @ image by its alt text, and a dot image", () => {
++    expect(addresses(`<p>jane.doe<img alt="@" src="x.png">example<img src="/i/dot.png">org</p>`)).toEqual([
++      "jane.doe@example.org (decoded)",
++    ]);
++  });
++
++  it("reads the bracketed and spelled-out disguises", () => {
++    expect(addresses("<p>jane [at] example [dot] org</p>")).toEqual(["jane@example.org (decoded)"]);
++    expect(addresses("<p>jane (at) cs.example.edu</p>")).toEqual(["jane@cs.example.edu (decoded)"]);
++    expect(addresses("<p>Write to jane at example dot org, please.</p>")).toEqual(["jane@example.org (decoded)"]);
++  });
++
++  it("takes plain addresses and mailto links as written, not decoded", () => {
++    expect(addresses(`<p>Mail <a href="mailto:Ann@Example.org?subject=hi">me</a> or bob@example.com.</p>`)).toEqual([
++      "ann@example.org",
++      "bob@example.com",
++    ]);
++  });
++
++  it("does not read prose as an address", () => {
++    expect(addresses("<p>Slides are available at example.com and at arxiv.org.</p>")).toEqual([]);
++    expect(addresses("<p>I arrived at Stanford. Then I left.</p>")).toEqual([]);
++    expect(addresses("<p>See <img src=photo.jpg> at the top.</p>")).toEqual([]);
++  });
++
++  it("does not fuse cells or blocks into one word", () => {
++    expect(pageText("<table><tr><td>a</td><td>b</td></tr></table><p>c</p><div>d</div>").text).toBe("a b c d");
++  });
++
++  it("ignores scripts and styles", () => {
++    expect(addresses("<script>var e='x@evil.example'</script><style>a{}</style><p>hi</p>")).toEqual([]);
++  });
++});
++
++describe("addressNamesAuthor", () => {
++  it("is true for the surname, a first name, or initials with the surname", () => {
++    expect(addressNamesAuthor("alexwarth@gmail.com", "Alessandro Warth")).toBe(true);
++    expect(addressNamesAuthor("alessandro@example.org", "Alessandro Warth")).toBe(true);
++    expect(addressNamesAuthor("awarth@example.org", "Alessandro Warth")).toBe(true);
++    expect(addressNamesAuthor("jmuller@example.de", "Jörg Müller")).toBe(true);
++  });
++
++  it("is false for someone else's address", () => {
++    expect(addressNamesAuthor("labmanager@example.org", "Alessandro Warth")).toBe(false);
++    expect(addressNamesAuthor("info@example.org", null)).toBe(false);
++  });
++});
++
++describe("readAuthorPage", () => {
++  it("reads a page through the injected fetch", async () => {
++    const read = await readAuthorPage("http://example.org/~a", async () => ({
++      kind: "html",
++      text: "<p>a [at] example.org</p>",
++      finalUrl: "https://example.org/~a/",
++    }));
++    /* The page named is where the fetch ended, after redirects (R2). */
++    expect(read).toMatchObject({ kind: "read", url: "https://example.org/~a/", addresses: [{ address: "a@example.org", disguised: true }] });
++  });
++
++  it("turns a failure into a reason, never a throw", async () => {
++    const blocked = await readAuthorPage("http://10.0.0.1/", async (url) => {
++      throw new FetchFailure("blocked-address", url, "blocked");
++    });
++    expect(blocked).toEqual({ kind: "unread", url: "http://10.0.0.1/", reason: "blocked-address" });
++    const pdf = await readAuthorPage("https://example.org/cv.pdf", async () => ({ kind: "pdf" }));
++    expect(pdf).toEqual({ kind: "unread", url: "https://example.org/cv.pdf", reason: "not-html" });
++  });
++});
+diff --git a/tests/db-schema-drift.test.ts b/tests/db-schema-drift.test.ts
+index e1059eecd..a578da54f 100644
+--- a/tests/db-schema-drift.test.ts
++++ b/tests/db-schema-drift.test.ts
+@@ -264,6 +264,7 @@ describe("declaredTables", () => {
+       "articles",
+       "author_gift_guidance",
+       "author_gifts",
++      "author_lookup_candidates",
+       "author_lookups",
+       "bibliographic_records",
+       "bibliographic_service_slots",
+@@ -426,8 +427,9 @@ describe("against a real database", () => {
+          2026-10-21 (plan 261021d); sixty-six since `view_as_sessions`,
+          2026-10-21 (plan 261019n); sixty-seven since `feedback_questions`
+          the same day (plan 261021h); sixty-eight since
+-         `author_gift_guidance`, 2026-10-24 (plan 261024f). */
+-      expect(report.declaredTables).toBe(68);
++         `author_gift_guidance`, 2026-10-24 (plan 261024f); sixty-nine since
++         `author_lookup_candidates`, the same day (plan 261024j). */
++      expect(report.declaredTables).toBe(69);
+       expect(driftWarnings(report)).toEqual([]);
+     });
+   });
+diff --git a/tests/mcp-tools.test.ts b/tests/mcp-tools.test.ts
+index d47890263..405b84c6c 100644
+--- a/tests/mcp-tools.test.ts
++++ b/tests/mcp-tools.test.ts
+@@ -113,7 +113,37 @@ const DEFAULT_ROUTES: Routes = {
+           sendStartedAt: null,
+           discardedAt: null,
+           voucherId: null,
+-          lookups: [],
++          lookups: [
++            {
++              id: "l1",
++              createdAt: "2026-10-09T00:00:00Z",
++              finishedAt: "2026-10-09T00:01:00Z",
++              outcome: "author",
++              failure: null,
++              authorName: "Ann",
++              authorSourceUrl: null,
++              email: null,
++              emailSourceUrl: null,
++              suggestedEmail: null,
++              contactUrl: null,
++              searches: 5,
++              model: "m",
++              suggestedMessage: null,
++              cost: null,
++              candidates: [
++                {
++                  address: "ann@example.org",
++                  kind: "guess",
++                  confidence: "low",
++                  why: "A long shot.",
++                  sourceUrl: null,
++                  patternSeen: false,
++                  /* Not a field: the tool must not pass on what it does not name (plan 261024j). */
++                  extra: "CANDIDATE-EXTRA-FIELD",
++                },
++              ],
++            },
++          ],
+         },
+       ],
+     },
+@@ -334,6 +364,16 @@ describe("each tool calls the route it claims", () => {
+     expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
+   });
+ 
++  it("list_author_gifts lists a lookup's possible addresses, field by field (plan 261024j)", async () => {
++    const h = await harness();
++    const result = await h.call("list_author_gifts");
++    const { gifts } = result.json() as { gifts: { lookups: { candidates: unknown[] }[] }[] };
++    expect(gifts[0]?.lookups[0]?.candidates).toEqual([
++      { address: "ann@example.org", kind: "guess", confidence: "low", why: "A long shot.", sourceUrl: null, patternSeen: false },
++    ]);
++    expect(result.text).not.toContain("CANDIDATE-EXTRA-FIELD");
++  });
++
+   it("update_author_gift takes a replace or an append, not both, and sends nothing for both", async () => {
+     const h = await harness();
+     const result = await h.call("update_author_gift", { id: VOUCHER, notes: "a", append_notes: "b" });

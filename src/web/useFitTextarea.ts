@@ -34,6 +34,14 @@ export function useFitTextarea(box: RefObject<HTMLTextAreaElement | null>, value
   const fitBox = () => {
     const el = box.current;
     if (!el) return;
+    /* **Empty, the rows decide**, as in Chat's composer: an empty textarea's
+       `scrollHeight` counts its placeholder, and a long one wrapped in a
+       narrow box grew it past its rows before a word was typed (browser
+       check, plan 261011m; GPT Sol's plan review of 261024e, F2). */
+    if (el.value === "") {
+      el.style.height = "";
+      return;
+    }
     el.style.height = "auto";
     /* `scrollHeight` stops inside the border and the box is `border-box`. */
     el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;

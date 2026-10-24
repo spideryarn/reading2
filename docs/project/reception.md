@@ -274,7 +274,8 @@ What the reader gets:
   Pressing the mark opens the conversation beside Sources (`?thread=`, the mode unchanged), in the
   floating chat panel, which docks in the right-hand column only when Marginalia is open and the
   window is wide.
-- **In Chat's list** the conversation has Sources' icon, with a card that quotes the claim.
+- **In Chat's list** the conversation says *Claims* under its title, beside Sources' icon; the
+  icon's card quotes the claim.
 - **A visitor has neither** the button nor the mark. Chat is the owner's.
 
 How it works, and what to know before changing it:
@@ -366,7 +367,7 @@ What the reader gets:
   question: the angle, quoted, and a fixed question after it: *What do others say about the
   article from this angle? Search the web, and say so plainly if you find little.* The press is
   the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)); until
-  then the question waited in the box. Back returns to Sources' Reception.
+  then the question waited in the box. Back returns to Sources' Investigate.
 - **Your angles**, under the box: one line per chat started this way, newest first, three and then
   all. A chat appears once its first question is sent.
   A line opens its conversation beside Sources, as a claim's mark does. Under the angle it shows
@@ -374,7 +375,8 @@ What the reader gets:
   [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)).
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
   needs no stored debate.
-- **In Chat's list** the conversation has Sources' icon, with a card that quotes the angle.
+- **In Chat's list** the conversation says *Investigate* under its title, beside Sources' icon; the
+  icon's card quotes the question.
 - **A visitor has neither.** Sources is outside the
   [Experimental switch](experimental-features.md), but *Your angles* remains owner-only; the
   conversations are still in Chat's list.

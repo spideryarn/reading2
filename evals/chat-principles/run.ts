@@ -34,6 +34,9 @@ import { citedPassages, median, pairRows } from "../guide/conversations.js";
 import { blindCoin } from "../plain-words/run.js";
 
 const CORPUS = path.join(import.meta.dirname, "..", "..", "tests", "fixtures", "data-root", "data");
+/* Articles this eval needs beyond the shared fixtures: the piece a reader's
+   report was about, exported read-only from production (plan 261024d). */
+const OWN_ARTICLES = path.join(import.meta.dirname, "articles");
 const RESULTS = path.join(import.meta.dirname, "results");
 
 /* ------------------------------------------------------------------ cases -- */
@@ -53,6 +56,7 @@ export interface Case {
 
 const SETH = "noema-mythology-of-conscious-ai";
 const AGENTS = "openai-huggingface";
+const EXPRESSIVE = "effective-expressiveness";
 
 const SETH_ANSWER =
   "He thinks it is unlikely, at least for AI built the way it is today. His case is that consciousness may depend on being a living, self-maintaining body, not on computation alone, so a system that only computes would at most seem conscious. He stops short of saying it is impossible.";
@@ -238,6 +242,88 @@ export const CASES: readonly Case[] = [
     question: "What did Hugging Face do about it?",
     aim: "a question about a later part of the piece: is the reply easy to follow for this reader, given what they have read?",
   },
+  /* Plan 261024d (Greg's report spya-bq9wv5): what others have said, where
+     an answer is made of people, works and terms the reader may not know or
+     remember. `others-thought` replays his own Explore turns. */
+  {
+    id: "others-thought",
+    dir: EXPRESSIVE,
+    kind: "explore",
+    about: null,
+    why: "Wondering which programming languages suit AI coding models.",
+    history: [
+      "Do you have access to my recall chat?",
+      'Yes, I\'ve just read it. You compared his opening to Paul Graham\'s idea of a language\'s power: abstractions that let you do interesting things in less code. Then you worried that once effective expressiveness becomes "a property of a language and a problem and a programmer" [spya-vv3pdc], it turns into personal preference. Your reason for reading gives a way to test that worry: if an AI model is one of the "programmers," you could measure how naturally it solves a kind of problem in one language versus another. Would that answer your worry about preference, or just move it somewhere else?',
+    ],
+    question:
+      "Okay, yeah, that's a good summary. Help me think this through. What do you think? Is there anybody else who's thought more deeply or interestingly about this?",
+    aim: "the reader asks who else has thought about this: can a reader who has not read (or does not remember) the works and people it brings in follow the reply, without it lecturing?",
+  },
+  {
+    id: "others-chat",
+    dir: EXPRESSIVE,
+    kind: "chat",
+    about: null,
+    why: null,
+    history: [],
+    question: "Has anyone else written about this idea? Who, and what did they say?",
+    aim: "the reader asks what others have said: can a reader who has not read the works and people it brings in follow the reply, without it lecturing?",
+  },
+  {
+    id: "seth-others",
+    dir: SETH,
+    kind: "explore",
+    about: null,
+    why: null,
+    history: [],
+    question: "What do other people think of his argument?",
+    aim: "the reader asks what others think: can a reader who has not read the works and people it brings in follow the reply, without it lecturing?",
+  },
+  {
+    id: "expert-others",
+    dir: SETH,
+    kind: "chat",
+    about: "Neuroscientist; I work on perception.",
+    why: "Seeing how he positions his view for a lab discussion.",
+    history: [],
+    question: "How does his view compare with the other main theories of consciousness?",
+    aim: "an expert asks how the piece compares with other theories: does the reply remind them briefly what each theory says (an expert may be rusty, or not have read them all) without lecturing them on their own field?",
+  },
+  {
+    /* GPT Sol's plan review (F3): an expert who has shown, in the
+       conversation, that they know the theories by name and substance. */
+    id: "expert-shown-others",
+    dir: SETH,
+    kind: "chat",
+    about: "Consciousness researcher.",
+    why: null,
+    history: [
+      "I know global workspace theory and IIT well, and Graziano's attention schema. Where does Seth sit relative to those?",
+      "Closest to none of them: he puts consciousness in being a living, self-maintaining body that predicts itself, rather than in information broadcast, integration or self-modelling of attention as such.",
+    ],
+    question: "Has anyone pushed back on that from the IIT side?",
+    aim: "a reader who has shown in the conversation that they know the main theories: is the reply pitched to that (no re-explaining GWT or IIT), while still saying who any new person or work it brings in is?",
+  },
+  {
+    id: "recall-others",
+    dir: SETH,
+    kind: "learn",
+    about: null,
+    why: null,
+    history: [],
+    question: "Before I say what I took from it: what do other researchers say about his view?",
+    aim: "Recall, asked what others say: can a reader who has not read the works and people it brings in follow the reply, within Recall's short shape, without a lecture?",
+  },
+  {
+    id: "guide-others",
+    dir: SETH,
+    kind: "guide",
+    about: null,
+    why: null,
+    history: [],
+    question: "Is this piece well regarded? What should I read alongside it?",
+    aim: "the guide, asked how the piece is regarded and what to read with it: is any work or person it names identified enough to be useful, while staying brief?",
+  },
   {
     /* Tutorial's case until Recall took Tutorial in (2026-10-20, plan
        261020m); the id is kept so older results line up. */
@@ -311,8 +397,9 @@ interface Row extends Screen {
 }
 
 function load(dir: string): { meta: Meta; blocks: Block[] } {
-  const meta = JSON.parse(fs.readFileSync(path.join(CORPUS, dir, "meta.json"), "utf8")) as Meta;
-  const { blocks } = JSON.parse(fs.readFileSync(path.join(CORPUS, dir, "blocks.json"), "utf8")) as { blocks: Block[] };
+  const root = fs.existsSync(path.join(OWN_ARTICLES, dir)) ? OWN_ARTICLES : CORPUS;
+  const meta = JSON.parse(fs.readFileSync(path.join(root, dir, "meta.json"), "utf8")) as Meta;
+  const { blocks } = JSON.parse(fs.readFileSync(path.join(root, dir, "blocks.json"), "utf8")) as { blocks: Block[] };
   return { meta, blocks };
 }
 
@@ -402,7 +489,9 @@ function pairs(a: string, b: string, seed: number): void {
     "- Which reply leaves the reader sharper and better placed to read and think for themselves; is more honest",
     "  (holds its ground where the article supports it, corrects them plainly, does not flatter them or the piece);",
     "  says where each thing came from (the article, a web page, or memory); and is easier to follow for someone",
-    "  who may not have read the piece?",
+    "  who may not have read the piece, or the other works and people it brings in?",
+    "- problem: also flag a person, work, study or term the reply brings in without saying who or what it is and why",
+    "  it matters here; and background the reader plainly did not need, given what they have shown.",
     "- problem: does either one lose, bend or blur a claim, say something the article plainly does not, cave without",
     "  a reason, or lecture? And does either reveal or imply, unasked, that it can tell how much the reader has read",
     "  (\"since you haven't got far\", \"now that you've read most of it\")? Where the reader is said to have read part of",

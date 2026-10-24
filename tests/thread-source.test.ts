@@ -34,6 +34,7 @@ describe("threadSource", () => {
       from: "sources",
       mode: "sources",
       label: "Started from a claim in Sources › Claims",
+      place: "Claims",
       quote: "RNA can transfer a memory",
     });
   });
@@ -43,6 +44,7 @@ describe("threadSource", () => {
       from: "learn",
       mode: "learn",
       label: `From Learn › ${LEARN_SUB_MODES.recall.label}`,
+      place: "Recall",
       learn: "recall",
     });
     expect(threadSource(t("explore"))).toMatchObject({
@@ -68,13 +70,14 @@ describe("threadSource", () => {
   });
 
   /* A stored origin keeps its old mode word as data (`citations`, `debate`)
-     until the deep rename; what it shows is Sources' icon and filter,
-     with the sub-mode in the tooltip (GPT Sol's F5 on plan 261009l). */
+     until the deep rename; what it shows is Sources' icon and filter, with the
+     sub-mode in the row and tooltip (GPT Sol's F5 on plan 261009l). */
   it("names a glossary entry and a cited work, each under its own mode's icon and word", () => {
     expect(threadSource(t("chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } }))).toEqual({
       from: "glossary",
       mode: "glossary",
       label: "Started from a glossary entry",
+      place: "Glossary",
       quote: "qualia",
     });
     expect(
@@ -83,6 +86,7 @@ describe("threadSource", () => {
       from: "sources",
       mode: "sources",
       label: "Started from a cited work in Sources › Bibliography",
+      place: "Bibliography",
       quote: "Consciousness Explained",
     });
   });
@@ -92,8 +96,26 @@ describe("threadSource", () => {
       from: "ideas",
       mode: "ideas",
       label: "Started from an idea",
+      place: "Ideas",
       quote: "Attention suffices",
     });
+  });
+
+  /* Report spya-twsm7t: the list says *Investigate*, not only Sources' icon. */
+  it("names a question from Investigate as the reader's, under Sources' icon, placed in Investigate", () => {
+    expect(threadSource(t("chat", { origin: { mode: "reception", lens: "Is it borne out?" } }))).toEqual({
+      from: "sources",
+      mode: "sources",
+      place: "Investigate",
+      label: "Started from a question in Sources › Investigate",
+      quote: "Is it borne out?",
+      voice: "reader",
+    });
+  });
+
+  it("places no passage chat and no plain chat", () => {
+    expect(threadSource(t("chat", { anchor: QUOTED }))?.place).toBeUndefined();
+    expect(threadSource(t("chat"))?.place).toBeUndefined();
   });
 
   it("says nothing for a plain chat", () => {
@@ -185,16 +207,23 @@ describe("originBack", () => {
       quote: "RNA can transfer a memory",
       text: "Back to “RNA can transfer a memory” in Claims",
     });
-    expect(originBack({ mode: "glossary", itemId: "spya-ttm222", quote: "qualia" }).text).toBe(
-      "Back to “qualia” in Glossary",
-    );
-    expect(originBack({ mode: "bibliography", itemId: "spya-ttm333", quote: "A work" })).toMatchObject({
+    expect(originBack({ mode: "glossary", itemId: "spya-ttm222", quote: "qualia" })).toEqual({
+      mode: "glossary",
+      modeLabel: "Glossary",
+      quote: "qualia",
+      text: "Back to “qualia” in Glossary",
+    });
+    expect(originBack({ mode: "bibliography", itemId: "spya-ttm333", quote: "A work" })).toEqual({
       mode: "sources",
       view: "bibliography",
+      modeLabel: "Bibliography",
+      quote: "A work",
       text: "Back to “A work” in Bibliography",
     });
-    expect(originBack({ mode: "ideas", itemId: "spya-dea222", quote: "An idea" })).toMatchObject({
+    expect(originBack({ mode: "ideas", itemId: "spya-dea222", quote: "An idea" })).toEqual({
       mode: "ideas",
+      modeLabel: "Ideas",
+      quote: "An idea",
       text: "Back to “An idea” in Ideas",
     });
   });

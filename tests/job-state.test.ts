@@ -44,6 +44,7 @@ vi.mock("../src/job-failure.js", async (importOriginal) => {
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { INTERRUPTED, INTERRUPTED_CODE, MODEL_REFUSED } from "../src/messages.js";
 import {
+  ARTICLE_UNAFFECTED,
   DRIVER_STALLED_AFTER,
   displayJob,
   driverStalled,
@@ -298,6 +299,56 @@ it("tells an interruption apart from an ordinary retryable failure", () => {
 
   const busy = displayJob(job("error", { error: "The AI service is busy. [ai-busy]", failureKind: "retry" }), START);
   expect(busy.state, "every retryable failure read as an interruption").toBe("failed");
+});
+
+/**
+ * **A failed automatic-extra job says the article is fine** (plan 261024c,
+ * spya-rvj2p7). A job publishes only on a `done` ending, so a failed one of
+ * these jobs leaves the article exactly as it was; Greg read the failed step's message
+ * alone as the import having failed. An import keeps its silence, because
+ * there the article may not exist, and so does `labels`, whose failure marks
+ * the published revision (GPT Sol, plan review finding 1).
+ */
+it("a failed automatic-extra job says the article is unchanged; an import or labels does not", () => {
+  const failed = step({ name: "crossrefs", status: "error", error: "Adding cross-references did not finish." });
+  const mode = displayJob(job("error", { failureKind: "retry", steps: [failed] }), START);
+  expect(mode.state).toBe("failed");
+  expect(mode.sentence).toBe(ARTICLE_UNAFFECTED);
+
+  const gone = displayJob(
+    job("error", {
+      error: INTERRUPTED.message,
+      failureKind: INTERRUPTED.kind,
+      steps: [step({ name: "glossary" })],
+    }),
+    START,
+  );
+  expect(gone.state).toBe("interrupted");
+  expect(gone.sentence).toBe(ARTICLE_UNAFFECTED);
+
+  const importing = displayJob(
+    job("error", {
+      failureKind: "retry",
+      steps: [step({ name: "fetch", status: "error" }), step({ name: "extract" })],
+    }),
+    START,
+  );
+  expect(importing.sentence, "told a reader whose import failed that their article is fine").toBeNull();
+
+  /* Skim's job carries what it reads, and every one of them is a main mode. */
+  const skim = displayJob(
+    job("error", {
+      failureKind: "retry",
+      steps: [step({ name: "quotes", status: "done" }), step({ name: "ideas", status: "error" }), step({ name: "skim" })],
+    }),
+    START,
+  );
+  expect(skim.sentence).toBe(ARTICLE_UNAFFECTED);
+
+  for (const name of ["labels", "structure"] as const) {
+    const other = displayJob(job("error", { failureKind: "retry", steps: [step({ name, status: "error" })] }), START);
+    expect(other.sentence, `${name} is not an automatic extra`).toBeNull();
+  }
 });
 
 /**

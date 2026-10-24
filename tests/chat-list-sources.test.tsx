@@ -12,6 +12,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ChatThread, ThreadKind } from "../src/types.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
@@ -221,6 +222,46 @@ describe("pressing a row", () => {
     /* The list, not a transcript with a composer that would send to it. */
     expect(rows()).toHaveLength(EVERY.length);
     expect(host.querySelector(".chat-head-title")).toBeNull();
+  });
+});
+
+/**
+ * **The place a row came from, in words** (report spya-twsm7t, plan 261024i
+ * stage 1): an icon with a hover card was not enough to tell an Investigate
+ * chat from any other Sources one. The meta line names the sub-mode, in the
+ * chip's own words; a Learn row's title already does.
+ */
+describe("a row's place, in words", () => {
+  const LENS = thread("spya-lns025", "chat", { origin: { mode: "reception", lens: "Is it borne out?" } });
+  const WORK = thread("spya-wrk026", "chat", {
+    origin: { mode: "bibliography", itemId: "spya-ttm333", quote: "A work" },
+  });
+  const ENTRY = thread("spya-ent027", "chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } });
+  const place = (t: ChatThread) =>
+    row(t).querySelector(":scope .chat-thread-open > .chat-thread-meta > .chat-thread-place")?.textContent ?? null;
+
+  it("names the sub-mode or mode each row came from, under the title", () => {
+    paint([...EVERY, LENS, WORK, ENTRY]);
+    expect(place(LENS)).toBe("Investigate");
+    expect(place(CLAIM)).toBe("Claims");
+    expect(place(WORK)).toBe("Bibliography");
+    expect(place(ENTRY)).toBe("Glossary");
+  });
+
+  it("says nothing on a plain chat or a passage chat, and does not repeat a Learn row's title", () => {
+    paint(EVERY);
+    expect(place(CHAT)).toBeNull();
+    expect(place(PASSAGE)).toBeNull();
+    expect(place(LEARN)).toBeNull();
+    expect(place(EXPLORE)).toBeNull();
+  });
+
+  it("lets the time shrink with an ellipsis before a long place, count and date widen the row", () => {
+    const css = readFileSync("src/web/styles/mode-band.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = css.match(/\.chat-thread-when\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toMatch(/min-width\s*:\s*0/);
+    expect(rule).toMatch(/overflow\s*:\s*hidden/);
+    expect(rule).toMatch(/text-overflow\s*:\s*ellipsis/);
   });
 });
 

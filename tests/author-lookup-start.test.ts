@@ -46,7 +46,8 @@ const ADMIN = ADMIN_USER_ID_LOCAL as OwnerId;
 const RUN = randomUUID().slice(0, 8);
 const SLUG = `test-author-lookup-start-${RUN}`;
 const BIO_PAGE = "https://writer.example.org/about";
-const ADDRESS = `lookup-${RUN}@example.invalid`;
+/* In the author's name, so a seen address in a result fills the draft (plan 261024j, R1). */
+const ADDRESS = `paulgraham-${RUN}@example.invalid`;
 
 let article: ScratchArticle | undefined;
 const runIds: string[] = [];
@@ -192,6 +193,38 @@ describe("startAuthorLookup", () => {
       [seen?.runId],
     );
     expect(rows).toEqual([{ owner_id: ADMIN, article_slug: SLUG, scope_kind: "request", purpose: "author-lookup" }]);
+  });
+
+  /* Plan 261024f § D4, R1, R5: Greg's guidance reaches the prompt, the run
+     records which guidance it used, and the suggestion is kept on the run
+     without touching the email. */
+  it("sends Greg's newest guidance, records it on the run, and keeps the suggestion off the email", async () => {
+    const { rows: saved } = await pool.query<{ id: string }>(
+      "insert into spideryarn.author_gift_guidance (guidance, created_by) values ($1, $2) returning id",
+      [`Write like a pirate ${RUN}.`, ADMIN],
+    );
+    const guidanceId = saved[0]?.id ?? "";
+    try {
+      const { giftId, lookupId } = await pendingLookup();
+      const systems: string[] = [];
+      const call: AuthorLookupCall = async (body): Promise<JsonCall> => {
+        const runId = currentSpend()?.runId ?? null;
+        if (runId) runIds.push(runId);
+        systems.push((body.messages as { role: string; content: string }[])[0]?.content ?? "");
+        return { json: completion(), answeredBy: "anthropic/claude-sonnet-test", generationId: null };
+      };
+      await startAuthorLookup(lookupId, { call });
+
+      expect(systems).toHaveLength(1);
+      expect(systems[0]).toContain(`Write like a pirate ${RUN}.`);
+      expect(systems[0]).toContain("Claim nothing you were not told");
+      const row = await lookupRow(lookupId);
+      expect(row.guidance_id).toBe(guidanceId);
+      expect(row.suggested_message).toBe("Hello, here is a private link to your essay in Spideryarn.");
+      expect((await giftRow(giftId)).recipient_note).toBeNull();
+    } finally {
+      await pool.query("delete from spideryarn.author_gift_guidance where id = $1", [guidanceId]);
+    }
   });
 
   it("never calls for a row that is already claimed", async () => {

@@ -7758,6 +7758,18 @@ export const authorLookups = spideryarn.table(
     /** The lookup's own collector: the key into `ai_calls`. Null until claimed. */
     runId: uuid("run_id"),
     model: text("model"),
+    /**
+     * **The model's suggested message**, kept on its own so the card can offer
+     * *Use as your message* (plan 261024f, R1). Never written into the draft by
+     * the lookup: it reaches the email only through Greg's own edit.
+     */
+    suggestedMessage: text("suggested_message"),
+    /**
+     * **Which guidance the lookup ran with** — the `author_gift_guidance` row
+     * in force when it was claimed; null for none (the built-in text) or before
+     * it was claimed (plan 261024f, R5).
+     */
+    guidanceId: uuid("guidance_id").references((): AnyPgColumn => authorGiftGuidance.id, { onDelete: "set null" }),
   },
   (t) => [
     check("author_lookups_outcome", sql`${t.outcome} is null or ${t.outcome} in ('address', 'author', 'nothing', 'failed')`),
@@ -7773,7 +7785,8 @@ export const authorLookups = spideryarn.table(
           and coalesce(char_length(${t.emailSourceUrl}), 0) <= 10000
           and coalesce(char_length(${t.suggestedEmail}), 0) <= 10000
           and coalesce(char_length(${t.contactUrl}), 0) <= 10000
-          and coalesce(char_length(${t.model}), 0) <= 10000`,
+          and coalesce(char_length(${t.model}), 0) <= 10000
+          and coalesce(char_length(${t.suggestedMessage}), 0) <= 10000`,
     ),
     /* The list's runs of one gift, newest first. */
     index("author_lookups_gift").on(t.authorGiftId, t.createdAt),
@@ -7782,6 +7795,107 @@ export const authorLookups = spideryarn.table(
     uniqueIndex("author_lookups_one_pending")
       .on(t.authorGiftId)
       .where(sql`${t.outcome} is null`),
+  ],
+);
+
+/**
+ * **The addresses a lookup offered but did not apply** — written on a page it
+ * read, seen in a result but not in the author's name, or guessed from a
+ * colleague's pattern. Greg, 2026-10-23 (#686, spya-w5yavh): *"list a few with
+ * tooltips for me with a level of confidence for each"*. Plan
+ * docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md.
+ *
+ * Nothing here ever fills a draft: *Use this address* on the card is Greg's
+ * own edit. `confidence` is computed by src/author-candidates.ts, never the
+ * model's. Written once, by `finishLookup`, in the finish's transaction.
+ */
+export const authorLookupCandidates = spideryarn.table(
+  "author_lookup_candidates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    lookupId: uuid("lookup_id")
+      .notNull()
+      .references(() => authorLookups.id, { onDelete: "cascade" }),
+    /** Best first, from 0. */
+    position: integer("position").notNull(),
+    address: text("address").notNull(),
+    kind: text("kind").notNull(),
+    confidence: text("confidence").notNull(),
+    /** Written by our code, not the model: what it is and what it rests on. */
+    why: text("why").notNull(),
+    sourceUrl: text("source_url"),
+    /** A guess only: whether a colleague's pattern reproduced it. */
+    patternSeen: boolean("pattern_seen"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("author_lookup_candidates_position").on(t.lookupId, t.position),
+    uniqueIndex("author_lookup_candidates_address").on(t.lookupId, t.address),
+    check("author_lookup_candidates_position_range", sql`${t.position} >= 0`),
+    check(
+      "author_lookup_candidates_kind",
+      sql`${t.kind} in ('on-page', 'on-page-disguised', 'in-result', 'guess')`,
+    ),
+    check("author_lookup_candidates_confidence", sql`${t.confidence} in ('high', 'medium', 'low')`),
+    /* No guess is ever "likely" (R3), and only a guess has a pattern verdict. */
+    check("author_lookup_candidates_guess_not_high", sql`${t.kind} <> 'guess' or ${t.confidence} <> 'high'`),
+    check("author_lookup_candidates_pattern_only_guess", sql`(${t.patternSeen} is not null) = (${t.kind} = 'guess')`),
+    check(
+      "author_lookup_candidates_confidence_for_kind",
+      sql`(${t.kind} in ('on-page', 'on-page-disguised') and ${t.confidence} in ('high', 'medium'))
+          or (${t.kind} = 'in-result' and ${t.confidence} = 'medium')
+          or (${t.kind} = 'guess' and ((${t.patternSeen} and ${t.confidence} = 'medium')
+              or (not ${t.patternSeen} and ${t.confidence} = 'low')))`,
+    ),
+    check(
+      "author_lookup_candidates_source_for_kind",
+      sql`(${t.kind} = 'guess' or ${t.sourceUrl} is not null)
+          and (${t.patternSeen} is distinct from true or ${t.sourceUrl} is not null)`,
+    ),
+    check(
+      "author_lookup_candidates_address_normalised",
+      sql`${t.address} = lower(btrim(${t.address})) and ${t.address} like '%_@_%'`,
+    ),
+    check(
+      "author_lookup_candidates_text_lengths",
+      sql`char_length(${t.address}) <= 10000 and char_length(${t.why}) <= 10000
+          and coalesce(char_length(${t.sourceUrl}), 0) <= 10000`,
+    ),
+  ],
+);
+
+/**
+ * **Greg's guidance for the author lookup's suggested message**, edited on
+ * `/admin/vouchers` — Greg, 2026-10-23 (#688, spya-n8ruxv): *"have some kind
+ * of prompt or template that I can easily screw with, you know, in the web"*.
+ * Plan docs/plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md § D4 and R5; src/store/pg-author-gifts.ts is
+ * the only writer.
+ *
+ * **Insert-only: the newest row is in force**, so every earlier version is
+ * kept with who wrote it and when. `guidance` null means *use the built-in
+ * text* (src/author-lookup.ts), so a change to the built-in text is not
+ * shadowed by a stored copy of it. No row at all means the same.
+ *
+ * Only the voice of the message: the fixed rules around it — what to find,
+ * the address and URL rules, the untrusted-text fence, the truthfulness and
+ * length rules — stay in code.
+ */
+export const authorGiftGuidance = spideryarn.table(
+  "author_gift_guidance",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    guidance: text("guidance"),
+    createdAt: createdAt(),
+    /** The administrator who saved it. */
+    createdBy: uuid("created_by").notNull(),
+  },
+  (t) => [
+    /* The app's limit is 4,000 (AUTHOR_GIFT_GUIDANCE_MAX); this catches a runaway. */
+    check(
+      "author_gift_guidance_length",
+      sql`${t.guidance} is null or char_length(${t.guidance}) between 1 and 100000`,
+    ),
+    index("author_gift_guidance_newest").on(t.createdAt),
   ],
 );
 

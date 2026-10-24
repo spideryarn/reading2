@@ -383,18 +383,23 @@ import {
 import type { VoucherCreated, VoucherUpdated } from "./admin-vouchers.js";
 import {
   AUTHOR_GIFT_NOTES_MAX,
+  type AuthorGiftEmailPreview,
   type AuthorGiftEnsured,
+  type AuthorGiftGuidance,
   type AuthorGiftHighPowered,
   type AuthorGiftPatched,
   type AuthorGiftSent,
   type AuthorLookupStarted,
 } from "./admin-author-gifts.js";
 import { startAuthorLookup } from "./author-lookup-start.js";
+import { AUTHOR_GIFT_GUIDANCE_BUILT_IN, authorLookupFixedPrompt } from "./author-lookup.js";
 import type { AdminArticle, AdminArticleAccess, AdminArticles, TransferDone, TransferPreview } from "./admin-articles.js";
 import { parseTransferRequest, pgArticleTransferStore } from "./store/pg-article-transfer.js";
 import {
   parseAuthorGiftPatch,
+  type GuidanceRow,
   parseEnsureAuthorGift,
+  parseGuidance,
   parseSendAuthorGift,
   pgAuthorGiftStore,
 } from "./store/pg-author-gifts.js";
@@ -9975,6 +9980,19 @@ const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 /* Author gifts: GET lists, POST ensures one for an article (261010c). */
 const ADMIN_AUTHOR_GIFTS_PATH = "/api/admin/author-gifts";
+const ADMIN_AUTHOR_GIFT_GUIDANCE_PATH = "/api/admin/author-gift-guidance";
+/* One author gift: PATCH edits it, DELETE deletes a discarded one (plan 261024f). */
+const AUTHOR_GIFT_PATTERN = /^\/api\/admin\/author-gifts\/([\w-]+)$/;
+
+/** The guidance as the page reads it: the row in force, the built-in text, and the fixed prompt (plan 261024f § D4). */
+function guidanceReply(row: GuidanceRow | null): AuthorGiftGuidance {
+  return {
+    guidance: row?.guidance ?? null,
+    builtIn: AUTHOR_GIFT_GUIDANCE_BUILT_IN,
+    fixedPrompt: authorLookupFixedPrompt(),
+    updatedAt: row?.createdAt ?? null,
+  };
+}
 /* One article's transfer to another account: GET previews it, POST does it (261011n). */
 const ADMIN_ARTICLE_TRANSFER_PATTERN = /^\/api\/admin\/articles\/([\w-]+)\/transfer$/;
 
@@ -10400,7 +10418,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "pattern",
     method: "PATCH",
-    pattern: /^\/api\/admin\/author-gifts\/([\w-]+)$/,
+    pattern: AUTHOR_GIFT_PATTERN,
     article: "none",
     handler: async ({ request: { req, res } }, captures) => {
       const [, id = ""] = captures;
@@ -10420,6 +10438,79 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, { ok: true, notesUpdatedAt: answer.notesUpdatedAt } satisfies AuthorGiftPatched);
+    },
+  },
+  /* **The email a draft would send, if sent now** (plan 261024f § D2; Greg,
+     #687): the same renderer as Send, the private link's address replaced,
+     the text part only. A read: it sends and queues nothing. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/author-gifts\/([\w-]+)\/email$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const answer = await pgAuthorGiftStore.previewAuthorGiftEmail(id);
+      if (answer.kind === "not-found") throw httpError(404, "There is no such author gift.");
+      if (answer.kind === "starter-refused") throw starterRefused(answer.reason);
+      /* An address, and a note to somebody. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, answer.preview satisfies AuthorGiftEmailPreview);
+    },
+  },
+  /* **Greg's guidance for the lookup's suggested message** (plan 261024f §
+     D4; Greg, #688): read, and saved as a new row. Only the voice of the
+     message: the rest of the prompt is code, and comes back read-only. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: ADMIN_AUTHOR_GIFT_GUIDANCE_PATH,
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, guidanceReply(await pgAuthorGiftStore.currentGuidance()));
+    },
+  },
+  {
+    kind: "exact",
+    method: "PUT",
+    path: ADMIN_AUTHOR_GIFT_GUIDANCE_PATH,
+    article: "none",
+    handler: async ({ user, request: { req, res } }) => {
+      const parsed = parseGuidance(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      const row = await pgAuthorGiftStore.saveGuidance(parsed.value, user.id);
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, guidanceReply(row));
+    },
+  },
+  /* **A discarded gift, deleted for good** with its lookups (plan 261024f §
+     D1; Greg, #685). Only a discarded one: a sent gift's voucher is a billing
+     record. */
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: AUTHOR_GIFT_PATTERN,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const answer = await pgAuthorGiftStore.deleteAuthorGift(id);
+      switch (answer.kind) {
+        case "not-found":
+          throw httpError(404, "There is no such author gift.");
+        case "not-discarded":
+          throw httpError(409, "Only a discarded gift can be deleted. Discard it first.");
+        case "deleted":
+          res.setHeader("Cache-Control", "private, no-store");
+          send(res, 200, { deleted: true });
+          return;
+        default: {
+          const never: never = answer;
+          throw httpError(500, `unknown answer ${String(never)}`);
+        }
+      }
     },
   },
   {

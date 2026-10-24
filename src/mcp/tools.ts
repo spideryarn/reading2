@@ -253,6 +253,15 @@ function trimAuthorLookup(l: AdminAuthorLookup) {
     searches: l.searches,
     model: l.model,
     cost: l.cost,
+    /* Field by field, as everything here (plan 261024j): offered, never applied. */
+    candidates: l.candidates.map((c) => ({
+      address: c.address,
+      kind: c.kind,
+      confidence: c.confidence,
+      why: c.why,
+      sourceUrl: c.sourceUrl,
+      patternSeen: c.patternSeen,
+    })),
   };
 }
 

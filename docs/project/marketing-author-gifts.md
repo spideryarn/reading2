@@ -74,6 +74,19 @@ so they can use chat and every mode on it as its owner. It moves by itself only 
 of his own notes or chats on it; otherwise he moves it on `/admin/articles`
 ([261011n](../plans/261011n-author-gift-link-and-article-ownership-transfer.md)).
 
+**Since 2026-10-24 each draft shows the email it would send now**, from whom and to whom, with the
+private article address represented by a placeholder. The confirmation fetches it afresh before
+Send; the recipient's account status and the article's title are live inputs and can still change
+before the email is queued. The lookup's suggested message is offered beside it rather than put in
+it; the way the lookup writes that message is Greg's to edit on the Drafts tab; and a discarded
+draft can be deleted for good
+([261024f](../plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md)).
+When no address is found, the lookup now reads the author's own page (an `@` drawn as an image
+included) and lists the addresses it did not apply — written on a page, or guessed from a
+colleague's pattern — each marked *likely*, *possible* or *long shot*, for Greg to pick with one
+press ([261024j](../plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md);
+how it works is [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author)).
+
 **Since 2026-10-21 every gifted article gets its main modes**, so the author opens one that is ready,
 and the Give form offers High-powered AI for it, on by default
 ([261021j](../plans/261021j-gift-articles-on-opus-and-with-their-main-modes.md)). For the whole

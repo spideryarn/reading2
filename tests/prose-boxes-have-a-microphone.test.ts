@@ -43,6 +43,7 @@ const WITHOUT: Record<string, string> = {
   "src/web/AdminVouchersPage.tsx#VoucherRow": "admin only: a short note sent with a voucher",
   "src/web/AdminAuthorGifts.tsx#Notes": "admin only: notes on an author gift",
   "src/web/AdminAuthorGifts.tsx#DraftEditor": "admin only: the draft of an author gift's email",
+  "src/web/AuthorGiftGuidance.tsx#AuthorGiftGuidance": "admin only: the guidance for author lookups' messages",
   /* GPT Sol's plan review of 261021e, F5-F6. A voice rewrite would need a
      keeper name that survives the question's client-to-server id swap, and a
      modality carried through the edit route (`withEdit` in src/chat.ts keeps

@@ -262,7 +262,9 @@ describe("declaredTables", () => {
       "article_tags",
       "article_visibility_changes",
       "articles",
+      "author_gift_guidance",
       "author_gifts",
+      "author_lookup_candidates",
       "author_lookups",
       "bibliographic_records",
       "bibliographic_service_slots",
@@ -424,8 +426,10 @@ describe("against a real database", () => {
          since `private_link_openers` and `private_link_signed_out_opens`,
          2026-10-21 (plan 261021d); sixty-six since `view_as_sessions`,
          2026-10-21 (plan 261019n); sixty-seven since `feedback_questions`
-         the same day (plan 261021h). */
-      expect(report.declaredTables).toBe(67);
+         the same day (plan 261021h); sixty-eight since
+         `author_gift_guidance`, 2026-10-24 (plan 261024f); sixty-nine since
+         `author_lookup_candidates`, the same day (plan 261024j). */
+      expect(report.declaredTables).toBe(69);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

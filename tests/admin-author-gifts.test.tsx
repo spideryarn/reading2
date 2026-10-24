@@ -17,7 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AdminAuthorGift, AdminAuthorLookup } from "../src/admin-author-gifts.js";
+import type { AdminAuthorGift, AdminAuthorLookup, AdminLookupCandidate } from "../src/admin-author-gifts.js";
 import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -59,9 +59,11 @@ function lookup(over: Partial<AdminAuthorLookup> = {}): AdminAuthorLookup {
     emailSourceUrl: null,
     suggestedEmail: null,
     contactUrl: null,
+    suggestedMessage: null,
     searches: 2,
     model: "anthropic/claude-sonnet",
     cost: { nanos: 12_340_000, calls: 1, unpricedCalls: 0 },
+    candidates: [],
     ...over,
   };
 }
@@ -121,6 +123,8 @@ let sendAnswer: Answer;
 let lookupAnswer: Answer;
 let highPowerAnswer: Answer;
 let heldWrite: Promise<Response> | null;
+let heldPreview: Promise<Response> | null;
+let previewAnswer: (g: AdminAuthorGift) => Answer;
 
 beforeEach(() => {
   calls = [];
@@ -131,6 +135,17 @@ beforeEach(() => {
   lookupAnswer = { status: 202, body: { lookupId: LOOKUP } };
   highPowerAnswer = { status: 200, body: { highPower: true, queued: 0 } };
   heldWrite = null;
+  heldPreview = null;
+  previewAnswer = (g) => ({
+    status: 200,
+    body: {
+      from: "Spideryarn <hello@spideryarn.com>",
+      to: g.email,
+      subject: `A gift of ${g.articles} free articles on Spideryarn`,
+      text: [g.recipientName === null ? "" : `Dear ${g.recipientName},`, g.recipientNote ?? "", "[the private link to this article]"].join("\n\n"),
+      audience: "invite",
+    },
+  });
   /* A tab click writes `?tab=` into the address, which would outlive the test. */
   history.replaceState(null, "", "/admin/vouchers");
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -143,6 +158,13 @@ beforeEach(() => {
     if (method === "GET" && url === "/api/admin/author-gifts") return json({ status: 200, body: { gifts: giftsAnswer() } });
     if (method !== "GET" && heldWrite !== null) return heldWrite;
     if (method === "POST" && url === "/api/admin/author-gifts") return json(ensureAnswer);
+    /* The email preview (plan 261024f § D2): the server's renderer stood in for by the fields it reads. */
+    if (method === "GET" && url.endsWith("/email")) {
+      if (heldPreview !== null) return heldPreview;
+      const shown = giftsAnswer().find((g) => url === `/api/admin/author-gifts/${g.id}/email`);
+      if (!shown) return json({ status: 404, body: { error: "There is no such author gift." } });
+      return json(previewAnswer(shown));
+    }
     if (method === "POST" && url.endsWith("/lookups")) return json(lookupAnswer);
     if (method === "POST" && url.endsWith("/send")) return json(sendAnswer);
     if (method === "POST" && url.endsWith("/high-power")) return json(highPowerAnswer);
@@ -274,7 +296,7 @@ describe("Author gifts", () => {
     /* Send on a draft and a half-sent one; Restore only on the discarded; nothing but notes on the sent. */
     expect(button(card("a2"), "Send")).toBeDefined();
     expect(button(card("a3"), "Send")).toBeUndefined();
-    expect(button(card("a3"), "Edit")).toBeUndefined();
+    expect(button(card("a3"), "Edit the email")).toBeUndefined();
     expect(button(card("a4"), "Restore")).toBeDefined();
     expect(button(card("a4"), "Send")).toBeUndefined();
   });
@@ -337,7 +359,7 @@ describe("Author gifts", () => {
     const before = vouchersRead();
     await act(async () => button(card(DRAFT), "Send")?.click());
     expect(writes()).toEqual([]);
-    expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
+    expect(card(DRAFT)?.textContent).toContain("Send the email above to ann@example.test?");
     /* Plan 261020z: green outline send, red back-out. */
     const sendTo = button(card(DRAFT), "Send to ann@example.test");
     expect(sendTo?.classList.contains("tone-positive")).toBe(true);
@@ -513,7 +535,7 @@ describe("Author gifts", () => {
     expect(c?.textContent).toContain("Old notes.\nSecond line.");
     expect(c?.textContent).toContain("last written");
     await act(async () => button(c, "Edit notes")?.click());
-    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    const box = c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement;
     expect(box.value).toBe("Old notes.\nSecond line.");
     await act(async () => sets(box, "Old notes.\nSecond line.\nShe replied."));
     /* Plan 261020z: Save notes green, Cancel red. */
@@ -536,7 +558,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     await act(async () => button(c, "Edit notes")?.click());
-    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    const box = c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement;
     await act(async () => sets(box, "First words."));
     await act(async () => button(c, "Save notes")?.click());
     await settle();
@@ -551,7 +573,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     await act(async () => button(c, "Edit notes")?.click());
-    const box = () => c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement | null;
+    const box = () => c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement | null;
     await act(async () => sets(box() as HTMLTextAreaElement, "Greg's long, careful rewrite."));
     await act(async () => button(c, "Save notes")?.click());
     await settle();
@@ -567,7 +589,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     await act(async () => button(c, "Edit notes")?.click());
-    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    const box = c?.querySelector('textarea[aria-label="Private notes"]') as HTMLTextAreaElement;
     await act(async () => sets(box, "Greg's edited note."));
 
     row = gift({
@@ -603,14 +625,14 @@ describe("Author gifts", () => {
     giftsAnswer = () => [gift({ recipientName: "Ann" })];
     await mount();
     const c = card(DRAFT);
-    await act(async () => button(c, "Edit")?.click());
+    await act(async () => button(c, "Edit the email")?.click());
     const name = c?.querySelector('input[aria-label="Their name"]') as HTMLInputElement;
     await act(async () => sets(name, "Ann Author"));
     heldWrite = new Promise<Response>(() => {});
     act(() => button(c, "Save")?.click());
     expect(name.disabled).toBe(true);
     expect((c?.querySelector('input[aria-label="Email address"]') as HTMLInputElement | null)?.disabled).toBe(true);
-    expect((c?.querySelector('textarea[aria-label="Note to them"]') as HTMLTextAreaElement | null)?.disabled).toBe(true);
+    expect((c?.querySelector('textarea[aria-label="Your message to them"]') as HTMLTextAreaElement | null)?.disabled).toBe(true);
   });
 
   it("offers Look up again only on a draft, and not while one is running", async () => {
@@ -655,7 +677,7 @@ describe("Author gifts", () => {
     await mount();
     const c = card(DRAFT);
     const fields = c?.querySelector("dl")?.textContent ?? "";
-    expect(fields).toContain("typed@example.test — typed by you");
+    expect(fields).toContain("typed@example.test — chosen or typed by you");
     expect(fields).toContain("seen at https://example.test/bio");
     const run = c?.querySelector("ul li")?.textContent ?? "";
     expect(run).toContain("Address found");
@@ -680,15 +702,94 @@ describe("Author gifts", () => {
     expect(card(DRAFT)?.querySelector("dl")?.textContent).toContain("from the lookup");
   });
 
-  it("labels an address no result showed as suggested, not seen", async () => {
+  it("lists an address no result showed as a long shot, never applied (plan 261024j, R7)", async () => {
     giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", suggestedEmail: "guess@example.test" })] })];
     await mount();
     const run = card(DRAFT)?.querySelector("ul li")?.textContent ?? "";
     expect(run).toContain("Author found, no address");
-    expect(run).toContain("guess@example.test — suggested, not seen in any result");
+    expect(run).toContain("Possible addresses — none applied");
+    expect(run).toContain("guess@example.testlong shot");
   });
 
-  it("says each run's outcome, flags more than three searches, and gives the cost", async () => {
+  it("keeps a suggestion that is not an address as text, with no button to use it (R7)", async () => {
+    giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", suggestedEmail: "ann at example" })] })];
+    await mount();
+    expect(card(DRAFT)?.textContent).toContain("ann at example — suggested, not seen in any result, and not shaped like an address");
+    expect(button(card(DRAFT), "Use this address")).toBeUndefined();
+  });
+
+  describe("possible addresses (plan 261024j)", () => {
+    const offered: AdminLookupCandidate[] = [
+      {
+        address: "alexwarth@gmail.com",
+        kind: "on-page-disguised",
+        confidence: "high",
+        why: "Written in disguise on tinlizzie.org/~awarth/, the page the lookup took for theirs, and in the author's name.",
+        sourceUrl: "https://tinlizzie.org/~awarth/",
+        patternSeen: null,
+      },
+      {
+        address: "alessandro.warth@inkandswitch.com",
+        kind: "guess",
+        confidence: "low",
+        why: "A long shot: no colleague's address was seen to support it.",
+        sourceUrl: null,
+        patternSeen: false,
+      },
+    ];
+
+    it("lists each with its confidence in words, and none is applied", async () => {
+      giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      const rows = [...(card(DRAFT)?.querySelectorAll('ul[aria-label="Possible addresses"] > li') ?? [])].map((li) => li.textContent ?? "");
+      expect(rows).toEqual([
+        "alexwarth@gmail.comlikelyUse this address",
+        "alessandro.warth@inkandswitch.comlong shotUse this address",
+      ]);
+      expect(writes()).toEqual([]);
+    });
+
+    it("puts one in the draft only when pressed, through the ordinary edit", async () => {
+      giftsAnswer = () => [gift({ lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      await act(async () => button(card(DRAFT), "Use this address")?.click());
+      await settle();
+      expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { email: "alexwarth@gmail.com" } }]);
+    });
+
+    it("closes an open Send confirmation before choosing a different address", async () => {
+      giftsAnswer = () => [gift({ email: "ann@example.test", lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      await act(async () => button(card(DRAFT), "Send")?.click());
+      expect(button(card(DRAFT), "Send to ann@example.test")).toBeDefined();
+
+      await act(async () => button(card(DRAFT), "Use instead")?.click());
+      await settle();
+
+      expect(button(card(DRAFT), "Send to ann@example.test")).toBeUndefined();
+      expect(writes()).toEqual([{ method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { email: "alexwarth@gmail.com" } }]);
+    });
+
+    it("says Use instead when the draft has another address, and marks the one it has", async () => {
+      giftsAnswer = () => [gift({ email: "alexwarth@gmail.com", lookups: [lookup({ outcome: "author", candidates: offered })] })];
+      await mount();
+      const rows = [...(card(DRAFT)?.querySelectorAll('ul[aria-label="Possible addresses"] > li') ?? [])].map((li) => li.textContent ?? "");
+      expect(rows).toEqual(["alexwarth@gmail.comlikelyin the draft", "alessandro.warth@inkandswitch.comlong shotUse instead"]);
+    });
+
+    it("offers no button on a gift that is no longer a draft", async () => {
+      giftsAnswer = () => [
+        gift({ id: SENT, status: "sent", voucherId: "v1", lookups: [lookup({ outcome: "author", candidates: offered })] }),
+      ];
+      await mount({ tab: "Given" });
+      const shown = button(host, "Show");
+      if (shown) await act(async () => shown.click());
+      expect(host.textContent).toContain("alexwarth@gmail.com");
+      expect(button(host, "Use this address")).toBeUndefined();
+    });
+  });
+
+  it("says each run's outcome, flags more than five searches, and gives the cost", async () => {
     const recent = new Date(Date.now() - 30_000).toISOString();
     const old = new Date(Date.now() - 20 * 60_000).toISOString();
     giftsAnswer = () => [
@@ -696,7 +797,7 @@ describe("Author gifts", () => {
         lookups: [
           lookup({ id: "r1", outcome: null, finishedAt: null, cost: null, createdAt: recent }),
           lookup({ id: "r2", outcome: null, finishedAt: null, cost: null, createdAt: old }),
-          lookup({ id: "r3", outcome: "failed", failure: "503", searches: 5, cost: { nanos: 1_000_000, calls: 2, unpricedCalls: 1 } }),
+          lookup({ id: "r3", outcome: "failed", failure: "503", searches: 6, cost: { nanos: 1_000_000, calls: 2, unpricedCalls: 1 } }),
           lookup({ id: "r4", outcome: "failed", failure: "stale" }),
         ],
       }),
@@ -707,7 +808,7 @@ describe("Author gifts", () => {
     expect(runs[0]).toContain("nothing spent yet");
     expect(runs[1]).toContain("Did not finish");
     expect(runs[2]).toContain("Failed: 503");
-    expect(runs[2]).toContain("5 searches — more than the 3 it was allowed");
+    expect(runs[2]).toContain("6 searches — more than the 5 it was allowed");
     expect(runs[2]).toContain("cost not fully known");
     expect(runs[3]).toContain("Did not finish");
     expect(runs[3]).toContain("2 searches · cost: $0.0123 (1 call)");
@@ -717,7 +818,7 @@ describe("Author gifts", () => {
     giftsAnswer = () => [gift({ email: "found@example.test", emailLookupId: LOOKUP, recipientName: "Ann", lookups: [lookup()] })];
     await mount();
     const c = card(DRAFT);
-    await act(async () => button(c, "Edit")?.click());
+    await act(async () => button(c, "Edit the email")?.click());
     const name = c?.querySelector('input[aria-label="Their name"]') as HTMLInputElement;
     await act(async () => sets(name, "Ann Author"));
     /* Plan 261020z: Save green, Cancel red. */
@@ -733,7 +834,7 @@ describe("Author gifts", () => {
     giftsAnswer = () => [gift({ email: "old@example.test", recipientName: null })];
     await mount();
     const c = card(DRAFT);
-    await act(async () => button(c, "Edit")?.click());
+    await act(async () => button(c, "Edit the email")?.click());
     const email = c?.querySelector('input[aria-label="Email address"]') as HTMLInputElement;
     await act(async () => sets(email, "Ann Author <ann@example.test>"));
     await act(async () => button(c, "Save")?.click());
@@ -815,6 +916,162 @@ describe("Author gifts", () => {
       [`/api/admin/author-gifts/${DRAFT}`, { discarded: true }],
       [`/api/admin/author-gifts/${SENT}`, { discarded: false }],
     ]);
+  });
+
+  /* Plan 261024f § D1, Greg 2026-10-23 (#685, spya-h2r5ap). */
+  it("deletes a discarded gift for good only after asking, and Cancel sends nothing", async () => {
+    giftsAnswer = () => [gift(), gift({ id: SENT, status: "discarded", discardedAt: "2026-10-09T12:00:00Z" })];
+    await mount();
+    expect(button(card(DRAFT), "Delete")).toBeUndefined();
+    await act(async () => button(card(SENT), "Delete")?.click());
+    expect(card(SENT)?.textContent).toContain("Delete this draft for good?");
+    await act(async () => button(card(SENT), "Cancel")?.click());
+    expect(card(SENT)?.textContent).not.toContain("Delete this draft for good?");
+    expect(writes()).toEqual([]);
+
+    await act(async () => button(card(SENT), "Delete")?.click());
+    await act(async () => button(card(SENT), "Delete for good")?.click());
+    await settle();
+    expect(writes()).toEqual([{ method: "DELETE", url: `/api/admin/author-gifts/${SENT}`, body: undefined }]);
+  });
+
+  /* Plan 261024f § D2, Greg 2026-10-23 (#687, spya-nt6hee). */
+  it("shows a draft's email as it would go — from, to, subject and body — and not on a sent gift", async () => {
+    giftsAnswer = () => [
+      gift({ email: "ann@example.test", recipientName: "Ann", recipientNote: "Hello from Greg." }),
+      gift({ id: SENT, status: "sent", email: "bo@example.test" }),
+    ];
+    await mount();
+    await settle();
+    const email = card(DRAFT)?.querySelector('[aria-label="The email, if you sent it now"]');
+    expect(email?.textContent).toContain("Spideryarn <hello@spideryarn.com>");
+    expect(email?.textContent).toContain("ann@example.test");
+    expect(email?.textContent).toContain("A gift of 20 free articles on Spideryarn");
+    expect(email?.querySelector("[data-email-body]")?.textContent).toContain("Dear Ann,");
+    expect(email?.querySelector("[data-email-body]")?.textContent).toContain("Hello from Greg.");
+    expect(card(SENT)?.querySelector('[aria-label="The email, if you sent it now"]')).toBeNull();
+    /* The notes say what they are. */
+    expect(card(DRAFT)?.textContent).toContain("Private notes");
+    expect(card(DRAFT)?.textContent).toContain("never sent");
+  });
+
+  it("hides an old email while a changed gift's preview loads, and does not let that unreviewed gift be sent", async () => {
+    let shown = gift({ email: "ann@example.test", recipientNote: "Old message." });
+    giftsAnswer = () => [shown];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("Old message.");
+
+    let release: ((response: Response) => void) | undefined;
+    heldPreview = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    shown = gift({
+      email: "ann@example.test",
+      recipientNote: "New message.",
+      updatedAt: "2026-10-09T10:01:00Z",
+    });
+    await act(async () => button(section(), "Refresh")?.click());
+    await settle();
+
+    expect(c?.querySelector("[data-email-body]")).toBeNull();
+    expect(c?.textContent).toContain("Loading the email…");
+    expect((button(c, "Send") as HTMLButtonElement | undefined)?.disabled).toBe(true);
+
+    release?.(
+      new Response(
+        JSON.stringify({
+          from: "Spideryarn <hello@spideryarn.com>",
+          to: "ann@example.test",
+          subject: "A gift of 20 free articles on Spideryarn",
+          text: "New message.",
+          audience: "invite",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    heldPreview = null;
+    await settle();
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("New message.");
+    expect(c?.querySelector("[data-email-body]")?.textContent).not.toContain("Old message.");
+    expect((button(c, "Send") as HTMLButtonElement | undefined)?.disabled).toBe(false);
+  });
+
+  it("keeps the email through a reload that changed nothing, as the list's poll does", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test", recipientNote: "Steady." })];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("Steady.");
+
+    /* Any new request for the email would hang here and show the loading line. */
+    heldPreview = new Promise<Response>(() => {});
+    await act(async () => button(section(), "Refresh")?.click());
+    await settle();
+    expect(c?.querySelector("[data-email-body]")?.textContent).toContain("Steady.");
+    expect((button(c, "Send") as HTMLButtonElement | undefined)?.disabled).toBe(false);
+  });
+
+  it("refreshes the preview for the confirmation and waits for it before the final Send", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test", recipientNote: "Ready." })];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+
+    let release: ((response: Response) => void) | undefined;
+    heldPreview = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    await act(async () => button(c, "Send")?.click());
+    await settle();
+    expect(c?.textContent).toContain("Loading the email…");
+    expect((button(c, "Send to ann@example.test") as HTMLButtonElement | undefined)?.disabled).toBe(true);
+    expect(writes()).toEqual([]);
+
+    release?.(
+      new Response(
+        JSON.stringify({
+          from: "Spideryarn <hello@spideryarn.com>",
+          to: "ann@example.test",
+          subject: "A gift of 20 free articles on Spideryarn",
+          text: "Ready.",
+          audience: "invite",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    heldPreview = null;
+    await settle();
+    expect((button(c, "Send to ann@example.test") as HTMLButtonElement | undefined)?.disabled).toBe(false);
+  });
+
+  /* Plan 261024f, R1: the lookup's message is offered, never applied. */
+  it("offers the lookup's suggested message, and saves it as the message only through the editor", async () => {
+    giftsAnswer = () => [
+      gift({ email: "ann@example.test", lookups: [lookup({ suggestedMessage: "I made a version of your essay.\nGreg" })] }),
+    ];
+    await mount();
+    await settle();
+    const c = card(DRAFT);
+    expect(c?.querySelector('[aria-label="Suggested message"]')?.textContent).toContain("not in the email unless you use it");
+    await act(async () => button(c, "Use as your message")?.click());
+    expect(writes()).toEqual([]);
+    const box = c?.querySelector('textarea[aria-label="Your message to them"]') as HTMLTextAreaElement;
+    expect(box.value).toBe("I made a version of your essay.\nGreg");
+    await act(async () => button(c, "Save")?.click());
+    await settle();
+    expect(writes()).toEqual([
+      { method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { recipientNote: "I made a version of your essay.\nGreg" } },
+    ]);
+  });
+
+  it("hides the suggestion once it is the message", async () => {
+    giftsAnswer = () => [
+      gift({ recipientNote: "Same words.", lookups: [lookup({ suggestedMessage: "Same words." })] }),
+    ];
+    await mount();
+    expect(card(DRAFT)?.querySelector('[aria-label="Suggested message"]')).toBeNull();
   });
 
   /* Plan 261020ab, Greg 2026-10-20 (spya-vusqvg): one *New gift* form on

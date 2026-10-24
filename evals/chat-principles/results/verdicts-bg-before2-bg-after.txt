@@ -1,0 +1,18 @@
+1: Y; why: tighter, seminar-ready pushback with Chalmers counter; problem: none
+2: X; why: sharper LLM point, Friston and 4E identified, clean correction; problem: Y explains Bayesian updating to a fluent reader
+3: X; why: concrete benchmark tied to reader's goal, secondhand source flagged; problem: Y cites a study by its "title" awkwardly, garbled quote
+4: Y; why: identifies Iverson (APL), ties closeness of mapping to Prolog example; problem: none
+5: Y; why: names Dung, ties critiques back to article passages; problem: Y Bratton not identified; X Saad not identified and attribution to "a commenter" is muddy
+6: Y; why: names absent theories, sourced IIT contrast, sharp "attack on that if"; problem: none
+7: Y; why: finds actual Seth-Block-Tononi piece and sourced split; problem: Y explains homeostasis/autopoiesis to a consciousness researcher; Y critique author not identified
+8: Y; why: identifies Saad and critique clearly, leaves reader room to recall; problem: X garbles Blum commentary as making a case for AI consciousness
+9: Y; why: names concrete opposing works from the article; problem: X "research paper he mentions" unnamed, not useful
+10: X; why: concise, pitched to expert, names tension with stand-alone claim; problem: Y glosses "instantiates" for a philosopher of mind
+11: X; why: explains Friston and free-energy, links to Searle question; problem: Y names Friston without saying who, adds tangent on hallucination
+12: Y; why: findings tied to Felleisen split and working definition; problem: X Terhechte and Dan Luu not identified, 2026 paper finding not stated
+13: Y; why: identifies Iverson, explicit Graham vs Green comparison; problem: none
+14: Y; why: two clear objections, Blums identified; problem: X Substack critic unnamed
+15: X; why: sourced IIT contrast and neuromorphic point, report quote; problem: none
+16: Y; why: same core plus where to check commentaries; problem: X explains IIT cause-effect structure to an IIT expert
+17: X; why: recall question tied to a passage, fits Recall shape; problem: Y Saad not identified; Y question is speculation not recall
+18: same; why: near-identical, both brief and sourced; problem: none

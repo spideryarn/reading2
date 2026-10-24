@@ -102,6 +102,15 @@ describe("pageOpening: the page's visible text from its main heading on, before 
     expect(opening(`<body><p>By Jane Doe</p><p>Text.</p></body>`)).toEqual(["By Jane Doe", "Text."]);
   });
 
+  it("keeps the records' public shape unchanged while retaining internal element provenance", () => {
+    const doc = new JSDOM(`<body><article><h1>A title</h1><p>2025-11-02</p></article></body>`).window.document;
+    markHidden(doc);
+    expect(pageOpening(doc)).toEqual([
+      { id: "r1", text: "A title" },
+      { id: "r2", text: "2025-11-02" },
+    ]);
+  });
+
   it("skips scripts and styles", () => {
     expect(opening(`<body><h1>T</h1><script>var x = "Jane Doe";</script><style>p{}</style><p>Jane Doe</p></body>`)).toEqual(["T", "Jane Doe"]);
   });

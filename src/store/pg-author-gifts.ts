@@ -30,20 +30,34 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import {
+  AUTHOR_GIFT_GUIDANCE_MAX,
   AUTHOR_GIFT_NOTES_MAX,
   AUTHOR_LOOKUP_STALE_MINUTES,
   type AdminAuthorGift,
   type AdminAuthorLookup,
+  type AdminLookupCandidate,
+  type AuthorGiftEmailPreview,
+  STARTER_LINK_PLACEHOLDER,
   type AuthorGiftSendExpected,
   type AuthorGiftStatus,
   type AuthorLookupOutcome,
 } from "../admin-author-gifts.js";
 import { RECIPIENT_NAME_MAX, cleanRecipientName, starterOwnerOf } from "../admin-vouchers.js";
 import { getDb } from "../db/client.js";
-import { articleRevisions, articles, authorGifts, authorLookups, billingVouchers } from "../db/schema.js";
+import { FROM } from "../email.js";
+import {
+  articleRevisions,
+  articles,
+  authorGiftGuidance,
+  authorGifts,
+  authorLookupCandidates,
+  authorLookups,
+  billingVouchers,
+} from "../db/schema.js";
 import { isSlug } from "../ingest.js";
 import { log } from "../log.js";
 import { type OwnerId, runAsOwner } from "../owner.js";
+import { isWebUrl } from "../urls.js";
 import { spendByRun } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -56,13 +70,15 @@ import {
   prepareLockedGiftArticleIn,
 } from "./pg-gift-prep.js";
 import { ensureShareLinkForArticle } from "./pg-share-link.js";
-import { latestVoucherEmails } from "./pg-voucher-emails.js";
+import { type GiftAudience, giftMessage, latestVoucherEmails } from "./pg-voucher-emails.js";
+import { pgArticleReader } from "./pg.js";
 import {
   type CreateVoucherAnswer,
   type NewVoucher,
   type Parsed,
   type StarterRefusal,
   createVoucher,
+  giftAudienceFor,
   isPlainObject,
   looksLikeEmail,
   normaliseEmail,
@@ -470,20 +486,42 @@ export async function lookupSubject(lookupId: string): Promise<LookupSubject | n
   return row ? { ...row, createdBy: row.createdBy as OwnerId } : null;
 }
 
+export type LookupClaim =
+  | { readonly kind: "claimed"; readonly guidance: GuidanceRow | null }
+  | { readonly kind: "not-claimed" };
+
 /**
  * **Claim a pending lookup for one run, before spending anything** (R2-F5,
- * R2-F6). True when this call set `run_id`; false when the row is finished,
- * already claimed, or gone — and then the caller makes no call at all.
- * `runId` is the fresh collector's own id, so `ai_calls.run_id` names exactly
- * this run's calls.
+ * R2-F6). `claimed` when this call set `run_id`; `not-claimed` when the row is
+ * finished, already claimed, or gone — and then the caller makes no call at
+ * all. `runId` is the fresh collector's own id, so `ai_calls.run_id` names
+ * exactly this run's calls.
+ *
+ * The guidance the run uses is chosen and recorded **in the same statement**
+ * (plan 261024f, R5): a Save that commits before it wins, one after belongs to
+ * later lookups. A separate read first would let a lookup claimed after a Save
+ * still run with the guidance before it (261024f code review).
  */
-export async function claimLookup(lookupId: string, runId: string): Promise<boolean> {
-  const claimed = await getDb()
+export async function claimLookup(lookupId: string, runId: string): Promise<LookupClaim> {
+  const db = getDb();
+  const [claimed] = await db
     .update(authorLookups)
-    .set({ runId })
+    .set({
+      runId,
+      guidanceId: sql`(select ${authorGiftGuidance.id} from ${authorGiftGuidance}
+        order by ${authorGiftGuidance.createdAt} desc, ${authorGiftGuidance.id} desc limit 1)`,
+    })
     .where(and(eq(authorLookups.id, lookupId), isNull(authorLookups.outcome), isNull(authorLookups.runId)))
-    .returning({ id: authorLookups.id });
-  return claimed.length === 1;
+    .returning({ guidanceId: authorLookups.guidanceId });
+  if (!claimed) return { kind: "not-claimed" };
+  if (claimed.guidanceId === null) return { kind: "claimed", guidance: null };
+  const [guidance] = await db
+    .select({ id: authorGiftGuidance.id, guidance: authorGiftGuidance.guidance, createdAt: authorGiftGuidance.createdAt })
+    .from(authorGiftGuidance)
+    .where(eq(authorGiftGuidance.id, claimed.guidanceId))
+    .limit(1);
+  if (!guidance) throw new Error(`claimed author lookup ${lookupId} names missing guidance ${claimed.guidanceId}`);
+  return { kind: "claimed", guidance: { ...guidance, createdAt: guidance.createdAt.toISOString() } };
 }
 
 /**
@@ -505,6 +543,10 @@ export type LookupResult =
       readonly searches: number | null;
       readonly model: string | null;
       readonly notes: string | null;
+      /** Kept on the lookup's row for *Use as your message*; never written into the draft (plan 261024f, R1). */
+      readonly suggestedMessage?: string | null;
+      /** Addresses offered, best first; kept on their own rows, never written into the draft (plan 261024j). */
+      readonly candidates?: readonly AdminLookupCandidate[];
     }
   | {
       readonly kind: "failed";
@@ -533,6 +575,84 @@ function bounded(value: string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   const points = [...value];
   return points.length > LOOKUP_TEXT_MAX ? points.slice(0, LOOKUP_TEXT_MAX).join("") : value;
+}
+
+const CANDIDATE_KINDS = new Set(["on-page", "on-page-disguised", "in-result", "guess"]);
+const CANDIDATE_CONFIDENCES = new Set(["high", "medium", "low"]);
+/** Per lookup; src/author-candidates.ts caps at the same, this holds it at the door. */
+const CANDIDATES_STORED_MAX = 8;
+
+function candidateConfidenceFits(c: AdminLookupCandidate, patternSeen: boolean | null): boolean {
+  switch (c.kind) {
+    case "guess":
+      return patternSeen ? c.confidence === "medium" : c.confidence === "low";
+    case "in-result":
+      return c.confidence === "medium";
+    case "on-page":
+    case "on-page-disguised":
+      return c.confidence === "high" || c.confidence === "medium";
+  }
+}
+
+/** `undefined` means the candidate's provenance is inconsistent and the row is dropped. */
+function candidateSource(c: AdminLookupCandidate, patternSeen: boolean | null): string | null | undefined {
+  const sourceUrl = bounded(c.sourceUrl);
+  if (sourceUrl !== null && !isWebUrl(sourceUrl)) return undefined;
+  if ((c.kind !== "guess" || patternSeen) && sourceUrl === null) return undefined;
+  return sourceUrl;
+}
+
+/**
+ * **The candidates as the table's checks hold them**: normalised, each address
+ * once, a known kind and confidence, a pattern verdict on guesses only, no
+ * guess *likely* (R3, R8). Anything else is dropped, not stored and not thrown.
+ */
+function cleanCandidates(raw: readonly AdminLookupCandidate[]): AdminLookupCandidate[] {
+  const out: AdminLookupCandidate[] = [];
+  for (const c of raw) {
+    const address = normaliseEmail(c.address);
+    if (!looksLikeEmail(address) || !/.@./.test(address) || out.some((o) => o.address === address)) continue;
+    if (!CANDIDATE_KINDS.has(c.kind) || !CANDIDATE_CONFIDENCES.has(c.confidence)) continue;
+    const patternSeen = c.kind === "guess" ? (c.patternSeen ?? false) : null;
+    if (!candidateConfidenceFits(c, patternSeen)) continue;
+    const sourceUrl = candidateSource(c, patternSeen);
+    if (sourceUrl === undefined) continue;
+    const why = bounded(c.why) ?? "";
+    if (why === "") continue;
+    out.push({
+      address,
+      kind: c.kind,
+      confidence: c.confidence,
+      why,
+      sourceUrl,
+      patternSeen,
+    });
+    if (out.length === CANDIDATES_STORED_MAX) break;
+  }
+  return out;
+}
+
+/** Each lookup's offered addresses, in their stored order (plan 261024j). */
+async function candidatesByLookup(lookupIds: readonly string[]): Promise<Map<string, AdminLookupCandidate[]>> {
+  const byLookup = new Map<string, AdminLookupCandidate[]>();
+  if (lookupIds.length === 0) return byLookup;
+  const rows = await getDb()
+    .select()
+    .from(authorLookupCandidates)
+    .where(inArray(authorLookupCandidates.lookupId, [...lookupIds]))
+    .orderBy(authorLookupCandidates.lookupId, authorLookupCandidates.position);
+  for (const r of rows) {
+    const c: AdminLookupCandidate = {
+      address: r.address,
+      kind: r.kind as AdminLookupCandidate["kind"],
+      confidence: r.confidence as AdminLookupCandidate["confidence"],
+      why: r.why,
+      sourceUrl: r.sourceUrl,
+      patternSeen: r.patternSeen,
+    };
+    byLookup.set(r.lookupId, [...(byLookup.get(r.lookupId) ?? []), c]);
+  }
+  return byLookup;
 }
 
 /** An address the draft may take: normalised and address-shaped, or null. */
@@ -615,12 +735,23 @@ export async function finishLookup(lookupId: string, result: LookupResult): Prom
         emailSourceUrl: bounded(found?.emailSourceUrl),
         suggestedEmail: bounded(found?.suggestedEmail),
         contactUrl: bounded(found?.contactUrl),
+        suggestedMessage: bounded(found?.suggestedMessage),
         searches: result.searches ?? null,
         model: bounded(result.model),
       })
       .where(and(eq(authorLookups.id, lookupId), isNull(authorLookups.outcome)))
       .returning({ id: authorLookups.id });
     if (finished.length === 0) return { kind: "lost" };
+
+    /* The offered addresses, on their own rows (plan 261024j). Only after the
+       finish won, so a lost or stale run writes none; whatever the gift's
+       state, since they are the run's record, not the draft's. Each is cleaned
+       to what the table's checks hold, and a bad one is dropped rather than
+       failing the finish. */
+    const offered = cleanCandidates(found?.candidates ?? []);
+    if (offered.length > 0) {
+      await tx.insert(authorLookupCandidates).values(offered.map((c, position) => ({ lookupId, position, ...c })));
+    }
 
     const none = { email: false, name: false, notes: false } as const;
     if (gift.sendStartedAt !== null || gift.discardedAt !== null) return { kind: "finished", outcome, applied: none };
@@ -711,6 +842,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
     )
     .orderBy(desc(authorLookups.createdAt), desc(authorLookups.id));
   const spend = await spendByRun(lookups.flatMap((l) => (l.runId === null ? [] : [l.runId])));
+  const offered = await candidatesByLookup(lookups.map((l) => l.id));
 
   const byGift = new Map<string, AdminAuthorLookup[]>();
   for (const l of lookups) {
@@ -727,9 +859,11 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
       emailSourceUrl: l.emailSourceUrl,
       suggestedEmail: l.suggestedEmail,
       contactUrl: l.contactUrl,
+      suggestedMessage: l.suggestedMessage,
       searches: l.searches,
       model: l.model,
       cost: runSpend,
+      candidates: offered.get(l.id) ?? [],
     };
     byGift.set(l.authorGiftId, [...(byGift.get(l.authorGiftId) ?? []), wire]);
   }
@@ -998,6 +1132,192 @@ export async function patchAuthorGift(id: string, patch: AuthorGiftPatch): Promi
       .returning({ notesUpdatedAt: authorGifts.notesUpdatedAt });
     if (!row) throw new Error(`author gift ${id} was locked and then not updated`);
     return { kind: "updated", notesUpdatedAt: row.notesUpdatedAt?.toISOString() ?? null };
+  }, READ_COMMITTED);
+}
+
+/* --------------------------------------------------------------- preview -- */
+
+export type PreviewAnswer =
+  | { readonly kind: "preview"; readonly preview: AuthorGiftEmailPreview }
+  | { readonly kind: "starter-refused"; readonly reason: Exclude<StarterRefusal, "link-off"> }
+  | { readonly kind: "not-found" };
+
+/**
+ * **The email this gift would send, if sent now** — Greg, 2026-10-23 (#687,
+ * spya-nt6hee): *"crystal clear what the subject line, what the text is going
+ * to be … what's about to go out and where from"*. Plan 261024f § D2, R2, R3.
+ *
+ * Rendered by `giftMessage`, the function Send's `createVoucher` renders with,
+ * from the same inputs it reads: the draft's fields, the audience
+ * `giftAudienceFor` finds for the address, and the starter article's revision
+ * title read through `loadArticleIdentity`, once the gift's own article id and
+ * frozen slug are confirmed to name the same article. **Never the key**: the
+ * starter's address is
+ * `STARTER_LINK_PLACEHOLDER`, and nothing here reads the private link
+ * (voucher-starter.ts is that read's caller, and only for the email itself).
+ * An article that Send would refuse as absent or unpublished is refused here
+ * too, rather than manufacturing an email with no starter. Only the text part
+ * goes back, never the HTML.
+ *
+ * A read: nothing is written and nothing is queued.
+ */
+export async function previewAuthorGiftEmail(id: string): Promise<PreviewAnswer> {
+  const [gift] = await getDb()
+    .select({
+      email: authorGifts.email,
+      recipientName: authorGifts.recipientName,
+      recipientNote: authorGifts.recipientNote,
+      articles: authorGifts.articles,
+      starterSlug: authorGifts.starterSlug,
+      createdBy: authorGifts.createdBy,
+      articleThere: articles.id,
+      articleSlug: articles.slug,
+      processing: articles.processing,
+      currentRevisionId: articles.currentRevisionId,
+    })
+    .from(authorGifts)
+    /* Send resolves by the frozen slug as the gift's creator, then pins that
+       resolution to article_id (resolveGiftStarter). This asks the same
+       identity question the other way round, without touching the share token:
+       the gift's own article, by id and owner, and then whether it still has
+       the frozen slug. If the slug has since gone to another article, Send
+       refuses it as absent, so this does too.
+
+       The slug is compared after the read, not in the join, on purpose. A
+       join on the slug column is a slug lookup, which
+       tests/owner-isolation.test.ts admits only through the owner-naming
+       leaves; this row is found by its primary key, so there is no slug
+       lookup to sanction. */
+    .leftJoin(
+      articles,
+      and(eq(articles.id, authorGifts.articleId), eq(articles.ownerId, authorGifts.createdBy)),
+    )
+    .where(eq(authorGifts.id, id))
+    .limit(1);
+  if (!gift) return { kind: "not-found" };
+  if (gift.articleThere === null || gift.articleSlug !== gift.starterSlug) {
+    return { kind: "starter-refused", reason: "absent" };
+  }
+  if (gift.processing === "minimal" || gift.currentRevisionId === null) {
+    return { kind: "starter-refused", reason: "unpublished" };
+  }
+  /* The title through the read Send takes it from (voucher-starter.ts), so the
+     two cannot disagree about which title an article has. */
+  const title = await runAsOwner(gift.createdBy as OwnerId, async () => {
+    try {
+      return (await pgArticleReader.loadArticleIdentity(gift.starterSlug)).title;
+    } catch (err) {
+      const status = (err as { status?: unknown } | null | undefined)?.status;
+      if (status === 404 || status === 409) return null;
+      throw err;
+    }
+  });
+  if (title === null) return { kind: "starter-refused", reason: "absent" };
+  let audience: GiftAudience = { kind: "invite" };
+  if (gift.email !== null) {
+    try {
+      audience = await giftAudienceFor(gift.email);
+    } catch {
+      /* Send falls back the same way (pg-vouchers.ts § giftAudienceOrInvite). */
+      audience = { kind: "invite" };
+    }
+  }
+  const message = giftMessage(gift.articles, audience, {
+    recipientName: gift.recipientName,
+    recipientNote: gift.recipientNote,
+    starter: { title, url: STARTER_LINK_PLACEHOLDER },
+  });
+  return {
+    kind: "preview",
+    preview: { from: FROM, to: gift.email, subject: message.subject, text: message.text, audience: audience.kind },
+  };
+}
+
+/* -------------------------------------------------------------- guidance -- */
+
+/** The guidance row in force: Greg's text, or null for the built-in; null itself when none was ever saved. */
+export interface GuidanceRow {
+  readonly id: string;
+  readonly guidance: string | null;
+  readonly createdAt: string;
+}
+
+/**
+ * **The newest guidance row** (plan 261024f § D4, R5) — read by the lookup as
+ * it is claimed, and by the page. Insert-only, so the newest is in force; ties
+ * on the timestamp go to the larger id, so two reads always agree.
+ */
+export async function currentGuidance(): Promise<GuidanceRow | null> {
+  const [row] = await getDb()
+    .select({ id: authorGiftGuidance.id, guidance: authorGiftGuidance.guidance, createdAt: authorGiftGuidance.createdAt })
+    .from(authorGiftGuidance)
+    .orderBy(desc(authorGiftGuidance.createdAt), desc(authorGiftGuidance.id))
+    .limit(1);
+  return row ? { ...row, createdAt: row.createdAt.toISOString() } : null;
+}
+
+/** `{ guidance: string | null }`, nothing else; null, or text that is only spaces, is *the built-in text*. */
+export function parseGuidance(body: unknown): Parsed<string | null> {
+  if (!isPlainObject(body)) return { ok: false, message: "The body must be a JSON object." };
+  const unknown = Object.keys(body).filter((k) => k !== "guidance");
+  if (unknown.length > 0) return { ok: false, message: `Unknown field: ${unknown.join(", ")}.` };
+  if (!("guidance" in body)) return { ok: false, message: "guidance is required (null for the built-in text)." };
+  const value = body.guidance;
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== "string") return { ok: false, message: "guidance must be a string or null." };
+  if ([...value].length > AUTHOR_GIFT_GUIDANCE_MAX) {
+    return { ok: false, message: `guidance must be at most ${AUTHOR_GIFT_GUIDANCE_MAX.toLocaleString("en-GB")} characters.` };
+  }
+  const trimmed = value.trim();
+  return { ok: true, value: trimmed === "" ? null : trimmed };
+}
+
+/** **Save Greg's guidance** — a new row, so the old one is kept (R5). Null goes back to the built-in text. */
+export async function saveGuidance(guidance: string | null, createdBy: string): Promise<GuidanceRow> {
+  const [row] = await getDb()
+    .insert(authorGiftGuidance)
+    .values({ guidance, createdBy })
+    .returning({ id: authorGiftGuidance.id, guidance: authorGiftGuidance.guidance, createdAt: authorGiftGuidance.createdAt });
+  if (!row) throw new Error("saving the author gift guidance returned no row");
+  return { ...row, createdAt: row.createdAt.toISOString() };
+}
+
+/* ---------------------------------------------------------------- delete -- */
+
+export type DeleteAnswer =
+  | { readonly kind: "deleted" }
+  | { readonly kind: "not-found" }
+  /** Not discarded, being sent, or sent: only a discarded gift may go (plan 261024f § D1). */
+  | { readonly kind: "not-discarded" };
+
+/**
+ * **Delete a discarded gift for good, with its lookups** — Greg, 2026-10-23
+ * (#685, spya-h2r5ap): *"actually delete permanently the discarded draft"*.
+ * Plan docs/plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md § D1.
+ *
+ * Under the gift's row lock, so a Restore or a Send's freeze waits on it, and
+ * refused unless the gift is discarded, never frozen, and has no voucher: a
+ * sent gift's voucher is a billing record, and its gift row is that record's
+ * notes. `author_lookups` goes by its cascade; the spend stays in the ledger
+ * under each lookup's `run_id`. A lookup still running finishes into
+ * `not-found` and writes nothing.
+ */
+export async function deleteAuthorGift(id: string): Promise<DeleteAnswer> {
+  return await getDb().transaction(async (tx): Promise<DeleteAnswer> => {
+    const [gift] = await tx
+      .select({
+        sendStartedAt: authorGifts.sendStartedAt,
+        discardedAt: authorGifts.discardedAt,
+        voucherExists: VOUCHER_EXISTS,
+      })
+      .from(authorGifts)
+      .where(eq(authorGifts.id, id))
+      .for("update")
+      .limit(1);
+    if (!gift) return { kind: "not-found" };
+    if (statusOf(gift) !== "discarded") return { kind: "not-discarded" };
+    await tx.delete(authorGifts).where(eq(authorGifts.id, id));
+    return { kind: "deleted" };
   }, READ_COMMITTED);
 }
 
@@ -1393,6 +1713,10 @@ export const pgAuthorGiftStore = guardDbStore("author-gifts", {
   ensureAuthorGift,
   listAuthorGifts,
   patchAuthorGift,
+  deleteAuthorGift,
+  previewAuthorGiftEmail,
+  currentGuidance,
+  saveGuidance,
   sendAuthorGift,
   switchGiftOnHighPower,
   beginLookup,

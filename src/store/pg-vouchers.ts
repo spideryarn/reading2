@@ -81,6 +81,7 @@ import {
 } from "./pg-voucher-emails.js";
 import {
   RECIPIENT_NAME_MAX,
+  VOUCHER_NOTE_MAX,
   type AdminVoucher,
   type ClaimantUsage,
   cleanRecipientName,
@@ -93,8 +94,9 @@ const logger = log("store");
 
 /** The largest gift one voucher may carry. The table's check says the same. */
 export const VOUCHER_MAX_ARTICLES = 1000;
-/** The longest private note the app accepts; the table's CHECK is a much higher ceiling. */
-export const VOUCHER_NOTE_MAX = 500;
+/** The longest private note the app accepts; the table's CHECK is a much higher ceiling.
+   In the import-free module, so the page's boxes and this store share one number (plan 261024f). */
+export { VOUCHER_NOTE_MAX };
 
 /* The address rules live in an import-free module so that code which must not
    load the database can share them; re-exported here for this store's callers. */

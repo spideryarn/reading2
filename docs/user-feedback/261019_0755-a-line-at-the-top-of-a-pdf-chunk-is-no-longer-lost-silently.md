@@ -2,7 +2,7 @@
 reports: spya-rg5kk6
 addenda: spya-zdp62y
 ending: shipped
-comment: Re-read in production on 23 October: the page 43 line, the page 95 passage and notes 21–93 are back. 5 of your 7 bookmarks now point at changed paragraphs; whether to move them is asked separately.
+comment: Re-read in production on 23 October: the page 43 line, the page 95 passage and notes 21–93 are back. On 24 October your bookmarks and reading time were moved onto the new paragraphs: 6 bookmarks, all in place.
 ---
 # A line at the top of a PDF chunk is no longer lost silently
 
@@ -88,3 +88,9 @@ row for row, but 5 bookmarks and 85 reading-time places now point at ids not in 
 revision. The question said ids would be kept, and that was wrong; it was not measured before the
 run. Moving them is a write to his rows, so it is asked:
 [q-xns4gt](questions/q-xns4gt.md).
+
+Greg chose to move them, and on 2026-10-24 they were moved
+([261024g](../plans/261024g-repoint-greg-s-bookmarks-and-reading-time-on-the-re-read-order-of-time.md)).
+He now has 6 bookmarks on the book, all on current paragraphs, because two had landed on one.
+Reading time moved for 77 of the 85 places; the other 8 had no successor and were removed, 33.5
+seconds in all.

@@ -47,7 +47,8 @@ live.
 
 ## Fisheye and Expanded
 
-Two views, chosen by chips in the band's head row and kept in `?structure=`
+Two views (and a third behind the experimental switch, [§ Hover](#hover-an-experiment)), chosen by
+chips in the band's head row and kept in `?structure=`
 ([url-state.md](url-state.md)). **Fisheye**, the default, is everything below: the two faces, each
 opened up around where you are reading. **Expanded** is one list in every band width — every part
 and every section under it, at any depth, each with its gist, and each part's arc — and its list
@@ -58,6 +59,27 @@ scrolls the column by hand keeps their place until then. No paragraph rows: the 
 asked to see are the gists. The plan, and GPT Sol's review of it, is
 [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
 it are [keyboard.md § ← / → in Structure](keyboard.md).
+
+## Hover, an experiment
+
+> when the user hovers their mouse over a section, it automatically opens up that section in the
+> second column. […] It's an experiment I'd like to try, but we might want to revert it.
+>
+> — Greg, 2026-10-23, spya-kaxamm, in [261024k](../plans/261024k-structure-hover-submode.md)
+
+A third chip, **Hover** (`?structure=hover`), behind the experimental-features switch. It draws
+exactly what Fisheye draws. In the two columns, a mouse resting on a row (150ms,
+[`useHoverGlance.ts`](../../src/web/useHoverGlance.ts)) goes there, in either column, and no row
+has a card. The list face behaves as Fisheye, because it scrolls itself to follow the reader and
+would move under the mouse.
+
+A hover is a **quiet scroll** (`scrollToBlock`, instant and centred), not the click's jump: it
+pushes no Back entry, arms no return chip and flashes nothing, so sweeping a column does not fill
+the history. A click still jumps. The guards against a glance setting off another — one physical
+mouse move, at most one glance — and against a glance overriding a click are in the hook's header.
+
+**To revert**, take `hover` out of `STRUCTURE_VIEWS` and follow the compiler, then delete the hook
+and the help page's paragraph.
 
 ## The ribbon between the columns
 

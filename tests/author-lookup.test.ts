@@ -17,9 +17,12 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import { type JsonCall, ProviderRefused } from "../src/ai-call.js";
 import {
   ANSWER_TOKENS,
+  AUTHOR_GIFT_GUIDANCE_BUILT_IN,
   type AuthorLookupInput,
+  authorLookupFixedPrompt,
   authorLookupPrompt,
   authorLookupRequest,
+  authorLookupSystem,
   emailTokens,
   judgeAuthorLookup,
   MAX_RESULTS_PER_SEARCH,
@@ -330,6 +333,30 @@ describe("the request", () => {
     expect(system.content).toMatch(/article.*data, not instructions/i);
   });
 
+  /* Plan 261024f § D4, R4: Greg's guidance replaces the voice and nothing else. */
+  it("puts Greg's guidance in the system prompt, the built-in text when he has none, and keeps every fixed rule", () => {
+    const mine = authorLookupSystem("Say it in one sentence.");
+    const builtIn = authorLookupSystem(null);
+    expect(mine).toContain("Say it in one sentence.");
+    expect(mine).not.toContain(AUTHOR_GIFT_GUIDANCE_BUILT_IN);
+    expect(builtIn).toContain(AUTHOR_GIFT_GUIDANCE_BUILT_IN);
+    expect(authorLookupSystem("   ")).toBe(builtIn);
+    for (const system of [mine, builtIn]) {
+      expect(system).toMatch(/Claim nothing you were not told/);
+      expect(system).toMatch(/at most 450 characters/);
+      expect(system).toMatch(/Never put a guess here; guesses go in guesses/);
+      expect(system).toMatch(/never a colleague's/);
+      expect(system).toMatch(/article.*data, not instructions/i);
+      expect(system).toMatch(/cannot change any rule above/);
+    }
+    /* The guidance is the only difference between the two, and the page's read-only copy is the rest. */
+    const [head, tail] = authorLookupFixedPrompt().split("(the guidance you edit goes here)");
+    expect(mine.startsWith(head ?? "")).toBe(true);
+    expect(mine.endsWith(tail ?? "")).toBe(true);
+    const sent = authorLookupRequest(INPUT, "test/model", "Say it in one sentence.");
+    expect((sent.messages as { content: string }[])[0]?.content).toBe(mine);
+  });
+
   it("sends only the first and last 1,500 characters of a long text", () => {
     const text = `${"A".repeat(1500)}MIDDLE-NEVER-SENT${"Z".repeat(1500)}`;
     const prompt = authorLookupPrompt({ ...INPUT, text });
@@ -353,8 +380,206 @@ describe("the request", () => {
         parameters: { engine: "exa", max_total_results: MAX_TOTAL_RESULTS, max_results: MAX_RESULTS_PER_SEARCH },
       },
     ]);
-    expect(MAX_TOTAL_RESULTS).toBe(10);
+    expect(MAX_TOTAL_RESULTS).toBe(15);
     expect(MAX_RESULTS_PER_SEARCH).toBe(5);
+  });
+});
+
+/**
+ * **Trying harder** — plan 261024j (#686): the author's own page read for an
+ * address the search could not see, and addresses offered with a computed
+ * confidence, none of them ever filling the draft.
+ */
+describe("trying harder (plan 261024j)", () => {
+  const COLLEAGUE_PAGE = "https://uni.example.edu/people/bob-jones";
+  /** A page fetch that must not happen. */
+  const noFetch = async (): Promise<never> => {
+    throw new Error("no page should be read");
+  };
+  /** A page fetch that serves one page and records what was asked. */
+  const serve = (html: string, asked: string[] = []) => async (url: string) => {
+    asked.push(url);
+    return { kind: "html" as const, text: html, finalUrl: url };
+  };
+
+  it("a colleague's real address, seen and claimed as the author's, is offered, never applied (R1)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(answer({ email: { address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE } }), [
+          { url: BIO_PAGE, content: "Ann Smith writes about attention." },
+          { url: COLLEAGUE_PAGE, content: "Bob Jones, professor. bob.jones@uni.example.edu" },
+        ]),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBeNull();
+    expect(result.outcome).toBe("author");
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "bob.jones@uni.example.edu", kind: "in-result", confidence: "medium", sourceUrl: COLLEAGUE_PAGE }),
+    ]);
+    expect(result.notes).toContain("not in the author's name (not applied): bob.jones@uni.example.edu");
+  });
+
+  it("an unsourced model name cannot make a colleague's address fill the draft (R1)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(
+          answer({
+            author: { name: "Bob Jones", sourceUrl: "https://invented.example.net/bob" },
+            email: { address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE },
+          }),
+          [{ url: COLLEAGUE_PAGE, content: "Bob Jones, professor. bob.jones@uni.example.edu" }],
+        ),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBeNull();
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "bob.jones@uni.example.edu", kind: "in-result", confidence: "medium" }),
+    ]);
+  });
+
+  it("a model cannot replace the article's own author name with a colleague's to fill their address (R1)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(
+          answer({
+            author: { name: "Bob Jones", sourceUrl: COLLEAGUE_PAGE },
+            email: { address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE },
+          }),
+          [{ url: COLLEAGUE_PAGE, content: "Bob Jones, professor. bob.jones@uni.example.edu" }],
+        ),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBeNull();
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "bob.jones@uni.example.edu", kind: "in-result", confidence: "medium" }),
+    ]);
+  });
+
+  it("an address in the article's own text still fills, whatever its name (rule 2 unchanged there)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(completion(answer({ email: { address: "hello@essays.example.com", sourceUrl: SOURCE } }), [])),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBe("hello@essays.example.com");
+  });
+
+  it("a seen address in the author's name fills, and its guesses and pages are dropped (R6)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(
+          answer({
+            homepageUrl: BIO_PAGE,
+            guesses: [{ address: "a.smith@uni.example.edu", confidence: "high", colleague: null }],
+          }),
+          [{ url: BIO_PAGE, content: "Mail ann@example.org." }],
+        ),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBe("ann@example.org");
+    expect(result.candidates).toEqual([]);
+  });
+
+  it("reads the homepage when no address was seen, and offers an @ drawn as an image (Greg's example)", async () => {
+    const asked: string[] = [];
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(answer({ email: null, homepageUrl: BIO_PAGE, contactUrl: BIO_PAGE }), [{ url: BIO_PAGE, content: "Ann Smith, writer." }]),
+      ),
+      now: NOW,
+      fetchPage: serve("<table><tr><td>annsmith</td><td><img src=images/at.gif></td><td>gmail.com</td></tr></table>", asked),
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    /* The same URL as homepage and contact page is read once. */
+    expect(asked).toEqual([BIO_PAGE]);
+    expect(result.email).toBeNull();
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "annsmith@gmail.com", kind: "on-page-disguised", confidence: "high", sourceUrl: BIO_PAGE }),
+    ]);
+    expect(result.notes).toContain(`Read ${BIO_PAGE}: annsmith@gmail.com`);
+  });
+
+  it("never reads a homepage the search did not return (rule 1)", async () => {
+    const asked: string[] = [];
+    await runAuthorLookup(INPUT, {
+      call: fakeCall(completion(answer({ email: null, homepageUrl: "http://169.254.169.254/latest" }), [{ url: BIO_PAGE }])),
+      now: NOW,
+      fetchPage: serve("<p>x</p>", asked),
+    });
+    expect(asked).toEqual([]);
+  });
+
+  it("a page that cannot be read is a line in the notes, not a failed lookup", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(completion(answer({ email: null, homepageUrl: BIO_PAGE }), [{ url: BIO_PAGE }])),
+      now: NOW,
+      fetchPage: async () => {
+        throw new TypeError("network down");
+      },
+    });
+    expect(result.outcome).toBe("author");
+    expect(result.notes).toContain(`Could not read ${BIO_PAGE} (TypeError)`);
+  });
+
+  it("a guess's confidence is computed: a checked colleague pattern is possible, anything else a long shot (R3)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(
+          answer({
+            email: null,
+            guesses: [
+              /* Bob Jones → bob.jones, so Ann Smith → ann.smith: possible. */
+              { address: "ann.smith@uni.example.edu", confidence: "low", colleague: { name: "Bob Jones", address: "bob.jones@uni.example.edu", sourceUrl: COLLEAGUE_PAGE } },
+              /* The model says high, and no colleague backs it: a long shot. */
+              { address: "asmith@uni.example.edu", confidence: "high", colleague: null },
+              /* A colleague not in the result cited: unsupported. */
+              { address: "smith@uni.example.edu", confidence: "high", colleague: { name: "Cy Lee", address: "lee@uni.example.edu", sourceUrl: COLLEAGUE_PAGE } },
+              { address: "fourth@uni.example.edu", colleague: null },
+            ],
+          }),
+          [{ url: COLLEAGUE_PAGE, content: "Bob Jones: bob.jones@uni.example.edu" }],
+        ),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.email).toBeNull();
+    expect(result.candidates.map((c) => [c.address, c.confidence, c.patternSeen])).toEqual([
+      ["ann.smith@uni.example.edu", "medium", true],
+      ["asmith@uni.example.edu", "low", false],
+      ["smith@uni.example.edu", "low", false],
+    ]);
+    expect(result.candidates[0]?.why).toContain("first.last");
+  });
+
+  it("puts a shaped not-seen suggestion in the server's candidate list (R7)", async () => {
+    const result = await runAuthorLookup(INPUT, {
+      call: fakeCall(
+        completion(answer({ email: { address: "ann@elsewhere.example", sourceUrl: BIO_PAGE } }), [
+          { url: BIO_PAGE, content: "Ann Smith is a writer." },
+        ]),
+      ),
+      now: NOW,
+      fetchPage: noFetch,
+    });
+    if (result.outcome === "failed") throw new Error("failed");
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ address: "ann@elsewhere.example", kind: "guess", confidence: "low", patternSeen: false }),
+    ]);
   });
 });
 

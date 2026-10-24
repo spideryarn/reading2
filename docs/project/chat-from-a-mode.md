@@ -6,7 +6,8 @@ A button on one item in a mode (a claim, a glossary entry, a cited work, an idea
 about that item. The chat stores its **origin**: the mode, and the item by the most durable name it
 has. The item then shows a mark in the button's place that reopens the chat beside the mode, and a
 second press from anywhere reopens it rather than starting another
-([§ One chat per item](#one-chat-per-item)). Chat's list shows the row with the mode's icon, and
+([§ One chat per item](#one-chat-per-item)). Chat's list shows the row with the mode's icon and
+the sub-mode's name (*Investigate*, since 2026-10-24), and
 the open chat has a line that goes back to the item
 ([§ The way back from the chat](#the-way-back-from-the-chat)). It is an ordinary chat in every other
 way: same prompt, same tools.
@@ -203,7 +204,8 @@ In the order you would do them:
    is done. Only a claim's block is checked against the article; an `itemId` is never looked up.
 7. **The title, the list and the way back.** [`src/chat-title.ts`](../../src/chat-title.ts) §
    `titleFromOrigin`, [`src/web/thread-source.ts`](../../src/web/thread-source.ts) §
-   `threadSource` and `originBack`, and `openOrigin` in
+   `originPlace` (the mode and sub-mode it came from, which names the list row's place in words and
+   the way back's destination; since 2026-10-24, plan 261024i) and `threadSource`'s tooltip, and `openOrigin` in
    [`Reader.tsx`](../../src/web/reader/Reader.tsx). All **loud** (`never`). The row's icon needs
    nothing: it is the mode's own. **The band's `focus` is silent**: a band that never lands on its
    row still opens the mode, so the rendered-reader test in step 11 has to assert the scroll

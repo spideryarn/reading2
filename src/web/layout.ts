@@ -553,10 +553,9 @@ export const MARG_IDEAL = 288; // 18rem
  * About 48 characters of note; past that a 13px line is too long to read.
  */
 export const MARG_WIDE = 384; // 24rem
-/** The window width from which the prose moves left for the chat card, and the
-    most it moves: `shiftForCard`. */
-export const PROSE_SHIFT_FROM = 1600;
-export const PROSE_SHIFT_MAX = 100;
+/** How much page the prose keeps on its left when it moves for the chat card,
+    in rem — or half of what was there, when that is less: `shiftForCard`. */
+export const PROSE_SHIFT_KEEP_REM = 4;
 
 /**
  * **The column, widened into room that is already there.** `margW` is what the
@@ -581,9 +580,10 @@ function widened(margW: number, room: number): number {
  *     while the room left beside it already holds the column. Nothing is
  *     reserved then (`margReserve` 0), so turning the mode on does not move a
  *     word of the article. When that room is more than the column, the column
- *     grows into it, up to `MARG_WIDE` (`widened`). **From `PROSE_SHIFT_FROM`
- *     the prose does move**, left by up to `PROSE_SHIFT_MAX`, for the chat
- *     card: `shiftForCard`.
+ *     grows into it, up to `MARG_WIDE` (`widened`). **Then the prose moves
+ *     left anyway**, as far as the chat card can use, keeping 4rem of page on
+ *     its left: `shiftForCard`. So in practice it stays where Plain puts it
+ *     only from the width at which the card is full without moving.
  *  2. **Then the column pushes the centred prose left**, by reserving room on
  *     `.reader`'s right: the table is centred (`.text-alone`) in a content box
  *     `avail − margReserve` wide, so its right edge sits at
@@ -621,7 +621,7 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
      shift moves it left by the shift. */
   const beside = (avail - columnReserve - proseW) / 2;
   const margReserve =
-    columnReserve + 2 * shiftForCard(windowWidth, beside, beside + columnReserve, rootFontPx);
+    columnReserve + 2 * shiftForCard(beside, beside + columnReserve, rootFontPx);
   const margLeft = spineWidth(spine) + (avail - margReserve - proseW) / 2 + proseW;
   return {
     widths: [proseW],
@@ -639,34 +639,40 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
 }
 
 /**
- * **How far the prose moves left of centre on a wide window, so the chat card
- * in the column has more room.** Greg, 2026-10-06: *"re wider margin for chat
- * card: B give it more room on wide windows"*. B was: from about 1600px, shift
- * the prose left a little, keeping its width, so the margin and the card get
- * about 100px more. The prose is no longer centred there.
+ * **How far the prose moves left, so the chat card in the column has room.**
+ * Greg, 2026-10-06: *"B give it more room on wide windows"* — then up to 100px,
+ * from a 1600px window. Greg, 2026-10-23 (spya-rgh26u), from about 1512px at
+ * a 20px root, where that never applied: *"the chat in the right is all
+ * crammed into a tiny, tiny gap … and the margins are unhelpful"*. He had
+ * 315px of empty page left of the prose and a 282px card.
+ *
+ * So at every width: as far as the card can use, since it stops at
+ * `CHAT_CARD_MAX`, keeping `PROSE_SHIFT_KEEP_REM` of page left of the prose —
+ * or half of `left` where that is less, because at a large root on a
+ * narrowish window `left` can be under 8rem and a flat 4rem would move nothing
+ * and leave the card too narrow to draw (28px root at 1600: 82px, a 286px card
+ * rather than none; GPT Sol on 261024l). Continuous in the window's width, so
+ * nothing jumps as a window is dragged; the old 1600px step did.
+ *
+ * **Whether or not a card is open**: the fit does not know, and should not,
+ * because a paragraph the reader is asking about must not slide sideways the
+ * moment they ask. With no chat the page is set left, with room right of the
+ * notes (still capped at `MARG_WIDE`).
  *
  * `left` and `right` are the page either side of the prose before the shift.
- * Three limits: `PROSE_SHIFT_MAX`; what the card can use, since it stops at
- * `CHAT_CARD_MAX` (so at 1800px the shift is 58px, and from 1916px the prose
- * is centred again; 54px at 1920 and centred from about 2030 with the cap at
- * 49rem, before 261023a); and half of `left`, which only binds at a large
- * root and keeps the prose clear of the rail.
- *
- * **A step at `PROSE_SHIFT_FROM`**: the prose jumps 100px as a window is
- * dragged across it. Below it nothing changes, which is what was asked.
- *
  * Only with no band (`fitMargin`). Beside a band the prose is not centred and
  * the band has already taken the page left of it.
+ * docs/plans/261024l-the-chat-card-in-the-margin-gets-the-room-left-of-the-prose-at-every-width.md.
  */
-function shiftForCard(windowWidth: number, left: number, right: number, rootFontPx: number): number {
-  if (windowWidth < PROSE_SHIFT_FROM) return 0;
+function shiftForCard(left: number, right: number, rootFontPx: number): number {
   const cardFull = CHAT_CARD_MAX + MARG_GAP_REM * rootFontPx + CHAT_DOCK_GUTTER;
-  return Math.max(0, Math.min(PROSE_SHIFT_MAX, cardFull - right, left / 2));
+  const keep = Math.min(left / 2, PROSE_SHIFT_KEEP_REM * rootFontPx);
+  return Math.max(0, Math.min(cardFull - right, left - keep));
 }
 
 /** Keep the title over the prose whenever the column or the card's shift has
  * moved it left of centre: the masthead centres in the same narrowed box the
- * table does. Until 2026-10-06 this applied from `PROSE_SHIFT_FROM` only, and
+ * table does. Until 2026-10-06 this applied from a 1600px window only, and
  * from an iPad's width to about 1400px the title sat up to about 145px right
  * of the prose (qi-kfmr6j93; measured in 261006c). Beside a band the title has its own rule, which reads
  * `--marg-reserve` itself (narrow-window.css § the title over the column). */
