@@ -1376,6 +1376,11 @@ export function ChatDialog({
             /* Always a chat. This dialog is what a selection in the prose opens,
                and a Learn turn cannot be anchored to one. */
           kind="chat"
+            /* What an answer that mentions an earlier conversation may link
+               to (plan 261024u): every one this article has, from the server.
+               Only when the stored thread really is a chat, whose prompt is
+               the one handed their ids. */
+            everyThread={thread.kind === "chat" ? threads : undefined}
         />
         ) : loadFailed ? (
           /* **A request that failed is not a conversation that is gone**, and

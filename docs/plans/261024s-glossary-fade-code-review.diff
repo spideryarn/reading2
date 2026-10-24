@@ -1,0 +1,329 @@
+diff --git a/src/web/TableView.tsx b/src/web/TableView.tsx
+index 20e6169f4..1ec5d0153 100644
+--- a/src/web/TableView.tsx
++++ b/src/web/TableView.tsx
+@@ -813,6 +813,10 @@ function TableViewInner({
+     [blocks, matter, authors, byline, echo],
+   );
+   const stretchIds = useMemo(() => stretches.map((s) => s.ids), [stretches]);
++  /* The same blocks as one set, with the masthead's echo, for the glossary's
++     fade: folded on arrival or never drawn, so a term met there neither counts
++     nor fades (annotate.ts § termProminence). */
++  const uncounted = useMemo(() => new Set([...echo, ...stretchIds.flat()]), [echo, stretchIds]);
+   /* Each stub, by the row it stands in, with its words worked out once. */
+   const stubs = useMemo(
+     () =>
+@@ -1011,7 +1015,10 @@ function TableViewInner({
+    * annotate.ts, which also says why this is the whole list now rather than the
+    * one entry the reader pressed.
+    */
+-  const termMarksByBlock = useMemo(() => termMarks(blocks, terms ?? []), [blocks, terms]);
++  const termMarksByBlock = useMemo(
++    () => termMarks(blocks, terms ?? [], uncounted),
++    [blocks, terms, uncounted],
++  );
+ 
+   /**
+    * The citations, by block — a third map, for the reason there is a second.
+diff --git a/src/web/annotate.ts b/src/web/annotate.ts
+index 6a96f8de2..7928bc003 100644
+--- a/src/web/annotate.ts
++++ b/src/web/annotate.ts
+@@ -279,6 +279,13 @@ interface MarkBase {
+    * nothing to the wash, its strength or the stripes of a run it shares.
+    */
+   bare?: boolean;
++  /**
++   * How far this occurrence of a glossary term has faded, 0–1 — `term` marks
++   * only, absent meaning full. `termProminence` of how many times the entry
++   * has appeared so far, in document order (Greg, `spya-htsjmf`, 2026-10-24;
++   * plan 261024s). Drawn as `--term-a`.
++   */
++  prominence?: number;
+   /**
+    * The accessible name of an `xref` mark — the whole phrase, which the first
+    * piece carries as its `aria-label` so a phrase split across an `<em>` is
+@@ -534,7 +541,24 @@ function annotate(html: string, marks: readonly Mark[]): string {
+            place for whichever of them did not end there. */
+         if (chats.some((m) => m.end === nodeStart + to)) el.setAttribute("data-chat-end", "");
+       }
+-      if (terms.length > 0) el.setAttribute("data-term", terms.map((m) => m.id).join(" "));
++      /* Every custom property this run carries, written once below the hit
++         branch: a term's fade, then a hit's strength, fill and stripes. */
++      const style: string[] = [];
++      if (terms.length > 0) {
++        el.setAttribute("data-term", terms.map((m) => m.id).join(" "));
++        /* **The fade, as a number** — `--hit-a`'s pattern: the colour is the
++           token's, how far this occurrence has faded is the count's
++           (`termProminence`). The larger wins where two terms share a run, on
++           `strength`'s argument, and full is written as nothing, which is
++           every first occurrence and every article whose terms are rare.
++
++           **Not on a run a comment or a chat shares**: they draw the same
++           `border-bottom`, and fading it would fade the reader's own clickable
++           mark with the term's (GPT Sol, plan review of 261024s). */
++        const prominence = Math.max(...terms.map((m) => clamp(m.prominence ?? 1, 0, 1)));
++        const borderShared = comments.length > 0 || chats.length > 0;
++        if (prominence < 0.995 && !borderShared) style.push(`--term-a:${prominence.toFixed(2)}`);
++      }
+       if (hits.length > 0) {
+         el.setAttribute("data-hit", hits.map((m) => m.id).join(" "));
+         /* **Two kinds of hit share this element, and they are painted
+@@ -551,7 +575,6 @@ function annotate(html: string, marks: readonly Mark[]): string {
+            its pressed state, and paints nothing — see `Mark.bare`. */
+         const washes = hits.filter((m) => m.quoteStroke === undefined && !m.bare);
+         const quoted = hits.filter((m) => m.quoteStroke !== undefined);
+-        const style: string[] = [];
+         if (washes.length > 0) {
+           el.setAttribute("data-wash", "");
+           /* The outline intensity, as a custom property the stylesheet uses for
+@@ -742,6 +765,10 @@ function annotate(html: string, marks: readonly Mark[]): string {
+           el.setAttribute("data-dir", dirs.size === 1 ? [...dirs][0]! : "mixed");
+         }
+       }
++      /* A run with a faded term and no hit: the branch above wrote nothing.
++         (Written there, not here, for a hit, so the attribute order /design's
++         pasted specimens hold is kept.) */
++      if (hits.length === 0 && style.length > 0) el.setAttribute("style", style.join(";"));
+       /* Space-separated work ids, as `data-term` is, and for the same reason:
+          two works can be cited by one phrase — "(Tulving 1983; Baddeley 1974)"
+          is one run of characters naming two — and the hover card draws a
+@@ -921,6 +948,34 @@ export interface TermSelection {
+   open?: boolean;
+ }
+ 
++const NO_BLOCKS: ReadonlySet<BlockId> = new Set();
++
++/** Where the fade is at half: the fourth occurrence (n − 1 = 3). */
++const TERM_FADE_HALF = 3;
++/** How steep the fall is either side of it. */
++const TERM_FADE_STEEP = 3;
++
++/**
++ * **How strongly the n-th occurrence of a term is underlined**, 1 for the first.
++ *
++ * Greg, 2026-10-24 (`spya-htsjmf`): a term that recurs over and over — *consciousness*
++ * in a paper about consciousness — wears its dotted rule every time, and *"by
++ * the time consciousness has appeared five or ten times, it should basically
++ * not need an orange dotted line"*, by *"a smooth function"*.
++ *
++ * `1 / (1 + ((n − 1) / 3)³)`: 1.00, 0.96, 0.77, 0.50, 0.30, 0.18, …, 0.07 at the
++ * eighth. A plateau then a fall, rather than an exponential's fall from the
++ * start, because the first two or three are the ones teaching that the word
++ * has a card and a reader can miss the first; smooth rather than a cutoff, so
++ * no occurrence vanishes beside a neighbour still clearly drawn. The mark and
++ * its card stay at any value, and hover restores the full rule
++ * (annotations.css § mark.term). docs/plans/261024s-….
++ */
++export function termProminence(n: number): number {
++  if (n <= 1) return 1;
++  return 1 / (1 + ((n - 1) / TERM_FADE_HALF) ** TERM_FADE_STEEP);
++}
++
+ /**
+  * Every occurrence of every term, as marks, grouped by block.
+  *
+@@ -948,6 +1003,9 @@ export interface TermSelection {
+ export function termMarks(
+   blocks: Block[],
+   selections: readonly TermSelection[],
++  /** Blocks whose occurrences neither count towards the fade nor fade —
++   *  the folded front and back matter (`termProminence`). */
++  uncounted: ReadonlySet<BlockId> = NO_BLOCKS,
+ ): Map<BlockId, Mark[]> {
+   const byBlock = new Map<BlockId, Mark[]>();
+   if (selections.length === 0) return byBlock;
+@@ -967,6 +1025,8 @@ export function termMarks(
+     }
+   }
+ 
++  /** How many times each entry has been met so far. */
++  const seen = new Map<string, number>();
+   for (const block of blocks) {
+     const here = wanted.get(block.id);
+     if (!here) continue;
+@@ -975,9 +1035,21 @@ export function termMarks(
+     // of this file is about what happens when you mix them up.
+     const text = renderedText(block.html);
+     const marks: Mark[] = [];
++    const counts = !uncounted.has(block.id);
+     for (const term of here) {
+       for (const span of termSpans(text, term.pattern)) {
+-        marks.push({ id: term.id, kind: "term" as const, ...span, ...(term.open ? { open: true } : {}) });
++        /* `blocks` is the article in order, so this is the document order the
++           fade is counted in — per entry, aliases included. */
++        const n = counts ? (seen.get(term.id) ?? 0) + 1 : 1;
++        if (counts) seen.set(term.id, n);
++        const prominence = termProminence(n);
++        marks.push({
++          id: term.id,
++          kind: "term" as const,
++          ...span,
++          ...(term.open ? { open: true } : {}),
++          ...(prominence < 1 ? { prominence } : {}),
++        });
+       }
+     }
+     if (marks.length > 0) byBlock.set(block.id, marks);
+diff --git a/src/web/styles/annotations.css b/src/web/styles/annotations.css
+index 03af7cfae..e8837f061 100644
+--- a/src/web/styles/annotations.css
++++ b/src/web/styles/annotations.css
+@@ -148,8 +148,17 @@ mark.term {
+      glossary […] the glossary links should be a bit more prominent"*
+      (spya-sxvq2j). So the glossary is now the one *dotted orange* rule in the
+      prose and the louder of the two; the cross-reference went thin, solid and
+-     grey. docs/plans/261001r-…. */
+-  border-bottom: 2px dotted color-mix(in oklab, var(--highlight) 70%, transparent);
++     grey. docs/plans/261001r-….
++
++     **And fainter each time the same term comes back**, since 2026-10-24:
++     `--term-a` is `termProminence` of how many times it has appeared, written
++     by annotate.ts, so the eighth *consciousness* in a paper about
++     consciousness is all but gone. Hover and the pressed states below set
++     their own colour, so they draw it in full. Greg: *"by the time
++     consciousness has appeared five or ten times, it should basically not
++     need an orange dotted line"* (spya-htsjmf). docs/plans/261024s-…. */
++  border-bottom: 2px dotted
++    color-mix(in oklab, var(--highlight) calc(70% * var(--term-a, 1)), transparent);
+   /* The card is the whole point of the mark now, so the pointer should say
+      there is something here before the 320ms delay is up. `help` rather than
+      `pointer`: a click does nothing, and a pointer cursor promising one is the
+diff --git a/tests/annotate.test.ts b/tests/annotate.test.ts
+index 6029d7c71..01926087a 100644
+--- a/tests/annotate.test.ts
++++ b/tests/annotate.test.ts
+@@ -19,6 +19,7 @@ import {
+   renderedText,
+   resolveMark,
+   termMarks,
++  termProminence,
+   type Mark,
+   type MarkKind,
+ } from "../src/web/annotate.js";
+@@ -474,6 +475,106 @@ describe("termMarks", () => {
+     expect(both?.getAttribute("data-term")).toBe("spya-termid");
+     expect(host.querySelectorAll("mark mark")).toHaveLength(0);
+   });
++
++  /* ------------------------------------------------ the fade, per repeat --
++     Greg, 2026-10-24 (spya-htsjmf): a term that recurs over and over should
++     lose its underline smoothly, in document order. Plan 261024s. */
++
++  const repeats = Array.from({ length: 8 }, (_, i) => ({
++    id: `spya-rep00${i}`,
++    tag: "p",
++    kind: "text" as const,
++    text: "Consciousness, again.",
++    words: 2,
++    html: "<p>Consciousness, again.</p>",
++    gistable: true,
++  }));
++  const consciousness = {
++    id: "spya-consc1",
++    forms: ["consciousness"],
++    blocks: repeats.map((b) => b.id),
++  };
++
++  const parse = (out: string) => {
++    const host = document.createElement("div");
++    host.innerHTML = out;
++    return host;
++  };
++
++  it("fades a term's underline with each repeat, in document order", () => {
++    const found = termMarks(repeats, [consciousness]);
++    const prominence = repeats.map((b) => found.get(b.id)?.[0]?.prominence ?? 1);
++    expect(prominence[0]).toBe(1);
++    for (let i = 1; i < prominence.length; i++) {
++      expect(prominence[i]!).toBeLessThan(prominence[i - 1]!);
++    }
++    // Where the plan says it lands: half at the fourth, all but gone by the eighth.
++    expect(prominence[3]).toBeCloseTo(0.5, 2);
++    expect(prominence[7]!).toBeLessThan(0.1);
++    expect(termProminence(2)).toBeGreaterThan(0.9);
++  });
++
++  it("counts each entry on its own", () => {
++    const other = { id: "spya-again1", forms: ["again"], blocks: [repeats[5]!.id] };
++    const marks = termMarks(repeats, [consciousness, other]).get(repeats[5]!.id)!;
++    expect(marks.find((m) => m.id === "spya-again1")?.prominence ?? 1).toBe(1);
++    expect(marks.find((m) => m.id === "spya-consc1")?.prominence ?? 1).toBeLessThan(0.3);
++  });
++
++  it("neither counts nor fades an occurrence in folded matter", () => {
++    // The abstract is folded on arrival; counted, the body would open with
++    // the term already at half.
++    const matter = new Set([repeats[0]!.id, repeats[1]!.id]);
++    const found = termMarks(repeats, [consciousness], matter);
++    expect(found.get(repeats[0]!.id)?.[0]?.prominence ?? 1).toBe(1);
++    expect(found.get(repeats[1]!.id)?.[0]?.prominence ?? 1).toBe(1);
++    expect(found.get(repeats[2]!.id)?.[0]?.prominence ?? 1).toBe(1);
++    expect(found.get(repeats[3]!.id)?.[0]?.prominence).toBeCloseTo(termProminence(2), 5);
++  });
++
++  it("writes the fade as --term-a, only below full, and the larger of two wins", () => {
++    const found = termMarks(repeats, [consciousness]);
++    const first = parse(annotateHtml(repeats[0]!.html, found.get(repeats[0]!.id)!));
++    expect(first.querySelector("mark.term")?.getAttribute("style")).toBeNull();
++    const fifth = parse(annotateHtml(repeats[4]!.html, found.get(repeats[4]!.id)!));
++    expect(fifth.querySelector("mark.term")?.getAttribute("style")).toBe(
++      `--term-a:${termProminence(5).toFixed(2)}`,
++    );
++    const fresh = { id: "spya-fresh1", forms: ["consciousness"], blocks: [repeats[4]!.id] };
++    const both = termMarks(repeats, [consciousness, fresh]).get(repeats[4]!.id)!;
++    const shared = parse(annotateHtml(repeats[4]!.html, both));
++    expect(shared.querySelector("mark.term")?.getAttribute("style")).toBeNull();
++  });
++
++  it("counts every occurrence, aliases included, not every block", () => {
++    const twice = {
++      id: "spya-twice1",
++      tag: "p",
++      kind: "text" as const,
++      text: "Consciousness, or awareness.",
++      words: 3,
++      html: "<p>Consciousness, or awareness.</p>",
++      gistable: true,
++    };
++    const article = [twice, repeats[0]!];
++    const entry = { id: "spya-consc1", forms: ["consciousness", "awareness"], blocks: [twice.id, repeats[0]!.id] };
++    const found = termMarks(article, [entry]);
++    expect(found.get(twice.id)!.map((m) => m.prominence ?? 1)).toEqual([1, termProminence(2)]);
++    expect(found.get(repeats[0]!.id)?.[0]?.prominence).toBeCloseTo(termProminence(3), 5);
++  });
++
++  it("does not fade a comment's underline along with a term it shares", () => {
++    // One <mark>, one border-bottom: fading it would fade the reader's own
++    // clickable mark (Sol, plan review of 261024s).
++    const marks = termMarks(repeats, [consciousness]).get(repeats[6]!.id)!;
++    const text = renderedText(repeats[6]!.html);
++    const host = parse(annotateHtml(repeats[6]!.html, [{ id: "c1", start: 0, end: text.length }, ...marks]));
++    expect(host.querySelector("mark.cmt.term")?.getAttribute("style")).toBeNull();
++  });
++
++  it("draws the faded rule through --term-a in the stylesheet", () => {
++    expect(readerCssNoComments()).toMatch(/mark\.term\s*\{[^}]*var\(--term-a,\s*1\)/);
++  });
+ });
+ 
+ /**
+diff --git a/tests/quote-fill.test.ts b/tests/quote-fill.test.ts
+index d6b9711d3..bb5d6f945 100644
+--- a/tests/quote-fill.test.ts
++++ b/tests/quote-fill.test.ts
+@@ -202,10 +202,12 @@ const chromaOf = (rgb: readonly number[]) => {
+     text on a fill there has less room than the same text on the page. */
+ const mutedGround = (theme: Theme) => Array<number>(3).fill(achromaticOklch(token(BASE, theme, "--muted")));
+ 
+-/** The colour a rule in the stylesheet mixes: `color-mix(in oklab, var(--name) N%, transparent)`. */
++/** The colour a rule in the stylesheet mixes: `color-mix(in oklab, var(--name) N%, transparent)`.
++    `calc(N% * var(--term-a, 1))` reads as N%: a term's first occurrence, the
++    full-strength one (annotate.ts § termProminence). */
+ function ruleAlpha(selector: string, property: string, name: string): number {
+   const rule = new RegExp(`\\n${selector.replace(/[.[\]]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(SHEET)?.[1] ?? "";
+-  const m = new RegExp(`${property}:[^;]*color-mix\\(in oklab, var\\(${name}\\) (\\d+)%, transparent\\)`).exec(rule);
++  const m = new RegExp(`${property}:[^;]*color-mix\\(in oklab, var\\(${name}\\) (?:calc\\()?(\\d+)%(?: \\* var\\(--term-a, 1\\)\\))?, transparent\\)`).exec(rule);
+   if (!m?.[1]) throw new Error(`${selector} no longer draws ${property} as a mix of ${name}`);
+   return Number(m[1]) / 100;
+ }

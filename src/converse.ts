@@ -114,7 +114,7 @@ import {
 } from "./chat-tools.js";
 import { settledExchanges } from "./reader-notes.js";
 import { blockRefLeaks } from "./block-ref-leak.js";
-import { citableText } from "./citable.js";
+import { citableText, citationRuns } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import { type GuideExperience, experienceLine, modeWordsSection } from "./guide.js";
 import { startedAMode } from "./next-steps.js";
@@ -738,7 +738,11 @@ say when each is worth reaching for.
   on what it covered. When one took up the same question, claim, passage or
   objection they are asking about now, read it with reader_notes before you
   answer. Then answer the question, adding to what was said there rather than
-  repeating it; mention the earlier conversation when that helps them. Do not
+  repeating it; mention the earlier conversation when that helps them. When you
+  mention one, put its id from the list in square brackets straight after, as
+  you would a block id: "your earlier conversation on free will [spya-k3m9qt]".
+  The reader can press it to open that conversation. Use only an id from the
+  list, and never a conversation's id to cite a passage. Do not
   open one that is only on a nearby topic, and never guess what one said from
   its line in the list. A long conversation comes back as its newest part,
   saying when there are earlier exchanges and the before to call for them.
@@ -2178,6 +2182,13 @@ export interface ConverseRequest {
    */
   others?: string | null;
   /**
+   * The ids of those conversations (`otherConversationsSection(...).ids`).
+   * Not sent to the model: the counters read a bracketed one as a link to the
+   * conversation, which the panel draws (plan 261024u), rather than as an
+   * invented block id. See `threadCitations`.
+   */
+  otherThreadIds?: readonly string[];
+  /**
    * **Guide only**: how much the reader has used Spideryarn, as a bucket —
    * `experienceOf` in src/guide.ts. The route resolves it per turn
    * (`guideExperience` in src/routes.ts). Reaches the prompt in the final user
@@ -2893,6 +2904,34 @@ export function unknownCitedIds(text: string, known: Set<string>): string[] {
   return [...bad];
 }
 
+/**
+ * **The reader's conversations an answer links to**, and the ids it cannot —
+ * the server's half of plan 261024u, so the log means what the panel shows.
+ *
+ * The panel (citations.ts § `splitCitations`) draws a bracketed conversation id
+ * as a link, unless a passage of the open or a mentioned article has the same
+ * id, and then it leaves that id's **whole run** as text. `clash` is every id
+ * in such a run: added to the ambiguous count and taken out of the destination
+ * counts, as the panel draws none of them. `linked` is what the reader could
+ * press. The agreement is checked by painting
+ * (tests/chat-markdown-render.test.tsx § a link to another conversation).
+ */
+export function threadCitations(
+  text: string,
+  threadIds: readonly string[],
+  passages: { known: Set<string>; ambiguous: Set<string> },
+): { linked: string[]; clash: Set<string> } {
+  const colliding = new Set(threadIds.filter((id) => passages.known.has(id) || passages.ambiguous.has(id)));
+  const clash = new Set<string>();
+  if (colliding.size > 0) {
+    for (const run of citationRuns(text)) {
+      if (run.some((id) => colliding.has(id))) for (const id of run) clash.add(id);
+    }
+  }
+  const linkable = new Set(threadIds.filter((id) => !colliding.has(id)));
+  return { linked: citedBlockIds(text, linkable).filter((id) => !clash.has(id)), clash };
+}
+
 export async function* converse({
   meta,
   blocks,
@@ -2905,6 +2944,7 @@ export async function* converse({
   profile = null,
   notes = null,
   others = null,
+  otherThreadIds = [],
   experience = null,
   reading = null,
   useTools = true,
@@ -4003,9 +4043,14 @@ export async function* converse({
      still available: both are citable, so neither is "unknown". `citedBlocks`
      stays the open article's count, which is what it has always measured. */
   const ids = citationIds(blocks, mentions);
-  const unknownIds = unknownCitedIds(answer, ids.known);
-  const citedBlocks = citedBlockIds(answer, idsOf(blocks)).length;
-  const citedAmbiguous = citedBlockIds(answer, ids.ambiguous);
+  /* And the reader's other conversations (plan 261024u): a bracketed one is a
+     link the panel draws, so it is not "unknown" either; one that collides
+     with a passage is drawn as neither, so it is ambiguous. */
+  const threadCites = threadCitations(answer, otherThreadIds, ids);
+  const without = (set: Set<string>) => new Set([...set].filter((id) => !threadCites.clash.has(id)));
+  const unknownIds = unknownCitedIds(answer, new Set([...ids.known, ...otherThreadIds]));
+  const citedBlocks = citedBlockIds(answer, without(idsOf(blocks))).length;
+  const citedAmbiguous = citedBlockIds(answer, new Set([...ids.ambiguous, ...threadCites.clash]));
 
   /* One line per answered question.
      `unknownIds` is the point of it: a cited id this article does not have
@@ -4056,12 +4101,17 @@ export async function* converse({
            mentioned one, or two mentioned. An ambiguous id draws no chip in
            the panel (plan 261012d § 4), so a count here is citations the
            reader could not follow. */
-        ...(mentions.length > 0
+        ...(mentions.length > 0 || threadCites.clash.size > 0
           ? {
-              citedMentioned: citedBlockIds(answer, ids.mentioned).length,
+              citedMentioned: citedBlockIds(answer, without(ids.mentioned)).length,
               citedAmbiguous: citedAmbiguous.length,
             }
           : {}),
+        /* **Only when the reader has other conversations here.** How many of
+           them the answer linked to (plan 261024u). The prompt asks for the id
+           whenever an earlier conversation is mentioned; a run of answers that
+           opened one (`tools`) and linked none is the prompt not being followed. */
+        ...(otherThreadIds.length > 0 ? { citedConversations: threadCites.linked.length } : {}),
         /* Beside `chars` from the helper, and they are not the same number:
            `chars` is what streamed, `answerChars` is what was stored after a
            trim. Equal on almost every turn, and the pair is worth keeping —

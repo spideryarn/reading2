@@ -1,0 +1,7 @@
+1. **Medium — view-as is a new exposure, not existing spine behaviour.** [`useReadingTime`](</var/tmp/spideryarn-worktrees/fbdb7w6f-metadata-time-spent/src/web/useReadingTime.ts:205>) disables both fetching and drawing under view-as. The route permits the GET, but the spine never uses it there. Concretely, an administrator who currently sees no subject reading-time marks would gain the subject’s exact total in Metadata. If intentional, say so explicitly and add a view-as test.
+
+2. **Low — pin the non-cached offline behaviour.** `/api/reading-time/` is absent from [`CACHEABLE`](</var/tmp/spideryarn-worktrees/fbdb7w6f-metadata-time-spent/src/web/lib/api.ts:1120>), which is correct: offline, the row should fail rather than present an old total as current. Add this to the plan/test. Otherwise a future “cache all per-article GETs” implementation could serve yesterday’s total after today’s cleanup POST failed offline.
+
+3. **Low — avoid a StrictMode duplicate GET.** Following `useArticleCost`’s `live`-flag shape without checking `live` immediately after `await waitForReadingTimeWrites(...)` makes StrictMode’s discarded first effect continue into its GET. Check `live` after the wait, as the existing reading hook checks `gone` at [`useReadingTime.ts:382`](</var/tmp/spideryarn-worktrees/fbdb7w6f-metadata-time-spent/src/web/useReadingTime.ts:382>).
+
+The owner/visitor component boundary and owner-scoped store prevent a visitor privacy leak.

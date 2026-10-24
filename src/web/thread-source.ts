@@ -94,7 +94,7 @@ export const SOURCE_PASSAGE = "About a passage";
  * Learn kind has to say. Keyed by `LearnKind`, not `SingleThreadKind`: the
  * guide is single-thread but is not a part of Learn.
  */
-const LEARN_VIEW_OF: Readonly<Record<LearnKind, LearnConversationView>> = {
+export const LEARN_VIEW_OF: Readonly<Record<LearnKind, LearnConversationView>> = {
   learn: "recall",
   explore: "explore",
 };
