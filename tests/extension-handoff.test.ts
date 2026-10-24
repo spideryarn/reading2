@@ -541,12 +541,12 @@ describe("receive: the page is sent only for the reader it was opened for (F1)",
     const r = await receive({
       take: async () => ({ kind: "page", file }),
       stillFor: () => true,
-      send: async (f) => (sent.push(f), "11111111-1111-4111-8111-111111111111"),
+      send: async (f) => (sent.push(f), "e47e0510-0000-4000-8000-00000000c0de"),
       go: (h) => went.push(h),
     });
     expect(r).toEqual({ kind: "sent" });
     expect(sent).toEqual([file]);
-    expect(went).toEqual(["/add/upload/11111111-1111-4111-8111-111111111111"]);
+    expect(went).toEqual(["/add/upload/e47e0510-0000-4000-8000-00000000c0de"]);
   });
 
   it("a reply that arrives after the reader changed sends nothing", async () => {
