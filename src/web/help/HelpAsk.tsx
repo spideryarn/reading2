@@ -74,6 +74,7 @@ import { readAnswerStream } from "../lib/sse.js";
 import { Link } from "../Link.js";
 import { loginHref } from "../router.js";
 import { type UseDictationField, useDictationField } from "../useDictationField.js";
+import { useFitTextarea } from "../useFitTextarea.js";
 import { putKeyboardAway } from "../useVisualViewport.js";
 import { voiceClass } from "../voice.js";
 import { helpAnswerHref } from "./help-answer-links.js";
@@ -405,6 +406,10 @@ function SearchOnly({ state, onGo }: { state: HelpAskState; onGo: () => boolean 
 function AskBox({ state }: { state: HelpAskState }) {
   const { value, setValue, asked, ask, stop, over, box, dictate } = state;
   const arriving = asked?.kind === "arriving";
+  /* As tall as its words, never a scroller of its own (spya-p8h7r3: *"The
+     input box … stays pretty small. I think it should get larger."*). `rows`
+     is the floor. */
+  useFitTextarea(box, value);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -450,7 +455,7 @@ function AskBox({ state }: { state: HelpAskState }) {
         }}
         /* `any-pointer-coarse` at 16px or more: iOS zooms into a smaller
            field (SearchOnly says why a bare `text-base` is not enough). */
-        className={`${voiceClass("reader")} tw:box-border tw:block tw:w-full tw:resize-y tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:leading-relaxed tw:text-foreground tw:any-pointer-coarse:text-[max(1rem,16px)] tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none`}
+        className={`${voiceClass("reader")} tw:box-border tw:block tw:w-full tw:resize-none tw:overflow-hidden tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:leading-relaxed tw:text-foreground tw:any-pointer-coarse:text-[max(1rem,16px)] tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none`}
       />
       {over && (
         <p className={NOTE_CLASS}>
