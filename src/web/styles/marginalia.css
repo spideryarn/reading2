@@ -24,10 +24,12 @@
 }
 
 /* ---------------------------------------------------------- § the room --
-   `.reader` keeps `--marg-reserve` clear on its right, and it is often 0:
-   while the centred prose already leaves the column room beside it, nothing
-   moves. layout.ts § `fitMargin` is the arithmetic. Both variables are 0 in
-   every other mode, so this rule is inert there. */
+   `.reader` keeps `--marg-reserve` clear on its right: room for the column
+   where the centred prose leaves too little, and with no band, twice what the
+   prose moves left so the chat card gets room (layout.ts § `shiftForCard`). It
+   is 0 only once the centred prose already leaves a full card beside it.
+   layout.ts § `fitMargin` is the arithmetic. Both variables are 0 in every
+   other mode, so this rule is inert there. */
 .reader {
   padding-right: calc(var(--marg-reserve, 0px) + var(--safe-right));
 }

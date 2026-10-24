@@ -111,36 +111,43 @@ or floats in the corner. [comments.md § Where the chat panel sits](comments.md#
 > — Greg, 2026-10-05, about the chat card
 
 It is 288px at most wherever it has to take room from the prose or a band, as before. Where
-the centred prose already leaves more than that to its right, the column grows into it, up to
-384px. With a 16px root, the rail on and no band, it is 366px in a 1440px window and reaches
-384px from 1476px (310 and about 1590 before the cap came down to 42rem on 2026-10-23). Beside a band it grows only into room
-that was already spare right of the column. The prose and the band do not move or change width, and
-below about 1285px nothing changes at that root size. The chat card's sizing rule and cap did not
-change: it still takes all the room right of the prose, up to 576px, so at 1440px it is about 338px (282 before 2026-10-23), and wider there would
-mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/layout.ts);
+there is more than that right of the prose, the column grows into it, up to 384px, and with no
+band there usually is, because the prose moves left for the chat card (below). With a 16px root,
+the rail on and no band, it is 384px from about a 1200px window. Beside a band it grows only into
+room that was already spare right of the column. The chat card takes all the room right of the
+prose, up to 576px. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/layout.ts);
 [`layout-margin.test.ts`](../../tests/layout-margin.test.ts).
 
-**From a 1600px window the prose moves left, for the chat card.**
+**With no band, the prose moves left, for the chat card.**
 
 > re wider margin for chat card: B give it more room on wide windows
 >
 > — Greg, 2026-10-06
 
-B was offered as a small shift left from about 1600px, keeping the prose's width, so the margin
-and the card get about 100px more. With the column on and no band, the prose moves up to 100px
-further left from 1600px, whether or not a card is open. It moves only as far as the card can use, and the card
-stops at 576px. With a 16px root and the rail on: 100px at 1600 (card 418 → 518), 58px at
-1800 (518 → 576), and none from 1916px, where the prose is centred again. (Before the column's
-cap came down to 42rem on 2026-10-23 it was 362 → 462 at 1600 and centred from 2028:
-[261023a](../plans/261023a-reading-column-cap-a-middle-value.md).) Larger type can leave
-less space on the left; the shift keeps at least half of it clear of the rail. The notes' cap
-stays at 384px; at larger roots the notes can also grow into the new room, up to that cap.
-Below 1600px the prose stays where it was, so it jumps as a window
-is dragged across that width. Beside a band nothing moves: the prose is not centred there and
-the band has the page left of it. The masthead's title follows the prose at every width
-(`marginalia.css` § the room) — since 2026-10-06 below 1600px too, where the column had been
-pushing the prose left without it, leaving the title up to about 145px right of the prose from an iPad's width to about 1400px
-([the plan](../plans/261006c-the-title-follows-the-prose-below-1600px-with-the-marginalia-column-on.md) has the measurements).
+> Look at the ratio of the columns here for the Marginalia mode, especially when there's a chat
+> involved. There's plenty of space, and yet, you know, the chat in the right is all crammed into a
+> tiny, tiny gap and isn't wide enough to really read, and the margins are unhelpful.
+>
+> — Greg, 2026-10-23 (spya-rgh26u)
+
+B was a shift of up to 100px from a 1600px window. Greg's second report came from a window of
+about 1512px at a large text size, where nothing moved: about 315px of empty page left of the
+prose and a 282px card. So since 2026-10-24
+([261024l](../plans/261024l-the-chat-card-in-the-margin-gets-the-room-left-of-the-prose-at-every-width.md))
+it is one rule at every width: **the prose moves left as far as the card can use, keeping 4rem of
+page left of it, or half the room that was there when that is less** (`PROSE_SHIFT_KEEP_REM`).
+Its width never changes, and it moves whether or not a card is open, so asking about a paragraph
+never slides it out from under the reader's eye. The cost is that with no chat open the page is set
+left of centre, with room right of the notes. With a 16px root and the rail on, the card is 480px at
+1280 (was 260) and its full 576px from 1376; at a 20px root it is 517px at 1512 (was 282)
+and 445px at 1440, where it was too narrow to be a card at all. The prose is centred again from
+1916px at 16px, where the card is full anyway. The half rule is for large type on a narrow window:
+at a 28px root and 1600px only 82px is left of the prose, and a flat 4rem would leave the card too
+narrow to draw. The notes' cap stays at 384px: a longer note line is too long to read. Until
+2026-10-24 the prose jumped 100px as a window was dragged across 1600px; it no longer jumps.
+Beside a band nothing moves: the prose is not centred there and the band has the page left of
+it. The masthead's title follows the prose at every width (`marginalia.css` § the room;
+[261006c](../plans/261006c-the-title-follows-the-prose-below-1600px-with-the-marginalia-column-on.md)).
 `shiftForCard` and `margTitleReserve` in [`layout.ts`](../../src/web/layout.ts).
 
 **A lone question's line says its words once.** Opened, it shows only *Open the conversation*; the

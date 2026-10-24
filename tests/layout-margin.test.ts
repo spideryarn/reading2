@@ -23,8 +23,7 @@ import {
   MARG_WIDE,
   margTitleReserve,
   MODE_MIN,
-  PROSE_SHIFT_FROM,
-  PROSE_SHIFT_MAX,
+  PROSE_SHIFT_KEEP_REM,
   MODE_PROSE_FLOOR,
   PROSE_MIN,
   proseAloneMaxPx,
@@ -80,16 +79,15 @@ describe("the marginalia column", () => {
     }
   });
 
-  it("does not move the prose while the room beside it already holds the column", () => {
+  it("does not move the prose while the room beside it already holds a full chat card", () => {
     let unmoved = 0;
     for (const c of CASES) {
       const plain = fitView(c);
       const fit = fitView({ ...c, margin: true });
       const spine = fit.spine === "on" ? SPINE_W : 0;
       const room = (c.windowWidth - spine - plain.tableW) / 2;
-      if (room < MARG_IDEAL) continue;
-      /* From `PROSE_SHIFT_FROM` the prose may move for the chat card: § below. */
-      if (c.windowWidth >= PROSE_SHIFT_FROM) continue;
+      /* Short of that the prose moves left for the card: § below. */
+      if (room < CHAT_CARD_MAX + MARG_GAP_REM * c.rootFontPx + CHAT_DOCK_GUTTER) continue;
       unmoved += 1;
       expect(fit.tableW, JSON.stringify(c)).toBe(plain.tableW);
       expect(fit.margReserve, JSON.stringify(c)).toBe(0);
@@ -125,25 +123,28 @@ describe("the marginalia column", () => {
       expect(MARG_WIDE).toBe(384);
     });
 
-    it("grows into the room beside the centred prose: 366px at 1440, 384px at 1920 and 2560", () => {
+    it("grows into the room right of the prose: 384px at 1440, 1920 and 2560", () => {
       expect(proseAloneMaxPx(16)).toBe(696);
-      /* (1440 − 12 of rail − 696 of prose) / 2. It was 310 at the 49rem cap. */
-      expect(fitView({ windowWidth: 1440, margin: true }).margW).toBe(366);
+      /* (1440 − 12 of rail − 696 of prose) / 2 = 366 centred; the prose then
+         moves 238 left for the card (§ below), so 604 is right of it. It was
+         366 until 261024l, and 310 at the 49rem cap. */
+      expect(fitView({ windowWidth: 1440, margin: true }).margW).toBe(MARG_WIDE);
       expect(fitView({ windowWidth: 1920, margin: true }).margW).toBe(MARG_WIDE);
       expect(fitView({ windowWidth: 2560, margin: true }).margW).toBe(MARG_WIDE);
     });
 
-    it("is exactly what it was wherever that room is no more than the old column", () => {
-      /* 1284px with the rail at a 16px root: 12 + 696 + 2 × 288 (1396 at the
-         49rem cap). */
-      expect(fitView({ windowWidth: 1284, margin: true }).margW).toBe(MARG_IDEAL);
-      expect(fitView({ windowWidth: 1286, margin: true }).margW).toBe(MARG_IDEAL + 1);
+    it("is exactly what it was wherever the prose did not move for the card", () => {
+      /* Rule 3 at a 16px root: 900 − 12 − 288 leaves the prose 600, the
+         column's reserve takes the rest, so there is no room left of the prose
+         to give and the column is its unwidened 288. */
+      expect(fitView({ windowWidth: 900, margin: true }).tableW).toBe(600);
+      expect(fitView({ windowWidth: 900, margin: true }).margW).toBe(MARG_IDEAL);
       let same = 0;
       let wider = 0;
       for (const c of CASES) {
-        if (c.windowWidth >= PROSE_SHIFT_FROM) continue;
         const fit = fitView({ ...c, margin: true });
         if (fit.margW === 0) continue;
+        if (unshifted(c).left - tableLeft(fit, c.windowWidth) > 1e-6) continue;
         const spine = fit.spine === "on" ? SPINE_W : 0;
         const room = (c.windowWidth - spine - fitView(c).tableW) / 2;
         if (room <= MARG_IDEAL) {
@@ -162,32 +163,33 @@ describe("the marginalia column", () => {
 
     /** The fit before the prose could shift: what the old column reserved,
         and where that put the table and the room right of it. */
-    const unshifted = (c: (typeof CASES)[number]) => {
+    function unshifted(c: (typeof CASES)[number]) {
       const spine = fitView({ ...c, margin: true }).spine === "on" ? SPINE_W : 0;
       const avail = c.windowWidth - spine;
       const proseW = Math.min(fitView(c).tableW, avail - oldColumnWidth(c));
       const reserve = Math.max(0, 2 * oldColumnWidth(c) + proseW - avail);
       const left = spine + (avail - reserve - proseW) / 2;
       return { spine, proseW, reserve, left, room: c.windowWidth - left - proseW };
-    };
+    }
 
-    it("keeps the old prose width everywhere and its old position below 1600px", () => {
-      let below = 0;
+    it("keeps the old prose width everywhere", () => {
+      let drawn = 0;
       for (const c of CASES) {
         const fit = fitView({ ...c, margin: true });
         if (fit.margW === 0) continue;
-        const old = unshifted(c);
-        expect(fit.tableW, JSON.stringify(c)).toBe(old.proseW);
-        if (c.windowWidth >= PROSE_SHIFT_FROM) continue;
-        below += 1;
-        expect(fit.margReserve, JSON.stringify(c)).toBe(old.reserve);
+        drawn += 1;
+        expect(fit.tableW, JSON.stringify(c)).toBe(unshifted(c).proseW);
       }
-      expect(below).toBeGreaterThan(100);
+      expect(drawn).toBeGreaterThan(100);
     });
 
     /* Greg, 2026-10-06: "B give it more room on wide windows" — from about
-       1600px the prose moves left, keeping its width, and the card gets it. */
-    describe("from 1600px, the prose moves left to give the chat card room", () => {
+       1600px the prose moved left, keeping its width, and the card got it.
+       Greg, 2026-10-23 (spya-rgh26u), at about 1512px with large text: "the
+       chat in the right is all crammed into a tiny, tiny gap". Since 261024l
+       the prose moves at every width, keeping 4rem left of it, or half the
+       room that was there when that is less. */
+    describe("the prose moves left to give the chat card room", () => {
       const at = (windowWidth: number) => {
         const fit = fitView({ windowWidth, margin: true });
         return {
@@ -198,22 +200,48 @@ describe("the marginalia column", () => {
         };
       };
 
-      it("is 100px at most, from a 1600px window", () => {
-        expect(PROSE_SHIFT_FROM).toBe(1600);
-        expect(PROSE_SHIFT_MAX).toBe(100);
+      it("keeps 4rem left of the prose", () => {
+        expect(PROSE_SHIFT_KEEP_REM).toBe(4);
       });
 
-      it("leaves 1440 and 1599 alone: centred prose, a 338px card at 1440", () => {
-        /* 12 + (1428 − 696) / 2 = 378, and 366 right of the prose, less the
-           20px gap and the 8px gutter. */
-        expect(at(1440)).toEqual({ left: 378, proseW: 696, margW: 366, card: 338 });
-        /* 12 + (1587 − 696) / 2 = 457.5; 445.5 right of it, less 28. */
-        expect(at(1599)).toEqual({ left: 457.5, proseW: 696, margW: 384, card: 417.5 });
+      /* The full card wants 576 + 20 of gap + 8 of gutter = 604 right of the
+         prose at a 16px root; 576 + 25 + 8 = 609 at 20. */
+      it("at 1280 the prose keeps 64px and the card gets 480 (was 260)", () => {
+        /* 1268 after the rail; the column reserves 2 × 288 + 696 − 1268 = 4, so
+           284 is left of the prose and 288 right. 284 − 64 = 220 < 604 − 288. */
+        expect(at(1280)).toEqual({ left: 76, proseW: 696, margW: 384, card: 480 });
       });
 
-      it("gives the card 100px at 1600 (418 to 518), the prose 100px further left", () => {
-        /* Centred: 12 + (1588 − 696) / 2 = 458, with 446 right of it. */
-        expect(at(1600)).toEqual({ left: 358, proseW: 696, margW: 384, card: 518 });
+      it("at 1440 the card is full, 576 (was 338), and the prose keeps 128", () => {
+        /* 366 either side; the card needs 604 − 366 = 238 of the 302 it may take. */
+        expect(at(1440)).toEqual({ left: 140, proseW: 696, margW: 384, card: CHAT_CARD_MAX });
+      });
+
+      it("is continuous across 1600px, where it used to jump 100px", () => {
+        /* 445.5, 446 and 446.5 either side; each moves by what the card lacks,
+           604 − that, leaving 287, 288 and 289. */
+        expect(at(1599).left).toBe(299);
+        expect(at(1600).left).toBe(300);
+        expect(at(1601).left).toBe(301);
+        expect(at(1600).card).toBe(CHAT_CARD_MAX);
+      });
+
+      /* Greg's report: about 1512px at a 20px root. */
+      it("at a 20px root the prose keeps 80px: a 517px card at 1512 (was 282), 445 at 1440 (was none)", () => {
+        const at20 = (windowWidth: number) => {
+          const fit = fitView({ windowWidth, rootFontPx: 20, margin: true });
+          return {
+            left: tableLeft(fit, windowWidth),
+            proseW: fit.tableW,
+            card: chatCard(fit, windowWidth, 20),
+          };
+        };
+        /* 1500 after the rail, 870 of prose, 315 either side: 315 − 80 = 235,
+           short of 609 − 315 = 294. The card is 315 + 235 − 25 − 8. */
+        expect(at20(1512)).toEqual({ left: 92, proseW: 870, card: 517 });
+        /* The column reserves 2 × 288 + 870 − 1428 = 18: 270 left, 288 right.
+           270 − 80 = 190; 288 + 190 − 33. */
+        expect(at20(1440)).toEqual({ left: 92, proseW: 870, card: 445 });
       });
 
       it("moves only as far as the card can use: 58px at 1800, where it reaches 36rem", () => {
@@ -232,12 +260,11 @@ describe("the marginalia column", () => {
 
       /* At a 28px root the cap is 42 × 28 + 1.5 × 28 = 1218, the column pushes
          the prose left by 2 × 288 + 1218 − 1588 = 206, and the prose has
-         (1588 − 206 − 1218) / 2 = 82 left of it: half of that, 41, is all it may
-         move. 12 + 41 = 53; 53 + 1218 = 1271; 1600 − 1271 = 329 for the column,
-         less 35 of gap and 8 of gutter for the card. This was a 24px root,
-         giving 44px, until the cap came down to 42rem (plan 261023a): at 24 the
-         cap is 1044, the prose now has 256 left of it, and the 100px limit binds
-         first. */
+         (1588 − 206 − 1218) / 2 = 82 left of it: under 8rem, so it keeps half,
+         and 41 is all it may move. 12 + 41 = 53; 53 + 1218 = 1271; 1600 − 1271
+         = 329 for the column, less 35 of gap and 8 of gutter for the card. A
+         flat 4rem (112) would move nothing and leave 245, too little for a card
+         (GPT Sol on plan 261024l). */
       it("keeps the rail clear at a 28px root, where only 41px can be given to the card", () => {
         const fit = fitView({ windowWidth: 1600, rootFontPx: 28, margin: true });
         expect(tableLeft(fit, 1600)).toBe(53);
@@ -247,13 +274,13 @@ describe("the marginalia column", () => {
       });
 
       it("takes the rail's twelve pixels into account when it is turned off", () => {
-        /* (1600 − 696) / 2 = 452 either side, so the full 100px: the content
-           box is 1600 − 200, the prose starts (1400 − 696) / 2 = 352 in, ends
-           at 1048, and the card has 1600 − 1048 − 28. */
+        /* (1600 − 696) / 2 = 452 either side, and the card lacks 604 − 452 =
+           152: the content box is 1600 − 304, the prose starts (1296 − 696) / 2
+           = 300 in, ends at 996, and the card has 1600 − 996 − 28. */
         const fit = fitView({ windowWidth: 1600, showSpine: false, margin: true });
-        expect(tableLeft(fit, 1600)).toBe(352);
-        expect(fit.margLeft).toBe(1048);
-        expect(chatCard(fit, 1600)).toBe(524);
+        expect(tableLeft(fit, 1600)).toBe(300);
+        expect(fit.margLeft).toBe(996);
+        expect(chatCard(fit, 1600)).toBe(CHAT_CARD_MAX);
       });
 
       /* The card is full once the centred prose leaves 604 right of it:
@@ -266,33 +293,45 @@ describe("the marginalia column", () => {
         expect(fitView({ windowWidth: 1916, margin: true }).margReserve).toBe(0);
       });
 
-      it("at every width and root: never more than 100px, never past what the card uses, never into the rail", () => {
+      it("at every width and root: never past what the card uses, never past the keep", () => {
         let shifted = 0;
+        let cards = 0;
         for (const c of CASES) {
           const fit = fitView({ ...c, margin: true });
           if (fit.margW === 0) continue;
           const old = unshifted(c);
           const shift = old.left - tableLeft(fit, c.windowWidth);
           const label = JSON.stringify(c);
-          if (c.windowWidth < PROSE_SHIFT_FROM) {
-            expect(shift, label).toBeCloseTo(0, 6);
-            continue;
-          }
           expect(shift, label).toBeGreaterThanOrEqual(-1e-6);
-          expect(shift, label).toBeLessThanOrEqual(PROSE_SHIFT_MAX + 1e-6);
-          /* At least half the page that was left of the prose is still there. */
+          /* What was left of the prose keeps 4rem, or half of itself if less. */
+          const before = old.left - old.spine;
+          const keep = Math.min(before / 2, PROSE_SHIFT_KEEP_REM * c.rootFontPx);
           expect(tableLeft(fit, c.windowWidth) - old.spine, label).toBeGreaterThanOrEqual(
-            (old.left - old.spine) / 2 - 1e-6,
+            keep - 1e-6,
           );
+          /* And it takes all of that it can: either the card is full or the
+             keep binds. */
+          const full = CHAT_CARD_MAX + MARG_GAP_REM * c.rootFontPx + CHAT_DOCK_GUTTER;
+          const cardFull = old.room + shift >= full - 1e-6;
+          const keepBinds = tableLeft(fit, c.windowWidth) - old.spine <= keep + 1e-6;
+          expect(cardFull || keepBinds, label).toBe(true);
           if (shift < 1e-6) continue;
           shifted += 1;
           /* Every pixel the prose gave up is in the card. */
-          const full = CHAT_CARD_MAX + MARG_GAP_REM * c.rootFontPx + CHAT_DOCK_GUTTER;
           expect(old.room + shift, label).toBeLessThanOrEqual(full + 1e-6);
           const oldCard = old.room - MARG_GAP_REM * c.rootFontPx - CHAT_DOCK_GUTTER;
-          expect(chatCard(fit, c.windowWidth, c.rootFontPx), label).toBeCloseTo(oldCard + shift, 6);
+          const card = chatCard(fit, c.windowWidth, c.rootFontPx);
+          /* On a small window it can still be short of a card; then the chat
+             docks or floats, as it did. */
+          if (oldCard + shift < CHAT_DOCK_MIN) {
+            expect(card, label).toBeNull();
+            continue;
+          }
+          cards += 1;
+          expect(card, label).toBeCloseTo(oldCard + shift, 6);
         }
         expect(shifted).toBeGreaterThan(100);
+        expect(cards).toBeGreaterThan(100);
       });
 
       it("beside a band nothing moves: the table still starts right after the band", () => {
@@ -316,18 +355,19 @@ describe("the marginalia column", () => {
         for (const c of CASES) {
           const fit = fitView({ ...c, margin: true });
           expect(margTitleReserve(fit), JSON.stringify(c)).toBe(fit.margReserve);
-          if (c.windowWidth < PROSE_SHIFT_FROM && fit.margReserve > 0) pushed++;
+          if (fit.margReserve > 0) pushed++;
         }
         expect(pushed).toBeGreaterThan(100);
-        /* Rule 2: 2 × 288 + 696 − 1188 (196 at the 49rem cap). */
+        /* Rule 2: 2 × 288 + 696 − 1188 = 84 for the column, leaving 204 left of
+           the prose; it moves 204 − 64 = 140 for the card, so twice that more. */
         const fit = fitView({ windowWidth: 1200, margin: true });
-        expect(fit.margReserve).toBe(84);
-        expect(margTitleReserve(fit)).toBe(84);
-        /* Twice the card's 100px shift. */
-        expect(margTitleReserve(fitView({ windowWidth: 1600, margin: true }))).toBe(200);
-        /* 2 × 288 + 1044 − 1588 = 32 for the column, plus twice the 100px shift
-           (288 at the 49rem cap). */
-        expect(margTitleReserve(fitView({ windowWidth: 1600, rootFontPx: 24, margin: true }))).toBe(232);
+        expect(fit.margReserve).toBe(364);
+        expect(margTitleReserve(fit)).toBe(364);
+        /* Twice the card's 158px shift. */
+        expect(margTitleReserve(fitView({ windowWidth: 1600, margin: true }))).toBe(316);
+        /* 2 × 288 + 1044 − 1588 = 32 for the column, leaving 256 left: it keeps
+           96 (4rem at 24px), so twice 160 more. */
+        expect(margTitleReserve(fitView({ windowWidth: 1600, rootFontPx: 24, margin: true }))).toBe(352);
       });
 
       it("leaves the title to the band's own rule beside a band, and at 0 with no column", () => {
