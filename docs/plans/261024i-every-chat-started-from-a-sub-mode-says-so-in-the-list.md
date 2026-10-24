@@ -258,7 +258,7 @@ key sound, and the `from: "learn"` row safe (no `learn` field, so it opens in Ch
 
 | Finding | What changed |
 |---|---|
-| F1 (blocker): a waiting draft is not registered, so a second press before sending makes a second draft | **Not taken, with the reason in `Reader.tsx` § `discussQuizMark`.** An unsent draft is not a stored chat; to press Discuss again the reader must leave Chat for Quiz, and leaving Chat re-reads the summaries the reopen looks in. So no mark gets two *stored* chats. What is left is a second draft replacing an unsent first one, which is how Discuss and Summary's paragraph button already behave. Registering waiting drafts would need a lifecycle that follows `moveThread` and server id corrections, which is more machinery than the case is worth |
+| F1 (blocker): a waiting draft is not registered, so a second press before sending makes a second draft | **Not taken at plan time, and that was wrong; fixed in the code review.** I argued that leaving Chat re-reads the summaries, so no mark could get two stored chats. Sol's code review showed the gap: the band cleared the draft's origin once the thread was named, before the summaries' re-read had landed, so a press in that window minted a second stored chat. Now the draft keeps its origin until Reader's summary list has the thread (`chatDraftsFor(slug).threadForOrigin`, cleared in Reader), and a handoff the server refused is passed over (`refusedHandoffs`), so the next press still starts a real chat |
 | F2 (blocker): the rollback export omits the attempt's id, and the seeder restores no attempts | The export writes each attempt's `id`. The seeder is left as it is: it reads the old file fixtures, none of which has a quiz attempt, and a Quiz-origin thread with no attempt is refused **loudly** by the key, not lost silently. A test exports and re-seeds a Quiz chat over its attempt |
 | F3: the route trusts the request's quote | Taken: the route reads the attempt (`quizAttemptStore.questionOf`) and writes `originName(attempt.question)`. A forged quote is replaced, tested |
 | F4: test the deletes, not only the transfer order | Taken: deleting a discussed attempt alone is refused; deleting the article takes both in one statement; `READER_STATE` deletes threads before attempts |
@@ -303,5 +303,11 @@ and a null CHECK passes. The test went red on it; the second migration
       *approve with fixes made*. Its fixes: the time gives way (ellipsis) on a narrow row before
       the place does; tighter tests (the exact markup path, full equality for `originBack`); the
       mode docs and help pages that still said the icon alone marked the row
+- [x] [GPT Sol's stage 2 code review](261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list-stage2-code-review-sol.md):
+      *approve with fixes made*. Its fixes: F1's draft-origin bridge (above); a Quiz mark's chat opened
+      from Learn now switches to Chat's band, where before the press only changed the URL; the
+      seeder restores quiz attempts before threads, and the export test now re-seeds from empty;
+      stale comments. Its bridge broke *forgets a refused handoff* for Glossary, Bibliography and
+      Ideas (the refused draft was reopened); fixed with `refusedHandoffs`
 - [ ] Docs (chat-from-a-mode.md table, quiz.md, chat-tools.md list section, url-state if needed,
       help page), note in docs/user-feedback/, queue item done, pushed to dev

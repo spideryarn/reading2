@@ -570,7 +570,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     evidence: "static-only",
     reason:
       "`chat_threads.origin_*` at the route, in the store and in the export: what the wire may " +
-      "carry, that a thread's origin is set once, and that the four columns round-trip. It seeds " +
+      "carry, that a thread's origin is set once, and that all origin columns round-trip. It seeds " +
       "through `scratchArticleInPg`; what it still reaches is the seeder's copy step and the " +
       "ledger row the stubbed model call records.",
   },

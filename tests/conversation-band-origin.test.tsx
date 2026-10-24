@@ -252,7 +252,7 @@ describe("a conversation handed over with an origin", () => {
     expect("origin" in (posts[1]?.body ?? {}), "a follow-up carries none").toBe(false);
   });
 
-  it("uses the server's replacement id and stored origin, and forgets the pending entry", async () => {
+  it("uses the server's replacement id and keeps the origin bridge until Reader's summaries learn it", async () => {
     onPost = (body) => answered("spya-rgn444", body.origin);
     await mount({ slug: SLUG, target: "chat" as const, question: SEED, send: false, origin: CLAIM });
     const guessed = open();
@@ -260,7 +260,7 @@ describe("a conversation handed over with an origin", () => {
     await vi.waitFor(() => expect(open()).toBe("spya-rgn444"));
     expect(prop<ChatThread[]>("threads").find((t) => t.id === open())?.origin).toEqual(CLAIM);
     expect(drafts().origin(guessed)).toBeUndefined();
-    expect(drafts().origin(open())).toBeUndefined();
+    expect(drafts().origin(open())).toEqual(CLAIM);
     await send("Follow up");
     expect(posts[1]?.body.threadId).toBe("spya-rgn444");
     expect(posts[1]?.body.origin).toBeUndefined();

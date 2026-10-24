@@ -4670,7 +4670,7 @@ export const chatThreads = spideryarn.table(
 
     /**
      * **Where the conversation was started from, when that was an item in
-     * another mode** — `ThreadOrigin` in src/types.ts, as five columns
+     * another mode** — `ThreadOrigin` in src/types.ts, as seven columns
      * (docs/project/sql.md: columns over JSON). All null for every other
      * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
      *
@@ -4754,7 +4754,8 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_mode",
       sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz')`,
     ),
-    /* No mode, no origin: the other four columns mean nothing without it. */
+    /* No mode, no origin: the original four shape columns mean nothing
+       without it. The two Quiz columns have their own null-safe check below. */
     check(
       "chat_threads_origin_none",
       sql`${t.originMode} is not null or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is null)`,

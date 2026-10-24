@@ -12,7 +12,7 @@
  * Nothing reaches the model: `fetch` is stubbed, so `converse` fails on its
  * first call, and every assertion is about what happens before it.
  *
- * The mapping between the four columns and the union is written by hand in
+ * The mapping between the origin columns and the union is written by hand in
  * four places (`upsertThread` and `threadsFor` in src/store/pg-chat.ts,
  * src/store/export.ts, tests/helpers/seed-reader-state.ts), which is how
  * `tools` and `help` were each lost once. So the round trip is asserted
@@ -1033,11 +1033,16 @@ describe("a quiz mark's origin", () => {
         attempts: { id: string }[];
       };
       expect(kept.attempts.map((a) => a.id)).toContain(id);
-      /* The seeder writes threads only; the attempt is still in the table, so
-         the key is satisfied. A restore into an empty database would have to
-         put the attempts back first (tests/helpers/seed-reader-state.ts). */
+      /* A real restore has neither row. Remove the thread first because the
+         foreign key correctly refuses the reverse order, then prove the
+         seeder puts the attempt back before the chat that names it. */
+      await asTestOwner(() => chatStore.remove(SLUG, THREAD));
+      await getDb().delete(quizAttempts).where(eq(quizAttempts.id, id));
       await asTestOwner(() => seedChatFromFiles(SLUG));
       expect((await stored())?.origin).toEqual(mark(id));
+      expect(await getDb().select({ id: quizAttempts.id }).from(quizAttempts).where(eq(quizAttempts.id, id))).toEqual([
+        { id },
+      ]);
     } finally {
       globalThis.fetch = stub;
       await rm(exported, { recursive: true, force: true });

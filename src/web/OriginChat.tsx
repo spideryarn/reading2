@@ -1,8 +1,8 @@
 /**
  * **A chat started from an item in a mode: the button that starts one, and
  * the mark that reopens it.** Shared by Debate's claims, Glossary's entries,
- * Bibliography's rows and Ideas' rows (since plan 261009k), so they are one
- * design and not four copies.
+ * Bibliography's rows, Ideas' rows (since plan 261009k) and Quiz's marks
+ * (since plan 261024i), so they are one design and not five copies.
  *
  * - `OriginChatMark` is the way back: the chat's count of questions and its
  *   gist (the latest answer's opening until one exists). A press opens that

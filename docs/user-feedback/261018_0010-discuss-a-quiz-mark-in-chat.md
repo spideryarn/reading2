@@ -1,7 +1,7 @@
 ---
 reports: spya-jvsv3q
 ending: shipped
-comment: Shipped: a Chat icon under a finished mark opens a new chat with the question, the mark and your answer quoted, ready for you to type. Queued: the question remembering that chat and reopening it.
+comment: Shipped: a Chat icon under a finished mark opens a new chat with the question, the mark and your answer quoted, ready for you to type. Since 2026-10-24 the question also remembers that chat and reopens it.
 ---
 
 # Discuss a quiz mark in chat
@@ -20,4 +20,6 @@ in Chat with the question, the mark and your answer quoted in the text box. Noth
 you add what you want to ask, the same as Summary's paragraph button. Plan
 [261018b](../plans/261018b-quiz-mark-room-to-think-and-discuss-a-mark-in-chat.md) stage 2. The
 chat is a plain one, so the question does not show its summary or reopen it. That part is queued as
-`qi-8bh8r2vg`.
+`qi-8bh8r2vg`, and was **built on 2026-10-24** under `qi-t5nvqqen` (Greg's B on `q-nvxfwx`): the
+chat records the mark, and the question shows it and reopens it. Plan
+[261024i](../plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md) § Stage 2.

@@ -1,9 +1,10 @@
 ---
 id: q-nvxfwx
 report: spya-twsm7t
-status: open
+status: answered
 asked: 2026-10-24
 title: Should a chat started from a Quiz mark say it came from Quiz, and show again on that question?
+acted: spya-yq6h67
 refs: qi-g3neq83r · spya-twsm7t · docs/plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md · docs/user-feedback/261023_2307-chat-list-says-which-sub-mode-a-chat-came-from.md
 ---
 When you press "Discuss this in chat" under a Quiz mark, should that chat remember it came from Quiz?
@@ -29,3 +30,9 @@ What is left. Two buttons in sub-modes start a chat that records nothing about w
 Why Quiz is not a one-line change. A Quiz question's id is only unique inside one set of questions. If you press "Write them again", the new set can reuse an id for a different question. So the chat has to store which set it came from as well. For B it also has to store which of your answers it was about, because Quiz keeps every answer you have given.
 
 The way back. When you press the "Back to…" line in the chat, it would open Learn › Quiz on the same question, if that set of questions is still the current one. If the questions have since been written again, it opens Quiz at the start, and the chat is still in Chat's list.
+
+Greg's reply, 2026-10-24 (spya-yq6h67):
+
+> B
+
+Acted on by `fbtwsm7t-quiz-chat-origin`, 2026-10-24 (queue item qi-t5nvqqen): built, and on dev but not yet deployed. **Discuss this in chat** now records the mark it is about. Chat's list says Quiz on the row, the chat has a line back to the question, and the question shows that mark's chat in place of the button. Answer again and the new mark gets its own Discuss and its own chat. A mark that could not be saved still starts a plain chat, because there is no stored answer to point at. Plan: docs/plans/261024i-every-chat-started-from-a-sub-mode-says-so-in-the-list.md § Stage 2.

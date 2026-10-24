@@ -124,6 +124,8 @@ describe("a conversation's pending origin", () => {
     d.setOrigin(B, OTHER);
     expect(d.origin(A)).toEqual(CLAIM);
     expect(d.origin(B)).toEqual(OTHER);
+    expect(d.threadForOrigin(CLAIM)).toBe(A);
+    expect(d.threadForOrigin(OTHER)).toBe(B);
   });
 
   it("is untouched by typing, by clearing the box and by a submission", () => {
@@ -143,6 +145,7 @@ describe("a conversation's pending origin", () => {
     d.moveThread(A, B);
     expect(d.origin(B)).toEqual(CLAIM);
     expect(d.origin(A)).toBeUndefined();
+    expect(d.threadForOrigin(CLAIM)).toBe(B);
   });
 
   it("moves even when no words were written, and a move without one leaves the target's alone", () => {
@@ -159,6 +162,7 @@ describe("a conversation's pending origin", () => {
     d.setOrigin(A, CLAIM);
     d.dropThread(A);
     expect(d.origin(A)).toBeUndefined();
+    expect(d.threadForOrigin(CLAIM)).toBeUndefined();
     d.setOrigin(B, OTHER);
     d.clearOrigin(B);
     expect(d.origin(B)).toBeUndefined();

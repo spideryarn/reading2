@@ -672,9 +672,11 @@ export function ConversationBand({
      before its row is opened. Empty local rows go with this band; keeping its
      destination lets the next visit recover the words and pending origin. */
   const heldOnList = useRef<string | null>(null);
-  useEffect(() => {
-    for (const t of threads) if (named(t.id)) drafts.clearOrigin(t.id);
-  }, [threads, named, drafts]);
+  /* Do not clear a named thread's draft origin here. Reader's summary list is
+     the item modes' record, and it may still be a refresh behind this band's
+     controller. Reader clears the bridge once that list contains the thread;
+     until then a second press can reopen this id instead of minting another
+     conversation for the same item (plan 261024i, stage 2 review). */
 
   /* **A guide this tab began, beaten by the stored one**, is reconciled — as
      an empty Learn conversation is below — and if it was the one on screen,
@@ -1326,7 +1328,9 @@ export function ConversationBand({
             drafts.moveThread(to, confirmed);
             if (drafts.destination() === to) drafts.setDestination(confirmed);
           }
-          if (origin && to) drafts.clearOrigin(confirmed);
+          /* Keep the origin bridge after confirmation. Reader clears it when
+             its summary list contains this id; clearing it here creates a gap
+             in which a second item press starts another stored chat. */
         },
         ...(first ? { onGone: (gone: string) => onHandoffThreadGone?.(first, gone) } : {}),
       } : {}),

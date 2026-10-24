@@ -4581,8 +4581,8 @@ export type ChatAnchor =
  * not built: `chat_threads_origin_mode` in src/db/schema.ts lists it, and the
  * route accepts only the modes that are built (`ORIGIN_MODES`).
  *
- * **A glossary entry and a cited work since 2026-10-06, and an idea since
- * 2026-10-09**
+ * **A glossary entry and a cited work since 2026-10-06, an idea since
+ * 2026-10-09, and a Quiz mark since 2026-10-24**
  * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1):
  * each has a durable id, so the id is its identity and the name beside it is
  * a snapshot. See `GlossaryOrigin`.
@@ -4667,7 +4667,7 @@ export type QuizOrigin = {
 };
 
 /**
- * The most the name snapshot of a glossary, citations or ideas origin may be.
+ * The most the name snapshot of a glossary, citations, ideas or Quiz origin may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */

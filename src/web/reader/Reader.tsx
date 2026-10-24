@@ -107,6 +107,7 @@ import {
   askInSources,
   askToCheckClaim,
 } from "../chat-handoff.js";
+import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
 import { questionsByAnchor } from "../quiz-anchors.js";
@@ -1202,14 +1203,16 @@ export function Reader({
   );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
   /**
-   * **An item's chat between its first press and the summaries hearing of
-   * it** (plan 261010s, GPT Sol's F1 on the plan). `reopenItemChat` finds an
-   * item's chat in `chatSummaries`, which are re-read only when the reader
-   * leaves Chat or a turn settles; a second press inside that window would
-   * otherwise start a second chat. The band names the thread here as it
-   * sends, and again if the server corrects the id; an entry goes once the
-   * summaries carry that id, and from then on they are the record.
-  */
+   * **An immediately sent item's chat between its first press and the
+   * summaries hearing of it** (plan 261010s, GPT Sol's F1 on the plan).
+   * `reopenItemChat` finds an item's chat in `chatSummaries`, which are re-read
+   * only when the reader leaves Chat or a turn settles; a second press inside
+   * that window would otherwise start a second chat. The band names a direct
+   * handoff's thread here as it sends, and again if the server corrects the id;
+   * an entry goes once the summaries carry that id, and from then on they are
+   * the record. A waiting Quiz handoff has no `onHandoffThread`; its durable
+   * draft-origin bridge is `chatDraftsFor(slug)` below.
+   */
   const handedItemChats = useRef<{ origin: ThreadOrigin; id: string }[]>([]);
   const handedItemChatsSlug = useRef(slug);
   const handoffThread = useCallback(
@@ -1233,9 +1236,21 @@ export function Reader({
     handedItemChats.current = handedItemChats.current.filter(
       (handed) => handed.id !== id || !sameOrigin(handed.origin, origin),
     );
+    refusedHandoffs.current.add(id);
   }, [slug]);
+  /**
+   * **A handoff the server refused is not the item's chat**, though its draft
+   * still holds the origin (so a resend from that composer keeps it). The
+   * drafts bridge in `reopenItemChat` passes over these ids, and the next
+   * press starts a real chat, as it did before the bridge existed (plan
+   * 261024i stage 2's code review).
+   */
+  const refusedHandoffs = useRef(new Set<string>());
   useEffect(() => {
-    if (handedItemChatsSlug.current !== slug) handedItemChats.current = [];
+    if (handedItemChatsSlug.current !== slug) {
+      handedItemChats.current = [];
+      refusedHandoffs.current = new Set();
+    }
     handedItemChatsSlug.current = slug;
   }, [slug]);
   /* **And a handoff chat mode never took does not wait for the next visit.** The
@@ -2838,22 +2853,30 @@ export function Reader({
    * paragraph button, which records no origin.
    */
   useEffect(() => {
-    if (handedItemChats.current.length === 0) return;
     const known = new Set(chatSummaries.map((s) => s.id));
-    handedItemChats.current = handedItemChats.current.filter((h) => !known.has(h.id));
-  }, [chatSummaries]);
+    if (handedItemChats.current.length > 0) {
+      handedItemChats.current = handedItemChats.current.filter((h) => !known.has(h.id));
+    }
+    /* Waiting handoffs are not in `handedItemChats`: they become a stored
+       thread only when the reader later sends the seeded question. Their
+       draft origin is the bridge across that send and any corrected id, and
+       can go only once this same summary list has learned the thread. */
+    const drafts = chatDraftsFor(slug);
+    for (const id of known) drafts.clearOrigin(id);
+  }, [chatSummaries, slug]);
   const reopenItemChat = useCallback(
     (origin: ThreadOrigin | undefined): boolean => {
       if (!origin) return false;
       const id =
         threadForOrigin(chatSummaries, origin)?.id ??
-        handedItemChats.current.find((h) => sameOrigin(h.origin, origin))?.id;
+        handedItemChats.current.find((h) => sameOrigin(h.origin, origin))?.id ??
+        chatDraftsFor(slug).threadForOrigin(origin, (id) => refusedHandoffs.current.has(id));
       if (!id) return false;
       if (mode === "learn" || mode === "chat") showBand("chat");
       openClaimChat(id);
       return true;
     },
-    [chatSummaries, mode, showBand, openClaimChat],
+    [chatSummaries, mode, showBand, openClaimChat, slug],
   );
   const askEntry = useCallback(
     (entry: Pick<GlossaryEntry, "id" | "name">) => {
@@ -2878,18 +2901,30 @@ export function Reader({
   );
   /* A mark's chat, reopened if it has one. A mark that was not stored has no
      origin, so it always starts a plain chat, as every mark did before plan
-     261024i. A second press before the first draft is sent starts a second
-     draft, not a second stored chat: an unsent draft is not a chat, and
-     leaving Chat for Quiz re-reads the summaries the reopen looks in. */
+     261024i. The draft-origin bridge lets a second press reopen the same
+     composer before its first send and after sending while the stored summary
+     is still refreshing. */
   const discussQuizMark = useCallback(
     (seed: string, origin: QuizOrigin | null) => {
       if (!reopenItemChat(origin ?? undefined)) startQuizMarkChat(seed, origin);
     },
     [reopenItemChat, startQuizMarkChat],
   );
+  /* Quiz is inside Learn, where the floating chat card is deliberately not
+     drawn: a mark's own chat therefore has to open in Chat's band. This is
+     the same Learn exception as `reopenItemChat` and
+     `openAskedFromDrawer`; `openClaimChat` alone would write `?thread=` while
+     leaving Quiz on screen, so the press would appear to do nothing. */
+  const openQuizMarkChat = useCallback(
+    (threadId: string) => {
+      showBand("chat");
+      openClaimChat(threadId);
+    },
+    [showBand, openClaimChat],
+  );
   const quizChats = useMemo(
-    () => ({ summaries: chatSummaries, onOpen: openClaimChat }),
-    [chatSummaries, openClaimChat],
+    () => ({ summaries: chatSummaries, onOpen: openQuizMarkChat }),
+    [chatSummaries, openQuizMarkChat],
   );
   const checkClaim = useCallback(
     (origin: ClaimOrigin) => {
