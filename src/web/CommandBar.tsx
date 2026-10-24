@@ -113,7 +113,7 @@
  * the ground is free; web-client.md § Never delete a semantic class name is why
  * they are on the elements even while they carry no rules.
  */
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   type ArgumentKind,
   COULD_NOT_TELL,
@@ -218,6 +218,10 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { DiagramKind } from "./diagram.js";
 import { subModesOf, subModeWords, type SubMode } from "./sub-modes.js";
 import { useVisualViewport } from "./useVisualViewport.js";
+import { isAdmin } from "../admin.js";
+import { adminRows, COST_SECTION_ROW } from "./admin-commands.js";
+import { viewAsNonce } from "./lib/view-as.js";
+import { useSession } from "./useSession.js";
 import { voiceClass } from "./voice.js";
 import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
 import { dictationReporter } from "./dictation-report.js";
@@ -391,10 +395,12 @@ export type CommandBarExperimental = Pick<ExperimentalSetting, "on" | "loaded" |
  * *Add an article* would take you somewhere with a different name on it. It is
  * an **alias on Library** instead, which is both shorter and true.
  *
- * **Admin and Design**, which would need an admin check the bar has never had,
- * for two rows one person can use; and **sign out**, because a bar whose Enter
- * key is one row from signing you out is a bar you press more carefully.
- * 260908e § What was considered and left out.
+ * **Sign out**, because a bar whose Enter key is one row from signing you out
+ * is a bar you press more carefully. 260908e § What was considered and left
+ * out. **Admin and Design were left out by the same paragraph** — *"an admin
+ * check the bar has never had, for two rows one person can use"* — and came in
+ * on 2026-10-24 when Greg asked for admin rows (`spya-v88mga`), built beside
+ * this rather than in it (`adminRows`, admin-commands.ts, plan 261024n).
  *
  * **The experimental switch was left out by the same paragraph, and came in on
  * 2026-10-03** when Greg asked for it by name (spya-wh2xys: *"a command to turn
@@ -612,6 +618,72 @@ const rerunHeld = (step: MetadataRerunStep): string =>
  * action decided (command-match.ts § `ActionOutcome`).
  */
 const CLOSE: ActionOutcome = { kind: "close" };
+
+/** Why *Gift this to its author* stayed open: its code did not arrive. */
+const GIFT_DIALOG_NOT_LOADED = "Couldn't load the author gift. Check the connection and try again.";
+
+type GiftDialogComponent = ComponentType<{ slug: string; open: boolean; onClose: () => void }>;
+
+/**
+ * **The administrator's author-gift dialog, fetched on the first press** —
+ * plan 261024n § D2 and § F3. Nothing is downloaded, rendered or asked of
+ * `/api/admin` until *Gift this to its author* is pressed; after that it stays
+ * mounted (shut) for that article, so a second press opens what the first one
+ * read. A route change unmounts it instead of retargeting that state or the
+ * outstanding import to another article.
+ *
+ * **It opens once the bar has shut**, not inside the press: the bar's own
+ * `close()` hands focus back to whatever opened it, and two modals trading
+ * focus would leave it outside the one on screen. `barOpen` is the bar's prop.
+ *
+ * `slug` undefined — not the administrator, or nowhere to gift — draws nothing.
+ */
+function useAuthorGiftDialog(slug: string | undefined, barOpen: boolean) {
+  const [Dialog, setDialog] = useState<GiftDialogComponent | null>(null);
+  const loaded = useRef<GiftDialogComponent | null>(null);
+  /* The article whose row was actually pressed. Never let a later route prop
+     retarget an already-open dialog — drafting is an article-specific write. */
+  const [forSlug, setForSlug] = useState<string | null>(null);
+  const [wanted, setWanted] = useState(false);
+  const [open, setOpen] = useState(false);
+  const press = useCallback(async (): Promise<ActionOutcome> => {
+    if (slug === undefined) return { kind: "stay", message: GIFT_DIALOG_NOT_LOADED };
+    const pressedSlug = slug;
+    try {
+      let component = loaded.current;
+      if (component === null) {
+        const module = await import("./AuthorGiftDialog.js");
+        component = module.AuthorGiftDialog;
+        loaded.current = component;
+        setDialog(() => component);
+      }
+      /* Also closes any stale open state before a new article is attached. */
+      setOpen(false);
+      setForSlug(pressedSlug);
+      setWanted(true);
+      return CLOSE;
+    } catch {
+      return { kind: "stay", message: GIFT_DIALOG_NOT_LOADED };
+    }
+  }, [slug]);
+  useEffect(() => {
+    if (forSlug === null || forSlug === slug) return;
+    setWanted(false);
+    setOpen(false);
+    setForSlug(null);
+  }, [forSlug, slug]);
+  useEffect(() => {
+    if (!wanted || barOpen || forSlug === null || forSlug !== slug) return;
+    setWanted(false);
+    setOpen(true);
+  }, [wanted, barOpen, forSlug, slug]);
+  const close = useCallback(() => setOpen(false), []);
+  const element =
+    Dialog === null || forSlug === null || forSlug !== slug ? null : (
+      <Dialog key={forSlug} slug={forSlug} open={open} onClose={close} />
+    );
+  return { press, element };
+}
 
 /**
  * **One *Run again* row per step Metadata offers** — Greg, 2026-10-01
@@ -1996,7 +2068,7 @@ export function CommandBar({
   /* The appearance in force, for which of its three rows is marked `current`
      (appearance-commands.ts). The store's own hook, as /profile reads it. */
   const appearance = useAppearance();
-  const commands = useMemo(
+  const pickable = useMemo(
     () => [
       ...modes.map(modeCommand),
       /* After every mode and before every page: the mode rows stay exactly the
@@ -2021,6 +2093,31 @@ export function CommandBar({
     [modes, experimental, diagram, article, openComments, openFeedback, queue, appearance],
   );
   /**
+   * **The administrator's rows, after everything else** (admin-commands.ts,
+   * plan 261024n) — only for `isAdmin`, never under *view as*, and a courtesy
+   * either way: what they reach is refused by the server's `/api/admin` gate
+   * for anybody else. Kept out of `pickable`, which is what the sentence picker
+   * is sent (`keys` below), so the picker's catalogue stays the list of every
+   * row it can be shown (plan § F4).
+   */
+  const { user } = useSession();
+  const adminHere = isAdmin(user?.id) && viewAsNonce() === null;
+  const gift = useAuthorGiftDialog(adminHere ? article?.slug : undefined, open);
+  const openGift = gift.press;
+  const admin = useMemo(
+    () =>
+      adminHere
+        ? adminRows({
+            article:
+              article === undefined
+                ? undefined
+                : { openAuthorGift: openGift, goToCost: () => goToSection(article, COST_SECTION_ROW.section) },
+          })
+        : [],
+    [adminHere, article, openGift],
+  );
+  const commands = useMemo(() => [...pickable, ...admin], [pickable, admin]);
+  /**
    * **The ranked rows, and the argument rows after them when the query has
    * one** — `find`, since 2026-10-02, and jump, glossary and tags since
    * 2026-10-03 (`argumentRows`).
@@ -2044,7 +2141,7 @@ export function CommandBar({
    * still the list when it lands (F5). A changed list also clears drawn
    * suggestions: removing a row must not move Enter to its neighbour.
    */
-  const keys = useMemo(() => commands.map((c) => pickKey(c, article?.slug)), [commands, article?.slug]);
+  const keys = useMemo(() => pickable.map((c) => pickKey(c, article?.slug)), [pickable, article?.slug]);
   const signature = JSON.stringify([keys, article?.slug, article?.view, argumentKindsHere(article), experimental.signedIn]);
   const previousSignature = useRef(signature);
   useLayoutEffect(() => {
@@ -2750,7 +2847,9 @@ export function CommandBar({
   enterNow.current = enter;
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the click handled here is the backdrop, whose keyboard equivalent is Escape — which <dialog> implements itself. Lightbox.tsx carries the same ignore for the same handler; FeedbackDialog.tsx does not only because its ⌘/Ctrl+Enter listener happens to satisfy the rule
+    <>
+    {gift.element}
+    {/* biome-ignore lint/a11y/useKeyWithClickEvents: the click handled here is the backdrop, whose keyboard equivalent is Escape — which <dialog> implements itself. Lightbox.tsx carries the same ignore for the same handler; FeedbackDialog.tsx does not only because its ⌘/Ctrl+Enter listener happens to satisfy the rule */}
     <dialog
       ref={ref}
       className="cmdbar tw:fixed tw:inset-0 tw:m-0 tw:h-full tw:max-h-full tw:w-full tw:max-w-full tw:border-0 tw:bg-black/50 tw:p-0"
@@ -3150,5 +3249,6 @@ export function CommandBar({
         )}
       </div>
     </dialog>
+    </>
   );
 }
