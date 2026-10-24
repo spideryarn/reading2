@@ -1,6 +1,60 @@
-# The wordmark's hover animations
+# The reading-spider identity and wordmark animations
 
 Up: [design-css-overview.md](design-css-overview.md)
+
+## Identity and asset regeneration
+
+The identity is a faceless orange yarn spider absorbed in a book. Its intended eight limbs are
+four free rear strands, two book-support strands and two crossed lower strands; the hollow oval
+is its body. Character comes from the knot, material and pose. Greg's exact brief, the earlier
+versions, simulated independent critiques and the selection are preserved in
+[the design investigation](../investigations/261024a-spideryarn-logo-character-intent-and-selection.md).
+Both reviewers chose the compact reader. The [plan](../plans/261024a-eight-limbed-reading-spider-brand-assets.md)
+records implementation/review evidence.
+
+The two source treatments are [the detailed wool reader](../../assets/brand/source/reader.png) and
+[its optical SVG companion](../../assets/brand/source/mark.svg). The latter preserves the loop,
+book, free strands and crossed base while removing texture for small wordmarks and favicons.
+It is not a separate brand. [The source prompt](../../assets/brand/source/reader-generation.json)
+distinguishes the final generative cutout from the original opaque selected candidate.
+
+One transparent detailed artwork works on both app themes; the optical companion is one orange
+with transparent negative space. There is no theme-dependent pose or image swap. Opaque light
+and dark square exports are generated from the same pixels for install/design use. The shipped
+Apple/Android tile uses the warm ivory treatment, a 12% inset around the visible artwork, square
+corners and an opaque background; the OS supplies its mask. Do not label the ordinary manifest
+icons `maskable`: they are `any`, not a separately verified maskable safe-zone layout.
+
+[`scripts/generate-brand-assets.ts`](../../scripts/generate-brand-assets.ts) is the one raster/ICO
+pipeline; `BRAND_OUTPUTS` there is the exact output/size/padding inventory. It uses the existing
+canvas dependency and the small `png-to-ico` dev dependency; the compared alternatives and
+upstream sources are in the investigation. The output names used by existing pages and email
+templates are preserved. Both source files are committed: regenerating derivatives makes no AI calls.
+
+```sh
+npm run brand:generate -- --preview
+npm run brand:generate -- --check --preview
+node --import tsx scripts/make-og-card.ts
+```
+
+The first writes the public PNG/ICO family and [the size/theme preview](../../assets/brand/preview.png).
+The second checks those exact bytes without writing. The social card is generated afterwards by
+its existing script, using the detailed reader. It needs system Chrome and the installed Geist
+font; byte equality is a same-runtime check, not a cross-OS screenshot promise. Its dimensions
+and size budget remain guarded by `tests/og-card.test.ts`.
+
+Tiny marks are visually checked at actual 16/20/32/48px sizes; a large illustration alone is not
+evidence that a favicon is legible. `tests/brand-assets.test.ts` decodes outputs, checks internal
+gaps/backgrounds/padding and ICO frame pixels, and proves stale/invalid inputs are rejected.
+
+The shared app mark remains transparent because Radius Sweep masks its alpha. Semaphore's
+clipping is tied to the optical mark's anatomy and must follow source changes; its pixel
+geometry checks live in `tests/semaphore-geometry.test.ts`, with
+[rest/movement proofs](../../assets/brand/animation-preview.png). The `.logo-mark`, `.logo-image`
+and individual `.logo-letter` hooks still belong to the shared markup in
+[`LogoGlyphs.tsx`](../../src/web/LogoGlyphs.tsx).
+
+## The wordmark's hover animations
 
 Point at the Spideryarn wordmark, or hold it down on a phone, and one of twenty-seven animations plays
 — a different one each time. This is what they are, why there are twenty-seven rather than one, what the
@@ -103,7 +157,7 @@ then all ten snap straight at once), *The Shed* (a loom's warp), *Cross-referenc
 
 Three things this round found worth keeping:
 
-- **Semaphore moves part of a PNG** without an SVG trace: two pseudo-elements repaint the image
+- **Semaphore moves part of the raster mark**: two pseudo-elements repaint the image
   clipped to one foreleg each and rotate about the joint, while the image itself is clipped with the
   complement. The copies have to overlap their holes by a sliver, or the two antialiased edges leave
   a seam across both legs at rest.
@@ -406,11 +460,10 @@ away entirely.
 
 ## What is deliberately not here
 
-- **No SVG trace of the mark.** Several of the best ideas wanted one — a spider that draws itself in
-  one unbroken stroke is the truest possible animation for a mark that really is one continuous
-  strand. It needs a *centreline* trace rather than an autotraced outline (an outline gives you the
-  line drawing its own border, which looks like a leak), plus a second copy of the mark to keep in
-  sync. Worth doing one day; not worth it for a hover flourish.
+- **No stroke-drawing animation.** The optical mark now has an editable SVG source, with the PNG
+  generated from it (§ Identity and asset regeneration). The animations still share the raster
+  mark; a future strand-drawing effect would need to animate those source centrelines rather than
+  an autotraced outline, which would draw the borders of the yarn instead of the yarn itself.
 - **No user setting.** There is one already, and it is the operating system's:
   `prefers-reduced-motion` collapses each of these to a **still** through the global guard in
   [`tailwind.css`](../../src/web/tailwind.css) — not to nothing, which is what a reader expects and

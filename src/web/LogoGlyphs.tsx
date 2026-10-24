@@ -42,6 +42,8 @@ export function LogoLetters() {
  *
  * `className` is for the image's size and nothing else; the default is the
  * 20px every copy but the shelf's uses.
+ * The transparent optical reader is generated from assets/brand/source/mark.svg;
+ * large/install/social uses take its woolly counterpart. See design-logo.md.
  */
 export function LogoMark({
   size = 20,
