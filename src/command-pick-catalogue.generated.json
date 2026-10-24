@@ -417,6 +417,25 @@
   ]
  },
  {
+  "id": "submode:structure:hover",
+  "label": "Hover",
+  "description": "Like Fisheye, but resting the mouse on a row goes there, no click needed",
+  "aliases": [
+   "Structure",
+   "Hover Structure",
+   "Structure Hover",
+   "Hover mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:summary:brief",
   "label": "Brief",
   "description": "The piece in plain words, short and very simple",

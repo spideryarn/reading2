@@ -41,6 +41,8 @@ import { StructureNotice } from "../../StructureNotice.js";
 import { StructurePanel } from "../../StructurePanel.js";
 import { StructureArriving, type StructureArrival } from "./StructureArriving.js";
 import { STRUCTURE_SUB_MODES } from "../../sub-modes.js";
+import { shownBehindTheSwitch } from "../../experimental-visibility.js";
+import { scrollToBlock } from "../../scroll.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { structureColumnsBand } from "../../layout.js";
 import { type ArcCell, buildSummaryTree } from "../../tree.js";
@@ -91,6 +93,8 @@ const VIEW_HOW: Readonly<Record<StructureView, string>> = {
   fisheye: "It opens up as you read. With room it is two columns, otherwise one list.",
   expanded:
     "The list scrolls on its own, and follows you each time you move into another section.",
+  hover:
+    "Where there is room for two columns. A click still goes there too, and Back undoes only clicks.",
 };
 
 /**
@@ -103,16 +107,22 @@ const VIEW_HOW: Readonly<Record<StructureView, string>> = {
 export function StructureViewToggle({
   view,
   onView,
+  experimental,
 }: {
   view: StructureView;
   onView(next: StructureView): void;
+  /** The reader's experimental-features switch — Hover is behind it (experimental-visibility.ts). */
+  experimental: boolean;
 }) {
   const group = useRef<HTMLDivElement>(null);
   useRevealChosen(group, view);
+  const shown = STRUCTURE_VIEWS.filter((v) =>
+    shownBehindTheSwitch({ experimental: STRUCTURE_SUB_MODES[v].experimental, on: experimental, current: v === view }),
+  );
   return (
     <div ref={group} className="struct-views summ-views" role="radiogroup" aria-label="How Structure is drawn">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {STRUCTURE_VIEWS.map((v) => (
+        {shown.map((v) => (
           <Tooltip
             key={v}
             placement="bottom"
@@ -160,6 +170,7 @@ export function StructureBand({
   proseBeside,
   rootFontPx,
   arrival = null,
+  experimental = false,
   onJump,
 }: {
   /** The article's slug and whether it is the reader's own — for `StructureNotice` only. */
@@ -204,6 +215,8 @@ export function StructureBand({
    * This band stays the one component for both and learns nothing about jobs.
    */
   arrival?: StructureArrival | null;
+  /** The reader's experimental-features switch, for the chips (Hover is behind it). */
+  experimental?: boolean;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("StructureBand");
@@ -328,6 +341,11 @@ export function StructureBand({
    * Expanded is the list in every band width: one scrolling list of every part
    * and section, so it has no columns face. The face is still measured while
    * it is open, so going back to Fisheye lands on the right one.
+   *
+   * **Hover** is Fisheye with `onGlance` handed to the columns (§ `glance`
+   * below). The list face ignores it and behaves as Fisheye: the list scrolls
+   * itself to follow the reader, so a glance there would move the list under the
+   * mouse. Plan 261024k.
    */
   const [view, setView] = useQueryState("structure", structureParam);
   /* **The stand-in line rides in the head row**, under the chips, so one place
@@ -343,7 +361,7 @@ export function StructureBand({
   const provisional = article.tree.provisional;
   const head = (
     <>
-      <StructureViewToggle view={view} onView={(v) => void setView(v)} />
+      <StructureViewToggle view={view} onView={(v) => void setView(v)} experimental={experimental} />
       {arrival ? (
         <StructureArriving arrival={arrival} />
       ) : provisional === "headings" ? (
@@ -380,6 +398,24 @@ export function StructureBand({
       onJump={onJump}
       head={head}
       matter={matter}
+      onGlance={view === "hover" ? glance : undefined}
     />
   );
+}
+
+/**
+ * **Where a resting mouse goes in the Hover view: a quiet scroll, not a jump.**
+ * A click is `onJump`, which pushes a Back entry, arms the return chip and
+ * flashes the landing; a mouse swept down a column would leave a dozen of each.
+ * This is what ← / → stepping does instead (keynav.ts): the scroll alone, so the
+ * reader's place moves as it would under the wheel. Instant, because a glide
+ * across several parts walks the focus line through each, and column B — what
+ * the reader is looking at — would flicker through all of them. **Centred**, as
+ * a jump is: the focus sampler reads 40% down the viewport, so a short section
+ * scrolled to the top would read as the one after it, and column B would
+ * redraw for the wrong section (GPT Sol, plan review, finding 1).
+ * docs/plans/261024k-structure-hover-submode.md.
+ */
+function glance(id: BlockId): void {
+  scrollToBlock(id, "auto", undefined, { align: "centre" });
 }

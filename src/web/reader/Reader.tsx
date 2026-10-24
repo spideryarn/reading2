@@ -3750,6 +3750,8 @@ export function Reader({
                payload and has nothing to press, so this branch starts no job
                subscription for them. Plan 261005j, GPT Sol's F10. */
             arrival={owner ? owner.structureArrival : visitorArrival(article.tree)}
+            /* The Hover chip is behind the switch (sub-modes.ts). */
+            experimental={experimental.on}
             onJump={bandJump}
           />
         );
