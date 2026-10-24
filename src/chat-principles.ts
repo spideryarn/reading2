@@ -37,6 +37,22 @@
  * One clause on the bullet that already held the nearest rule; measured in
  * docs/investigations/261020g-chat-reading-so-far-measured.md (plan 261020ac).
  *
+ * **"Nor that they know or remember a person, work, study or term you bring
+ * in"** is Greg's too, after an Explore answer about who else had thought
+ * about the piece named its sources with no who, what or why:
+ *
+ * > Like a good teacher tries to sort of anticipate what the reader may or may
+ * > not know and doesn't assume that the reader has read everything that's
+ * > being referred to. […] even if I'm a neuroscientist reading an article
+ * > about neuroscience, I may not have read all the references or whatever
+ * > recently, so I might be rusty
+ * >
+ * > — Greg, 2026-10-23 (`spya-bq9wv5`)
+ *
+ * So it holds whatever the profile says; how much to say is still the next
+ * line's "pitched to who they are". Plan and measurement:
+ * docs/plans/261024d-chats-give-the-background-for-what-they-bring-in.md.
+ *
  * Which conversation kinds carry it is held by tests/chat-principles.test.ts.
  * Live's spoken prompts do not yet: they were tuned for terseness and can only
  * be measured with the realtime harness (the plan's § Deferred).
@@ -61,7 +77,9 @@ specific, it wins.
   does not say.
 - Do not assume they have read the piece, or the part you are discussing,
   unless they say so; nor that they know its field, unless they show it here,
-  in their profile or in why they are reading.
+  in their profile or in why they are reading. Nor that they know or remember
+  a person, work, study or term you bring in: like a good teacher, say briefly
+  who or what it is and why it matters here.
 - Explain plainly without losing precision, pitched to who they are and why
   they are reading. When another part of Spideryarn would serve them better
   than an answer here, say so.`;
