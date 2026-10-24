@@ -29,6 +29,10 @@
  * its words. Before the deploy that creates the table, both say
  * *addenda: not deployed* and carry on.
  *
+ * The listing ends with one `unswept:` line carrying both uncovered counts,
+ * so a tail-trimmed view still shows them. Before the addenda table exists,
+ * the same line says that its count is unavailable rather than claiming zero.
+ *
  * ## Why it exists
  *
  * The feedback sweep read only Sentry, and Sentry is the *second* destination —
@@ -609,6 +613,19 @@ export function addendaSummary(addenda: readonly ListedAddendum[], left: readonl
 }
 
 /**
+ * **The listing's last line: both counts, whatever was printed above.** The
+ * Overseer read the listing through `tail`, saw only the addenda section, and
+ * missed 17 reports (Greg, 2026-10-24). Any tail-trimmed view that retains
+ * the last line now carries how many reports and addenda nothing covers.
+ */
+export function finalTally(reportsLeft: number, addendaLeft: number | null, since: Date): string {
+  const reports = `${reportsLeft} ${reportsLeft === 1 ? "report" : "reports"}`;
+  const addenda =
+    addendaLeft === null ? "addenda not deployed" : `${addendaLeft} ${addendaLeft === 1 ? "addendum" : "addenda"}`;
+  return `unswept: ${reports}, ${addenda} (since ${since.toISOString()})`;
+}
+
+/**
  * The reports and their addenda, read in one read-only transaction so they
  * are one moment. `addenda` is null when production has no table for them yet.
  */
@@ -629,7 +646,7 @@ export async function readListing(
 
 /**
  * The whole listing as lines, with no I/O: the reports nothing covers, each
- * with its `+N addenda`, then the addenda nothing covers.
+ * with its `+N addenda`, then the addenda nothing covers, then `finalTally`.
  */
 export function renderListing(
   read: { reports: readonly UnsweptRow[]; addenda: readonly ListedAddendum[] | null },
@@ -647,12 +664,13 @@ export function renderListing(
     ...left.map((row) => renderUnswept(row, admin(row.ownerId), addendaCount(read.addenda ?? [], row))),
     "",
   ];
-  if (read.addenda === null) return [...lines, ADDENDA_NOT_DEPLOYED];
+  if (read.addenda === null) return [...lines, ADDENDA_NOT_DEPLOYED, finalTally(left.length, null, since)];
   const leftAddenda = unsweptAddenda(read.addenda, coveredAddendumIds(notes, sources), since);
   return [
     ...lines,
     addendaSummary(read.addenda, leftAddenda, since),
     ...leftAddenda.map((one) => renderUnsweptAddendum(one, entries)),
+    finalTally(left.length, leftAddenda.length, since),
   ];
 }
 
