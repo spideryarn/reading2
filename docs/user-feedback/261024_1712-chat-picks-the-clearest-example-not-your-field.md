@@ -5,7 +5,8 @@ comment: Chats now pick the clearest example rather than one from your job by de
 ---
 # Chat picks the clearest example, not your field by default
 
-Admin report from Greg (`feedback-reporter.ts` exit 0, no addenda), #699, Sentry event
+Admin report from Greg (`feedback-reporter.ts` exit 0, no addenda), #699, Sentry issue
+`SPIDERYARN-READING2-NY` (resolved), event
 `5cbfb0d5d0c847ad9c13b18a8a2810a0`, filed from a block chat (`spya-ypk02m`) on *Consciousness in
 Artificial Intelligence* (`arxiv-2308-08708-spya-xax6v4`):
 
