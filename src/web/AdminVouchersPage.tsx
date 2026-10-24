@@ -50,7 +50,7 @@ import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import type { Row } from "@tanstack/react-table";
 
 import type { AdminUser } from "../admin.js";
-import { AUTHOR_GIFT_PARAM } from "../admin-author-gifts.js";
+import { AUTHOR_GIFT_PARAM, AUTHOR_LOOKUP_MAX_SEARCHES } from "../admin-author-gifts.js";
 import {
   type VoucherEmailState,
   RECIPIENT_NAME_MAX,
@@ -764,7 +764,7 @@ function DraftFields({
       {slug !== "" && <HighPowerBox id="author-gift-new-high-power" checked={highPower} onChange={onHighPower} disabled={busy} />}
       <p className="tw:m-0">
         Drafting makes the article's private link if it has none, saves a draft, queues the article's main modes, and
-        runs a web lookup for the author and an address, using up to three searches. Nothing is emailed: the draft
+        runs a web lookup for the author and an address, using up to {AUTHOR_LOOKUP_MAX_SEARCHES} searches. Nothing is emailed: the draft
         appears under Drafts, where you review it and press Send.
       </p>
       <div className="tw:mt-2">

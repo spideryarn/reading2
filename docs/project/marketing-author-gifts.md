@@ -67,6 +67,10 @@ until Greg presses *Send* — nothing is emailed automatically. How it works is
 its reviews and every decision are
 [261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).
 
+**Since 2026-10-24 a gift can be drafted while reading**: *Gift this to its author* in the command
+bar, Greg's alone, opens the draft over the article
+([admin.md § The command bar's admin rows](admin.md#the-command-bars-admin-rows)).
+
 **Since 2026-10-11 the gift ends with the article being theirs.** An agent drafting a gift answers
 the draft's own address (`/admin/vouchers?gift=<id>`) for the harness to open, and when the
 recipient signs in and opens the private link, the article moves to their account, made private,

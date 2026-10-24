@@ -148,3 +148,34 @@ component. The page link is still offered from inside the dialog for the review 
   deriving the number from `AUTHOR_LOOKUP_MAX_SEARCHES`, in the add page's lines and the Give form.
 - **F6** — tests added for a failed first read then Retry, High-powered AI unticked
   (`highPower: false`), and a created gift whose refresh fails without a second POST.
+
+## After GPT Sol's code review
+
+[261024n-admin-commands-code-review-sol.md](261024n-admin-commands-code-review-sol.md) (exit 0).
+Sol fixed F1–F5 inside the stage; I read its diff and re-ran the suites and typecheck.
+
+- **F1, kept.** A press now captures its slug; a route change unmounts the dialog rather than
+  retargeting it, and the loaded component is cached so a second press keeps state.
+  Postmortem [261024d](../postmortems/261024d-an-asynchronous-intent-without-its-target-adopts-the-next-render-s-target.md).
+- **F2, kept.** A ref latch stops a same-tick double submit sending two POSTs (the server's
+  idempotency already stopped two gifts). Postmortem
+  [261024c](../postmortems/261024c-a-disabled-button-does-not-close-the-same-tick-submit-gap.md).
+- **F3, kept.** `tests/eager-client-graph.test.ts` now also asserts that every derived lazy root is
+  named in `ROUTE_PRIVATE`. Postmortem
+  [261024b](../postmortems/261024b-a-one-way-calibration-check-cannot-prove-every-derived-root-is-named.md).
+- **F4, F5, kept.** The Feedback-precedence test mounts `FeedbackHost`; admin.md and
+  `article-commands.ts` no longer say every destination is under `/api/admin` (`/design` is the
+  data-free exception).
+- **F6, not changed.** The Give form on /admin/vouchers has the same same-tick gap; it is
+  pre-existing and the server's idempotency keeps it harmless.
+
+Also from the full suite: the eager card `AddAuthorGift.tsx` must not import
+`src/admin-author-gifts.ts` (an admin-route module), so its "5" is written out and
+`tests/add-page-author-gift.test.tsx` holds it to `AUTHOR_LOOKUP_MAX_SEARCHES`; and
+`useVisualViewport.ts` joins `SHARED_WITH_READER`, at no cost to the reader.
+
+**Browser check** (Sonnet subagent, Playwright on the box): gift dialog opens after the bar shuts with
+focus inside, rights gate and High-powered default right, Escape and a second press work, *What it
+cost* lands in place, a non-admin sees none of the rows, no console errors, fits at 390px. One miss:
+"admin costs" found nothing, because `›` in the label is not typeable. Each `Admin › …` row now has an
+`admin …` alias, with a test seen red first.

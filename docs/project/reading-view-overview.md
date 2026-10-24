@@ -442,7 +442,7 @@ throwing the switch, whose own copy states its price), *AI processing*, and *Sha
 (`share`, `publish`, `private`; to the *Access & sharing* card, which asks before anything goes public, and above the shared shelf for `share`) — the way an
 accepted run lands there: a step to Metadata from the reading view, the section added in place on
 Metadata. Not *Export*, which the action below owns, and not *What it cost*, which is an
-administrator's. *Archive this article* — *Put this article back* over an archived one, the label
+administrator's and is among their own rows (below). *Archive this article* — *Put this article back* over an archived one, the label
 following the state, and **no row at all while the state is unknown** — presses through the same
 controller as the masthead mark and the page's buttons, so the four cannot disagree and a press while
 another is out sends nothing. *Export this article* downloads the ZIP through the function the
@@ -549,6 +549,10 @@ the article. That makes this the one place the profile becomes words that can le
 conversation: [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception).
 Shapes in [`src/command-suggest.ts`](../../src/command-suggest.ts), the prompt and the call in
 [`src/command-suggest-call.ts`](../../src/command-suggest-call.ts).
+
+**The administrator has rows of their own**, typed-only — the author gift for this article, its
+*What it cost*, and the admin pages —
+[admin.md § The command bar's admin rows](admin.md#the-command-bars-admin-rows).
 
 **The box takes dictation**, which is Greg's *"type (or even talk)"* from the bar's first day: the
 microphone every other box has, and nothing can be pressed while it is listening —

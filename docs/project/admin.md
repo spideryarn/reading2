@@ -36,6 +36,7 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
 - [§ `/admin/articles`](#adminarticles-moving-an-article-to-another-account) — moving an article to another account
 - [§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only) — *view as*: the second cross-owner read, and everything that keeps it read-only
+- [§ The command bar's admin rows](#the-command-bars-admin-rows) — the author gift without leaving the article, and the admin pages one ⌘K away
 - [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
 - [§ See also](#see-also) — neighbouring docs
 
@@ -1244,6 +1245,39 @@ the browser-storage exception: a refresh is shared with their ordinary tabs, nev
 the reader. So a bug that only shows when the reader presses something is still reproduced in the
 administrator's own account. The reader is not emailed each time; the privacy page says it can
 happen ([privacy.md](privacy.md)).
+
+## The command bar's admin rows
+
+Since 2026-10-24 the command bar on an article has rows only the administrator sees. Greg, 2026-10-23
+(#683, `spya-v88mga`), reading an article and wondering whether to tell its author about Spideryarn:
+
+> maybe that would require us to have a kind of admin-specific set of functionality that would only
+> be included in the command bar for admins. Probably it would just open up the relevant page in
+> /admin. But do a review of all the functionality we might want to include that's admin-specific
+> and add it to the command bar. And if there's a way to do this without leaving the article, that
+> would be even better.
+
+All typed-only — `admin`, `gift`, `author`, `users`, `costs` bring them up — and none marked
+`generates`:
+
+- **Gift this to its author** opens a small dialog over the article (`AuthorGiftDialog.tsx`): the
+  Give form's ticked half with the article already chosen — the rights tick, *High-powered AI*
+  ticked by default, *Draft a gift for the author* — through the same `POST /api/admin/author-gifts`.
+  If the article already has a gift it says how far it has got instead. Either way it links to the
+  gift's card on Drafts, in a new tab. Nothing is emailed from it; Send stays on the card. The
+  dialog's code and its first read are fetched on the first press, not before.
+- **What it cost** opens Metadata's administrator-only section (`?section=what-it-cost`).
+- **Admin**, **Admin › Users**, **› Feedback**, **› Gift vouchers**, **› Articles**, **› Costs**
+  and **Design reference** go to those pages.
+
+**They are a courtesy, like the Admin link.** `CommandBar` builds them only for `isAdmin` and never
+under *view as*; every private read or write they reach is in the `/api/admin` namespace, which the
+server refuses to anybody else. `/design` is the data-free exception: its route check is cosmetic.
+They are kept out of what the sentence picker is sent, so the picker's catalogue is unchanged.
+Left out on purpose: *view as* (it needs a person and a reason, from `/admin/users`), moving an
+article (it needs a target account, on `/admin/articles`), and Send. The review and the reasons:
+[261024n](../plans/261024n-admin-commands-in-the-command-bar-and-an-author-gift-without-leaving-the-article.md);
+the words are [`src/web/admin-commands.ts`](../../src/web/admin-commands.ts).
 
 ## What it cannot do, and what is not built
 

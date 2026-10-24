@@ -59,11 +59,11 @@ export interface SectionRow {
  * **The sections the bar names, and only these three.**
  *
  * **Not Export**: the direct action below owns that word, and two rows for one
- * word is the wrong one ranked first half the time (GPT Sol's F4). **Not What
- * it cost**: that section is an administrator's, and the bar has no admin
- * check — a row everyone sees for a section only one person has would be a
- * press that lands nowhere. The rest of the page's sections are things to
- * read rather than to do, and the Metadata row reaches them.
+ * word is the wrong one ranked first half the time (GPT Sol's F4). **What it
+ * cost lives with the administrator's rows** (`adminRows` in
+ * admin-commands.ts), rather than in this reader-facing list. The rest of the
+ * page's sections are things to read rather than to do, and the Metadata row
+ * reaches them.
  *
  * **The words avoid two collisions, on purpose.** The bare verbs —
  * `regenerate`, `rerun`, `reprocess`, `redo` — stay the Metadata row's, which
