@@ -1,0 +1,242 @@
+[
+  {
+    "id": "P01",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "greatwork-spya-yw4d3t",
+    "A": "link1b",
+    "B": "link0b"
+  },
+  {
+    "id": "P02",
+    "kind": "control",
+    "level": "fuller",
+    "slug": "arxiv-2307-09288v2-spya-smdqsk",
+    "A": "link0a",
+    "B": "link0b"
+  },
+  {
+    "id": "P03",
+    "kind": "control",
+    "level": "brief",
+    "slug": "greatwork-spya-yw4d3t",
+    "A": "link0b",
+    "B": "link0a"
+  },
+  {
+    "id": "P04",
+    "kind": "control",
+    "level": "brief",
+    "slug": "arxiv-2308-08708-spya-w598t3",
+    "A": "link0a",
+    "B": "link0b"
+  },
+  {
+    "id": "P05",
+    "kind": "control",
+    "level": "fuller",
+    "slug": "arxiv-2308-08708-spya-w598t3",
+    "A": "link0a",
+    "B": "link0b"
+  },
+  {
+    "id": "P06",
+    "kind": "control",
+    "level": "fuller",
+    "slug": "greatwork-spya-yw4d3t",
+    "A": "link0a",
+    "B": "link0b"
+  },
+  {
+    "id": "P07",
+    "kind": "test",
+    "level": "brief",
+    "slug": "arxiv-2307-09288v2-spya-smdqsk",
+    "A": "link0a",
+    "B": "link1a"
+  },
+  {
+    "id": "P08",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "arxiv-2307-09288v2-spya-smdqsk",
+    "A": "link0a",
+    "B": "link1a"
+  },
+  {
+    "id": "P09",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+    "A": "link0a",
+    "B": "link1a"
+  },
+  {
+    "id": "P10",
+    "kind": "test",
+    "level": "brief",
+    "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+    "A": "link0b",
+    "B": "link1b"
+  },
+  {
+    "id": "P11",
+    "kind": "test",
+    "level": "brief",
+    "slug": "arxiv-2307-09288v2-spya-smdqsk",
+    "A": "link1b",
+    "B": "link0b"
+  },
+  {
+    "id": "P12",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "arxiv-2308-08708-spya-w598t3",
+    "A": "link1a",
+    "B": "link0a"
+  },
+  {
+    "id": "P13",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "nber-w31161-spya-dkgc83",
+    "A": "link0b",
+    "B": "link1b"
+  },
+  {
+    "id": "P14",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "greatwork-spya-yw4d3t",
+    "A": "link1a",
+    "B": "link0a"
+  },
+  {
+    "id": "P15",
+    "kind": "control",
+    "level": "fuller",
+    "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+    "A": "link0b",
+    "B": "link0a"
+  },
+  {
+    "id": "P16",
+    "kind": "control",
+    "level": "fuller",
+    "slug": "nber-w31161-spya-dkgc83",
+    "A": "link0b",
+    "B": "link0a"
+  },
+  {
+    "id": "P17",
+    "kind": "test",
+    "level": "brief",
+    "slug": "nber-w31161-spya-dkgc83",
+    "A": "link0b",
+    "B": "link1b"
+  },
+  {
+    "id": "P18",
+    "kind": "test",
+    "level": "brief",
+    "slug": "greatwork-spya-yw4d3t",
+    "A": "link1b",
+    "B": "link0b"
+  },
+  {
+    "id": "P19",
+    "kind": "test",
+    "level": "brief",
+    "slug": "greatwork-spya-yw4d3t",
+    "A": "link0a",
+    "B": "link1a"
+  },
+  {
+    "id": "P20",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "arxiv-2308-08708-spya-w598t3",
+    "A": "link0b",
+    "B": "link1b"
+  },
+  {
+    "id": "P21",
+    "kind": "test",
+    "level": "brief",
+    "slug": "arxiv-2308-08708-spya-w598t3",
+    "A": "link1a",
+    "B": "link0a"
+  },
+  {
+    "id": "P22",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "nber-w31161-spya-dkgc83",
+    "A": "link1a",
+    "B": "link0a"
+  },
+  {
+    "id": "P23",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+    "A": "link1b",
+    "B": "link0b"
+  },
+  {
+    "id": "P24",
+    "kind": "test",
+    "level": "brief",
+    "slug": "nber-w31161-spya-dkgc83",
+    "A": "link1a",
+    "B": "link0a"
+  },
+  {
+    "id": "P25",
+    "kind": "test",
+    "level": "brief",
+    "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+    "A": "link0a",
+    "B": "link1a"
+  },
+  {
+    "id": "P26",
+    "kind": "control",
+    "level": "brief",
+    "slug": "arxiv-2307-09288v2-spya-smdqsk",
+    "A": "link0a",
+    "B": "link0b"
+  },
+  {
+    "id": "P27",
+    "kind": "test",
+    "level": "fuller",
+    "slug": "arxiv-2307-09288v2-spya-smdqsk",
+    "A": "link0b",
+    "B": "link1b"
+  },
+  {
+    "id": "P28",
+    "kind": "control",
+    "level": "brief",
+    "slug": "nber-w31161-spya-dkgc83",
+    "A": "link0b",
+    "B": "link0a"
+  },
+  {
+    "id": "P29",
+    "kind": "test",
+    "level": "brief",
+    "slug": "arxiv-2308-08708-spya-w598t3",
+    "A": "link0b",
+    "B": "link1b"
+  },
+  {
+    "id": "P30",
+    "kind": "control",
+    "level": "brief",
+    "slug": "jmlr-v15-srivastava14a-spya-sd3uzs",
+    "A": "link0a",
+    "B": "link0b"
+  }
+]

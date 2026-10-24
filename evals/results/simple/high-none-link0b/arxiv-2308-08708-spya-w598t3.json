@@ -1,0 +1,338 @@
+{
+  "arm": "high-none-link0b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "arxiv-2308-08708-spya-w598t3",
+  "version": "simple-prompt/12",
+  "sourceSha256": "525e97af9b0ee15d35746e51afc9feb88ab0c9f2f90877d31ae99af836d6f84c",
+  "at": "2026-10-24T20:29:28.901Z",
+  "bodyWords": 38412,
+  "band": "long",
+  "bodyBlocks": 667,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "a04df36259511f14",
+  "systemsSha256": "3053f57effe818f6bfdf0122549df7ca2a6ca4a4e54deaf4b328be6cc4b94148",
+  "power": "high",
+  "guard": true,
+  "wallMs": 63407,
+  "costUsd": 0.1872104,
+  "tokens": {
+    "input": 12775,
+    "output": 6495,
+    "reasoning": 3677
+  },
+  "briefReadyMs": 18483,
+  "fullerReadyMs": 63402,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 606,
+  "briefWords": 75,
+  "fuller": [
+    {
+      "text": "This report asks whether today's AI systems, or ones built soon, could be conscious. By conscious, the authors mean having subjective experience: there is \"something it is like\" to be the system. Their approach is to check AI systems against the best-supported theories from brain science about what makes experience conscious.",
+      "ids": [
+        "spya-ebdy7q",
+        "spya-za4jnw",
+        "spya-kga2kd"
+      ],
+      "sentences": [
+        {
+          "text": "This report asks whether today's AI systems, or ones built soon, could be conscious.",
+          "id": "spya-ebdy7q"
+        },
+        {
+          "text": "By conscious, the authors mean having subjective experience: there is \"something it is like\" to be the system.",
+          "id": "spya-kga2kd",
+          "key": "subjective experience"
+        },
+        {
+          "text": "Their approach is to check AI systems against the best-supported theories from brain science about what makes experience conscious.",
+          "id": "spya-ebdy7q"
+        }
+      ]
+    },
+    {
+      "text": "The authors say the question is becoming pressing. AI is improving very fast, and leading researchers are copying brain functions linked to consciousness to make AI more capable. Chatbots that convincingly imitate human conversation will likely lead many people to believe these systems are conscious. Both prospects raise deep moral and social questions, and society will cope better if it understands the science.",
+      "ids": [
+        "spya-xffjj7",
+        "spya-rw25az"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say the question is becoming pressing.",
+          "id": "spya-xffjj7"
+        },
+        {
+          "text": "AI is improving very fast, and leading researchers are copying brain functions linked to consciousness to make AI more capable.",
+          "id": "spya-xffjj7"
+        },
+        {
+          "text": "Chatbots that convincingly imitate human conversation will likely lead many people to believe these systems are conscious.",
+          "id": "spya-rw25az"
+        },
+        {
+          "text": "Both prospects raise deep moral and social questions, and society will cope better if it understands the science.",
+          "id": "spya-rw25az"
+        }
+      ]
+    },
+    {
+      "text": "The method rests on a working assumption called computational functionalism: running the right kind of computation is enough for consciousness, whatever the system is made of. The authors call this mainstream but disputed, and adopt it mainly because it makes AI consciousness possible in principle and checkable by studying how systems work. They take a \"theory-heavy\" approach: asking whether an AI carries out the functions that theories link to consciousness. The alternative, behaviour tests, is unreliable because AI can be trained to mimic human behaviour while working in very different ways.",
+      "ids": [
+        "spya-skqjuz",
+        "spya-ctq40s"
+      ],
+      "sentences": [
+        {
+          "text": "The method rests on a working assumption called computational functionalism: running the right kind of computation is enough for consciousness, whatever the system is made of.",
+          "id": "spya-skqjuz",
+          "key": "computational functionalism"
+        },
+        {
+          "text": "The authors call this mainstream but disputed, and adopt it mainly because it makes AI consciousness possible in principle and checkable by studying how systems work.",
+          "id": "spya-skqjuz"
+        },
+        {
+          "text": "They take a \"theory-heavy\" approach: asking whether an AI carries out the functions that theories link to consciousness.",
+          "id": "spya-skqjuz",
+          "key": "theory-heavy"
+        },
+        {
+          "text": "The alternative, behaviour tests, is unreliable because AI can be trained to mimic human behaviour while working in very different ways.",
+          "id": "spya-ctq40s"
+        }
+      ]
+    },
+    {
+      "text": "From a survey of theories, the authors draw 14 \"indicator properties\": features that make a system more likely to be conscious. Recurrent processing theory says perception must loop signals back on itself, building an organised picture of a scene. Global workspace theory says many specialised parts feed a small shared \"workspace\" whose contents are then broadcast back to all of them. Higher-order theories say a system must monitor its own perceptions, telling reliable ones from noise, and use this to form beliefs and act. Other sources add a model of one's own attention, perception built on constant prediction, learning to pursue goals, and modelling how one's actions change one's inputs.",
+      "ids": [
+        "spya-e26sbq",
+        "spya-h0myfg"
+      ],
+      "sentences": [
+        {
+          "text": "From a survey of theories, the authors draw 14 \"indicator properties\": features that make a system more likely to be conscious.",
+          "id": "spya-h0myfg",
+          "key": "14 \"indicator properties\""
+        },
+        {
+          "text": "Recurrent processing theory says perception must loop signals back on itself, building an organised picture of a scene.",
+          "id": "spya-e26sbq"
+        },
+        {
+          "text": "Global workspace theory says many specialised parts feed a small shared \"workspace\" whose contents are then broadcast back to all of them.",
+          "id": "spya-e26sbq"
+        },
+        {
+          "text": "Higher-order theories say a system must monitor its own perceptions, telling reliable ones from noise, and use this to form beliefs and act.",
+          "id": "spya-e26sbq"
+        },
+        {
+          "text": "Other sources add a model of one's own attention, perception built on constant prediction, learning to pursue goals, and modelling how one's actions change one's inputs.",
+          "id": "spya-e26sbq"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Next, the authors ask how each indicator could be built with today's machine learning. Some are already met: many networks loop information, and reinforcement learning, where a system learns by trial and reward, arguably gives a basic kind of agency. Researchers have also tried systems designed around global workspace and attention schema theories. The authors argue most or all indicators could be met with existing techniques, though combining them would need experiment.",
+      "ids": [
+        "spya-bjqnkv",
+        "spya-vbxfyw"
+      ],
+      "sentences": [
+        {
+          "text": "Next, the authors ask how each indicator could be built with today's machine learning.",
+          "id": "spya-bjqnkv"
+        },
+        {
+          "text": "Some are already met: many networks loop information, and reinforcement learning, where a system learns by trial and reward, arguably gives a basic kind of agency.",
+          "id": "spya-bjqnkv"
+        },
+        {
+          "text": "Researchers have also tried systems designed around global workspace and attention schema theories.",
+          "id": "spya-bjqnkv"
+        },
+        {
+          "text": "The authors argue most or all indicators could be met with existing techniques, though combining them would need experiment.",
+          "id": "spya-vbxfyw",
+          "key": "existing techniques"
+        }
+      ]
+    },
+    {
+      "text": "They then test specific systems. Large language models built on the Transformer design make only a weak case for the workspace indicators, mainly because information never loops back. Perceiver, a related design, comes closer but lacks broadcast to all its parts. Of three agents studied, DeepMind's AdA, which learns by reward to control a figure in a 3D virtual world, may be likeliest to count as embodied.",
+      "ids": [
+        "spya-gd65wa",
+        "spya-qn0mha",
+        "spya-fxfsqf"
+      ],
+      "sentences": [
+        {
+          "text": "They then test specific systems.",
+          "id": null
+        },
+        {
+          "text": "Large language models built on the Transformer design make only a weak case for the workspace indicators, mainly because information never loops back.",
+          "id": "spya-gd65wa",
+          "key": "only a weak case"
+        },
+        {
+          "text": "Perceiver, a related design, comes closer but lacks broadcast to all its parts.",
+          "id": "spya-qn0mha"
+        },
+        {
+          "text": "Of three agents studied, DeepMind's AdA, which learns by reward to control a figure in a 3D virtual world, may be likeliest to count as embodied.",
+          "id": "spya-fxfsqf"
+        }
+      ]
+    },
+    {
+      "text": "The authors name several limits. The list is provisional and should change as research continues. More indicators make consciousness more likely, but the authors do not claim any set guarantees it, and some matter little alone. The indicators are loosely worded, so judging a system always takes some interpretation.",
+      "ids": [
+        "spya-keyjq6",
+        "spya-zzrkvw",
+        "spya-ajm56z"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name several limits.",
+          "id": null
+        },
+        {
+          "text": "The list is provisional and should change as research continues.",
+          "id": "spya-keyjq6"
+        },
+        {
+          "text": "More indicators make consciousness more likely, but the authors do not claim any set guarantees it, and some matter little alone.",
+          "id": "spya-zzrkvw"
+        },
+        {
+          "text": "The indicators are loosely worded, so judging a system always takes some interpretation.",
+          "id": "spya-ajm56z"
+        }
+      ]
+    },
+    {
+      "text": "The report warns of errors in both directions. Missing real consciousness could cause suffering, while wrongly seeing it could waste effort, weaken stronger claims, and harm human relationships. The authors back more research on consciousness and its application to AI, and using the theory-heavy method.",
+      "ids": [
+        "spya-cub4e0",
+        "spya-e294be",
+        "spya-bgjyry"
+      ],
+      "sentences": [
+        {
+          "text": "The report warns of errors in both directions.",
+          "id": "spya-cub4e0"
+        },
+        {
+          "text": "Missing real consciousness could cause suffering, while wrongly seeing it could waste effort, weaken stronger claims, and harm human relationships.",
+          "id": "spya-e294be"
+        },
+        {
+          "text": "The authors back more research on consciousness and its application to AI, and using the theory-heavy method.",
+          "id": "spya-bgjyry"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that no current AI system appears to be a strong candidate for consciousness. Yet there seem to be no obvious technical barriers to building systems that meet the indicators. Meeting them would not make a system definitely conscious, but if computational functionalism is true, conscious AI could realistically be built in the near term.",
+      "ids": [
+        "spya-ebdy7q",
+        "spya-h0gwqz"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that no current AI system appears to be a strong candidate for consciousness.",
+          "id": "spya-ebdy7q",
+          "key": "no current AI system"
+        },
+        {
+          "text": "Yet there seem to be no obvious technical barriers to building systems that meet the indicators.",
+          "id": "spya-ebdy7q"
+        },
+        {
+          "text": "Meeting them would not make a system definitely conscious, but if computational functionalism is true, conscious AI could realistically be built in the near term.",
+          "id": "spya-h0gwqz"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This report asks whether today's AI systems could be conscious, meaning able to have experiences. The authors say this matters because AI is improving fast. Chatbots that talk like people may also lead many to believe AI is conscious.",
+      "ids": [
+        "spya-ebdy7q",
+        "spya-xffjj7"
+      ],
+      "sentences": [
+        {
+          "text": "This report asks whether today's AI systems could be conscious, meaning able to have experiences.",
+          "id": "spya-ebdy7q",
+          "key": "could be conscious"
+        },
+        {
+          "text": "The authors say this matters because AI is improving fast.",
+          "id": "spya-xffjj7"
+        },
+        {
+          "text": "Chatbots that talk like people may also lead many to believe AI is conscious.",
+          "id": "spya-xffjj7"
+        }
+      ]
+    },
+    {
+      "text": "Using brain science theories, they list \"indicator properties\": features that make consciousness more likely. They find no current AI system is a strong candidate. But building AI with these features seems possible, and may come soon.",
+      "ids": [
+        "spya-vtt6qv",
+        "spya-ebdy7q",
+        "spya-h0gwqz"
+      ],
+      "sentences": [
+        {
+          "text": "Using brain science theories, they list \"indicator properties\": features that make consciousness more likely.",
+          "id": "spya-vtt6qv",
+          "key": "indicator properties"
+        },
+        {
+          "text": "They find no current AI system is a strong candidate.",
+          "id": "spya-ebdy7q",
+          "key": "no current AI system"
+        },
+        {
+          "text": "But building AI with these features seems possible, and may come soon.",
+          "id": "spya-h0gwqz"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

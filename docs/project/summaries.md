@@ -594,6 +594,23 @@ on, not enough to read instead of going there. One card for the whole reading vi
 ([`BlockLinkCard.tsx`](../../src/web/BlockLinkCard.tsx)), so a chip here means what it means in
 every other band.
 
+**A door opens onto the detail, not onto another summary** (since 2026-10-24, `simple-prompt/13`):
+
+> the summary linking to the executive summary is less useful than linking to the main part of the
+> text that really lays out the argument being linked to in detail. That's more useful.
+>
+> — Greg, 2026-10-24 (`spya-hnw9xq`)
+
+Asked for the blocks that "best support" a paragraph, the writer picked the piece's own compressed
+claims: on the report he was reading, every one of Brief's links went to the abstract or the
+executive summary. The prompt now says an id is a link the reader follows, so among the blocks that
+support a paragraph it prefers where the body lays the point out, never a merely related block to
+avoid the front summary, and the abstract or executive summary where only they make the point.
+Measured on four papers and an essay:
+[261024f](../investigations/261024f-summary-links-to-the-body-or-the-abstract-measured.md); plan
+[261024x](../plans/261024x-summary-links-the-body-that-argues-a-point-not-the-abstract.md).
+Stored summaries are *outdated*, not rewritten; Rerun in Metadata writes one under the new rule.
+
 ### Ask about a paragraph (since 2026-10-04)
 
 > Often when I read the summary, I want to talk about it or ask questions. I'm not sure what the

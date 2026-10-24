@@ -658,11 +658,12 @@ tr.row-active .block-ref { opacity: 0.95; }
    GPT Sol, 2026-08-28. */
 .prose .zoomable > * { margin: 0; }
 
-/* **What a reader is told about a figure that came out of a PDF** —
-   PdfFigureNote.tsx.
+/* **What a reader is told beside a figure** — PdfFigureNote.tsx and
+   OriginalLink.tsx.
 
-   Two things, sometimes both: one muted line when the picture could not be
-   recovered, and a way back to the page of the PDF the figure sits on.
+   Two things, sometimes both: one muted line when a PDF picture could not be
+   recovered, and a way back to the PDF page or web element the figure came
+   from.
 
    **Outside `.prose`, and that is the whole reason it needs its own rules
    here.** It is a sibling of the prose box inside the same cell, exactly like
@@ -707,7 +708,7 @@ td.text .figure-note-link {
 }
 /* And the quiet version, on a figure that *did* come through: an icon and
    nothing else, because this sits in the prose and the prose is the point. The
-   accessible name is an `.sr-only` sentence inside the button. */
+   accessible name is an `.sr-only` sentence inside the control. */
 td.text .figure-note-icon {
   border: 0;
   padding: 0;

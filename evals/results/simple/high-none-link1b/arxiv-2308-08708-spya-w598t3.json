@@ -1,0 +1,346 @@
+{
+  "arm": "high-none-link1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "arxiv-2308-08708-spya-w598t3",
+  "version": "simple-prompt/13",
+  "sourceSha256": "c75d19ae37a81a03d32783f8c4067104a6a19faa03c1403d554f33f62f522543",
+  "at": "2026-10-24T20:35:18.716Z",
+  "bodyWords": 38412,
+  "band": "long",
+  "bodyBlocks": 667,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "a04df36259511f14",
+  "systemsSha256": "c88afd9f8ceacc36fe6b18db2bbe9ac327726fa070044a96358715d2afb5d88e",
+  "power": "high",
+  "guard": true,
+  "wallMs": 81856,
+  "costUsd": 0.2430184,
+  "tokens": {
+    "input": 13744,
+    "output": 9424,
+    "reasoning": 6321
+  },
+  "briefReadyMs": 23237,
+  "fullerReadyMs": 81850,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 685,
+  "briefWords": 111,
+  "fuller": [
+    {
+      "text": "This report asks whether today's AI systems, or ones built in the near future, could be conscious. By conscious, the authors mean having subjective experience: there is \"something it is like\" to be the system. Their approach is to check AI systems against the best-supported scientific theories of how consciousness arises in the brain. They argue this is the best method available now, even though experts disagree deeply about consciousness.",
+      "ids": [
+        "spya-btc0ws",
+        "spya-kga2kd",
+        "spya-vagp3k"
+      ],
+      "sentences": [
+        {
+          "text": "This report asks whether today's AI systems, or ones built in the near future, could be conscious.",
+          "id": "spya-btc0ws"
+        },
+        {
+          "text": "By conscious, the authors mean having subjective experience: there is \"something it is like\" to be the system.",
+          "id": "spya-kga2kd",
+          "key": "\"something it is like\""
+        },
+        {
+          "text": "Their approach is to check AI systems against the best-supported scientific theories of how consciousness arises in the brain.",
+          "id": "spya-vagp3k"
+        },
+        {
+          "text": "They argue this is the best method available now, even though experts disagree deeply about consciousness.",
+          "id": "spya-vagp3k"
+        }
+      ]
+    },
+    {
+      "text": "The authors take seriously the possibility that conscious AI could be built within the next few decades. Even if not, chatbots that imitate human conversation are likely to make many people believe some AI is conscious. Failing to spot real consciousness could mean causing or allowing serious harm to beings that can suffer. Wrongly seeing it, which they say already seems to be happening, could pull care away from humans and animals.",
+      "ids": [
+        "spya-rw25az",
+        "spya-rwwdyn",
+        "spya-wcfqx8"
+      ],
+      "sentences": [
+        {
+          "text": "The authors take seriously the possibility that conscious AI could be built within the next few decades.",
+          "id": "spya-rw25az"
+        },
+        {
+          "text": "Even if not, chatbots that imitate human conversation are likely to make many people believe some AI is conscious.",
+          "id": "spya-rw25az"
+        },
+        {
+          "text": "Failing to spot real consciousness could mean causing or allowing serious harm to beings that can suffer.",
+          "id": "spya-rwwdyn"
+        },
+        {
+          "text": "Wrongly seeing it, which they say already seems to be happening, could pull care away from humans and animals.",
+          "id": "spya-wcfqx8"
+        }
+      ]
+    },
+    {
+      "text": "The method rests on three working assumptions. Computational functionalism, the idea that doing the right kind of computation is enough for consciousness, is adopted for practical reasons: it lets brain findings carry over to AI. Brain theories built from experiments comparing conscious and unconscious states in people have real evidence behind them. A theory-heavy approach, looking at how a system works inside, beats behaviour tests, because AI can be trained to mimic human talk while working very differently.",
+      "ids": [
+        "spya-bggf5b",
+        "spya-mrsk64",
+        "spya-ctq40s"
+      ],
+      "sentences": [
+        {
+          "text": "The method rests on three working assumptions.",
+          "id": null
+        },
+        {
+          "text": "Computational functionalism, the idea that doing the right kind of computation is enough for consciousness, is adopted for practical reasons: it lets brain findings carry over to AI.",
+          "id": "spya-bggf5b",
+          "key": "Computational functionalism"
+        },
+        {
+          "text": "Brain theories built from experiments comparing conscious and unconscious states in people have real evidence behind them.",
+          "id": "spya-mrsk64"
+        },
+        {
+          "text": "A theory-heavy approach, looking at how a system works inside, beats behaviour tests, because AI can be trained to mimic human talk while working very differently.",
+          "id": "spya-ctq40s"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "From the theories, the authors draw fourteen \"indicator properties\": features whose presence makes consciousness more likely. They back no single theory and claim no feature is definitely required; a system with more indicators is simply a better candidate. Some indicators may be needed yet do little on their own, so certain combinations count for more. Integrated information theory is left out, because it holds that ordinary digital computers are unlikely to be conscious, whatever programs they run.",
+      "ids": [
+        "spya-zzrkvw",
+        "spya-s6gpb6",
+        "spya-puakq3"
+      ],
+      "sentences": [
+        {
+          "text": "From the theories, the authors draw fourteen \"indicator properties\": features whose presence makes consciousness more likely.",
+          "id": "spya-zzrkvw",
+          "key": "fourteen \"indicator properties\""
+        },
+        {
+          "text": "They back no single theory and claim no feature is definitely required; a system with more indicators is simply a better candidate.",
+          "id": "spya-s6gpb6"
+        },
+        {
+          "text": "Some indicators may be needed yet do little on their own, so certain combinations count for more.",
+          "id": "spya-zzrkvw"
+        },
+        {
+          "text": "Integrated information theory is left out, because it holds that ordinary digital computers are unlikely to be conscious, whatever programs they run.",
+          "id": "spya-puakq3"
+        }
+      ]
+    },
+    {
+      "text": "The main theories, and what they suggest looking for, include these. Recurrent processing theory says vision becomes conscious when signals loop back from higher to lower areas; in AI this means \"algorithmic recurrence\", repeating the same operation on information. Global workspace theory says many specialised parts, called modules, compete to enter a small shared \"workspace\", whose contents are then broadcast to all of them. Higher-order theories, especially perceptual reality monitoring, say a perception is conscious when a monitoring system judges it reliable rather than noise.",
+      "ids": [
+        "spya-h7zydn",
+        "spya-h0ynta",
+        "spya-rsxs3n"
+      ],
+      "sentences": [
+        {
+          "text": "The main theories, and what they suggest looking for, include these.",
+          "id": null
+        },
+        {
+          "text": "Recurrent processing theory says vision becomes conscious when signals loop back from higher to lower areas; in AI this means \"algorithmic recurrence\", repeating the same operation on information.",
+          "id": "spya-h7zydn"
+        },
+        {
+          "text": "Global workspace theory says many specialised parts, called modules, compete to enter a small shared \"workspace\", whose contents are then broadcast to all of them.",
+          "id": "spya-h0ynta"
+        },
+        {
+          "text": "Higher-order theories, especially perceptual reality monitoring, say a perception is conscious when a monitoring system judges it reliable rather than noise.",
+          "id": "spya-rsxs3n"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Two more indicators cover agency, meaning learning from feedback to pursue goals, and embodiment, meaning modelling how one's own actions change what one senses. On this account, a system controlling a body in a virtual world can count as embodied. The authors argue that most indicators could be built with existing AI techniques. Many networks already repeat operations in loops, and reinforcement learning, which trains a system by rewarding good outcomes, arguably supplies agency.",
+      "ids": [
+        "spya-wgyss2",
+        "spya-vbxfyw",
+        "spya-vpd5tu"
+      ],
+      "sentences": [
+        {
+          "text": "Two more indicators cover agency, meaning learning from feedback to pursue goals, and embodiment, meaning modelling how one's own actions change what one senses.",
+          "id": "spya-wgyss2"
+        },
+        {
+          "text": "On this account, a system controlling a body in a virtual world can count as embodied.",
+          "id": "spya-wgyss2"
+        },
+        {
+          "text": "The authors argue that most indicators could be built with existing AI techniques.",
+          "id": "spya-vbxfyw",
+          "key": "could be built with existing AI techniques"
+        },
+        {
+          "text": "Many networks already repeat operations in loops, and reinforcement learning, which trains a system by rewarding good outcomes, arguably supplies agency.",
+          "id": "spya-vpd5tu"
+        }
+      ]
+    },
+    {
+      "text": "Large language models built on the Transformer design, the basis of chatbots like GPT-4, make only a weak case for the workspace indicators. Information flows one way through their layers, so no single workspace receives from modules and sends back to them. Perceiver, a design that combines inputs in a small shared space, comes closer but lacks broadcast: only one output part uses the workspace, and inputs get nothing back.",
+      "ids": [
+        "spya-gd65wa",
+        "spya-qn0mha"
+      ],
+      "sentences": [
+        {
+          "text": "Large language models built on the Transformer design, the basis of chatbots like GPT-4, make only a weak case for the workspace indicators.",
+          "id": "spya-gd65wa"
+        },
+        {
+          "text": "Information flows one way through their layers, so no single workspace receives from modules and sends back to them.",
+          "id": "spya-gd65wa"
+        },
+        {
+          "text": "Perceiver, a design that combines inputs in a small shared space, comes closer but lacks broadcast: only one output part uses the workspace, and inputs get nothing back.",
+          "id": "spya-qn0mha"
+        }
+      ]
+    },
+    {
+      "text": "PaLM-E, a language model linked to a robot, is trained to imitate human behaviour and does not learn to pursue goals from success or failure. A \"virtual rodent\", with a simulated rat body that can move in 38 independent ways, learns by rewards and plausibly could learn a model of itself. AdA, an agent learning new tasks in a 3D virtual world, may be likeliest to count as embodied, since it predicts from its past actions and inputs.",
+      "ids": [
+        "spya-hzjj6f",
+        "spya-kf6ae6",
+        "spya-fxfsqf"
+      ],
+      "sentences": [
+        {
+          "text": "PaLM-E, a language model linked to a robot, is trained to imitate human behaviour and does not learn to pursue goals from success or failure.",
+          "id": "spya-hzjj6f"
+        },
+        {
+          "text": "A \"virtual rodent\", with a simulated rat body that can move in 38 independent ways, learns by rewards and plausibly could learn a model of itself.",
+          "id": "spya-kf6ae6"
+        },
+        {
+          "text": "AdA, an agent learning new tasks in a 3D virtual world, may be likeliest to count as embodied, since it predicts from its past actions and inputs.",
+          "id": "spya-fxfsqf"
+        }
+      ]
+    },
+    {
+      "text": "The authors admit that applying any indicator takes interpretation, because the theories themselves are not precise. Evidence from humans also cannot say how loosely a theory's conditions can be met by a very different system. Overall, no current system is a strong candidate, but if computational functionalism is true, conscious AI could realistically be built in the near term. They call for more research on consciousness and AI, and urgent attention to the moral and social risks of building conscious machines.",
+      "ids": [
+        "spya-ajm56z",
+        "spya-r7v8tg",
+        "spya-h0gwqz"
+      ],
+      "sentences": [
+        {
+          "text": "The authors admit that applying any indicator takes interpretation, because the theories themselves are not precise.",
+          "id": "spya-ajm56z"
+        },
+        {
+          "text": "Evidence from humans also cannot say how loosely a theory's conditions can be met by a very different system.",
+          "id": "spya-r7v8tg"
+        },
+        {
+          "text": "Overall, no current system is a strong candidate, but if computational functionalism is true, conscious AI could realistically be built in the near term.",
+          "id": "spya-h0gwqz",
+          "key": "no current system is a strong candidate"
+        },
+        {
+          "text": "They call for more research on consciousness and AI, and urgent attention to the moral and social risks of building conscious machines.",
+          "id": "spya-h0gwqz"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This report asks whether today's or near-future AI systems could be conscious. Here, conscious means having experiences, so that it feels like something to be that system. The authors say this matters because chatbots that talk like people will lead many to think they are conscious. That raises deep moral questions for everyone.",
+      "ids": [
+        "spya-za4jnw",
+        "spya-rw25az"
+      ],
+      "sentences": [
+        {
+          "text": "This report asks whether today's or near-future AI systems could be conscious.",
+          "id": null
+        },
+        {
+          "text": "Here, conscious means having experiences, so that it feels like something to be that system.",
+          "id": "spya-za4jnw"
+        },
+        {
+          "text": "The authors say this matters because chatbots that talk like people will lead many to think they are conscious.",
+          "id": "spya-rw25az"
+        },
+        {
+          "text": "That raises deep moral questions for everyone.",
+          "id": "spya-rw25az"
+        }
+      ]
+    },
+    {
+      "text": "The team made a list of indicator properties: features that brain-science theories link to consciousness. The more of them an AI has, the more likely it is to be conscious. No current AI system looks like a strong candidate. But most of these features could be built with today's methods, so conscious AI may not be far off.",
+      "ids": [
+        "spya-s6gpb6",
+        "spya-vbxfyw"
+      ],
+      "sentences": [
+        {
+          "text": "The team made a list of indicator properties: features that brain-science theories link to consciousness.",
+          "id": "spya-s6gpb6",
+          "key": "indicator properties"
+        },
+        {
+          "text": "The more of them an AI has, the more likely it is to be conscious.",
+          "id": "spya-s6gpb6"
+        },
+        {
+          "text": "No current AI system looks like a strong candidate.",
+          "id": "spya-vbxfyw"
+        },
+        {
+          "text": "But most of these features could be built with today's methods, so conscious AI may not be far off.",
+          "id": "spya-vbxfyw"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

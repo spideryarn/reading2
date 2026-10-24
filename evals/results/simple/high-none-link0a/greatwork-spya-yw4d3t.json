@@ -1,0 +1,308 @@
+{
+  "arm": "high-none-link0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "greatwork-spya-yw4d3t",
+  "version": "simple-prompt/12",
+  "sourceSha256": "525e97af9b0ee15d35746e51afc9feb88ab0c9f2f90877d31ae99af836d6f84c",
+  "at": "2026-10-24T20:27:42.872Z",
+  "bodyWords": 11890,
+  "band": "standard",
+  "bodyBlocks": 330,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "892b882370221bbe",
+  "systemsSha256": "c5fa0839739a1ebefa4883ba8968567f8b3063f38bf9d067ae12529fccab6bd6",
+  "power": "high",
+  "guard": true,
+  "wallMs": 30300,
+  "costUsd": 0.2128972,
+  "tokens": {
+    "input": 10075,
+    "output": 3659,
+    "reasoning": 1253
+  },
+  "briefReadyMs": 12463,
+  "fullerReadyMs": 30296,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 510,
+  "briefWords": 85,
+  "fuller": [
+    {
+      "text": "This is an essay by Paul Graham, from July 2023, giving a guide to doing great work in any field. He built it by asking what lists of techniques from many different fields would have in common, their overlap. His finding is that this overlap has a definite shape, not just a single rule saying \"work hard.\" The advice assumes the reader is very ambitious.",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-h7wvhs"
+      ],
+      "sentences": [
+        {
+          "text": "This is an essay by Paul Graham, from July 2023, giving a guide to doing great work in any field.",
+          "id": null
+        },
+        {
+          "text": "He built it by asking what lists of techniques from many different fields would have in common, their overlap.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "His finding is that this overlap has a definite shape, not just a single rule saying \"work hard.\"",
+          "id": "spya-x22sb9",
+          "key": "not just a single rule"
+        },
+        {
+          "text": "The advice assumes the reader is very ambitious.",
+          "id": "spya-h7wvhs"
+        }
+      ]
+    },
+    {
+      "text": "Graham argues from experience and from the lives of people who did great work, not from measurements. He says it matters because schools pretend choosing a field is easy, expecting you to commit before you could know what the work is like. So when it comes to figuring out what to work on, he says, you are on your own. He also thinks many more people could try to do great work, but modesty and fear hold them back.",
+      "ids": [
+        "spya-kg58at",
+        "spya-nupugj",
+        "spya-m03ypv"
+      ],
+      "sentences": [
+        {
+          "text": "Graham argues from experience and from the lives of people who did great work, not from measurements.",
+          "id": null
+        },
+        {
+          "text": "He says it matters because schools pretend choosing a field is easy, expecting you to commit before you could know what the work is like.",
+          "id": "spya-kg58at"
+        },
+        {
+          "text": "So when it comes to figuring out what to work on, he says, you are on your own.",
+          "id": "spya-nupugj"
+        },
+        {
+          "text": "He also thinks many more people could try to do great work, but modesty and fear hold them back.",
+          "id": "spya-m03ypv"
+        }
+      ]
+    },
+    {
+      "text": "His core recipe has four steps, which he says nearly everyone who did great work followed. Choose a field you have both a natural aptitude for and a deep interest in. Learn enough to reach a frontier, an edge of what anyone knows. Notice the gaps at that edge, which look smooth from far away but turn out to be full of holes. Explore the gaps that look promising.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-uhu9ux",
+        "spya-kr0zrr"
+      ],
+      "sentences": [
+        {
+          "text": "His core recipe has four steps, which he says nearly everyone who did great work followed.",
+          "id": "spya-kr0zrr",
+          "key": "four steps"
+        },
+        {
+          "text": "Choose a field you have both a natural aptitude for and a deep interest in.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Learn enough to reach a frontier, an edge of what anyone knows.",
+          "id": "spya-uhu9ux"
+        },
+        {
+          "text": "Notice the gaps at that edge, which look smooth from far away but turn out to be full of holes.",
+          "id": "spya-uhu9ux"
+        },
+        {
+          "text": "Explore the gaps that look promising.",
+          "id": "spya-kr0zrr"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The first step is hard because you can only learn what most work is like by doing it, so the steps overlap. His rule when unsure is to pick whatever is most interesting; a field should grow more interesting as you learn more. Rather than making big plans, he suggests \"staying upwind\": at each stage, do what seems most interesting and keeps your best options open.",
+      "ids": [
+        "spya-xyy769",
+        "spya-afr68u",
+        "spya-zzu2w0"
+      ],
+      "sentences": [
+        {
+          "text": "The first step is hard because you can only learn what most work is like by doing it, so the steps overlap.",
+          "id": "spya-xyy769"
+        },
+        {
+          "text": "His rule when unsure is to pick whatever is most interesting; a field should grow more interesting as you learn more.",
+          "id": "spya-afr68u"
+        },
+        {
+          "text": "Rather than making big plans, he suggests \"staying upwind\": at each stage, do what seems most interesting and keeps your best options open.",
+          "id": "spya-zzu2w0",
+          "key": "staying upwind"
+        }
+      ]
+    },
+    {
+      "text": "Hard work is required; he admits this may not be provable, but says the evidence is as strong as the evidence that people die. Yet you can work too hard, and the hardest kinds of work may only last four or five hours a day. The key is consistency: a page a day becomes a book a year.",
+      "ids": [
+        "spya-qnc4ge",
+        "spya-twawf5",
+        "spya-gvh3ek"
+      ],
+      "sentences": [
+        {
+          "text": "Hard work is required; he admits this may not be provable, but says the evidence is as strong as the evidence that people die.",
+          "id": "spya-qnc4ge"
+        },
+        {
+          "text": "Yet you can work too hard, and the hardest kinds of work may only last four or five hours a day.",
+          "id": "spya-twawf5",
+          "key": "four or five hours a day"
+        },
+        {
+          "text": "The key is consistency: a page a day becomes a book a year.",
+          "id": "spya-gvh3ek"
+        }
+      ]
+    },
+    {
+      "text": "New ideas often seem obvious once seen, but finding them means fixing a broken model, a flawed way of seeing the world. That takes being stricter than others about clues that the model fails, plus a willingness to break rules. A good new idea must seem bad to most people, or someone would already have explored it.",
+      "ids": [
+        "spya-xmnc2p",
+        "spya-xeu6p8",
+        "spya-eyucj5"
+      ],
+      "sentences": [
+        {
+          "text": "New ideas often seem obvious once seen, but finding them means fixing a broken model, a flawed way of seeing the world.",
+          "id": "spya-xmnc2p"
+        },
+        {
+          "text": "That takes being stricter than others about clues that the model fails, plus a willingness to break rules.",
+          "id": "spya-xeu6p8"
+        },
+        {
+          "text": "A good new idea must seem bad to most people, or someone would already have explored it.",
+          "id": "spya-eyucj5",
+          "key": "must seem bad to most people"
+        }
+      ]
+    },
+    {
+      "text": "Graham's word for the right attitude is earnest, meaning sincere and not putting on a fake image. At its core this is intellectual honesty, which he calls a source of power, since seeing new ideas needs a sharp eye for truth. Morale also compounds: good work lifts your spirits, which helps you do better work, and the cycle can run in reverse.",
+      "ids": [
+        "spya-udt302",
+        "spya-jq7znf",
+        "spya-tccwxn"
+      ],
+      "sentences": [
+        {
+          "text": "Graham's word for the right attitude is earnest, meaning sincere and not putting on a fake image.",
+          "id": "spya-udt302"
+        },
+        {
+          "text": "At its core this is intellectual honesty, which he calls a source of power, since seeing new ideas needs a sharp eye for truth.",
+          "id": "spya-jq7znf"
+        },
+        {
+          "text": "Morale also compounds: good work lifts your spirits, which helps you do better work, and the cycle can run in reverse.",
+          "id": "spya-tccwxn"
+        }
+      ]
+    },
+    {
+      "text": "If the secret had to be one word, Graham bets it would be \"curiosity.\" He names four factors: ability, interest, effort and luck, so the real question is finding work where ability and interest combine. He is optimistic such a match exists for most people, but says you can only find out by trying.",
+      "ids": [
+        "spya-a8tsmy",
+        "spya-r4vhyb",
+        "spya-chaaks"
+      ],
+      "sentences": [
+        {
+          "text": "If the secret had to be one word, Graham bets it would be \"curiosity.\"",
+          "id": "spya-a8tsmy",
+          "key": "curiosity"
+        },
+        {
+          "text": "He names four factors: ability, interest, effort and luck, so the real question is finding work where ability and interest combine.",
+          "id": "spya-r4vhyb"
+        },
+        {
+          "text": "He is optimistic such a match exists for most people, but says you can only find out by trying.",
+          "id": "spya-chaaks"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Paul Graham asks what advice for doing great work is shared across many fields. He wanted a guide anyone could use, whatever kind of work they do. He lays out four steps: pick a field, learn it, spot gaps, and explore them.",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-kr0zrr"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Paul Graham asks what advice for doing great work is shared across many fields.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He wanted a guide anyone could use, whatever kind of work they do.",
+          "id": "spya-x22sb9"
+        },
+        {
+          "text": "He lays out four steps: pick a field, learn it, spot gaps, and explore them.",
+          "id": "spya-kr0zrr",
+          "key": "four steps"
+        }
+      ]
+    },
+    {
+      "text": "Hard work matters, but deep interest drives you harder than duty ever could. His main answer is curiosity, which guides every one of the four steps. If an oracle gave one word for the secret, he would bet on \"curiosity.\"",
+      "ids": [
+        "spya-qnc4ge",
+        "spya-cfv9ys",
+        "spya-a8tsmy"
+      ],
+      "sentences": [
+        {
+          "text": "Hard work matters, but deep interest drives you harder than duty ever could.",
+          "id": "spya-qnc4ge"
+        },
+        {
+          "text": "His main answer is curiosity, which guides every one of the four steps.",
+          "id": "spya-cfv9ys",
+          "key": "His main answer is curiosity"
+        },
+        {
+          "text": "If an oracle gave one word for the secret, he would bet on \"curiosity.\"",
+          "id": "spya-a8tsmy"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

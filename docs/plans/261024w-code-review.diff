@@ -1,0 +1,819 @@
+diff --git a/docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md b/docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md
+new file mode 100644
+index 000000000..f02e4d596
+--- /dev/null
++++ b/docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md
+@@ -0,0 +1,114 @@
++# Figures and tables open in the original, and a titled arXiv box keeps its words
++
++Report `spya-weuekx` (#697), Greg (admin), a suggestion, 2026-10-24 16:55 UTC, on
++`arxiv-2308-08708-spya-xax6v4` (Butlin et al., *Consciousness in Artificial Intelligence*, imported
++from `https://arxiv.org/html/2308.08708`), at block `spya-rme98g`:
++
++> All figures and tables and anything else like that extracted from the original article should
++> provide a subtle UI widget of some kind that enables you to go back to the original article to see
++> that diagram. I say that because the one that I'm looking at doesn't seem like it's been imported
++> correctly.
++
++Two things, then: the widget he asked for, and why that one was wrong.
++
++## What was wrong with that one (read from production, read-only)
++
++Two blocks after `spya-rme98g` is `spya-wejt97`, and it is **Box 1, "Determinacy, degrees,
++dimensions"** — about 300 words — stored as an empty SVG: a black rounded frame, a white interior,
++a black title bar, and nothing in them. The same is true of Boxes 2, 3 and 4 (`spya-xgh7tw`,
++`spya-ymqz9n`, `spya-fsaefz`). Over a thousand words of the paper are missing, and the reader sees
++four empty boxes.
++
++LaTeXML draws a `tcolorbox` as an SVG frame with its words in `<foreignObject>`s; the sanitiser
++deletes `foreignObject` (rightly, `src/sanitize-policy.ts`), so `src/latexml.ts` §
++`liftBoxedPassage` takes the words out first. It was written against 2608.13566, whose box has **one**
++`foreignObject`, and it refuses anything else on purpose, because a diagram has one per label. These
++boxes have a **title bar**, so two: the title, then the body. Every one of the four in this paper is
++that shape (counted on the live page, 2026-10-24).
++
++The figures and tables of this paper came through: Figures 1–7 are images with captions, Tables 1–3
++are tables. So the widget would not have shown Greg anything new for those, but it would have for
++the boxes — and on a page where the lift fails some other way, it still will.
++
++## Stage A — a titled box keeps its title and its words
++
++Widen `liftBoxedPassage` by exactly one measured shape: **two** `foreignObject`s, each the same
++container/content shape as today, the first (in document order) a title of at most 25 words with no
++line break in it. The result is one `<span>` with the SVG's `id`, holding `<strong>` + the title's
++nodes + `<br>` + the body's nodes. `<strong>` because the title bar is the box's heading (LaTeXML sets
++it `ltx_font_bold`, a class the sanitiser drops) and run into the body without it, it reads as the
++first sentence. Every other rule stays: frame tags only, no active content, linked ids keep the page
++unchanged. Three or more `foreignObject`s is still a diagram and is left alone.
++
++Test first, from a fixture cut from 2308.08708's Box 1, red before the change. Forward only:
++the existing article changes when re-extracted, which is a production write and Greg's call.
++
++## Stage B — every figure, table and image of a web article gets a way back
++
++A quiet icon (`ExternalLink`, the masthead's own) after the block, in the `.figure-note` row the PDF
++figures already use (`PdfFigureNote.tsx`), opening the publisher's page **at that element** in a new
++tab. Same look as the PDF one: faint at rest, full on hover or focus, an `.sr-only` name.
++
++- **Which articles**: those with a web source, `webSource(meta)` (`SourceLink.tsx`) — fetched pages,
++  including for a visitor, who already sees that address in the masthead. Not an upload's *saved
++  from* address, which is a claim out of a file and is never called the original. A PDF keeps its
++  own control.
++- **Which blocks**: `kind === "media"`, or a block whose html holds a `<table>`, `<figure>`, `<img>`,
++  `<picture>`, `<video>` or `<svg>` — skipping a maths-only block (`<math>`), and an image inline in
++  a paragraph of prose (more than a few words of text and no `<figure>`/`<table>`), which is an icon,
++  not a figure.
++- **Where it lands**: the first original `id` inside the block (not ours, `spya-…`): stage 3 keeps
++  descendant ids, so arXiv's `S2.F1.g1` is on the published page too. Failing that, a text fragment
++  (`#:~:text=`) of the caption's opening words, or the block's. Failing that, the page itself. The
++  tooltip says which: *"Open this figure in the original"* or *"Open the original page"*.
++- **Pure helper, tested**: `originalLinksIn(article): Map<BlockId, OriginalLink>` beside
++  `pdfFigureNotesIn`, memoised in `TableView` the same way, rendered as a sibling after `.prose` so
++  no comment anchor moves.
++
++Why not something smarter, such as a screenshot of the original figure: it is a fetch and a
++renderer per figure for what a link already does, and the reader's question is "is this what the
++page shows?", which the page answers.
++
++## Deferred, with a queue entry
++
++**A PDF's tables** carry no page marker (`pdf-read.ts` § `figureMarker` marks figures only), so they
++get no link yet. Adding one means a new reserved attribute through stage 2, the sanitiser's list and
++the web path's forgery scrub. Queued rather than done here.
++
++## Simpler option passed over
++
++Linking every such block to the page without a fragment. One line, but on a long paper it drops the
++reader at the top of a 40-page HTML rendering, which is no way back to *that* diagram.
++
++## GPT Sol's plan review, and what changed
++
++[261024w-plan-review-sol.md](261024w-plan-review-sol.md). All six checked against the code.
++
++1. **Use the existing classifier** (P1) — taken. Which blocks is `figuresOf` (src/figures.ts), the
++   answer Skim's *Figures* walk and Structure's marks already give, so a rule, a pull-quote, a layout
++   or equation table and lettering get nothing. Plus one addition the classifier does not make: a
++   block with no words that draws something, because that is how a box we failed to lift reaches
++   the reader, and it is the one most worth checking against the page.
++2. **A figure whose only id was on its own element loses it** (P1) — true, and accepted for v1:
++   it aims by its caption or at the page. Carrying the root id through stage 3 is a change to the
++   block contract's neighbourhood for a fallback that already lands near enough. Written in
++   article-images.md.
++3. **Two short labels would read as a titled box** (P1) — taken. The title must be set bold
++   (`ltx_font_bold` on every word), with a negative test for two plain labels.
++4. **Text-fragment encoding** (P1) — already `-`-safe; tests now pin `-`, `,`, `&`, `%`, `#` and
++   non-ASCII, and the link carries `rel="noreferrer noopener"`.
++5. **Multi-page articles** (P1) — true: the article holds page 1's address only. A block carrying a
++   later page's namespaced id (`p2-…`) is aimed at the page, not at an id page 1 lacks; one with no
++   id cannot be told apart and its caption fragment simply fails to match on page 1. Accepted for
++   v1, written down; per-block page provenance is the fix if it matters (multi-page import landed the
++   same day, 261024p).
++6. **One link per block** (P2) — accepted as the product claim: a block holding a figure's panels is
++   one figure, and `figuresOf` counts it as one.
++
++## Found while building
++
++**Box 3 holds a figure**, and the lift refused any `<img>` (261005l F28, written against an
++embedded YouTube player). So the box stayed empty, 450 words with it. A plain `<img>` is no longer
++refused: on an arXiv page (rule 1) it is the paper's own figure, fetched and hosted by stage 4.5 like
++any other. Players, `picture`, `source` and the rest stay refused. All four boxes of 2308.08708 now
++lift, checked on the live page.
+diff --git a/docs/plans/261024w-plan-review-prompt.md b/docs/plans/261024w-plan-review-prompt.md
+new file mode 100644
+index 000000000..a6b7e09d3
+--- /dev/null
++++ b/docs/plans/261024w-plan-review-prompt.md
+@@ -0,0 +1,7 @@
++Review the plan docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md before it is built. Read-only.
++
++Context: a Feedback report from the product owner (quoted in the plan). Read the code the plan names: src/latexml.ts (§ liftBoxedPassage and the three rules at the top), tests/latexml.test.ts and tests/fixtures/latexml/boxed-passage.html, src/web/PdfFigureNote.tsx, src/web/TableView.tsx (where PdfFigureNotes is rendered), src/web/SourceLink.tsx (webSource, savedFromSource), src/blocks.ts (stampAuthorAnchors, which ids survive), src/sanitize-policy.ts, docs/project/article-images.md, docs/project/content-extraction.md.
++
++The original page is https://arxiv.org/html/2308.08708 (Box 1 is svg#S1.SS2.p5.pic1).
++
++Look for: wrong assumptions about which ids survive into stored block html; security (an href built from a stranger's page: the URL is the article's own fetched address, and the fragment comes from an id or text in the page); cases where the widget would be noise (inline images, maths, layout tables, icons) or missing (a publisher figure whose only id was on the block element itself); the titled-box rule admitting a diagram; text-fragment encoding; whether a visitor's payload has the url; anything simpler. Say P0/P1/P2 per finding, with file:line evidence. Write findings only.
+diff --git a/docs/plans/261024w-plan-review-sol.md b/docs/plans/261024w-plan-review-sol.md
+new file mode 100644
+index 000000000..fa7926515
+--- /dev/null
++++ b/docs/plans/261024w-plan-review-sol.md
+@@ -0,0 +1,11 @@
++1. **P1 — Stage B duplicates the existing figure classifier and reintroduces cases it already excludes.** The proposed `kind === "media"` test includes every `<hr>`, while raw tag matching admits presentation tables, LaTeXML equation tables, pull-quote figures, and small lettering/icons (`docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md:56-59`; `src/blocks.ts:330-339`). `figureKindOf`/`figuresOf` already answer this exact question and explicitly reject those cases (`src/figures.ts:1-16`, `src/figures.ts:45-95`, `src/figures.ts:109-123`). Stage B should consume that existing classification instead of defining a second, broader one.
++
++2. **P1 — The exact-fragment strategy assumes original IDs survive when the common root ID does not.** Stage 3 temporarily stamps author IDs, scrubs those stamps before serialization, and overwrites every block element’s non-Spideryarn ID with its own ID (`src/blocks.ts:1184-1188`, `src/blocks.ts:1237-1256`, `src/blocks.ts:1492-1516`). DOM-clobbering IDs can also be deleted by the sanitiser (`src/blocks.ts:1216-1229`). Therefore a publisher `<figure id="figure-1"><img …></figure>` with no descendant ID has no recoverable original ID in `block.html`, contrary to the plan’s claim (`docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md:60-63`). The original root target must be carried through stage 3, or the plan must explicitly accept that these figures only receive a text/page fallback.
++
++3. **P1 — “Two foreignObjects, first short” can turn a two-label diagram into prose and discard the drawing.** The existing safety rule says diagrams use one `foreignObject` per label; it does not establish that diagrams always have three or more (`src/latexml.ts:703-708`; `tests/latexml.test.ts:600-610`). A diagram made from paths/rectangles with two short HTML labels satisfies the proposed rule (`docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md:35-41`). The plan itself notes that a real title carries `ltx_font_bold`, but does not require that evidence. Require a measured title-specific marker or geometry, and add a two-label-diagram negative test.
++
++4. **P1 — The text-fragment fallback lacks the encoding and browsing-context rules that make it work.** Text-fragment terms must percent-encode `-`, `&`, and `,`; plain `encodeURIComponent` is insufficient because it leaves hyphens unchanged. Cross-origin text fragments also require a `noopener` browsing context ([WICG specification](https://wicg.github.io/scroll-to-text-fragment/)). The plan only says `#:~:text=` and “new tab” (`docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md:48-63`), while existing external-source anchors explicitly use `rel="noreferrer noopener"` (`src/web/Masthead.tsx:186-188`). Specify a dedicated text-directive encoder, construct the address through `URL` while replacing any existing hash, and test hyphens, commas, ampersands, `%`, `#`, and non-ASCII text.
++
++5. **P1 — Links for figures on later pages of a multi-page article will open the wrong page.** Each later page is extracted using its own URL, then only its content is joined into page 1’s article; its address is not retained, and its anchors are rewritten to `p2-…`, `p3-…` (`src/read-parts.ts:10-27`, `src/read-parts.ts:57-61`, `src/read-parts.ts:99-117`, `src/read-parts.ts:171-179`; `docs/project/content-extraction.md:430-445`). `webSource(meta)` supplies page 1’s address, so the proposed article-only helper will open page 1 with a fragment or text that belongs to another page (`docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md:52-65`). Per-block source-page provenance is needed, or later-page blocks must be explicitly excluded.
++
++6. **P2 — A singular `Map<BlockId, OriginalLink>` cannot provide a link for every visual in a block.** The existing PDF implementation documents that one block can contain multiple figures and consequently stores and renders an array of notes (`src/web/PdfFigureNote.tsx:193-205`). Stage B proposes one link based on the first ID and one control per block (`docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md:60-66`), leaving subsequent figures without their own destination. Use `Map<BlockId, OriginalLink[]>` or narrow the product claim to one link per figure block.
+\ No newline at end of file
+diff --git a/docs/project/article-images.md b/docs/project/article-images.md
+index 35c540982..4a57d5c74 100644
+--- a/docs/project/article-images.md
++++ b/docs/project/article-images.md
+@@ -337,6 +337,30 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
+   article became up to 200 requests. `GATE` admits two at a time *across the process* — not two per
+   article, which is the same unbounded number wearing a limit's name.
+ 
++## A way back to the original, beside every figure
++
++> All figures and tables and anything else like that extracted from the original article should
++> provide a subtle UI widget of some kind that enables you to go back to the original article to see
++> that diagram.
++>
++> — Greg, 2026-10-24 (report spya-weuekx)
++
++A PDF's figures have had it since 2026-09-06: an icon after the figure opening the owner's PDF at
++its page, or the words *View the original* when the picture was not recovered
++([`src/web/PdfFigureNote.tsx`](../../src/web/PdfFigureNote.tsx)). **A web article's figures, tables
++and media get the same icon since 2026-10-24**, an ordinary link to the publisher's page
++([`src/web/OriginalLink.tsx`](../../src/web/OriginalLink.tsx)), for owner and visitor alike. Which
++blocks is `figuresOf`'s answer (src/figures.ts), plus a block with no words that draws something.
++It aims at an `id` inside the block, which the publisher's page has too, then at the caption's
++first words as a text fragment, then at the page.
++
++What it cannot do yet, and why
++([261024w](../plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md)):
++**a PDF's tables** carry no page marker, so they have no icon; **a figure whose only id was on its
++own element** loses it to the block id stage 3 gives that element, so it aims by caption or at the
++page; and **a figure on a later page of a multi-page article** opens page 1, since the article holds
++only page 1's address.
++
+ ## An image the step never sees
+ 
+ **The manifest can only speak for the images stage 2 kept.** A picture Readability threw away is in
+diff --git a/docs/project/content-extraction.md b/docs/project/content-extraction.md
+index 9a8e4fc01..52c1cbf98 100644
+--- a/docs/project/content-extraction.md
++++ b/docs/project/content-extraction.md
+@@ -327,7 +327,7 @@ everything it makes is sanitised afterwards like the rest of the page.
+ | an aligned equation as a table, one inline formula per cell | a fragment per cell, the number in the middle | one `\[\begin{aligned}…\end{aligned}\]`, its number beside it |
+ | a plot as `<object type="image/svg+xml">` | a caption over nothing | an `<img>`. SVG is still not hosted: [article-images.md](article-images.md) leaves it linked to arXiv |
+ | a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
+-| a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
++| a boxed passage as an SVG frame round a `foreignObject`, or two when it has a bold title bar | an empty block: Boxes 1–4 of 2308.08708, 1,800 words, until 2026-10-24 (report spya-weuekx) | the passage's own blocks, a title first in bold; an image inside kept, a player refused ([261024w](../plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md)) |
+ | authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why a rule cannot read affiliations). **Each name's affiliations** come from the general pass every web page gets (below, § `meta.authors`), reading the rewritten rows; nothing arXiv-specific. From 2026-10-09 to the same day's [261010d](../plans/261010d-a-general-authors-pass-for-every-web-page.md) they came from an arXiv-only call on Sonnet ([261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md)) |
+ | the title block itself: each author's affiliation, email and `\thanks` note in a pop-up CSS hides | one paragraph of every author fused, with `thanks:`, `footnotemark: 1` and `Affiliation:` as text; and Readability **deleting** the first short author element it took for the byline | one row per author (name, then each contact on its own line), each note once, numbered, and a name carrying the numbers of the notes it shares; one line of names when nobody has details. The page's nodes are moved, a word check and the link targets checked before the swap, and an unproved `\footnotemark` refuses. 16 of 20 live pages, 2026-10-09 ([261009d](../plans/261009d-arxiv-html-title-block-tidied-at-import.md)) |
+ | no document title, for a paper that sets its title page by hand with no `\title`: no `.ltx_title_document`, and a `<title>` naming a numbered part of the paper, number glued on | *1Indicator Properties* for arXiv 2308.08708 (report spya-mx3wz0); one arXiv HTML article in ten on production, 2026-10-17 | the `<title>` is not used (`latexmlUntitled`). One cheap call reads the title off the page's opening (`pageOpening`, the authors pass's records), and code keeps it only if it is a run of whole words that record prints, storing the page's characters ([`src/opening-title.ts`](../../src/opening-title.ts)). No answer: `arXiv:<id>`, else the slug. 8 of 8 on the measured variants, against 1 of 8 for "the first line" ([261017a](../plans/261017a-an-arxiv-paper-with-no-title-takes-its-title-from-its-own-opening.md)) |
+diff --git a/src/latexml.ts b/src/latexml.ts
+index 21b0cdeae..f633ea7ee 100644
+--- a/src/latexml.ts
++++ b/src/latexml.ts
+@@ -674,8 +674,18 @@ function isDownloadLink(cell: Element): boolean {
+ /** What an SVG that only frames a passage is drawn with. `text`, `image`, `circle`, `use`: a drawing. */
+ const FRAME_TAGS = new Set(["g", "path", "rect"]);
+ 
+-/** Content that would begin loading or running only after it was lifted into ordinary HTML. */
+-const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, img, link, object, picture, script, source, style, svg, video";
++/**
++ * Content that would begin loading or running only after it was lifted into
++ * ordinary HTML — an embedded player above all (GPT Sol, 261005l F28).
++ *
++ * **Not a plain `<img>`, since 2026-10-24.** Box 3 of 2308.08708 holds the
++ * paper's own self-attention figure, and refusing it left the whole box — 450
++ * words — an empty frame (spya-weuekx). Lifted, it is one more of the paper's
++ * figures on an arXiv page (rule 1), fetched and hosted by stage 4.5 like every
++ * other (docs/project/article-images.md). `picture` and `source` stay refused:
++ * nothing measured needs them.
++ */
++const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, link, object, picture, script, source, style, svg, video";
+ 
+ /**
+  * **`svg.ltx_picture` that is only a frame round one `<foreignObject>` → a
+@@ -700,6 +710,14 @@ const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, img, link, object, picture
+  *       span.ltx_foreignobject_content   → its child nodes are the passage
+  * ```
+  *
++ * **Or two, when the box has a title bar** — the title, then the body, in
++ * document order, each of the shape above (Boxes 1–4 of 2308.08708, report
++ * spya-weuekx: a thousand words that reached the reader as four empty frames).
++ * The first must read as a title: at most `BOX_TITLE_WORDS` words and no line
++ * break. It comes out first, in a `<strong>` — LaTeXML sets it
++ * `ltx_font_bold`, a class the sanitiser drops, and run straight into the body
++ * it reads as the body's first sentence — then a `<br>`, then the body.
++ *
+  * A diagram is not this: it has a `foreignObject` per label (nine in each of
+  * Figure 1's panels in 2610.01988v1) and is left as the picture it is. The
+  * `<span>` takes the SVG's `id`; the passage's own ids move with it; a link to
+@@ -710,44 +728,90 @@ const ACTIVE_PASSAGE_CONTENT = "audio, embed, iframe, img, link, object, picture
+ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
+   if (svg.classList.contains("ltx_markedasmath")) return false;
+   const objects = Array.from(svg.querySelectorAll("foreignObject"));
+-  const object = objects[0];
+-  if (objects.length !== 1 || object === undefined) return false;
+-  const container = object.firstElementChild;
+-  const content = container?.firstElementChild;
+-  if (
+-    object.children.length !== 1 ||
+-    !noOwnText(object) ||
+-    !container?.matches("span.ltx_foreignobject_container") ||
+-    container.children.length !== 1 ||
+-    !noOwnText(container) ||
+-    !content?.matches("span.ltx_foreignobject_content") ||
+-    (content.textContent ?? "").trim() === ""
+-  ) {
+-    return false;
++  if (objects.length !== 1 && objects.length !== 2) return false;
++  const contents: Element[] = [];
++  for (const object of objects) {
++    const content = passageOf(object);
++    if (content === null || content.querySelector(ACTIVE_PASSAGE_CONTENT) !== null) return false;
++    contents.push(content);
+   }
+-  if (content.querySelector(ACTIVE_PASSAGE_CONTENT) !== null) return false;
++  const title = contents.length === 2 ? contents[0] : undefined;
++  const body = contents[contents.length - 1];
++  if (body === undefined || (title !== undefined && !readsAsTitle(title))) return false;
++  /* The two wrappers round each passage, which are discarded with the frame. */
++  const wrappers = new Set<Element>(objects);
++  for (const content of contents) if (content.parentElement) wrappers.add(content.parentElement);
+   /* Everything else in the SVG is the frame: drawn, wordless, and not linked to. */
+   for (const part of Array.from(svg.querySelectorAll("*"))) {
+-    if (content.contains(part)) {
++    const inside = contents.find((content) => content.contains(part));
++    if (inside !== undefined) {
+       /* The wrapper itself is discarded: only its children move. A linked id
+          or name on that wrapper therefore has no faithful home. */
+-      if (part === content && linkedNamesOf(part, targets).length > 0) return false;
++      if (part === inside && linkedNamesOf(part, targets).length > 0) return false;
+       continue;
+     }
+     if (linkedNamesOf(part, targets).length > 0) return false;
+-    if (part === object || part === container) continue;
++    if (wrappers.has(part)) continue;
+     if (!FRAME_TAGS.has(part.tagName.toLowerCase()) || !noOwnText(part)) return false;
+   }
+   if (!noOwnText(svg)) return false;
+ 
+-  const passage = svg.ownerDocument.createElement("span");
++  const doc = svg.ownerDocument;
++  const passage = doc.createElement("span");
+   const id = svg.getAttribute("id");
+   if (id) passage.setAttribute("id", id);
+-  passage.append(...Array.from(content.childNodes));
++  if (title !== undefined) {
++    const strong = doc.createElement("strong");
++    strong.append(...Array.from(title.childNodes));
++    passage.append(strong, doc.createElement("br"));
++  }
++  passage.append(...Array.from(body.childNodes));
+   svg.replaceWith(passage);
+   return true;
+ }
+ 
++/** The most words a box's title bar may have and still be read as one. Box 2 of 2308.08708's has eight. */
++const BOX_TITLE_WORDS = 25;
++
++/**
++ * The passage inside one `foreignObject` — exactly
++ * `foreignObject > span.ltx_foreignobject_container > span.ltx_foreignobject_content`,
++ * nothing beside either wrapper, and some words in it — or `null`.
++ */
++function passageOf(object: Element): Element | null {
++  const container = object.firstElementChild;
++  const content = container?.firstElementChild;
++  if (
++    object.children.length !== 1 ||
++    !noOwnText(object) ||
++    !container?.matches("span.ltx_foreignobject_container") ||
++    container.children.length !== 1 ||
++    !noOwnText(container) ||
++    !content?.matches("span.ltx_foreignobject_content") ||
++    (content.textContent ?? "").trim() === ""
++  ) {
++    return null;
++  }
++  return content;
++}
++
++/**
++ * A title bar: a few words on one line, **every one of them set bold**. The
++ * bold is the evidence: a diagram with two short labels has the same count of
++ * `foreignObject`s, and nothing else tells them apart (GPT Sol, plan review).
++ */
++function readsAsTitle(content: Element): boolean {
++  if (content.querySelector("br") !== null) return false;
++  if ((content.textContent ?? "").trim().split(/\s+/u).length > BOX_TITLE_WORDS) return false;
++  const walker = content.ownerDocument.createTreeWalker(content, 4 /* NodeFilter.SHOW_TEXT */);
++  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
++    if ((node.nodeValue ?? "").trim() === "") continue;
++    const bold = node.parentElement?.closest(".ltx_font_bold");
++    if (!bold || !content.contains(bold)) return false;
++  }
++  return true;
++}
++
+ /* ------------------------------------------------------------------ *
+  * 8. A macro LaTeXML could not expand
+  * ------------------------------------------------------------------ */
+diff --git a/src/web/OriginalLink.tsx b/src/web/OriginalLink.tsx
+new file mode 100644
+index 000000000..3f9b92ed5
+--- /dev/null
++++ b/src/web/OriginalLink.tsx
+@@ -0,0 +1,167 @@
++/**
++ * **A way back to the publisher's page, beside each figure, table and image of
++ * a web article** — opened at that element when the page lets us aim at it.
++ *
++ * Greg, 2026-10-24 (report spya-weuekx):
++ *
++ * > All figures and tables and anything else like that extracted from the
++ * > original article should provide a subtle UI widget of some kind that
++ * > enables you to go back to the original article to see that diagram. I say
++ * > that because the one that I'm looking at doesn't seem like it's been
++ * > imported correctly.
++ *
++ * A PDF's figures have had this since 2026-09-06 (PdfFigureNote.tsx), and this
++ * is the web half, drawn the same way: the same `.figure-note` row after the
++ * block, the same faint icon, so the two read as one control
++ * (docs/project/controls.md § Controls that do the same job look the same).
++ * Plan docs/plans/261024w-figures-and-tables-open-in-the-original-and-a-titled-arxiv-box-keeps-its-words.md.
++ *
++ * ## Where it lands
++ *
++ * **On an `id` the block carries from the page, first.** Stage 3 renames the
++ * block's own element to our `spya-` id but keeps every id beneath it
++ * (src/blocks.ts § `stampAuthorAnchors`), so arXiv's `S2.F1.g1` in our copy is
++ * `S2.F1.g1` on arxiv.org too, and `#S2.F1.g1` scrolls the reader to it.
++ * **Then on the caption's opening words**, as a text fragment
++ * (`#:~:text=`), which every current engine reads and an old one ignores. Only
++ * a caption's: a table's first cells sit in separate boxes, and a text fragment
++ * cannot match across them. **Then the page itself**, at the top, which is
++ * still the way back, and the tip says so rather than promising the figure.
++ *
++ * ## Why an anchor, when the PDF's is a button
++ *
++ * The PDF's original is owner-only and fetched with a token (SourceLink.tsx
++ * says why that cannot be an `href`). This one is the article's public address,
++ * already printed in the masthead for owner and visitor alike, so it is an
++ * ordinary link and every way a browser opens one works. The address is
++ * `webSource`'s, which is the `https?` allowlist this field's sinks share; the
++ * fragment comes from the page, and is percent-encoded, so it can only ever be
++ * a fragment.
++ */
++
++import { ExternalLink } from "lucide-react";
++
++import { figuresOf, type FigureKind } from "../figures.js";
++import type { Article, Block, BlockId } from "../types.js";
++import { webSource } from "./SourceLink.js";
++
++/** Where one block's link goes, and whether it is aimed at the element or only at the page. */
++export interface OriginalLink {
++  href: string;
++  aim: "element" | "page";
++  /** What it is — `figures.ts`'s answer — for the words on the control. */
++  kind: FigureKind;
++}
++
++/** How much of a caption a text fragment carries: enough to be unique, short enough to match. */
++const FRAGMENT_WORDS = 6;
++
++/**
++ * **An id that a later page of a multi-page article was given**, namespaced by
++ * src/read-parts.ts § `namespaceAnchors`. It is on page N, not on the address
++ * we hold, which is page 1's, so it is no use as a fragment.
++ */
++const LATER_PAGE_ID = /^p\d+-/u;
++
++/**
++ * Every figure, table and medium of a web article, and where its link goes.
++ * Empty for anything with no web address — an upload, and a PDF, which has its
++ * own control.
++ *
++ * **Which blocks is `figuresOf`'s answer** (src/figures.ts), the one Skim's
++ * *Figures* walk and Structure's marks use, so a rule, a pull-quote's
++ * `<figure>`, a layout table and a line of lettering get nothing here either.
++ * With one addition: a block with no words at all whose markup draws something
++ * — an inline SVG in a paragraph, which is how a box LaTeXML drew and we failed
++ * to lift reaches a reader (latexml.ts § `liftBoxedPassage`). That is the very
++ * block a reader most needs to check against the page.
++ *
++ * One link per block, aimed at the first place in it the page can be scrolled
++ * to: a block holding a figure's panels is one figure.
++ */
++export function originalLinksIn(article: Article): Map<BlockId, OriginalLink> {
++  const links = new Map<BlockId, OriginalLink>();
++  const source = webSource(article.meta);
++  if (source === null) return links;
++  const page = withoutFragment(source);
++  if (page === null) return links;
++
++  const found = new Map<BlockId, { kind: FigureKind; caption: string | null }>();
++  for (const figure of figuresOf(article.blocks)) found.set(figure.blockId, figure);
++  const parser = new DOMParser();
++  for (const block of article.blocks) {
++    const figure = found.get(block.id) ?? (drawnWithoutWords(block) ? { kind: "figure" as const, caption: null } : undefined);
++    if (figure === undefined) continue;
++    const root = parser.parseFromString(block.html, "text/html").body;
++    links.set(block.id, linkFor(root, figure.kind, figure.caption, page));
++  }
++  return links;
++}
++
++/** No words, and something drawn: an SVG or a picture the stage-3 rules did not call media. */
++function drawnWithoutWords(block: Block): boolean {
++  return block.text.trim() === "" && /<(?:svg|img|picture|canvas)\b/iu.test(block.html);
++}
++
++function linkFor(root: HTMLElement, kind: FigureKind, caption: string | null, page: string): OriginalLink {
++  const ids = Array.from(root.querySelectorAll("[id]")).map((el) => el.getAttribute("id") ?? "");
++  /* A block from a later page aims at nothing in particular: page 1 has neither its ids nor its words. */
++  if (ids.some((id) => LATER_PAGE_ID.test(id))) return { href: page, aim: "page", kind };
++  const id = ids.find((value) => value !== "" && !value.startsWith("spya-"));
++  if (id !== undefined) return { href: `${page}#${encodeURIComponent(id)}`, aim: "element", kind };
++
++  /* Only a caption: a table's first cells sit in separate boxes, and a text fragment cannot match across them. */
++  const words = (caption ?? "").trim().split(/\s+/u).filter(Boolean).slice(0, FRAGMENT_WORDS);
++  if (words.length >= 2) return { href: `${page}#:~:text=${textDirective(words.join(" "))}`, aim: "element", kind };
++
++  return { href: page, aim: "page", kind };
++}
++
++/** The control's words: what it opens, and how sure it is of landing there. */
++export function originalLinkName(link: OriginalLink): string {
++  if (link.aim === "page") return "Open the original page";
++  return link.kind === "media" ? "Open this in the original" : `Open this ${link.kind} in the original`;
++}
++
++/**
++ * A text directive's value: percent-encoded, and `-` too, which the syntax
++ * reserves along with `,` and `&` and which `encodeURIComponent` leaves alone.
++ */
++function textDirective(text: string): string {
++  return encodeURIComponent(text).replace(/-/gu, "%2D");
++}
++
++/** The address with any fragment of its own removed, or `null` if it will not parse. */
++function withoutFragment(source: string): string | null {
++  try {
++    const url = new URL(source);
++    url.hash = "";
++    return url.href;
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * The icon, in its own `.figure-note` row after the block's prose — outside
++ * `.prose`, so it is in no comment's offset space (PdfFigureNote.tsx says why
++ * that matters).
++ */
++export function OriginalLinkNote({ link }: { link: OriginalLink | undefined }) {
++  if (link === undefined) return null;
++  const name = originalLinkName(link);
++  return (
++    <p className="figure-note">
++      <a
++        href={link.href}
++        target="_blank"
++        rel="noreferrer noopener"
++        className="figure-note-icon"
++        data-tip={name}
++      >
++        <ExternalLink size={12} aria-hidden="true" />
++        <span className="sr-only">{name}</span>
++      </a>
++    </p>
++  );
++}
+diff --git a/src/web/TableView.tsx b/src/web/TableView.tsx
+index 1ec5d0153..486be6e90 100644
+--- a/src/web/TableView.tsx
++++ b/src/web/TableView.tsx
+@@ -69,6 +69,7 @@ import {
+   zoomTargetOf,
+   type ZoomedFigure,
+ } from "./zoomable.js";
++import { OriginalLinkNote, originalLinksIn } from "./OriginalLink.js";
+ import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
+ import { useFoldArticle } from "./fold.js";
+ import { atFront, matterStretches, stubCount, stubHow, stubLabel, stubWhat } from "./matter-view.js";
+@@ -1261,6 +1262,11 @@ function TableViewInner({
+      PdfFigureNote.tsx § `hasOriginalPdf` — which is also the ownership gate,
+      and says why that is safe and where to look if it stops being. */
+   const canOpenSource = hasOriginalPdf(article);
++  /* **And a web article's figures, tables and images, each with a way back to
++     the publisher's page** — OriginalLink.tsx. Empty for anything with no web
++     address, a PDF included, which has the control above. Memoised for the
++     same reason. */
++  const originalLinks = useMemo(() => originalLinksIn(article), [article]);
+ 
+   const noteStarts = useMemo(() => {
+     const out = new Map<BlockId, NoteStart>();
+@@ -1774,6 +1780,8 @@ function TableViewInner({
+                     canOpenSource={canOpenSource}
+                   />
+                 )}
++                {/* The web half of the same control — OriginalLink.tsx. */}
++                <OriginalLinkNote link={originalLinks.get(block.id)} />
+                 {/* The quiz's questions on this block — `Props.quizAfter`. */}
+                 {quizAfter?.get(block.id)}
+                 {/* The open mode's door, after its block — `Props.afterBlock`. */}
+diff --git a/tests/fixtures/latexml/titled-boxed-passage-with-figure.html b/tests/fixtures/latexml/titled-boxed-passage-with-figure.html
+new file mode 100644
+index 000000000..ba1cd4653
+--- /dev/null
++++ b/tests/fixtures/latexml/titled-boxed-passage-with-figure.html
+@@ -0,0 +1,20 @@
++<!-- Cut from arxiv.org/html/2308.08708 (div#S2.SS2.SSS3.p15, Box 3, which holds a figure) by a scratch script, 2026-10-24. Inline styles removed. -->
++<div id="S2.SS2.SSS3.p15" class="ltx_para ltx_noindent"><span class="ltx_inline-block"><svg id="S2.SS2.SSS3.p15.pic1" class="ltx_picture" height="1163.77" overflow="visible" version="1.1" viewBox="0 0 650 1163.77" width="650"><g fill="#000000" stroke="#000000" stroke-width="0.4pt" transform="translate(0,1163.77) matrix(1 0 0 -1 0 0)"><g fill="#000000" fill-opacity="1.0"><path d="M 0 5.91 L 0 1157.86 C 0 1161.12 2.64 1163.77 5.91 1163.77 L 644.09 1163.77 C 647.36 1163.77 650 1161.12 650 1157.86 L 650 5.91 C 650 2.64 647.36 0 644.09 0 L 5.91 0 C 2.64 0 0 2.64 0 5.91 Z"></path></g><g fill="#FFFFFF" fill-opacity="1.0"><path d="M 1.97 5.91 L 1.97 1142.35 L 648.03 1142.35 L 648.03 5.91 C 648.03 3.73 646.27 1.97 644.09 1.97 L 5.91 1.97 C 3.73 1.97 1.97 3.73 1.97 5.91 Z"></path></g><g fill="#000000" fill-opacity="1.0"><path d="M 1.97 1144.32 L 1.97 1157.86 C 1.97 1160.04 3.73 1161.8 5.91 1161.8 L 644.09 1161.8 C 646.27 1161.8 648.03 1160.04 648.03 1157.86 L 648.03 1144.32 Z"></path></g><g fill-opacity="1.0" transform="matrix(1.0 0.0 0.0 1.0 21.65 1148.25)"><foreignObject height="9.61" overflow="visible" transform="matrix(1 0 0 -1 0 9.61)" width="527.61"><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">
++<span id="S2.SS2.SSS3.p15.pic1.1" class="ltx_inline-block ltx_minipage ltx_align_bottom">
++<span id="S2.SS2.SSS3.p15.pic1.1.1" class="ltx_p"><span id="S2.SS2.SSS3.p15.pic1.1.1.1" class="ltx_text ltx_font_bold">Box 3: Attention in neuroscience and in AI</span></span>
++</span></span></span></foreignObject></g><g fill-opacity="1.0" transform="matrix(1.0 0.0 0.0 1.0 21.65 16.47)"><foreignObject height="1116.77" overflow="visible" transform="matrix(1 0 0 -1 0 1114.08)" width="606.76"><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content"><span id="S2.SS2.SSS3.p15.pic1.2" class="ltx_inline-logical-block ltx_minipage ltx_align_bottom">
++<span id="S2.SS2.SSS3.p15.pic1.p1" class="ltx_para">
++<span id="S2.SS2.SSS3.p15.pic1.p1.1" class="ltx_p"><span id="S2.SS2.SSS3.p15.pic1.p1.1.1" class="ltx_text">The fields of neuroscience and machine learning each have their own distinct concepts of attention (Lindsay 2020). In machine learning, several different forms of attention have been developed, but at present, the most common is “self-attention” (Vaswani et al. 2023). This is the mechanism at the heart of Transformer networks, which power large language models.</span></span>
++</span>
++<span id="S2.SS2.SSS3.p15.pic1.fig1" class="ltx_figure"><img src="2308.08708v3/figures/selfAttention.png" id="S2.SS2.SSS3.p15.pic1.g1" class="ltx_graphics ltx_centering ltx_img_portrait" width="218" height="284" alt="[Uncaptioned image]">
++</span>
++<span id="S2.SS2.SSS3.p15.pic1.p2" class="ltx_para">
++<span id="S2.SS2.SSS3.p15.pic1.p2.1" class="ltx_p"><span id="S2.SS2.SSS3.p15.pic1.p2.1.1" class="ltx_text">In self-attention, representations of elements of an input sequence (for example, words in a sentence) are allowed to interact multiplicatively. Specifically, each <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.1" class="ltx_text ltx_font_bold">word representation</span>, that is given as a vector is transformed into three new vectors: a <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.2" class="ltx_text">query</span>, <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.3" class="ltx_text">key</span>, and <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.4" class="ltx_text">value</span>. The <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.5" class="ltx_text">query</span> vector of one word is multiplied by the <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.6" class="ltx_text">key</span> vectors of all other words to determine a <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.7" class="ltx_text">weighting</span> for each of these words. This <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.8" class="ltx_text">weighting</span> is applied to the <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.9" class="ltx_text">value</span> vectors of these words; the sum of these <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.10" class="ltx_text">weighted</span> <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.11" class="ltx_text">value</span> vectors forms the new <span id="S2.SS2.SSS3.p15.pic1.p2.1.1.12" class="ltx_text ltx_font_bold">representation</span> of the word. This process is done in parallel for all words.
++
++<br class="ltx_break">“Cross-attention” follows a similar formula but allows the query to be generated from one set of representations and the key and values to come from another (self-attention and cross-attention are both forms of “key-query attention”). This can be helpful, for example, in translation networks that use the words of the sentence being generated in the target language to guide attention toward the appropriate words of the sentence in the original language.
++
++<br class="ltx_break">Key-query attention has only loose connections to how attention is conceptualised in neuroscience. Similar to self-attention, gain modulation (wherein attention multiplicatively scales neural activity) has been found in many neural systems (Treue &amp; Trujillo 1999, Reynolds &amp; Heeger 2009). However, this attentional modulation is frequently thought to arise from recurrent top-down connections, not from the parallel processing of concurrent inputs (Noudoost et al. 2010, Bichot et al. 2015). Previous versions of attention in machine learning have relied on recurrent processing, and in this way could be considered more similar to biological attention (Mnih et al. 2014, Bahdanau et al. 2014). However, it should be noted that there are many different flavors of attention within neuroscience and the underlying neural mechanisms may vary across them. Therefore, saying definitively which forms of artificial attention are closest to biological attention in general, is not straightforward.
++
++<br class="ltx_break">Insofar as different theories of consciousness depend on recurrent processing or other specific components of the attention mechanism, self-attention may not be sufficient to form the basis of artificial consciousness. For example, there is nothing akin to the binary ignition process in global workspace theory in self-attention, as attention is implemented as a graded weighting of inputs. There is also no built-in model of the attention process on top of attention itself, as required in attention schema theory.</span></span>
++</span></span></span></span></foreignObject></g></g></svg></span>
++</div>
+diff --git a/tests/fixtures/latexml/titled-boxed-passage.html b/tests/fixtures/latexml/titled-boxed-passage.html
+new file mode 100644
+index 000000000..f2215e1da
+--- /dev/null
++++ b/tests/fixtures/latexml/titled-boxed-passage.html
+@@ -0,0 +1,13 @@
++<!-- Cut from arxiv.org/html/2308.08708 (div#S1.SS2.p5, Box 1) by a scratch script, 2026-10-24. Inline styles removed. -->
++<div id="S1.SS2.p5" class="ltx_para ltx_noindent"><span class="ltx_inline-block"><svg id="S1.SS2.p5.pic1" class="ltx_picture" height="360.88" overflow="visible" version="1.1" viewBox="0 0 650 360.88" width="650"><g fill="#000000" stroke="#000000" stroke-width="0.4pt" transform="translate(0,360.88) matrix(1 0 0 -1 0 0)"><g fill="#000000" fill-opacity="1.0"><path d="M 0 5.91 L 0 354.97 C 0 358.24 2.64 360.88 5.91 360.88 L 644.09 360.88 C 647.36 360.88 650 358.24 650 354.97 L 650 5.91 C 650 2.64 647.36 0 644.09 0 L 5.91 0 C 2.64 0 0 2.64 0 5.91 Z"></path></g><g fill="#FFFFFF" fill-opacity="1.0"><path d="M 1.97 5.91 L 1.97 336.77 L 648.03 336.77 L 648.03 5.91 C 648.03 3.73 646.27 1.97 644.09 1.97 L 5.91 1.97 C 3.73 1.97 1.97 3.73 1.97 5.91 Z"></path></g><g fill="#000000" fill-opacity="1.0"><path d="M 1.97 338.74 L 1.97 354.97 C 1.97 357.15 3.73 358.91 5.91 358.91 L 644.09 358.91 C 646.27 358.91 648.03 357.15 648.03 354.97 L 648.03 338.74 Z"></path></g><g fill-opacity="1.0" transform="matrix(1.0 0.0 0.0 1.0 21.65 345.37)"><foreignObject height="12.3" overflow="visible" transform="matrix(1 0 0 -1 0 9.61)" width="527.61"><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">
++<span id="S1.SS2.p5.pic1.1" class="ltx_inline-block ltx_minipage ltx_align_bottom">
++<span id="S1.SS2.p5.pic1.1.1" class="ltx_p"><span id="S1.SS2.p5.pic1.1.1.1" class="ltx_text ltx_font_bold">Box 1: Determinacy, degrees, dimensions</span></span>
++</span></span></span></foreignObject></g><g fill-opacity="1.0" transform="matrix(1.0 0.0 0.0 1.0 21.65 16.47)"><foreignObject height="311.18" overflow="visible" transform="matrix(1 0 0 -1 0 308.49)" width="606.76"><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">
++<span id="S1.SS2.p5.pic1.2" class="ltx_inline-block ltx_minipage ltx_align_bottom">
++<span id="S1.SS2.p5.pic1.2.1" class="ltx_p"><span id="S1.SS2.p5.pic1.2.1.1" class="ltx_text">In this report, we generally write as though consciousness is an all-or-nothing matter: a system either is conscious, or it isn’t. However, there are various other possibilities. There seem to be many properties that have “blurry” boundaries, in the sense that whether some object has that property may be indeterminate. For example, a shirt may be a colour somewhere on the borderline between yellow and green, such that there is no fact of the matter about whether it is yellow or not. In principle, consciousness could be like this: there could be creatures that are neither determinately conscious nor determinately non-conscious (Simon 2017, Schwitzgebel forthcoming). If this is the case, some AI systems could be in this “blurry” zone. This kind of indeterminacy arguably follows from materialism about consciousness (Birch 2022a).
++
++<br class="ltx_break">Another possibility is that there could be degrees of consciousness so that it is possible for one system to be more conscious than another (Lee 2022). In this case, it might be possible to build AI systems that are conscious but only to a very slight degree, or even systems which are conscious to a much greater degree than humans (Shulman &amp; Bostrom 2021). Alternatively, rather than a single scale, it could be that consciousness varies along multiple dimensions (Birch et al. 2020).
++
++<br class="ltx_break">Lastly, it could be that there are multiple elements of consciousness. These would not be necessary conditions for some further property of consciousness, but rather constituents which make up consciousness. These elements may be typically found together in humans, but separable in other animals or AI systems. In this case, it would be possible for a system to be partly conscious, in the sense of having some of these elements.</span></span>
++</span></span></span></foreignObject></g></g></svg></span>
++</div>
+diff --git a/tests/latexml.test.ts b/tests/latexml.test.ts
+index 3dd504aaf..eccf28676 100644
+--- a/tests/latexml.test.ts
++++ b/tests/latexml.test.ts
+@@ -597,6 +597,68 @@ describe("fix 7 — a boxed passage keeps its words", () => {
+     expect(block[0]?.text.replace(/\s+/gu, " ").trim()).toBe(WORDS);
+   });
+ 
++  describe("a box with a title bar: two foreignObjects, the title then the body (Box 1 of 2308.08708, spya-weuekx)", () => {
++    const TITLE = "Box 1: Determinacy, degrees, dimensions";
++
++    it("keeps the title, set apart, and every word of the body", () => {
++      const { doc, stats } = prepared(latexml(fx("titled-boxed-passage")));
++      expect(stats).toEqual({ ...NOTHING, boxedPassages: 1 });
++      expect(doc.querySelector("svg, foreignObject")).toBeNull();
++      const lifted = doc.querySelector('[id="S1.SS2.p5.pic1"]');
++      expect(lifted?.tagName).toBe("SPAN");
++      const first = lifted?.firstElementChild;
++      expect(first?.tagName).toBe("STRONG");
++      expect(first?.textContent?.trim()).toBe(TITLE);
++      expect(first?.nextElementSibling?.tagName).toBe("BR");
++      const text = lifted?.textContent?.replace(/\s+/gu, " ").trim() ?? "";
++      expect(text.startsWith(`${TITLE} In this report, we generally write`)).toBe(true);
++      expect(text).toContain("constituents which make up");
++      expect(lifted?.querySelector('[id="S1.SS2.p5.pic1.2.1.1"]')).not.toBeNull();
++    });
++
++    it("a reader gets one block holding the title and the body", async () => {
++      const { blocks } = await blocksOf(fx("titled-boxed-passage"));
++      const block = blocks.filter((b) => b.text.includes("Determinacy, degrees"));
++      expect(block).toHaveLength(1);
++      expect(block[0]?.text).toContain("blurry");
++      expect(block[0]?.html).toContain("<strong>");
++    });
++
++    it("keeps a figure the box holds (Box 3 of 2308.08708)", async () => {
++      const { doc, stats } = prepared(latexml(fx("titled-boxed-passage-with-figure")));
++      expect(stats).toEqual({ ...NOTHING, boxedPassages: 1 });
++      const lifted = doc.querySelector('[id="S2.SS2.SSS3.p15.pic1"]');
++      expect(lifted?.firstElementChild?.textContent?.trim()).toBe("Box 3: Attention in neuroscience and in AI");
++      expect(lifted?.querySelector("img")?.getAttribute("src")).toBe("2308.08708v3/figures/selfAttention.png");
++      const { blocks } = await blocksOf(fx("titled-boxed-passage-with-figure"));
++      expect(blocks.some((b) => b.text.includes("The fields of neuroscience and machine learning"))).toBe(true);
++      expect(blocks.some((b) => b.html.includes("selfAttention.png"))).toBe(true);
++    });
++
++    it("is left alone when the first part is not a short title", () => {
++      const fixture = fx("titled-boxed-passage");
++      const long = `${"word ".repeat(30)}`;
++      const html = fixture.replace(TITLE, long);
++      expect(html).not.toBe(fixture);
++      expect(prepared(latexml(html)).unchanged).toBe(true);
++    });
++
++    it("is left alone when the first part is not set bold: a diagram with two short labels", () => {
++      const fixture = fx("titled-boxed-passage");
++      const html = fixture.replace("ltx_text ltx_font_bold", "ltx_text");
++      expect(html).not.toBe(fixture);
++      expect(prepared(latexml(html)).unchanged).toBe(true);
++    });
++
++    it("is left alone when a third foreignObject makes it a diagram", () => {
++      const fixture = fx("titled-boxed-passage");
++      const label = '<g><foreignObject width="5" height="5"><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">x</span></span></foreignObject></g>';
++      const html = fixture.replace("</g></svg>", `${label}</g></svg>`);
++      expect(html).not.toBe(fixture);
++      expect(prepared(latexml(html)).unchanged).toBe(true);
++    });
++  });
++
+   describe("left exactly as the page had it", () => {
+     const fixture = fx("boxed-passage");
+     it("a diagram whose labels are foreignObjects (Figure 1a of 2610.01988v1)", () => {
+diff --git a/tests/original-link.test.tsx b/tests/original-link.test.tsx
+new file mode 100644
+index 000000000..3ffa836de
+--- /dev/null
++++ b/tests/original-link.test.tsx
+@@ -0,0 +1,139 @@
++// @vitest-environment jsdom
++/**
++ * A web article's figures, tables and media each get a way back to the
++ * publisher's page, aimed at the element where the page lets us
++ * (src/web/OriginalLink.tsx, report spya-weuekx, plan 261024w).
++ *
++ * The first blocks below are cut from production's copy of arxiv-2308-08708
++ * (Butlin et al.), shortened, so the ids are the ones arxiv.org/html/2308.08708
++ * has.
++ */
++
++import { renderToStaticMarkup } from "react-dom/server";
++import { describe, expect, it } from "vitest";
++
++import type { Article, Block, BlockId, BlockKind } from "../src/types.js";
++import { OriginalLinkNote, originalLinksIn } from "../src/web/OriginalLink.js";
++
++const URL = "https://arxiv.org/html/2308.08708";
++
++function block(id: string, html: string, tag = "p", kind: BlockKind = "text"): Block {
++  const div = document.createElement("div");
++  div.innerHTML = html;
++  return { id: id as BlockId, tag, kind, text: div.textContent ?? "", html } as Block;
++}
++
++function article(blocks: Block[], meta: Record<string, unknown> = { url: URL }): Article {
++  return {
++    meta: { slug: "a-piece", title: "A piece", ...meta },
++    blocks,
++    tree: { version: "hierarchy/4", nodes: [], roots: [] },
++  } as unknown as Article;
++}
++
++const FIGURE = block(
++  "spya-ygqdq4",
++  '<figure id="spya-ygqdq4"><img id="S2.F1.g1" src="x1.png" alt=""><figcaption><span id="S2.F1.3">Figure 1: </span>An unfolded recurrent neural network</figcaption></figure>',
++  "figure",
++  "media",
++);
++const TABLE = block(
++  "spya-zp40de",
++  '<figure id="spya-zp40de"><figcaption>Table 2: Indicator Property Entailments</figcaption><table id="S2.T2.2"><tbody><tr><td>RPT-1</td></tr></tbody></table></figure>',
++  "figure",
++  "media",
++);
++const PROSE = block(
++  "spya-rme98g",
++  "<p>These ideas inform our investigation in different ways. We adopt computational functionalism as a working hypothesis.</p>",
++);
++/** Box 1 as production stores it today: the frame, and none of its words. */
++const EMPTY_BOX = block(
++  "spya-wejt97",
++  '<p id="spya-wejt97"><span><svg id="S1.SS2.p5.pic1" viewBox="0 0 650 360.88"><g><path d="M 0 5.91 L 0 354.97 Z"></path></g></svg></span>\n</p>',
++);
++
++describe("which blocks get a link", () => {
++  it("a figure and a table, aimed at the ids the publisher's page has, and not a paragraph", () => {
++    const links = originalLinksIn(article([FIGURE, PROSE, TABLE]));
++    expect([...links.keys()]).toEqual(["spya-ygqdq4", "spya-zp40de"]);
++    expect(links.get(FIGURE.id)).toEqual({ href: `${URL}#S2.F1.g1`, aim: "element", kind: "figure" });
++    expect(links.get(TABLE.id)).toEqual({ href: `${URL}#S2.T2.2`, aim: "element", kind: "table" });
++  });
++
++  it("the empty frame of a box we failed to lift, which is the block most worth checking (spya-weuekx)", () => {
++    expect(originalLinksIn(article([EMPTY_BOX])).get(EMPTY_BOX.id)).toEqual({
++      href: `${URL}#S1.SS2.p5.pic1`,
++      aim: "element",
++      kind: "figure",
++    });
++  });
++
++  it("not what figures.ts says is no figure: a rule, an icon in a sentence, a layout table", () => {
++    const rule = block("spya-aaaaaa", "<hr>", "hr", "media");
++    const inline = block("spya-bbbbbb", '<p>Press the <img src="gear.png" alt="settings"> button, then choose the second option.</p>');
++    const layout = block("spya-cccccc", '<table role="presentation"><tbody><tr><td>a</td></tr></tbody></table>', "table", "other");
++    expect(originalLinksIn(article([rule, inline, layout])).size).toBe(0);
++  });
++
++  it("nothing for an article with no web address: an upload, a PDF, or an address that is not http(s)", () => {
++    expect(originalLinksIn(article([FIGURE], {})).size).toBe(0);
++    expect(originalLinksIn(article([FIGURE], { source: "pdf" })).size).toBe(0);
++    expect(originalLinksIn(article([FIGURE], { url: "javascript:alert(1)" })).size).toBe(0);
++  });
++});
++
++describe("where it lands", () => {
++  it("on the caption's opening words when nothing inside has an id of the page's", () => {
++    const figure = block(
++      "spya-dddddd",
++      '<figure id="spya-dddddd"><img src="a.png" alt=""><figcaption>Fig. 3: Ice-age cycles, re-drawn &amp; 100% “extended” #2</figcaption></figure>',
++      "figure",
++      "media",
++    );
++    const link = originalLinksIn(article([figure])).get(figure.id);
++    expect(link?.aim).toBe("element");
++    expect(link?.href).toBe(`${URL}#:~:text=Fig.%203%3A%20Ice%2Dage%20cycles%2C%20re%2Ddrawn%20%26`);
++    const more = block("spya-eeeeee", '<figure><img src="a.png" alt=""><figcaption>A &amp; B: 100% “é” #2</figcaption></figure>', "figure", "media");
++    expect(originalLinksIn(article([more])).get(more.id)?.href).toBe(
++      `${URL}#:~:text=A%20%26%20B%3A%20100%25%20%E2%80%9C%C3%A9%E2%80%9D%20%232`,
++    );
++  });
++
++  it("on the page itself when there is neither, and the address's own fragment is dropped", () => {
++    const table = block("spya-ffffff", "<table><tbody><tr><td>a</td><td>b</td></tr></tbody></table>", "table", "other");
++    expect(originalLinksIn(article([table], { url: `${URL}#S1` })).get(table.id)).toEqual({
++      href: URL,
++      aim: "page",
++      kind: "table",
++    });
++  });
++
++  it("percent-encodes an id, so a page's id cannot be anything but a fragment", () => {
++    const odd = block("spya-gggggg", '<figure><img id="a b#c?d" src="a.png" alt=""></figure>', "figure", "media");
++    expect(originalLinksIn(article([odd])).get(odd.id)?.href).toBe(`${URL}#a%20b%23c%3Fd`);
++  });
++
++  it("only at the page for a block from a later page of a multi-page article, whose ids page 1 does not have", () => {
++    const later = block("spya-hhhhhh", '<figure><img id="p2-fig4" src="a.png" alt=""><figcaption>Figure 4: later</figcaption></figure>', "figure", "media");
++    expect(originalLinksIn(article([later])).get(later.id)).toEqual({ href: URL, aim: "page", kind: "figure" });
++  });
++});
++
++describe("the control", () => {
++  it("is a quiet link to a new tab, named for what it opens", () => {
++    const html = renderToStaticMarkup(<OriginalLinkNote link={{ href: `${URL}#S2.F1.g1`, aim: "element", kind: "figure" }} />);
++    const host = document.createElement("div");
++    host.innerHTML = html;
++    const a = host.querySelector("a");
++    expect(a?.getAttribute("href")).toBe(`${URL}#S2.F1.g1`);
++    expect(a?.getAttribute("target")).toBe("_blank");
++    expect(a?.getAttribute("rel")).toContain("noopener");
++    expect(a?.textContent).toBe("Open this figure in the original");
++  });
++
++  it("promises only the page when it cannot aim, and nothing at all for no link", () => {
++    expect(renderToStaticMarkup(<OriginalLinkNote link={{ href: URL, aim: "page", kind: "table" }} />)).toContain("Open the original page");
++    expect(renderToStaticMarkup(<OriginalLinkNote link={undefined} />)).toBe("");
++  });
++});
