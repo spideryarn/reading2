@@ -202,12 +202,18 @@ const chromaOf = (rgb: readonly number[]) => {
     text on a fill there has less room than the same text on the page. */
 const mutedGround = (theme: Theme) => Array<number>(3).fill(achromaticOklch(token(BASE, theme, "--muted")));
 
-/** The colour a rule in the stylesheet mixes: `color-mix(in oklab, var(--name) N%, transparent)`. */
+/** The colour a rule in the stylesheet mixes: `color-mix(in oklab, var(--name) N%, transparent)`.
+    `calc(N% * var(--term-a, 1))` reads as N%: a term's first occurrence, the
+    full-strength one (annotate.ts § termProminence). */
 function ruleAlpha(selector: string, property: string, name: string): number {
   const rule = new RegExp(`\\n${selector.replace(/[.[\]]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(SHEET)?.[1] ?? "";
-  const m = new RegExp(`${property}:[^;]*color-mix\\(in oklab, var\\(${name}\\) (\\d+)%, transparent\\)`).exec(rule);
-  if (!m?.[1]) throw new Error(`${selector} no longer draws ${property} as a mix of ${name}`);
-  return Number(m[1]) / 100;
+  const m = new RegExp(
+    `${property}:[^;]*color-mix\\(in oklab, var\\(${name}\\) ` +
+      `(?:(\\d+)%|calc\\((\\d+)% \\* var\\(--term-a, 1\\)\\)), transparent\\)`,
+  ).exec(rule);
+  const percent = m?.[1] ?? m?.[2];
+  if (!percent) throw new Error(`${selector} no longer draws ${property} as a mix of ${name}`);
+  return Number(percent) / 100;
 }
 const brandOrange = () => {
   const hex = /--spideryarn-orange:\s*#([0-9a-f]{6})/i.exec(BASE)?.[1];

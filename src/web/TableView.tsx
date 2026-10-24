@@ -813,6 +813,10 @@ function TableViewInner({
     [blocks, matter, authors, byline, echo],
   );
   const stretchIds = useMemo(() => stretches.map((s) => s.ids), [stretches]);
+  /* The same blocks as one set, with the masthead's echo, for the glossary's
+     fade: folded on arrival or never drawn, so a term met there neither counts
+     nor fades (annotate.ts § termProminence). */
+  const uncounted = useMemo(() => new Set([...echo, ...stretchIds.flat()]), [echo, stretchIds]);
   /* Each stub, by the row it stands in, with its words worked out once. */
   const stubs = useMemo(
     () =>
@@ -1011,7 +1015,10 @@ function TableViewInner({
    * annotate.ts, which also says why this is the whole list now rather than the
    * one entry the reader pressed.
    */
-  const termMarksByBlock = useMemo(() => termMarks(blocks, terms ?? []), [blocks, terms]);
+  const termMarksByBlock = useMemo(
+    () => termMarks(blocks, terms ?? [], uncounted),
+    [blocks, terms, uncounted],
+  );
 
   /**
    * The citations, by block — a third map, for the reason there is a second.
