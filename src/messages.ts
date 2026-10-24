@@ -354,6 +354,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "dig-no-search": "retry",
   /* *Ask about Spideryarn* — src/help-chat-call.ts. */
   "help-resting": "blocked",
+  /* A citation's automatic *Does it say that?*, everybody's day used — src/cite-check.ts. */
+  "cite-check-resting": "blocked",
   "cite-lookup-failed": "retry",
   "cite-gone": "blocked",
   "guess-resting": "blocked",
@@ -7197,6 +7199,35 @@ export const HELP_CHAT_RESTING: ReaderFacingFailure = {
     "Questions about Spideryarn have reached today's limit for everyone, so asking again today will " +
     "get the same answer. Try again tomorrow; the Help pages and their search are still here. [help-resting]",
 };
+
+/**
+ * **A citation's automatic *Does it say that?* refused by its allowance**
+ * (`CITE_CHECK_RATE_POLICY`, src/cite-check.ts, plan 261024m § At a cap). A
+ * rest on the card starts the check; these say why one did not, and that the
+ * button still asks, because a press is never capped. The numbers are the
+ * policy's (8 an hour, 20 a day): change them together.
+ */
+export const CITE_CHECK_HOUR =
+  "That's 8 automatic checks in the last hour. Press Does it say that? to ask anyway.";
+export const CITE_CHECK_DAY =
+  "You've had today's 20 automatic checks. Press Does it say that? to ask anyway.";
+/** Two already running for this reader. The card draws nothing for it; the next rest tries again. */
+export const CITE_CHECK_BUSY =
+  "Two automatic checks are already running. Press Does it say that? to ask anyway.";
+/** The 503 of the four, so it carries a code, as `HELP_CHAT_RESTING` does. */
+export const CITE_CHECK_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Automatic checks are paused for everyone today, and resting here again will get the same answer. " +
+    "Press Does it say that? to ask anyway. [cite-check-resting]",
+};
+/**
+ * A *Does it say that?* chat the current citation list does not back: the
+ * list changed since the page loaded (rerun, stale, the work gone, or the
+ * paragraph no longer citing it). Nothing was asked or spent.
+ */
+export const CITE_CHECK_STALE =
+  "This citation has changed since the page loaded, so nothing was asked. Reload the page and try again.";
 
 /**
  * **The forced search did not happen, or nobody can say it did** — the search

@@ -182,11 +182,11 @@ const rawPgFetchAllowanceStore: FetchAllowanceStore = {
       /* The window cap first: a reader who is over it is over it whether or not
          they also have four requests in the air, and reporting the rarer of the
          two reasons would send whoever reads the logs to the wrong number. */
-      if (fills >= policy.fills) return { kind: "rate" };
+      if (fills >= policy.fills) return { kind: "rate", reason: "hour" };
       /* The day, where a bucket has one. Reported as `rate` too, because it is
          still this reader's own allowance and the caller's answer is the same;
          only the fuse below is a different kind of fact. */
-      if (daily && (counts?.daily ?? 0) >= daily.fills) return { kind: "rate" };
+      if (daily && (counts?.daily ?? 0) >= daily.fills) return { kind: "rate", reason: "day" };
       if (inFlight >= policy.concurrency) return { kind: "concurrency" };
 
       /* **The fuse, counted across every owner** — the only query here that is
@@ -230,6 +230,15 @@ const rawPgFetchAllowanceStore: FetchAllowanceStore = {
     await db
       .update(rateLimitEvents)
       .set({ leaseUntil: null })
+      .where(and(eq(rateLimitEvents.id, id), eq(rateLimitEvents.ownerId, currentOwnerId())));
+  },
+
+  async cancel(id: string): Promise<void> {
+    /* **The row goes**, unlike `finish`: the caller was refused before it
+       spent anything, so the fill must not count. Owner-scoped like `finish`,
+       so a token can only refund its own owner's row. */
+    await getDb()
+      .delete(rateLimitEvents)
       .where(and(eq(rateLimitEvents.id, id), eq(rateLimitEvents.ownerId, currentOwnerId())));
   },
 };

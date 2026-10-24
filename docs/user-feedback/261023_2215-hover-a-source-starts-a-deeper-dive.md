@@ -1,9 +1,9 @@
 ---
 reports: spya-mxk20e
-ending: awaiting
-comment: Links already stream a note on hover. For citations, most works have nothing to ground a cheap note in, so anything reaching your article spends money on a hover. Your call, in the question: quick note, web search, or a chat in the card.
+ending: shipped
+comment: Rest on a citation naming one work and after about 2 seconds the card starts Does it say that? and shows its answer: about 20 seconds and 17p each, capped per day. A tap does not start one; the button does. Each is a chat in Chat's list.
 ---
-# Hovering a source starts a deeper dive: awaiting Greg
+# Hovering a source starts a deeper dive: shipped
 
 Report `spya-mxk20e` (#678), SPIDERYARN-READING2-NA, Greg (admin, provenance proved by
 `feedback-reporter.ts`), 2026-10-23 22:15 UTC, a suggestion, filed from
@@ -14,17 +14,18 @@ Report `spya-mxk20e` (#678), SPIDERYARN-READING2-NA, Greg (admin, provenance pro
 > stream in the response so that I can just hover over a source or a link or whatever and find out
 > more without having to click and ask for it and be taken somewhere else.
 
-**Ending: awaiting Greg; nothing built.**
+**Ending: shipped, for every reader (Greg chose C on [q-hc4y2j](questions/q-hc4y2j.md), reply
+`spya-r5hb87`, 2026-10-24: "C. Make it a main rather than experimental feature").**
 
-- **A link already does this**: its card streams how the page stands to the paragraph
+- Resting about 2 s on a citation that names one work, in a paragraph that cites it, starts
+  *Does it say that?* and shows the answer in the card, with *Continue in Chat*. One chat per work
+  and paragraph (a `cite-check` thread origin, unique in the database); a second rest reuses it.
+  Keyboard focus counts as a rest; a tap does not.
+- Measured: 17p median (7p to 43p), about 20 s
+  ([261024d](../investigations/261024d-does-it-say-that-cost-and-latency.md)). Automatic starts
+  are capped at 8 an hour and 20 a day per reader and 100 a day overall; the button is not.
+- The answer arrives whole after a tool round (upstream; the card shows what the chat is doing
+  meanwhile). Plan, reviews and what was left undone:
+  [261024m](../plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md).
+- A link's card already streamed a note
   ([links.md](../project/links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)).
-- **For a citation, a cheap paragraph-relative note was planned, reviewed by GPT Sol, and not
-  built.** Without evidence about the work it can only restate the paragraph (Sol's F1, and the
-  "say nothing rather than guess" rule for Sources). Only 86 of 790 cited works in production hold a
-  checked abstract note, and the reported article's one work does not. Every version that reaches
-  most works spends on the hover, which reverses Greg's 1B on q-ny49p3. Opus arbitrated: ask first.
-- The question, with four options and a recommendation, is
-  [q-hc4y2j](questions/q-hc4y2j.md). The plan, its review and the cost controls (dwell, one work
-  only, cache per work and paragraph, daily caps, freshness) are
-  [261024m](../plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md),
-  ready as the build spec for whichever option he picks.

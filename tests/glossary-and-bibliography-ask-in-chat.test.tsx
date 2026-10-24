@@ -62,13 +62,12 @@ import {
 } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import {
-  askAboutBlock,
   askAboutCitedWork,
   askAboutGlossaryEntry,
   askAboutIdea,
-  askDoesItSayThat,
   CITED_WORK_QUESTION,
 } from "../src/web/chat-handoff.js";
+import { askAboutBlock, askDoesItSayThat } from "../src/chat-question.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
 
 const who = vi.hoisted(() => {
@@ -413,6 +412,7 @@ let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
 let refuseNextSend = false;
+let conflictCiteCheckId: string | null = null;
 /** When set, the summaries are this list and not the server's: a re-read that has not caught up yet. */
 let frozenSummaries: ChatThread[] | null = null;
 let bibliographyMayReply: Promise<void> | null = null;
@@ -490,6 +490,10 @@ function reply(url: string, method: string, body: unknown): Response {
       refuseNextSend = false;
       return json({ error: "Send refused for this test" }, 400);
     }
+    const sent = body as { origin?: ThreadOrigin };
+    if (conflictCiteCheckId && sent.origin?.mode === "cite-check") {
+      return json({ error: "A chat already exists.", threadId: conflictCiteCheckId }, 409);
+    }
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
   }
   if (method === "POST") return new Response(null, { status: 204 });
@@ -526,6 +530,7 @@ beforeEach(() => {
   nextAnswer = "";
   minted = 0;
   refuseNextSend = false;
+  conflictCiteCheckId = null;
   frozenSummaries = null;
   bibliographyMayReply = null;
   who.set(null);
@@ -1023,8 +1028,10 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
   });
 
   /* Plan 261011w: *Does it say that?* is not the item's chat. It starts a fresh
-     one, anchored on the paragraph the card was opened from, with no origin,
-     even when the work already has its own chat. */
+     one, anchored on the paragraph the card was opened from, even when the
+     work already has its own chat. Since plan 261024m it carries a
+     `cite-check` origin, the work and the paragraph, so a rest on the card and
+     a second press find it; no `auto`, because a press is never capped. */
   it("Does it say that? starts a fresh chat anchored on the citing paragraph", async () => {
     who.set(OWNER);
     server.push(startedFrom("spya-srvx34", { mode: "bibliography", itemId: WORK, quote: WORK_TITLE }, "Earlier."));
@@ -1032,9 +1039,10 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
     const button = await card(".prose mark.cite", ".prose-card-cite-check");
     await act(async () => button.click());
     await until(() => chatPosts().length === 1, "the question sent");
-    const sent = chatPosts()[0]?.body as { question: string; origin?: unknown; anchor?: unknown };
+    const sent = chatPosts()[0]?.body as { question: string; origin?: unknown; anchor?: unknown; auto?: unknown };
     expect(sent.anchor).toEqual({ blockId: "spya-bbbbbb" });
-    expect(sent.origin).toBeUndefined();
+    expect(sent.origin).toEqual({ mode: "cite-check", itemId: WORK, blockId: "spya-bbbbbb", quote: WORK_TITLE });
+    expect(sent.auto).toBeUndefined();
     expect(sent.question).toBe(
       askAboutBlock({
         blockId: "spya-bbbbbb",
@@ -1045,6 +1053,41 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
        does not silently turn a Sources press into navigation to Chat. */
     expect(param("mode")).toBe("sources");
     expect(dialog()).not.toBeNull();
+  });
+
+  /* Plan 261024m: the paragraph's check is one chat, so a second press opens it. */
+  it("Does it say that? reopens this paragraph's check and sends nothing", async () => {
+    who.set(OWNER);
+    server.push(
+      startedFrom(
+        "spya-srvx35",
+        { mode: "cite-check", itemId: WORK, blockId: "spya-bbbbbb", quote: WORK_TITLE },
+        "It does, in chapter 2.",
+      ),
+    );
+    await open("?mode=sources");
+    const button = await card(".prose mark.cite", ".prose-card-cite-check");
+    await act(async () => button.click());
+    await until(() => param("thread") === "spya-srvx35" && dialog() !== null, "the earlier check");
+    expect(chatPosts(), "no new question").toHaveLength(0);
+  });
+
+  it("Does it say that? adopts a check another tab created after this tab's summary read", async () => {
+    who.set(OWNER);
+    const existing = startedFrom(
+      "spya-srvx36",
+      { mode: "cite-check", itemId: WORK, blockId: "spya-bbbbbb", quote: WORK_TITLE },
+      "The other tab's answer.",
+    );
+    server.push(existing);
+    frozenSummaries = server.filter((thread) => thread.id !== existing.id);
+    conflictCiteCheckId = existing.id;
+    await open("?mode=sources");
+    const button = await card(".prose mark.cite", ".prose-card-cite-check");
+    await act(async () => button.click());
+    await until(() => param("thread") === existing.id, "the existing check's id after the 409");
+    await until(() => (dialog()?.textContent ?? "").includes("The other tab's answer."), "the existing check after the 409");
+    expect(chatPosts(), "the deliberate press made only its one attempt").toHaveLength(1);
   });
 
   /* GPT Sol's F1 on plan 261010s: still in Chat, the summaries have not been

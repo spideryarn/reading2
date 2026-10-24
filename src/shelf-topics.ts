@@ -91,7 +91,7 @@ export const ALLOWANCE_RETRY_MS = 30 * 60 * 1000;
 
 export interface ShelfTopicsDeps {
   store: ShelfTermsStore;
-  allowance: FetchAllowanceStore;
+  allowance: Pick<FetchAllowanceStore, "take" | "finish">;
   /** The reader's own "about you", or null. */
   readProfile: () => Promise<string | null>;
   /** False: no key — the program's list, and no claim, no call. */

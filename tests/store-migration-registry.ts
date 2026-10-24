@@ -3881,6 +3881,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/related-work-pg.test.ts": {
     "00000000-0000-4000-8000-0000ca401e11": { kind: "seeded" },
   },
+  /* A second reader, seeded, whose allowance spend shows the automatic
+     cite-check start's global cap is everybody's. 261024m. */
+  "tests/chat-origin-route.test.ts": {
+    "00000000-0000-4000-8000-00000000c17e": { kind: "seeded" },
+  },
   "tests/cited-in-spideryarn-pg.test.ts": {
     "00000000-0000-4000-8000-00000c17e0a1": { kind: "seeded" },
     "00000000-0000-4000-8000-00000c17e0b2": { kind: "seeded" },

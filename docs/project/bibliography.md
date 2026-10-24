@@ -718,9 +718,10 @@ link.
 **And *Does it say that?*, since 2026-10-11, on a card opened from a paragraph that cites the work**
 (that paragraph is in the work's `citedAt`; not the reference entry). It is the research's idea 2,
 Greg's 4B on [q-fkq30v](../user-feedback/questions/q-fkq30v.md): *does the cited work say that?*, at
-the citing sentence. A press starts a fresh chat anchored on that paragraph, with no origin, so it is
-not the work's one chat and a second paragraph is a second question. The question names the work,
-fenced (`askDoesItSayThat` in [`chat-handoff.ts`](../../src/web/chat-handoff.ts)), and chat answers
+the citing sentence. Since 2026-10-24 that chat has an identity of its own, origin `cite-check` (the work's
+id and the citing block), so it is one chat per work and paragraph: a press opens the existing one
+rather than asking again, and it is never the work's own *Ask in chat* chat (below). The question names the work,
+fenced (`askDoesItSayThat` in [`chat-question.ts`](../../src/chat-question.ts)), and chat answers
 it by reading the paper with `read_cited_work`
 ([chat-tools.md § Reading a cited paper](chat-tools.md#reading-a-cited-paper-read_cited_work)),
 which is Dig deeper's paper read, offered to chat. A text button, one tap for a finger, owner only
@@ -728,6 +729,33 @@ which is Dig deeper's paper read, offered to chat. A text button, one tap for a 
 [261011w](../plans/261011w-does-the-cited-work-say-that-at-the-citing-sentence.md). The glossary card's is the same shape. The one-shot that opened Citations on a row
 (`citeFocus`, `BibliographyPanel` § `Props.focus`, which lowers the bar if it hides the row) stays in
 `Reader` for the way back from a chat to its row (that plan's stage 2).
+
+**And since 2026-10-24 resting on the citation starts it by itself**, streamed into the card.
+Greg, report `spya-mxk20e`: *"any time I hover over a source, let's automatically start … some
+kind of deeper dive … and just stream in the response"*; asked to choose
+([q-hc4y2j](../user-feedback/questions/q-hc4y2j.md)), *"C. Make it a main rather than experimental
+feature"* (2026-10-24). When the prose card shows **exactly one** work, opened by a mouse rest or by
+keyboard focus on a linked citation (**not a tap**: a tap asks to see the card, not to spend), from
+a paragraph that cites it, on the owner's own article and not in view-as, **2 s with the card open**
+starts the paragraph's `cite-check` chat. The card draws an activity line (*Reading the paper…*,
+*Searching the web…*), then the chat's answer with Chat's own renderer in a scrolling box, and
+*Continue in Chat*. The stream lives in a loader outside React
+([`src/web/cite-check.ts`](../../src/web/cite-check.ts)), so closing the card loses nothing; the
+server finishes the turn anyway. An existing chat for that work and paragraph is shown, not bought
+again. The press goes through the same loader, so it adopts a start in flight.
+
+What it costs and what bounds it: a turn is Opus 5.5 at high effort with the paper read, **$0.17
+median, 21 s** ([261024d](../investigations/261024d-does-it-say-that-cost-and-latency.md)); about
+30¢ the first time on an article (writing its prompt cache), about 8¢ after. Only an automatic start
+takes the `cite-check` allowance (`CITE_CHECK_RATE_POLICY` in
+[`src/cite-check.ts`](../../src/cite-check.ts)): 8 an hour and 20 a day per reader, 100 a day
+across everybody, 2 at once, refunded on any refusal before the model starts. At a cap the card says
+so in one line and points at the press, which is never capped. The server builds the question and
+refuses a different one, checks the Bibliography is fresh and the block cites the work, and refuses
+an edit of the chat's first question, since that question is its identity. The answer arrives
+whole after the wait rather than word by word, because the provider holds back text written after a
+tool result ([chat-tools.md § Still open](chat-tools.md)). Plan
+[261024m](../plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
 `NOT_A_BLOCK_SELECTION` — both, and the pair is the point: the second alone would take the tap away

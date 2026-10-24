@@ -97,6 +97,7 @@ import type {
   ArcFound,
   ReceptionFound,
   BibliographyFound,
+  ThreadOrigin,
   IdeasFound,
   IllustratedFound,
   SketchFound,
@@ -1298,6 +1299,14 @@ export interface ChatStore {
        * hold more than `MENTIONS_MAX_PER_THREAD` distinct articles.
        */
       mentions?: readonly MentionToStore[];
+      /**
+       * Where the conversation was started from (`ThreadOrigin`) — like
+       * `anchor`, applied only when this turn creates the thread. Named here
+       * since 2026-10-24 (it reached `withTurn` through the spread before),
+       * because `begin` now reads it too: a `cite-check` origin's unique index
+       * is translated into `CiteCheckExists` (plan 261024m, C1).
+       */
+      origin?: ThreadOrigin;
     },
     now?: () => string,
   ): Promise<Turn>;
@@ -3454,7 +3463,12 @@ export type RateBucket =
      searches and its one read over everything they found, about $0.40–0.50 a
      run, taken inside the step so every way of starting it passes it
      (src/situate.ts § `SITUATE_RATE_POLICY`, plan 261024o, GPT Sol's S5). */
-  | "situate";
+  | "situate"
+  /* A citation's *Does it say that?* started by resting on its card, not by
+     a press — one Opus chat turn the reader did not click for, so bounded
+     (src/cite-check.ts § `CITE_CHECK_RATE_POLICY`, plan 261024m). A press of
+     the button takes nothing from it. */
+  | "cite-check";
 
 /**
  * **A bucket's old spellings, still counted against it.** Plan
@@ -3500,13 +3514,25 @@ export interface FetchAllowanceStore {
   take(bucket: RateBucket, policy: RatePolicy): Promise<AllowanceTaken>;
   /** The fetch is over. Frees the concurrency slot; the fill still counts. */
   finish(id: string): Promise<void>;
+  /**
+   * **The fill never happened**: the caller was refused after taking it and
+   * before spending anything (a lost race, a stale request), so its row is
+   * deleted — the slot freed and the fill no longer counted. Not `finish`,
+   * which keeps the fill: a refund for work that ran would make the cap a cap
+   * on nothing. Plan 261024m, GPT Sol's C1.
+   */
+  cancel(id: string): Promise<void>;
 }
 
 export type AllowanceTaken =
   /** `id` is the token to hand back to `finish`. */
   | { kind: "allowed"; id: string }
-  /** Too many fills in the window. */
-  | { kind: "rate" }
+  /**
+   * Too many fills in the window: `hour` for the rolling window, `day` for a
+   * policy's daily per-owner cap. Both are this reader's own allowance; the
+   * reason lets a caller say which (plan 261024m, GPT Sol's C10).
+   */
+  | { kind: "rate"; reason: "hour" | "day" }
   /** Too many at once. */
   | { kind: "concurrency" }
   /**

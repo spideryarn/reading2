@@ -36,7 +36,7 @@ import type {
   WriteOutcome,
 } from "./model.js";
 import { asOpId, initialState, recoveringIds } from "./model.js";
-import type { SpokenOutcome, TurnSink } from "./effects.js";
+import type { SpokenOutcome, TurnRefusal, TurnSink } from "./effects.js";
 import { project, storedSpoken } from "./project.js";
 import { reduce } from "./reduce.js";
 import { markAnsweredHere } from "./answered-here.js";
@@ -192,6 +192,8 @@ export class ChatController {
   #effects: ChatEffects;
   #current: ChatSnapshot;
   #listeners = new Set<() => void>();
+  /** Whether the hook that owns navigation callbacks is presently mounted. */
+  #attached = true;
   /**
    * The open notification window's timer, or `null` when no window is open.
    * `#notify` has the whole story.
@@ -211,7 +213,7 @@ export class ChatController {
   /** Navigation that waits for any `begin`, including when the optimistic id was accepted. */
   #onBegun = new Map<OpId, (id: string) => void>();
   /** Restore a mentioned question only when the request was refused before `begin`. */
-  #onRefused = new Map<OpId, () => void>();
+  #onRefused = new Map<OpId, (refusal: TurnRefusal) => void>();
   /** Open a first turn that failed before `begin` when its outcome is uncertain. */
   #onUnconfirmed = new Map<OpId, (id: string) => void>();
   /** Draft bookkeeping, unlike navigation, must finish even after detach. */
@@ -283,7 +285,7 @@ export class ChatController {
     onConfirmed?: (id: string) => void,
     onGone?: (id: string) => void,
     onBegun?: (id: string) => void,
-    onRefused?: () => void,
+    onRefused?: (refusal: TurnRefusal) => void,
     onUnconfirmed?: (id: string) => void,
   ): void {
     if (onThreadId) this.#onThreadId.set(event.op.id, onThreadId);
@@ -376,7 +378,7 @@ export class ChatController {
    * otherwise re-enter with a result for an operation that had not finished
    * being registered.
    */
-  dispatch = (event: ChatEvent): ChatState => {
+  dispatch = (event: ChatEvent, refusal?: TurnRefusal): ChatState => {
     const before = this.#current;
     const { state, commands } = reduce(before.state, event);
     const operation = "opId" in event ? before.state.operations.get(event.opId) : undefined;
@@ -428,8 +430,8 @@ export class ChatController {
          docs/postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md */
       this.#notify();
     }
-    onRefused?.();
-    if (operation?.kind === "turn") onUnconfirmed?.(operation.threadId);
+    if (this.#attached) onRefused?.(refusal ?? { status: 409 });
+    if (this.#attached && operation?.kind === "turn") onUnconfirmed?.(operation.threadId);
     for (const command of commands) this.#perform(command);
     this.#retireGone(event, operation, state);
     if (finished) this.#onSettled?.();
@@ -513,6 +515,18 @@ export class ChatController {
   }
 
   /**
+   * The consumer that owns these callbacks is mounted again.
+   *
+   * React StrictMode runs an effect's cleanup and setup back-to-back. Keeping
+   * the registrations and reopening this gate means that synthetic cleanup
+   * cannot silently erase a live turn's navigation, while a real unmount still
+   * closes the gate synchronously.
+   */
+  attach(): void {
+    this.#attached = true;
+  }
+
+  /**
    * The consumer that owns these callbacks has gone. Stop calling it.
    *
    * **The controller deliberately outlives the hook** — the stream still holds
@@ -526,17 +540,16 @@ export class ChatController {
    * conversation they have left. Unsubscribing removes the render listener and
    * says nothing about this. GPT Sol, 2026-08-28.
    *
-   * Only callbacks into the mounted UI go. Draft acknowledgements and article completion
-   * callbacks survive, as do the intent commands: the controller's own work
-   * carries on, which is the whole distinction: what this object decides for
-   * itself survives the unmount, and what it was doing on somebody else's behalf
-   * does not.
+   * The callbacks stay registered until their operation retires because a
+   * StrictMode cleanup is immediately followed by `attach`; this boolean is
+   * the boundary that prevents them running after a real unmount. Draft
+   * acknowledgements and article completion callbacks survive regardless, as
+   * do the intent commands: the controller's own work carries on, which is the
+   * whole distinction: what this object decides for itself survives the
+   * unmount, and what it was doing on somebody else's behalf does not.
    */
   detach(): void {
-    this.#onThreadId.clear();
-    this.#onBegun.clear();
-    this.#onRefused.clear();
-    this.#onUnconfirmed.clear();
+    this.#attached = false;
   }
 
   /** Forget the callbacks of turns that have finished. */
@@ -660,8 +673,8 @@ export class ChatController {
         return;
       case "named":
         this.#onConfirmed.get(command.opId)?.(command.threadId);
-        this.#onBegun.get(command.opId)?.(command.threadId);
-        if (command.wasThreadId !== command.threadId) {
+        if (this.#attached) this.#onBegun.get(command.opId)?.(command.threadId);
+        if (this.#attached && command.wasThreadId !== command.threadId) {
           // The URL is pointing at an id the server did not accept. Tell the
           // caller so `?thread=` can follow, or a reload lands on a
           // conversation that does not exist.
@@ -836,8 +849,8 @@ export class ChatController {
           repair: { id: asOpId(mintId()) },
         });
       },
-      refused: (error) => {
-        this.dispatch({ type: "turn.refused", opId, error, repair: { id: asOpId(mintId()) } });
+      refused: (error, refusal) => {
+        this.dispatch({ type: "turn.refused", opId, error, repair: { id: asOpId(mintId()) } }, refusal);
       },
       disconnected: (error) => {
         this.dispatch({

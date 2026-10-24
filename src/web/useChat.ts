@@ -65,6 +65,7 @@ import {
   runTurn,
   settledAnswer,
   stopAnswer,
+  type TurnRefusal,
 } from "./chat/effects.js";
 import { useMadeFor } from "./lib/made-for.js";
 import type { MentionsToSend } from "./mentions.js";
@@ -129,6 +130,8 @@ export interface SendOptions {
    * first turn and a delete may both finish after the band has unmounted.
    */
   onGone?(threadId: string): void;
+  /** A definite refusal before `begin`, including a cite-check conflict's thread id. */
+  onRefused?(refusal: TurnRefusal): void;
   /**
    * Whether this answer should be written for the reader's profile. Absent
    * means yes.
@@ -554,6 +557,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
   }, [controller]);
 
   useEffect(() => {
+    controller.attach();
     startLoad();
     /* **And when this hook goes, its navigation callbacks go with it.** The controller
        outlives it on purpose — the stream still holds it, so a cancel waiting
@@ -768,7 +772,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, onBegun, onUnconfirmed, anchor, origin, kind, help, typed, modality, sourceCommentId, visible, mentions } = opts;
+      const { onThreadId, onBegun, onUnconfirmed, onRefused, anchor, origin, kind, help, typed, modality, sourceCommentId, visible, mentions } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -894,7 +898,12 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
           : opts.onConfirmed,
         opts.onGone,
         onBegun,
-        mentions?.onRefused,
+        mentions || onRefused
+          ? (refusal) => {
+              mentions?.onRefused?.();
+              onRefused?.(refusal);
+            }
+          : undefined,
         /* An ended request with no refusal lets the composer go too, in any
            thread: a follow-up has no navigation of its own to do it. */
         mentions?.onUnconfirmed

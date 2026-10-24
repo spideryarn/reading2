@@ -49,7 +49,7 @@ contract come from.
 - [§ The links the prompt does not carry](#the-links-the-prompt-does-not-carry) — `article_links` and `read_web_page`
 - [§ The citations list: one more tool](#the-citations-list-one-more-tool) — `article_citations`
 - [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) — `read_cited_work`, the PDF of a work the article cites
-- [§ The reader's notes: the one tool not every conversation gets](#the-readers-notes-the-one-tool-not-every-conversation-gets) — `reader_notes`, `toolsFor(kind)`, and [the other conversations with every question](#the-other-conversations-come-with-every-question) (each one's gist)
+- [§ The reader's notes: the one tool not every conversation gets](#the-readers-notes-the-one-tool-not-every-conversation-gets) — `reader_notes`, `toolsFor(kind)`, [the other conversations with every question](#the-other-conversations-come-with-every-question) (each one's gist), and [an answer's mention of one, as a link](#an-answer-links-the-conversation-it-mentions)
 - [§ The loop, and the three things that are not obvious](#the-loop-and-the-three-things-that-are-not-obvious) — rounds, withheld tools
 - [§ What the reader sees](#what-the-reader-sees) — tool rows in the panel
 - [§ Chat's list shows every conversation about the article](#chats-list-shows-every-conversation-about-the-article) — list sources, icons, the `?chatfrom=` filter, chats started from a mode
@@ -580,6 +580,36 @@ fixture, three runs each: with the list, "where is his argument weakest?" opened
 conversation that had covered it 3/3 and answered by building on its three points; a question
 about a term opened the conversation about that term 3/3; "who is Blake Lemoine?" opened nothing
 3/3. Without the list, nothing was ever opened. Figures in the plan.
+
+### An answer links the conversation it mentions
+
+**Built 2026-10-24**, plan
+[261024u](../plans/261024u-chat-links-the-earlier-conversation-it-mentions.md), from Greg's report
+`spya-t7cq2s`:
+
+> This chat references a previous conversation. It would be great if that could include a
+> hyperlink that would take me to the previous chat conversation in context.
+>
+> — Greg, 2026-10-24
+
+The BUILD ON bullet now asks the model to put a conversation's id from the list in square brackets
+when it mentions one, as it would a block id. A conversation id has a block id's shape, so the
+renderer finds it the same way (`splitCitations`, a `thread` segment) and draws it as a link
+(`ThreadRef.tsx`) to that conversation: a chat opens where chats are drawn now (Chat's band, or
+the floating chat over another mode), the guide in Chat's band, a Recall or Explore conversation in
+its part of Learn. Pushed, so Back returns to the conversation the link was in; the page does not
+scroll ([url-state.md § `thread`](url-state.md)).
+
+- **Only the reader's own conversations.** The model's bracket only selects an id among the threads
+  the server listed for the signed-in owner on this article, minus Candidates and the conversation
+  on screen (`threadLinks` in [`thread-links.ts`](../../src/web/thread-links.ts)). The address is
+  built from that row's id and kind, never from the answer. Any other id stays the characters the
+  model wrote. An id a passage also has leaves its whole run as text, the `CrossArticles` rule.
+- **The log agrees with the screen.** `threadCitations` in `converse.ts` keeps a linked
+  conversation out of `unknownIds` and counts it as `citedConversations`; an id drawn as neither is
+  `citedAmbiguous`. `tests/chat-markdown-render.test.tsx` paints each case and compares.
+- **Typed Chat only**, because only Chat's prompt carries the ids. Explore sees the reader's
+  conversations too, but its panel is handed only its own one; deferred.
 
 ## The loop, and the three things that are not obvious
 
@@ -1748,10 +1778,19 @@ alone, in order.
   provider instead of by a nudge — and it would remove the need for the nudge message entirely. Two
   things to check first, neither of them assumable: whether OpenRouter passes the parameter through
   for `anthropic/*` or drops it silently (which is the documented hazard in
-  [setup-dev.md](setup-dev.md)), and the cache arithmetic. Changing `tool_choice` invalidates cached
-  *message* blocks while leaving tools and system cached — and the article lives in a message here, so
-  it may well be worse than the tools-array invalidation it replaces. Measure `cacheReadTokens` before
-  believing it.
+  [setup-dev.md](setup-dev.md)), and the cache arithmetic.
+
+  **Both measured 2026-10-24**, on Opus 5.5 with a 19,000-token stand-in article in a message
+  behind the breakpoint
+  ([`scripts/spikes/261024q-last-round-cache-probe.ts`](../../scripts/spikes/261024q-last-round-cache-probe.ts)).
+  The cache worry was wrong: with the same tools array, `tool_choice: "none"` **read** all 19,031
+  cached tokens, while chat's current last round (web search only) read none and wrote 18,955 — the
+  $0.256 write seen on a real capped turn in
+  [261024d](../investigations/261024d-does-it-say-that-cost-and-latency.md). What stops it being a
+  plain swap is the other half: asked a question that needed a search, the same request with
+  `tool_choice: "none"` came back with **no text at all**, where `auto` searched and answered. So the
+  guide's shape would likely switch off web search on chat's last round and risk the empty answer
+  this whole section is about. One run each; not built.
 - **The logged `model` is whichever one answered last.** OpenRouter can route different rounds of one
   turn to different providers or models, and `used` is overwritten each round, so a turn that changed
   hands mid-way reports only where it ended. Nobody has seen this happen; it would be invisible if it
@@ -1796,7 +1835,23 @@ alone, in order.
   ahead of system and messages, so withholding them on the last round costs a cache write on the one
   path that has already been expensive. It only happens after three tool rounds, which is rare, and
   the alternative designs all trade it for a loop that can fail to terminate — so it stands, named
-  rather than hidden. Also from the review.
+  rather than hidden. Also from the review. Measured, and why `tool_choice: "none"` is not yet the
+  fix: the bullet on it above.
+- **An answer written after a tool round does not stream; it arrives in one burst.** Upstream of
+  us, measured 2026-10-24
+  ([`scripts/spikes/261024q-chat-stream-round2-probe.ts`](../../scripts/spikes/261024q-chat-stream-round2-probe.ts),
+  [`…-burst-probe.ts`](../../scripts/spikes/261024q-chat-stream-burst-probe.ts)). A first round
+  streams: ~125 deltas over 4 s, on Opus at high, medium or low effort and on Sonnet, with or without
+  tools declared. The round after a `role: "tool"` result does not, on every one of those: the
+  reasoning streams, then nothing for the time it takes to write the answer, then the thinking
+  block's signature and **every content delta inside 30–140 ms**. The same content handed over in a
+  user message, same tools declared, streamed over 4 s — so the trigger is the tool result in the
+  history, not the effort, the model, web search or our parser. Replaying `reasoning_details` did
+  not change it. Whether OpenRouter or Anthropic holds the text is not separable without a direct
+  Anthropic key. Until it changes, a chat turn that uses a tool shows its reasoning period as
+  silence and then the whole answer; the levers are the reasoning deltas (they do stream, seconds
+  earlier) as an activity line, or doing the tool's work before the turn so the answer is a first
+  round.
 - **Nothing measures whether the tools make answers better.** This is the same gap
   [original-version/search-and-chat.md](original-version/search-and-chat.md) reports about the
   previous version's chat — a year of work and no document assessing whether it helped anyone read.

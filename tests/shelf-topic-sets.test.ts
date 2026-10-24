@@ -593,7 +593,7 @@ describe("shelfTopicSet", () => {
   it("a refused allowance releases the claim without counting a failure", async () => {
     const { store, state } = fakeStore(shelfOf(10));
     const deps = depsFor(store);
-    deps.allowance = { take: async () => ({ kind: "rate" }), finish: async () => {} };
+    deps.allowance = { take: async () => ({ kind: "rate", reason: "hour" }), finish: async () => {} };
     const { response, refresh } = await shelfTopicSet(false, deps);
     expect(refresh).toBeNull();
     expect(response.refreshing).toBe(false);

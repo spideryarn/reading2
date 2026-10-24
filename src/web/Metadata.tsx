@@ -224,6 +224,7 @@ import {
   FileType,
   Fingerprint,
   Globe,
+  Hourglass,
   Image,
   Layers,
   Link2,
@@ -265,6 +266,8 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { ReadTimeCard } from "./ReadTimeCard.js";
+import { spentWords } from "./reading-time.js";
+import { type TimeSpentReading, useTimeSpentReading } from "./useReadingTime.js";
 import { isWebUrl } from "../urls.js";
 import { useMadeFor } from "./lib/made-for.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
@@ -750,6 +753,7 @@ export function Metadata({
      src/web/page-title.ts. */
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "metadata" }));
   const lastRead = at ? article.blocks.find((b) => b.id === at) : undefined;
+  const timeSpent = useTimeSpentReading(slug);
 
   const backHref = readHref(slug, carriedSearch(location.search), "article");
 
@@ -1414,6 +1418,12 @@ export function Metadata({
                   You haven't scrolled past the top of this one yet.
                 </span>
               )}
+            </Row>
+            {/* Greg, 2026-10-24 (spya-db7w6f): *"can you provide an estimate
+                of the amount of time spent reading the article by the
+                user?"* — docs/plans/261024t-metadata-shows-time-spent-reading.md. */}
+            <Row icon={Hourglass} label="Time spent reading">
+              <TimeSpent load={timeSpent} />
             </Row>
           </div>
         </Section>
@@ -3859,6 +3869,28 @@ function Chip({ icon: Icon }: { icon: ComponentType<{ size?: number }> }) {
       className="tw:inline-flex tw:h-6 tw:w-6 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-md tw:bg-secondary tw:text-ink-faint"
     >
       <Icon size={13} />
+    </span>
+  );
+}
+
+/**
+ * The whole article's reading time, said as an estimate — it is the spine's
+ * and the gutter's measure summed (docs/project/reading-time.md § What is true
+ * of it), so "about", and the line under it says what was counted.
+ */
+function TimeSpent({ load }: { load: TimeSpentReading }) {
+  if (load.kind === "loading") return <span className="tw:text-muted-foreground">Checking…</span>;
+  if (load.kind === "viewing-as")
+    return <span className="tw:text-muted-foreground">Not shown while viewing as another reader.</span>;
+  if (load.kind === "failed")
+    return <span className="tw:text-muted-foreground">This could not be read just now.</span>;
+  if (!(load.seconds >= 1)) return <span className="tw:text-muted-foreground">None recorded yet.</span>;
+  return (
+    <span>
+      <span className="tw:text-foreground">about {spentWords(load.seconds)}</span>
+      <span className="tw:block tw:text-xs tw:text-ink-faint">
+        counted while it was on your screen and you were active
+      </span>
     </span>
   );
 }

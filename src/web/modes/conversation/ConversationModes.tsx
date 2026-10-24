@@ -502,6 +502,8 @@ type ConversationBandProps = {
    * 261009k, stage 2). Chat's band only; Learn's conversations have no origin.
    */
   onOrigin?: ((origin: ThreadOrigin) => void) | undefined;
+  /** Close a passage draft hidden under Chat before a Learn row replaces the mode. */
+  onLeaveForLearn?: (() => void) | undefined;
   /**
    * **The Recall | Explore | Quiz control**, when this band is one of Learn's
    * conversation views. Absent in chat mode. Built by `LearnBand` above and passed straight
@@ -523,6 +525,7 @@ export function ConversationBand({
   onSettled,
   onScreen,
   onOrigin,
+  onLeaveForLearn,
   articleTitle,
 }: ConversationBandProps) {
   useRenderCount("ConversationBand");
@@ -930,9 +933,8 @@ export function ConversationBand({
    * "Arriving in chat" there.
    *
    * `thread` is deliberately *not* in this rule's condition. `?thread=` can
-   * name a conversation that no longer exists — leave chat mode with an empty
-   * new one open and the URL keeps its id while the panel takes the
-   * conversation with it — and a reader coming back to that URL should get a
+   * name a conversation that no longer exists — from a pasted address, Back,
+   * or a conversation another tab removed — and a reader coming to that URL should get a
    * conversation, not a list they did not ask for. Starting one overwrites the
    * stale id, which is why there is no separate effect clearing it: an effect
    * that cleared the URL whenever the id was missing would also fire in the
@@ -1221,9 +1223,9 @@ export function ConversationBand({
    * nothing else.
    *
    * After that rule, and only once the list has answered: before then
-   * `?thread=` is whatever the last mode left in it, and recording that would
-   * overwrite the very thing the rule is about to read. A failed load cannot
-   * establish that a conversation is absent, so it cannot record the list.
+   * `?thread=` is the arrival the address or an item hand-off requested, and
+   * recording it would overwrite the very thing the rule is about to read. A
+   * failed load cannot establish that a conversation is absent, so it cannot record the list.
    * A positively matched local conversation is still known, though: `begin`
    * can have supplied it independently of that failed fetch.
    *
@@ -1388,6 +1390,7 @@ export function ConversationBand({
       guide={kind === "chat" ? { thread: theGuide, onOpen: () => void openGuide(true) } : undefined}
       onOpenLearn={kind === "chat" ? (view, id) => {
         setPendingLive(null);
+        onLeaveForLearn?.();
         void setWhere({ mode: "learn", learn: view, thread: id }, { history: "push" });
       } : undefined}
       threadId={current}

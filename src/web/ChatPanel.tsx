@@ -155,7 +155,8 @@ import { chatDraftsFor } from "./chat-draft.js";
 import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
 import { afterChange, composerModality, freshProvenance } from "./composer-modality.js";
-import { crossArticles, type CrossArticles, snippet } from "./citations.js";
+import { crossArticles, type CrossArticles, snippet, type ThreadLink } from "./citations.js";
+import { threadLinks } from "./thread-links.js";
 import { type BringIn, BringIntoChat } from "./BringIntoChat.js";
 import { pastedAddresses } from "./bring-in.js";
 import { MentionChips, MentionPicker, useMentionPicker } from "./MentionPicker.js";
@@ -521,6 +522,10 @@ export function ChatPanel({
   const open = threads.find((t) => t.id === threadId) ?? null;
   /** What the list draws. */
   const rows = listed ?? threads;
+  /* What an answer may link to (plan 261024u): Chat's two sets together, the
+     guide being in `threads` and not in `listed`. None in Learn, which is
+     handed only its own conversation. */
+  const everyThread = useMemo(() => (listed ? [...threads, ...listed] : undefined), [threads, listed]);
   // A stopped session retains recovery text. It must never appear in a different thread.
   const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
     ? live
@@ -824,6 +829,7 @@ export function ChatPanel({
              `onSendNew` mints a `chat` conversation here, never a guide turn:
              `send(null, …)` with the band's kind (ConversationModes.tsx). */
           onChatNew={open.kind === "guide" ? (question) => onSendNew(question) : undefined}
+          everyThread={everyThread}
         />
       ) : learn ? (
         /* **Learn never draws a list, not even for a frame.** The band
@@ -1578,6 +1584,7 @@ export function Conversation({
   onStartLive,
   articleTitle,
   onChatNew,
+  everyThread,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
@@ -1634,6 +1641,13 @@ export function Conversation({
    * passes its list box's `onSendNew`; absent elsewhere.
    */
   onChatNew?: ((question: string) => void) | undefined;
+  /**
+   * **Every conversation the reader has on this article**, as the server
+   * listed them — what an answer's mention of an earlier one may link to (plan
+   * 261024u; thread-links.ts). Typed Chat only, because only Chat's prompt is
+   * handed the ids; absent elsewhere, and then a conversation id stays text.
+   */
+  everyThread?: readonly ChatThread[] | undefined;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   /* **The guide's greeting** (plan 261009i): drawn only by a conversation
@@ -1650,6 +1664,12 @@ export function Conversation({
      answers' citation chips (citations.ts § `crossArticles`). Built from the
      server's list and the open article's blocks, never from an answer. */
   const cross = useMemo(() => crossArticles(blocks, thread.mentioned, (s) => readHref(s)), [blocks, thread.mentioned]);
+  /* The reader's other conversations, by id, for an answer that mentions one
+     (thread-links.ts). From the server's list, never from an answer. */
+  const links = useMemo(
+    () => (kind === "chat" && everyThread ? threadLinks(everyThread, thread.id) : undefined),
+    [kind, everyThread, thread.id],
+  );
   /* *Bring into this chat* under an answer hands its article to this
      conversation's box, which keeps the ref while it is drawn (plan 261017e).
      Typed Chat only: no other kind takes another article in. */
@@ -2176,6 +2196,7 @@ export function Conversation({
             recovering={recovering.has(m.id)}
             blocks={blocks}
             cross={cross}
+            threadLinks={links}
             /* Only the last answer may be retried — see `retryTurn` in
                src/chat.ts. The button is hidden rather than shown-and-refused,
                because a button that exists and always says no is worse than one
@@ -2487,6 +2508,7 @@ export function Turn({
   recovering,
   blocks,
   cross,
+  threadLinks,
   onRetry,
   onHintOpened,
   onRewrite,
@@ -2515,6 +2537,8 @@ export function Turn({
   blocks: Map<string, string>;
   /** Other articles the conversation brought in, for their citation chips. */
   cross?: CrossArticles | undefined;
+  /** The reader's other conversations, for an answer that mentions one. */
+  threadLinks?: ReadonlyMap<string, ThreadLink> | undefined;
   /** Present only on the last message. See the call site. */
   onRetry?: ((messageId: string) => void) | undefined;
   /** The pencil: open this question's editor. */
@@ -2696,6 +2720,7 @@ export function Turn({
           onJump={onJump}
           blocks={blocks}
           cross={cross}
+          threadLinks={threadLinks}
           /* Tooltips only once the answer has landed — see Cited.tsx. */
           live={message.status === "pending"}
         />
@@ -3324,12 +3349,14 @@ function Answer({
   onJump,
   blocks,
   cross,
+  threadLinks,
   live,
 }: {
   text: string;
   onJump(id: BlockId): void;
   blocks: Map<string, string>;
   cross?: CrossArticles | undefined;
+  threadLinks?: ReadonlyMap<string, ThreadLink> | undefined;
   live: boolean;
 }) {
   /* The blocks, the chips, the web links and the marks all live in Cited.tsx,
@@ -3348,6 +3375,7 @@ function Answer({
       text={text}
       blocks={blocks}
       cross={cross}
+      threadLinks={threadLinks}
       onJump={onJump}
       /* Only the **end** of an answer still arriving can be half-written, and
          a bare URL cut in half is a link that goes somewhere wrong for the

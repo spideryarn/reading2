@@ -72,7 +72,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
 | `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10, and `?mode=hierarchy` does too; `?mode=trajectory` opens Skim; `?mode=remember` opens Learn; `?mode=tweets` is rewritten to `?mode=summary&summary=thread` (`liftLegacyTweets` in [`router.ts`](../../src/web/router.ts)) (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
 | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
-| `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
+| `thread` | which conversation is open — **`mode` decides how it is drawn**. **One exception pushes**: an answer's link to another of the reader's conversations is a real link and a navigation they chose, so Back returns to the conversation it was in, and it does not scroll the page ([chat-tools.md § An answer links the conversation it mentions](chat-tools.md#an-answer-links-the-conversation-it-mentions), `threadHref` in [`thread-links.ts`](../../src/web/thread-links.ts)) | **replace** | `?thread=spya-k3m9qt` |
 | `guide` | **open this article's guide in Chat**, whether or not it exists yet (one per article, so a link cannot know its id). Chat's band reads it once its list has loaded, opens the stored guide or begins one, replaces `thread` with its id and drops `guide`, so the address becomes the ordinary `?mode=chat&thread=<id>`. Acted on only while `mode=chat`; never restored — [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) ([`params.ts`](../../src/web/params.ts) § `guideParam`) | **replace** | `?mode=chat&guide=1` |
 | `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `sources` (Bibliography, Reception and Claims together; `debate` and `citations` until 2026-10-09, then briefly `peer-review`, each lifted to it on arrival), `glossary`, `ideas`, `learn` (Recall and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
@@ -283,10 +283,21 @@ opposite of "the reader turned every column off".
 | unset | either | no conversation open |
 
 So "open in full chat" from the floating panel is `setMode("chat")` and nothing else — the id is
-already right — and leaving chat mode puts the panel back where the reader left it, for free.
+already right.
+
+**A reader's switch to any other mode clears `?thread=`**, in the same pushed entry, and closes an
+unsent passage chat with it (its words are kept by block). Until 2026-10-24 the id survived the
+switch and the conversation followed the reader into the next mode as the floating panel. Greg,
+spya-mj4b56: *"If I switch modes, I've switched away from it."* A sub-mode inside the mode the
+reader is in keeps it, and so does a switch to Chat, which draws that conversation in its band.
+Back brings it back with the rest of the address. The rule is `leaveTheChat` in
+[`Reader.tsx`](../../src/web/reader/Reader.tsx), called by the Dock's `onMode`, including
+Marginalia swapping a band out, and `showBand`. Navigations that write their destination and
+`?thread=` together also close Reader's local passage target themselves —
+[261024r](../plans/261024r-switching-mode-leaves-the-chat.md).
 
 **In `mode=chat` the id has to name a chat.** Learn writes its own conversation's id into
-`?thread=`, and it survives a switch to Chat like every parameter. Chat's band opens only
+`?thread=`, and it survives a switch to Chat. Chat's band opens only
 `chat`-kind conversations, so once its list has loaded it clears an id of another kind, by replace,
 and shows the list. Going the other way is one navigation: a press on a Learn row in Chat's list
 sets `mode=learn`, `learn=<sub-mode>` and `thread=<id>` together, pushed.

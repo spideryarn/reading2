@@ -345,7 +345,7 @@ export function InvestigatePanel({
  * - **Never over anything already there** (`occupied`): any `?thread=`,
  *   including the one the reader came back from (Reader.tsx § `openOrigin`
  *   keeps it for a lens) and one Chat carries that no dialog draws; an
- *   unsent passage chat, whose words live only in the dialog; a note; or an
+ *   unsent passage chat, whose words are kept in `chat-draft.ts`; a note; or an
  *   annotation in progress. Any of these decides the visit at once, before
  *   the summaries arrive (GPT Sol's F1 and F2 on the plan; built-code review).
  * - **Nor over a finding focus**: *Open in Sources* from the margin has

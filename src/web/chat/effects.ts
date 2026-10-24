@@ -22,7 +22,8 @@
  */
 import type { ChatMessage, ChatThread, ChatThreadView, ToolRun } from "../../types.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../../messages.js";
-import { apiFetch, failure, readJson } from "../lib/api.js";
+import { apiFetch, detailsOf, failure, readJson } from "../lib/api.js";
+import { isSpideryarnId } from "../../ids.js";
 import { heldReader } from "../lib/session.js";
 import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "../lib/sse.js";
@@ -111,8 +112,13 @@ export interface TurnSink {
    * `refused` below.
    */
   failed(error: string, text?: string): void;
-  /** A definite HTTP refusal: the server answered before opening the stream. */
-  refused(error: string): void;
+  /**
+   * A definite HTTP refusal: the server answered before opening the stream.
+   * `refusal` carries the status and what the server declared beside the
+   * sentence, validated (`TurnRefusal`), so a caller can act on which refusal
+   * it was without reading prose. Chat's controller reads only `error`.
+   */
+  refused(error: string, refusal: TurnRefusal): void;
   /**
    * The stream stopped without ending, or ended without saying how.
    *
@@ -125,6 +131,35 @@ export interface TurnSink {
    * the operation, so the reducer decides it and this does not.
    */
   disconnected(error: string): void;
+}
+
+/**
+ * **Which refusal a send met**, as the server declared it — plan
+ * docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md,
+ * GPT Sol's C2. Only the fields the chat route declares (`declaredFields`,
+ * src/routes.ts), each checked here rather than passed on as whatever the body
+ * held: `threadId` on a 409 for a citation's chat that already exists, and
+ * `reason` on an automatic *Does it say that?* refused by its allowance.
+ */
+export interface TurnRefusal {
+  status: number;
+  threadId?: string;
+  reason?: TurnRefusalReason;
+}
+
+/** Why an automatic cite-check was refused (src/cite-check.ts § `CiteCheckCapReason`). */
+export type TurnRefusalReason = "hour" | "day" | "busy" | "global";
+
+const REFUSAL_REASONS: ReadonlySet<string> = new Set<TurnRefusalReason>(["hour", "day", "busy", "global"]);
+
+/** The declared fields of a refused send, or none of them where malformed. */
+function turnRefusal(status: number, details: Readonly<Record<string, unknown>>): TurnRefusal {
+  const { threadId, reason } = details;
+  return {
+    status,
+    ...(typeof threadId === "string" && isSpideryarnId(threadId) ? { threadId } : {}),
+    ...(typeof reason === "string" && REFUSAL_REASONS.has(reason) ? { reason: reason as TurnRefusalReason } : {}),
+  };
 }
 
 /**
@@ -171,11 +206,20 @@ export async function runTurn(
       // question over the size cap. After it starts, failures arrive as an
       // `error` frame inside a 200, and `drainTurn` handles those.
       const refusal = await failure(response);
+      const declared = turnRefusal(response.status, detailsOf(refusal));
       /* A 4xx proves the request was refused. For mention sends this includes
          the validation 400s whose words must go back beside the chips. A 5xx,
-         a timeout or a lost response is uncertain: the write may have landed. */
-      if (response.status === 409 || (Array.isArray(payload.mentions) && response.status >= 400 && response.status < 500)) {
-        sink.refused(refusal.message);
+         a timeout or a lost response is uncertain: the write may have landed.
+         **Except an allowance's refusal**: a 429 or 503 carrying a declared
+         `reason` is the cite-check allowance saying no before anything was
+         written (src/cite-check.ts), as definite as a 409. A proxy's bare 503
+         declares no reason and stays uncertain. */
+      if (
+        response.status === 409 ||
+        ((response.status === 429 || response.status === 503) && declared.reason !== undefined) ||
+        (Array.isArray(payload.mentions) && response.status >= 400 && response.status < 500)
+      ) {
+        sink.refused(refusal.message, declared);
         return;
       }
       /* The refusal itself, not a plain `Error` with its words copied in: its

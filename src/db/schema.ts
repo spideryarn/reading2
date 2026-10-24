@@ -4675,8 +4675,9 @@ export const chatThreads = spideryarn.table(
      * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
      *
      * - `origin_mode`: which mode. `reception` (a lens), `sources-claims` (a
-     *   claim), `glossary`, `bibliography` and `ideas` are written; `summary`
-     *   is reserved. `citations` (a cited work) and `debate` (a claim or a
+     *   claim), `glossary`, `bibliography`, `ideas` and `cite-check` (a
+     *   citation's *Does it say that?*: a work id, its citing block and the
+     *   title, plan 261024m) are written; `summary` is reserved. `citations` (a cited work) and `debate` (a claim or a
      *   lens) are origins as written before 2026-10-09 (plan 261009w): still
      *   admitted, never written now, and read as `bibliography`, and by shape
      *   as `sources-claims` or `reception`, by `originFromColumns`
@@ -4752,7 +4753,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check')`,
     ),
     /* No mode, no origin: the original four shape columns mean nothing
        without it. The two Quiz columns have their own null-safe check below. */
@@ -4787,6 +4788,14 @@ export const chatThreads = spideryarn.table(
     check(
       "chat_threads_origin_item",
       sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+    ),
+    /* A citation's *Does it say that?*: the cited work's id, the citing block,
+       and the work's title as a snapshot; no lens (plan 261024m). The item
+       check above does not name this mode, so it passes there. Null-safe like
+       its neighbours. */
+    check(
+      "chat_threads_origin_cite_check",
+      sql`${t.originMode} is distinct from 'cite-check' or (${t.originItemId} is not null and ${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null)`,
     ),
     /* A mark in Learn › Quiz: the question's id and words, its batch, and the
        attempt it is about; no block, no lens (plan 261024i, stage 2). */
@@ -4879,6 +4888,20 @@ export const chatThreads = spideryarn.table(
     uniqueIndex("chat_threads_one_guide")
       .on(t.articleId)
       .where(sql`${t.kind} = 'guide'`),
+    /**
+     * **One *Does it say that?* chat per cited work and citing paragraph**
+     * (plan docs/plans/261024m-citation-card-streams-a-note-on-what-this-paragraph-cites-the-work-for.md,
+     * GPT Sol's C1). Two tabs resting on the same citation at once must not
+     * buy two Opus turns. The backstop, not the first line: the route refuses
+     * a second with a 409 carrying the first's id, and `withTurn` decides it
+     * again under the article row lock; a violation that still reaches here is
+     * translated by name into the same refusal (`pgChatStore.begin`), never a
+     * 500. Deleting the chat frees the key. On `article_id`, like the
+     * single-thread indexes above: the server resolves threads per article.
+     */
+    uniqueIndex("chat_threads_one_cite_check")
+      .on(t.articleId, t.originItemId, t.originBlockId)
+      .where(sql`${t.originMode} = 'cite-check'`),
     /**
      * The thread list, newest first — what the chat panel opens with. Made by
      * hand in drizzle/0003_reader_state_owner_fks.sql and declared here on
@@ -8696,7 +8719,7 @@ export const rateLimitEvents = spideryarn.table(
        rewrites or deletes those rows, then drops it from this list. */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate', 'cite-check')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

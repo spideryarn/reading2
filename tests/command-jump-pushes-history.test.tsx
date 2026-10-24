@@ -208,7 +208,10 @@ describe("the reading view's wiring (source-level, and labelled as such)", () =>
        Since plan 261004g it is `showBand`: the same plain setter, plus
        bringing back a band that had stepped aside on a narrow window. */
     expect(call).toMatch(/openGlossary: \(\) => showBand\("glossary"\),/);
-    expect(reader).toMatch(/const showBand = useCallback\([\s\S]*?if \(target !== mode\) void setMode\(target\);/);
+    /* Since plan 261024r the switch also leaves the chat (`leaveTheChat`). */
+    expect(reader).toMatch(
+      /const showBand = useCallback\([\s\S]*?if \(target !== mode\) \{\s*leaveTheChat\(target\);\s*void setMode\(target\);/,
+    );
     expect(reader).toMatch(/<Dock[\s\S]*?executor=\{executor\}/);
   });
 });

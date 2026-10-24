@@ -571,3 +571,62 @@
   font-family: var(--font-ui);
   font-size: max(var(--text-min), 0.72rem);
 }
+
+/* **A citation's *Does it say that?*, started by a rest on the card** —
+   ProseHoverCard.tsx § `CiteCheckSection`, plan 261024m. The model's words,
+   so the relation section's rule (`.prose-card-part-relation`): a claim that
+   is ours, not the author's. The header carries what the chat is doing on the
+   right, quiet, so the 15–30 s before the answer is not a blank. */
+.prose-card-check { border-left: 2px solid var(--highlight); padding-left: 0.5rem; }
+.prose-card-check-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.2rem;
+}
+.prose-card-check-head .prose-card-label { margin: 0; }
+.prose-card-check-activity {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.76rem);
+  font-style: italic;
+}
+/* The answer runs 300–400 words with headings and lists, so it scrolls past
+   about sixteen lines rather than making the card taller than the window;
+   Continue in Chat is where it is read in full. Drawn by Chat's
+   `CitedMarkdown`, with Chat's spacing for its blocks, smaller. */
+.prose-card-check-answer {
+  max-height: calc(16 * 1.45 * 0.85rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.prose-card-check-answer > :first-child { margin-top: 0; }
+.prose-card-check-answer > :last-child { margin-bottom: 0; }
+.prose-card-check-answer p:not([class]),
+.prose-card-check-answer .fmt-list,
+.prose-card-check-answer .fmt-quote { margin: 0 0 0.45rem; }
+.prose-card-check-answer .fmt-list { padding-left: 1.1rem; }
+.prose-card-check-answer .fmt-h {
+  margin: 0.55rem 0 0.2rem;
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+/* A cap's sentence, a failure, or *still reading*: one line, plain. */
+.prose-card-check-line {
+  margin: 0.15rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.79rem);
+  overflow-wrap: break-word;
+}
+.prose-card-check-foot {
+  display: flex;
+  margin: 0.1rem 0 0;
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.79rem);
+}

@@ -76,6 +76,12 @@ describe("safeToReload", () => {
       expect(safeToReload()).toBe(false);
     });
 
+    it("a passage chat's unsent words", () => {
+      chatDraftsFor("an-article").setPassage("spya-passag", "half a passage question");
+      expect(reloadVeto()).toBe("chat-draft");
+      expect(safeToReload()).toBe(false);
+    });
+
     it("but not a box that was cleared, or holds only spaces", () => {
       const d = chatDraftsFor("an-article");
       d.setThread("thread-1", "half a question");

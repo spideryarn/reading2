@@ -97,16 +97,15 @@ import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
   citingSentences,
-  askDoesItSayThat,
   askAboutGlossaryEntry,
   askAboutIdea,
-  askAboutBlock,
   askAboutTerm,
   itemOrigin,
   askReceptionThroughLens,
   askInSources,
   askToCheckClaim,
 } from "../chat-handoff.js";
+import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
 import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
@@ -129,7 +128,9 @@ import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
 import { Dock, useActivateMode, useActivateSubMode } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { type CiteCheckSenders, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { citeCheckOrigin, onCiteCheckThread, pressCiteCheck } from "../cite-check.js";
+import { viewAsNonce } from "../lib/view-as.js";
 import type { CiteFocus } from "../BibliographyPanel.js";
 import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
@@ -507,6 +508,52 @@ export function Reader({
     setBandAway(false);
   }, [mode]);
   /**
+   * The floating chat, and the passage it is about.
+   *
+   * **One id, not two.** `?thread=` says which conversation is open and `mode`
+   * says how it is drawn — full width in chat mode, floating over the article
+   * anywhere else. An earlier draft of the plan added a `?chat=` beside it; a
+   * GPT-5.6 review pointed out it carries nothing `mode` does not already
+   * carry, and two ids that can disagree is a bug waiting to be written.
+   *
+   * `chatDraft` is the moment before there is a conversation at all: a passage
+   * the reader selected, or a paragraph they pressed, with no conversation
+   * stored and nothing spent. It is component state rather than a parameter
+   * because there is nothing to link to — and because the quote is the reader's selection,
+   * which docs/project/logging.md and chat-handoff.ts both say does not belong
+   * in an address.
+   */
+  const [thread, setThread] = useQueryState("thread", threadParam);
+  const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
+  const leavePassageChat = useCallback(() => setChatDraft(null), []);
+  /**
+   * **A reader's switch of mode leaves the chat beside the mode** — Greg,
+   * 2026-10-24 (spya-mj4b56): *"If I switch modes, I've switched away from
+   * it."* Until then `?thread=` survived every switch, and every mode but Chat
+   * and Learn drew it as the floating chat, so a conversation in Investigate
+   * or in Chat followed the reader into the next mode as a panel. So the
+   * conversation and an unsent passage chat both close, in the same pushed
+   * entry as the mode (nuqs merges the writes of one tick, and `push` wins),
+   * so Back brings them back. An unsent passage question is kept in the
+   * article's draft store (ChatDialog.tsx), so nothing typed is lost.
+   *
+   * **Not on the way to Chat**, which draws that very conversation in its band
+   * (*Open in full chat* is `setMode("chat")` for the same reason). Callers
+   * call this only for a change of mode: a sub-mode inside the mode the reader
+   * is in keeps it, as the band's own toggles do. Navigations that decide
+   * `?thread=` themselves (`openOrigin`, the item modes' ways) close only the
+   * local passage target here and keep their one combined URL write.
+   * docs/plans/261024r-switching-mode-leaves-the-chat.md.
+   */
+  const leaveTheChat = useCallback(
+    (target: Mode) => {
+      if (target === "chat") return;
+      leavePassageChat();
+      void setThread(null);
+    },
+    [leavePassageChat, setThread],
+  );
+  /**
    * **Open a band from somewhere that is not the Dock** — a card in the prose,
    * the command bar, a hand-off to Chat. The band asked for may be the one
    * already open and stepped aside, and then the effect above never runs:
@@ -522,9 +569,12 @@ export function Reader({
   const showBand = useCallback(
     (target: BandMode) => {
       setBandAway(false);
-      if (target !== mode) void setMode(target);
+      if (target !== mode) {
+        leaveTheChat(target);
+        void setMode(target);
+      }
     },
-    [mode, setMode],
+    [mode, setMode, leaveTheChat],
   );
   /* **Browser Back does not bring the band back**, deliberately. A `popstate`
      rule was in the plan and GPT Sol took it out: while the band is away the
@@ -965,24 +1015,6 @@ export function Reader({
      question does not arise. A module constant rather than a fresh `[]`,
      because the band memoises on it by identity. reader-capability.ts § searches. */
   const searches = capability.kind === "visitor" ? capability.searches : NO_SEARCHES;
-  /**
-   * The floating chat, and the passage it is about.
-   *
-   * **One id, not two.** `?thread=` says which conversation is open and `mode`
-   * says how it is drawn — full width in chat mode, floating over the article
-   * anywhere else. An earlier draft of the plan added a `?chat=` beside it; a
-   * GPT-5.6 review pointed out it carries nothing `mode` does not already
-   * carry, and two ids that can disagree is a bug waiting to be written.
-   *
-   * `chatDraft` is the moment before there is a conversation at all: a passage
-   * the reader selected, or a paragraph they pressed, with nothing stored and
-   * nothing spent. It is component state rather than a parameter because there
-   * is nothing to link to — and because the quote is the reader's selection,
-   * which docs/project/logging.md and chat-handoff.ts both say does not belong
-   * in an address.
-   */
-  const [thread, setThread] = useQueryState("thread", threadParam);
-  const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
   /* A saved comment can finish after the reader has changed mode. The action
      it releases must use the mode that is committed then, not the one in the
      render where Save was pressed. */
@@ -1009,8 +1041,8 @@ export function Reader({
    * Not `chatDraft`, and that is Greg's call rather than tidiness: asked on
    * 2026-09-11 whether the question should go into the conversation already
    * there or a new one, he said *"fresh"*. `chatDraft` is the floating panel's
-   * ordinary draft about a passage, and it is left exactly as it was — suppressed
-   * in chat mode, back when the reader leaves. A completed passage question asked
+   * ordinary draft about a passage. A hand-off to Chat leaves it in place but
+   * suppresses it there; a later switch to another mode closes it. A completed passage question asked
    * while a conversation mode is open joins this handoff through
    * `askPassageInChat` below. The handoff lives for one commit: the chat band takes
    * it, opens a new conversation with it, and clears it.
@@ -1065,7 +1097,8 @@ export function Reader({
           question: target.question,
         }),
         "send",
-        undefined,
+        /* A citation's *Does it say that?* carries its identity (plan 261024m). */
+        target.origin,
         {
           anchor: target.anchor,
           ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
@@ -1163,18 +1196,22 @@ export function Reader({
       handToChat(askAboutCitedWork(work, citing), "send", itemOrigin("bibliography", work.id, work.title)),
     [handToChat],
   );
-  /* **And *Does it say that?* on a citation's card** (plan 261011w): a fresh
-     chat anchored on the citing paragraph, not an item's chat, so it stores no
-     origin and is never reopened; the same work cited in two paragraphs is two
-     questions. Chat answers it by reading the paper (`read_cited_work`). */
-  const checkCitedWorkInChat = useCallback(
-    (work: Pick<CitedWork, "title" | "authors" | "year">, blockId: BlockId) =>
+  /* **And *Does it say that?* on a citation's card** (plan 261011w): a chat
+     anchored on the citing paragraph. Since plan 261024m it stores a
+     `cite-check` origin, one chat per work and paragraph, so a rest on the
+     card and a second press find it; the same work cited in two paragraphs is
+     still two questions. Chat answers it by reading the paper
+     (`read_cited_work`). This starts one; `checkCitedWork` below decides
+     whether to. */
+  const startCiteCheckChat = useCallback(
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">, blockId: BlockId) =>
       askPassageInChat({
         kind: "draft",
         anchor: { blockId },
         opening: article.blocks.find((block) => block.id === blockId)?.text ?? "",
         question: askDoesItSayThat(work),
         sendNow: true,
+        origin: citeCheckOrigin(work, blockId),
       }),
     [article.blocks, askPassageInChat],
   );
@@ -1221,10 +1258,30 @@ export function Reader({
       if (taken.target === "chat" && taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
       const origin = taken.target === "chat" ? taken.origin : undefined;
       if (origin) {
+        const previous = handedItemChats.current.find((h) => sameOrigin(h.origin, origin));
         handedItemChats.current = [
           ...handedItemChats.current.filter((h) => !sameOrigin(h.origin, origin)),
           { origin, id },
         ];
+        /* A cite-check's card reads chatAnchors directly, unlike the item
+           buttons' short-lived bridge above. Tell it about a manual press as
+           soon as Chat names the thread, including a server id correction. */
+        if (origin.mode === "cite-check") {
+          if (previous && previous.id !== id) owner?.chatAnchors.rename(previous.id, id);
+          else if (!previous) {
+            const now = new Date().toISOString();
+            owner?.chatAnchors.add({
+              id,
+              title: taken.question.slice(0, 60),
+              createdAt: now,
+              updatedAt: now,
+              anchor: { blockId: origin.blockId },
+              origin,
+              kind: "chat",
+              turns: 1,
+            });
+          }
+        }
       }
     },
     [owner, slug],
@@ -1236,8 +1293,9 @@ export function Reader({
     handedItemChats.current = handedItemChats.current.filter(
       (handed) => handed.id !== id || !sameOrigin(handed.origin, origin),
     );
+    if (origin.mode === "cite-check") owner?.chatAnchors.drop(id);
     refusedHandoffs.current.add(id);
-  }, [slug]);
+  }, [owner, slug]);
   /**
    * **A handoff the server refused is not the item's chat**, though its draft
    * still holds the origin (so a resend from that composer keeps it). The
@@ -1320,13 +1378,17 @@ export function Reader({
   const openQuizAt = useCallback(
     (batchId: string, questionId: BlockId) => {
       setQuizArrival({ batchId, questionId });
-      if (!inQuiz.current)
+      if (!inQuiz.current) {
+        /* `setQuizNav` chooses Quiz's own `thread=null`; only the local
+           passage target remains for Reader to close. */
+        leavePassageChat();
         void setQuizNav({ mode: "learn", learn: "quiz", thread: null }, { history: "push" });
+      }
       /* A band that had stepped aside on a narrow window comes back: the reader
          has asked to answer. */
       setBandAway(false);
     },
-    [setQuizNav],
+    [leavePassageChat, setQuizNav],
   );
   /**
    * The passage the reader has just selected, before they have saved anything.
@@ -1370,8 +1432,9 @@ export function Reader({
    * about state. Chat wins, matching how an overlapping mark resolves.
    *
    * Suppressed in chat mode, where the band already shows that conversation and
-   * a floating copy on top of itself is nonsense. The parameter stays, so
-   * leaving the mode brings the panel back where the reader left it.
+   * a floating copy on top of itself is nonsense. Leaving Chat for another
+   * mode clears the parameter (`leaveTheChat`, since 2026-10-24), so the
+   * conversation does not follow the reader out as a panel.
    */
   const overlay: ChatTarget | null =
     /* **`!owner` first, and it is not redundant.** A visitor's `chatDraft` is
@@ -1383,7 +1446,7 @@ export function Reader({
       ? null
       : (chatDraft ??
         /* **Only a chat may be opened here, and that is not a tidy-up.**
-           `?thread=` survives leaving the mode, so a pasted
+           `?thread=` can arrive beside any mode, so a pasted
            `?mode=toc&thread=<a Learn thread>` used to mount this dialog over
            a Learn conversation — chat's UI and composer rather than Learn's, and the
            next question answered with chat's prompt. Nothing on screen would
@@ -1656,13 +1719,14 @@ export function Reader({
         case "term":
           openTermInGlossary(target.id);
           return;
+        /* `showBand`, which leaves the chat beside Skim (`leaveTheChat`). */
         case "idea":
           void setIdeaId(target.id);
-          void setMode("ideas");
+          showBand("ideas");
           return;
         case "event":
           void setEventId(target.id);
-          void setMode("timeline");
+          showBand("timeline");
           return;
         default: {
           const never: never = target;
@@ -1670,7 +1734,7 @@ export function Reader({
         }
       }
     },
-    [canOpenFromStopCard, openTermInGlossary, setIdeaId, setEventId, setMode],
+    [canOpenFromStopCard, openTermInGlossary, setIdeaId, setEventId, showBand],
   );
 
   /**
@@ -1814,11 +1878,15 @@ export function Reader({
     (workId: string) => {
       setBandAway(false);
       setCiteFocus(focusOn(workId));
+      /* The combined URL write below already decides which conversation is
+         open. On an actual mode change, close Reader's non-URL passage arm as
+         well; a move between Sources' own lists is still a sub-mode move. */
+      if (mode !== "sources") leavePassageChat();
       if (mode !== "sources" || sourcesView !== "bibliography" || thread !== null) {
         void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
       }
     },
-    [mode, sourcesView, thread, setSourcesWay],
+    [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
   );
   /**
    * ***Open in Sources* on a citation's card in the prose — and, for a work
@@ -1844,11 +1912,12 @@ export function Reader({
     (findingId: string) => {
       setBandAway(false);
       setFindingFocus(focusOn(findingId));
+      if (mode !== "sources") leavePassageChat();
       if (mode !== "sources" || sourcesView !== "investigate" || thread !== null) {
         void setSourcesWay({ mode: "sources", sources: "investigate", thread: null }, { history: "push" });
       }
     },
-    [mode, sourcesView, thread, setSourcesWay],
+    [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
   );
   const openCitedWorkFromCard = useMemo(
     () => openFromCiteCard(openBibliographyWork, findWebNote),
@@ -1884,14 +1953,16 @@ export function Reader({
     (origin: ThreadOrigin) => {
       switch (origin.mode) {
         case "glossary":
-          /* `?term=` and the gate lowered if it hides the entry. The thread is
-             cleared in the same tick, which nuqs sends as one entry. */
-          void setThread(null);
+          /* `?term=` and the gate lowered if it hides the entry. `showBand`
+             clears the chat in the same tick, which nuqs sends as one entry. */
           openTermAndLand(origin.itemId);
           return;
         /* Bibliography's cited work (its origin said `citations` until 2026-10-09,
            plan 261009w; the server reads that word as this one). */
         case "bibliography":
+        /* A citation's *Does it say that?* goes back to the work it checked,
+           where its row in Bibliography lists the paragraphs that cite it. */
+        case "cite-check":
           openBibliographyWork(origin.itemId);
           return;
         case "ideas":
@@ -1900,12 +1971,16 @@ export function Reader({
           setOpenOccurrence(null);
           setIdeaFocus(focusOn(origin.itemId));
           setBandAway(false);
+          leavePassageChat();
           void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
           return;
         /* A lens's origin lands on Investigate, a claim's on Claims (both `debate`
            until plan 261009w's Stage 3). */
         case "reception":
           setBandAway(false);
+          /* This destination keeps the current conversation. A passage draft
+             hidden under Chat must not outrank it beside Investigate. */
+          leavePassageChat();
           /* A question is not in the article: *Your questions* is Investigate's (it
              was Reception's angle box until plan 261020n, and an angle chat
              made then lands here too, where it is now listed). **`?thread=`
@@ -1920,6 +1995,7 @@ export function Reader({
         case "sources-claims":
           setBandAway(false);
           setClaimFocus(focusOn(claimFocusKey(origin)));
+          leavePassageChat();
           void setSourcesWay(
             { mode: "sources", sources: "claims", bears: null, receptionthread: null, thread: null },
             { history: "push" },
@@ -1937,7 +2013,7 @@ export function Reader({
         }
       }
     },
-    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, setThread, openQuizAt],
+    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, leavePassageChat, openQuizAt],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -2916,6 +2992,65 @@ export function Reader({
     },
     [chatSummaries, mode, showBand, openClaimChat, slug],
   );
+  /* **Open a thread where *Ask in chat* reopens an item's chat** — beside the
+     mode, or in Chat's band from Chat and Learn. A citation card's *Continue
+     in Chat*, and the press that finds a check already running (plan 261024m). */
+  const openThreadInChat = useCallback(
+    (threadId: string) => {
+      if (mode === "learn" || mode === "chat") showBand("chat");
+      openClaimChat(threadId);
+    },
+    [mode, showBand, openClaimChat],
+  );
+  /**
+   * ***Does it say that?* on a citation's card, routed through the card's
+   * own check** (plan 261024m, § After GPT Sol's review, last bullet). A chat
+   * for this work and paragraph that the summaries or the check know is
+   * opened; a check still starting is adopted, and opened once it has a
+   * thread; otherwise the chat is started as before, now with its origin, so
+   * the next rest finds it. The press also cancels a resting card's timer.
+   * A press is never capped: it sends no `auto`.
+   */
+  const checkCitedWork = useCallback(
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">, blockId: BlockId) => {
+      const decided = pressCiteCheck({ slug, workId: work.id, blockId });
+      if (reopenItemChat(citeCheckOrigin(work, blockId))) return;
+      if ("open" in decided) {
+        openThreadInChat(decided.open);
+        return;
+      }
+      if ("wait" in decided) {
+        void decided.wait.then((after) => {
+          if ("open" in after) openThreadInChat(after.open);
+          else if ("start" in after) startCiteCheckChat(work, blockId);
+        });
+        return;
+      }
+      startCiteCheckChat(work, blockId);
+    },
+    [slug, reopenItemChat, openThreadInChat, startCiteCheckChat],
+  );
+  /* The card's check tells us of each thread it begins and settles, so Chat's
+     list, the button's reuse and the marks hear of it (plan 261024m). */
+  useEffect(() => {
+    if (!refreshChats) return;
+    return onCiteCheckThread(() => refreshChats());
+  }, [refreshChats]);
+  /* What the prose card needs to start the check by itself: the owner's, and
+     not in view-as, where nothing is spent on the owner's behalf. */
+  const citeCheckSenders = useMemo<CiteCheckSenders | null>(
+    () =>
+      owner && viewAsNonce() === null
+        ? {
+            slug,
+            summaries: chatSummaries,
+            summariesLoaded: chatSummariesLoaded,
+            onContinue: openThreadInChat,
+            onRefresh: () => refreshChats?.(),
+          }
+        : null,
+    [owner, slug, chatSummaries, chatSummariesLoaded, openThreadInChat, refreshChats],
+  );
   const askEntry = useCallback(
     (entry: Pick<GlossaryEntry, "id" | "name">) => {
       if (!reopenItemChat(itemOrigin("glossary", entry.id, entry.name))) askGlossaryEntryInChat(entry);
@@ -3031,9 +3166,9 @@ export function Reader({
   const marginCiteActions = useMemo<MarginCiteSenders | null>(
     () =>
       isOwner
-        ? { onAsk: askWork, onCheck: checkCitedWorkInChat, onOpen: openCitedWorkFromCard, onJump: jumpTo }
+        ? { onAsk: askWork, onCheck: checkCitedWork, onOpen: openCitedWorkFromCard, onJump: jumpTo }
         : null,
-    [isOwner, askWork, checkCitedWorkInChat, openCitedWorkFromCard, jumpTo],
+    [isOwner, askWork, checkCitedWork, openCitedWorkFromCard, jumpTo],
   );
   /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
   const ideaChats = useMemo(
@@ -3743,6 +3878,7 @@ export function Reader({
               onHandoffThreadGone={handoffThreadGone}
               onSettled={refreshChats}
               onOrigin={openOrigin}
+              onLeaveForLearn={leavePassageChat}
               articleTitle={article.meta.title}
             />
             </ChatSearchHere>
@@ -4230,7 +4366,10 @@ export function Reader({
         mode={mode}
         slug={slug}
         owner={owner !== null}
-        onPlain={() => void setMode("plain")}
+        onPlain={() => {
+          leaveTheChat("plain");
+          void setMode("plain");
+        }}
       >
         {content}
       </ModeBoundary>
@@ -4319,6 +4458,7 @@ export function Reader({
          docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
       if (!toggle && marginOpen && !press.closeBand) return;
       if (press.closeBand) {
+        leaveTheChat("plain");
         void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
         setBandAway(false);
       } else {
@@ -4338,11 +4478,13 @@ export function Reader({
            setter here would add an invisible history entry and make the
            reader press Back twice to leave the article. */
         if (mode === "plain" && !marginOpen) return;
+        if (mode !== "plain") leaveTheChat("plain");
         void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
         setBandAway(false);
         return;
       }
       if (press === "close") {
+        leaveTheChat("plain");
         void setMode("plain");
         return;
       }
@@ -4362,6 +4504,9 @@ export function Reader({
        address and the rendered mode do not move. The activation and
        recovery paths do not depend on that write — the token minted in
        Dock is their signal. */
+    /* **A change of mode leaves the chat** (`leaveTheChat`); a sub-mode row
+       of the mode already open does not, as the band's own toggles do not. */
+    if (next !== mode) leaveTheChat(next);
     if (sub === undefined) {
       if (next !== mode) {
         /* **`mode` alone, with one exception**: returning to Learn
@@ -5131,7 +5276,9 @@ export function Reader({
            261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
         onAskTerm={owner ? askEntry : null}
         onAskCitedWork={owner ? askWork : null}
-        onCheckCitedWork={owner ? checkCitedWorkInChat : null}
+        onCheckCitedWork={owner ? checkCitedWork : null}
+        /* And the same check started by a rest on the card (plan 261024m). */
+        citeCheck={citeCheckSenders}
         /* *Open in Sources* on a cited work's card: Bibliography, its row in
            view (plan 261010e). Owner only, as the marks are. On a row with
            no note it also starts the one web search (plan 261018o). */

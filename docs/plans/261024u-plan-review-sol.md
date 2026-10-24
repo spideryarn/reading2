@@ -1,0 +1,11 @@
+Security boundary is sound: the model selects only from owner-scoped rows for this article, while code builds the destination. I found four plan gaps.
+
+F1 — Medium — Typed-Chat gating and thread plumbing are underspecified. `Conversation` also renders Guide, Recall, and Explore, while ChatPanel’s `threads` excludes Learn and `listed` excludes Guide. A generic renderer change could therefore either enable links outside scope or omit kinds. Pass `everyThread` explicitly as `linkableThreads`, and create the map only when `kind === "chat"`, excluding Candidates and the current thread.
+
+F2 — Medium — `<Link>` calls `navigate()`, which scrolls the window to the top. Because the target carries the same `?at=`, its landing effect may not run again, losing the article position despite “in context.” Give `ThreadRef` a plain-click path using `navigate(href, { scroll: false })`, while leaving modified clicks to the browser.
+
+F3 — Medium — Collision handling is specified only client-side. Simply adding eligible thread IDs to `unknownCitedIds`’ known set and counting them separately can count one colliding ID as both a block and a conversation, although the client renders plain text. Compute the block/thread collision set server-side too; exclude it from both destination counters and count it as ambiguous. Test open-block/thread and mentioned-block/thread collisions.
+
+F4 — Low — The existing “client and server agree” test equates `citableText` IDs with `.block-ref` chips. It will not fail immediately because existing renders pass no thread set, but its stated invariant becomes false. Extend it to classify block, cross-article, and thread chips, including links/code/command-token exclusions. Also document that thread links deliberately push—an exception to `threadParam`’s usual replace—and assert one Back returns to the source conversation.
+
+Push is preferable to replace here: it gives the requested return path. The address-driven effects already reconcile `heldOnList`, drafts, live hang-up/pending state, Guide, Learn rows, and the floating dialog. No callback route is simpler across both presentations.

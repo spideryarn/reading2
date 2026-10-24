@@ -35,6 +35,9 @@ export function titleFromOrigin(origin: ThreadOrigin): string {
       return titleFrom(`Cited work: ${origin.quote}`);
     case "ideas":
       return titleFrom(`Idea: ${origin.quote}`);
+    /* The work's title: the question is the same for every one of them. */
+    case "cite-check":
+      return titleFrom(`Does it say that? ${origin.quote}`);
     case "quiz":
       return titleFrom(`Quiz: ${origin.quote}`);
     default: {

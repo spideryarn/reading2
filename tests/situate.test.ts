@@ -843,7 +843,7 @@ function countingAllowance() {
     finished: 0,
     async take(bucket: RateBucket, policy: RatePolicy): Promise<AllowanceTaken> {
       taken.push({ bucket, policy });
-      if (fills >= policy.fills) return { kind: "rate" };
+      if (fills >= policy.fills) return { kind: "rate", reason: "hour" };
       if (inFlight >= policy.concurrency) return { kind: "concurrency" };
       fills++;
       inFlight++;

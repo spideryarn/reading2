@@ -28,6 +28,7 @@ import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
 const SLUG = "a-piece";
 const AT = "2026-10-04T09:00:00.000Z";
 const BLOCK = "spya-dlgb01" as BlockId;
+const OTHER_BLOCK = "spya-dlgb02" as BlockId;
 
 const STORED: ChatThread = {
   id: "spya-dlgt01",
@@ -54,6 +55,7 @@ let threads: ChatThread[] = [STORED];
 const removed: string[] = [];
 const discarded: string[] = [];
 const sends: unknown[][] = [];
+let closes = 0;
 
 vi.mock("../src/web/useProfile.js", () => ({
   useProfile: () => ({ profile: null, loaded: true, save: () => {}, error: null }),
@@ -100,10 +102,12 @@ function mount(target: Target) {
       <ChatDialog
         slug={SLUG}
         at={null}
-        blocks={new Map([[BLOCK, "a science of bumps"]])}
+        blocks={new Map([[BLOCK, "a science of bumps"], [OTHER_BLOCK, "another passage"]])}
         target={target}
         onJump={() => {}}
-        onClose={() => {}}
+        onClose={() => {
+          closes += 1;
+        }}
         onThread={() => {}}
         onOpenFull={() => {}}
         onCreated={() => {}}
@@ -144,6 +148,7 @@ beforeEach(() => {
   removed.length = 0;
   discarded.length = 0;
   sends.length = 0;
+  closes = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -207,5 +212,85 @@ describe("the dialog's passage arm", () => {
     submit();
     expect(sends).toHaveLength(1);
     expect(sends[0]?.[3]).toMatchObject({ modality: "typed" });
+  });
+});
+
+/* **A passage's unsent words outlive the dialog** — a mode switch closes it
+   (docs/plans/261024r-switching-mode-leaves-the-chat.md, GPT Sol's F1), and
+   the words lived only in its state. They are kept in the article's store by
+   block, apart from any conversation's, and the block's chat brings them back. */
+describe("the dialog's passage arm, closed unsent", () => {
+  const draft = (extra: Partial<Extract<Target, { kind: "draft" }>> = {}): Target => ({
+    kind: "draft",
+    anchor: { blockId: BLOCK },
+    opening: "a science of bumps",
+    ...extra,
+  });
+
+  it("has its words back when the block's chat opens again", () => {
+    mount(draft());
+    type("half a question about bumps");
+    act(() => root.render(null));
+    mount(draft());
+    expect(box().value).toBe("half a question about bumps");
+  });
+
+  it("changes drafts when another block replaces it without unmounting the dialog", () => {
+    mount(draft());
+    type("about the first passage");
+    mount({
+      kind: "draft",
+      anchor: { blockId: OTHER_BLOCK },
+      opening: "another passage",
+      question: "about the second passage",
+    });
+    expect(box().value).toBe("about the second passage");
+  });
+
+  it("counts them as words the page holds", () => {
+    mount(draft());
+    type("half a question");
+    expect(chatDraftsFor(SLUG).holdsWords()).toBe(true);
+  });
+
+  it("gives way to a question handed in with the new press", () => {
+    mount(draft());
+    type("the old words");
+    act(() => root.render(null));
+    mount(draft({ question: "the new question" }));
+    expect(box().value).toBe("the new question");
+    act(() => root.render(null));
+    mount(draft());
+    expect(box().value).toBe("the new question");
+  });
+
+  it("keeps the words when the reader explicitly closes the panel", () => {
+    mount(draft());
+    type("keep this for later");
+    const close = host.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+    if (!close) throw new Error("the dialog drew no close button");
+    act(() => close.click());
+    expect(closes).toBe(1);
+    act(() => root.render(null));
+    mount(draft());
+    expect(box().value).toBe("keep this for later");
+  });
+
+  it("does not erase other unsent words when a handed-in question sends itself", () => {
+    chatDraftsFor(SLUG).setPassage(BLOCK, "a different half-written question");
+    mount(draft({ question: "Does it say that?", sendNow: true }));
+    expect(sends).toHaveLength(1);
+    act(() => root.render(null));
+    mount(draft());
+    expect(box().value).toBe("a different half-written question");
+  });
+
+  it("forgets them once they are sent", () => {
+    mount(draft());
+    type("What does this mean?");
+    submit();
+    act(() => root.render(null));
+    mount(draft());
+    expect(box().value).toBe("");
   });
 });
