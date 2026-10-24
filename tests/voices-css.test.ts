@@ -243,6 +243,7 @@ const VOICES_BY_SURFACE: Record<Surface, readonly string[] | { none: string }> =
   "public-library": [".voice-author"],
   add: [".voice-reader", ".prof-box-input"],
   "add-upload": [".voice-reader", ".prof-box-input"],
+  "add-from-extension": { none: OURS },
   profile: [".prof-box-input", ".prof-interim", ".voice-author"],
   /* the reading column's specimen is a sample of an article; the text-roles
      matrix sets one sample in each voice a role meets */

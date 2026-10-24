@@ -153,6 +153,16 @@ export type Route =
    */
   | { kind: "add-upload"; uploadId: string }
   /**
+   * Take the page the Chrome extension captured, and upload it —
+   * `/add-from-extension`. See AddFromExtension.tsx.
+   *
+   * Not under `/add/`, whose branch reads the rest of the path as a stranger's
+   * address, and carrying nothing: the page asks the extension for its capture,
+   * and the extension decides whether this tab may have it.
+   * docs/plans/261024q-chrome-extension-one-click-add-the-page.md.
+   */
+  | { kind: "add-from-extension" }
+  /**
    * The design reference — every primitive on one page. See DesignPage.tsx.
    *
    * **On the administrator's list since 2026-09-05** (`ADMIN_ONLY` below), which
@@ -390,6 +400,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   "public-library": false,
   add: false,
   "add-upload": false,
+  "add-from-extension": false,
   design: true,
   profile: false,
   login: false,
@@ -431,6 +442,7 @@ const VIEW_AS_ALLOWED: Record<Route["kind"], boolean> = {
   "public-library": false,
   add: false,
   "add-upload": false,
+  "add-from-extension": false,
   design: false,
   profile: false,
   login: false,
@@ -757,6 +769,13 @@ export function loginHref({ next, create = false }: { next?: string; create?: bo
  */
 export const PROFILE_HREF = "/profile";
 /**
+ * Where the Chrome extension sends the reader with a captured page. The
+ * extension's copy is `RECEIVE_PATH` in extension/src/handoff.ts, which checks
+ * the asking tab is exactly here; tests/extension-handoff.test.ts holds the
+ * two equal.
+ */
+export const EXTENSION_RECEIVE_HREF = "/add-from-extension";
+/**
  * The privacy policy. Linked from the landing page's footer and from
  * `/profile`, so both a stranger and a reader can find it.
  */
@@ -926,6 +945,9 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
   // Beside `design` and above `/read/` for the same reason: it is not about an
   // article, so the article regex must never get a chance at it.
   [PROFILE_HREF, "profile"],
+  /* Top level, and shares only its first letters with `/add`: the `/add/`
+     branch needs the slash, so it never sees this. */
+  [EXTENSION_RECEIVE_HREF, "add-from-extension"],
   // Beside `design` and `profile`, and for the same reason. Above `/read/`
   // because it is not about an article, and above the sign-in gate in App.tsx
   // because it is not about being signed in either.

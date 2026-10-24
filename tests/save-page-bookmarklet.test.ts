@@ -19,7 +19,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readArticle } from "../src/extract.js";
 import { decodeHtml, uploadedDocumentKind } from "../src/fetch.js";
 import { MAX_UPLOAD_BYTES } from "../src/uploads.js";
-import { bookmarkletHref, savePageForSpideryarn } from "../src/web/save-page-bookmarklet.js";
+import { bookmarkletHref, capturePage, savePageForSpideryarn } from "../src/web/save-page-bookmarklet.js";
 
 type Win = Window & typeof globalThis;
 
@@ -76,7 +76,7 @@ async function save(html: string, url?: string) {
   const { win, saved } = page(html, url);
   vi.useFakeTimers({ toFake: ["setTimeout"] });
   try {
-    savePageForSpideryarn(win, MAX_UPLOAD_BYTES);
+    savePageForSpideryarn(win, MAX_UPLOAD_BYTES, capturePage);
   } finally {
     vi.useRealTimers();
   }
@@ -98,7 +98,7 @@ describe("savePageForSpideryarn", () => {
     const { win, saved } = page(article());
     vi.useFakeTimers();
     try {
-      savePageForSpideryarn(win, MAX_UPLOAD_BYTES);
+      savePageForSpideryarn(win, MAX_UPLOAD_BYTES, capturePage);
       expect(saved.revoked).toEqual([]);
       vi.runAllTimers();
     } finally {
@@ -344,7 +344,7 @@ describe("savePageForSpideryarn", () => {
   it("names the file from a multibyte title, and the file is still a web page", async () => {
     const { win, saved } = page(article("", `<p>${prose}</p>`));
     win.document.title = "日本語の論文: a naïve study";
-    savePageForSpideryarn(win, MAX_UPLOAD_BYTES);
+    savePageForSpideryarn(win, MAX_UPLOAD_BYTES, capturePage);
     expect(saved.names).toEqual(["日本語の論文 a naïve study.html"]);
     const bytes = new Uint8Array(await saved.blobs[0]!.arrayBuffer());
     expect(uploadedDocumentKind(saved.names[0]!, bytes)).toBe("html");
@@ -361,11 +361,11 @@ describe("savePageForSpideryarn", () => {
       const html = article();
       const { bytes } = await sizeOf(html);
       const exact = page(html);
-      savePageForSpideryarn(exact.win, bytes);
+      savePageForSpideryarn(exact.win, bytes, capturePage);
       expect(exact.saved.names).toHaveLength(1);
       expect(exact.saved.alerts).toEqual([]);
       const over = page(html);
-      savePageForSpideryarn(over.win, bytes - 1);
+      savePageForSpideryarn(over.win, bytes - 1, capturePage);
       expect(over.saved.names).toEqual([]);
       expect(over.saved.alerts).toHaveLength(1);
     });
@@ -375,7 +375,7 @@ describe("savePageForSpideryarn", () => {
       const { bytes, chars } = await sizeOf(html);
       expect(bytes).toBeGreaterThan(chars);
       const { win, saved } = page(html);
-      savePageForSpideryarn(win, chars);
+      savePageForSpideryarn(win, chars, capturePage);
       expect(saved.names).toEqual([]);
       expect(saved.alerts).toHaveLength(1);
     });
@@ -388,7 +388,7 @@ describe("savePageForSpideryarn", () => {
 
   it("refuses a page over the cap, says so, and downloads nothing", () => {
     const { win, saved } = page(article());
-    savePageForSpideryarn(win, 1000);
+    savePageForSpideryarn(win, 1000, capturePage);
     expect(saved.alerts).toHaveLength(1);
     expect(saved.alerts[0]).toMatch(/too big/);
     expect(saved.names).toEqual([]);
@@ -456,7 +456,7 @@ describe("savePageForSpideryarn", () => {
     it(`names the file from the title ${JSON.stringify(title.slice(0, 20))}`, async () => {
       const { win, saved } = page(article());
       win.document.title = title;
-      savePageForSpideryarn(win, MAX_UPLOAD_BYTES);
+      savePageForSpideryarn(win, MAX_UPLOAD_BYTES, capturePage);
       expect(saved.names).toEqual([name]);
     });
   }
@@ -467,12 +467,12 @@ describe("bookmarkletHref", () => {
     const href = bookmarkletHref();
     expect(href.startsWith("javascript:")).toBe(true);
     const body = decodeURIComponent(href.slice("javascript:".length));
-    const m = /^void \(([\s\S]*)\)\(window,(\d+)\);$/.exec(body);
-    expect(m).not.toBeNull();
-    expect(Number(m![2])).toBe(MAX_UPLOAD_BYTES);
+    expect(body).toBe(
+      `void (${savePageForSpideryarn.toString()})(window,${MAX_UPLOAD_BYTES},${capturePage.toString()});`,
+    );
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const revived = new Function(`return (${m![1]})`)() as typeof savePageForSpideryarn;
-    expect(revived.toString()).toBe(savePageForSpideryarn.toString());
+    const revived = new Function(`return (${capturePage.toString()})`)() as typeof capturePage;
+    expect(revived.toString()).toBe(capturePage.toString());
   });
 
   it("run as a bookmark in a page, downloads the page and returns nothing", async () => {
@@ -482,5 +482,63 @@ describe("bookmarkletHref", () => {
     expect(result).toBeUndefined();
     expect(saved.names).toEqual(["Cell biology a study.html"]);
     expect(await text(saved.blobs[0]!)).toContain("The cells were cultured");
+  });
+});
+
+/**
+ * The capture alone, which the Chrome extension runs through `executeScript`
+ * (docs/plans/261024q-chrome-extension-one-click-add-the-page.md § Stage 1).
+ * The bookmarklet is `capturePage` then a download, so every test above
+ * already holds what is in the string; these hold its three answers.
+ */
+describe("capturePage", () => {
+  it("hands back the page, its file name and its size, and downloads nothing", () => {
+    const { win, saved } = page(article());
+    const got = capturePage(MAX_UPLOAD_BYTES, 0, win);
+    if (got.kind !== "page") throw new Error(`expected a page, got ${got.kind}`);
+    expect(got.filename).toBe("Cell biology a study.html");
+    expect(got.bytes).toBe(new TextEncoder().encode(got.html).length);
+    expect(got.html.startsWith('<!doctype html>\n<html><head><meta charset="utf-8">')).toBe(true);
+    expect(saved.names).toEqual([]);
+    expect(saved.alerts).toEqual([]);
+  });
+
+  it("is the same text the bookmarklet saves", async () => {
+    const got = capturePage(MAX_UPLOAD_BYTES, 0, page(article()).win);
+    const { saved } = await save(article());
+    expect(got.kind === "page" && got.html).toBe(await text(saved.blobs[0]!));
+  });
+
+  it("says too-big, with the size, one byte over the cap", () => {
+    const { win } = page(article());
+    const at = capturePage(MAX_UPLOAD_BYTES, 0, win);
+    if (at.kind !== "page") throw new Error("expected a page");
+    expect(capturePage(at.bytes, 0, win).kind).toBe("page");
+    expect(capturePage(at.bytes - 1, 0, win)).toEqual({ kind: "too-big", bytes: at.bytes });
+  });
+
+  it("says pdf for Chrome's PDF viewer, a document of type application/pdf", () => {
+    const { win } = page(article());
+    Object.defineProperty(win.document, "contentType", { value: "application/pdf" });
+    expect(capturePage(MAX_UPLOAD_BYTES, 0, win)).toEqual({ kind: "pdf" });
+  });
+
+  it("the bookmarklet says so for a PDF, and saves nothing", () => {
+    const { win, saved } = page(article());
+    Object.defineProperty(win.document, "contentType", { value: "application/pdf" });
+    savePageForSpideryarn(win, MAX_UPLOAD_BYTES, capturePage);
+    expect(saved.names).toEqual([]);
+    expect(saved.alerts[0]).toMatch(/PDF/);
+  });
+
+  it("with a message cap, refuses a page under the upload cap whose JSON is over it", () => {
+    /* A quote is one byte of HTML and two of JSON (GPT Sol, 261024q F9). */
+    const { win } = page(article("", `<p>${'"'.repeat(20_000)}</p>`));
+    const plain = capturePage(MAX_UPLOAD_BYTES, 0, win);
+    if (plain.kind !== "page") throw new Error("expected a page");
+    const json = new TextEncoder().encode(JSON.stringify(plain.html)).length;
+    expect(json).toBeGreaterThan(plain.bytes + 19_000);
+    expect(capturePage(MAX_UPLOAD_BYTES, json, win).kind).toBe("page");
+    expect(capturePage(MAX_UPLOAD_BYTES, json - 1, win)).toEqual({ kind: "too-big", bytes: plain.bytes });
   });
 });

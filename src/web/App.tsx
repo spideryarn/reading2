@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Library } from "./Library.js";
+import { AddFromExtension } from "./AddFromExtension.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { SignedInShell } from "./BackLink.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -285,6 +286,10 @@ export function App() {
        through SignInControls' one-shot store and back via `LeaveLogin`.
        OAuthConsentPage.tsx; docs/plans/261007p. */
     if (route.kind === "oauth-consent") return <SendToSignIn />;
+    /* The Chrome extension's page, the same way: the capture waits in the
+       extension for this tab, and signing in happens in this tab, so coming
+       back here afterwards still finds it (AddFromExtension.tsx). */
+    if (route.kind === "add-from-extension") return <SendToSignIn />;
     /* **The third exception, since 2026-09-02.** The privacy policy is for
        somebody deciding whether to sign in, so answering it with the pitch
        would be answering the one question the pitch is trying to get past.
@@ -487,7 +492,8 @@ function SendToSignIn() {
   useEffect(() => {
     /* StrictMode runs this twice, and the second run is already on `/login`:
        sending that address as `next` would lose the one that mattered. */
-    if (parseRoute(location.pathname).kind !== "oauth-consent") return;
+    const kind = parseRoute(location.pathname).kind;
+    if (kind !== "oauth-consent" && kind !== "add-from-extension") return;
     navigate(loginHref({ next: `${location.pathname}${location.search}` }), { replace: true });
   }, []);
   return null;
@@ -589,7 +595,10 @@ function SignedIn({
      but a running visit draws the page that posts nothing: `App` always has a
      visit for a signed-in reader at one of these addresses, and if it ever
      did not, starting an import is the wrong way to be wrong. */
-  if ((route.kind === "add" || route.kind === "add-upload") && addVisit?.kind !== "running")
+  if (
+    (route.kind === "add" || route.kind === "add-upload" || route.kind === "add-from-extension") &&
+    addVisit?.kind !== "running"
+  )
     return (
       <>
         <HomeLogo />
@@ -625,6 +634,15 @@ function SignedIn({
           source={{ kind: "upload", uploadId: route.uploadId }}
           readerId={user.id}
         />
+      </>
+    );
+  /* Keyed on the reader for the reason the add page is: it holds one reader's
+     captured page until it is sent. */
+  if (route.kind === "add-from-extension")
+    return (
+      <>
+        <HomeLogo />
+        <AddFromExtension key={user.id} readerId={user.id} />
       </>
     );
   if (route.kind === "design")

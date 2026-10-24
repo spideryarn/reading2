@@ -72,5 +72,9 @@ export function nextAddVisit(
 export function addAddress(route: Route): string | null {
   if (route.kind === "add") return `url ${route.url}`;
   if (route.kind === "add-upload") return `upload ${route.uploadId}`;
+  /* The extension's page holds a captured page for the reader it mounted for,
+     so it is stopped by a change of reader like the two above (GPT Sol,
+     docs/plans/261024q-chrome-extension-one-click-add-the-page.md F1). */
+  if (route.kind === "add-from-extension") return "extension";
   return null;
 }

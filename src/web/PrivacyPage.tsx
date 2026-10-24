@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "21 October 2026";
+const LAST_UPDATED = "24 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -190,6 +190,21 @@ export function PrivacyPage() {
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">The articles you add</strong> — we fetch the page
             you point us at and store its text and images. A PDF you upload is stored as a file.
+          </li>
+          {/* **The Chrome extension**, since 2026-10-24: the store requires a
+              privacy policy that says exactly what an extension takes, and this
+              is the one its listing links to. Kept in step with
+              extension/store/listing.md and docs/project/privacy.md.
+              docs/plans/261024q-chrome-extension-one-click-add-the-page.md (F8). */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">Pages you add with the Chrome extension</strong> —
+            when you press its button, and only then, the extension copies the page in that tab as
+            your browser shows it, with its address, and passes it to a Spideryarn tab, which adds
+            it to your shelf like a file you uploaded. That can include anything the page shows you,
+            such as your name in the site’s menu; scripts and password and hidden fields are left
+            out. The extension holds the copy in your browser for at most 15 minutes, until the
+            Spideryarn tab takes it, and sends nothing anywhere else. It reads no other tab and
+            nothing in the background, and it has no access to your Spideryarn account.
           </li>
           {/* **Quiz answers are on this list since 2026-10-05**, and until then
               the bullet ended "Quiz answers are the exception: they go to a

@@ -41,6 +41,7 @@ listed here; the names under each are files in `docs/project/`.
   two) · `structure-step.md` ·
   `article-images.md` (stage 4.5 — the figures the piece came with, hosted by us) ·
   `ingest-queue.md` (paste a URL, get an article) ·
+  `chrome-extension.md` (one click adds the page as the browser shows it) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
   `cost-tracking.md` (what a call cost, and how new AI work gets tracked for free) ·
   `admin-costs.md` (`/admin/costs`, and the cost analysis an agent runs when Greg asks) ·
