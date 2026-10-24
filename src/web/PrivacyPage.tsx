@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "21 October 2026";
+const LAST_UPDATED = "24 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -481,6 +481,20 @@ export function PrivacyPage() {
           When you open a cited work that has no note in Sources, from its card in the article, the
           web is searched once for that work’s own page: the search is sent its title, authors, year
           and DOI or arXiv identifier, and never the article’s text.
+          {/* Plan 261024o (src/situate.ts, src/situate-citers.ts): the owner's
+              press on Search the literature, behind the experimental switch.
+              The searches are planned by a model from the fenced title,
+              headings and opening, never the profile, and each is one forced
+              Exa search through OpenRouter; the citing works are OpenAlex's,
+              found by the DOI or the title as Cited by finds them.
+              docs/project/privacy.md § Search the literature. */}{" "}
+          When you press Search the literature, in Sources’ Investigate (an experimental feature),
+          your article is searched for in the wider literature. Its title, headings, opening and
+          details of works it cites go through OpenRouter to an AI that writes a dozen or so short
+          searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is
+          sent the article’s DOI, or the words of its title, to find papers that cite it. The whole
+          article, the search results, public abstracts, and what you wrote about yourself or why
+          you are reading then go through OpenRouter to the AI that writes the dossier.
         </p>
         <p>
           {/* **The honest version of the training question.** Everything here

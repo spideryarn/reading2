@@ -28,6 +28,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
+- [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's press
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
 - [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
@@ -834,6 +835,31 @@ page's address and title, and when, are kept in `citation_web_notes`, one row pe
 the article (deletion, export). Never shown to a visitor. The page says it in the Crossref
 paragraph and in Haiku's clause; `tests/privacy-page.test.ts` holds both, and `LAST_UPDATED` moved to
 19 October 2026.
+
+## Search the literature
+
+**Added 2026-10-24**, with [sources.md § Where this piece sits](sources.md#where-this-piece-sits)
+([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md),
+[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, at the top
+of Sources › Investigate and behind the experimental switch, searches **the article itself**: a
+model (Claude Sonnet, through OpenRouter) is shown the fenced title, headings, opening and the works
+Bibliography says it leans on, and writes a dozen or so short searches. Each search goes through
+OpenRouter to Exa (the quick-tier model running it sees the search too); Exa receives the query, not
+a separate copy of the title or passage. OpenAlex is asked for the papers that cite the piece by its
+DOI, or the words of its title, as Reception's *Cited by* asks it. The final Claude Sonnet read,
+again through OpenRouter, receives the whole fenced article, the search results, public abstracts
+from OpenAlex and the checked abstract words already stored for cited works. The reader's profile
+block — *About you* and/or *Why you are reading this piece* — is shown only to that final read, for
+ranking and questions, and never becomes a search (the plan's review, S4).
+
+So the press says what leaves before it is pressed (`SITUATE_DISCLOSURE`,
+[`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts)), and the page says *"When you
+press Search the literature, in Sources’ Investigate (an experimental feature), your article is
+searched for in the wider literature"*, then names the planner, Exa, OpenAlex and final read, in the
+indexes paragraph beside the cited-work search, whose *"never the article’s text"* stays true of
+that search alone. The dossier is stored on the article's
+revision (`article_revisions.situate`), goes with the article, and is never shown to a visitor.
+`LAST_UPDATED` moved to 24 October 2026, and `tests/privacy-page.test.ts` holds the sentence.
 
 ## A claim typed into Sources › Claims
 

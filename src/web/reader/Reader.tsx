@@ -1705,6 +1705,10 @@ export function Reader({
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
+  /* A Situate finding in Investigate's dossier (plan 261024o), asked for by a
+     margin *literature* line's *Open in Sources*. */
+  const [findingFocus, setFindingFocus] = useState<ItemFocus | null>(null);
+  const findingFocusTaken = useCallback((taken: ItemFocus) => setFindingFocus(focusTaken(taken)), []);
   /**
    * **Open Glossary on one term and bring its row into view** — the prose
    * card's *Open in Glossary* and its second tap, and a chat's way back to a
@@ -1749,6 +1753,9 @@ export function Reader({
           break;
         case "claim":
           setClaimFocus(null);
+          break;
+        case "finding":
+          setFindingFocus(null);
           break;
         default: {
           const unhandled: never = slot;
@@ -1802,6 +1809,26 @@ export function Reader({
    * the card's button is (the visitor's card gets `null`).
    */
   const findWebNote = owner?.bibliography.findWebNote;
+  /**
+   * **Open Investigate on one Situate finding** — a margin *literature*
+   * line's *Open in Sources* (plan 261024o § Marginalia). The focus and the
+   * move in one tick, as `openBibliographyWork` does; the dossier lands on the
+   * finding once it has drawn it (SituateDossier.tsx, `data-finding`), and a
+   * finding a newer search has replaced is dropped there, opening on the list.
+   * This is a destination press, not a chat's way back: an open conversation
+   * is cleared so it cannot cover the row, and Investigate's arrival does not
+   * reopen another while the focus is being served.
+   */
+  const openFindingInSources = useCallback(
+    (findingId: string) => {
+      setBandAway(false);
+      setFindingFocus(focusOn(findingId));
+      if (mode !== "sources" || sourcesView !== "investigate" || thread !== null) {
+        void setSourcesWay({ mode: "sources", sources: "investigate", thread: null }, { history: "push" });
+      }
+    },
+    [mode, sourcesView, thread, setSourcesWay],
+  );
   const openCitedWorkFromCard = useMemo(
     () => openFromCiteCard(openBibliographyWork, findWebNote),
     [openBibliographyWork, findWebNote],
@@ -2620,6 +2647,7 @@ export function Reader({
    */
   const marginViewer = capability.kind === "owner" ? "owner" : "visitor";
   const openAskedFromMargin = marginViewer === "owner" ? openAskedFromDrawer : undefined;
+  const openFindingFromMargin = marginViewer === "owner" ? openFindingInSources : undefined;
   const marginNotes = useMemo(() => {
     if (!marginRoom) return null;
     const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
@@ -2628,6 +2656,8 @@ export function Reader({
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
       relations: isOwner ? ownerFeed.relations : null,
       notes: isOwner ? ownerFeed.notes : null,
+      /* The owner's only, with the switch on: the feed reads it only then (plan 261024o). */
+      literature: isOwner ? ownerFeed.literature : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2655,6 +2685,7 @@ export function Reader({
             viewer={marginViewer}
             onOpenAsked={openAskedFromMargin}
             onJump={jumpTo}
+            onOpenFinding={openFindingFromMargin}
           />
         </>,
       );
@@ -2687,12 +2718,14 @@ export function Reader({
     isOwner,
     ownerFeed.relations,
     ownerFeed.notes,
+    ownerFeed.literature,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
     askedList,
     marginViewer,
     openAskedFromMargin,
+    openFindingFromMargin,
     jumpTo,
     chatCardBlock,
     chatCardThread,
@@ -3935,6 +3968,8 @@ export function Reader({
             onCiteFocusTaken={citeFocusTaken}
             claimFocus={claimFocus}
             onClaimFocusTaken={claimFocusTaken}
+            findingFocus={findingFocus}
+            onFindingFocusTaken={findingFocusTaken}
             onOpenWork={openBibliographyWork}
           />
         );

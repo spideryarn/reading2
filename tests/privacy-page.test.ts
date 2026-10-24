@@ -208,7 +208,18 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "21 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "24 October 2026"');
+  });
+
+  it("says what Search the literature sends, and to whom", () => {
+    /* Plan 261024o, GPT Sol's S4: Investigate's *Where this piece sits* names
+       separately what the planner and final reader see through OpenRouter,
+       the model-written searches Exa sees through OpenRouter, and the DOI or
+       title OpenAlex sees. The profile reaches only the final read. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When you press Search the literature, in Sources’ Investigate (an experimental feature), your article is searched for in the wider literature. Its title, headings, opening and details of works it cites go through OpenRouter to an AI that writes a dozen or so short searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is sent the article’s DOI, or the words of its title, to find papers that cite it. The whole article, the search results, public abstracts, and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.",
+    );
   });
 
   it("distinguishes the article-free open record from the request log", () => {

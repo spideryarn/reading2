@@ -98,6 +98,40 @@ describe("a note in the margin", () => {
     const text = card()?.textContent ?? "";
     expect(text).toContain(MARG_TIPS[key].head);
     expect(text).toContain(MARG_TIPS[key].how);
+    expect(text).not.toContain("Searched ");
+  });
+
+  it("says when a literature search ran, on that kind's card only", async () => {
+    paint([
+      {
+        kind: "literature",
+        items: [
+          {
+            finding: {
+              id: "si-one",
+              kind: "since",
+              blockId: "spya-aaaaaa",
+              quote: "the passage's words",
+              note: "Later work changes the picture.",
+              strength: "strong",
+              sources: [
+                {
+                  origin: "web",
+                  url: "https://example.org/paper",
+                  title: "A later paper",
+                  quote: "the source's words",
+                },
+              ],
+            },
+            searchedAt: "2026-10-24T09:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+    await hover(trigger());
+    const text = card()?.textContent ?? "";
+    expect(text).toContain(MARG_TIPS.literature.how);
+    expect(text).toMatch(/Searched .*2026\./);
   });
 
   it("tells a visitor whose comment it is", async () => {

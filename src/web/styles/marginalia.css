@@ -318,6 +318,14 @@ p.marg-shut {
 .marg-open-asked {
   justify-self: start;
 }
+/* Situate's findings (plan 261024o): the sources a finding rests on, then a
+   quiet "From the web" and the press into Investigate. */
+.marg-literature-from {
+  color: var(--ink-faint);
+}
+.marg-literature-open {
+  margin-left: 0.25rem;
+}
 .marg-open a {
   color: inherit;
   text-decoration: underline 1px var(--rule-strong);

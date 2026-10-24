@@ -192,8 +192,10 @@ export function claimFocusKey(claim: { blockId: string; quote: string }): string
   return `${claim.blockId} ${claim.quote}`;
 }
 
-/** The four lists a focus can bring a row into view in, one piece of state each (Reader.tsx). */
-export type FocusSlot = "term" | "cite" | "idea" | "claim";
+/** The lists a focus can bring a row into view in, one piece of state each (Reader.tsx).
+    `finding` is Investigate's *Where this piece sits* (plan 261024o): a margin
+    *literature* line's *Open in Sources*. */
+export type FocusSlot = "term" | "cite" | "idea" | "claim" | "finding";
 
 /** Where the reader is, as far as a focus cares: the mode, and Sources' sub-mode. */
 export interface FocusPlace {
@@ -209,7 +211,13 @@ function slotAt(place: FocusPlace): FocusSlot | null {
     case "ideas":
       return "idea";
     case "sources":
-      return place.sources === "bibliography" ? "cite" : place.sources === "claims" ? "claim" : null;
+      return place.sources === "bibliography"
+        ? "cite"
+        : place.sources === "claims"
+          ? "claim"
+          : place.sources === "investigate"
+            ? "finding"
+            : null;
     default:
       return null;
   }
