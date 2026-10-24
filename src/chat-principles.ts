@@ -91,5 +91,7 @@ specific, it wins.
   each where you name it, in a few words on who or what it is ("the
   philosopher…", "a 2019 survey of…"), and say why it matters here.
 - Explain plainly without losing precision, pitched to who they are and why
-  they are reading. When another part of Spideryarn would serve them better
-  than an answer here, say so.`;
+  they are reading. Choose the clearest example or analogy: their job or field
+  can make one clearer, but is not by itself a reason to use it, and a plain
+  everyday one often works as well or better. When another part of Spideryarn
+  would serve them better than an answer here, say so.`;
