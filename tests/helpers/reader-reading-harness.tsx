@@ -9,6 +9,8 @@ const readerReadingProbe = vi.hoisted(() => ({
   table: vi.fn(),
   spine: vi.fn(),
   gutter: vi.fn(),
+  dock: vi.fn(),
+  width: 1600,
 }));
 export { readerReadingProbe };
 
@@ -49,12 +51,19 @@ vi.mock("../../src/web/lib/supabase.js", () => ({
 }));
 vi.mock("../../src/web/Masthead.js", () => ({ Masthead: () => null }));
 /* The component only: Reader also calls the Dock's mode activators and
-   `visibleModes` for chat's `mode` chips (plan 261007j). */
+   `visibleModes` for chat's `mode` chips (plan 261007j). Its props are
+   recorded, so a test can press a mode through the `onMode` Reader hands it. */
 vi.mock("../../src/web/Dock.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/web/Dock.js")>()),
-  Dock: () => null,
+  Dock: (props: unknown) => {
+    readerReadingProbe.dock(props);
+    return null;
+  },
 }));
-vi.mock("../../src/web/reader/measure.js", () => ({ useWindowWidth: () => 1600, useRootFontPx: () => 16 }));
+vi.mock("../../src/web/reader/measure.js", () => ({
+  useWindowWidth: () => readerReadingProbe.width,
+  useRootFontPx: () => 16,
+}));
 vi.mock("../../src/web/marginalia/MarginaliaColumn.js", async (original) => {
   const actual = await original<typeof import("../../src/web/marginalia/MarginaliaColumn.js")>();
   return { ...actual, OwnerMarginFeed: () => null, MarginaliaHead: () => null, useMarginLayout: () => {} };
@@ -88,9 +97,15 @@ export function readingHarnessOwner(): Extract<ReaderCapability, { kind: "owner"
   } as unknown as Extract<ReaderCapability, { kind: "owner" }>;
 }
 
-export function readingHarnessView(capability: ReaderCapability, margin: boolean) {
+export function readingHarnessView(
+  capability: ReaderCapability,
+  margin: boolean,
+  /** More of the address to start from, and a listener for every write to it. */
+  opts: { search?: string; onUrlUpdate?: ComponentProps<typeof NuqsTestingAdapter>["onUrlUpdate"] } = {},
+) {
+  const search = `${margin ? "?margin=1&spine=1" : "?spine=1"}${opts.search ? `&${opts.search}` : ""}`;
   return (
-    <NuqsTestingAdapter searchParams={margin ? "?margin=1&spine=1" : "?spine=1"} hasMemory>
+    <NuqsTestingAdapter searchParams={search} hasMemory {...(opts.onUrlUpdate ? { onUrlUpdate: opts.onUrlUpdate } : {})}>
       <Reader slug="reading-harness" article={readingHarnessArticle} capability={capability} />
     </NuqsTestingAdapter>
   );

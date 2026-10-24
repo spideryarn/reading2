@@ -507,6 +507,52 @@ export function Reader({
     setBandAway(false);
   }, [mode]);
   /**
+   * The floating chat, and the passage it is about.
+   *
+   * **One id, not two.** `?thread=` says which conversation is open and `mode`
+   * says how it is drawn — full width in chat mode, floating over the article
+   * anywhere else. An earlier draft of the plan added a `?chat=` beside it; a
+   * GPT-5.6 review pointed out it carries nothing `mode` does not already
+   * carry, and two ids that can disagree is a bug waiting to be written.
+   *
+   * `chatDraft` is the moment before there is a conversation at all: a passage
+   * the reader selected, or a paragraph they pressed, with no conversation
+   * stored and nothing spent. It is component state rather than a parameter
+   * because there is nothing to link to — and because the quote is the reader's selection,
+   * which docs/project/logging.md and chat-handoff.ts both say does not belong
+   * in an address.
+   */
+  const [thread, setThread] = useQueryState("thread", threadParam);
+  const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
+  const leavePassageChat = useCallback(() => setChatDraft(null), []);
+  /**
+   * **A reader's switch of mode leaves the chat beside the mode** — Greg,
+   * 2026-10-24 (spya-mj4b56): *"If I switch modes, I've switched away from
+   * it."* Until then `?thread=` survived every switch, and every mode but Chat
+   * and Learn drew it as the floating chat, so a conversation in Investigate
+   * or in Chat followed the reader into the next mode as a panel. So the
+   * conversation and an unsent passage chat both close, in the same pushed
+   * entry as the mode (nuqs merges the writes of one tick, and `push` wins),
+   * so Back brings them back. An unsent passage question is kept in the
+   * article's draft store (ChatDialog.tsx), so nothing typed is lost.
+   *
+   * **Not on the way to Chat**, which draws that very conversation in its band
+   * (*Open in full chat* is `setMode("chat")` for the same reason). Callers
+   * call this only for a change of mode: a sub-mode inside the mode the reader
+   * is in keeps it, as the band's own toggles do. Navigations that decide
+   * `?thread=` themselves (`openOrigin`, the item modes' ways) close only the
+   * local passage target here and keep their one combined URL write.
+   * docs/plans/261024r-switching-mode-leaves-the-chat.md.
+   */
+  const leaveTheChat = useCallback(
+    (target: Mode) => {
+      if (target === "chat") return;
+      leavePassageChat();
+      void setThread(null);
+    },
+    [leavePassageChat, setThread],
+  );
+  /**
    * **Open a band from somewhere that is not the Dock** — a card in the prose,
    * the command bar, a hand-off to Chat. The band asked for may be the one
    * already open and stepped aside, and then the effect above never runs:
@@ -522,9 +568,12 @@ export function Reader({
   const showBand = useCallback(
     (target: BandMode) => {
       setBandAway(false);
-      if (target !== mode) void setMode(target);
+      if (target !== mode) {
+        leaveTheChat(target);
+        void setMode(target);
+      }
     },
-    [mode, setMode],
+    [mode, setMode, leaveTheChat],
   );
   /* **Browser Back does not bring the band back**, deliberately. A `popstate`
      rule was in the plan and GPT Sol took it out: while the band is away the
@@ -965,24 +1014,6 @@ export function Reader({
      question does not arise. A module constant rather than a fresh `[]`,
      because the band memoises on it by identity. reader-capability.ts § searches. */
   const searches = capability.kind === "visitor" ? capability.searches : NO_SEARCHES;
-  /**
-   * The floating chat, and the passage it is about.
-   *
-   * **One id, not two.** `?thread=` says which conversation is open and `mode`
-   * says how it is drawn — full width in chat mode, floating over the article
-   * anywhere else. An earlier draft of the plan added a `?chat=` beside it; a
-   * GPT-5.6 review pointed out it carries nothing `mode` does not already
-   * carry, and two ids that can disagree is a bug waiting to be written.
-   *
-   * `chatDraft` is the moment before there is a conversation at all: a passage
-   * the reader selected, or a paragraph they pressed, with nothing stored and
-   * nothing spent. It is component state rather than a parameter because there
-   * is nothing to link to — and because the quote is the reader's selection,
-   * which docs/project/logging.md and chat-handoff.ts both say does not belong
-   * in an address.
-   */
-  const [thread, setThread] = useQueryState("thread", threadParam);
-  const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
   /* A saved comment can finish after the reader has changed mode. The action
      it releases must use the mode that is committed then, not the one in the
      render where Save was pressed. */
@@ -1009,8 +1040,8 @@ export function Reader({
    * Not `chatDraft`, and that is Greg's call rather than tidiness: asked on
    * 2026-09-11 whether the question should go into the conversation already
    * there or a new one, he said *"fresh"*. `chatDraft` is the floating panel's
-   * ordinary draft about a passage, and it is left exactly as it was — suppressed
-   * in chat mode, back when the reader leaves. A completed passage question asked
+   * ordinary draft about a passage. A hand-off to Chat leaves it in place but
+   * suppresses it there; a later switch to another mode closes it. A completed passage question asked
    * while a conversation mode is open joins this handoff through
    * `askPassageInChat` below. The handoff lives for one commit: the chat band takes
    * it, opens a new conversation with it, and clears it.
@@ -1320,13 +1351,17 @@ export function Reader({
   const openQuizAt = useCallback(
     (batchId: string, questionId: BlockId) => {
       setQuizArrival({ batchId, questionId });
-      if (!inQuiz.current)
+      if (!inQuiz.current) {
+        /* `setQuizNav` chooses Quiz's own `thread=null`; only the local
+           passage target remains for Reader to close. */
+        leavePassageChat();
         void setQuizNav({ mode: "learn", learn: "quiz", thread: null }, { history: "push" });
+      }
       /* A band that had stepped aside on a narrow window comes back: the reader
          has asked to answer. */
       setBandAway(false);
     },
-    [setQuizNav],
+    [leavePassageChat, setQuizNav],
   );
   /**
    * The passage the reader has just selected, before they have saved anything.
@@ -1370,8 +1405,9 @@ export function Reader({
    * about state. Chat wins, matching how an overlapping mark resolves.
    *
    * Suppressed in chat mode, where the band already shows that conversation and
-   * a floating copy on top of itself is nonsense. The parameter stays, so
-   * leaving the mode brings the panel back where the reader left it.
+   * a floating copy on top of itself is nonsense. Leaving Chat for another
+   * mode clears the parameter (`leaveTheChat`, since 2026-10-24), so the
+   * conversation does not follow the reader out as a panel.
    */
   const overlay: ChatTarget | null =
     /* **`!owner` first, and it is not redundant.** A visitor's `chatDraft` is
@@ -1383,7 +1419,7 @@ export function Reader({
       ? null
       : (chatDraft ??
         /* **Only a chat may be opened here, and that is not a tidy-up.**
-           `?thread=` survives leaving the mode, so a pasted
+           `?thread=` can arrive beside any mode, so a pasted
            `?mode=toc&thread=<a Learn thread>` used to mount this dialog over
            a Learn conversation — chat's UI and composer rather than Learn's, and the
            next question answered with chat's prompt. Nothing on screen would
@@ -1656,13 +1692,14 @@ export function Reader({
         case "term":
           openTermInGlossary(target.id);
           return;
+        /* `showBand`, which leaves the chat beside Skim (`leaveTheChat`). */
         case "idea":
           void setIdeaId(target.id);
-          void setMode("ideas");
+          showBand("ideas");
           return;
         case "event":
           void setEventId(target.id);
-          void setMode("timeline");
+          showBand("timeline");
           return;
         default: {
           const never: never = target;
@@ -1670,7 +1707,7 @@ export function Reader({
         }
       }
     },
-    [canOpenFromStopCard, openTermInGlossary, setIdeaId, setEventId, setMode],
+    [canOpenFromStopCard, openTermInGlossary, setIdeaId, setEventId, showBand],
   );
 
   /**
@@ -1814,11 +1851,15 @@ export function Reader({
     (workId: string) => {
       setBandAway(false);
       setCiteFocus(focusOn(workId));
+      /* The combined URL write below already decides which conversation is
+         open. On an actual mode change, close Reader's non-URL passage arm as
+         well; a move between Sources' own lists is still a sub-mode move. */
+      if (mode !== "sources") leavePassageChat();
       if (mode !== "sources" || sourcesView !== "bibliography" || thread !== null) {
         void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
       }
     },
-    [mode, sourcesView, thread, setSourcesWay],
+    [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
   );
   /**
    * ***Open in Sources* on a citation's card in the prose — and, for a work
@@ -1844,11 +1885,12 @@ export function Reader({
     (findingId: string) => {
       setBandAway(false);
       setFindingFocus(focusOn(findingId));
+      if (mode !== "sources") leavePassageChat();
       if (mode !== "sources" || sourcesView !== "investigate" || thread !== null) {
         void setSourcesWay({ mode: "sources", sources: "investigate", thread: null }, { history: "push" });
       }
     },
-    [mode, sourcesView, thread, setSourcesWay],
+    [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
   );
   const openCitedWorkFromCard = useMemo(
     () => openFromCiteCard(openBibliographyWork, findWebNote),
@@ -1884,9 +1926,8 @@ export function Reader({
     (origin: ThreadOrigin) => {
       switch (origin.mode) {
         case "glossary":
-          /* `?term=` and the gate lowered if it hides the entry. The thread is
-             cleared in the same tick, which nuqs sends as one entry. */
-          void setThread(null);
+          /* `?term=` and the gate lowered if it hides the entry. `showBand`
+             clears the chat in the same tick, which nuqs sends as one entry. */
           openTermAndLand(origin.itemId);
           return;
         /* Bibliography's cited work (its origin said `citations` until 2026-10-09,
@@ -1900,12 +1941,16 @@ export function Reader({
           setOpenOccurrence(null);
           setIdeaFocus(focusOn(origin.itemId));
           setBandAway(false);
+          leavePassageChat();
           void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
           return;
         /* A lens's origin lands on Investigate, a claim's on Claims (both `debate`
            until plan 261009w's Stage 3). */
         case "reception":
           setBandAway(false);
+          /* This destination keeps the current conversation. A passage draft
+             hidden under Chat must not outrank it beside Investigate. */
+          leavePassageChat();
           /* A question is not in the article: *Your questions* is Investigate's (it
              was Reception's angle box until plan 261020n, and an angle chat
              made then lands here too, where it is now listed). **`?thread=`
@@ -1920,6 +1965,7 @@ export function Reader({
         case "sources-claims":
           setBandAway(false);
           setClaimFocus(focusOn(claimFocusKey(origin)));
+          leavePassageChat();
           void setSourcesWay(
             { mode: "sources", sources: "claims", bears: null, receptionthread: null, thread: null },
             { history: "push" },
@@ -1937,7 +1983,7 @@ export function Reader({
         }
       }
     },
-    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, setThread, openQuizAt],
+    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, leavePassageChat, openQuizAt],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -3743,6 +3789,7 @@ export function Reader({
               onHandoffThreadGone={handoffThreadGone}
               onSettled={refreshChats}
               onOrigin={openOrigin}
+              onLeaveForLearn={leavePassageChat}
               articleTitle={article.meta.title}
             />
             </ChatSearchHere>
@@ -4230,7 +4277,10 @@ export function Reader({
         mode={mode}
         slug={slug}
         owner={owner !== null}
-        onPlain={() => void setMode("plain")}
+        onPlain={() => {
+          leaveTheChat("plain");
+          void setMode("plain");
+        }}
       >
         {content}
       </ModeBoundary>
@@ -4319,6 +4369,7 @@ export function Reader({
          docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
       if (!toggle && marginOpen && !press.closeBand) return;
       if (press.closeBand) {
+        leaveTheChat("plain");
         void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
         setBandAway(false);
       } else {
@@ -4338,11 +4389,13 @@ export function Reader({
            setter here would add an invisible history entry and make the
            reader press Back twice to leave the article. */
         if (mode === "plain" && !marginOpen) return;
+        if (mode !== "plain") leaveTheChat("plain");
         void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
         setBandAway(false);
         return;
       }
       if (press === "close") {
+        leaveTheChat("plain");
         void setMode("plain");
         return;
       }
@@ -4362,6 +4415,9 @@ export function Reader({
        address and the rendered mode do not move. The activation and
        recovery paths do not depend on that write — the token minted in
        Dock is their signal. */
+    /* **A change of mode leaves the chat** (`leaveTheChat`); a sub-mode row
+       of the mode already open does not, as the band's own toggles do not. */
+    if (next !== mode) leaveTheChat(next);
     if (sub === undefined) {
       if (next !== mode) {
         /* **`mode` alone, with one exception**: returning to Learn

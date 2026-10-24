@@ -283,10 +283,21 @@ opposite of "the reader turned every column off".
 | unset | either | no conversation open |
 
 So "open in full chat" from the floating panel is `setMode("chat")` and nothing else — the id is
-already right — and leaving chat mode puts the panel back where the reader left it, for free.
+already right.
+
+**A reader's switch to any other mode clears `?thread=`**, in the same pushed entry, and closes an
+unsent passage chat with it (its words are kept by block). Until 2026-10-24 the id survived the
+switch and the conversation followed the reader into the next mode as the floating panel. Greg,
+spya-mj4b56: *"If I switch modes, I've switched away from it."* A sub-mode inside the mode the
+reader is in keeps it, and so does a switch to Chat, which draws that conversation in its band.
+Back brings it back with the rest of the address. The rule is `leaveTheChat` in
+[`Reader.tsx`](../../src/web/reader/Reader.tsx), called by the Dock's `onMode`, including
+Marginalia swapping a band out, and `showBand`. Navigations that write their destination and
+`?thread=` together also close Reader's local passage target themselves —
+[261024r](../plans/261024r-switching-mode-leaves-the-chat.md).
 
 **In `mode=chat` the id has to name a chat.** Learn writes its own conversation's id into
-`?thread=`, and it survives a switch to Chat like every parameter. Chat's band opens only
+`?thread=`, and it survives a switch to Chat. Chat's band opens only
 `chat`-kind conversations, so once its list has loaded it clears an id of another kind, by replace,
 and shows the list. Going the other way is one navigation: a press on a Learn row in Chat's list
 sets `mode=learn`, `learn=<sub-mode>` and `thread=<id>` together, pushed.

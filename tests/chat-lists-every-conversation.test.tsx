@@ -155,7 +155,7 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
-async function mount(search: string): Promise<void> {
+async function mount(search: string, onLeaveForLearn?: () => void): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () =>
     root.render(
@@ -171,6 +171,7 @@ async function mount(search: string): Promise<void> {
             onJump: () => {},
             kind: "chat",
             onScreen: () => [],
+            onLeaveForLearn,
           }),
         ),
       ),
@@ -360,6 +361,18 @@ describe("pressing a Learn row goes to Learn", () => {
     expect(param("learn")).toBe("explore");
     expect(param("thread")).toBe(EXPLORE.id);
     expect(history.length, "one entry, so Back is one press").toBe(before + 1);
+  });
+
+  it("closes Reader's hidden passage target without clearing Learn's chosen thread", async () => {
+    stored = [CHAT, LEARN];
+    const leave = vi.fn();
+    await mount("?mode=chat", leave);
+    await written();
+    await act(async () => prop<(view: string, id: string) => void>("onOpenLearn")("recall", LEARN.id));
+    await written();
+    expect(leave).toHaveBeenCalledTimes(1);
+    expect(param("mode")).toBe("learn");
+    expect(param("thread")).toBe(LEARN.id);
   });
 
   it("goes to Recall for a Recall conversation", async () => {
