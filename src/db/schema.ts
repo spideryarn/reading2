@@ -7799,6 +7799,60 @@ export const authorLookups = spideryarn.table(
 );
 
 /**
+ * **The addresses a lookup offered but did not apply** — written on a page it
+ * read, seen in a result but not in the author's name, or guessed from a
+ * colleague's pattern. Greg, 2026-10-23 (#686, spya-w5yavh): *"list a few with
+ * tooltips for me with a level of confidence for each"*. Plan
+ * docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md.
+ *
+ * Nothing here ever fills a draft: *Use this address* on the card is Greg's
+ * own edit. `confidence` is computed by src/author-candidates.ts, never the
+ * model's. Written once, by `finishLookup`, in the finish's transaction.
+ */
+export const authorLookupCandidates = spideryarn.table(
+  "author_lookup_candidates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    lookupId: uuid("lookup_id")
+      .notNull()
+      .references(() => authorLookups.id, { onDelete: "cascade" }),
+    /** Best first, from 0. */
+    position: integer("position").notNull(),
+    address: text("address").notNull(),
+    kind: text("kind").notNull(),
+    confidence: text("confidence").notNull(),
+    /** Written by our code, not the model: what it is and what it rests on. */
+    why: text("why").notNull(),
+    sourceUrl: text("source_url"),
+    /** A guess only: whether a colleague's pattern reproduced it. */
+    patternSeen: boolean("pattern_seen"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("author_lookup_candidates_position").on(t.lookupId, t.position),
+    uniqueIndex("author_lookup_candidates_address").on(t.lookupId, t.address),
+    check("author_lookup_candidates_position_range", sql`${t.position} >= 0`),
+    check(
+      "author_lookup_candidates_kind",
+      sql`${t.kind} in ('on-page', 'on-page-disguised', 'in-result', 'guess')`,
+    ),
+    check("author_lookup_candidates_confidence", sql`${t.confidence} in ('high', 'medium', 'low')`),
+    /* No guess is ever "likely" (R3), and only a guess has a pattern verdict. */
+    check("author_lookup_candidates_guess_not_high", sql`${t.kind} <> 'guess' or ${t.confidence} <> 'high'`),
+    check("author_lookup_candidates_pattern_only_guess", sql`(${t.patternSeen} is not null) = (${t.kind} = 'guess')`),
+    check(
+      "author_lookup_candidates_address_normalised",
+      sql`${t.address} = lower(btrim(${t.address})) and ${t.address} like '%_@_%'`,
+    ),
+    check(
+      "author_lookup_candidates_text_lengths",
+      sql`char_length(${t.address}) <= 10000 and char_length(${t.why}) <= 10000
+          and coalesce(char_length(${t.sourceUrl}), 0) <= 10000`,
+    ),
+  ],
+);
+
+/**
  * **Greg's guidance for the author lookup's suggested message**, edited on
  * `/admin/vouchers` — Greg, 2026-10-23 (#688, spya-n8ruxv): *"have some kind
  * of prompt or template that I can easily screw with, you know, in the web"*.

@@ -81,6 +81,11 @@ before the email is queued. The lookup's suggested message is offered beside it 
 it; the way the lookup writes that message is Greg's to edit on the Drafts tab; and a discarded
 draft can be deleted for good
 ([261024f](../plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md)).
+When no address is found, the lookup now reads the author's own page (an `@` drawn as an image
+included) and lists the addresses it did not apply — written on a page, or guessed from a
+colleague's pattern — each marked *likely*, *possible* or *long shot*, for Greg to pick with one
+press ([261024j](../plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md);
+how it works is [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author)).
 
 **Since 2026-10-21 every gifted article gets its main modes**, so the author opens one that is ready,
 and the Give form offers High-powered AI for it, on by default

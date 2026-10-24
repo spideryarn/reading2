@@ -407,6 +407,23 @@ export const ARTICLE_TABLE_COVERAGE = {
         "wrote or anything about the piece, so it is kept out of exports.",
     },
   },
+  /* The addresses a lookup offered but did not apply — plan 261024j. Rows of
+     an `author_lookups` row, and go where it goes. */
+  author_lookup_candidates: {
+    rollback: {
+      exported: false,
+      why:
+        "The addresses an author lookup offered the administrator without applying — " +
+        "docs/plans/261024j-author-lookup-tries-harder-reads-the-author-s-page-and-proposes-likely-addresses.md. " +
+        "Belongs to its `author_lookups` row, which is not restored either.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "Spideryarn's own administrative record about the article, not anything you " +
+        "wrote or anything about the piece, so it is kept out of exports.",
+    },
+  },
   /* Reached only through `author_lookups.guidance_id` — plan 261024f § D4. Not
      about any one article at all: the admin's wording for every lookup's message. */
   author_gift_guidance: {
