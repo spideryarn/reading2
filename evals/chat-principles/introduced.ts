@@ -13,6 +13,7 @@
  * `introduced-<arms>-counts.txt`, one line per reply:
  * `r<n>: brought <a>; bare <b>; over <c>; bare-names: …`.
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,16 +21,19 @@ import type { Case } from "./run.js";
 import { blindCoin } from "../plain-words/run.js";
 
 const RESULTS = path.join(import.meta.dirname, "results");
+const SHEET_VERSION = "<!-- blind-sheet-v2 -->";
 
 interface Row {
   readonly case: string;
   readonly run: number;
+  readonly question?: string;
   readonly answer: string;
 }
 
 export interface KeyRow {
   readonly label: string;
   readonly case: string;
+  readonly run: number;
 }
 
 export function arg(name: string): string | undefined {
@@ -73,13 +77,39 @@ const HEADER = [
   "",
 ];
 
-/** The result rows of `labels`, each with its arm, kept to `cases` when given. */
+/**
+ * The result rows of `labels`, each with its arm, kept to `cases` when given.
+ * Every arm must contain the same unique case/run cohort: a comparison must
+ * never silently survive one arm dropping a reply.
+ */
 function rowsFor(labels: string[], cases?: ReadonlySet<string>) {
-  return labels.flatMap((label) =>
-    rowsOf(label)
-      .filter((r) => !cases || cases.has(r.case))
-      .map((r) => ({ label, ...r })),
-  );
+  if (labels.length === 0) throw new Error("at least one arm is required");
+  if (new Set(labels).size !== labels.length) throw new Error("each arm may appear only once");
+  const arms = labels.map((label) => ({
+    label,
+    rows: rowsOf(label).filter((r) => !cases || cases.has(r.case)),
+  }));
+  const cohort = (label: string, rows: readonly Row[]): Set<string> => {
+    if (rows.length === 0) throw new Error(`${label} has no selected result rows`);
+    const found = new Set<string>();
+    for (const row of rows) {
+      const id = `${row.case}\0${row.run}`;
+      if (found.has(id)) throw new Error(`duplicate ${label} row: ${row.case} run ${row.run}`);
+      found.add(id);
+    }
+    return found;
+  };
+  const expected = cohort(arms[0]!.label, arms[0]!.rows);
+  for (const arm of arms.slice(1)) {
+    const found = cohort(arm.label, arm.rows);
+    for (const id of expected) {
+      if (!found.has(id)) throw new Error(`${arm.label} is missing ${id.replace("\0", " run ")}`);
+    }
+    for (const id of found) {
+      if (!expected.has(id)) throw new Error(`${arm.label} has extra ${id.replace("\0", " run ")}`);
+    }
+  }
+  return arms.flatMap(({ label, rows }) => rows.map((r) => ({ label, ...r })));
 }
 
 /**
@@ -99,7 +129,6 @@ export async function writeSheet(
   /* `run.ts` reaches production's chat and store modules. The tally needs none
      of that; load the cases only for the command that renders them. */
   const { CASES } = await import("./run.js");
-  if (new Set(labels).size !== labels.length) throw new Error("each arm may appear only once");
   const all = rowsFor(labels, cases);
   /* Fisher–Yates on the tested coin, so the arms interleave. */
   const coin = blindCoin(seed);
@@ -107,7 +136,7 @@ export async function writeSheet(
     const j = uniformIndex(coin, i);
     [all[i], all[j]] = [all[j]!, all[i]!];
   }
-  const out = [...header];
+  const out = [...header, SHEET_VERSION, ""];
   const key: string[] = [];
   all.forEach((r, i) => {
     const c = CASES.find((k) => k.id === r.case);
@@ -118,7 +147,7 @@ export async function writeSheet(
       "",
       `Reader: about them: ${c.about ?? "not said"}; why reading: ${c.why ?? "not said"}.`,
       ...c.history.map((t, k) => `> ${k % 2 === 0 ? "Reader" : "Companion"}: ${t}`),
-      `Reader now: "${c.question}"`,
+      `Reader now: "${r.question ?? c.legacyQuestion ?? c.question}"`,
       "",
       ...(context?.(c, r.answer) ?? []),
       r.answer.trim(),
@@ -126,8 +155,10 @@ export async function writeSheet(
     );
   });
   const name = labels.join("-");
-  fs.writeFileSync(path.join(RESULTS, `${prefix}-${name}.md`), `${out.join("\n")}\n`);
-  fs.writeFileSync(path.join(RESULTS, `${prefix}-${name}-key.txt`), `${key.join("\n")}\n`);
+  const sheet = `${out.join("\n")}\n`;
+  const sheetHash = createHash("sha256").update(sheet).digest("hex");
+  fs.writeFileSync(path.join(RESULTS, `${prefix}-${name}.md`), sheet);
+  fs.writeFileSync(path.join(RESULTS, `${prefix}-${name}-key.txt`), `sheet-sha256: ${sheetHash}\n${key.join("\n")}\n`);
   console.log(`${all.length} replies`);
 }
 
@@ -142,10 +173,18 @@ export function readKey(
   if (expected.size !== rows.length) throw new Error("an arm contains duplicate case/run rows");
 
   const key = new Map<string, KeyRow>();
+  const sheet = fs.readFileSync(path.join(RESULTS, `${prefix}-${name}.md`), "utf8");
   const keyLines = fs
     .readFileSync(path.join(RESULTS, `${prefix}-${name}-key.txt`), "utf8")
     .split("\n")
     .filter((line) => line.trim() !== "");
+  const hash = /^sheet-sha256: ([0-9a-f]{64})$/.exec(keyLines[0] ?? "");
+  if (sheet.includes(SHEET_VERSION) && !hash) throw new Error("versioned blind sheet has no hash in its key");
+  if (hash) {
+    const actual = createHash("sha256").update(sheet).digest("hex");
+    if (actual !== hash[1]) throw new Error("blind sheet and key do not match");
+    keyLines.shift();
+  }
   for (const [i, line] of keyLines.entries()) {
     const m = /^(r\d+): (\S+) (\S+) (\d+)$/.exec(line.trim());
     if (!m) throw new Error(`malformed key line ${i + 1}: ${line}`);
@@ -154,7 +193,7 @@ export function readKey(
     if (key.has(reply)) throw new Error(`duplicate key for ${reply}`);
     const identity = `${m[2]}\0${m[3]}\0${m[4]}`;
     if (!expected.delete(identity)) throw new Error(`unexpected or duplicate key row: ${line}`);
-    key.set(reply, { label: m[2]!, case: m[3]! });
+    key.set(reply, { label: m[2]!, case: m[3]!, run: Number(m[4]) });
   }
   if (expected.size > 0) throw new Error(`key omits ${expected.size} result row(s)`);
   return key;

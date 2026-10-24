@@ -37,7 +37,10 @@ sent no anchor before; GPT Sol's plan review, F3):
   expressive power.
 - Three guards: `ex-anaesthetist` (the passage turns on anaesthesia, so their field is the clearest
   example), `ex-asks-field` (a teacher who asks for classroom terms), `ex-help` (a plumber's "?"
-  press, whose prompt asks for an analogy).
+  turn, whose hidden prompt asks for an analogy). The saved `ex-help` runs passed production's
+  `help: true`, but the visible transcript said *"Explain this passage."* rather than the press's
+  *"Help me understand."* The two ask nearly the same thing, but this was not an exact transcript
+  replay; the harness now uses `HELP_QUESTION` so another run cannot drift the same way.
 
 Arms, three runs per case, 27 replies each: `ex-before` and `ex-before2` (control) at `2786da13e`;
 `ex-after` (the principle sentence) at its commit; `ex-remind` and `ex-remind2` (sentence and
@@ -49,10 +52,11 @@ Two measures, each from a fresh Opus subagent that read only its own file:
 
 - **A targeted blind count**, [`examples.ts`](../../evals/chat-principles/examples.ts): all replies
   of the arms shuffled together with no arm names, the passage and every passage the reply cites
-  shown, so the article's own examples are not counted as the model's (Sol, F4). For each reply the
-  counter itemises the examples it brings in, tags each `general` or `theirs`, and marks a `theirs`
-  one `forced` only by naming the plainer example that would have done better. The tally refuses a
-  line whose counts do not match its items.
+  shown, so examples in that evidence are not counted as the model's (Sol, F4). An article example
+  the reply used without citing its passage could still be misclassified. For each reply the counter
+  itemises the examples it brings in, tags each `general` or `theirs`, and marks a `theirs` one
+  `forced` only by naming the plainer example that would have done better. The tally refuses a line
+  whose counts do not match its items.
 - **Blind pairs** (`run.ts --pairs`), keys balanced 13/14, unblinded with
   [`tally.ts`](../../evals/chat-principles/tally.ts).
 

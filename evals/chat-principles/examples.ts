@@ -43,6 +43,7 @@ const HEADER = [
 function passages(c: Case, answer: string): string[] {
   const { blocks } = load(c.dir);
   const anchor = c.anchor ? blocks.find((b) => b.id === c.anchor!.blockId) : undefined;
+  if (c.anchor && !anchor) throw new Error(`${c.id}: missing anchor block ${c.anchor.blockId}`);
   return [
     ...(anchor ? [`Passage [${anchor.id}]: ${anchor.text.replace(/\s+/g, " ")}`, ""] : []),
     ...(() => {
@@ -61,7 +62,7 @@ async function tally(labels: string[]): Promise<void> {
   const name = labels.join("-");
   const key = readKey(labels, name, "examples", EXAMPLE_CASES);
   const sums = new Map<string, { examples: number; theirs: number; forced: number; n: number }>();
-  const perCase = new Map<string, string[]>();
+  const perCase = new Map<string, Array<{ run: number; value: string }>>();
   const seen = new Set<string>();
   const lines = fs
     .readFileSync(path.join(RESULTS, `examples-${name}-counts.txt`), "utf8")
@@ -79,12 +80,13 @@ async function tally(labels: string[]): Promise<void> {
     /* The counts must be the items' own, so a miscount is caught here rather
        than averaged in. */
     const items = m[5]!.trim() === "none" ? [] : m[5]!.split(" | ");
-    const tagged = (re: RegExp) => items.filter((item) => re.test(item)).length;
-    if (
-      items.length !== examples ||
-      tagged(/\(theirs[,)]/) !== theirs ||
-      tagged(/\(theirs, forced → .+\)$/) !== forced
-    ) {
+    const tags = items.map((item) => {
+      if (/\(general\)$/.test(item)) return "general";
+      if (/\(theirs\)$/.test(item)) return "theirs";
+      if (/\(theirs, forced → .+\)$/.test(item)) return "forced";
+      throw new Error(`${reply}: malformed item: ${item}`);
+    });
+    if (items.length !== examples || tags.filter((tag) => tag !== "general").length !== theirs || tags.filter((tag) => tag === "forced").length !== forced) {
       throw new Error(`${reply}: the counts do not match its items: ${line}`);
     }
     const s = sums.get(k.label) ?? { examples: 0, theirs: 0, forced: 0, n: 0 };
@@ -94,7 +96,7 @@ async function tally(labels: string[]): Promise<void> {
     s.n++;
     sums.set(k.label, s);
     const at = `${k.case} ${k.label}`;
-    perCase.set(at, [...(perCase.get(at) ?? []), `${examples}/${theirs}/${forced}`]);
+    perCase.set(at, [...(perCase.get(at) ?? []), { run: k.run, value: `${examples}/${theirs}/${forced}` }]);
   }
   const missing = [...key.keys()].filter((r) => !seen.has(r));
   if (missing.length > 0) throw new Error(`the counter did not answer ${missing.join(", ")}`);
@@ -107,7 +109,14 @@ async function tally(labels: string[]): Promise<void> {
     );
   }
   console.log("\nper case, examples/theirs/forced per run:");
-  for (const at of [...perCase.keys()].sort()) console.log(`  ${at.padEnd(28)} ${perCase.get(at)!.join("  ")}`);
+  for (const at of [...perCase.keys()].sort()) {
+    const runs = perCase
+      .get(at)!
+      .sort((a, b) => a.run - b.run)
+      .map(({ run, value }) => `${run}:${value}`)
+      .join("  ");
+    console.log(`  ${at.padEnd(28)} ${runs}`);
+  }
 }
 
 const sheetArg = arg("sheet");

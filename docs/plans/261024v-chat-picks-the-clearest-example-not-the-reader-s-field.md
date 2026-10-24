@@ -95,16 +95,20 @@ on `evals/chat-principles/run.ts` (production's `converse`, Opus 5.5, tools on):
   on Felleisen's expressive power. Three guard the other side (Sol, F5): **`ex-anaesthetist`**,
   on the passage that turns on anaesthesia, where their field plainly is the clearest example;
   **`ex-asks-field`**, a teacher who asks for it in classroom terms; and **`ex-help`**, a "?" press,
-  whose prompt asks for one analogy, so one should still come.
+  whose hidden prompt asks for one analogy, so one should still come. The saved run passed the
+  production `help` flag but used *"Explain this passage."* for the visible words rather than the
+  press's *"Help me understand."*; the harness now imports the production wording.
 - **Arms**: `ex-before` and `ex-before2` (control) on the commit before the change, `ex-after` on
-  the commit with it; three runs per case, 27 replies an arm. About $15.
+  the commit with it; three runs per case, 27 replies an arm. Estimated at about $15 before the run;
+  these three result files record $4.18 in model calls.
 - **A targeted blind count**, `evals/chat-principles/examples.ts`, sharing `introduced.ts`' shuffle
   and key: every reply from all arms shuffled with no arm names, **with the passage and every
-  passage the reply cites shown** (Sol, F4, so the article's own examples are not counted as the
-  model's). A fresh Opus subagent itemises each example the reply brings in, tags it `general` or
-  `theirs`, and marks a `theirs` one `forced` only by naming the plainer example that would have
-  done better. The tally rejects a line whose counts do not match its items, and reports examples
-  per reply, theirs per example and forced per theirs, per arm and per case.
+  passage the reply cites shown** (Sol, F4, so examples visible in that evidence are not counted as
+  the model's; an uncited article example can still be misclassified). A fresh Opus subagent
+  itemises each example the reply brings in, tags it `general` or `theirs`, and marks a `theirs` one
+  `forced` only by naming the plainer example that would have done better. The tally rejects a line
+  whose counts do not match its items, and reports examples per reply, theirs per example and forced
+  per theirs, per arm and per case.
 - **Blind pairs** (`run.ts --pairs`), judged on the usual question by a fresh subagent, key
   balance checked.
 - **Read the outputs**, the three guard cases above all.
