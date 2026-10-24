@@ -5,7 +5,7 @@ comment: On dev. Type "gift" in the command bar while reading your own published
 ---
 # Admin commands in the command bar, and an author gift without leaving the article
 
-Report `spya-v88mga` (#683), a suggestion from Greg (`feedback-reporter.ts` exit 0, administrator's
+Report `spya-v88mga` (#683, SPIDERYARN-READING2-NF), a suggestion from Greg (`feedback-reporter.ts` exit 0, administrator's
 row, no addenda when re-read before this note), filed while reading
 `effective-expressiveness-spya-z8dehh`. Session `fbv88mga-admin-command-bar`.
 
