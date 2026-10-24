@@ -2063,6 +2063,34 @@ const readItFor = (kind: ThreadKind): string => {
 };
 
 /**
+ * **A one-line reminder beside the profile: an example is chosen for being
+ * clearest, not for matching the reader's job.** Greg's report `spya-furs26`:
+ *
+ * > It's nice how the chat seems to take into account my background in the
+ * > examples that they choose, but perhaps we can make a minimal update so that
+ * > they don't do that too much. There may be a simpler or better analogy that
+ * > doesn't involve my specific background
+ * >
+ * > — Greg, 2026-10-24
+ *
+ * The long version is `CHAT_PRINCIPLES`' pitch bullet, near the top; this is
+ * its echo next to the profile, the pattern `profileSection` itself follows,
+ * because the principle alone cut examples forced from the reader's job by
+ * about a third and left two of six cases untouched
+ * (docs/investigations/261024b-chat-examples-not-the-reader-s-field-measured.md).
+ * Here rather than in `profileSection`, which a dozen non-conversation prompts
+ * share. Conversations only: Referee's `candidates` carries no principles.
+ * Explore's `THEIR OWN CASES` is a different thing, trying the piece on the
+ * reader's project, and as the more specific rule it still wins.
+ */
+function withExampleReminder(kind: ThreadKind, who: string): string {
+  if (!who || kind === "candidates") return who;
+  return `${who}
+When you use an example or analogy, choose the clearest one for the point.
+Their job or field is not by itself a reason to use one from it.`;
+}
+
+/**
  * **The reader pressed "?" instead of typing, so they could not say what they
  * were missing.** Report 1S, 2026-09-05:
  *
@@ -2541,9 +2569,12 @@ export function buildConverseMessages(opts: {
     opts.visible && opts.visible.length > 0
       ? visibleBlocksLine(opts.visible)
       : readerPositionLine(opts.at);
-  const who = profileSection(
-    opts.profile ?? null,
-    kind === "explore" || kind === "guide" ? "with-the-reader" : "about-the-article",
+  const who = withExampleReminder(
+    kind,
+    profileSection(
+      opts.profile ?? null,
+      kind === "explore" || kind === "guide" ? "with-the-reader" : "about-the-article",
+    ),
   );
   /* After the profile: the reader is who they say, then how much of the app
      they have seen. The guide's only. */
