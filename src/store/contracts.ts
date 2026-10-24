@@ -105,6 +105,7 @@ import type {
   QuizQuestionId,
   FaqFound,
   SourcesClaimListFound,
+  SituateFound,
   SourcesClaimCheckCounts,
   SourcesClaimCheckResult,
   SourcesClaimCheckTarget,
@@ -354,6 +355,12 @@ export interface ArticleReader {
    * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
    */
   loadSourcesClaims(slug: string): Promise<SourcesClaimListFound>;
+  /**
+   * Where the piece sits in the literature (plan 261024o) — **owner only**,
+   * with no public twin. Throws `ArtefactNotMadeYet` until the `situate` step
+   * has run. The profile verdict is the route's.
+   */
+  loadSituate(slug: string): Promise<SituateFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still
@@ -3432,7 +3439,12 @@ export type RateBucket =
      note (src/citation-web-note.ts § `WEB_NOTE_RATE_POLICY`, plan 261018o R7).
      Not Dig deeper's bucket: that one is shared by much dearer presses, and
      a cheap one here must not starve them, or they it. */
-  | "citation-web-note";
+  | "citation-web-note"
+  /* Sources' *Search the literature* — the `situate` step's planned web
+     searches and its one read over everything they found, about $0.40–0.50 a
+     run, taken inside the step so every way of starting it passes it
+     (src/situate.ts § `SITUATE_RATE_POLICY`, plan 261024o, GPT Sol's S5). */
+  | "situate";
 
 /**
  * **A bucket's old spellings, still counted against it.** Plan

@@ -3816,7 +3816,13 @@ export type StepName =
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Ideas' article block
      at `high` effort (measured against `medium` in stage 1), so an
      `ArticleStage`. */
-  | "simple";
+  | "simple"
+  /* **Where the piece sits in the literature** — plan 261024o. A planned set of
+     web searches, the later works that cite it, and one read of all of it
+     beside the whole article, checked in code (src/situate.ts). Owner only, on
+     a press. Not an `ArticleStage`: its article block is fenced as untrusted,
+     so its bytes match no other stage's. */
+  | "situate";
 
 /**
  * **What a job's once-per-job marker can name** (`jobs.paid_step_begun`,
@@ -8294,6 +8300,185 @@ export interface SourcesClaimListResponse {
 
 /** As `FaqFound`: the same type, because there is no `profileChanged` to omit. */
 export type SourcesClaimListFound = SourcesClaimListResponse;
+
+/* ---------------------------------------------------------------- situate --
+   Where the piece sits in the literature — the `situate` column on
+   `article_revisions`, written by the `situate` step (src/situate.ts): a plan of
+   web searches, the searches, the later works that cite it, and one read of all
+   of it beside the whole article, every claim checked in code. Owner only: no
+   public projection, no visitor read. Plan
+   docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md.
+
+   Here rather than in src/situate.ts for every artefact's reason: the panel and
+   the margin read them, and a client module may not import a stage. */
+
+/** What kind of piece the planner judged it to be. The research's split: each wants different questions. */
+export type SituateKind = "empirical" | "theory" | "review" | "position" | "news" | "other";
+export const SITUATE_KINDS = ["empirical", "theory", "review", "position", "news", "other"] as const satisfies readonly SituateKind[];
+
+/** `since`: older than about two years, so what happened after matters most. `now`: where it sits today. */
+export type SituateAngle = "since" | "now";
+export const SITUATE_ANGLES = ["since", "now"] as const satisfies readonly SituateAngle[];
+
+/** What a search was for: the piece itself, one of its claims, a load-bearing citation, or an omission. */
+export type SituateQueryGroup = "piece" | "claim" | "citation" | "missing";
+export const SITUATE_QUERY_GROUPS = ["piece", "claim", "citation", "missing"] as const satisfies readonly SituateQueryGroup[];
+
+/**
+ * **What happened to one search** (GPT Sol's S2 on the plan): `failed`, the
+ * request failed; `no-search`, the answer came back with no provider-proven
+ * search in it (`whereSearchCountCameFrom`); `empty`, a search ran and returned
+ * nothing we accepted; `found`, pages. Only the last two *searched*.
+ */
+export type SituateQueryOutcome = "failed" | "no-search" | "empty" | "found";
+
+export interface SituateQuery {
+  /** The query as it was sent, after the code's checks (src/situate.ts § `validateQueries`). */
+  q: string;
+  /** The planner's few words on what it was looking for. */
+  for: string;
+  group: SituateQueryGroup;
+  outcome: SituateQueryOutcome;
+  /** Pages this search contributed that no earlier search had. */
+  pages: number;
+}
+
+/** Why there are no later citing works in the evidence, when there are none. */
+export type SituateCitersSkipped = "no-identity" | "unconfirmed" | "not-indexed" | "unavailable";
+
+export interface SituateSearched {
+  queries: SituateQuery[];
+  /** Distinct web pages read. */
+  pages: number;
+  /** Later works that cite the piece, from OpenAlex, read with their abstracts. */
+  citers: number;
+  /** Cited works whose own checked abstract words were read (`citation_blurbs`). */
+  cited: number;
+  citersSkipped?: SituateCitersSkipped;
+}
+
+/** The kinds of finding, in the order the dossier groups them. */
+export type SituateFindingKind = "challenged" | "citation" | "since" | "missing" | "reception" | "supported";
+export const SITUATE_FINDING_KINDS = [
+  "challenged",
+  "citation",
+  "since",
+  "missing",
+  "reception",
+  "supported",
+] as const satisfies readonly SituateFindingKind[];
+
+export type SituateStrength = "strong" | "suggestive";
+export const SITUATE_STRENGTHS = ["strong", "suggestive"] as const satisfies readonly SituateStrength[];
+
+/**
+ * **One source a finding rests on**, every field the code's, not the model's:
+ * the URL and title are the search's (or OpenAlex's, or the Bibliography's),
+ * and `quote` is that source's own characters, found in its own text.
+ */
+export interface SituateSource {
+  /** `web`: a search's page. `citer`: a later work citing the piece. `cited`: a work the piece cites, by its own abstract. */
+  origin: "web" | "citer" | "cited";
+  url: string;
+  title: string;
+  quote: string;
+  /** A citing work's year, from OpenAlex. */
+  year?: number;
+  /** For `cited`: the Bibliography row (`CitedWork.id`). */
+  citedWorkId?: string;
+}
+
+/**
+ * **One finding, beside the passage it concerns** — anchored the house way
+ * (docs/project/block-ids.md): `blockId` and `quote`, the quote re-found in its
+ * block and stored as the article's characters. `note` is the model's words.
+ */
+export interface SituateFinding {
+  /** A hash of the kind, the block and the canonical source URL, so source reordering cannot change it (S8). */
+  id: string;
+  kind: SituateFindingKind;
+  blockId: BlockId;
+  quote: string;
+  note: string;
+  strength: SituateStrength;
+  /** At least one, in the model's order. */
+  sources: SituateSource[];
+}
+
+/** What the read wrote, and what the checks threw away and why. Counts only. */
+export interface SituateCounts {
+  /** Findings the model wrote. */
+  written: number;
+  kept: number;
+  /** Unreadable: a field missing, or a word off its closed list. */
+  malformed: number;
+  /** Its block is not in the article. */
+  unknownBlock: number;
+  /** Its quote is not in that block, or under four words. */
+  unquoted: number;
+  /** A source id this run never gathered. */
+  unknownSource: number;
+  /** A source quote not found wholly in one source passage, under six words, or recognisable boilerplate. */
+  sourceUnquoted: number;
+  /** Every source was dropped, so the finding was too. */
+  noSource: number;
+  /** A `citation` finding with no cited work's own words, cited in that very block. */
+  citationRule: number;
+  /** A third or later finding on one block. */
+  perBlock: number;
+  /** Past the cap of fourteen. */
+  overCap: number;
+  /** The same kind, block and canonical source twice. */
+  duplicate: number;
+  /** Queries the planner wrote that the code refused (URL-only, too short, a repeat…). */
+  queriesRefused: number;
+}
+
+/** The artefact. The `situate` column on `article_revisions`. */
+export interface Situate {
+  /** `situate/N` — src/situate.ts § `PROMPT_VERSION`. */
+  version: string;
+  generator: string;
+  slug: string;
+  /** The article as the read was sent it (src/situate.ts § `inputFingerprint`). */
+  sourceHash: string;
+  /** The profile the read was written for, or null for none (src/profile.ts). */
+  profileHash: string | null;
+  generatedAt: string;
+  elapsedMs: number;
+  kind: SituateKind;
+  year: number | null;
+  angle: SituateAngle;
+  /**
+   * `read`: the searches found something and one read wrote what follows.
+   * `nothing-found`: enough searches ran and none found anything, so nothing was
+   * read and there are no findings — said as that, never as "all clear". The
+   * per-query outcomes preserve the failed/no-search remainder.
+   */
+  outcome: "read" | "nothing-found";
+  /** Two or three sentences on where the piece sits now. Empty when `nothing-found`. */
+  overview: string;
+  /** Strongest first, at most two per block and fourteen in all. */
+  findings: SituateFinding[];
+  /** Questions this reader might ask next. */
+  questions: string[];
+  searched: SituateSearched;
+  counts: SituateCounts;
+}
+
+/** `GET /api/situate/:slug` — owner only. The three staleness facts of a profile carrier. */
+export interface SituateResponse {
+  situate: Situate;
+  /** The article moved underneath this. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+  /** Written for a profile other than the reader's current one. */
+  profileChanged: boolean;
+}
+
+/** What the store answers, before the route adds the profile verdict. */
+export type SituateFound = Omit<SituateResponse, "profileChanged">;
 
 /* ----------------------------------------------------- Sources claim checks --
    One reader press: the ticked claims and the typed one, searched on the open

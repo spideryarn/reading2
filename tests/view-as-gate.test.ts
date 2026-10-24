@@ -466,6 +466,7 @@ const EXPECTED_ON_THE_LIST = [
   "^\\/api\\/quiz\\/([\\w.%-]+)$",
   "^\\/api\\/faq\\/([\\w.%-]+)$",
   "^\\/api\\/sources-claims\\/([\\w.%-]+)$",
+  "^\\/api\\/situate\\/([\\w.%-]+)$",
   "^\\/api\\/sources-claims\\/([\\w.%-]+)\\/checks$",
   "^\\/api\\/relations\\/([\\w.%-]+)$",
   "^\\/api\\/crossrefs\\/([\\w.%-]+)$",

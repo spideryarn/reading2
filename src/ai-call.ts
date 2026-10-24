@@ -675,6 +675,15 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **Situate's searches** (src/situate.ts, plan 261024o): `search_web`'s
+     request under its own job, so its row and its reasons. A search that a
+     fallback ran without the tool is caught as `no-search`, never read as
+     "nothing found" (S2) — `require_parameters` is what keeps it rare. */
+  "situate-search": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
      policy and its reason: the request sends `openrouter:web_search`, and a
      fallback that silently dropped the tool leaves a model answering from
@@ -1247,6 +1256,9 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   "dig-deeper-search": { effort: "low" },
   /* Low: one forced-search call, then five lines from what came back. */
   "web-search-subagent": { effort: "low" },
+  /* `search_web`'s request, so its setting: only the search's annotations are
+     read, never the lines (src/situate.ts § `searchOne`). */
+  "situate-search": { effort: "low" },
   "citation-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },
@@ -1465,6 +1477,11 @@ export type ChatJob = Exclude<
   | "relations"
   /* Generation, on the Messages wire like `faq`. src/sources-claims.ts. */
   | "sources-claims"
+  /* Situate's plan and its read, on the Messages wire like `sources-claims`.
+     Its searches (`situate-search`) stay IN: they are chat completions.
+     src/situate.ts. */
+  | "situate-plan"
+  | "situate"
   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
   | "skim"
   /* Generation, on the Messages wire like `faq`. src/crossrefs.ts. */

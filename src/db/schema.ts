@@ -84,6 +84,7 @@ import type {
   BlockKind,
   Bibliography,
   CitationBlurbs,
+  Situate,
   Arc,
   Citation,
   Reception,
@@ -1468,6 +1469,18 @@ export const articleRevisions = spideryarn.table(
      * neighbours make.
      */
     citationBlurbs: jsonb("citation_blurbs").$type<CitationBlurbs>(),
+
+    /**
+     * Where the piece sits in the literature — `Situate`, src/types.ts,
+     * written by the `situate` step (src/situate.ts). Plan 261024o.
+     *
+     * **Owner only**: no public projection reads it and no visitor DTO carries
+     * it. Every source in it is the search's URL and title and a quote found in
+     * that source's own text; the model's words are the notes, the overview and
+     * the questions. The search queries are stored too, because the panel says
+     * what was searched. No foreign key, on its neighbours' argument.
+     */
+    situate: jsonb("situate").$type<Situate>(),
 
     /**
      * **Retired: nothing reads or writes this.** Bibliography's column before
@@ -3710,7 +3723,7 @@ export const revisionStepRuns = spideryarn.table(
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -8643,7 +8656,7 @@ export const rateLimitEvents = spideryarn.table(
        rewrites or deletes those rows, then drops it from this list. */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check', 'related-work-search', 'citation-web-note', 'situate')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

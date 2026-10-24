@@ -13,7 +13,7 @@
  * sees exactly what it saw before, and so that `guardDbStore` lets it through
  * untranslated (src/store/db-errors.ts § Six things pass, the first).
  *
- * Thrown by sixteen loaders in src/store/pg.ts. **"Not made" is each loader's
+ * Thrown by the artefact loaders in src/store/pg.ts. **"Not made" is each loader's
  * own test**, and for several it is wider than an empty column: `loadFaq`,
  * `loadSimpleSummary`, `loadReception`, `loadRelations` and `loadSkim` throw this
  * for a stored document they cannot use, and `loadSketch` and
@@ -28,8 +28,9 @@
  * `loadBibliography` first (plan 261006g); `loadSimpleSummary`, `loadIdeas`,
  * `loadFaq`, `loadTimeline`, `loadReception`, `loadGlossary` and `loadQuotes`
  * (plan 261006h); and `loadTweets`, `loadRelations`, `loadSkim`, `loadSketch`,
- * `loadIllustrated` and `loadArc` (plan 261007n). Without the header each is
- * still a 404, for a tab opened before the deploy.
+ * `loadIllustrated` and `loadArc` (plan 261007n); and `loadSituate` (plan
+ * 261024o), whose route was born with it. Without the header each is still a
+ * 404, for a tab opened before the deploy.
  *
  * A new artefact read is two edits **that must land together**: the helper at
  * its route, and its name in `NONE_YET_AS_NULL` (src/web/lib/api.ts), so the

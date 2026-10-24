@@ -96,6 +96,12 @@ import {
   PROMPT_VERSION as SOURCES_CLAIMS_PROMPT_VERSION,
 } from "../sources-claims.js";
 import {
+  inputFingerprint as situateFingerprint,
+  isOutdated as situateIsOutdated,
+  isStale as situateIsStale,
+  PROMPT_VERSION as SITUATE_PROMPT_VERSION,
+} from "../situate.js";
+import {
   inputFingerprint as relationsFingerprint,
   isOutdated as relationsAreOutdated,
   isStale as relationsIsStale,
@@ -216,6 +222,8 @@ import type {
   FaqFound,
   SourcesClaimList,
   SourcesClaimListFound,
+  Situate,
+  SituateFound,
   Relations,
   RelationsResponse,
   Crossrefs,
@@ -575,6 +583,8 @@ type RevisionReader =
   | "faq"
   | "relations"
   | "sourcesClaims"
+  /** Situate's dossier, owner only (src/situate.ts, plan 261024o). */
+  | "situate"
   | "skim"
   | "crossrefs"
   | "simpleSummary"
@@ -626,6 +636,7 @@ const REVISION_READ_POLICY: Record<
     illustrated: "value", reception: "value", assets: "value", bibliography: "value", faq: "value",
     relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
     sourcesClaims: "value",
+    situate: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -675,6 +686,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -702,6 +714,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -729,6 +742,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -808,6 +822,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
     sourcesClaims: "value",
+    situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -869,6 +884,7 @@ const REVISION_READ_POLICY: Record<
     relations: "value",
     /* Only for Debate Claims' fallback head when metadata has no title. */
     sourcesClaims: "value",
+    situate: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
     /* Not for a skeleton — its user message is a constant — but for the
@@ -1028,6 +1044,11 @@ const REVISION_READ_POLICY: Record<
      visitor by default (docs/project/mode.md § The artefact).
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   sourcesClaims: { metadata: "value", sourcesClaims: "value" },
+  /* Its own reader and the metadata page, and not the library. `isCurrent`
+     needs the column for its arm, and `personalisedSteps` needs it because it
+     carries a `profileHash`. **And no public read**: src/store/public-reader.ts
+     does not select it — owner only (plan 261024o, S9). */
+  situate: { metadata: "value", situate: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
@@ -1383,6 +1404,9 @@ export const REVISION_PROJECTIONS = {
     relations: articleRevisions.relations,
     /* For `isCurrent`'s arm, as `debate` above. */
     sourcesClaims: articleRevisions.sourcesClaims,
+    /* For `isCurrent`'s arm, as `debate` above. Owner only, and never
+       personalised in the publish dialog's sense (`NeverShared`). */
+    situate: articleRevisions.situate,
     /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, as `debate` above. */
@@ -1491,6 +1515,13 @@ export const REVISION_PROJECTIONS = {
   sourcesClaims: {
     id: articleRevisions.id,
     sourcesClaims: articleRevisions.sourcesClaims,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited head and tree fallback its exact-request fingerprint needs, as
+     `sourcesClaims`. */
+  situate: {
+    id: articleRevisions.id,
+    situate: articleRevisions.situate,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree its own exact-request fingerprint needs. */
@@ -2117,6 +2148,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   "sources-claims": ["article_revisions.sources_claims"],
   bibliography: ["article_revisions.bibliography"],
   "citation-blurbs": ["article_revisions.citation_blurbs"],
+  situate: ["article_revisions.situate"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
   skim: ["article_revisions.skim"],
@@ -2760,10 +2792,12 @@ export type ProfileCarrying = Exclude<
  * the owner's badge and Regenerate (plan 261002f), but `PublicArtefacts` has no
  * quiz and src/store/public-reader.ts never reads the column: telling an owner
  * "your quiz was written for your profile" before they share would describe
- * something no visitor receives. One named exception rather than a hand list,
- * so every *other* artefact gaining the field still fails the compiler here.
+ * something no visitor receives. Situate is the second, for the same reason:
+ * owner only, read for the owner's profile, and never in the public payload
+ * (plan 261024o, S9). Named exceptions rather than a hand list, so every
+ * *other* artefact gaining the field still fails the compiler here.
  */
-type NeverShared = "quiz";
+type NeverShared = "quiz" | "situate";
 
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
@@ -3665,6 +3699,26 @@ const rawPgArticleReader: ArticleReader = {
           );
         }
         /* The same stamp shape as `faq`, over its own exact request input. */
+        /* Its exact rendered body and cited head, as `sources-claims`. The
+           profile is the artefact's own on both sides, for `skim`'s reason:
+           this read cannot see the profile a job would stamp with today, and
+           `GET /api/situate/:slug` is where a changed profile is reported. */
+        case "situate": {
+          const situate = revision.situate as Situate | null;
+          if (!situate || !Array.isArray(situate.findings) || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: situate.sourceHash,
+              promptVersion: situate.version,
+              model: situate.generator,
+            },
+            {
+              inputHash: situateFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: SITUATE_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         case "crossrefs": {
           const crossrefs = revision.crossrefs as Crossrefs | null;
           if (!crossrefs || !tree || blocks.length === 0) return false;
@@ -4203,6 +4257,38 @@ const rawPgArticleReader: ArticleReader = {
         !tree ||
         sourcesClaimsIsStale(claimList, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: sourcesClaimsAreOutdated(claimList),
+    };
+  },
+
+  /**
+   * Where the piece sits in the literature — the Postgres half of
+   * `loadSituate`. **Owner only**: there is no public twin, and
+   * src/store/public-reader.ts never selects the column (plan 261024o, S9).
+   *
+   * `loadSourcesClaims`'s shape: the cited head and the tree, because the
+   * fingerprint is the article the read was sent. **A 404 is the ordinary
+   * case** (it runs only on the owner's press); a run that found nothing, or
+   * kept no finding, is a 200 with an empty list. The profile half is the
+   * route's, because a store adapter does not read the profile.
+   */
+  async loadSituate(slug: string): Promise<SituateFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "situate");
+    if (!found) throw notFound(slug);
+    const situate = found.revision.situate as Situate | null;
+    if (!situate || !Array.isArray(situate.findings)) {
+      throw new ArtefactNotMadeYet(
+        `No search of the literature for "${slug}" yet. Run one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["situate"] }.`,
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      situate,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale: !tree || situateIsStale(situate, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: situateIsOutdated(situate),
     };
   },
 

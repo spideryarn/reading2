@@ -201,6 +201,12 @@ export const STEP_ORDER = [
      (`publishRevisionIn`), never by import itself. Off `DEFAULT_INGEST_STEPS`
      and in `FORCE_ONLY_WHEN_NAMED`. */
   "citation-blurbs",
+  /* **After `citation-blurbs`, whose checked abstract words it reads** when
+     they are there (plan 261024o): where the piece sits in the literature, a
+     planned set of web searches and one read. Off `DEFAULT_INGEST_STEPS` and in
+     `FORCE_ONLY_WHEN_NAMED` — the dearest press in Sources, owner only. It
+     never makes the Bibliography or the notes; it reads what is there. */
+  "situate",
   /* **Last**: it sends Ideas' bytes and thinks at `medium`, which no other
      `ids` stage does. Off `DEFAULT_INGEST_STEPS` — Greg asked for import to
      be as fast as possible — and in `FORCE_ONLY_WHEN_NAMED`: a model call over

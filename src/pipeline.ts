@@ -163,6 +163,18 @@ import {
 } from "./citation-blurbs.js";
 import { CITATION_BLURBS_PROMPT_VERSION, citationBlurbsExpectedHash, sourcePolicy } from "./citation-blurbs-identity.js";
 import { optionalSources } from "./registry-keys.js";
+import { openRouterJson } from "./ai-call.js";
+import {
+  generateSituate,
+  inputFingerprint as situateFingerprint,
+  PROMPT_VERSION as SITUATE_PROMPT_VERSION,
+  SITUATE_RATE_POLICY,
+  SituateRefused,
+  type SituateDeps,
+  type SituateRun,
+} from "./situate.js";
+import { situateCiters } from "./situate-citers.js";
+import type { AllowanceTaken, FetchAllowanceStore } from "./store/contracts.js";
 import { citationEvidenceDeps } from "./citation-evidence.js";
 import { attachReceptionRegistry, receptionRegistryDeps } from "./reception-registry.js";
 import { declaredFailure, stageFailure } from "./job-failure.js";
@@ -242,6 +254,12 @@ import {
   documentIsABotCheck,
   documentHasNoArticle,
   CITATION_BLURBS_NO_BIBLIOGRAPHY,
+  SITUATE_BUSY,
+  SITUATE_CLAIMS_NOT_FOUND,
+  SITUATE_LIMITED,
+  SITUATE_RESTING,
+  SITUATE_SEARCHES_FAILED,
+  SITUATE_TOO_FEW_SEARCHES,
   FETCH_PAPER_MISSING,
   fetchFailed,
   ILLUSTRATE_NO_SKETCH,
@@ -698,6 +716,10 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      buy. Its `stamp` hashes every row's identity, so a list that names other
      works re-runs without being forced. Plan 261017h stage 3. */
   "citation-blurbs",
+  /* The dearest press in Sources (about $0.40–0.50): web searches and a read
+     over the whole article, which nothing else in the pipeline reads. Forcing
+     the Bibliography one step before it must never buy it. Plan 261024o. */
+  "situate",
   /* The same two reasons as `faq`: it reads the blocks, the tree and the
      metadata, nothing else in the pipeline reads what it writes, so the
      positional cascade would buy a model call for nothing. Its `stamp` compares
@@ -6215,6 +6237,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Stage 5p — a note on each cited work, from its abstract alone (plan 261017h
      stage 3). Queued by the publication of a Bibliography; see the factory. */
   "citation-blurbs": citationBlurbsStep(),
+  /* Where the piece sits in the literature — the owner's press in Sources ›
+     Investigate (plan 261024o). See the factory. */
+  situate: situateStep(),
   /* Stage 5q — cross-references: a phrase in one block linked to the block that
      shows it in detail. Off DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED;
      queued after import by the add page's box, or by a press on Metadata.
@@ -6278,6 +6303,167 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     },
   },
 };
+
+/** What the `situate` step is handed: the stage's seams, and the allowance it takes before them. */
+export interface SituateStepDeps extends SituateDeps {
+  allowance: Pick<FetchAllowanceStore, "take" | "finish">;
+}
+
+/** The reader's sentence for each way the stage stops before its read. */
+const SITUATE_REFUSALS: Record<SituateRefused["why"], ReaderFacingFailure> = {
+  "too-few-queries": SITUATE_TOO_FEW_SEARCHES,
+  "no-claim-queries": SITUATE_TOO_FEW_SEARCHES,
+  "searches-failed": SITUATE_SEARCHES_FAILED,
+  "claims-not-found": SITUATE_CLAIMS_NOT_FOUND,
+};
+
+/** And for each way the allowance refuses. */
+const SITUATE_ALLOWANCE_REFUSALS: Record<Exclude<AllowanceTaken["kind"], "allowed">, ReaderFacingFailure> = {
+  concurrency: SITUATE_BUSY,
+  rate: SITUATE_LIMITED,
+  global: SITUATE_RESTING,
+};
+
+/**
+ * **The `situate` step** — where the piece sits in the literature: a planned
+ * set of web searches, the later works that cite it, and one read of all of it
+ * beside the whole article, every claim checked in code (src/situate.ts, plan
+ * 261024o). A factory so a test can hand it a fake allowance, fake searches and
+ * fake citers and still run the step the pipeline runs.
+ *
+ * **The allowance is taken here, inside the step, before any paid call** (GPT
+ * Sol's S5): the press, a command-bar re-run, Metadata and
+ * `/api/jobs/:id/retry` all arrive at this line. `oncePerJob`, so a requeued
+ * window of the same job does not buy the searches twice; the allowance's
+ * lease covers the whole step, and is freed however it ends.
+ *
+ * **The stamp** is the article the read is sent (`inputFingerprint`), the
+ * prompt version, the capable model and the reader's profile — Skim's shape,
+ * because the read ranks for the reader. The searches are not in it: the web
+ * moves on its own, and only a press (forced, `FORCE_ONLY_WHEN_NAMED`) asks it
+ * again.
+ *
+ * It reads the Bibliography and the notes on cited works when they are there
+ * and never makes them: without them the plan has no list of the works it leans
+ * on, and the read no cited works' own words, and both say so in the artefact.
+ */
+export function situateStep(deps?: () => Promise<SituateStepDeps>): PipelineStep<"situate"> {
+  const depsFor =
+    deps ??
+    (async (): Promise<SituateStepDeps> => ({
+      /* Loaded here rather than imported: src/store/index.ts reaches this
+         module, and the step needs the store only when it runs. */
+      allowance: (await import("./store/index.js")).fetchAllowanceStore,
+      search: openRouterJson,
+      citers: (identity) => situateCiters(identity),
+      now: () => new Date(),
+    }));
+  return {
+    name: "situate",
+    label: "Searching the literature",
+    produces: ["situate"],
+    /* The searches and the read are bought from the provider and cannot be
+       fetched back if this window dies with them in flight: plan 261009l's
+       rule, as `reception` keeps it. */
+    oncePerJob: true,
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        /* The real, nullable meta, as `generateSituate` hashes it. */
+        inputHash: situateFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: SITUATE_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx, store) {
+      const article = await readArticle(ctx.slug, store);
+      const bibliography = await store.read(ctx.slug, "bibliography", "bibliography");
+      const blurbs = await store.read(ctx.slug, "citation-blurbs", "citation-blurbs");
+      const d = await depsFor();
+
+      const taken = await d.allowance.take("situate", SITUATE_RATE_POLICY);
+      if (taken.kind !== "allowed") {
+        plog.warn({ slug: ctx.slug, step: "situate", why: taken.kind }, `situate ${ctx.slug}: allowance spent`);
+        throw stageFailure(SITUATE_ALLOWANCE_REFUSALS[taken.kind], { authored: `situate allowance: ${taken.kind}` });
+      }
+      let run: SituateRun;
+      try {
+        run = await generateSituate(
+          {
+            article,
+            bibliography,
+            blurbs,
+            profile: ctx.profile ?? null,
+            power: ctx.power,
+            signal: ctx.signal,
+            onProgress: ctx.report,
+          },
+          d,
+        );
+      } catch (err) {
+        /* The stage's own refusals carry counts only, written here: authored. */
+        if (err instanceof SituateRefused) throw stageFailure(SITUATE_REFUSALS[err.why], { authored: err.message });
+        throw err;
+      } finally {
+        try {
+          await d.allowance.finish(taken.id);
+        } catch {
+          /* The lease runs out on its own. */
+        }
+      }
+
+      const { situate } = run;
+      const outcomes = { failed: 0, "no-search": 0, empty: 0, found: 0 };
+      for (const q of situate.searched.queries) outcomes[q.outcome]++;
+      /* Counts, timings and the model only — never a query, a URL, a quote or
+         anything the model wrote (docs/project/logging.md). `sourceUnquoted`
+         is the one to watch: a model quoting a page it did not read. */
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "situate",
+          model: run.model,
+          outcome: situate.outcome,
+          kind: situate.kind,
+          angle: situate.angle,
+          queries: situate.searched.queries.length,
+          searchFailed: outcomes.failed,
+          searchNoSearch: outcomes["no-search"],
+          searchEmpty: outcomes.empty,
+          searchFound: outcomes.found,
+          pages: situate.searched.pages,
+          citers: situate.searched.citers,
+          citersSkipped: situate.searched.citersSkipped ?? null,
+          cited: situate.searched.cited,
+          findings: situate.findings.length,
+          questions: situate.questions.length,
+          ...situate.counts,
+          planMs: run.planMs,
+          searchMs: run.searchMs,
+          readMs: run.readMs,
+          ms: situate.elapsedMs,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          /* The profile's LENGTH, never the profile. */
+          profileChars: ctx.profile?.length ?? 0,
+        },
+        `situate ${ctx.slug}: ${situate.findings.length} findings from ${situate.searched.pages} pages`,
+      );
+      const n = situate.findings.length;
+      return {
+        parts: { situate },
+        detail:
+          situate.outcome === "nothing-found"
+            ? `${situate.searched.queries.length} searches, nothing found`
+            : `${n} ${n === 1 ? "finding" : "findings"} from ${situate.searched.pages} pages`,
+      };
+    },
+  };
+}
 
 /**
  * **The `citation-blurbs` step** — a short note on each work the Bibliography

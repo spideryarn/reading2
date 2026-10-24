@@ -66,6 +66,7 @@ import {
   loadQuiz,
   loadFaq,
   loadSourcesClaims,
+  loadSituate,
   loadRelations,
   loadCrossrefs,
   loadSimpleSummary,
@@ -507,6 +508,7 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  SituateResponse,
   QuizFound,
   QuizResponse,
   QuotesResponse,
@@ -12397,6 +12399,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadSourcesClaims(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /* Sources › Investigate's dossier: where the piece sits in the literature —
+     plan 261024o, src/situate.ts. **Owner only**: every store read is
+     owner-scoped, so somebody else's article is a 404, and there is no public
+     twin (S9). GET only: asking again is POST /api/jobs { slug, steps:
+     ["situate"], force: ["situate"] }, whose step takes the allowance itself.
+     This route never spends. The three staleness facts of a profile carrier;
+     none yet is `200 null` — `orNullWhenNotMadeYet`. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/situate\/([\w.%-]+)$/,
+    article: "first-capture",
+    viewAs: "read",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<SituateResponse>(at, () => loadSituate(at), (found) => found.situate),
+      );
       if (!found) return;
       send(res, 200, found);
     },

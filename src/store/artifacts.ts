@@ -45,6 +45,7 @@ import type {
   Arc,
   Block,
   Bibliography,
+  Situate,
   CitationBlurbs,
   Crossrefs,
   Matter,
@@ -115,6 +116,7 @@ export type ArtifactKind =
   | "reception"
   | "bibliography"
   | "citation-blurbs"
+  | "situate"
   | "crossrefs"
   | "matter"
   | "simple";
@@ -251,6 +253,11 @@ export interface ArtifactMap {
    * src/types.ts, written by the `citation-blurbs` step. Plan 261017h stage 3.
    */
   "citation-blurbs": CitationBlurbs;
+  /**
+   * Where the piece sits in the literature — `Situate`, src/types.ts, written
+   * by the `situate` step. Owner only. Plan 261024o.
+   */
+  situate: Situate;
   /**
    * Links between the article's own blocks — `Crossrefs`, src/types.ts,
    * written by the `crossrefs` step.
@@ -510,6 +517,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   /* An `entries` map, and **an EMPTY one is usable**: a list with no works,
      or none decided yet, is still the step's answer. */
   "citation-blurbs": { field: "entries", ok: isObject },
+  /* A `findings` array, and **an EMPTY one is usable**: the searches ran and
+     found nothing (`outcome: "nothing-found"`), or the read found nothing the
+     checks kept. Both are real answers, said as such and never as "all clear". */
+  situate: { field: "findings", ok: isArray },
   /* A `links` array, and **an EMPTY one is usable**, as `faq`'s is: a piece
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
@@ -1077,6 +1088,10 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      column itself (src/citation-blurbs.ts § `previousEntry`), keyed by the
      Bibliography's ids, which that list already inherits across runs. */
   "citation-blurbs": "citation-blurbs",
+  /* No `BASELINE` row: a finding's id is a hash of its kind, block and canonical
+     source URL (src/situate.ts § `findingId`), so a re-run that finds the same
+     thing keeps it without reading the last run. */
+  situate: "situate",
   /* **And deliberately NO `BASELINE` row**: nothing addresses a link, so a
      re-run simply replaces the list. */
   crossrefs: "crossrefs",

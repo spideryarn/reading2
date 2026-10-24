@@ -1081,6 +1081,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      being cut off mid-call. The spike's whole run was about a minute. Replace
      with a measurement once it has run on real articles. */
   "citation-blurbs": 360_000,
+  /* **Measured once, in the spike** (investigation 261024b): 63 s end to end on
+     a 38,000-word article — the plan call, 17 searches eight at a time, and one
+     read. Budgeted as the parts' ceilings instead: the plan's call, then two
+     waves of searches at `SEARCH_TIMEOUT_MS` (src/situate.ts), then the read,
+     whose answer budget at Sonnet's measured stream rate is about two and a
+     half minutes. 360 s holds all of it; the allowance's lease is sized from
+     this number. Replace with a measurement once it has run on real articles. */
+  situate: 360_000,
 };
 
 /**

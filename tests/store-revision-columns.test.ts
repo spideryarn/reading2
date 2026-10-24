@@ -263,6 +263,10 @@ const READS = [
   /* Added 2026-10-08 with the `debate-claims` stage. `CITED_FINGERPRINT_COLUMNS`
      supplies its rendered head and tree fallback. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "sourcesClaims",
+  /* Added 2026-10-24 with the `situate` stage, owner only.
+     `CITED_FINGERPRINT_COLUMNS`, as `sourcesClaims`: the article the read was
+     sent. docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md. */
+  "situate",
   /* Added 2026-09-30 with the `crossrefs` stage. `CITED_FINGERPRINT_COLUMNS`,
      like `faq`: its article head carries the cited metadata fields.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

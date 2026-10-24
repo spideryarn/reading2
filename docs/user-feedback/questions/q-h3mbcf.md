@@ -1,9 +1,10 @@
 ---
 id: q-h3mbcf
 report: spya-nt6hee
-status: open
+status: answered
 asked: 2026-10-24
 title: Should the fixed parts of an author-gift email be editable too, or only your message?
+acted: spya-kkqwg0
 refs: docs/plans/261024f-author-gift-drafts-permanent-delete-exact-email-preview-editable-lookup-guidance.md · docs/user-feedback/261023_2240-author-gift-draft-shows-the-exact-email.md · #687
 ---
 Each author-gift draft now shows the exact email, and you can edit your message in it. The rest of the email is fixed wording. Should that be editable too?
@@ -25,3 +26,9 @@ What was done (on dev, not yet deployed): each draft card now shows "The email, 
 What is still fixed: everything in the email except the greeting name and your message. That wording is shared with every gift voucher you send from the Give form, not just author gifts, which is why it was not made editable in the same change.
 
 What would decide it: whether the fixed paragraphs read wrongly for an author, who is not really "being given articles" so much as being shown their own work. If they do, C fixes it for every author gift at once.
+
+Greg's reply, 2026-10-24 (spya-kkqwg0):
+
+> A for now and we'll consider C in future
+
+Acted on by the feedback sweep, 2026-10-24: nothing to build, the fixed wording stays as it shipped. C (one editable wording for every author-gift email) is recorded as a proposal in the Overseer's queue, unauthorised, for when he wants it.
