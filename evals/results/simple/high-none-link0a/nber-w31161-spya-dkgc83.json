@@ -1,0 +1,339 @@
+{
+  "arm": "high-none-link0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "nber-w31161-spya-dkgc83",
+  "version": "simple-prompt/12",
+  "sourceSha256": "525e97af9b0ee15d35746e51afc9feb88ab0c9f2f90877d31ae99af836d6f84c",
+  "at": "2026-10-24T20:27:41.437Z",
+  "bodyWords": 15466,
+  "band": "long",
+  "bodyBlocks": 220,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "befaba74749a9dcc",
+  "systemsSha256": "3053f57effe818f6bfdf0122549df7ca2a6ca4a4e54deaf4b328be6cc4b94148",
+  "power": "high",
+  "guard": true,
+  "wallMs": 38017,
+  "costUsd": 0.27211,
+  "tokens": {
+    "input": 12474,
+    "output": 3909,
+    "reasoning": 1151
+  },
+  "briefReadyMs": 14049,
+  "fullerReadyMs": 38012,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 617,
+  "briefWords": 96,
+  "fuller": [
+    {
+      "text": "This economics paper asks what happens when real workers get a generative AI helper on the job. The authors follow 5,179 customer support agents at a large US software firm, most of them working in the Philippines. Over time, many agents got a chat assistant built on OpenAI's GPT models, which reads customer chats and suggests replies in real time. Agents stay in charge and are free to ignore what it suggests.",
+      "ids": [
+        "spya-jbk3e7",
+        "spya-gc9783",
+        "spya-yfurna"
+      ],
+      "sentences": [
+        {
+          "text": "This economics paper asks what happens when real workers get a generative AI helper on the job.",
+          "id": null
+        },
+        {
+          "text": "The authors follow 5,179 customer support agents at a large US software firm, most of them working in the Philippines.",
+          "id": "spya-jbk3e7"
+        },
+        {
+          "text": "Over time, many agents got a chat assistant built on OpenAI's GPT models, which reads customer chats and suggests replies in real time.",
+          "id": "spya-gc9783"
+        },
+        {
+          "text": "Agents stay in charge and are free to ignore what it suggests.",
+          "id": "spya-gc9783"
+        }
+      ]
+    },
+    {
+      "text": "The authors say this is, to their knowledge, the first study of generative AI used at scale in a real workplace. Older software needed exact, written-out instructions, so it could not do work that rests on tacit knowledge: know-how people cannot fully put into words. AI systems learn from examples instead, including examples of top and weak workers. So they might pick up what makes the best workers good and pass it on to others.",
+      "ids": [
+        "spya-yfurna",
+        "spya-rfqusq",
+        "spya-zc5qrc"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say this is, to their knowledge, the first study of generative AI used at scale in a real workplace.",
+          "id": "spya-yfurna"
+        },
+        {
+          "text": "Older software needed exact, written-out instructions, so it could not do work that rests on tacit knowledge: know-how people cannot fully put into words.",
+          "id": "spya-rfqusq",
+          "key": "tacit knowledge"
+        },
+        {
+          "text": "AI systems learn from examples instead, including examples of top and weak workers.",
+          "id": "spya-zc5qrc"
+        },
+        {
+          "text": "So they might pick up what makes the best workers good and pass it on to others.",
+          "id": "spya-zc5qrc"
+        }
+      ]
+    },
+    {
+      "text": "The data cover 3 million chats, with outcomes summed up for each agent in each month. The main measure is resolutions per hour: how many customer problems an agent solves each hour. It is built from how long each chat takes, how many chats an agent handles per hour, and the share of chats solved. Because the tool reached agents at different times, the authors compare each agent's change after getting it with the change for agents who did not yet have it.",
+      "ids": [
+        "spya-trjye4",
+        "spya-r006w5",
+        "spya-ujafxf"
+      ],
+      "sentences": [
+        {
+          "text": "The data cover 3 million chats, with outcomes summed up for each agent in each month.",
+          "id": "spya-ujafxf"
+        },
+        {
+          "text": "The main measure is resolutions per hour: how many customer problems an agent solves each hour.",
+          "id": "spya-trjye4",
+          "key": "resolutions per hour"
+        },
+        {
+          "text": "It is built from how long each chat takes, how many chats an agent handles per hour, and the share of chats solved.",
+          "id": "spya-trjye4"
+        },
+        {
+          "text": "Because the tool reached agents at different times, the authors compare each agent's change after getting it with the change for agents who did not yet have it.",
+          "id": "spya-r006w5"
+        }
+      ]
+    },
+    {
+      "text": "On average, access to the tool raised resolutions per hour by about 14%. Chats got 3.8 minutes shorter, a 9% drop, and agents handled about 14% more chats per hour, partly by juggling several at once. The share of chats solved rose a little, by 1.3 percentage points, and surveyed customer satisfaction did not change.",
+      "ids": [
+        "spya-sc3j5y",
+        "spya-sevzu3",
+        "spya-vpyejh"
+      ],
+      "sentences": [
+        {
+          "text": "On average, access to the tool raised resolutions per hour by about 14%.",
+          "id": "spya-sc3j5y",
+          "key": "raised resolutions per hour by about 14%"
+        },
+        {
+          "text": "Chats got 3.8 minutes shorter, a 9% drop, and agents handled about 14% more chats per hour, partly by juggling several at once.",
+          "id": "spya-sevzu3"
+        },
+        {
+          "text": "The share of chats solved rose a little, by 1.3 percentage points, and surveyed customer satisfaction did not change.",
+          "id": "spya-vpyejh"
+        }
+      ]
+    },
+    {
+      "text": "The gains were very uneven. The least skilled fifth of agents, judged by their work before the tool, solved 34% more problems per hour, while the most skilled saw no gain. Agents with under a month on the job improved by 46%, and those with over a year saw no effect. New agents with the tool reached, after two months, the level that agents without it took over six months to reach.",
+      "ids": [
+        "spya-qb6xjf",
+        "spya-auzxac",
+        "spya-bffqk2"
+      ],
+      "sentences": [
+        {
+          "text": "The gains were very uneven.",
+          "id": null
+        },
+        {
+          "text": "The least skilled fifth of agents, judged by their work before the tool, solved 34% more problems per hour, while the most skilled saw no gain.",
+          "id": "spya-qb6xjf"
+        },
+        {
+          "text": "Agents with under a month on the job improved by 46%, and those with over a year saw no effect.",
+          "id": "spya-auzxac"
+        },
+        {
+          "text": "New agents with the tool reached, after two months, the level that agents without it took over six months to reach.",
+          "id": "spya-bffqk2",
+          "key": "two months"
+        }
+      ]
+    },
+    {
+      "text": "To see why the tool helps, the authors look at three kinds of evidence. Agents who followed more suggestions gained more: about 10% for the lowest fifth of followers, close to 25% for the highest fifth. During outages, when the software broke and gave no suggestions, agents with three months of use still worked faster than before, hinting they had learned. A similarity score for the wording of low- and high-skill agents rose from 0.55 to 0.61, suggesting weaker agents began writing more like strong ones.",
+      "ids": [
+        "spya-mp473w",
+        "spya-jhjk2m",
+        "spya-buny07"
+      ],
+      "sentences": [
+        {
+          "text": "To see why the tool helps, the authors look at three kinds of evidence.",
+          "id": null
+        },
+        {
+          "text": "Agents who followed more suggestions gained more: about 10% for the lowest fifth of followers, close to 25% for the highest fifth.",
+          "id": "spya-mp473w"
+        },
+        {
+          "text": "During outages, when the software broke and gave no suggestions, agents with three months of use still worked faster than before, hinting they had learned.",
+          "id": "spya-jhjk2m",
+          "key": "outages"
+        },
+        {
+          "text": "A similarity score for the wording of low- and high-skill agents rose from 0.55 to 0.61, suggesting weaker agents began writing more like strong ones.",
+          "id": "spya-buny07"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The tool also changed how the job felt. Customers' messages became clearly friendlier, by half of a typical spread on a scale from -1 to 1. Customers asked to speak to a manager almost 25% less often. Among agents with under six months on the job, quitting fell by about 10 percentage points, a 40% drop.",
+      "ids": [
+        "spya-ndnues",
+        "spya-y3yxwe",
+        "spya-krqm5r"
+      ],
+      "sentences": [
+        {
+          "text": "The tool also changed how the job felt.",
+          "id": null
+        },
+        {
+          "text": "Customers' messages became clearly friendlier, by half of a typical spread on a scale from -1 to 1.",
+          "id": "spya-ndnues"
+        },
+        {
+          "text": "Customers asked to speak to a manager almost 25% less often.",
+          "id": "spya-y3yxwe"
+        },
+        {
+          "text": "Among agents with under six months on the job, quitting fell by about 10 percentage points, a 40% drop.",
+          "id": "spya-krqm5r"
+        }
+      ]
+    },
+    {
+      "text": "The authors name clear limits. They cannot see wages, total hiring, or whether firms might use such tools to replace workers. The quitting results are less certain, because the firm may have given the tool to agents it expected to stay. And this is one firm with a fairly stable product, so results may differ where things change fast.",
+      "ids": [
+        "spya-a0nfx2",
+        "spya-he788c",
+        "spya-mpc5zp"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name clear limits.",
+          "id": null
+        },
+        {
+          "text": "They cannot see wages, total hiring, or whether firms might use such tools to replace workers.",
+          "id": "spya-a0nfx2"
+        },
+        {
+          "text": "The quitting results are less certain, because the firm may have given the tool to agents it expected to stay.",
+          "id": "spya-he788c"
+        },
+        {
+          "text": "And this is one firm with a fairly stable product, so results may differ where things change fast.",
+          "id": "spya-mpc5zp"
+        }
+      ]
+    },
+    {
+      "text": "The authors' main conclusion is that the AI seems to capture the best practices of top workers and share them with newer, weaker ones. This raises a fairness question they flag themselves. Top performers supply much of the training data but gain little, and under relative bonuses might even earn less, so how should they be paid for it?",
+      "ids": [
+        "spya-kvtdmz",
+        "spya-myf7jd"
+      ],
+      "sentences": [
+        {
+          "text": "The authors' main conclusion is that the AI seems to capture the best practices of top workers and share them with newer, weaker ones.",
+          "id": "spya-kvtdmz",
+          "key": "capture the best practices of top workers"
+        },
+        {
+          "text": "This raises a fairness question they flag themselves.",
+          "id": null
+        },
+        {
+          "text": "Top performers supply much of the training data but gain little, and under relative bonuses might even earn less, so how should they be paid for it?",
+          "id": "spya-myf7jd"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This study looks at what happened when a company gave its customer help workers an AI chat helper. The helper suggested replies to customers as the workers typed, and workers could ignore them. It is one of the first looks at such a tool in a real workplace, not a lab.",
+      "ids": [
+        "spya-jbk3e7",
+        "spya-yfurna"
+      ],
+      "sentences": [
+        {
+          "text": "This study looks at what happened when a company gave its customer help workers an AI chat helper.",
+          "id": "spya-jbk3e7"
+        },
+        {
+          "text": "The helper suggested replies to customers as the workers typed, and workers could ignore them.",
+          "id": "spya-yfurna"
+        },
+        {
+          "text": "It is one of the first looks at such a tool in a real workplace, not a lab.",
+          "id": "spya-yfurna"
+        }
+      ]
+    },
+    {
+      "text": "Workers with the tool solved 14% more customer problems per hour on average. New and less skilled workers gained the most, about 34%, while top workers barely gained. The authors think the AI may pass on the habits of the best workers to everyone else.",
+      "ids": [
+        "spya-jbk3e7",
+        "spya-yfurna"
+      ],
+      "sentences": [
+        {
+          "text": "Workers with the tool solved 14% more customer problems per hour on average.",
+          "id": "spya-jbk3e7",
+          "key": "14% more customer problems per hour"
+        },
+        {
+          "text": "New and less skilled workers gained the most, about 34%, while top workers barely gained.",
+          "id": "spya-jbk3e7",
+          "key": "New and less skilled workers gained the most"
+        },
+        {
+          "text": "The authors think the AI may pass on the habits of the best workers to everyone else.",
+          "id": "spya-yfurna"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}
