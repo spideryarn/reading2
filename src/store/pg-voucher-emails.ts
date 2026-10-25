@@ -67,7 +67,7 @@ import { FREE_LIFETIME_INGESTS } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingVoucherEmails, billingVouchers } from "../db/schema.js";
 import { type EmailDeps, type SendResult, noteText, oneLine, sendEmail } from "../email.js";
-import { EMAIL_BODY_CLOSE, EMAIL_BODY_OPEN, EMAIL_FOOTER_ROW, emailButton, emailHead } from "../email-frame.js";
+import { emailButton, emailHtml } from "../email-frame.js";
 import { log } from "../log.js";
 import { ADMIN_VOUCHERS_URL, PUBLIC_ORIGIN } from "../urls.js";
 import { type AccountEmail, accountEmail } from "./admin-accounts.js";
@@ -257,19 +257,13 @@ function giftHtml(parts: {
     (p, i) =>
       `<tr><td style="font-size:16px;line-height:1.6;padding:0 0 ${i === parts.paragraphs.length - 1 ? 28 : 16}px 0;">${p}</td></tr>`,
   );
-  return (
-    emailHead(parts.subject) +
-    EMAIL_BODY_OPEN +
-    `<tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">${parts.heading}</td></tr>
-${greetingRow(parts.name)}${noteRow(parts.note)}${starterRows(parts.starter)}${paragraphs.join("\n")}
-<tr><td style="padding:0 0 28px 0;">
-${emailButton(parts.button)}
-</td></tr>
-<tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">${parts.after}</td></tr>
-` +
-    EMAIL_FOOTER_ROW +
-    EMAIL_BODY_CLOSE
-  );
+  return emailHtml({
+    title: parts.subject,
+    heading: parts.heading,
+    rows: `${greetingRow(parts.name)}${noteRow(parts.note)}${starterRows(parts.starter)}${paragraphs.join("\n")}`,
+    button: parts.button,
+    after: parts.after,
+  });
 }
 
 const FOOTER_TEXT =

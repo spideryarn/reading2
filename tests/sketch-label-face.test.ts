@@ -17,6 +17,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { GlobalFonts, createCanvas } from "@napi-rs/canvas";
 import { describe, expect, it } from "vitest";
+import { sceneSvg } from "../evals/sketch/svg.js";
 import {
   CHAR_W,
   CHAR_W_BY_VOICE,
@@ -94,17 +95,24 @@ function token(name: string): string {
 
 const firstFamily = (stack: string) => (stack.split(",")[0] ?? "").trim().replace(/^['"]|['"]$/g, "");
 
+/** Measure one file under a private family name, rather than a fallback with the same spelling. */
+function measureFile(file: string, family: string, wght: number | null): number {
+  const ctx = createCanvas(10, 10).getContext("2d");
+  const registered = GlobalFonts.registerFromPath(path.join(ROOT, "node_modules", file), family);
+  if (registered === null) {
+    throw new Error(`could not register ${file}; refusing to measure canvas's fallback face`);
+  }
+  ctx.font = `100px "${family}"`;
+  ctx.fontVariationSettings = wght === null ? "normal" : `"wght" ${wght}`;
+  return ctx.measureText(SAMPLE).width / 100 / SAMPLE.length;
+}
+
 /** The average em per character of `SAMPLE` in `voice`'s face, averaged over the drawn weights. */
 function measured(voice: SketchLabelVoice): number {
-  const ctx = createCanvas(10, 10).getContext("2d");
   let sum = 0;
   for (const w of WEIGHTS) {
     const { file, wght } = FACES[voice].files[w];
-    const family = `measure-${voice}-${w}`;
-    GlobalFonts.registerFromPath(path.join(ROOT, "node_modules", file), family);
-    ctx.font = `100px "${family}"`;
-    ctx.fontVariationSettings = wght === null ? "normal" : `"wght" ${wght}`;
-    sum += ctx.measureText(SAMPLE).width / 100 / SAMPLE.length;
+    sum += measureFile(file, `measure-${voice}-${w}`, wght);
   }
   return sum / WEIGHTS.length;
 }
@@ -112,9 +120,18 @@ function measured(voice: SketchLabelVoice): number {
 const VOICES = Object.keys(CHAR_W_BY_VOICE) as SketchLabelVoice[];
 
 describe("Sketch's label width is the face it is drawn in", () => {
+  it("refuses to measure a face that did not register instead of measuring canvas's fallback", () => {
+    expect(() => measureFile("not-a-font.woff2", "missing-sketch-label-face", null)).toThrow(/register/i);
+  });
+
   it("CHAR_W is the drawn voice's entry, and ui is the 0.53 that has always wrapped the labels", () => {
     expect(CHAR_W).toBe(CHAR_W_BY_VOICE[SKETCH_LABEL_VOICE]);
     expect(CHAR_W_BY_VOICE.ui).toBe(0.53);
+  });
+
+  it("writes the drawn voice's literal stack into a standalone exported SVG", () => {
+    const svg = sceneSvg({ id: "overview", title: "A scene", height: 100, items: [] });
+    expect(svg).toContain(`<style>text { font-family: ${FONT_STACK_BY_VOICE[SKETCH_LABEL_VOICE]}; }</style>`);
   });
 
   for (const voice of VOICES) {

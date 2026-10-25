@@ -171,7 +171,8 @@ Then:
    are one decision. Sketch's is `SKETCH_LABEL_VOICE` in `src/sketch-scene.ts`: it sets the
    `<svg>`'s `voiceClass`, the exporter's stack and `CHAR_W`, and
    [`tests/sketch-label-face.test.ts`](../../tests/sketch-label-face.test.ts) holds each face's width
-   to its woff2. It is still `"ui"`; switching it is a product call, asked as
+   to its woff2 and refuses canvas's silent fallback when a face does not register. It is still
+   `"ui"`; switching it is a product call, asked as
    [q-ugekcv](../user-feedback/questions/q-ugekcv.md). Illustrated's captions are painted into the
    image.
 

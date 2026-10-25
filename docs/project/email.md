@@ -70,10 +70,11 @@ Three rules the HTML keeps; the production writer refuses the first two when the
   word beside it so a blocked image loses nothing). Mail clients drop what a web page relies on.
 
 **The frame has one source**: [`src/email-frame.ts`](../../src/email-frame.ts) — the head, the
-outer tables, the wordmark row, the footer row and the button. The gift email below is built from
-it; the two templates stay hand-written files, because GoTrue reads them from disk, and
-`tests/email-frame.test.ts` fails unless each is exactly that frame around its own comment, title
-and rows. So a change to the frame goes in that file first, then into both templates
+outer tables, the wordmark row, the heading, action and after rows, the footer row and the button.
+The gift email below is built from its complete `emailHtml` composer; the two templates stay
+hand-written files, because GoTrue reads them from disk, and `tests/email-frame.test.ts` compares
+each complete file after its own leading comment with that composer. So a change to the frame goes
+in that file first, then into both templates
 ([261025k § 1](../plans/261025k-fonts-and-css-code-quality.md)).
 
 The other four GoTrue emails (magic link, email change, invite, reauthentication) are still

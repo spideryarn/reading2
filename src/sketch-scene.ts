@@ -52,7 +52,6 @@
  */
 import { isSpideryarnId } from "./ids.js";
 import type { BlockId } from "./types.js";
-import type { Voice } from "./web/voice.js";
 
 /**
  * The sketch prompt's version; src/sketch.ts says why it lives here.
@@ -118,8 +117,12 @@ const REGION_STYLES: readonly SketchRegionStyle[] = ["band", "dashed", "bracket"
  */
 export const SIZE_PX: Record<SketchSize, number> = { xs: 10, sm: 12, md: 15, lg: 20 };
 
-/** The two voices a label could be drawn in: the app's own, or the model's whose words they are. */
-export type SketchLabelVoice = Extract<Voice, "ui" | "ai">;
+/**
+ * The two voices a label could be drawn in: the app's own, or the model's
+ * whose words they are. Kept local rather than importing the client's `Voice`:
+ * this shared scene module is a pure leaf on the browser allowlist.
+ */
+export type SketchLabelVoice = "ui" | "ai";
 
 /**
  * **Whose face the labels are drawn in.** The words are the model's, so the
