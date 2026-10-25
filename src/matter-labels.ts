@@ -24,6 +24,10 @@
  *   as a *Contents* label would be. A page's label can be lost before this
  *   (Readability dropped `<h1 class="toc-header">`, spya-jk0xw5) or never be
  *   there at all.
+ * - **A summary the author put at the front** (`summaryAt`, plan 261025f): an
+ *   *Executive summary*, *Key points*, *Highlights*, *Significance* or
+ *   *Author summary* label in the opening that nothing of the article's own
+ *   outranks, and its run. Only this rule finds them; the model is not asked.
  */
 import {
   BACK_MATTER_FROM_SHARE,
@@ -40,6 +44,7 @@ import {
   labelledSection,
   matterWindows,
   stretchEvidence,
+  summaryAt,
 } from "./matter.js";
 import { inPageHrefs } from "./matter-current.js";
 import type { Block, BlockId } from "./types.js";
@@ -49,7 +54,7 @@ import { type FrontMatterArticle, frontMatter } from "./web/front-matter.js";
 const FRONT: ReadonlySet<MatterKind> = new Set(["abstract", "keywords", "contents", "authors"]);
 /** Kinds that may sit either side: "Details" at the top of a report, "Acknowledgements" at the end of a paper. */
 const EITHER: ReadonlySet<MatterKind> = new Set(["acknowledgements", "funding", "declarations"]);
-/** Substantive previews that may link to their later sections but are never matter. */
+/** Substantive previews that may link to their later sections but are never a contents list: at the front, one is a summary (`summaryAt`). */
 const CONTENTS_PREVIEW_LABEL = /^\s*(?:key points?|highlights?|significance|executive summary|author summary)\s*:?\s*$/iu;
 
 export type LabelsArticle = MatterArticle & FrontMatterArticle & { blocks: readonly Block[] };
@@ -112,6 +117,11 @@ export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId
     while (end > i + 1 && stretchEvidence(article, i, end, kinds) !== null) end--;
     candidates.push({ item: item++, start: i, end, kinds: [...kinds], headedBy: null, shape: "range" });
   }
+  /* A front summary under its label (`summaryAt` holds where it sits and how far it runs). */
+  for (let i = 0; i < w.openEnd; i++) {
+    const run = summaryAt(article, i);
+    if (typeof run !== "string") candidates.push({ item: item++, ...run, kinds: ["summary"], headedBy: null, shape: "range" });
+  }
   for (const run of inlineLabelRuns(blocks, placed)) candidates.push({ item: item++, ...run, headedBy: null, shape: "range" });
   for (const run of linked) candidates.push({ item: item++, ...run, kinds: ["contents"], headedBy: null, shape: "range" });
   return holdStretches(article, candidates, echo);
@@ -140,9 +150,9 @@ const insideRun = (index: number, runs: readonly { start: number; end: number }[
  * blocks, empty blocks allowed between, each linking to a heading of the
  * article that comes after it, together naming at least
  * `LINKED_CONTENTS_MIN_ENTRIES` distinct headings. Each entry's text must name
- * the heading that its own link targets. A labelled "Key points" list stays
- * showing even when it meets this structural rule: the caller vetoes that
- * label (front-and-back-matter.md: never folded). Where a run sits is the
+ * the heading that its own link targets. A labelled "Key points" list is never
+ * contents even when it meets this structural rule: the caller vetoes that
+ * label, and a front one folds as a summary instead. Where a run sits is the
  * caller's to check, and the shared checks still hold it to its entries naming
  * the headings (`stretchEvidence`'s unlabelled contents).
  * `[start, end)`, ending at the last entry.

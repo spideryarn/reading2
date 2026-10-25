@@ -21,6 +21,7 @@ export const MATTER_KIND_NAMES: ReadonlySet<string> = new Set<MatterKindName>([
   "title",
   "authors",
   "abstract",
+  "summary",
   "keywords",
   "contents",
   "dates",

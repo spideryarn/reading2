@@ -825,7 +825,7 @@ function TableViewInner({
         stretches.map((s) => [
           s.ids[0]!,
           {
-            label: stubLabel(s.kinds),
+            label: stubLabel(s.kinds, blocks[s.start]?.text),
             count: stubCount(s, blocks),
             what: stubWhat(s.kinds),
             how: stubHow(atFront(s, blocks)),

@@ -16,6 +16,7 @@
  * says. **Nothing here comes from a model's words**: a label is built from the
  * closed list of kinds, a count from the blocks (plan review F4).
  */
+import { SUMMARY_FALLBACK_LABEL, summaryStubLabel } from "../matter-summary.js";
 import type { Article, Block, BlockId, MatterKindName } from "../types.js";
 import { type FrontMatterArticle, frontMatter } from "./front-matter.js";
 
@@ -29,6 +30,7 @@ export const MATTER_KIND_ORDER: readonly MatterKindName[] = [
   "title",
   "authors",
   "abstract",
+  "summary",
   "keywords",
   "contents",
   "dates",
@@ -166,6 +168,7 @@ const KIND_LABEL: Record<MatterKindName, string> = {
   title: "Title",
   authors: "Authors and affiliations",
   abstract: "Abstract",
+  summary: SUMMARY_FALLBACK_LABEL,
   keywords: "Keywords",
   contents: "Contents",
   dates: "Publication details",
@@ -180,6 +183,7 @@ const KIND_WHAT: Record<MatterKindName, string> = {
   title: "The title, as the page repeats it.",
   authors: "Who wrote it, where they work, and how to reach them.",
   abstract: "The authors' own summary of the paper.",
+  summary: "The authors' own summary of the piece, which Summary and Structure also cover.",
   keywords: "The keywords and subject codes it is filed under.",
   contents: "The piece's own table of contents.",
   dates: "When it was received, accepted and published, its DOI, licence and citation.",
@@ -210,10 +214,16 @@ export function namedKinds(kinds: readonly MatterKindName[]): MatterKindName[] {
  * the authors' list further down both reading *Authors and affiliations*, two
  * stubs a reader could not tell apart; and *Title and authors and
  * affiliations* does not read.
+ *
+ * **A summary is named by its label**: *Executive summary*, *Key points*,
+ * *Significance* (Greg's answer to q-r8kumx: the stub says which kind it is).
+ * `firstText` is the stretch's first block, which for a summary is its label;
+ * it only chooses one of src/matter-summary.ts's names, never shows itself.
  */
-export function stubLabel(kinds: readonly MatterKindName[]): string {
+export function stubLabel(kinds: readonly MatterKindName[], firstText = ""): string {
   const titled = kinds.includes("title");
-  const label = (k: MatterKindName) => (titled && k === "authors" ? "Authors" : KIND_LABEL[k]);
+  const label = (k: MatterKindName) =>
+    titled && k === "authors" ? "Authors" : k === "summary" ? summaryStubLabel(firstText) : KIND_LABEL[k];
   const named = namedKinds(kinds).map((k, i) => (i === 0 ? label(k) : lowerFirst(label(k))));
   if (named.length === 0) return "Folded";
   if (named.length === 1) return named[0]!;
@@ -234,7 +244,7 @@ function isEmpty(block: Block): boolean {
 }
 
 /**
- * **The stub's count**, from the blocks: *200 words* for an abstract on its
+ * **The stub's count**, from the blocks: *200 words* for an abstract or a front summary on its
  * own, *251 entries* for references (every non-empty block that is not a
  * heading, so the *References* heading is not an entry), and *N lines*
  * (non-empty blocks) for everything else. References win over the abstract
@@ -247,7 +257,7 @@ export function stubCount(stretch: Pick<ViewStretch, "start" | "end" | "kinds">,
   if (main.includes("references")) {
     return plural(inside.filter((b) => !isEmpty(b) && b.kind !== "heading").length, "entry", "entries");
   }
-  if (main.length === 1 && main[0] === "abstract") {
+  if (main.length === 1 && (main[0] === "abstract" || main[0] === "summary")) {
     return plural(
       inside.filter((b) => b.kind !== "heading").reduce((n, b) => n + b.words, 0),
       "word",

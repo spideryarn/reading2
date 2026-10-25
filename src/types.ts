@@ -7090,6 +7090,7 @@ export type MatterKindName =
   | "title"
   | "authors"
   | "abstract"
+  | "summary"
   | "keywords"
   | "contents"
   | "dates"

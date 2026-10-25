@@ -294,7 +294,11 @@ checked in the browser first.
 - **The abstract is folded by default**, a stub on the page and a row in Structure: his lean in
   `spya-vskdap`. One kind to take out of the fold list if he changes his mind after seeing it.
 - **Nothing is skipped or removed**: Greg called that "toooo extreme".
-- **Appendices, glossaries, notes and executive summaries are not folded.**
+- **Appendices, glossaries, notes and executive summaries are not folded.** *Overturned for
+  executive summaries and the other front summaries* (Key points, Highlights, Significance, Author
+  summary) by Greg's answer "B" to q-r8kumx on 2026-10-25; they fold, each its own stub —
+  [261025f](261025f-an-executive-summary-and-the-other-front-summaries-fold-like-the-abstract.md).
+  Appendices, glossaries and notes still do not.
 - **The fold is not remembered** between visits, as today.
 
 ## Stages

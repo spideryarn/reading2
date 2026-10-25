@@ -774,7 +774,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-h5mteu": "Chat, Recall, Tutorial and Quiz now say when the article is wrong or disputed, in a separate sentence marked as from memory or with a link. Live and Explain are queued to get the same.",
   "spya-hdde62": "The More button now sits straight after Summary in the bottom bar, before Skim, on every screen. On a phone it stays there too, rather than jumping to the front.",
   "spya-hdeye3": "Chat now gives a detailed answer when you ask for one, about twice as long as before, while ordinary answers stay as brief as they were.",
-  "spya-hnw9xq": "Summary's links now go to the passage that argues each point, not the abstract or executive summary. Still waiting on you: should an executive summary be folded like the abstract (q-r8kumx)?",
+  "spya-hnw9xq": "Summary now links the passage that argues each point, not the abstract or executive summary. And, per your answer B, executive summaries and the other front summaries now fold like the abstract (this article: once re-imported).",
   "spya-hrfj6q": "The Referee error was a stored failure from 5 September, before the 28 September fix; a retry works now. The same overflow was live in Search on long papers, and that is fixed.",
   "spya-hrx8z2": "Fixed on dev: all 11 asterisk notes in The Order of Time will link. Your copy changes only after a Refresh, which moves about 7 minutes of reading time; that is the open question.",
   "spya-ht4hf4": "On dev. Every chat on an article now answers on Claude Opus 5.5, whatever the article's High-powered AI switch says. Candidates and the tools a chat calls still follow the switch.",

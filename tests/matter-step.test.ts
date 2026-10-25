@@ -140,6 +140,12 @@ describe("matterForReader — the stretches reach the reading view only about th
       stretches: [{ from: "spya-aaaaaa", to: "spya-bbbbbb", kinds: ["references"] }],
     };
     expect(matterForReader(legacy, legacyBlocks)).toEqual(legacy.stretches);
+    /* matter/3 (plan 261024h) under its own m2 hash, pinned from the code
+       before matter/4 added the list-item bit (plan 261025f). */
+    expect(MATTER_PROMPT_VERSION).not.toBe("matter/3");
+    const matter3: Matter = { ...legacy, version: "matter/3", sourceHash: "m2:db0d4d63919f0e41" };
+    expect(matterForReader(matter3, legacyBlocks)).toEqual(legacy.stretches);
+    expect(matterForReader({ ...matter3, sourceHash: "m1:06756ee7e3eebb0e" }, legacyBlocks)).toBeUndefined();
   });
 
   it("withholds a value carried over blocks that have since changed", () => {
