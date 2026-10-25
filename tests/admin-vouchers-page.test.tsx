@@ -1725,6 +1725,15 @@ describe("sorting and hiding the Given table", () => {
       (tr) => tr.querySelector("td")?.textContent?.match(/^[a-z-]+@example\.test/)?.[0],
     );
   const query = () => new URLSearchParams(location.search);
+  /** nuqs writes the address behind its throttle, which counts from its last
+      write, so a second click inside that window is written late and one read
+      straight after a click is a race — docs/project/testing.md § A nuqs write
+      outlives the test that started it, and
+      docs/postmortems/261025a-a-fixed-wait-raced-the-address-throttle.md. One
+      flush writes the keys these synchronous setters queued together. Wait
+      for a changed value before reading neighbouring keys plainly. */
+  const address = (key: string, value: string | null) =>
+    vi.waitFor(() => expect(query().get(key)).toBe(value));
   async function click(el: HTMLElement | undefined) {
     if (!el) throw new Error("nothing to click");
     await act(async () => el.click());
@@ -1800,11 +1809,11 @@ describe("sorting and hiding the Given table", () => {
     await mount();
     await click(headerButton("Email"));
     expect(order()).toEqual(["claimed@example.test", "revoked@example.test", "waiting@example.test"]);
-    expect(query().get("by")).toBe("email");
+    await address("by", "email");
     expect(query().get("tab")).toBe("given");
     expect(query().get("gift")).toBe(WAITING);
     await click(headerButton("Email"));
-    expect(query().get("dir")).toBe("desc");
+    await address("dir", "desc");
     expect(query().get("tab")).toBe("given");
     expect(query().get("gift")).toBe(WAITING);
 
@@ -1821,11 +1830,11 @@ describe("sorting and hiding the Given table", () => {
     const tab = (name: string) =>
       [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent?.startsWith(name));
     await click(tab("Give"));
-    expect(query().get("tab")).toBeNull();
+    await address("tab", null);
     expect(query().get("by")).toBe("articles");
     expect(query().get("dir")).toBe("asc");
     await click(tab("Given"));
-    expect(query().get("tab")).toBe("given");
+    await address("tab", "given");
     expect(order()).toEqual(["revoked@example.test", "claimed@example.test", "waiting@example.test"]);
   });
 
@@ -1842,7 +1851,7 @@ describe("sorting and hiding the Given table", () => {
     ];
     await mount();
     await click(headerButton("Status"));
-    expect(query().get("by")).toBe("status");
+    await address("by", "status");
     /* Equal statuses newest first: the two revoked ones. */
     expect(order()).toEqual([
       "claimed@example.test",
@@ -1869,9 +1878,13 @@ describe("sorting and hiding the Given table", () => {
 
     /* Only the waiting voucher has a note to them: first under either arrow. */
     await click(headerButton("Note to them"));
+    /* Otherwise the next wait could see Private note's old dir=desc. */
+    await address("by", "recipientNote");
+    expect(query().get("dir")).toBeNull();
     expect(order()[0]).toBe("waiting@example.test");
     await click(headerButton("Note to them"));
-    expect(query().get("dir")).toBe("desc");
+    await address("dir", "desc");
+    expect(query().get("by")).toBe("recipientNote");
     expect(order()[0]).toBe("waiting@example.test");
   });
 

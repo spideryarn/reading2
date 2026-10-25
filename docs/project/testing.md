@@ -1061,7 +1061,10 @@ only home for something the rest of a feature depends on (a Safari private windo
 a per-key debounce queue; every parameter then joins one shared throttle queue, which flushes from a
 `setTimeout` at 50ms. Both queues are `globalSingleton`s stored on **`globalThis`**, keyed by the
 package version, so they belong to the realm rather than to the React root: **unmounting cancels
-nothing**, and neither does anything else short of a new realm.
+nothing**. What does cancel them is a `popstate`, or — once `enableHistorySync()` has patched
+`history` — a `pushState`/`replaceState` from outside nuqs, both of which call nuqs' `resetQueues()`
+(`node_modules/nuqs/dist/patch-history-*.js`). An `afterEach` that resets the address that way
+drops the pending write; one that does not leaves it armed.
 
 A case that returns with a write still queued leaves an armed timer. Vitest tears the environment
 down, the timer fires, and nuqs reads a `location` that is gone. The run then fails as an
