@@ -633,8 +633,8 @@ export function PrivacyPage() {
           note on each work an article cites and check it, for which it is shown each cited work’s
           title, authors and year and its abstract from a public catalogue, and none of the
           article’s own text, and to write a note on one cited work from a web search for its
-          page, for which it is shown that work’s title, authors, year and identifier and what the
-          search returned;{" "}
+          page, for which it is shown that work’s title, authors, year and, when it has one, its
+          identifier and what the search returned;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it

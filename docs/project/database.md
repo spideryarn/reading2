@@ -1605,8 +1605,9 @@ artefact, which has one writer. The CHECKs tie every field to its state with `co
 261004a's reason. `page_kind` (`own` | `looks-like`, 2026-10-25,
 [261025d](../plans/261025d-citation-web-note-looser-page-rule.md)) is allowed only beside a note
 and may be null there, which reads as `own`: the writer from before the column names none and took
-only the strict rule's pages, so the migration needed no backfill and that writer could still
-insert during the deploy. Like its siblings it is in deletion, transfer, `ArticleRows` and both exports
+only the strict rule's pages, so the migration needed no backfill. A small compatibility trigger
+nulls an inherited kind when that old writer updates a row the new one already touched; without it,
+an old note-to-none upsert would retain the kind and fail the CHECK. Like its siblings it is in deletion, transfer, `ArticleRows` and both exports
 (`citation-web-notes.json`); [`src/store/pg-citation-web-notes.ts`](../../src/store/pg-citation-web-notes.ts)
 is the store.
 

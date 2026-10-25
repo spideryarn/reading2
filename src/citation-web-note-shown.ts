@@ -39,9 +39,10 @@ export const CITATION_WEB_NOTE_PROMPT_VERSION = "citation-web-note/3";
  * `/4` loosened it (plan 261025d): a page that looks like the work's own —
  * titled as the work, naming its first author, off a short list of hosts —
  * counts too, as `looks-like`. **A `/3` note is still shown**, as `own`: the
- * strict rule is a subset of today's, and its migration backfilled
- * `page_kind`. **A `/3` *none* is no longer trusted**, since the looser rule
- * may find a page where the strict one found none (`NOTES_STILL_SHOWN`).
+ * strict rule is a subset of today's, and the row adapter reads its null
+ * `page_kind` as `own`. **A `/3` *none* is no longer trusted**, since the
+ * looser rule may find a page where the strict one found none
+ * (`NOTES_STILL_SHOWN`).
  */
 export const CITATION_WEB_NOTE_VALIDATION_VERSION = "citation-web-note-checks/4";
 
@@ -102,7 +103,8 @@ function belongsTo(e: Record<string, unknown>, row: IdentityRow): boolean {
  * - `state` is `note`;
  * - its `identity` equals `rowIdentity` recomputed from the row **as the list
  *   stores it** — a list made again that changed the work takes it down;
- * - its `validationVersion` is today's;
+ * - its `validationVersion` is today's, or the still-valid strict `/3` for a
+ *   note (never for a negative);
  * - one or two sentences, each a non-empty text and quote within the abstract
  *   notes' caps, the whole within `BLURB_MAX_CHARS`;
  * - `url` an http(s) address with no user name or password in it, at most

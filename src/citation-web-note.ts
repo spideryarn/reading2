@@ -702,6 +702,7 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
     }
 
     let row = first.row;
+    let titleSearchAllowed = importedFromAPublicAddress(article.meta);
     let anchor = await identify(row, article);
 
     const allowance = await deps.allowance.take("citation-web-note", WEB_NOTE_RATE_POLICY);
@@ -737,9 +738,14 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
       if (late) throw late;
       /* A bibliography run can replace the row while this press waits for its
          slot. Search the row that is current now, never the old work under a
-         reused stable id; and repeat the identifier refusal for nothing. */
-      if (rowIdentity(again.row) !== rowIdentity(row)) {
+         reused stable id; and repeat the identifier refusal for nothing. The
+         article can also have been replaced without changing the row: if a
+         public-address article became an upload, G6 must stop its title-only
+         work before the writer sees it. */
+      const currentTitleSearchAllowed = importedFromAPublicAddress(article.meta);
+      if (rowIdentity(again.row) !== rowIdentity(row) || currentTitleSearchAllowed !== titleSearchAllowed) {
         row = again.row;
+        titleSearchAllowed = currentTitleSearchAllowed;
         anchor = await identify(row, article);
       }
     } catch (err) {

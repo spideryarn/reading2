@@ -37,7 +37,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ A row](#a-row) — what one row draws, and where its two scores come from
 - [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
 - [§ A note from the abstract](#a-note-from-the-abstract) — an AI's sentence or two about the work, from its abstract alone, and when it is shown
-- [§ A note from one web search](#a-note-from-one-web-search) — the owner's *Open in Sources* on a row with no note: one search for the work's own page, by its identifier
+- [§ A note from one web search](#a-note-from-one-web-search) — the owner's *Open in Sources* on a row with no note: one search for the work's page
 - [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
 - [§ What we have read of the work](#what-we-have-read-of-the-work) — said once in the band's (i), and on a row only when it differs
 - [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
@@ -358,7 +358,7 @@ never for every work. `POST /api/bibliography/:slug/:id/web-note`
 **Stages, not words — a stated exception to *stream any model call a person waits on***. No
 sentence may be shown before code and the check have passed it, a note is one or two sentences, and
 a streamed sentence later withdrawn reads as the answer. So the stream carries `stage` frames, and
-the row says what the ~6 s are for: *Looking for this work's own page on the web…*, then *Checking
+the row says what the ~6 s are for: *Looking for this work's page on the web…*, then *Checking
 the note against the page…*. **Once the paid call has started the server finishes and stores
 whatever the connection does**; before it, a gone connection frees the slot and spends nothing.
 

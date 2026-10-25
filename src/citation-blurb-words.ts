@@ -99,7 +99,7 @@ export const CITE_LIST_READ_ABSTRACTS =
 
 /* ------------------------------------------------- a web note (261018o) --
    The owner's *Open in Sources* on a row with no note: one web search for the
-   work's own page (src/citation-web-note.ts). The same component draws it
+   work's page (src/citation-web-note.ts). The same component draws it
    (`CiteBlurb`), so the words for what it is are here beside the abstract
    note's, and say what it is **not** just as plainly. */
 
@@ -145,7 +145,7 @@ export function webNoteQuotesLead(sentences: number): string {
 export const WEB_NOTE_SEARCHING = "Looking for this work's page on the web…";
 /** The row while the note is checked against the page, before it is shown. */
 export const WEB_NOTE_CHECKING = "Checking the note against the page…";
-/** The row once a search found no page code could be sure is the work's own. */
+/** The row once a search found no page code could use for the work. */
 export const WEB_NOTE_NONE = "We searched the web for this work's page and found none we could use.";
 /** Added to the band's (i) when a row on screen has a web note. */
 export const CITE_LIST_WEB_NOTES =

@@ -289,7 +289,7 @@ describe("the privacy page", () => {
       "When you open a cited work that has no note in Sources, from its card in the article, the web is searched once for that work’s page: the search is sent its title, authors, year and, when it has one, its DOI or arXiv identifier, and never the article’s text. In an article from a file you uploaded, a cited work with no identifier is not searched.",
     );
     expect(prose).toContain(
-      "and to write a note on one cited work from a web search for its page, for which it is shown that work’s title, authors, year and identifier and what the search returned",
+      "and to write a note on one cited work from a web search for its page, for which it is shown that work’s title, authors, year and, when it has one, its identifier and what the search returned",
     );
   });
 

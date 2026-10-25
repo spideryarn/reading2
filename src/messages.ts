@@ -7292,14 +7292,14 @@ export const WEB_NOTE_HAS_ABSTRACT_NOTE = "This work already has a note from its
 export const WEB_NOTE_HAS_WEB_NOTE = "This work already has a note from a web search.";
 export const WEB_NOTE_SEARCHED = "We searched the web for this work's page recently and found none we could use.";
 /**
- * A row searched for nothing (plan 261025d): no DOI or arXiv id, and its title
- * may not be sent out — an uploaded file's cited work — or there is too little
- * to know its page by: no title to search, no first author, or a list that
- * calls it unpublished.
+ * A row searched for nothing (plan 261025d): its identifier conflicts with
+ * the list, its title may not be sent out — an uploaded file's cited work —
+ * or the list gives too little to know its page by or calls it unpublished.
  */
 export const WEB_NOTE_NO_IDENTIFIER =
-  "This work has no DOI or arXiv id, and either the article is a file you uploaded, whose cited works we do not search for by title, " +
-  "or the list gives too little to recognise its page by, so nothing was searched.";
+  "We could not safely identify a page for this work without a title search: its identifier conflicts with the list, " +
+  "the article is a file you uploaded whose cited works we do not search for by title, or the list gives too little or calls it unpublished. " +
+  "Nothing was searched.";
 
 /**
  * **The first step's call failed** (plan 260930d P-5): the quick check that

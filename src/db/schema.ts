@@ -5822,9 +5822,11 @@ export const citationWebNotes = spideryarn.table(
      * as the work that names its first author. Decided by code at the press,
      * never derived from `host`. **Null on a note means `own`**: only a writer
      * from before the column leaves it null, and that writer took only the
-     * strict rule's pages — so the migration needs no backfill, and a code
-     * rollback can still write (GPT Sol's plan review #3). Today's writer
-     * always names it (`webNoteColumns`).
+     * strict rule's pages — so the migration needs no backfill. The
+     * `citation_web_notes_normalise_page_kind` trigger also nulls an inherited
+     * value when that writer updates a row a newer writer already touched, so
+     * a rolling deploy or code rollback can still write (GPT Sol's plan review
+     * #3). Today's writer always names it (`webNoteColumns`).
      */
     pageKind: text("page_kind"),
     /** When the press decided. A `none` is asked again a week after this. */

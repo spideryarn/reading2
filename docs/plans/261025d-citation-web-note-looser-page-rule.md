@@ -189,5 +189,16 @@ disagree.**
 ## Reviews
 
 - Plan: GPT Sol, read-only — above.
-- Code: GPT Sol, workspace-write — [prompt](261025d-code-review-prompt.md), its answer
-  `261025d-code-review-sol.md` once it lands.
+- Code: GPT Sol, workspace-write — [prompt](261025d-code-review-prompt.md),
+  [answer](261025d-code-review-sol.md). Six findings, all fixed by the reviewer and read before
+  committing: **#1 (P1)** the deployed writer's upsert names no `page_kind`, so on a row a newer
+  writer had touched it would inherit `looks-like` (a strict note mislabelled) or fail the CHECK
+  on a *none*; a `BEFORE` trigger, `citation_web_notes_normalise_page_kind`, clears it for a `/3`
+  write and for every *none* (migration `20261025121700`). **#2 (P1)** an article that became an
+  upload while a press waited for its slot kept its title-search permission; the re-read now
+  re-asks. **#3 (P1)** two test fixtures failed `npm run typecheck` (my gate had been a bare
+  `tsc -p .`, which does not cover them). **#4–#6** wording that claimed more than code checks
+  (the help page now names the refused hosts and says the rest can still be someone else's
+  description), stale comments, and tests for host normalisation, Amazon's country domains and the
+  upload race. The reviewer's sandbox could not reach Postgres; run here, its trigger turned one
+  of my CHECK assertions (a *none* with a page kind is now cleared, not refused), which I rewrote.

@@ -203,6 +203,13 @@ describe("pageIsTheWork (R1): the work's own page by its identifier, never a pag
     ).toBe(false);
   });
 
+  it("normalises resolver hosts but refuses credentials and non-default ports", () => {
+    expect(pageIsTheWork({ url: "https://WWW.DOI.ORG./10.1038/nature05357" }, doi)).toBe(true);
+    expect(pageIsTheWork({ url: "https://user@doi.org/10.1038/nature05357" }, doi)).toBe(false);
+    expect(pageIsTheWork({ url: "https://doi.org:8443/10.1038/nature05357" }, doi)).toBe(false);
+    expect(pageIsTheWork({ url: "https://ARXIV.ORG.:8443/abs/2001.08361" }, ANCHOR)).toBe(false);
+  });
+
   it("checks an arXiv id by its address only, never by a page's prose", () => {
     expect(pageIsTheWork({ url: "https://site.example/p", title: TITLE, excerpt: "arXiv:2001.08361" }, ANCHOR)).toBe(false);
     /* Not even arXiv's own DOI for it, on somebody else's page under its whole title. */
@@ -241,15 +248,19 @@ describe("pageLooksLikeTheWork (261025d): a page titled as the work that names i
     expect(
       pageLooksLikeTheWork({ ...base, title: "What is it like to be a bat? | Reviews | Notre Dame Philosophical Reviews" }, bat),
     ).toBe(false);
+    expect(pageLooksLikeTheWork({ ...base, title: "What is it like to be a bat? | Reviews of Modern Physics" }, bat)).toBe(true);
   });
 
-  it("refuses encyclopedias, reader-review sites, shops and summary sites, whatever the title", () => {
+  it("refuses the named general encyclopedia, reader-review, shop and summary hosts, whatever the title", () => {
     for (const url of [
       "https://en.wikipedia.org/wiki/What_Is_It_Like_to_Be_a_Bat%3F",
       "https://www.wikiwand.com/en/What_Is_It_Like_to_Be_a_Bat",
       "https://www.goodreads.com/book/show/1",
       "https://www.amazon.co.uk/dp/1",
       "https://amazon.com/dp/1",
+      "https://WWW.AMAZON.CO.UK.:8443/dp/1",
+      "https://books.amazon.com.br/dp/1",
+      "https://amazon.de/dp/1",
       "https://ndpr.nd.edu/reviews/1",
       "https://www.sparknotes.com/x",
       "https://www.supersummary.com/x",
@@ -778,10 +789,12 @@ describe("the press", () => {
     });
 
     it("is refused for nothing when the list gives no first author", async () => {
-      const noAuthor = { ...titleOnly, authors: undefined } as CitedWork;
-      const h = harness({ row: noAuthor, shown: noAuthor, evidence: registriesThatKnowNothing() });
+      const noAuthor = { ...titleOnly, authors: undefined } as unknown as CitedWork;
+      const evidence = registriesThatKnowNothing();
+      const h = harness({ row: noAuthor, shown: noAuthor, evidence });
       const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
       expect((err as WebNoteRefused).reason).toBe("no-identifier");
+      expect(evidence.fetched).toEqual([]);
       expect(h.calls).toEqual([]);
       expect(h.taken).toBe(0);
     });
@@ -791,7 +804,10 @@ describe("the press", () => {
       const h = harness({ row: conflicted, shown: conflicted, evidence: registriesThatKnowNothing() });
       const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
       expect((err as WebNoteRefused).reason).toBe("no-identifier");
+      expect((err as WebNoteRefused).message).toContain("identifier conflicts with the list");
+      expect((err as WebNoteRefused).message).not.toContain("has no DOI or arXiv id");
       expect(h.calls).toEqual([]);
+      expect(h.taken).toBe(0);
     });
 
     it("is refused for nothing when the list calls the work unpublished", async () => {
@@ -800,6 +816,37 @@ describe("the press", () => {
       const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
       expect((err as WebNoteRefused).reason).toBe("no-identifier");
       expect(h.calls).toEqual([]);
+      expect(h.taken).toBe(0);
+    });
+
+    it("is refused for nothing for an author-year label or a title too plain to identify", async () => {
+      for (const row of [
+        { ...titleOnly, title: "Kaplan (2020)" },
+        { ...titleOnly, title: "Introduction" },
+      ] as CitedWork[]) {
+        const evidence = registriesThatKnowNothing();
+        const h = harness({ row, shown: row, evidence });
+        const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+        expect((err as WebNoteRefused).reason).toBe("no-identifier");
+        expect(evidence.fetched).toEqual([]);
+        expect(h.calls).toEqual([]);
+        expect(h.taken).toBe(0);
+      }
+    });
+
+    it("does not send a title-only work when the article becomes an upload while the allowance is taken", async () => {
+      const upload = { ...ARTICLE, meta: { ...ARTICLE.meta, filename: "paper.pdf" } } as unknown as Article;
+      const h = harness({
+        row: titleOnly,
+        shown: titleOnly,
+        articleAfterAllowance: upload,
+        evidence: registriesThatKnowNothing(),
+      });
+      const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+      expect(err).toMatchObject({ status: 409, reason: "no-identifier" });
+      expect(h.calls).toEqual([]);
+      expect(h.saved).toEqual([]);
+      expect(h.finished).toBe(1);
     });
   });
 
