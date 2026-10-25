@@ -118,6 +118,11 @@ spike and its numbers.
    next for you**: Chrome forbids every extension, Claude-in-Chrome included, to script the Web
    Store's pages, so screenshot, read and click all fail with "The extensions gallery cannot be
    scripted" (tried 2026-10-25). Do it by hand, or use `npm run extension:publish` for updates.
+   **Trader status (the EU Digital Services Act question): declared non-trader** for now, Greg's
+   call on 2026-10-25 (*"At the moment we're still basically being amateurs"*), against the agent's
+   advice that a free extension serving a paid app is likely a trader's. Trader would publish a
+   verified address, email and phone on the listing to EU visitors. Revisit if Google asks, or
+   when the listing goes Public.
 2. **The item**: *New item*, upload `extension/dist/spideryarn-extension-<version>.zip`. Fill the
    *Store listing* and *Privacy practices* tabs from
    [`extension/store/listing.md`](../../extension/store/listing.md), *Distribution* → Unlisted, and
