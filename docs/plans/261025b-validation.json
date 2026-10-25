@@ -1,0 +1,224 @@
+{
+  "date": "2026-10-25",
+  "selection": "A unchanged textured reader",
+  "protected_unchanged_sha256": {
+    "assets/brand/source/reader.png": "aa45d260a0ef1a95303d1aab65360bb586259d51382f9345996580797416b402",
+    "assets/brand/source/mark.svg": "51ec9cec2f861f6420f24417d5566a359e9d5e1eceea58311f1bf837e49f642b",
+    "public/spideryarn-reader.png": "e33d457af578b6ca5e33d6d296617df893dae5966aaa3150e9a2639de36e49fb",
+    "public/apple-touch-icon.png": "1c6043780ff94e2ede2904f6703b80d9f09d60003c799fc3d655e77120390767",
+    "public/android-chrome-192x192.png": "7e965d23cc0ea3f7e6d6418009ab9012324d1d4096d57e20b776cc603a0b093a",
+    "public/android-chrome-512x512.png": "620af79e5d78ecfe19e37a0e596ce1b565fcbc307cdabec0ced4e42f63533c8d",
+    "public/app-icon-light-1024.png": "f5331232d5aec1e0f6a876d616705b49ff4defde9da3a6a0183bc58fc857beac",
+    "public/app-icon-dark-1024.png": "8811e533bde4df60304b45964443f703d039d12f47f3513de241d30ecdc294bf",
+    "public/og-card.png": "9b9083709eb6a6abfadac049377a2dc5bfdcb795e563715af65e7fb8f8581319"
+  },
+  "brand_update": "passed",
+  "brand_check": {
+    "files": 10,
+    "tests": 310,
+    "result": "passed"
+  },
+  "typecheck": {
+    "source_files": 4006,
+    "result": "passed"
+  },
+  "build": "passed",
+  "scoped_lint": "passed:1 existing specificity warning,1existing complexity info",
+  "whole_tree_lint": "failed baseline; npm lint includes dot even with explicit files",
+  "full_test": {
+    "command": "npm test",
+    "exit_code": 130,
+    "result": "interrupted after unrelated failures were established; no complete-suite passing claim",
+    "failing_suite_summaries": [
+      {
+        "file": "tests/auth-user-seeding.test.ts",
+        "summary": "12 tests | 1 failed"
+      },
+      {
+        "file": "tests/admin-store.test.ts",
+        "summary": "4 tests | 4 failed"
+      },
+      {
+        "file": "tests/overseer-reports.test.ts",
+        "summary": "96 tests | 1 failed"
+      },
+      {
+        "file": "tests/gjd-remote-setup.test.ts",
+        "summary": "63 tests | 20 failed"
+      },
+      {
+        "file": "tests/public-network-trace.test.tsx",
+        "summary": "99 tests | 2 failed"
+      },
+      {
+        "file": "tests/box-tidy.test.ts",
+        "summary": "33 tests | 7 failed"
+      },
+      {
+        "file": "tests/read-error-matrix.test.tsx",
+        "summary": "175 tests | 1 failed"
+      },
+      {
+        "file": "tests/selecting-applies-the-highlight.test.tsx",
+        "summary": "52 tests | 2 failed"
+      },
+      {
+        "file": "tests/a-broken-mode-leaves-the-article-readable.test.tsx",
+        "summary": "92 tests | 4 failed"
+      },
+      {
+        "file": "tests/fleet-server-process.test.ts",
+        "summary": "5 tests | 2 failed"
+      },
+      {
+        "file": "tests/readiness-loop.test.ts",
+        "summary": "96 tests | 2 failed"
+      },
+      {
+        "file": "tests/a-band-link-steps-the-band-aside-on-a-phone.test.tsx",
+        "summary": "19 tests | 2 failed"
+      },
+      {
+        "file": "tests/worktree-check.test.ts",
+        "summary": "74 tests | 3 failed"
+      },
+      {
+        "file": "tests/worktree-setup-bootstrap.test.ts",
+        "summary": "25 tests | 9 failed"
+      },
+      {
+        "file": "tests/statusline.test.ts",
+        "summary": "47 tests | 14 failed"
+      },
+      {
+        "file": "tests/check-scripts-shell.test.ts",
+        "summary": "39 tests | 17 failed"
+      },
+      {
+        "file": "tests/gjd-remote-resume-overseer.test.ts",
+        "summary": "40 tests | 5 failed | 16 skipped"
+      },
+      {
+        "file": "tests/fleet-composed-access.test.ts",
+        "summary": "76 tests | 1 failed"
+      },
+      {
+        "file": "tests/fleet-child.test.ts",
+        "summary": "28 tests | 1 failed"
+      },
+      {
+        "file": "tests/run-claude.test.ts",
+        "summary": "79 tests | 14 failed | 2 skipped"
+      },
+      {
+        "file": "tests/screenshots-compressed.test.ts",
+        "summary": "31 tests | 5 failed"
+      },
+      {
+        "file": "tests/systemd-units.test.ts",
+        "summary": "96 tests | 1 failed | 1 skipped"
+      },
+      {
+        "file": "tests/fleet-collect.test.ts",
+        "summary": "83 tests | 2 failed"
+      },
+      {
+        "file": "tests/question-press-answer-does-not-loop.test.tsx",
+        "summary": "11 tests | 1 failed"
+      },
+      {
+        "file": "tests/a-second-press-closes-the-mode.test.tsx",
+        "summary": "13 tests | 1 failed"
+      },
+      {
+        "file": "tests/fleet-actions-list-processes.test.ts",
+        "summary": "10 tests | 1 failed"
+      },
+      {
+        "file": "tests/claude-accounts.test.ts",
+        "summary": "87 tests | 1 failed"
+      },
+      {
+        "file": "tests/fleet-usage-history-wiring.test.ts",
+        "summary": "9 tests | 1 failed"
+      },
+      {
+        "file": "tests/fleet-readiness.test.ts",
+        "summary": "136 tests | 1 failed"
+      },
+      {
+        "file": "tests/overseer-work.test.ts",
+        "summary": "64 tests | 5 failed"
+      },
+      {
+        "file": "tests/admin-costs-page.test.tsx",
+        "summary": "54 tests | 1 failed"
+      },
+      {
+        "file": "tests/mode-herald-wiring.test.tsx",
+        "summary": "11 tests | 1 failed"
+      },
+      {
+        "file": "tests/admin-page.test.tsx",
+        "summary": "31 tests | 1 failed"
+      },
+      {
+        "file": "tests/overseer-work-reading.test.ts",
+        "summary": "26 tests | 1 failed"
+      },
+      {
+        "file": "tests/fleet-admission-route.test.ts",
+        "summary": "22 tests | 2 failed"
+      },
+      {
+        "file": "tests/fleet-admission-explain.test.ts",
+        "summary": "36 tests | 1 failed"
+      },
+      {
+        "file": "tests/overseer-launchers.test.ts",
+        "summary": "58 tests | 1 failed | 17 skipped"
+      },
+      {
+        "file": "tests/quiz-in-prose.test.tsx",
+        "summary": "6 tests | 1 failed"
+      },
+      {
+        "file": "tests/readiness-preparation.test.ts",
+        "summary": "21 tests | 3 failed"
+      },
+      {
+        "file": "tests/small-screen-hint.test.ts",
+        "summary": "10 tests | 1 failed"
+      },
+      {
+        "file": "tests/overseer-daemon-process.test.ts",
+        "summary": "2 tests | 1 failed"
+      },
+      {
+        "file": "tests/the-ideas-extraction-changed-no-requests.test.tsx",
+        "summary": "3 tests | 1 failed"
+      },
+      {
+        "file": "tests/run-codex.test.ts",
+        "summary": "114 tests | 13 failed"
+      }
+    ],
+    "disjointness": "Changed executable files are only asset generator and Semaphore CSS; remaining code changes are comments. Neither touched test file appears in failing suite summaries. Focused brand/animation/consumer contracts passed independently.",
+    "environment": "shared DB contention then ECONNREFUSED observed; remote/process tests failed too"
+  },
+  "browser": {
+    "surface": "in-app browser, not Chrome UI",
+    "all_images_loaded": 16,
+    "logical_favicon_width": 16,
+    "srcset_selected": "favicon-32x32.png",
+    "limits": [
+      "no physical Retina/Chrome-tab cache verification",
+      "static motion proof not live animation/reduced-motion timing"
+    ]
+  },
+  "final_doc_links": {
+    "tests": 18,
+    "result": "passed"
+  },
+  "sol_review": "approved, no blocking scoped findings"
+}

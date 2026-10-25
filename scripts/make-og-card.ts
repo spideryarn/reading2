@@ -27,7 +27,7 @@ const root = process.cwd();
 const dataUri = (file: string, type: string): string =>
   `data:${type};base64,${readFileSync(path.join(root, file)).toString("base64")}`;
 
-// Large previews use the wool reader; the optical mark is for tiny wordmarks.
+// Social previews use the same textured reader as the tab and app mark.
 const logo = dataUri("public/spideryarn-reader.png", "image/png");
 const font = dataUri(
   "node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2",

@@ -1,0 +1,9 @@
+{
+  "source": "assets/brand/source/reader.png",
+  "sha256": "aa45d260a0ef1a95303d1aab65360bb586259d51382f9345996580797416b402",
+  "annotation": "Hand traced on the unchanged 1254px master: two upper rear limbs, up to the visible diagonal occlusion by the body loop. Coordinates belong to the source, never to the served PNG or CSS. Everything outside these regions is stationary. The distal outline is deliberately in transparent space; the inner diagonal follows the visible body seam.",
+  "upperFreeLimbs": [
+    [[240,60],[475,60],[475,280],[511,352],[440,442],[280,365],[240,220]],
+    [[780,60],[1000,60],[1000,340],[830,442],[747,352],[780,280]]
+  ]
+}
