@@ -72,7 +72,7 @@ import {
 import { OriginalLinkNote, originalLinksIn } from "./OriginalLink.js";
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 import { useFoldArticle } from "./fold.js";
-import { atFront, matterStretches, stubCount, stubHow, stubLabel, stubWhat } from "./matter-view.js";
+import { atFront, foldedOnArrival, matterStretches, stubCount, stubHow, stubLabel, stubWhat } from "./matter-view.js";
 import { FoldToggle, MatterStub } from "./FoldToggle.js";
 import { mastheadEcho } from "./masthead-echo.js";
 
@@ -816,8 +816,12 @@ function TableViewInner({
   const stretchIds = useMemo(() => stretches.map((s) => s.ids), [stretches]);
   /* The same blocks as one set, with the masthead's echo, for the glossary's
      fade: folded on arrival or never drawn, so a term met there neither counts
-     nor fades (annotate.ts § termProminence). */
-  const uncounted = useMemo(() => new Set([...echo, ...stretchIds.flat()]), [echo, stretchIds]);
+     nor fades (annotate.ts § termProminence). The one definition of that set,
+     which the masthead's read-so-far pie also leaves out (plan 261025j). */
+  const uncounted = useMemo(
+    () => foldedOnArrival({ blocks, matter, meta: { title, authors, byline }, titleOverridden }),
+    [blocks, matter, title, authors, byline, titleOverridden],
+  );
   /* Each stub, by the row it stands in, with its words worked out once. */
   const stubs = useMemo(
     () =>

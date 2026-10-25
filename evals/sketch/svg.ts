@@ -26,7 +26,13 @@
  *   rsvg-convert -w 1100 x.svg > x.png   rasterises it
  */
 import { paintScene, wrap, type Painted, type Prim } from "../../src/sketch-paint.js";
-import type { Sketch, SketchScene } from "../../src/sketch-scene.js";
+import {
+  CHAR_W,
+  FONT_STACK_BY_VOICE,
+  SKETCH_LABEL_VOICE,
+  type Sketch,
+  type SketchScene,
+} from "../../src/sketch-scene.js";
 
 /** From styles/colourscales.css — Okabe–Ito, lifted for a dark ground. */
 const CAT: [number, number, number][] = [
@@ -160,7 +166,9 @@ function body(painted: Painted): string {
   return out.join("\n");
 }
 
-const FONT = `<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>`;
+/* The face the app draws the labels in, as a literal stack: an exported SVG has no
+   stylesheet to read `--font-ui` from (src/sketch-scene.ts § SKETCH_LABEL_VOICE). */
+const FONT = `<style>text { font-family: ${FONT_STACK_BY_VOICE[SKETCH_LABEL_VOICE]}; }</style>`;
 
 /**
  * A caption, wrapped, as `<text>` lines from `y` downwards.
@@ -171,7 +179,7 @@ const FONT = `<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-
  * estimate the painter uses, so the two cannot disagree about what fits.
  */
 function lines(text: string, x: number, y: number, px: number, fill: string, weight?: string): string {
-  const perLine = Math.max(1, Math.floor((760 - x * 2) / (px * 0.53)));
+  const perLine = Math.max(1, Math.floor((760 - x * 2) / (px * CHAR_W)));
   return wrap(text, perLine, 3)
     .map(
       (line, i) =>
@@ -183,7 +191,7 @@ function lines(text: string, x: number, y: number, px: number, fill: string, wei
 
 /** How tall `lines` came out, so what follows can start under it. */
 function linesHeight(text: string, x: number, px: number): number {
-  const perLine = Math.max(1, Math.floor((760 - x * 2) / (px * 0.53)));
+  const perLine = Math.max(1, Math.floor((760 - x * 2) / (px * CHAR_W)));
   return wrap(text, perLine, 3).length * px * 1.3;
 }
 

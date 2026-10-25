@@ -67,6 +67,7 @@ import { FREE_LIFETIME_INGESTS } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingVoucherEmails, billingVouchers } from "../db/schema.js";
 import { type EmailDeps, type SendResult, noteText, oneLine, sendEmail } from "../email.js";
+import { emailButton, emailHtml } from "../email-frame.js";
 import { log } from "../log.js";
 import { ADMIN_VOUCHERS_URL, PUBLIC_ORIGIN } from "../urls.js";
 import { type AccountEmail, accountEmail } from "./admin-accounts.js";
@@ -219,11 +220,6 @@ export interface GiftWords {
 
 const NO_WORDS: GiftWords = { recipientName: null, recipientNote: null };
 
-/** The orange button, for the email's own action and for the starter's link. */
-function buttonHtml(button: { readonly label: string; readonly url: string }): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${button.url}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">${button.label}</a></td></tr></table>`;
-}
-
 /**
  * The starter's line and its *Read it* button, between the note and our own
  * words, or nothing at all. The title is the author's text and the address
@@ -234,14 +230,15 @@ function starterRows(starter: SaidStarter | null): string {
   if (starter === null) return "";
   return (
     `<tr><td style="font-size:16px;line-height:1.6;padding:0 0 12px 0;">${escapeNoteHtml(starter.line)}</td></tr>\n` +
-    `<tr><td style="padding:0 0 24px 0;">${buttonHtml({ label: "Read it", url: escapeNoteHtml(starter.url) })}</td></tr>\n`
+    `<tr><td style="padding:0 0 24px 0;">${emailButton({ label: "Read it", url: escapeNoteHtml(starter.url) })}</td></tr>\n`
   );
 }
 
 /**
- * One email in the shape of supabase/templates/confirmation.html. Every value
- * interpolated is ours, **except `name`, `note` and `starter`**, which are
- * escaped here, at the one place they meet markup.
+ * One email, its own rows inside the frame from src/email-frame.ts (the one the
+ * Supabase templates are checked against). Every value interpolated is ours,
+ * **except `name`, `note` and `starter`**, which are escaped here, at the one
+ * place they meet markup.
  */
 function giftHtml(parts: {
   readonly subject: string;
@@ -260,36 +257,13 @@ function giftHtml(parts: {
     (p, i) =>
       `<tr><td style="font-size:16px;line-height:1.6;padding:0 0 ${i === parts.paragraphs.length - 1 ? 28 : 16}px 0;">${p}</td></tr>`,
   );
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
-<title>${parts.subject}</title>
-</head>
-<body style="margin:0;padding:0;background-color:#0a0a0a;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
-<tr><td align="center" style="padding:40px 16px;">
-<table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
-<tr><td style="padding:0 0 32px 0;">
-<img src="${PUBLIC_ORIGIN}/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
-<span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:600;color:#DB8A45;">Spideryarn</span>
-</td></tr>
-<tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">${parts.heading}</td></tr>
-${greetingRow(parts.name)}${noteRow(parts.note)}${starterRows(parts.starter)}${paragraphs.join("\n")}
-<tr><td style="padding:0 0 28px 0;">
-${buttonHtml(parts.button)}
-</td></tr>
-<tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">${parts.after}</td></tr>
-<tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>
-`;
+  return emailHtml({
+    title: parts.subject,
+    heading: parts.heading,
+    rows: `${greetingRow(parts.name)}${noteRow(parts.note)}${starterRows(parts.starter)}${paragraphs.join("\n")}`,
+    button: parts.button,
+    after: parts.after,
+  });
 }
 
 const FOOTER_TEXT =
