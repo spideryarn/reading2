@@ -34,6 +34,31 @@ record the superseded experiments and validation.
 - [Archive](../../assets/brand/archive/) and [explorations](../../assets/brand/explorations/):
   previous masters and retained selection evidence. Change the master, then regenerate derivatives.
 
+### Margin follows display size
+
+> So I guess what I'm suggesting, the smaller the icon, the less margin.
+>
+> — Greg, 2026-10-25
+
+Favicons and the shared small in-app mark nearly fill their image box, retaining only a sampling
+allowance at the tips. Home-screen tiles use the middle fuller treatment Greg preferred; large
+reader/social and theme exports retain their existing breathing room. Intended **display size**
+matters: a high-resolution phone tile is still a small icon when installed.
+[BRAND_OUTPUTS](../../scripts/generate-brand-assets.ts) owns exact inset values, measured around
+the longest visible-alpha dimension. The
+[margin follow-up](../plans/261025h-less-margin-in-smaller-reader-icons.md) records the choice and checks.
+
+Ivory remains the default opaque phone background by agent judgment under Greg's instruction to
+choose: it separates the dark book from the orange yarn better than charcoal. Dark remains an
+export, not an automatically selected iPhone theme. [Apple's app-icon guidance](https://developer.apple.com/design/human-interface-guidelines/app-icons)
+describes opaque full-bleed background layers and system-applied corner masks for native icons;
+those native clear/layered appearances are not a promise about our flat web-clip PNG.
+[WebKit's transparency report](https://bugs.webkit.org/show_bug.cgi?id=255596) documents unexpected
+black backgrounds/borders with transparent web-clip icons; this historical report is a reason for
+a predictable opaque tile, not a claim that every current iOS appearance forbids transparency.
+[Apple-touch-icon takes precedence over manifest icons](https://webkit.org/blog/13878/) on the
+web-app path. Physical iPhone appearance and cached installations still need device verification.
+
 One transparent treatment works in both app themes. Install tiles have opaque backgrounds and
 breathing room for the OS's corner mask. Exact colours, padding, filenames and dimensions have
 one home: `BRAND_OUTPUTS` in [generate-brand-assets.ts](../../scripts/generate-brand-assets.ts).

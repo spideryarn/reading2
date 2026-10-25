@@ -61,7 +61,7 @@ async function sourcePart(part: "upper" | "stationary") {
     right = Math.max(right, x); bottom = Math.max(bottom, y);
   }
   const width = right - left + 1, height = bottom - top + 1;
-  const scale = 256 * 0.95 / Math.max(width, height);
+  const scale = 256 * 0.99 / Math.max(width, height);
   const dx = (256 - width * scale) / 2, dy = (256 - height * scale) / 2;
   const output = new Uint8ClampedArray(256 * 256 * 4);
   const regions = ANATOMY.upperFreeLimbs as Point[][];

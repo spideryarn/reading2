@@ -68,6 +68,35 @@ describe("brand assets", () => {
     }
   });
 
+  it("gives smaller display icons less margin while preserving larger export breathing room", async () => {
+    // An independent decoded-pixel contract, not the generator's output table.
+    // Source resolutions differ from display sizes: Android512 is a phone tile.
+    const expected = [
+      ["favicon-16x16.png", 0.99], ["favicon-32x32.png", 0.99], ["favicon-48x48.png", 0.99],
+      ["spideryarn-logo.png", 0.99], ["apple-touch-icon.png", 0.84],
+      ["android-chrome-192x192.png", 0.84], ["android-chrome-512x512.png", 0.84],
+      ["spideryarn-reader.png", 0.94], ["app-icon-light-1024.png", 0.76], ["app-icon-dark-1024.png", 0.76],
+    ] as const;
+    for (const [file, fill] of expected) {
+      const { width, height, data } = await pixels(path.join(outputDir, file));
+      const background = [...data.slice(0, 4)];
+      let left = width, top = height, right = -1, bottom = -1;
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        const at = (y * width + x) * 4;
+        const visible = background[3] === 0
+          ? (data[at + 3] ?? 0) >= 128
+          : [0, 1, 2].some((channel) => Math.abs((data[at + channel] ?? 0) - (background[channel] ?? 0)) >= 32);
+        if (!visible) continue;
+        left = Math.min(left, x); right = Math.max(right, x);
+        top = Math.min(top, y); bottom = Math.max(bottom, y);
+      }
+      const longest = Math.max(right - left + 1, bottom - top + 1);
+      // Ignore faint antialiased wool fibres at the boundary, with at most
+      // one percent or two pixels of rasterisation allowance.
+      expect(Math.abs(longest - width * fill), file).toBeLessThanOrEqual(Math.max(2, width * 0.01));
+    }
+  });
+
   it.each([16, 32, 48, 256])("retains internal gaps and a substantial foreground at %ipx", async (size) => {
     const file = size === 256 ? "spideryarn-logo.png" : `favicon-${size}x${size}.png`;
     const { data } = await pixels(path.join(outputDir, file));
@@ -116,7 +145,7 @@ describe("brand assets", () => {
     const expected = createCanvas(256, 256);
     const ctx = expected.getContext("2d");
     ctx.imageSmoothingQuality = "high";
-    const scale = 256 * 0.95 / Math.max(width, height);
+    const scale = 256 * 0.99 / Math.max(width, height);
     ctx.drawImage(await loadImage(path.join(ROOT, "assets/brand/source/reader.png")), left, top, width, height,
       (256 - width * scale) / 2, (256 - height * scale) / 2, width * scale, height * scale);
     expect(await rastersEquivalent(await readFile(path.join(outputDir, "spideryarn-logo.png")), expected.toBuffer("image/png"))).toBe(true);

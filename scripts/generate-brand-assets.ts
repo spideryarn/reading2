@@ -17,16 +17,18 @@ const LIGHT = "#FFF9EE";
 const DARK = "#242321";
 
 /** Padding is a fraction of each edge, around the visible alpha bounds.
- * Install assets use an opaque square: operating systems supply their masks. */
+ * Tiny display marks use almost the full box; phone tiles retain a moderate
+ * inset, and large exports more breathing room. Resolution is not display size:
+ * the 512px Android asset is still a phone tile. Operating systems mask tiles. */
 export const BRAND_OUTPUTS = [
-  { file: "spideryarn-logo.png", size: 256, padding: 0.025 },
-  { file: "favicon-16x16.png", size: 16, padding: 0.025 },
-  { file: "favicon-32x32.png", size: 32, padding: 0.025 },
-  { file: "favicon-48x48.png", size: 48, padding: 0.025 },
+  { file: "spideryarn-logo.png", size: 256, padding: 0.005 },
+  { file: "favicon-16x16.png", size: 16, padding: 0.005 },
+  { file: "favicon-32x32.png", size: 32, padding: 0.005 },
+  { file: "favicon-48x48.png", size: 48, padding: 0.005 },
   { file: "spideryarn-reader.png", size: 512, padding: 0.03 },
-  { file: "apple-touch-icon.png", size: 180, padding: 0.12, background: LIGHT },
-  { file: "android-chrome-192x192.png", size: 192, padding: 0.12, background: LIGHT },
-  { file: "android-chrome-512x512.png", size: 512, padding: 0.12, background: LIGHT },
+  { file: "apple-touch-icon.png", size: 180, padding: 0.08, background: LIGHT },
+  { file: "android-chrome-192x192.png", size: 192, padding: 0.08, background: LIGHT },
+  { file: "android-chrome-512x512.png", size: 512, padding: 0.08, background: LIGHT },
   { file: "app-icon-light-1024.png", size: 1024, padding: 0.12, background: LIGHT },
   { file: "app-icon-dark-1024.png", size: 1024, padding: 0.12, background: DARK },
 ] as const;
@@ -135,7 +137,7 @@ async function renderPreview(input: Source, files: Map<string, Buffer>): Promise
       ctx.drawImage(detail, x, 200, size, size);
       ctx.fillText(`${size}px`, x, 406);
     }
-    ctx.fillText("180px install tile - opaque cream, 12% inset", left + 20, 458);
+    ctx.fillText("180px install tile - opaque ivory, 8% inset", left + 20, 458);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(install, left + 110, 478);
     ctx.fillText(`One master SHA256 ${input.hash}`, left + 20, 696);
@@ -204,14 +206,14 @@ function renderBrowserPreview(): string {
     ${[16, 32, 48].map((size) => `<img width="${size}" height="${size}" src="../../public/favicon-${size}x${size}.png" alt="${size} pixel favicon">`).join(" ")}
     <p>Same reader in the app, at 20, 44 and 128 logical pixels:</p>
     ${[20, 44, 128].map((size) => `<img width="${size}" height="${size}" src="../../public/spideryarn-logo.png" alt="${size} pixel app reader">`).join(" ")}
-    <p>Install tile, 60 logical pixels:</p><img width="60" height="60" src="../../public/apple-touch-icon.png" alt="Install tile"></section>`;
+    <p>Install tile, 60 logical pixels — 84% artwork fill:</p><img width="60" height="60" src="../../public/apple-touch-icon.png" alt="Install tile"></section>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Spideryarn — selected reader tab preview</title>
 ${[16, 32, 48].map((size) => `<link rel="icon" type="image/png" sizes="${size}x${size}" href="../../public/favicon-${size}x${size}.png">`).join("\n")}
 <link rel="icon" type="image/x-icon" href="../../public/favicon.ico">
 <style>body{font:16px system-ui;margin:24px;color:#242321}main{display:flex;flex-wrap:wrap;gap:20px}section{padding:24px;min-width:300px;flex:1}section img{vertical-align:middle;margin-right:24px}.light{background:#fff9ee}.dark{background:#242321;color:#fff9ee}p{max-width:70ch}</style></head>
-<body><h1>One textured reader, every size</h1><p>Compare at 100% browser zoom. Inspect this page's real tab icon in Chrome on your Mac. A 16 logical pixel tab icon can use 32 image pixels on a 2× display. The browser chooses its favicon resource; the samples below do not prove which resource it selected or physical Retina quality.</p><main>${sample("light")}${sample("dark")}</main></body></html>
+<body><h1>One textured reader, every size</h1><p>Compare at 100% browser zoom. Inspect this page's real tab icon in Chrome on your Mac. A 16 logical pixel tab icon can use 32 image pixels on a 2× display. Tiny marks use 99% of the longest artwork dimension; phone tiles use 84%. Large exports retain their breathing room. The browser chooses its favicon resource; the samples below do not prove which resource it selected or physical Retina quality.</p><main>${sample("light")}${sample("dark")}</main></body></html>
 `;
 }
 
