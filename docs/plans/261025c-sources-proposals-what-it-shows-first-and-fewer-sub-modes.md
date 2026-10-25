@@ -180,8 +180,9 @@ A per-citer for/against mark (C) would pay a second pass for little, because abs
 Honestly measured: on the two articles where the read did see citers' abstracts (36 for Dropout,
 30 for *Consciousness in AI*), no finding cited one, so whether the *right* citers pay for their
 tokens is untested; it is the first thing to measure once built.
-What would really answer it is the citing sentence itself, which waits on the Semantic Scholar
-licence question already with you (q-x9srvv); it would drop into the same read.
+What would really answer it is the citing sentence itself. Semantic Scholar holds those, but Greg
+decided on 2026-10-25 not to use it, because its licence is non-commercial (q-x9srvv,
+[bibliography.md](../project/bibliography.md)), so for now no source we use supplies them.
 
 ## The second question: two identity rules
 
