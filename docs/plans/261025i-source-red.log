@@ -1,0 +1,34 @@
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/brand-assets.test.ts -t independently selected
+
+
+ RUN  v4.1.11 /Users/greg/.codex/worktrees/spideryarn-knot-reader-logo/reading2
+
+ ❯ |unit| tests/brand-assets.test.ts (23 tests | 1 failed | 22 skipped) 677ms
+     × uses the independently selected airier C master 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/brand-assets.test.ts > brand assets > uses the independently selected airier C master
+AssertionError: expected 'aa45d260a0ef1a95303d1aab65360bb586259…' to be '9902588192568689966279d6642a942ae7920…' // Object.is equality
+
+Expected: "9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635"
+Received: "aa45d260a0ef1a95303d1aab65360bb586259d51382f9345996580797416b402"
+
+ ❯ tests/brand-assets.test.ts:62:65
+     60|   it("uses the independently selected airier C master", async () => {
+     61|     const selected = await readFile(path.join(ROOT, "assets/brand/sour…
+     62|     expect(createHash("sha256").update(selected).digest("hex")).toBe("…
+       |                                                                 ^
+     63|   });
+     64|   it("publishes the intended dimensions", async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 22 skipped (23)
+   Start at  18:43:27
+   Duration  1.90s (transform 262ms, setup 227ms, import 892ms, tests 677ms, environment 0ms)
+

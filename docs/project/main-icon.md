@@ -15,28 +15,61 @@ and pose suggest character without eyes, eyebrows or fingers. Overlap deliberate
 attachments to the imagination. The [design investigation](../investigations/261024a-spideryarn-logo-character-intent-and-selection.md)
 preserves Greg's exact brief, alternatives, selection and later limb-proportion refinement.
 
-> Let's go with A. Proceed autonomously.
+> I can't really tell the difference between B and C. Maybe C? I think these are better, especially for the smaller verisons. Proceed.
 >
 > — Greg, 2026-10-25
 
-A is the **textured reader**, not the flat B study. Greg chose it after comparing the same seated
-character at tab and app sizes, with Chrome on his Mac as the main target. One artwork now serves
-favicons, the small in-app mark, install icons and social images; it is resized and padded for its
-host, not replaced by a separate character. The [selection and implementation](../plans/261025b-one-textured-reader-across-tab-and-app.md)
-record the superseded experiments and validation.
+The current master is **C from the upper-limb study**: the textured seated reader with slimmer,
+longer free rear limbs. It refines the earlier A selection; the body, book and seated pose retain
+the same identity. The four free rear strands, two book supports and two crossed lower strands
+still suggest eight limbs without a literal face or hands. One master serves favicons, the small
+in-app mark, install icons, extension icons and social images. The
+[airier-limb adoption](../plans/261025i-airier-reader-limbs-across-the-icon-family.md) records the
+exact source and validation; the earlier [A selection](../plans/261025b-one-textured-reader-across-tab-and-app.md)
+explains why the separate optical mark was dropped.
 
 - [Reader master](../../assets/brand/source/reader.png): the sole active artwork input, including
   wool texture, book and shading. [Prompt/input history](../../assets/brand/source/reader-generation.json)
-  distinguishes generative renderings from exact pixel extraction. This choice did not edit it.
+  distinguishes generative renderings from exact pixel extraction. C is a new generative rendering,
+  not a mathematically exact limb edit; prompt percentages are visual aims, not measured changes.
+  The [previous master](../../assets/brand/archive/reader-before-airier-limbs.png) and
+  [B/C studies](../../assets/brand/explorations/airier-limbs-prompts.json) preserve the comparison.
 - [Former optical SVG](../../assets/brand/source/mark.svg): historical evidence only; no longer
   loaded by generation. The [flat reader study](../../assets/brand/archive/flat-reader-study-2026-10-25.svg)
   was B, considered but not selected. The separate upright-knot favicon direction was also dropped.
 - [Archive](../../assets/brand/archive/) and [explorations](../../assets/brand/explorations/):
   previous masters and retained selection evidence. Change the master, then regenerate derivatives.
 
+### Margin follows display size
+
+> So I guess what I'm suggesting, the smaller the icon, the less margin.
+>
+> — Greg, 2026-10-25
+
+Favicons and the shared small in-app mark nearly fill their image box, retaining only a sampling
+allowance at the tips. Home-screen tiles use the middle fuller treatment Greg preferred; large
+reader/social and theme exports retain their existing breathing room. Intended **display size**
+matters: a high-resolution phone tile is still a small icon when installed.
+The `BRAND_OUTPUTS` and `EXTENSION_OUTPUTS` tables in
+[generate-brand-assets.ts](../../scripts/generate-brand-assets.ts) own exact inset values, measured around
+the longest visible-alpha dimension. The
+[margin follow-up](../plans/261025h-less-margin-in-smaller-reader-icons.md) records the choice and checks.
+
+Ivory remains the default opaque phone background by agent judgment under Greg's instruction to
+choose: it separates the dark book from the orange yarn better than charcoal. Dark remains an
+export, not an automatically selected iPhone theme. [Apple's app-icon guidance](https://developer.apple.com/design/human-interface-guidelines/app-icons)
+describes opaque full-bleed background layers and system-applied corner masks for native icons;
+those native clear/layered appearances are not a promise about our flat web-clip PNG.
+[WebKit's transparency report](https://bugs.webkit.org/show_bug.cgi?id=255596) documents unexpected
+black backgrounds/borders with transparent web-clip icons; this historical report is a reason for
+a predictable opaque tile, not a claim that every current iOS appearance forbids transparency.
+[Apple-touch-icon takes precedence over manifest icons](https://webkit.org/blog/13878/) on the
+web-app path. Physical iPhone appearance and cached installations still need device verification.
+
 One transparent treatment works in both app themes. Install tiles have opaque backgrounds and
 breathing room for the OS's corner mask. Exact colours, padding, filenames and dimensions have
-one home: `BRAND_OUTPUTS` in [generate-brand-assets.ts](../../scripts/generate-brand-assets.ts).
+one home: the public and extension output tables in
+[generate-brand-assets.ts](../../scripts/generate-brand-assets.ts).
 The [manifest](../../public/site.webmanifest) uses ordinary `any` icons; no separately verified
 maskable safe-zone treatment is supplied. The light/dark 1024px files are available exports;
 the shipped Apple/Android consumers use the cream tile. The app's theme setting does not select
@@ -51,6 +84,9 @@ between those installed-icon exports.
 2. Refine the detailed artwork with genuine transparency, including through the body and limb gaps.
    Preserve opaque book pages. Do not introduce a second artwork source for small sizes. The [limb-refinement plan](../plans/261024a-reading-spider-limb-refinement.md)
    shows the archived inputs and why concealed paths are not a literal limb-length measurement.
+   Deliberately refresh the selected-master identity guard in [brand tests](../../tests/brand-assets.test.ts)
+   and the independently annotated source/hash in [anatomy checks](../../tests/semaphore-geometry.test.ts)
+   when accepting a new master; do not weaken the checks to accommodate an unreviewed file.
 3. Regenerate and check from the repository root:
 
    ```sh
@@ -59,7 +95,7 @@ between those installed-icon exports.
    ```
 
    The aliases in [package.json](../../package.json) own the command sequence and focused test list.
-   `brand:update` rebuilds PNG/ICO, both size-review sheets, the browser review page and static animation proof, then
+   `brand:update` rebuilds public/extension PNGs and ICO, both size-review sheets, the browser review page and static animation proof, then
    the social card. `brand:check` checks
    PNG/ICO/proof freshness and the focused image, animation, metadata and doc contracts.
    Freshness compares decoded pixels within a small tolerance, not bytes, so the Mac and the Linux
@@ -140,10 +176,11 @@ its source changes, including still/reduced-motion appearance.
 markup; preserve them when replacing artwork. If output names change, follow the consumers in
 the [shell head](../../index.html), manifest, email templates and
 [site brand list](../../src/site-pages.ts), including robots/public-shell fixtures.
-The [Chrome extension](chrome-extension.md) already uses the same textured reader on cream. Its
-[build](../../scripts/build-extension.ts) copies committed files from `extension/icons/`; those
-are a separate package, not outputs of `brand:update`. A future master change must update and
-review those icons explicitly too. This selection leaves their already consistent artwork unchanged.
+The [Chrome extension](chrome-extension.md) uses the same master on cream. `brand:update` and
+`brand:check` now generate/check `extension/icons/` as well as the public family; the
+[build](../../scripts/build-extension.ts) packages those committed icons. Rebuild its package after
+an artwork change. Building/pushing assets does not submit a store update; the extension guide
+owns versioning and publication.
 
 [Brand tests](../../tests/brand-assets.test.ts) cover alpha, gaps, padding, ICO pixels and declared
 dimensions; [OG tests](../../tests/og-card.test.ts) cover its separate structural contract.

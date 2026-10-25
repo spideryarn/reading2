@@ -1,0 +1,21 @@
+{
+  "tool": "Built-in image_gen",
+  "date": "2026-10-25",
+  "input": "../archive/reader-before-airier-limbs.png",
+  "transparent_background": true,
+  "variants": [
+    {
+      "label": "B",
+      "file": "airier-limbs-b.png",
+      "generated_file": "exec-9417e8ba-d0da-4b76-b52f-c33dcec4da04.png",
+      "prompt": "Use case: precise-object-edit; preview-only Spideryarn favicon refinement. Image 1 is the EDIT TARGET, the approved faceless orange wool/yarn spider reading a dark charcoal book. Preserve this SAME character, material, colour, lighting, hollow oval body, book, seated crossed lower limbs, book-supporting limbs, camera, and overall composition. Make ONE restrained change: the FOUR FREE REAR/UPWARD limbs above and beside the body should be about 15% thinner in cord diameter and about 10% longer along their curved paths, with slightly more open negative space. Keep their thick rounded ends and relaxed friendly arcs; no insect-like sharp legs. These proportions are visual targets, not literal pixel measurements. Leave the oval body cord, the two book-holding limbs and the two crossed lower limbs at the original thickness so the reading pose stays recognisable and comparable. Preserve eight intended limbs total. Do not add a face, eyes, hands, fingers, extra limbs, symbols, text, outline, frame or shadow. Do not flatten the wool texture. Fit the complete figure within a square canvas with breathing room. Genuine RGBA transparency surrounding it AND through the hollow body and limb gaps. Book pages remain opaque ivory. Produce one standalone logo, not a contact sheet. The goal is a subtle optical experiment, not a redesign."
+    },
+    {
+      "label": "C",
+      "file": "airier-limbs-c.png",
+      "generated_file": "exec-e161cf5c-9870-48e6-8d74-e432890132ff.png",
+      "prompt": "Use case: precise-object-edit, preview-only optical experiment for the existing Spideryarn favicon. Image 1 is the EDIT TARGET. Preserve its exact identity: faceless orange knitted-yarn spider reading the same dark charcoal book with opaque ivory pages, hollow oval body, two book-supporting limbs and two crossed lower limbs, same rendering/material/lighting/view. Change ONLY the four free upper/rear cord limbs: make them visibly but tastefully about 25% slimmer and their curved lengths about 15% longer, to expose clearer negative spaces around the body. Keep them softly rounded, upturned and cheerful. Do not make a spiky insect; do not change the body's oval cord thickness or thin the book-holding or crossed seated limbs. Preserve eight intended limbs, seated reading pose, book size, no eyes/face/fingers/text/additions. The goal is to test a slightly more airy silhouette at tiny tab sizes while recognisably the SAME main character. Entire figure centred on square transparent RGBA canvas with room around extremities; real transparency through the body and limb gaps as well as outside. No backdrop, baked checkerboard, frame, ground shadow or contact sheet. The numeric proportional targets are visual aims, not claims of exact pixel preservation."
+    }
+  ],
+  "note": "Exact prompts; proportional numbers are generative targets, not measured geometry. Both outputs are new renderings, not pixel-exact edits."
+}

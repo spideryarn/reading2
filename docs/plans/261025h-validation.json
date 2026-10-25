@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-25",
+  "treatment": {
+    "small_app_and_favicons": {
+      "padding_per_edge": 0.005,
+      "longest_alpha_fill": 0.99
+    },
+    "phone_tiles": {
+      "padding_per_edge": 0.08,
+      "longest_alpha_fill": 0.84,
+      "background": "opaque ivory"
+    },
+    "large_exports": "unchanged"
+  },
+  "preserved_sha256": {
+    "assets/brand/source/reader.png": "aa45d260a0ef1a95303d1aab65360bb586259d51382f9345996580797416b402",
+    "public/spideryarn-reader.png": "e33d457af578b6ca5e33d6d296617df893dae5966aaa3150e9a2639de36e49fb",
+    "public/app-icon-light-1024.png": "f5331232d5aec1e0f6a876d616705b49ff4defde9da3a6a0183bc58fc857beac",
+    "public/app-icon-dark-1024.png": "8811e533bde4df60304b45964443f703d039d12f47f3513de241d30ecdc294bf",
+    "public/og-card.png": "9b9083709eb6a6abfadac049377a2dc5bfdcb795e563715af65e7fb8f8581319"
+  },
+  "brand_update": "passed",
+  "brand_check": {
+    "files": 10,
+    "tests": 311,
+    "result": "passed"
+  },
+  "typecheck": {
+    "source_files": 4015,
+    "result": "passed"
+  },
+  "build": "passed",
+  "scoped_lint": "passed with existing warning/info",
+  "independent_review": "approved;34focusedtests/freshnesschecks passed",
+  "full_suite": "not repeated; recent interrupted known-red run documented in261025b-validation.json",
+  "limitations": [
+    "no physical iPhone appearance/installation-cache verification",
+    "static animation proof not live motion/reduced-motion verification"
+  ]
+}
