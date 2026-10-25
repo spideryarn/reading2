@@ -634,6 +634,12 @@ setting dies with the transaction), or the session pooler on port 5432. To tell 
 poisoned: `select current_setting('default_transaction_read_only')` via 6543 says `on` while the
 same query via 5432 says `off`; `reset default_transaction_read_only` via 6543 clears it.
 
+**The tables are in the `spideryarn` schema, not `public`** (`pgSchema("spideryarn")` in
+`src/db/schema.ts`). So `\dt`, `to_regclass('jobs')` and `information_schema … where
+table_schema = 'public'` all report a fully migrated database as empty — an agent once escalated on
+exactly that, and the migration it asked for was a no-op. Qualify every name (`spideryarn.jobs`,
+`\dt spideryarn.*`) before concluding anything is missing.
+
 **There is no `psql` on the box.** The reads made from there on 2026-09-30 were a small node script: `pg`
 imported by absolute path from a tree's `node_modules`, the committed CA passed as `ssl: { ca }`,
 and every query inside `begin read only` … `rollback`. Without `ssl` the pooler answers

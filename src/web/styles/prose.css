@@ -439,7 +439,7 @@ td.text mark.cite.passage-flash-still { background-color: var(--flash-wash-stron
    themes, as it does on the still rule above. */
 ::highlight(quote-flash) { background-color: var(--flash-wash-strong); }
 
-/* `.block-id` was here, positioning six characters of Courier in an 83px
+/* `.block-id` was here, positioning six monospace characters in an 83px
    gutter. The gutter is icons now and the id has moved into their `title`, so
    the rule has gone rather than been kept "in case" — a class nothing renders
    is a rule the next reader has to prove is dead. BlockGutter.tsx. */
@@ -450,7 +450,8 @@ tr.row-active .block-ref { opacity: 0.95; }
    Every block id still drawn as characters: both ends of a gist's range and a
    cited id in model prose. **Not the gutter beside a paragraph** — that was
    another until 2026-08-31 and is now
-   an icon whose `title` carries the id (§ the gutter). Courier at Greg's asking, and small and faint on
+   an icon whose `title` carries the id (§ the gutter). The one monospace (Courier, at Greg's
+   asking, until 2026-10-25), and small and faint on
    purpose — an id is machine text sitting next to prose, and it should read as
    a footnote to the thing it labels rather than as part of it.
 
@@ -458,7 +459,7 @@ tr.row-active .block-ref { opacity: 0.95; }
    and like nothing at all when you are not. Hence: no underline at rest, no
    colour of its own, and both on hover. */
 .block-ref {
-  font-family: var(--font-id);
+  font-family: var(--font-mono);
   font-size: max(var(--text-min), 0.58rem);
   line-height: 1;
   letter-spacing: 0.02em;
@@ -498,7 +499,7 @@ tr.row-active .block-ref { opacity: 0.95; }
    id and not the pair. */
 .block-range { line-height: 1; }
 .block-range-dash {
-  font-family: var(--font-id);
+  font-family: var(--font-mono);
   font-size: max(var(--text-min), 0.58rem);
   color: var(--ink-faint);
   opacity: 0.5;

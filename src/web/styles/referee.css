@@ -547,7 +547,7 @@
   padding: 0;
 }
 /* The placement rows' `.crit-jump` is a block link (plan 260928b), and so also
-   `.block-ref` — whose id-chip type (Courier, 0.58rem, faint, half opacity)
+   `.block-ref` — whose id-chip type (monospace, 0.58rem, faint, half opacity)
    prose.css sets, and which would win or lose on stylesheet order against the
    rule above. Two classes win outright, so the anchor looks like the button the
    model's rows still are. The colour, opacity and underline only on the `<a>`:
@@ -688,7 +688,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 .prm-promise { margin: 0 0 0.15rem; font-size: var(--type-item); font-weight: 600; color: var(--ink); }
 
 /* A block link (BlockRef.tsx, plan 260928b), so it is also `.block-ref`, whose
-   id-chip type prose.css sets: Courier at 0.58rem, faint, half opacity, and an
+   id-chip type prose.css sets: monospace at 0.58rem, faint, half opacity, and an
    underline and a colour on hover. Written as two classes so it wins that on
    specificity rather than on which stylesheet loads last; the underline belongs
    to the quote inside, as it did when this was a button. Colour, opacity and

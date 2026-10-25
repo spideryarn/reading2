@@ -314,6 +314,13 @@ and mutate it to find out. Worth the minutes wherever the passing value is zero,
 same object", and on caches, instruments, compound keys and composition seams — the last two
 mechanically, by reading the signature and counting.
 
+**And "I could not make it fire" is not "it cannot fire".** Before deleting a runtime guard that no
+test reddens, delete it and see whether the compiler objects — if it does, it is a type narrowing:
+keep it. Otherwise write the one-sentence argument for why it is unreachable, and have a
+cross-family reviewer try to break it. An argument that rests on a threshold or a count is unproven:
+in spideryarn on 2026-08-30 a guard deleted on that reasoning was reachable one item past such an
+edge, and it was a P0.
+
 ## Spotting the family
 
 You are probably in it when:
