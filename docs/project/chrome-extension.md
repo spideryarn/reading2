@@ -113,7 +113,8 @@ spike and its numbers.
 
 1. **A developer account**: https://chrome.google.com/webstore/devconsole, signed in as the Google
    account that should own it, with 2-step verification on. Pay the one-time fee, verify the
-   contact email.
+   contact email. **The publishing account is greg@gregdetre.com** (Greg, 2026-10-25: *"we'll use
+   my greg@gregdetre.com Google account for publishing"*).
 2. **The item**: *New item*, upload `extension/dist/spideryarn-extension-<version>.zip`. Fill the
    *Store listing* and *Privacy practices* tabs from
    [`extension/store/listing.md`](../../extension/store/listing.md), *Distribution* → Unlisted, and
