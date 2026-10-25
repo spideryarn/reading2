@@ -167,10 +167,14 @@ Then:
    through them.
 3. **A `tw:font-*` utility on the same element wins** (Tailwind's layer comes after ours). Wrap the
    words in a classed `<span>` rather than fighting it; that is how Tweets' posts are voiced.
-4. **Model text drawn in SVG is not voiced.** Sketch wraps and measures its labels in TypeScript
-   assuming Geist's width (`CHAR_W` in `src/sketch-scene.ts`); changing the face without changing
-   that measurement can spill a label out of its shape. Voicing it means passing a per-voice width
-   into `paintScene`. Illustrated's captions are painted into the image.
+4. **Model text drawn in SVG is measured in TypeScript**, so its face and its width per character
+   are one decision. Sketch's is `SKETCH_LABEL_VOICE` in `src/sketch-scene.ts`: it sets the
+   `<svg>`'s `voiceClass`, the exporter's stack and `CHAR_W`, and
+   [`tests/sketch-label-face.test.ts`](../../tests/sketch-label-face.test.ts) holds each face's width
+   to its woff2 and refuses canvas's silent fallback when a face does not register. It is still
+   `"ui"`; switching it is a product call, asked as
+   [q-ugekcv](../user-feedback/questions/q-ugekcv.md). Illustrated's captions are painted into the
+   image.
 
 [`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) catches the silent failures: a class
 renamed in a component (so the rule matches nothing), a compound selector whose parts never meet, a
@@ -193,8 +197,9 @@ you add text that is not the app's own, put it in its voice at the same time.**
 - **Bibliography's "in your library" match titles** (above): `CitedInSpideryarn` does not carry the
   rename flag yet —
   [261002f § 6](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
-- **Sketch's SVG labels and Illustrated's painted captions** (§ How to put an element in its voice,
-  point 4).
+- **Sketch's SVG labels**, in Geist until Greg answers
+  [q-ugekcv](../user-feedback/questions/q-ugekcv.md), and **Illustrated's painted captions**
+  (§ How to put an element in its voice, point 4).
 
 The audit that found what was missing, with file:line and where each string comes from:
 [261002b-voices-trawl.md](../plans/261002b-voices-trawl.md) for the reading view, and

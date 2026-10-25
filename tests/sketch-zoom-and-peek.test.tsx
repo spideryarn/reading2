@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CANVAS_W } from "../src/sketch-scene.js";
+import { CANVAS_W, SKETCH_LABEL_VOICE } from "../src/sketch-scene.js";
 import type { Block, BlockId } from "../src/types.js";
 import { SketchView } from "../src/web/SketchView.js";
 
@@ -894,11 +894,19 @@ describe("a press on the picture", () => {
     const dialog = stub();
     const svg = host.querySelector(".sk-scroll svg.sk-svg");
     expect(svg, "no picture in the band").not.toBeNull();
+    expect(svg?.classList.contains(`voice-${SKETCH_LABEL_VOICE}`), "the band picture is drawn in another face").toBe(
+      true,
+    );
 
     await press(svg);
 
     expect(dialog.hasAttribute("open"), "a press on the background did not open the overlay").toBe(true);
-    expect(host.querySelector(".sk-in-full")).not.toBeNull();
+    const full = host.querySelector(".sk-in-full");
+    expect(full).not.toBeNull();
+    expect(
+      full?.querySelector("svg.sk-svg")?.classList.contains(`voice-${SKETCH_LABEL_VOICE}`),
+      "the fullscreen picture is drawn in another face",
+    ).toBe(true);
   });
 
   it("leaves a press on a node to select it, and a press on a region's name to open it", async () => {
