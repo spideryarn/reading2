@@ -1,0 +1,42 @@
+Verdict: revise before building. No P0s; five P1s.
+
+### Findings
+
+- **F1 — P1 — Item 1’s exact comparison cannot pass with the proposed decomposition.** Both auth templates have different template-specific comments before the doctype ([confirmation.html](/var/tmp/spideryarn-worktrees/fonts-code-quality/supabase/templates/confirmation.html:1), [recovery.html](/var/tmp/spideryarn-worktrees/fonts-code-quality/supabase/templates/recovery.html:1)); `giftHtml` starts directly at the doctype ([pg-voucher-emails.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/store/pg-voucher-emails.ts:263)). The asserted `emailHead(title) + …` equality in the plan omits those comments ([plan](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/plans/261025k-fonts-and-css-code-quality.md:21)).  
+  **Fix:** preserve each auth comment as a template-specific prefix, then compare the remainder to the shared frame; alternatively include an explicit prefix argument. Do not delete the comments merely to satisfy the test.
+
+- **F2 — P1 — Item 3 does not create the claimed single source for Sketch’s face and width.** The offline SVG exporter independently hard-codes both Geist and `0.53` twice ([svg.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/evals/sketch/svg.ts:163), [svg.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/evals/sketch/svg.ts:173), [svg.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/evals/sketch/svg.ts:185)). Switching `SKETCH_LABEL_VOICE` to AI would therefore change the browser picture and server scoring while exported/eval SVGs stayed Geist-width.  
+  **Fix:** make the exporter consume the shared face/metric decision and add an exported-SVG regression test.
+
+- **F3 — P1 — The proposed measurement test does not guarantee “changing a face without changing the number is red.”** It only rejects a margin below Geist’s ([plan](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/plans/261025k-fonts-and-css-code-quality.md:78)); a stale value that is too large, or a switch to a narrower face, passes while changing wrapping and truncation. It also needs to account for the SVG’s weight 500/600 text ([diagram-sketch.css](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/web/styles/diagram-sketch.css:308), [diagram-sketch.css](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/web/styles/diagram-sketch.css:321)), not only one normal font file.  
+  **Fix:** use one `SKETCH_LABEL_VOICE`, derive the metric from a voice→measured-width table, and assert each table value is close to the measured value times one named safety factor, with relevant weights covered. Pin the UI result to exactly `0.53` so this no-change commit cannot alter a boundary through floating-point drift.
+
+- **F4 — P1 — Moving `voices.css` breaks several load-graph tests unless they are explicitly redesigned.** The suite currently pins exactly two top-level local imports and the old layer list ([styles-entry-is-imports-only.test.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/tests/styles-entry-is-imports-only.test.ts:331)); requires every file under `src/web/styles/` to belong to the app manifest ([same test](/var/tmp/spideryarn-worktrees/fonts-code-quality/tests/styles-entry-is-imports-only.test.ts:314)); and `readerSheets()` adds only app sheets and tone ([stylesheets.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/tests/helpers/stylesheets.ts:216)). The voice tests additionally require `:root :is(…)` and resets in their old files ([voices-css.test.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/tests/voices-css.test.ts:295)).  
+  **Fix:** name these changes in item 2. The simpler structure is to move the file to `src/web/voices.css`, beside `button-tone.css`, preserving the invariant that everything under `src/web/styles/` belongs to `styles.css`. Teach `readerSheets()` the actual `app → voices → utilities → tone` order and update the layer/import assertions.
+
+- **F5 — P1 — Item 4 is not a buildable or reviewable plan.** It contains no design, files, acceptance criteria, or passed-over alternative ([plan](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/plans/261025k-fonts-and-css-code-quality.md:100)).  
+  **Fix:** remove item 4 from this plan, or decide and document it and obtain another plan review before building it. The stated prerequisite is also stale: the one-monospace and Shantell commits (`4c4b39d13`, `f45464d06`) are already ancestors of this plan’s base HEAD.
+
+- **F6 — P2 — “Computed voice wins” contradicts the established provenance invariant without buying anything today.** The plan puts computed classes last ([plan](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/plans/261025k-fonts-and-css-code-quality.md:51)), while both the project rule and helper documentation say a `voice-*` class must never share an element with a listed class ([fonts.md](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/project/fonts.md:148), [voice.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/web/voice.ts:22)). I found no current element carrying both.  
+  **Fix:** keep the no-overlap rule and add a guard for it. If dual classification is deliberately being made legal, update both docs and add a fixture proving the chosen precedence.
+
+- **F7 — P2 — Item 1’s motivating font-drift claim is false.** The templates and gift email already use the same explicit system-sans stack ([confirmation.html](/var/tmp/spideryarn-worktrees/fonts-code-quality/supabase/templates/confirmation.html:20), [pg-voucher-emails.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/store/pg-voucher-emails.ts:275)); the project doc says so explicitly ([fonts.md](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/project/fonts.md:95)). They do not carry Georgia.  
+  **Fix:** describe this honestly as deduplicating/checking identical email framing, not correcting current font drift. “Checked, not generated” is otherwise the simpler sound design.
+
+- **F8 — P2 — The required architecture documentation is missing from item 2.** The design map currently says every file under `styles/` is imported into `app`, and that `button-tone.css` is the sole hand-written sheet outside/beyond that arrangement ([design-css-overview.md](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/project/design-css-overview.md:23)). `web-client.md` likewise says every rule under `styles/` is in `app` ([web-client.md](/var/tmp/spideryarn-worktrees/fonts-code-quality/docs/project/web-client.md:72)).  
+  **Fix:** update `fonts.md`, `design-css-overview.md`, `web-client.md`, the headers of `tailwind.css`/`styles.css`, and the stylesheet-helper commentary in the same stage, using the important-doc approval workflow.
+
+### Cascade conclusions
+
+I found no existing app-layer `font-family` rule that currently beats a voice declaration on the same element. There are also no font `!important`s, relevant inline font styles, or font declarations in `tone`.
+
+The suspicious cases are safe:
+
+- `.passage-whole` remains UI because its declaration applies directly to the descendant; the voice on `.cmt-quote`/`.dock-question-quote` is merely inherited.
+- Chat headings and code are explicitly named by the later voice rules, preserving AI and monospace.
+- Utilities remain later than `voices`, so `tw:font-*` still wins.
+- `@import "./voices.css" layer(voices)` works like the existing `tone` import; the imported file need not contain its own `@layer`.
+
+`CHAR_W` also sizes edge-label plates, region-label hit areas, and free labels ([sketch-paint.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/sketch-paint.ts:552), [sketch-paint.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/sketch-paint.ts:665), [sketch-paint.ts](/var/tmp/spideryarn-worktrees/fonts-code-quality/src/sketch-paint.ts:913)). A shared table will cover those automatically; the missed consumer is the offline caption/export path.
+
+No files were changed. The focused tests produced 75 passes; one test was prevented from spawning `git` by the sandbox (`EPERM`), not by a repository failure. The required fresh Sol run also could not initialize its app-server client under this read-only environment, so there is no cross-family verdict to count.

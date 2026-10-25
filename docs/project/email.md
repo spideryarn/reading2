@@ -69,6 +69,13 @@ Three rules the HTML keeps; the production writer refuses the first two when the
 - **Inline styles, table layout, system fonts, one image** (the spider, from the live site, with the
   word beside it so a blocked image loses nothing). Mail clients drop what a web page relies on.
 
+**The frame has one source**: [`src/email-frame.ts`](../../src/email-frame.ts) — the head, the
+outer tables, the wordmark row, the footer row and the button. The gift email below is built from
+it; the two templates stay hand-written files, because GoTrue reads them from disk, and
+`tests/email-frame.test.ts` fails unless each is exactly that frame around its own comment, title
+and rows. So a change to the frame goes in that file first, then into both templates
+([261025k § 1](../plans/261025k-fonts-and-css-code-quality.md)).
+
 The other four GoTrue emails (magic link, email change, invite, reauthentication) are still
 Supabase's, because the app sends none of them.
 
@@ -187,7 +194,7 @@ Two emails per voucher ([billing.md § Gift vouchers](billing.md); plan
 review that reshaped it):
 
 - **To the recipient**, when the voucher is made and again when an unclaimed voucher's address
-  actually changes: *A gift of N free articles on Spideryarn*, HTML in the auth templates' shape plus
+  actually changes: *A gift of N free articles on Spideryarn*, HTML in the same frame as the auth templates plus
   a plain-text part. **Never the private note or the creator.** It may carry a **note to them**
   (`recipient_note`), unlabelled and in italics (the text part sets it on its own lines), placed under
   the heading, above our words, in both letters; Greg signs it himself, and `/admin/vouchers` reminds
