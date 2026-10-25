@@ -230,6 +230,13 @@ DOI can sit on the wrong paper there — and only its `abstract`, never its mode
 Semantic Scholar needs `SEMANTIC_SCHOLAR_API_KEY` **and** `SEMANTIC_SCHOLAR_COMMERCIAL_USE=approved`
 (its standard licence is non-commercial); OpenAlex's search needs `OPENALEX_API_KEY`, which every
 OpenAlex call also sends for its larger budget ([setup-dev.md § Secrets](setup-dev.md#secrets)).
+**Semantic Scholar stays off: Greg decided on 2026-10-25 not to use it**, so neither of its settings
+is set anywhere, and its code stays dormant behind them:
+
+> I'm not going to use Semantic Scholar then because I don't want to break their terms of use.
+>
+> — Greg, 2026-10-25
+
 Which sources were on is stamped on the step and on each registry "nothing", so switching a key on
 asks those rows again and keeps every note.
 
