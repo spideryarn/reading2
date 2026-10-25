@@ -92,7 +92,7 @@ const HIDDEN_STAMP = RESERVED_ATTRS.hidden;
 /**
  * **What a page hides from its reader, stamped**, asked of the page as it
  * arrived: `prepareDocument` takes `aria-hidden` off collapsed sections so
- * Readability keeps them (`unhideCollapsedSections`, src/extract.ts), and
+ * Readability keeps them (`unhideCollapsedSections`, src/read-article.ts), and
  * after that the question can no longer be answered. A stamp rather than a set
  * of elements, because the LaTeXML title-block rewrite builds its rows on a
  * copy, and a copy keeps attributes but not identity. Inline styles and rules

@@ -1468,7 +1468,7 @@ export function documentHasNoArticle(origin: DocumentOrigin): ReaderFacingFailur
  * produced it does not know that: it reads no markup and makes no claim about
  * what the page *is* — only that there is too little text here to build
  * anything from, which is equally true of a genuinely tiny real page
- * (src/extract.ts § `capabilityFloor`). So the causes are named as the usual
+ * (src/read-article.ts § `capabilityFloor`). So the causes are named as the usual
  * ones and the short-honest-page case is named beside them, because a reader
  * whose genuinely 300-character page was refused must not be told they were
  * shown a wall.

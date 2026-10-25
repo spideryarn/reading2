@@ -17,7 +17,8 @@
  * `MAX_CONTINUATION_PAGES` of them, through `fetchDocument` and its address
  * guard. A page that wanted to send us somewhere could already link there.
  */
-import { JSDOM, VirtualConsole } from "jsdom";
+/* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why. */
+import { jsdom } from "./jsdom-lazy.js";
 import { openRouterJson, type AiRequestBody } from "./ai-call.js";
 import { withChatJsonSchema } from "./messages-structured-output.js";
 import { MULTI_PAGE_MODEL } from "./models.js";
@@ -113,6 +114,7 @@ function relOf(el: Element): "next" | "prev" | undefined {
  * whose links are already absolute; a link it kept is marked `inArticle`.
  */
 export function pageLinks(html: string, pageUrl: string, articleHtml: string | null): PageLink[] {
+  const { JSDOM, VirtualConsole } = jsdom();
   const virtualConsole = new VirtualConsole();
   const doc = new JSDOM(html, { url: pageUrl, virtualConsole }).window.document;
   const here = new URL(pageUrl);
