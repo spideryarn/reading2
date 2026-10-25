@@ -1,0 +1,30 @@
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/brand-assets.test.ts -t uses the selected textured reader
+
+
+ RUN  v4.1.11 /Users/greg/.codex/worktrees/spideryarn-knot-reader-logo/reading2
+
+ ❯ |unit| tests/brand-assets.test.ts (19 tests | 1 failed | 18 skipped) 603ms
+     × uses the selected textured reader and dark book for the app and every favicon 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/brand-assets.test.ts > brand assets > uses the selected textured reader and dark book for the app and every favicon
+AssertionError: favicon-16x16.png must contain the reader's dark book: expected 0 to be greater than 3.84
+ ❯ tests/brand-assets.test.ts:100:67
+     98|         }
+     99|       }
+    100|       expect(book, `${file} must contain the reader's dark book`).toBe…
+       |                                                                   ^
+    101|     }
+    102|     // A full independently cropped master comparison also protects th…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  11:22:04
+   Duration  1.41s (transform 71ms, setup 70ms, import 635ms, tests 603ms, environment 0ms)
+

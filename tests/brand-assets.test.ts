@@ -72,7 +72,10 @@ describe("brand assets", () => {
     const file = size === 256 ? "spideryarn-logo.png" : `favicon-${size}x${size}.png`;
     const { data } = await pixels(path.join(outputDir, file));
     expect(data[3]).toBe(0);
-    expect(enclosedGaps(data, size)).toBeGreaterThanOrEqual(size === 16 ? 1 : 3);
+    // This master preserves the central hollow at 16/32; the smaller arm
+    // gaps resolve at 48/256. The historical outline had a hollow book too.
+    const minimumGaps = new Map([[16, 1], [32, 1], [48, 2], [256, 3]]);
+    expect(enclosedGaps(data, size)).toBeGreaterThanOrEqual(minimumGaps.get(size) ?? 3);
     const visible: number[] = [];
     for (let i = 0; i < size * size; i++) if ((data[i * 4 + 3] ?? 0) > 127) visible.push(i);
     expect(visible.length).toBeGreaterThan(size * size * 0.2);
@@ -81,6 +84,42 @@ describe("brand assets", () => {
     const ys = visible.map((i) => Math.floor(i / size));
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(size * 0.8);
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(size * 0.8);
+  });
+
+  it("uses the selected textured reader and dark book for the app and every favicon", async () => {
+    // Independent identity check: the historical orange outline has no dark
+    // book. The chosen master has an opaque brown cover in the lower centre.
+    for (const size of [16, 32, 48, 256]) {
+      const file = size === 256 ? "spideryarn-logo.png" : `favicon-${size}x${size}.png`;
+      const { data } = await pixels(path.join(outputDir, file));
+      let book = 0;
+      for (let y = Math.floor(size * 0.6); y < Math.floor(size * 0.82); y++) {
+        for (let x = Math.floor(size * 0.35); x < Math.floor(size * 0.65); x++) {
+          const at = (y * size + x) * 4;
+          const [r = 255, g = 255, b = 255, a = 0] = data.slice(at, at + 4);
+          if (a > 128 && r < 130 && g < 100 && b < 90 && r - g < 40) book++;
+        }
+      }
+      expect(book, `${file} must contain the reader's dark book`).toBeGreaterThan(size * size * 0.015);
+    }
+    // A full independently cropped master comparison also protects the limbs,
+    // texture and hollow body, beyond the distinguishing book colour above.
+    const master = await pixels(path.join(ROOT, "assets/brand/source/reader.png"));
+    const occupied: number[] = [];
+    for (let i = 0; i < master.width * master.height; i++) if ((master.data[i * 4 + 3] ?? 0) >= 16) occupied.push(i);
+    const xs = occupied.map((i) => i % master.width);
+    const ys = occupied.map((i) => Math.floor(i / master.width));
+    const left = xs.reduce((a, b) => Math.min(a, b));
+    const top = ys.reduce((a, b) => Math.min(a, b));
+    const width = xs.reduce((a, b) => Math.max(a, b)) - left + 1;
+    const height = ys.reduce((a, b) => Math.max(a, b)) - top + 1;
+    const expected = createCanvas(256, 256);
+    const ctx = expected.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    const scale = 256 * 0.95 / Math.max(width, height);
+    ctx.drawImage(await loadImage(path.join(ROOT, "assets/brand/source/reader.png")), left, top, width, height,
+      (256 - width * scale) / 2, (256 - height * scale) / 2, width * scale, height * scale);
+    expect(await rastersEquivalent(await readFile(path.join(outputDir, "spideryarn-logo.png")), expected.toBuffer("image/png"))).toBe(true);
   });
 
   it("keeps reader transparency and opaque inset install tiles in both themes", async () => {
@@ -176,7 +215,7 @@ describe("brand assets", () => {
     const drifted = createCanvas(width, width);
     const image = drifted.getContext("2d").createImageData(width, width);
     image.data.set(data);
-    for (let i = 0; i < image.data.length; i += 4) if (image.data[i + 3] === 255) image.data[i] = Math.max(0, (image.data[i] ?? 0) - 2);
+    for (let i = 0; i < image.data.length; i += 4) if ((image.data[i + 3] ?? 0) > 128) image.data[i] = Math.max(0, (image.data[i] ?? 0) - 2);
     drifted.getContext("2d").putImageData(image, 0, 0);
     const driftedBytes = drifted.toBuffer("image/png");
     const originalIco = await readFile(path.join(outputDir, "favicon.ico"));
@@ -189,14 +228,28 @@ describe("brand assets", () => {
     expect((await readFile(file)).equals(driftedBytes)).toBe(true);
     await expect(generateBrandAssets({ outputDir, check: true })).resolves.toHaveLength(11);
 
-    const changedMark = path.join(temporary, "changed-mark.svg");
-    const svg = await readFile(path.join(ROOT, "assets/brand/source/mark.svg"), "utf8");
-    for (const changed of [svg.replaceAll("#DB8A45", "#DB8A4D"), svg.replace('stroke-width="18"', 'stroke-width="17.5"')]) {
-      expect(changed).not.toBe(svg);
-      await writeFile(changedMark, changed);
-      await expect(generateBrandAssets({ outputDir, markPath: changedMark, check: true }))
-        .rejects.toThrow(/spideryarn-logo.png, favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, favicon.ico/);
+    const changedReader = path.join(temporary, "changed-reader.png");
+    const master = await loadImage(path.join(ROOT, "assets/brand/source/reader.png"));
+    const changed = createCanvas(master.width, master.height);
+    const ctx = changed.getContext("2d");
+    ctx.drawImage(master, 0, 0);
+    const imageData = ctx.getImageData(0, 0, master.width, master.height);
+    // A visible channel change to the actual master must invalidate every
+    // derivative, including the formerly independent small mark and favicons.
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      if ((imageData.data[i + 3] ?? 0) > 128) imageData.data[i] = Math.max(0, (imageData.data[i] ?? 0) - 35);
     }
+    ctx.putImageData(imageData, 0, 0);
+    await writeFile(changedReader, changed.toBuffer("image/png"));
+    const publicNames = [
+      "spideryarn-logo.png", "favicon-16x16.png", "favicon-32x32.png", "favicon-48x48.png",
+      "spideryarn-reader.png", "apple-touch-icon.png", "android-chrome-192x192.png",
+      "android-chrome-512x512.png", "app-icon-light-1024.png", "app-icon-dark-1024.png", "favicon.ico",
+    ];
+    const publicBefore = await Promise.all(publicNames.map((name) => readFile(path.join(outputDir, name))));
+    await expect(generateBrandAssets({ outputDir, readerPath: changedReader, check: true }))
+      .rejects.toThrow(/spideryarn-logo.png, favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, spideryarn-reader.png, apple-touch-icon.png, android-chrome-192x192.png, android-chrome-512x512.png, app-icon-light-1024.png, app-icon-dark-1024.png, favicon.ico/);
+    for (const [index, name] of publicNames.entries()) expect(await readFile(path.join(outputDir, name))).toEqual(publicBefore[index]);
     await generateBrandAssets({ outputDir });
   });
 
@@ -238,7 +291,7 @@ describe("brand assets", () => {
     await expect(generateBrandAssets({ outputDir: path.join(ROOT, "public"), check: true })).resolves.toHaveLength(11);
   });
 
-  it.each(["preview.png", "tiny-size-preview.png"])("detects missing/stale %s without writing", async (file) => {
+  it.each(["preview.png", "tiny-size-preview.png", "browser-preview.html"])("detects missing/stale %s without writing", async (file) => {
     const previewDir = path.join(temporary, `${file}-proofs`);
     const options = { outputDir, preview: true, previewDir };
     await generateBrandAssets(options);
@@ -251,10 +304,33 @@ describe("brand assets", () => {
     await expect(generateBrandAssets({ ...options, check: true })).rejects.toThrow(file);
     expect(await readFile(proof, "utf8")).toBe("deliberately stale proof");
     await writeFile(proof, original);
-    const before = await Promise.all(["preview.png", "tiny-size-preview.png"].map((file) => stat(path.join(previewDir, file))));
+    const before = await Promise.all(["preview.png", "tiny-size-preview.png", "browser-preview.html"].map((file) => stat(path.join(previewDir, file))));
     await expect(generateBrandAssets({ ...options, check: true })).resolves.toHaveLength(11);
-    for (const [i, file] of ["preview.png", "tiny-size-preview.png"].entries()) {
+    for (const [i, file] of ["preview.png", "tiny-size-preview.png", "browser-preview.html"].entries()) {
       expect((await stat(path.join(previewDir, file))).mtimeMs).toBe(before[i]?.mtimeMs);
+    }
+  });
+
+  it("declares real favicon resources and 16 logical pixel Retina samples in the browser proof", async () => {
+    const previewDir = path.join(temporary, "browser-proof");
+    await generateBrandAssets({ outputDir, previewDir, preview: true });
+    const doc = new JSDOM(await readFile(path.join(previewDir, "browser-preview.html"), "utf8")).window.document;
+    const links = [...doc.querySelectorAll('link[rel="icon"][type="image/png"]')];
+    expect(links.map((link) => [link.getAttribute("sizes"), link.getAttribute("href")])).toEqual(
+      [16, 32, 48].map((size) => [`${size}x${size}`, `../../public/favicon-${size}x${size}.png`]),
+    );
+    const samples = [...doc.querySelectorAll('img[srcset]')];
+    expect(samples).toHaveLength(2);
+    for (const sample of samples) {
+      expect(sample.getAttribute("width")).toBe("16");
+      expect(sample.getAttribute("height")).toBe("16");
+      expect(sample.getAttribute("srcset")).toBe("../../public/favicon-16x16.png 1x, ../../public/favicon-32x32.png 2x");
+    }
+    expect(doc.querySelectorAll("section.light img, section.dark img")).toHaveLength(16);
+    for (const image of doc.querySelectorAll("img")) {
+      const relative = image.getAttribute("src");
+      expect(relative).toMatch(/^\.\.\/\.\.\/public\/[\w-]+\.png$/);
+      await expect(stat(path.join(ROOT, "assets/brand", relative ?? ""))).resolves.toBeDefined();
     }
   });
 

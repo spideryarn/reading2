@@ -427,10 +427,10 @@ away entirely.
 
 ## What is deliberately not here
 
-- **No stroke-drawing animation.** The optical mark now has an editable SVG source, with the PNG
-  generated from it (§ Identity and asset regeneration). The animations still share the raster
-  mark; a future strand-drawing effect would need to animate those source centrelines rather than
-  an autotraced outline, which would draw the borders of the yarn instead of the yarn itself.
+- **No stroke-drawing animation.** The selected textured reader has a raster master
+  ([main-icon.md](main-icon.md)); the former optical SVG is historical. A future strand-drawing
+  effect would need a deliberate centreline model rather than an autotraced outline, which would
+  draw the borders of the yarn instead of the yarn itself.
 - **No user setting.** There is one already, and it is the operating system's:
   `prefers-reduced-motion` collapses each of these to a **still** through the global guard in
   [`tailwind.css`](../../src/web/tailwind.css) — not to nothing, which is what a reader expects and
