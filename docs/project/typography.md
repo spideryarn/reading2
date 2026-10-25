@@ -17,8 +17,7 @@ reader words override that base with the faces in [fonts.md](fonts.md).
 | `--font-sans` | Geist — the family itself. Nothing should name this directly; use one of the two below |
 | `--font-reading` | the default reading stack before a voice-specific override |
 | `--font-ui` | chrome: controls, masthead facts. The table's column headers wore it until 2026-09-05, when that row lost its height — it is still in the DOM for the fisheye panels' geometry and for a screen reader, and sets no type at all |
-| `--font-mono` | Geist Mono — counts, and anything that wants to line up |
-| `--font-id` | Courier — block ids, and only block ids (Greg's ask) |
+| `--font-mono` | Geist Mono — code (whoever wrote it), block ids, counts, and anything that wants to line up. Block ids were Courier and a model's code iA Writer Mono until 2026-10-25 ([fonts.md](fonts.md#three-faces-and-the-readers)) |
 | `--font-brand` | Geist — the wordmark, and only the wordmark. Trebuchet MS until 2026-09-08 |
 
 `--font-reading` and `--font-ui` both resolve to `--font-sans` today. They remain separate base

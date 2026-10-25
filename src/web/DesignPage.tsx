@@ -426,14 +426,12 @@ const FACES: { token: string; used: string }[] = [
      screen reader and the sticky offsets (TableView.tsx § A head with no
      height), and it sets no type at all. */
   { token: "--font-ui", used: "chrome: controls, masthead facts" },
-  { token: "--font-mono", used: "counts and anything that wants to line up" },
-  { token: "--font-id", used: "block ids, and only block ids" },
+  { token: "--font-mono", used: "code, block ids, and anything that wants to line up" },
   { token: "--font-brand", used: "the wordmark, and only the wordmark" },
   /* The per-voice faces, read only by styles/voices.css, for everyone since
      2026-10-02. docs/project/fonts.md. */
   { token: "--font-author", used: "the article, and verbatim quotes of it" },
   { token: "--font-ai", used: "model-generated prose" },
-  { token: "--font-ai-code", used: "code inside a model's answer" },
   { token: "--font-reader", used: "anything the reader typed" },
 ];
 
@@ -448,7 +446,7 @@ const FACES: { token: string; used: string }[] = [
  */
 const ROLE_VOICES: { voice: Voice; head: string }[] = [
   { voice: "ui", head: "Geist — ours" },
-  { voice: "ai", head: "mono — the model's" },
+  { voice: "ai", head: "Quattro — the model's" },
   { voice: "author", head: "serif — the author's" },
   { voice: "reader", head: "Arial — the reader's" },
 ];

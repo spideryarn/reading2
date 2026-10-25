@@ -275,7 +275,7 @@ function giftHtml(parts: {
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
 <tr><td style="padding:0 0 32px 0;">
 <img src="${PUBLIC_ORIGIN}/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
-<span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
+<span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:600;color:#DB8A45;">Spideryarn</span>
 </td></tr>
 <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">${parts.heading}</td></tr>
 ${greetingRow(parts.name)}${noteRow(parts.note)}${starterRows(parts.starter)}${paragraphs.join("\n")}

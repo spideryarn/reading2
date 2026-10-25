@@ -10,7 +10,7 @@
  * names the family you meant. Written when the model's face became iA Writer
  * Quattro (261021f).
  *
- * The model's two faces also need all the styles they are drawn in: a missing
+ * The model's face also needs all the styles they are drawn in: a missing
  * italic or 700 is synthesised by the browser, which on these faces looks like
  * a bug, not a choice.
  */
@@ -68,7 +68,6 @@ describe("self-hosted faces", () => {
     "--font-mono",
     "--font-author",
     "--font-ai",
-    "--font-ai-code",
   ])("%s names a family an imported file declares", (token) => {
     const family = primaryFamily(TOKENS, token);
     expect(FACES.map((f) => f.family)).toContain(family);
@@ -76,7 +75,6 @@ describe("self-hosted faces", () => {
 
   it.each([
     ["--font-ai", ["normal", "italic"], [400, 700]],
-    ["--font-ai-code", ["normal", "italic"], [400, 700]],
   ] as const)("%s has every style it is drawn in", (token, styles, weights) => {
     const family = primaryFamily(TOKENS, token);
     for (const style of styles) {

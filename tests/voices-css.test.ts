@@ -36,7 +36,7 @@ const CSS = readFileSync("src/web/styles/voices.css", "utf8").replace(/\/\*[\s\S
 const selectors = [...CSS.matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => m[1]!.trim());
 
 function selectorUsing(
-  token: "--font-author" | "--font-ai" | "--font-ai-code" | "--font-reader" | "--font-ui",
+  token: "--font-author" | "--font-ai" | "--font-reader" | "--font-ui",
 ): string {
   const rule = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) =>
     m[2]!.includes(`var(${token})`),
@@ -389,18 +389,18 @@ describe("voices.css", () => {
     const tokens = readFileSync("styles/tokens.css", "utf8");
     const used = [...new Set([...CSS.matchAll(/var\((--font-[\w-]+)\)/g)].map((m) => m[1]!))];
     /* --font-ui only in the placeholder rule: app copy inside a reader's box. */
-    /* --font-ai-code only for code in a model's answer: the model's letters on one width. */
+    /* --font-mono only for code in a model's answer: code is in the one monospace, whoever wrote it. */
     expect(used.sort()).toEqual([
       "--font-ai",
-      "--font-ai-code",
       "--font-author",
+      "--font-mono",
       "--font-reader",
       "--font-ui",
     ]);
     for (const t of used) expect(tokens, t).toMatch(new RegExp(`${t}:`));
   });
 
-  it("keeps code in Chat and Candidates on the model's monospace through the full cascade", () => {
+  it("keeps code in Chat and Candidates on the one monospace through the full cascade", () => {
     const { window } = new JSDOM(`<!doctype html><body>
       <div class="chat-turn model">
         <p><code class="fmt-code" id="chat-inline">inline</code></p>
@@ -421,7 +421,7 @@ describe("voices.css", () => {
       window.getComputedStyle(window.document.getElementById(id)!).fontFamily;
 
     for (const id of ["chat-inline", "chat-block", "candidate-inline", "candidate-block"]) {
-      expect(family(id), id).toBe("var(--font-ai-code)");
+      expect(family(id), id).toBe("var(--font-mono)");
     }
     expect(family("other-inline"), "code outside a model answer").toBe("var(--font-mono)");
   });

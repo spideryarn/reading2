@@ -284,8 +284,7 @@
     --font-reading: var(--font-sans);   /* the base reading stack before a voice override */
     --font-ui: var(--font-sans);        /* chrome: controls, masthead facts, column headers */
     --font-brand: var(--font-sans);     /* the wordmark, and only the wordmark */
-    --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
-    --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
+    --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace; /* code and block ids */
 
     /* One face per voice — the author's, the model's, the reader's — applied to
        visible words by src/web/styles/voices.css, for every reader since 2026-10-02.
@@ -295,11 +294,11 @@
        becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
        "Courier is really ugly" — and Plex became iA Writer Quattro on 2026-10-21, after a
        reader found the monospace hard going: Plex's letters on four widths rather than one,
-       so it still looks typed but reads as prose. Code in a model's answer keeps one width,
-       in iA Writer Mono (voices.css). docs/project/fonts.md. */
+       so it still looks typed but reads as prose. Code, whoever wrote it, is --font-mono:
+       iA Writer Mono for a model's code and Courier for block ids went on 2026-10-25, so
+       there is one monospace. docs/project/fonts.md. */
     --font-author: 'Source Serif 4 Variable', 'Times New Roman', Times, serif;
     --font-ai: 'iA Writer Quattro', 'Courier New', Courier, monospace;
-    --font-ai-code: 'iA Writer Mono', 'Courier New', Courier, monospace;
     --font-reader: Arial, Helvetica, 'Liberation Sans', sans-serif;
 
     /* ---- reading measure --------------------------------------------- */
