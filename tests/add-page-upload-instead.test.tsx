@@ -8,7 +8,9 @@
  *  - a site that refused the app (`[fetch-refused]`) gets the control; a
  *    timeout, whose sentence says to try again, and a running import do not;
  *  - choosing a file and pressing Add hands it to the shelf's own upload
- *    engine and goes to `/add/upload/<id>`, as the shelf's Add does.
+ *    engine and goes to `/add/upload/<id>`, as the shelf's Add does;
+ *  - the Chrome extension is offered above the bookmarklet only where it gets
+ *    round the failure, and only once there is a store item (plan 261025b).
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -84,6 +86,18 @@ vi.mock("../src/web/batchUpload.js", async (importActual) => {
       add: (files: File[]) => {
         batched.push(...files.map((f) => f.name));
       },
+    },
+  };
+});
+
+/** `EXTENSION_STORE_URL`, as each test wants it: `null` is today's production. */
+let storeUrl: string | null = null;
+vi.mock("../src/web/extension-handoff.js", async (importActual) => {
+  const actual = await importActual<typeof import("../src/web/extension-handoff.js")>();
+  return {
+    ...actual,
+    get EXTENSION_STORE_URL() {
+      return storeUrl;
     },
   };
 });
@@ -171,6 +185,12 @@ beforeEach(() => {
   forgotten = 0;
   batched.length = 0;
   navigations.length = 0;
+  storeUrl = null;
+  /* A mouse: the extension and the bookmarklet are offered only to a fine pointer. */
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: query === "(pointer: fine)", media: query }),
+  });
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -273,5 +293,48 @@ describe("Upload a file instead, on the add page", () => {
     });
     expect(sent).toEqual(["mental-imagery.pdf"]);
     expect(navigations).toContain(addUploadHref("up-1"));
+  });
+});
+
+describe("the Chrome extension, under a failed import (plan 261025b)", () => {
+  const STORE = "https://chromewebstore.google.com/detail/abcdefghijklmnopabcdefghijklmnop";
+  const storeLink = () => control()?.querySelector<HTMLAnchorElement>(`a[href="${STORE}"]`) ?? null;
+
+  it("is offered under a site that refused the app, opening the store in a new tab", async () => {
+    storeUrl = STORE;
+    await show(makeJob("error", fetchFailed("forbidden", 403).message));
+    const link = storeLink();
+    expect(link?.textContent).toBe("Get it from the Chrome Web Store");
+    expect(link?.target).toBe("_blank");
+    expect(link?.rel).toBe("noopener noreferrer");
+    /* Above the bookmarklet: the better way round where it reaches. */
+    const bookmarklet = [...(control()?.querySelectorAll("a") ?? [])].find((a) => a.textContent?.includes("Save for Spideryarn"));
+    expect(bookmarklet).toBeDefined();
+    expect(link!.compareDocumentPosition(bookmarklet!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("is not offered where it would not help, though the upload is", async () => {
+    storeUrl = STORE;
+    await show(makeJob("error", fetchFailed("invalid-url", null).message));
+    expect(control()).not.toBeNull();
+    expect(storeLink()).toBeNull();
+    expect(control()?.textContent).not.toContain("Chrome");
+  });
+
+  it("is not offered while there is no store item", async () => {
+    await show(makeJob("error", fetchFailed("forbidden", 403).message));
+    expect(control()).not.toBeNull();
+    expect(control()?.textContent).not.toContain("Chrome");
+  });
+
+  it("is not offered on a phone", async () => {
+    storeUrl = STORE;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({ matches: query === "(pointer: coarse)", media: query }),
+    });
+    await show(makeJob("error", fetchFailed("forbidden", 403).message));
+    expect(control()).not.toBeNull();
+    expect(storeLink()).toBeNull();
   });
 });

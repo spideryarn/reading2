@@ -25,8 +25,21 @@ import { savedSource } from "../urls.js";
  * The store's id for the published extension, once Greg has created the item
  * (the store assigns it then; until then there is none, and production asks
  * nobody). docs/user-feedback/questions/ has the steps.
+ *
+ * **Setting it is the whole change**: every place that points a reader at the
+ * extension takes its link from `EXTENSION_STORE_URL` below and draws nothing
+ * of it while this is `null` (plan 261025b). The id lives here only;
+ * docs/project/chrome-extension.md points at this line rather than copying it.
  */
 export const PRODUCTION_EXTENSION_ID: string | null = null;
+
+/** The store's page for an item: Chromium builds it as this prefix plus the id. */
+export function extensionStoreUrl(id: string | null): string | null {
+  return id === null ? null : `https://chromewebstore.google.com/detail/${id}`;
+}
+
+/** Where a reader installs the extension, or `null` while there is no item. */
+export const EXTENSION_STORE_URL: string | null = extensionStoreUrl(PRODUCTION_EXTENSION_ID);
 
 /** extension/manifest.ts § `DEV_EXTENSION_ID`, held equal by
  *  tests/extension-handoff.test.ts. Trusted only by a dev build of this app,

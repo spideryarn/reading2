@@ -38,6 +38,7 @@ import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "../
 import { subModesOf } from "../src/web/sub-modes.js";
 import { appearanceRows } from "../src/web/appearance-commands.js";
 import { besideTheModes, experimentalCommand } from "../src/web/CommandBar.js";
+import { extensionStoreUrl } from "../src/web/extension-handoff.js";
 import { FIND_MORE_MODES } from "../src/web/find-more.js";
 
 const close = () => ({ kind: "close" }) as const;
@@ -195,6 +196,8 @@ function everyRow(): readonly Command[] {
       openComments: () => {},
       openFeedback: () => {},
       queue: { run: async () => null, lastFailure: () => null },
+      /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
+      extensionStore: extensionStoreUrl("a".repeat(32)),
     }),
     ...METADATA_RERUN_STEPS.map((step) => rerunCommand(step, close)),
     ...SECTION_ROWS.map((row) => sectionCommand(row, close)),

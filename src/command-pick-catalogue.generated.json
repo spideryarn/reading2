@@ -2182,6 +2182,28 @@
   ]
  },
  {
+  "id": "action:chrome-extension",
+  "label": "Chrome extension",
+  "description": "Add the page you are reading in one press, from Chrome. How, in Help.",
+  "aliases": [
+   "extension",
+   "browser extension",
+   "chrome",
+   "plugin",
+   "add-on"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
   "id": "page:/",
   "label": "Library",
   "description": "Your shelf, and the box you paste a new article into.",

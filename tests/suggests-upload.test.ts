@@ -14,8 +14,10 @@ import {
   codeOfMessage,
   documentIsABotCheck,
   FETCH_PAPER_MISSING,
+  failureSuggestsExtension,
   failureSuggestsUpload,
   fetchFailed,
+  SUGGESTS_EXTENSION,
   SUGGESTS_UPLOAD,
 } from "../src/messages.js";
 
@@ -74,5 +76,46 @@ describe("SUGGESTS_UPLOAD", () => {
     expect(failureSuggestsUpload(documentIsABotCheck("upload").message)).toBe(false);
     expect(failureSuggestsUpload("Something went wrong, upload it. [jb-made-up]")).toBe(false);
     expect(failureSuggestsUpload(undefined)).toBe(false);
+  });
+});
+
+/**
+ * **Which of those also offer the Chrome extension**, one decision per code, so
+ * a code added to `SUGGESTS_UPLOAD` is a red test here until somebody decides
+ * it. True where the page may still open in the reader's own browser, which the
+ * extension adds as shown; plan 261025b, GPT Sol's plan review finding 2.
+ */
+const EXTENSION_HELPS: Record<string, boolean> = {
+  "fetch-address": false, // a slip in the address: the browser cannot open it either
+  "fetch-scheme": false, // the extension takes only http(s) tabs
+  "fetch-private": true, // an intranet page the reader can see
+  "fetch-certificate": true,
+  "fetch-redirects": true,
+  "fetch-login": true,
+  "fetch-refused": true,
+  "fetch-type": false, // not a web page; a PDF tab goes back to our server
+  "fetch-empty": true,
+  "fetch-declined": true,
+  "fetch-incomplete": true,
+  "fetch-paper-missing": false, // the paper is not there for anybody
+  "jb-bot-check": true,
+};
+
+describe("SUGGESTS_EXTENSION", () => {
+  it("has a decision for exactly the codes that suggest an upload", () => {
+    expect(Object.keys(EXTENSION_HELPS).sort()).toEqual([...SUGGESTS_UPLOAD].sort());
+  });
+
+  for (const [code, helps] of Object.entries(EXTENSION_HELPS)) {
+    it(`[${code}] ${helps ? "offers" : "does not offer"} the extension`, () => {
+      expect(SUGGESTS_EXTENSION.has(code)).toBe(helps);
+    });
+  }
+
+  it("is read off a stored message's bracketed code", () => {
+    expect(failureSuggestsExtension(fetchFailed("forbidden", 403).message)).toBe(true);
+    expect(failureSuggestsExtension(documentIsABotCheck("url").message)).toBe(true);
+    expect(failureSuggestsExtension(fetchFailed("invalid-url", null).message)).toBe(false);
+    expect(failureSuggestsExtension(undefined)).toBe(false);
   });
 });
