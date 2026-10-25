@@ -233,7 +233,9 @@ polar interpolation drags a mix round to 11.7° and the result is quietly pink i
   0–1 scores on a list row, [`SharePie`](../../src/web/SharePie.tsx) for a share of a whole. Their
   headers say what keeps a picture honest: a fixed scale, the exact quantity drawn (an edge too
   thin to see is the card's words to tell, not a stretched slice), and the figure in words for a
-  screen reader. `SharePie` is a button, because its card holds the only explanation and must be
+  screen reader. One deliberate exception: the masthead's read-so-far mark hands `SharePie` a coarse
+  band's whole quarter, because the band is the quantity it claims and its words say so
+  (`ReadSoFarMark.tsx`, plan 261025j). `SharePie` is a button, because its card holds the only explanation and must be
   reachable by touch and keyboard; `ScoreBars` stays out of the tab order, because its accessible
   name already carries every score. This is a preference for glanceable
   quantities, not a ban on numbers: words stay for a warning, a failure, or anything that is not a

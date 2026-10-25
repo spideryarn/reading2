@@ -25,6 +25,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { listWorktrees } from "../scripts/worktree-admin.js";
+import type { DockerInventory } from "../scripts/worktree-check.js";
 import { myLockStart, orphanProcessIn } from "./helpers/live-process.js";
 import { classifyPidNamespace, type ProcTable, procTable } from "../scripts/worktree-inuse.js";
 import {
@@ -37,12 +38,21 @@ import {
   proveAndDeleteBranch,
   reachableOids,
   relock,
-  removeWorktree,
+  type RemoveOptions,
+  type RemoveOutcome,
+  removeWorktree as removeWorktreeReal,
 } from "../scripts/worktree-remove.js";
 
 let root: string;
 let origin: string;
 let primary: string;
+
+const EMPTY_DOCKER: DockerInventory = { kind: "listed", containers: [] };
+
+/** These are git-removal tests, not integration tests for the host's Docker daemon. */
+function removeWorktree(cwd: string, wanted: string | undefined, opts: RemoveOptions = {}): RemoveOutcome {
+  return removeWorktreeReal(cwd, wanted, { docker: () => EMPTY_DOCKER, ...opts });
+}
 
 function git(args: string[], cwd: string): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -342,6 +352,41 @@ describe("removeWorktree", () => {
     expect(existsSync(wt)).toBe(false);
     const branch = spawnSync("git", ["rev-parse", "--verify", "refs/heads/worktree-fresh-and-done"], { cwd: primary });
     expect(branch.status).not.toBe(0);
+  });
+
+  it("REFUSES when the Docker mount scan cannot tell", () => {
+    const wt = landedWorktree("worktree-docker-unknown");
+
+    const out = removeWorktree(primary, "worktree-docker-unknown", {
+      docker: () => ({ kind: "cannot-tell", why: "docker inspect timed out" }),
+    });
+
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("could not tell whether a Docker container is mounted");
+    expect(existsSync(wt)).toBe(true);
+  });
+
+  it("REFUSES when a Docker container is mounted from the tree", () => {
+    const wt = landedWorktree("worktree-docker-mounted");
+
+    const out = removeWorktree(primary, "worktree-docker-mounted", {
+      docker: () => ({
+        kind: "listed",
+        containers: [
+          {
+            Id: "c0ffee",
+            Name: "/supabase_kong_spideryarn2",
+            State: { Status: "exited" },
+            Mounts: [{ Type: "bind", Source: path.join(wt, "supabase", "templates", "recovery.html") }],
+            Config: { Labels: { "com.supabase.cli.project": "spideryarn2" } },
+          },
+        ],
+      }),
+    });
+
+    expect(out.ok).toBe(false);
+    expect(out.steps.join("\n")).toContain("supabase_kong_spideryarn2");
+    expect(existsSync(wt)).toBe(true);
   });
 
   it("REFUSES the same tree while the session named in its lock is still alive", () => {

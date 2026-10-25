@@ -37,8 +37,13 @@ import {
   corpusStrays,
   gather,
   hiddenFromStatus,
+  containersUnder,
+  dockerInspectInventory,
   listenersUnder,
   logStrays,
+  mountsUnder,
+  pathUnder,
+  SUPABASE_PROJECT,
   report,
   runCheck,
   standingAgainstTrunk,
@@ -72,6 +77,7 @@ const clean: CheckFacts = {
   disposable: 3,
   trunk: { kind: "landed" },
   listeners: { kind: "checked", found: [] },
+  mounts: { kind: "checked", found: [], inspected: 12 },
 };
 
 describe("listenersUnder", () => {
@@ -873,5 +879,208 @@ describe("gather, in a real linked worktree", () => {
     const facts = gather(worktree);
     expect(facts.trunk.kind).toBe("ahead");
     expect(report(facts).safe).toBe(false);
+  });
+});
+
+/* ------------------------------------------------- Docker mounts (261025i) -- */
+
+describe("pathUnder", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = realpathSync(mkdtempSync(path.join(tmpdir(), "path-under-")));
+    mkdirSync(path.join(dir, "tree", "supabase", "snippets"), { recursive: true });
+    mkdirSync(path.join(dir, "tree-old"), { recursive: true });
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("counts the root itself and anything under it", () => {
+    const root = path.join(dir, "tree");
+    expect(pathUnder(root, root)).toBe(true);
+    expect(pathUnder(path.join(root, "supabase", "snippets"), root)).toBe(true);
+  });
+
+  it("does not count a sibling whose name starts with the root's", () => {
+    // `tree-old` is not under `tree`, which a bare startsWith would say it is.
+    expect(pathUnder(path.join(dir, "tree-old"), path.join(dir, "tree"))).toBe(false);
+    expect(pathUnder(path.join(dir, "tree-old", "gone"), path.join(dir, "tree"))).toBe(false);
+  });
+
+  it("ignores a trailing slash on either side", () => {
+    expect(pathUnder(`${path.join(dir, "tree", "supabase")}/`, `${path.join(dir, "tree")}/`)).toBe(true);
+  });
+
+  it("sees through a symlinked spelling of the root", () => {
+    // /var → /private/var on macOS is this case: Docker reports one spelling,
+    // the root arrives in the other.
+    const alias = path.join(dir, "alias");
+    symlinkSync(path.join(dir, "tree"), alias);
+    expect(pathUnder(path.join(dir, "tree", "supabase"), alias)).toBe(true);
+    expect(pathUnder(path.join(alias, "supabase"), path.join(dir, "tree"))).toBe(true);
+    expect(pathUnder(path.join(alias, "supabase", "gone.html"), path.join(dir, "tree"))).toBe(true);
+  });
+
+  it("judges a path that no longer exists by its spelling", () => {
+    // The incident's own shape: a mount source whose directory was deleted.
+    const root = path.join(dir, "tree");
+    expect(pathUnder(path.join(root, "supabase", "templates", "gone.html"), root)).toBe(true);
+    expect(pathUnder(path.join(dir, "elsewhere", "gone"), root)).toBe(false);
+  });
+
+  it("strips Docker Desktop's /host_mnt on macOS, and only there", () => {
+    const root = path.join(dir, "tree");
+    expect(pathUnder(`/host_mnt${root}/supabase`, root, "darwin")).toBe(true);
+    expect(pathUnder(`/host_mnt${root}/supabase`, root, "linux")).toBe(false);
+  });
+});
+
+describe("containersUnder", () => {
+  const root = "/srv/wt/tree";
+  const container = (over: Record<string, unknown>) => ({
+    Id: "c0ffee",
+    Name: "/some_container",
+    State: { Status: "running" },
+    Mounts: [],
+    Config: { Labels: {} },
+    ...over,
+  });
+
+  it("matches a bind mount from under the root", () => {
+    const found = containersUnder(
+      [
+        container({
+          Name: "/supabase_studio_spideryarn2",
+          Mounts: [{ Type: "bind", Source: `${root}/supabase/snippets` }],
+          Config: { Labels: { "com.supabase.cli.project": "spideryarn2" } },
+        }),
+      ],
+      root,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.name).toBe("supabase_studio_spideryarn2");
+    expect(found[0]?.project).toBe("spideryarn2");
+    expect(found[0]?.matched.join(" ")).toContain(`${root}/supabase/snippets`);
+  });
+
+  it("matches the supabase workdir label even with no bind mount", () => {
+    // The box's Kong had no binds until content_path templates arrived, but it
+    // was still started from — and its config still names — that workdir.
+    const found = containersUnder(
+      [container({ Config: { Labels: { "com.supabase.cli.project": "spideryarn2", "com.supabase.cli.workdir": root } } })],
+      root,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.matched.join(" ")).toContain("com.supabase.cli.workdir");
+  });
+
+  it("matches a stopped container as well as a running one", () => {
+    // Stopped is the dangerous state: it is waiting to start from the mount.
+    const found = containersUnder([container({ State: { Status: "exited" }, Mounts: [{ Source: `${root}/x` }] })], root);
+    expect(found.map((c) => c.state)).toEqual(["exited"]);
+  });
+
+  it("finds nothing in a container mounted from elsewhere", () => {
+    const found = containersUnder(
+      [
+        container({
+          Mounts: [{ Source: "/home/greg/code/spideryarn2/supabase/snippets" }, { Source: "/var/lib/docker/volumes/v/_data" }],
+          Config: { Labels: { "com.supabase.cli.workdir": "/home/greg/code/spideryarn2" } },
+        }),
+        container({ Mounts: [{ Source: `${root}-old/supabase` }] }),
+        container({ Mounts: null, Config: { Labels: null } }),
+      ],
+      root,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("matches another project's container too, and marks it as not ours", () => {
+    const found = containersUnder(
+      [container({ Name: "/supabase_db_hellozenno", Mounts: [{ Source: `${root}/data` }], Config: { Labels: { "com.supabase.cli.project": "hellozenno" } } })],
+      root,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.project).toBe("hellozenno");
+  });
+});
+
+describe("blockers, on Docker mounts", () => {
+  it("blocks on a spideryarn2 container mounted from the tree, and names the repair", () => {
+    const found = blockers({
+      ...clean,
+      mounts: {
+        kind: "checked",
+        inspected: 12,
+        found: [{ id: "abc", name: "supabase_kong_spideryarn2", state: "running", project: SUPABASE_PROJECT, matched: ["bind /wt/supabase/templates/x.html"] }],
+      },
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0]?.why).toContain("Docker container");
+    const text = found[0]?.detail.join("\n") ?? "";
+    expect(text).toContain("supabase_kong_spideryarn2");
+    expect(text).toContain("npm run db:stop && npm run db:start");
+    expect(text).toContain("--no-backup");
+  });
+
+  it("tells another project's container to go to its owner, not to db:stop", () => {
+    const found = blockers({
+      ...clean,
+      mounts: { kind: "checked", inspected: 3, found: [{ id: "d", name: "supabase_db_hellozenno", state: "exited", project: "hellozenno", matched: ["bind /wt/data"] }] },
+    });
+    expect(found).toHaveLength(1);
+    const text = found[0]?.detail.join("\n") ?? "";
+    expect(text).toContain("supabase_db_hellozenno");
+    expect(text).toContain("whatever owns it");
+    expect(text).not.toContain("npm run db:stop");
+  });
+
+  it("blocks when Docker is there but could not be asked", () => {
+    // A stopped daemon is exactly when containers sit waiting to restart from
+    // a mount you are about to delete — so, unlike listeners, this fails closed.
+    const facts: CheckFacts = { ...clean, mounts: { kind: "cannot-tell", why: "Cannot connect to the Docker daemon" } };
+    const found = blockers(facts);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.detail.join("\n")).toContain("Cannot connect to the Docker daemon");
+    expect(report(facts).safe).toBe(false);
+  });
+
+  it("does not block without Docker at all, and says so", () => {
+    const facts: CheckFacts = { ...clean, mounts: { kind: "no-docker", why: "docker: command not found" } };
+    expect(blockers(facts)).toEqual([]);
+    expect(report(facts).lines.join("\n")).toContain("docker: command not found");
+    expect(report(facts).safe).toBe(true);
+  });
+
+  it("says out loud that it looked and found nothing", () => {
+    expect(report(clean).lines.join("\n")).toMatch(/ok {3}no Docker container\b.*\(12 inspected\)/);
+  });
+});
+
+describe("mountsUnder, against an inventory", () => {
+  it("is checked-and-empty when Docker has no containers", () => {
+    expect(mountsUnder("/srv/wt/tree", { kind: "listed", containers: [] })).toEqual({ kind: "checked", found: [], inspected: 0 });
+  });
+
+  it("passes the unknowns through unchanged", () => {
+    expect(mountsUnder("/x", { kind: "no-docker", why: "nope" })).toEqual({ kind: "no-docker", why: "nope" });
+    expect(mountsUnder("/x", { kind: "cannot-tell", why: "timeout" })).toEqual({ kind: "cannot-tell", why: "timeout" });
+  });
+
+  it("names the project supabase/config.toml declares", () => {
+    const toml = readFileSync(path.join(process.cwd(), "supabase", "config.toml"), "utf8");
+    expect(toml).toMatch(new RegExp(`^project_id = "${SUPABASE_PROJECT}"$`, "m"));
+  });
+});
+
+describe("dockerInspectInventory", () => {
+  it("does not forgive a failed inspect with no error text as if containers merely vanished", () => {
+    expect(dockerInspectInventory(1, "[]", "")).toEqual({
+      kind: "cannot-tell",
+      why: "docker inspect exited 1 with no error text",
+    });
+  });
+
+  it("accepts partial JSON only when every reported error says a container vanished", () => {
+    expect(dockerInspectInventory(1, "[]", "Error: No such object: gone\n")).toEqual({ kind: "listed", containers: [] });
+    expect(dockerInspectInventory(1, "[]", "permission denied\n").kind).toBe("cannot-tell");
   });
 });

@@ -262,6 +262,10 @@ describe("drawn 40px tall under a finger", () => {
     expect(declsFor(coarse, ".quiz-only-read-what")).toMatch(/gap:\s*8px/);
   });
 
+  it("the masthead's share pie does not overlap the adjacent read-time target", () => {
+    expect(coarse).not.toMatch(/\.facts\s+\.read-so-far\s*\{[^}]*margin-left:\s*-/s);
+  });
+
   it("Quiz's steppers are 40 × 40, keeping their gap (Sol, R7)", () => {
     const quiz = source("src/web/QuizPanel.tsx");
     const step = /className="([^"]*\bquiz-step\b[^"]*)"/.exec(quiz)?.[1] ?? "";

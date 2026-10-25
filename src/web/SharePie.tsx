@@ -18,6 +18,8 @@
  * ("under 1%", "over 99%", from `readShareLabel`) are where that edge is told.
  * A 4%/96% clamp was in the plan and GPT Sol struck it: drawing 0.1% unread as
  * 4% is forty times too much, the picture lying in order to look legible.
+ * The one caller that hands it something coarser is ReadSoFarMark.tsx, whose
+ * quantity *is* a band and whose label says the band, not a figure.
  *
  * **The trigger is a button, so a finger and the keyboard reach the card**,
  * where `ScoreBars` is a bare span. Hover opens it for a mouse; a tap opens it

@@ -176,6 +176,25 @@ experimental features off" pins it through the real `App`.
   reader's last write before reading. `useReadingTime.ts` § `useTimeSpentReading`; Greg's report
   `spya-db7w6f`; plan [261024t](../plans/261024t-metadata-shows-time-spent-reading.md).
 
+- **The masthead**, since 2026-10-25: a small pie right after the read time, in five coarse bands
+  (nothing drawn, started, about half, most, finished), each drawn as a whole quarter so the picture
+  is as coarse as the words. Finished is 80% of the counted words, so not every passage has to be
+  read; the card never prints a percentage. The words are the
+  quiz's, less what is folded on arrival, and the quiz now leaves that out too. Owner only, and
+  nothing until the opening read has answered. The chats' phrase reads the same cut points
+  (`readBand`), on the server's word count, which still includes folded matter.
+
+  > basically, I don't want to see a whole bunch of indications that I'm 97% finished because I read
+  > most of the paragraphs but chose to skip some, or because I read basically all of it but skipped
+  > the final section that's, like, not that interesting for some reason. So, yeah, it can be a
+  > coarse estimate, basically, is what I'm saying.
+  >
+  > — Greg, 2026-10-25 (`spya-e5477u`)
+
+  `readBand`, `readSoFarWords` in [`read-filter.ts`](../../src/web/read-filter.ts),
+  [`ReadSoFarMark.tsx`](../../src/web/ReadSoFarMark.tsx); plan
+  [261025j](../plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md).
+
 ## Not built
 
 - **A way to switch it off, and a way to erase it** — the obvious next step now that every owner

@@ -145,6 +145,9 @@ const MANIFEST = [
   "prose.css",
   "spine.css",
   "tooltip.css",
+  /* SharePie's own rules, before quiz.css and shell.css's facts, which size
+     it where each sits. Plan 261025j. */
+  "share-pie.css",
   "annotations.css",
   "dock.css",
   "design-page.css",
