@@ -9,7 +9,8 @@
  *   a row fresher than 7 days ─────────────────────► that row, checked against the article
  *   else ask OpenAlex, each request in its own polite turn:
  *     1. works/doi:<doi>              404 ► not-indexed (remembered)
- *        its title and an author must be the article's, else ► unconfirmed (nothing stored)
+ *        its title and an author must be the article's, with the bounded arXiv exception below,
+ *        else ► unconfirmed (nothing stored)
  *     2. works?filter=cites:<W id>    most cited first, one page of 100
  *        too large ► once more with 25 ► too-large
  *     store the row and its list together, then answer
@@ -35,7 +36,10 @@
  * Crossref — and the cache keeps OpenAlex's title and authors so that a cache
  * hit and a stale fallback are checked exactly as a fresh answer is. Without
  * that, a second article carrying the DOI by mistake would be handed the first
- * one's citers.
+ * one's citers. **One exception, for the arXiv DOI named by the article's own
+ * arXiv address**: two distinct structured author matches stand in for the title,
+ * because arXiv retitles between versions and OpenAlex has given one arXiv
+ * record a merged deposit's title (`isThisArticle`).
  *
  * **OpenAlex is an outside party, and everything it sends is text.** Every
  * string goes through `plainRegistryText` with a bound, ids and DOIs are kept
@@ -120,14 +124,23 @@ export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi" 
  */
 export type CitersKey = WorkId | `openalex:w${string}`;
 
+/** The prefix of every DOI arXiv mints, as `parseWorkId` writes it: lower case. */
+const ARXIV_DOI = "doi:10.48550/arxiv.";
+
+/** The arXiv DOI independently named by the article's own arxiv.org address. */
+function arxivDoiAtAddress(article: ArticleIdentity): WorkId | null {
+  const named = article.url ? parseWorkId(article.url) : null;
+  return named?.startsWith("arxiv:") ? parseWorkId(doiFor(named)) : null;
+}
+
 /**
  * **The DOI to ask about**: the article's own usable DOI, or else the one its own address
  * names — an arxiv.org page, whose DOI is arXiv's at DataCite (`doiFor`).
  *
  * The address is the fallback for articles imported before an agreed arXiv
  * record put its DOI on the article (plan 261010n, report spya-sbj3yk): until
- * then every arXiv paper said "no DOI". It is no looser than `meta.doi`, because
- * the answer is checked against the title and an author on every way out.
+ * then every arXiv paper said "no DOI". The answer is checked against the
+ * article on every way out; `isThisArticle` owns the exact evidence required.
  */
 export function citersIdOf(article: ArticleIdentity): WorkId | null {
   /* Only a usable DOI has precedence. A legacy or hand-edited non-DOI value
@@ -136,8 +149,7 @@ export function citersIdOf(article: ArticleIdentity): WorkId | null {
   if (own?.startsWith("doi:")) return own;
   /* Only an arXiv page: the gap this closes is arXiv's, and an address that is a
      DOI's own (doi.org) gets its DOI put on the article at import (GPT Sol's F4). */
-  const named = article.url ? parseWorkId(article.url) : null;
-  return named?.startsWith("arxiv:") ? parseWorkId(doiFor(named)) : null;
+  return arxivDoiAtAddress(article);
 }
 
 /** The work a DOI resolves to at OpenAlex, in OpenAlex's own words. */
@@ -351,13 +363,24 @@ export function openAlexAuthors(names: readonly string[]): WorkAuthor[] {
   return authors;
 }
 
-/** The whole title and one author agree. With no title on OpenAlex's side, or no author on ours, they cannot. */
+/** The whole title and one author agree, or the bounded arXiv exception does. */
 function isThisArticle(article: ArticleIdentity, target: CitedTarget): target is CitedTarget & { title: string } {
-  return (
-    target.title !== null &&
-    registryIsThisArticle(article.title, target.title) &&
-    registryAuthorIsOurs(article, openAlexAuthors(target.authors))
-  );
+  if (target.title === null) return false;
+  if (registryIsThisArticle(article.title, target.title)) {
+    return registryAuthorIsOurs(article, openAlexAuthors(target.authors));
+  }
+  /* **An arXiv DOI's record may carry another title** — two distinct structured
+     author matches stand in for it, but only when the article's own arXiv address
+     independently names that DOI. OpenAlex merged a stranger's deposit into
+     arXiv 2308.08708 and took its title while keeping the arXiv paper's authors
+     and 196 real citers (investigation 261025a). Binding the exception to the
+     address keeps a mistyped DOI, or an author's later page carrying an older
+     DOI, from borrowing that older paper's citers. Not for any other DOI: there
+     the title is the test. */
+  const id = citersIdOf(article);
+  return id?.startsWith(ARXIV_DOI) === true &&
+    arxivDoiAtAddress(article) === id &&
+    twoStructuredAuthorsAgree(article, target.authors);
 }
 
 /** The article's year: `publishedYear`, or the year of `publishedAt` — or undefined. */
@@ -380,6 +403,43 @@ function sameNamedPerson(one: string, two: string): boolean {
     return a.given === "" || b.given === "" || a.given === b.given ||
       ((a.given.length === 1 || b.given.length === 1) && a.given[0] === b.given[0]);
   }));
+}
+
+/** Names that are independently identifiable, with spelling and initial variants counted once. */
+function distinctNames(names: readonly string[]): string[] {
+  const distinct: string[] = [];
+  for (const name of names) {
+    if (tokens(name).length > 0 && !distinct.some((prior) => sameNamedPerson(prior, name))) {
+      distinct.push(name);
+    }
+  }
+  return distinct;
+}
+
+/**
+ * Whether two distinct OpenAlex authors match two distinct structured article
+ * authors. The free-text byline deliberately cannot supply this evidence:
+ * `registryAuthorIsOurs` scans the whole string, so `J. Smith Jones` can match
+ * both John Smith and Jane Jones, and adjacent authors can be recombined across
+ * their boundary. A title can tolerate that loose corroboration; no-title
+ * confirmation cannot.
+ */
+function twoStructuredAuthorsAgree(article: ArticleIdentity, targetNames: readonly string[]): boolean {
+  const ours = distinctNames((article.authors ?? []).map((author) => author.name));
+  const theirs = distinctNames(targetNames);
+  if (ours.length < 2 || theirs.length < 2) return false;
+  const matches: { ours: number; theirs: number }[] = [];
+  for (let theirsAt = 0; theirsAt < theirs.length; theirsAt++) {
+    for (let oursAt = 0; oursAt < ours.length; oursAt++) {
+      const ourName = ours[oursAt];
+      const theirName = theirs[theirsAt];
+      if (ourName !== undefined && theirName !== undefined && registryAuthorIsOurs(
+        { authors: [{ name: ourName, affiliations: [] }] },
+        openAlexAuthors([theirName]),
+      )) matches.push({ ours: oursAt, theirs: theirsAt });
+    }
+  }
+  return matches.some((one) => matches.some((two) => one.ours !== two.ours && one.theirs !== two.theirs));
 }
 
 /**
@@ -546,8 +606,8 @@ async function searchByTitle(
 
 /**
  * **The OpenAlex work confirmed to be this article**, by exactly the path
- * `citersOf` takes — the DOI's record with its title and an author checked, or
- * the one title-search match — and **nothing cached**. For Situate's own
+ * `citersOf` takes — the DOI's checked record (including its bounded arXiv
+ * exception), or the one title-search match — and **nothing cached**. For Situate's own
  * question of the citers (plan 261024o, GPT Sol's S6): it wants their abstracts,
  * which neither `Citer` nor this module's cache holds, so it asks its own page
  * rather than widening either.
