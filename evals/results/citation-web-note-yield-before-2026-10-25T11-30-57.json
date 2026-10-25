@@ -1,0 +1,1191 @@
+{
+  "summary": {
+    "slug": "arxiv-2308-08708-spya-xax6v4",
+    "label": "before",
+    "works": 70,
+    "withAbstractNote": 28,
+    "pressed": 42,
+    "tally": {
+      "refused:no-identifier": 26,
+      "none:declined": 6,
+      "none:not-the-work": 2,
+      "note": 4,
+      "none:none-picked": 2,
+      "none:quote-not-in-evidence": 2
+    }
+  },
+  "rows": [
+    {
+      "id": "spya-tzqkhu",
+      "title": "Phenomenal consciousness, defined and defended as innocently as I can manage",
+      "authors": "Schwitzgebel",
+      "year": "2016",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 572,
+      "results": []
+    },
+    {
+      "id": "spya-knwnnn",
+      "title": "What is it like to be a bat?",
+      "authors": "Nagel",
+      "year": "1974",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 408,
+      "results": []
+    },
+    {
+      "id": "spya-y2b2tm",
+      "title": "Minds, brains, and programs",
+      "authors": "Searle",
+      "year": "1980",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 644,
+      "results": []
+    },
+    {
+      "id": "spya-ejfr7q",
+      "title": "Absent qualia, fading qualia, dancing qualia",
+      "authors": "Chalmers",
+      "year": "1995",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 406,
+      "results": []
+    },
+    {
+      "id": "spya-yec6mc",
+      "title": "Theories of consciousness",
+      "authors": "Seth, Bayne",
+      "year": "2022",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "declined"
+      },
+      "stored": {
+        "identity": "02369788725d81c2",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:28:44.783Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "declined"
+      },
+      "results": [
+        {
+          "url": "https://www.nature.com/articles/s41583-022-00587-4",
+          "title": "Theories of consciousness | Nature Reviews Neuroscience"
+        },
+        {
+          "url": "https://doi.org/10.1038/s41583-022-00587-4",
+          "title": "Theories of consciousness"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/35505255",
+          "title": "Theories of consciousness - PubMed"
+        },
+        {
+          "url": "https://sussex.figshare.com/articles/journal_contribution/Theories_of_consciousness/23488103",
+          "title": "Theories of consciousness"
+        },
+        {
+          "url": "https://www.nature.com/articles/s41583-022-00587-4/tables/1?code=c61e7d56-69bc-4f10-84f9-3ac6f9b7820d&error=cookies_not_supported",
+          "title": "Table 1 A selection of theories of consciousness"
+        }
+      ],
+      "ms": 7589
+    },
+    {
+      "id": "spya-uu82sj",
+      "title": "Birch's animal / The ConTraSt database",
+      "authors": "Yaron, Melloni, Pitts, Mudrik",
+      "year": "2022",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 591,
+      "results": []
+    },
+    {
+      "id": "spya-ws9me9",
+      "title": "The search for invertebrate consciousness",
+      "authors": "Birch",
+      "year": "2022",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 411,
+      "results": []
+    },
+    {
+      "id": "spya-kaptbh",
+      "title": "Artificial You: AI and the Future of Your Mind",
+      "authors": "Schneider",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "55acd0d56628d0e8",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:28:52.569Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "results": [
+        {
+          "url": "https://www.jstor.org/stable/j.ctvfjd00r",
+          "title": "Artificial You: AI and the Future of Your Mind on JSTOR"
+        },
+        {
+          "url": "https://press.princeton.edu/books/ebook/9780691197777/artificial-you",
+          "title": "Artificial You | Princeton University Press"
+        },
+        {
+          "url": "http://cds.cern.ch/record/2691663",
+          "title": "Artificial You: AI and the Future of Your Mind"
+        },
+        {
+          "url": "https://press.princeton.edu/books/hardcover/9780691180144/artificial-you",
+          "title": "Artificial You | Princeton University Press"
+        },
+        {
+          "url": "https://www.loc.gov/item/2024696790/?loclr=blogklu",
+          "title": "Artificial You: AI and the Future of Your Mind | Library of Congress"
+        }
+      ],
+      "ms": 6784
+    },
+    {
+      "id": "spya-dzsh79",
+      "title": "Awareness of the problem of testing consciousness in AI: Susan Schneider's proposed tests for AI consciousness…",
+      "authors": "Udell, Schwitzgebel",
+      "year": "2021",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 517,
+      "results": []
+    },
+    {
+      "id": "spya-z64xsb",
+      "title": "Could a large language model be conscious?",
+      "authors": "Chalmers",
+      "year": "2023",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 413,
+      "results": []
+    },
+    {
+      "id": "spya-grsk3d",
+      "title": "Towards a true neural stance on consciousness",
+      "authors": "Lamme",
+      "year": "2006",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "declined"
+      },
+      "stored": {
+        "identity": "17f0378f96c60267",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:29:01.103Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "declined"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.tics.2006.09.001",
+          "title": "Towards a true neural stance on consciousness"
+        },
+        {
+          "url": "https://www.cell.com/trends/cognitive-sciences/abstract/S1364-6613(06)00237-3",
+          "title": "Towards a true neural stance on consciousness: Trends in Cognitive Sciences"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/abs/pii/S1364661306002373",
+          "title": "Towards a true neural stance on consciousness"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/16997611/",
+          "title": "Towards a true neural stance on consciousness"
+        },
+        {
+          "url": "https://pages.ucsd.edu/~jpineda/COGS175/readings/Lamme.pdf",
+          "title": "doi:10.1016/j.tics.2006.09.001"
+        }
+      ],
+      "ms": 7605
+    },
+    {
+      "id": "spya-h4hp4h",
+      "title": "Visual functions generate conscious seeing",
+      "authors": "Lamme",
+      "year": "2020",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 644,
+      "results": []
+    },
+    {
+      "id": "spya-fys39a",
+      "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+      "authors": "Doerig, Schurger, Hess, Herzog",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Using mathematical results from the theory of computation, the authors argue that theories tying consciousness to the wiring pattern of a system (such as IIT) are either false or outside science.",
+              "quote": "using theorems from the theory of computation, we show that causal structure theories are either false or outside the realm of science"
+            },
+            {
+              "text": "Any recurrent network can be unfolded into a feedforward network with the same input-output behaviour, so these theories are neither necessary nor sufficient to explain the empirical data.",
+              "quote": "We call this unfolding: any recurrent network can be unfolded into a feedforward network implementing the same function."
+            }
+          ],
+          "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+          "host": "doi.org",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+          "readAt": "2026-10-25T11:29:18.179Z"
+        }
+      },
+      "stored": {
+        "identity": "05b31c65aa1ee617",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:29:18.179Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Using mathematical results from the theory of computation, the authors argue that theories tying consciousness to the wiring pattern of a system (such as IIT) are either false or outside science.",
+            "quote": "using theorems from the theory of computation, we show that causal structure theories are either false or outside the realm of science"
+          },
+          {
+            "text": "Any recurrent network can be unfolded into a feedforward network with the same input-output behaviour, so these theories are neither necessary nor sufficient to explain the empirical data.",
+            "quote": "We call this unfolding: any recurrent network can be unfolded into a feedforward network implementing the same function."
+          }
+        ],
+        "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+        "host": "doi.org",
+        "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+        "readAt": "2026-10-25T11:29:18.179Z"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/pii/S105381001830521X",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness - ScienceDirect"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/31078047/",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness - PubMed"
+        },
+        {
+          "url": "https://infoscience.epfl.ch/entities/publication/8e1eed36-db86-4289-b19c-67535e671644/articledetails",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness"
+        },
+        {
+          "url": "https://digitalcommons.chapman.edu/psychology_articles/161/",
+          "title": "\"The Unfolding Argument: Why IIT and Other Causal Structure Theories Ca\" by Adrian Doerig, Aaron Schurger et al."
+        }
+      ],
+      "ms": 16436
+    },
+    {
+      "id": "spya-wbbuma",
+      "title": "A Cognitive Theory of Consciousness",
+      "authors": "Baars",
+      "year": "1988",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 440,
+      "results": []
+    },
+    {
+      "id": "spya-apz7z8",
+      "title": "Towards a cognitive neuroscience of consciousness: Basic evidence and a workspace framework",
+      "authors": "Dehaene, Naccache",
+      "year": "2001",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "declined"
+      },
+      "stored": {
+        "identity": "8e7e5f5fdb175d8c",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:29:24.117Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "declined"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/s0010-0277(00)00123-2",
+          "title": "Towards a cognitive neuroscience of consciousness: basic evidence and a workspace framework"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/abs/pii/S0010027700001232",
+          "title": "Towards a cognitive neuroscience of consciousness: basic evidence and a workspace framework"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/11164022/",
+          "title": "Towards a cognitive neuroscience of consciousness: basic evidence and a workspace framework - PubMed"
+        },
+        {
+          "url": "https://europepmc.org/article/MED/11164022",
+          "title": "Towards a cognitive neuroscience of consciousness: basic evidence and a workspace framework. - Abstract - Europe PMC"
+        },
+        {
+          "url": "https://journalpsyche.org/articles/0xc065.pdf",
+          "title": "PII: S0010-0277(00)00123-2"
+        }
+      ],
+      "ms": 5493
+    },
+    {
+      "id": "spya-u94u03",
+      "title": "Human and Animal Minds: The Consciousness Questions Laid to Rest",
+      "authors": "Carruthers",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "none-picked"
+      },
+      "stored": {
+        "identity": "7dd629cf449b900d",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:29:30.203Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "none-picked"
+      },
+      "results": [
+        {
+          "url": "https://philpapers.org/rec/CARHAA-4",
+          "title": "The Consciousness Questions Laid to Rest"
+        },
+        {
+          "url": "https://porcelainpublishing.com/journal/JHC/9/2/10.47297/wspjhc2025090206",
+          "title": "An Active Sense of Philosophy of Animal"
+        },
+        {
+          "url": "https://search.library.yale.edu/catalog/13173953",
+          "title": "Quicksearch"
+        },
+        {
+          "url": "https://academic.oup.com/pages/for-librarians/marc-records/oxford-scholarship-online",
+          "title": "Oxford Scholarship Online | Oxford Academic"
+        },
+        {
+          "url": "https://academic.oup.com/oxford-handbooks-online?t0=ORR%3ASOC00500",
+          "title": "Oxford Handbooks Online | Oxford Academic"
+        }
+      ],
+      "ms": 6085
+    },
+    {
+      "id": "spya-fae0g7",
+      "title": "Conscious processing and the global neuronal workspace hypothesis",
+      "authors": "Mashour, Roelfsema, Changeux, Dehaene",
+      "year": "2020",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "declined"
+      },
+      "stored": {
+        "identity": "1d2c3f44835959d4",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:29:36.959Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "declined"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.neuron.2020.01.026",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis"
+        },
+        {
+          "url": "https://www.cell.com/neuron/fulltext/S0896-6273(20)30052-0",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis: Neuron"
+        },
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8770991/",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis - PMC"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32135090/",
+          "title": "Conscious Processing and the Global Neuronal Workspace ..."
+        },
+        {
+          "url": "https://europepmc.org/article/med/32135090",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis. - Abstract - Europe PMC"
+        }
+      ],
+      "ms": 6756
+    },
+    {
+      "id": "spya-q62pcv",
+      "title": "Neuronal discharges and gamma oscillations explicitly reflect visual consciousness in the lateral prefrontal cortex",
+      "authors": "Panagiotaropoulos, Deco, Kapoor, Logothetis",
+      "year": "2012",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "bf600dce4d94c93a",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:29:42.679Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "results": [
+        {
+          "url": "https://www.cell.com/neuron/fulltext/S0896-6273(12)00516-8",
+          "title": "Neuronal Discharges and Gamma Oscillations Explicitly Reflect Visual Consciousness in the Lateral Prefrontal Cortex: Neuron"
+        },
+        {
+          "url": "https://research.monash.edu/en/publications/correction-neuronal-discharges-and-gamma-oscillations-explicitly-/",
+          "title": "Correction Neuronal Discharges and Gamma Oscillations Explicitly Reflect Visual Consciousness in the Lateral Prefrontal Cortex - Monash University"
+        },
+        {
+          "url": "https://www.frontiersin.org/journals/human-neuroscience/articles/10.3389/fnhum.2012.00263/full",
+          "title": "Frontiers | Introduction to Research Topic – Binocular Rivalry: A Gateway to Studying Consciousness"
+        },
+        {
+          "url": "https://www.cell.com/neuron/issue?pii=S0896-6273%2812%29X0012-6",
+          "title": "Issue: Neuron"
+        },
+        {
+          "url": "https://www.cell.com/neuron/archive",
+          "title": "Issue archive: Neuron"
+        }
+      ],
+      "ms": 5720
+    },
+    {
+      "id": "spya-xukadt",
+      "title": "Birch: Global workspace theory and animal consciousness",
+      "authors": "Birch",
+      "year": "2020",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 469,
+      "results": []
+    },
+    {
+      "id": "spya-rp3sca",
+      "title": "Reflections on higher-order theories: Understanding the higher-order approach to consciousness",
+      "authors": "Brown, Lau, LeDoux",
+      "year": "2019",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 558,
+      "results": []
+    },
+    {
+      "id": "spya-e5rse3",
+      "title": "Higher-order theories do just fine",
+      "authors": "Michel, Lau",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "none-picked"
+      },
+      "stored": {
+        "identity": "42a14bc45e48a8f2",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:29:47.752Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "none-picked"
+      },
+      "results": [
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32663056/",
+          "title": "Hard criteria for empirical theories of consciousness - PubMed"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/33196376/",
+          "title": "Hard but so valuable to define hard criteria for empirical theories of consciousness"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/33232193/",
+          "title": "'Orch OR' is the most complete, and most easily falsifiable theory of consciousness - PubMed"
+        },
+        {
+          "url": "https://philosophymindscience.org/index.php/phimisci/article/view/12269",
+          "title": "How brains build higher order representations of uncertainty"
+        },
+        {
+          "url": "https://jds-online.org/journal/JDS/article/1353",
+          "title": "Decoding Consciousness in Artificial Intelligence"
+        }
+      ],
+      "ms": 4046
+    },
+    {
+      "id": "spya-hx3eb6",
+      "title": "Rethinking Consciousness: A Scientific Theory of Subjective Experience",
+      "authors": "Graziano",
+      "year": "2019",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 520,
+      "results": []
+    },
+    {
+      "id": "spya-zhvng9",
+      "title": "Being You: A New Science of Consciousness",
+      "authors": "Seth",
+      "year": "2021",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 512,
+      "results": []
+    },
+    {
+      "id": "spya-jjrssn",
+      "title": "Consciousness in Action",
+      "authors": "Hurley",
+      "year": "1998",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 389,
+      "results": []
+    },
+    {
+      "id": "spya-uwr296",
+      "title": "Animal cognition and human values / Machines, plants and animals: The origins of agency",
+      "authors": "Dretske",
+      "year": "1999",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 417,
+      "results": []
+    },
+    {
+      "id": "spya-cqcmhw",
+      "title": "Reinforcement Learning",
+      "authors": "Sutton, Barto",
+      "year": "2018",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 1,
+      "results": []
+    },
+    {
+      "id": "spya-xsyqxm",
+      "title": "Sensorimotor subjectivity and the enactive approach to experience",
+      "authors": "Thompson",
+      "year": "2005",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "declined"
+      },
+      "stored": {
+        "identity": "036fe4f0c004f259",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:30:02.213Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "declined"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1007/s11097-005-9003-x",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        },
+        {
+          "url": "https://evanthompson.me/wp-content/uploads/2012/11/sensorimotor-subjectivity.pdf",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        },
+        {
+          "url": "https://doi.org/10.31231/osf.io/vjteq",
+          "title": "Sensorimotor Subjectivity and the Enactive Approach to Experience"
+        },
+        {
+          "url": "https://link.springer.com/article/10.1007/s11097-005-9003-x?code=8d24e380-8697-448a-be93-b033d1b0aea6&error=cookies_not_supported",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        },
+        {
+          "url": "http://espra.scicog.fr/ThompsonPCS.pdf",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        }
+      ],
+      "ms": 12623
+    },
+    {
+      "id": "spya-xh9v7p",
+      "title": "Mind, matter, and metabolism",
+      "authors": "Godfrey-Smith",
+      "year": "2016",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "declined"
+      },
+      "stored": {
+        "identity": "b42e8d2e68a835f6",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:30:09.409Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "declined"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.5840/jphil20161131034",
+          "title": "Mind, Matter, and Metabolism"
+        },
+        {
+          "url": "https://www.pdcnet.org/jphil/content/jphil_2016_0113_0010_0481_0506",
+          "title": "Mind, Matter, and Metabolism - Peter Godfrey-Smith"
+        },
+        {
+          "url": "https://philpapers.org/rec/GODMMA-6",
+          "title": "Mind, Matter, and Metabolism"
+        },
+        {
+          "url": "https://petergodfreysmith.com/wp-content/uploads/2013/06/Mind_Matter_Metabolism_PGS_2014_DW3.pdf",
+          "title": "Mind, Matter, and Metabolism | Peter Godfrey-Smith"
+        },
+        {
+          "url": "https://petergodfreysmith.com/metazoan.net/Mind_Matter_Metabolism_PGS_2015_preprint.htm",
+          "title": "Mind, Matter, and Metabolism - Peter Godfrey-Smith"
+        }
+      ],
+      "ms": 7196
+    },
+    {
+      "id": "spya-kbxamx",
+      "title": "Dehaene, Lau, Kouider: What is consciousness, and could machines have it?",
+      "authors": "Dehaene, Lau, Kouider",
+      "year": "2017",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 578,
+      "results": []
+    },
+    {
+      "id": "spya-texrr4",
+      "title": "Generative adversarial networks",
+      "authors": "Goodfellow et al.",
+      "year": "2014",
+      "linkFrom": "arxiv",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The paper trains two models at once: a generator G that learns the shape of the data, and a discriminator D that estimates whether a sample came from the training data or from G.",
+              "quote": "a generative model G that captures the data distribution, and a discriminative model D that estimates the probability that a sample came from the training data rather than G"
+            },
+            {
+              "text": "When both G and D are multilayer neural networks, the whole system can be trained with ordinary backpropagation, without needing Markov chains.",
+              "quote": "In the case where G and D are defined by multilayer perceptrons, the entire system can be trained with backpropagation"
+            }
+          ],
+          "url": "https://arxiv.org/abs/1406.2661",
+          "host": "arxiv.org",
+          "title": "[1406.2661] Generative Adversarial Networks",
+          "readAt": "2026-10-25T11:30:20.636Z"
+        }
+      },
+      "stored": {
+        "identity": "67e5472a33d695d1",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:30:20.636Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The paper trains two models at once: a generator G that learns the shape of the data, and a discriminator D that estimates whether a sample came from the training data or from G.",
+            "quote": "a generative model G that captures the data distribution, and a discriminative model D that estimates the probability that a sample came from the training data rather than G"
+          },
+          {
+            "text": "When both G and D are multilayer neural networks, the whole system can be trained with ordinary backpropagation, without needing Markov chains.",
+            "quote": "In the case where G and D are defined by multilayer perceptrons, the entire system can be trained with backpropagation"
+          }
+        ],
+        "url": "https://arxiv.org/abs/1406.2661",
+        "host": "arxiv.org",
+        "title": "[1406.2661] Generative Adversarial Networks",
+        "readAt": "2026-10-25T11:30:20.636Z"
+      },
+      "results": [
+        {
+          "url": "https://arxiv.org/abs/1406.2661",
+          "title": "[1406.2661] Generative Adversarial Networks"
+        },
+        {
+          "url": "https://arxiv.org/html/1406.2661v1",
+          "title": "Generative Adversarial Nets"
+        },
+        {
+          "url": "https://arxiv.org/pdf/1406.2661",
+          "title": null
+        },
+        {
+          "url": "https://doi.org/10.48550/arxiv.1406.2661",
+          "title": "Generative Adversarial Networks"
+        },
+        {
+          "url": "https://proceedings.neurips.cc/paper/5423-generative-adversarial-nets.",
+          "title": "Generative Adversarial Nets"
+        }
+      ],
+      "ms": 10649
+    },
+    {
+      "id": "spya-djsfq5",
+      "title": "Attention schema theory in a neural network agent",
+      "authors": "Wilterson, Graziano",
+      "year": "2021",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 562,
+      "results": []
+    },
+    {
+      "id": "spya-twybrn",
+      "title": "Neural optimal feedback control with local learning rules",
+      "authors": "Friedrich et al.",
+      "year": "2021",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 453,
+      "results": []
+    },
+    {
+      "id": "spya-artmnj",
+      "title": "Perceiver: General perception with iterative attention",
+      "authors": "Jaegle, Gimeno, Brock, Vinyals, Zisserman, Carreira",
+      "year": "2021",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 421,
+      "results": []
+    },
+    {
+      "id": "spya-bvdf50",
+      "title": "The Perceiver architecture is a functional global workspace",
+      "authors": "Juliani, Kanai, Sasai",
+      "year": "2022",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 457,
+      "results": []
+    },
+    {
+      "id": "spya-yatf88",
+      "title": "A mathematical framework for transformer circuits",
+      "authors": "Elhage et al.",
+      "year": "2021",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 511,
+      "results": []
+    },
+    {
+      "id": "spya-vfh2ny",
+      "title": "Human-timescale adaptation in an open-ended task space (AdA)",
+      "authors": "DeepMind Adaptive Agents Team",
+      "year": "2023",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 546,
+      "results": []
+    },
+    {
+      "id": "spya-vcbke4",
+      "title": "A defense of the rights of artificial intelligences",
+      "authors": "Schwitzgebel, Garza",
+      "year": "2015",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The paper argues that possible artificial beings that differ from humans in no morally relevant way would deserve moral consideration (fair ethical treatment) similar to that of humans.",
+              "quote": "Such possible beings would deserve moral consideration similar to that of human beings."
+            },
+            {
+              "text": "It recommends that AI designers avoid building AIs whose moral status is unclear.",
+              "quote": "avoid designing AIs whose moral status is unclear"
+            }
+          ],
+          "url": "https://doi.org/10.1111/misp.12032",
+          "host": "doi.org",
+          "title": "A Defense of the Rights of Artificial Intelligences",
+          "readAt": "2026-10-25T11:30:32.878Z"
+        }
+      },
+      "stored": {
+        "identity": "78a5cfd3afb0e197",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:30:32.878Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The paper argues that possible artificial beings that differ from humans in no morally relevant way would deserve moral consideration (fair ethical treatment) similar to that of humans.",
+            "quote": "Such possible beings would deserve moral consideration similar to that of human beings."
+          },
+          {
+            "text": "It recommends that AI designers avoid building AIs whose moral status is unclear.",
+            "quote": "avoid designing AIs whose moral status is unclear"
+          }
+        ],
+        "url": "https://doi.org/10.1111/misp.12032",
+        "host": "doi.org",
+        "title": "A Defense of the Rights of Artificial Intelligences",
+        "readAt": "2026-10-25T11:30:32.878Z"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1111/misp.12032",
+          "title": "A Defense of the Rights of Artificial Intelligences"
+        },
+        {
+          "url": "https://faculty.ucr.edu/~eschwitz/SchwitzAbs/AIRights.htm",
+          "title": "AI Rights - Eric Schwitzgebel and Mara Garza"
+        },
+        {
+          "url": "https://pdcnet.org/msp/content/msp_2015_0039_0098_0119",
+          "title": "Midwest Studies in Philosophy"
+        },
+        {
+          "url": "https://faculty.ucr.edu/~eschwitz/SchwitzPapers/AIRights-150915.pdf",
+          "title": "Department of Philosophy University of California at Riverside Riverside, CA 92521-0201"
+        },
+        {
+          "url": "https://philpapers.org/rec/SCHADO-9",
+          "title": "A Defense of the Rights of Artificial Intelligences"
+        }
+      ],
+      "ms": 9291
+    },
+    {
+      "id": "spya-jgd27h",
+      "title": "The Intentional Stance",
+      "authors": "Dennett",
+      "year": "1987",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 507,
+      "results": []
+    },
+    {
+      "id": "spya-z2en5u",
+      "title": "The attention schema theory: a foundation for engineering artificial consciousness",
+      "authors": "Graziano",
+      "year": "2017",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Graziano offers the attention schema theory, which explains how the brain comes to claim it has subjective awareness, as a possible starting point for building artificial consciousness in machines.",
+              "quote": "The theory is offered as a possible starting point for building artificial consciousness."
+            }
+          ],
+          "url": "https://doi.org/10.3389/frobt.2017.00060",
+          "host": "doi.org",
+          "title": "The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness",
+          "readAt": "2026-10-25T11:30:41.550Z"
+        }
+      },
+      "stored": {
+        "identity": "067d333a420f5968",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:30:41.550Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Graziano offers the attention schema theory, which explains how the brain comes to claim it has subjective awareness, as a possible starting point for building artificial consciousness in machines.",
+            "quote": "The theory is offered as a possible starting point for building artificial consciousness."
+          }
+        ],
+        "url": "https://doi.org/10.3389/frobt.2017.00060",
+        "host": "doi.org",
+        "title": "The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness",
+        "readAt": "2026-10-25T11:30:41.550Z"
+      },
+      "results": [
+        {
+          "url": "https://www.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00060/full",
+          "title": "Frontiers | The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness"
+        },
+        {
+          "url": "https://doi.org/10.3389/frobt.2017.00060",
+          "title": "The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness"
+        },
+        {
+          "url": "https://www.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00060/pdf",
+          "title": "The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness"
+        },
+        {
+          "url": "https://public-pages-files-2025.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00060/text",
+          "title": null
+        },
+        {
+          "url": "https://collaborate.princeton.edu/en/publications/the-attention-schema-theory-a-foundation-for-engineering-artifici/",
+          "title": "The attention schema theory: A foundation for engineering artificial consciousness - Princeton University"
+        }
+      ],
+      "ms": 8163
+    },
+    {
+      "id": "spya-b4349w",
+      "title": "Dimensions of animal consciousness",
+      "authors": "Birch, Schnell, Clayton",
+      "year": "2020",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "stored": {
+        "identity": "55d2431defbfd4be",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:30:50.712Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.tics.2020.07.007",
+          "title": "Dimensions of Animal Consciousness"
+        },
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7116194/",
+          "title": "Dimensions of Animal Consciousness - PMC"
+        },
+        {
+          "url": "https://www.cell.com/trends/cognitive-sciences/fulltext/S1364-6613(20)30192-3",
+          "title": "Dimensions of Animal Consciousness: Trends in Cognitive Sciences"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/pii/S1364661320301923",
+          "title": "Opinion Dimensions of Animal Consciousness"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32830051/",
+          "title": "Dimensions of Animal Consciousness"
+        }
+      ],
+      "ms": 9162
+    },
+    {
+      "id": "spya-pkmnk4",
+      "title": "Unsupervised learning for physical interaction through video prediction",
+      "authors": "Finn, Goodfellow, Levine",
+      "year": "2016",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched."
+      },
+      "ms": 511,
+      "results": []
+    },
+    {
+      "id": "spya-ecxqj4",
+      "title": "Deep learning and the global workspace theory",
+      "authors": "VanRullen, Kanai",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "stored": {
+        "identity": "5c43ecddbcd4587b",
+        "validationVersion": "citation-web-note-checks/3",
+        "promptVersion": "citation-web-note/2",
+        "checkedAt": "2026-10-25T11:30:57.484Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.tins.2021.04.005",
+          "title": "Deep learning and the Global Workspace Theory"
+        },
+        {
+          "url": "https://www.cell.com/trends/neurosciences/abstract/S0166-2236(21)00077-1",
+          "title": "Deep learning and the Global Workspace Theory"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/abs/pii/S0166223621000771",
+          "title": "Deep learning and the Global Workspace Theory"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/abs/pii/S0166223621000771?dgcid=author",
+          "title": "Opinion Deep learning and the Global Workspace Theory"
+        },
+        {
+          "url": "https://arxiv.org/abs/2012.10390",
+          "title": "Computer Science > Artificial Intelligence"
+        }
+      ],
+      "ms": 6261
+    }
+  ]
+}

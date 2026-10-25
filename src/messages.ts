@@ -7290,9 +7290,16 @@ export const WEB_NOTE_REGISTRY_BUSY: ReaderFacingFailure = {
 /** The 409s: answered from what is already stored, for nothing. Read by the client by `reason`, not by these words. */
 export const WEB_NOTE_HAS_ABSTRACT_NOTE = "This work already has a note from its abstract.";
 export const WEB_NOTE_HAS_WEB_NOTE = "This work already has a note from a web search.";
-export const WEB_NOTE_SEARCHED = "We searched the web for this work's own page recently and found none we could be sure of.";
+export const WEB_NOTE_SEARCHED = "We searched the web for this work's page recently and found none we could use.";
+/**
+ * A row searched for nothing (plan 261025d): no DOI or arXiv id, and its title
+ * may not be sent out — an uploaded file's cited work — or there is too little
+ * to know its page by: no title to search, no first author, or a list that
+ * calls it unpublished.
+ */
 export const WEB_NOTE_NO_IDENTIFIER =
-  "The article gives this work no DOI or arXiv id we could check a web page against, so nothing was searched.";
+  "This work has no DOI or arXiv id, and either the article is a file you uploaded, whose cited works we do not search for by title, " +
+  "or the list gives too little to recognise its page by, so nothing was searched.";
 
 /**
  * **The first step's call failed** (plan 260930d P-5): the quick check that

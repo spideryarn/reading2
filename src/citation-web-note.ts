@@ -1,20 +1,23 @@
 /**
- * **A short note on one cited work, from one web search for that work's own
+ * **A short note on one cited work, from one web search for that work's
  * page** — the owner's press of *Open in Sources* on a citation's card in the
  * prose, for a row with no note. `POST /api/bibliography/:slug/:id/web-note`,
  * SSE out. Plan 261018o stage 2
  * (docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md),
  * as amended by its review — R1, R4, R7, R8 and R9 govern where they disagree
- * with the stage's own text. Greg's choice was *1B*: "It would take only the
- * work's own page, never someone else's, and require a quote the code finds in
- * the page."
+ * with the stage's own text — and loosened by plan 261025d
+ * (docs/plans/261025d-citation-web-note-looser-page-rule.md), which governs
+ * where they disagree. Greg's choice was first *1B*, "only the work's own
+ * page, never someone else's"; then, on q-x9srvv, 2026-10-25: "I don't think
+ * we want to be so restrictive that we only trust DOI or archive pages. I
+ * think we want to be looser."
  *
  * ```
  * free refusals: no such entry (404) · an abstract note, a web note, a none under a week old (409)
- *   └─ the identifier: the row's DOI / arXiv id, or the strict title rule's DOI ─► none? 409 no-identifier, nothing spent
+ *   └─ the identifier: the row's DOI / arXiv id, or the strict title rule's DOI ─► none? by title alone, or 409 no-identifier
  *        └─ the allowance (`citation-web-note`, one at a time) ─► the store read again
  *             └─ "searching": ONE Haiku call, one Exa search, five results, {url, sentences}
- *                  └─ code: an annotation's URL · the work's own page by its id · not the article · judgeNote
+ *                  └─ code: an annotation's URL · own by its id, or looks like it · not the article · judgeNote
  *                       └─ "checking": the separate check, shown only the extract
  *                            └─ stored ─► done {note} or done {none, why}
  * ```
@@ -27,15 +30,16 @@
  *    call's own `url_citation` annotations (`readFind`'s rule 1, in
  *    src/citation-find.ts), and **what is stored is the annotation's**: its
  *    URL, its title, its extract. The model's answer is a pointer.
- * 2. **The page is the work's own by its identifier (R1)** — `pageIsTheWork`:
- *    `doi.org/<the DOI>` or arXiv's own `abs|pdf|html` page for the id (host
- *    checked, the id exact, so `2001.083612` is not `2001.08361`), and
- *    nothing else. A publisher's page carrying the DOI under the work's title
- *    was accepted until GPT Sol's review #2 on this stage: a DOI and a title
- *    show a page is *about* the work, and a citation index or a review can
- *    carry both. `resultIsTheWork`'s looser title rule is not used either.
- *    Greg's promise was the work's own page, never someone else's. So a row
- *    with no identifier gets no search at all.
+ * 2. **The page is one of two kinds (261025d), stored as `pageKind`** —
+ *    `own`, the work's own by its identifier (`pageIsTheWork`: `doi.org/<the
+ *    DOI>` or arXiv's own `abs|pdf|html` page for the id, host checked, the
+ *    id exact, so `2001.083612` is not `2001.08361`); or `looks-like`, a page
+ *    titled as the work that names its first author, off a short list of
+ *    hosts (`pageLooksLikeTheWork`), which may be someone else's description
+ *    of the work and is labelled so. A resolver or arXiv page for a
+ *    *different* identifier is neither (`namesAnotherWork`). A row with no
+ *    identifier is searched by title only from a public-address article (G6)
+ *    and can take only a `looks-like` page (`identify`).
  * 3. **The page is not the article being read** — not its source address, its
  *    extract not a copy of it (`isCopy` over `shingleOverlap`, src/shingles.ts),
  *    and no quote the article's own words (`isArticleText`). The spike's
@@ -43,8 +47,9 @@
  * 4. **`judgeNote`** (src/citation-blurbs.ts) over the page's extract: one or
  *    two sentences, at most `BLURB_MAX_CHARS`, each with a 6–30-word quote
  *    found in that extract.
- * 5. **The separate check** (`checkRequest` with `WEB_EXTRACT_EVIDENCE`, R8):
- *    shown only the extract and the sentences, no tools; anything but every
+ * 5. **The separate check** (`checkRequest` with `WEB_EXTRACT_EVIDENCE`, or
+ *    `WEB_LOOKALIKE_EVIDENCE` for a `looks-like` page; R8, 261025d), told to
+ *    refuse praise: shown only the extract and the sentences, no tools; anything but every
  *    sentence *supported* keeps no note. Beyond what 1B promised; it is what
  *    took the abstract notes from 4.6% to 1.3% unsupported, for ~0.05 ¢.
  *
@@ -88,6 +93,7 @@
 
 import { type AiRequestBody, type JsonCall, openRouterJson, ProviderRefused } from "./ai-call.js";
 import { CITATION_BLURBS_MODEL } from "./models.js";
+import { surnameOf, titleNamesWork, tokens, yearOf } from "./citation-lookup.js";
 import {
   CHECK_CALL_TIMEOUT_MS,
   checkRequest,
@@ -95,9 +101,10 @@ import {
   judgeNote,
   readCheckAnswer,
   WEB_EXTRACT_EVIDENCE,
+  WEB_LOOKALIKE_EVIDENCE,
 } from "./citation-blurbs.js";
 import { BLURB_MAX_CHARS, rowIdentity } from "./citation-blurbs-identity.js";
-import { type EvidenceDeps, resolveWorkId } from "./citation-evidence.js";
+import { type EvidenceDeps, type ResolvedWork, resolveWorkId } from "./citation-evidence.js";
 import { FIND_TIMEOUT_MS, MAX_TOTAL_RESULTS } from "./citation-find.js";
 import {
   CITATION_WEB_NOTE_PROMPT_VERSION,
@@ -137,6 +144,7 @@ import type {
   SearchEvidence,
   WebNoteDone,
   WebNoteRefusal,
+  WebNotePageKind,
   WebNoteStage,
 } from "./types.js";
 import { untrusted } from "./untrusted-fence.js";
@@ -191,11 +199,12 @@ export const WEB_NOTE_RATE_POLICY: RatePolicy = {
  */
 export const WEB_NOTE_SYSTEM = [
   "You find the web page of one scholarly work, and write a short note about the work from what the search returned for that page.",
-  "Run ONE web search for it — use its exact DOI or arXiv id, which is given. Do not search again.",
+  "Run ONE web search for it — by its exact DOI or arXiv id when one is given, otherwise by its title and first author. Do not search again.",
   "Then answer with only a JSON object and nothing else:",
   '{"url": "<the search result URL that is this work\'s own page>", "sentences": [{"text": "<one sentence>", "quote": "<words copied from that result>"}]}',
-  "The work's own page is its doi.org address, or its arXiv page (arxiv.org/abs/, /pdf/ or /html/ with its id). When the search returns its doi.org address, name that one.",
-  "A page that only mentions, cites, reviews or summarises the work is not its page.",
+  "When a DOI or arXiv id is given, the work's own page is best its doi.org address or its arXiv page (arxiv.org/abs/, /pdf/ or /html/ with that id): when the search returns one of those, name it.",
+  "Otherwise name a page that is this work itself, titled exactly as the work, and whose text as the search returned it names the work's first author: its publisher's page, a library or repository record, or its author's own copy.",
+  "A page that only mentions, cites, reviews or summarises the work is not its page: not an encyclopedia entry, a book review, a reading list or a page about another work.",
   'If no result is this work itself, answer {"url": null, "sentences": []}.',
   "Copy the URL exactly as the search result gave it. Never write a URL that was not one of the search results.",
   "",
@@ -203,6 +212,7 @@ export const WEB_NOTE_SYSTEM = [
   "Write ONE sentence on what the work argues or finds. Add a second only when that text separately supports something the first does not say. Most works need one.",
   `The whole note is at most two sentences and under ${BLURB_MAX_CHARS} characters in all.`,
   "Never say more than that text does: no stronger claim, no wider scope, no method, evidence or result it does not state.",
+  "Say what the work itself argues or finds, never praise or anyone's judgement of it.",
   "Do not just restate the title: say something the title does not.",
   "With each sentence, copy one quote of 6 to 30 words, exactly as it appears in that text, that the sentence rests on. Copy it character for character, in one piece.",
   "If that text does not say what the work argues or finds, give the URL and an empty list of sentences.",
@@ -212,12 +222,16 @@ export const WEB_NOTE_SYSTEM = [
   plainWords("explain"),
 ].join("\n");
 
-/** The work as the row gives it, and the identifier the page will be checked against. */
+/**
+ * The work as the row gives it, and the identifier an `own` page is checked
+ * against — `null` for a title-only row the registries could not identify,
+ * which can then take only a `looks-like` page (plan 261025d).
+ */
 export interface WebNoteWork {
   title: string;
   authors?: string | undefined;
   year?: string | undefined;
-  anchor: WorkId;
+  anchor: WorkId | null;
 }
 
 /** The user turn: the work's details and its identifier, fenced. Nothing of the article. */
@@ -225,7 +239,9 @@ export function webNotePrompt(work: WebNoteWork): string {
   const lines = [`Title: ${work.title}`];
   if (work.authors) lines.push(`Authors: ${work.authors}`);
   if (work.year) lines.push(`Year: ${work.year}`);
-  lines.push(work.anchor.startsWith("arxiv:") ? `arXiv id: ${work.anchor.slice("arxiv:".length)}` : `DOI: ${doiFor(work.anchor)}`);
+  if (work.anchor !== null) {
+    lines.push(work.anchor.startsWith("arxiv:") ? `arXiv id: ${work.anchor.slice("arxiv:".length)}` : `DOI: ${doiFor(work.anchor)}`);
+  }
   return [
     "The work to find:",
     "",
@@ -303,6 +319,101 @@ export function pageIsTheWork(page: Pick<SearchEvidence, "url" | "title" | "exce
   return false;
 }
 
+/**
+ * **Hosts whose pages are about a work by design** — Wikipedia and its
+ * mirror, reader reviews and the shops that carry them, a review journal, and
+ * summary sites. No title rule refuses them: Wikipedia's page for *What is it
+ * like to be a bat?* is titled exactly that and names Nagel. Matched on the
+ * exact host or a dot-delimited subdomain of it; `amazon` on any of its
+ * country domains. The looser tier only (plan 261025d), and a quality
+ * heuristic, not identity evidence: kept short, because the label and the
+ * check carry the rest. **Not the scholarly encyclopedias** (the Stanford and
+ * Internet Encyclopedias of Philosophy, Britannica): an entry there is often
+ * the very work an article cites (GPT Sol's plan review #4).
+ */
+const LOOKALIKE_REFUSED_HOSTS = [
+  "wikipedia.org",
+  "wikiwand.com",
+  "goodreads.com",
+  "ndpr.nd.edu",
+  "sparknotes.com",
+  "litcharts.com",
+  "gradesaver.com",
+  "supersummary.com",
+  "coursehero.com",
+  "enotes.com",
+  "shortform.com",
+  "blinkist.com",
+  "bookey.app",
+];
+const AMAZON = /(?:^|\.)amazon\.(?:com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})$/;
+
+function refusedHost(host: string): boolean {
+  return AMAZON.test(host) || LOOKALIKE_REFUSED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/** A title this short ("Mind", "Being You") is too easily somebody else's without the year. */
+const SHORT_TITLE_TOKENS = 2;
+
+/**
+ * **Does this search result look like the work's own page? (plan 261025d)**
+ * The looser tier, for a page that is not the work's own by its identifier
+ * (`pageIsTheWork`): a publisher's page, a catalogue's record, a repository,
+ * an author's own copy. Every one of these:
+ *
+ * - **its title names the work** (`titleNamesWork`, anchored at the start, a
+ *   short site tail at most): `whole`, or `truncated` with the year as well;
+ * - **the first author's surname** is in its title or extract — a row with
+ *   no authors has no looser tier;
+ * - a title of `SHORT_TITLE_TOKENS` or fewer also needs the year;
+ * - the host is not one whose pages are about works by design
+ *   (`LOOKALIKE_REFUSED_HOSTS`).
+ *
+ * **What it cannot refuse**, named in docs/project/bibliography.md: a page
+ * off that list, titled exactly as the work and naming its author, that is
+ * somebody else's account of it — a blog post, a syllabus, a publisher's
+ * blurb. That is why such a note is labelled as possibly someone else's
+ * description (src/citation-blurb-words.ts), and why the check refuses praise.
+ * Stricter than `resultIsTheWork`'s no-anchor branch, which passes a page on
+ * the year alone and stays *Find it*'s rule.
+ */
+export function pageLooksLikeTheWork(
+  page: Pick<SearchEvidence, "url" | "title" | "excerpt">,
+  work: { title: string; authors?: string | undefined; year?: string | undefined },
+): boolean {
+  if (!isWebUrl(page.url)) return false;
+  const host = hostOf(page.url).toLowerCase().replace(/\.$/, "");
+  if (host === "" || refusedHost(host)) return false;
+  const surname = surnameOf(work.authors ?? null);
+  if (surname === null) return false;
+  const named = titleNamesWork(page.title, work.title);
+  if (named === null) return false;
+  const seen = new Set(tokens(`${page.title ?? ""} ${page.excerpt ?? ""}`));
+  if (!seen.has(surname)) return false;
+  if (named === "whole" && tokens(work.title).length > SHORT_TITLE_TOKENS) return true;
+  const year = yearOf(work.year ?? null);
+  return year !== null && seen.has(year);
+}
+
+/**
+ * **A resolver or arXiv page for a different identifier** (GPT Sol's plan
+ * review #2): `doi.org/<another DOI>` under the work's title is a chapter's,
+ * a preprint's or a namesake's record — evidence code holds that it is not
+ * this work, so it cannot be `looks-like` either. Only these two hosts, where
+ * the address is the identifier.
+ */
+function namesAnotherWork(page: Pick<SearchEvidence, "url">, anchor: WorkId): boolean {
+  let host: string;
+  try {
+    host = new URL(page.url).hostname.toLowerCase().replace(/\.$/, "").replace(/^www\./, "");
+  } catch {
+    return false;
+  }
+  if (!DOI_HOSTS.has(host) && !ARXIV_HOSTS.has(host)) return false;
+  const parsed = parseWorkId(page.url);
+  return parsed !== null && doiFor(parsed) !== doiFor(anchor);
+}
+
 /** The article, as the self-refusal reads it: its source address and its prose, shingled once. */
 export interface ArticleSelf {
   sourceUrl: string | null;
@@ -324,7 +435,7 @@ function isTheArticle(page: SearchEvidence, self: ArticleSelf): boolean {
 
 /** What one writer call's answer came to, before the check. */
 export type WebNoteReading =
-  | { kind: "candidate"; page: SearchEvidence; sentences: CitationBlurbSentence[] }
+  | { kind: "candidate"; page: SearchEvidence; pageKind: WebNotePageKind; sentences: CitationBlurbSentence[] }
   | { kind: "none"; why: CitationWebNoteWhy; page: SearchEvidence | null }
   | { kind: "transient"; why: "cut-off" | "unreadable" };
 
@@ -388,7 +499,17 @@ export function readWebNote(json: unknown, work: WebNoteWork, self: ArticleSelf)
   const page = isWebUrl(url) ? results.get(url) : undefined;
   if (page === undefined) return { kind: "none", why: "not-a-result", page: null };
   if (hasCredentials(page.url) || page.url.length > WEB_NOTE_URL_CAP) return { kind: "none", why: "not-the-work", page };
-  if (!pageIsTheWork(page, work.anchor)) return { kind: "none", why: "not-the-work", page };
+  /* Rule 2, two tiers (plan 261025d): the work's own by its identifier, or a
+     page that looks like its own. A page passing both is `own`. */
+  const pageKind: WebNotePageKind | null =
+    work.anchor !== null && pageIsTheWork(page, work.anchor)
+      ? "own"
+      : work.anchor !== null && namesAnotherWork(page, work.anchor)
+        ? null
+        : pageLooksLikeTheWork(page, work)
+          ? "looks-like"
+          : null;
+  if (pageKind === null) return { kind: "none", why: "not-the-work", page };
   if (isTheArticle(page, self)) return { kind: "none", why: "the-article", page };
   const extract = page.excerpt ?? "";
   if (extract.trim() === "") return { kind: "none", why: "no-extract", page };
@@ -399,7 +520,7 @@ export function readWebNote(json: unknown, work: WebNoteWork, self: ArticleSelf)
       /* A quote that is the article's own words is the article, whatever the
          page's address: the second signal `isArticleText` exists for. */
       if (judged.sentences.some((s) => isArticleText(self.shingles, s.quote))) return { kind: "none", why: "the-article", page };
-      return { kind: "candidate", page, sentences: judged.sentences };
+      return { kind: "candidate", page, pageKind, sentences: judged.sentences };
     case "declined":
       return { kind: "none", why: "declined", page };
     case "failed-check":
@@ -483,6 +604,35 @@ function refusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
   }
 }
 
+/**
+ * May a row the registries did not identify be searched by its title?**
+ * Only when they said no about themselves — not found, not identified, no
+ * abstract — and never for what the row itself is: an identifier its
+ * registry record contradicts, an author–year label, a work the list calls
+ * unpublished, a title too plain to search, or title search off (an uploaded
+ * file, G6).
+ */
+function searchableByTitle(why: Extract<ResolvedWork, { kind: "none" }>["why"]): boolean {
+  switch (why) {
+    case "not-found":
+    case "not-identified":
+    case "no-abstract":
+      return true;
+    /* The row's own identifier disagrees with the registry's record: which
+       work it is, is in doubt, and a title search would only pick a side. */
+    case "conflict":
+    case "no-identifier-or-title":
+    case "label-only":
+    case "unpublished":
+    case "title-search-off":
+      return false;
+    default: {
+      const never: never = why;
+      return never;
+    }
+  }
+}
+
 /** The free refusals that read the store: the same three before and after the allowance. */
 function storedRefusal(shown: CitedWork, read: { row: CitedWork; note: CitationWebNote | null }, now: number): WebNoteRefused | null {
   if (shown.blurb !== undefined) return new WebNoteRefused("abstract-note", WEB_NOTE_HAS_ABSTRACT_NOTE);
@@ -514,18 +664,45 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
     let article = await deps.reader.loadArticle(slug);
     const line = log("model").child({ slug, entryId });
 
-    /* R1: no identifier, no search. A title-only row is searched by title
-       only for an article from a public address (G6), as the notes are. */
+    /**
+     * **The identifier an `own` page is checked against, or `null` to search
+     * by title alone** (plan 261025d), or a free refusal. A row the registries
+     * could not identify is still searched — it can then take only a
+     * `looks-like` page — but only when all of these hold:
+     *
+     * - the article came from a public address (G6): an uploaded file's
+     *   cited work may be unpublished, and its title is not sent out;
+     * - the row has a first author, which `pageLooksLikeTheWork` needs;
+     * - the registries said no for a reason about the registry, not the row:
+     *   an author–year label, a work the list calls unpublished, or a title
+     *   too plain to search are refused, as for the abstract notes.
+     *
+     * A registry that was busy is a 503, not a title search: a note or a
+     * week-long *none* made without the identifier the registry would have
+     * given is worse than a press that asks again.
+     */
+    async function identify(of: CitedWork, from: Article): Promise<WorkId | null> {
+      const publicAddress = importedFromAPublicAddress(from.meta);
+      const resolved = await resolveWorkId(of, { titleSearch: publicAddress }, await deps.evidence());
+      switch (resolved.kind) {
+        case "id":
+          return resolved.id;
+        case "transient":
+          line.warn({ why: resolved.why }, "citation web note: no identifier this time");
+          throw httpError(503, WEB_NOTE_REGISTRY_BUSY.message);
+        case "none":
+          if (publicAddress && surnameOf(of.authors ?? null) !== null && searchableByTitle(resolved.why)) return null;
+          line.info({ outcome: "no-identifier", why: resolved.why }, "citation web note");
+          throw new WebNoteRefused("no-identifier", WEB_NOTE_NO_IDENTIFIER);
+        default: {
+          const never: never = resolved;
+          throw new Error(`citation web note: an identifier outcome nobody handled: ${String(never)}`);
+        }
+      }
+    }
+
     let row = first.row;
-    let resolved = await resolveWorkId(row, { titleSearch: importedFromAPublicAddress(article.meta) }, await deps.evidence());
-    if (resolved.kind === "transient") {
-      line.warn({ why: resolved.why }, "citation web note: no identifier this time");
-      throw httpError(503, WEB_NOTE_REGISTRY_BUSY.message);
-    }
-    if (resolved.kind === "none") {
-      line.info({ outcome: "no-identifier", why: resolved.why }, "citation web note");
-      throw new WebNoteRefused("no-identifier", WEB_NOTE_NO_IDENTIFIER);
-    }
+    let anchor = await identify(row, article);
 
     const allowance = await deps.allowance.take("citation-web-note", WEB_NOTE_RATE_POLICY);
     if (allowance.kind !== "allowed") {
@@ -563,15 +740,7 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
          reused stable id; and repeat the identifier refusal for nothing. */
       if (rowIdentity(again.row) !== rowIdentity(row)) {
         row = again.row;
-        resolved = await resolveWorkId(row, { titleSearch: importedFromAPublicAddress(article.meta) }, await deps.evidence());
-        if (resolved.kind === "transient") {
-          line.warn({ why: resolved.why }, "citation web note: no identifier this time");
-          throw httpError(503, WEB_NOTE_REGISTRY_BUSY.message);
-        }
-        if (resolved.kind === "none") {
-          line.info({ outcome: "no-identifier", why: resolved.why }, "citation web note");
-          throw new WebNoteRefused("no-identifier", WEB_NOTE_NO_IDENTIFIER);
-        }
+        anchor = await identify(row, article);
       }
     } catch (err) {
       await freeLease();
@@ -582,7 +751,7 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
       title: row.title,
       ...(row.authors !== undefined ? { authors: row.authors } : {}),
       ...(row.year !== undefined ? { year: row.year } : {}),
-      anchor: resolved.id,
+      anchor,
     };
     const self = articleSelf(article);
     const identity = rowIdentity(row);
@@ -642,7 +811,11 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
         onStage("checking");
         const checked = await call(
           "citation-web-note-check",
-          checkRequest(reading.page.excerpt ?? "", reading.sentences, WEB_EXTRACT_EVIDENCE),
+          checkRequest(
+            reading.page.excerpt ?? "",
+            reading.sentences,
+            reading.pageKind === "own" ? WEB_EXTRACT_EVIDENCE : WEB_LOOKALIKE_EVIDENCE,
+          ),
           checkTimeoutMs,
           started,
         );
@@ -666,9 +839,13 @@ export function makeCitationWebNote(deps: CitationWebNoteDeps): (slug: string, e
           host,
           title: title === "" ? null : title,
           readAt: new Date(now()).toISOString(),
+          pageKind: reading.pageKind,
         };
         await deps.notes.save(slug, entryId, note);
-        line.info({ ...logged, ms: since(started), outcome: "note", host, sentences: reading.sentences.length }, "citation web note");
+        line.info(
+          { ...logged, ms: since(started), outcome: "note", host, pageKind: reading.pageKind, sentences: reading.sentences.length },
+          "citation web note",
+        );
         /* What the read would show: the same guard, so the frame and the
            next GET cannot disagree. */
         const webNote: CitedWorkWebNote | null = shownWebNote(note, row);

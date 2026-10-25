@@ -5816,6 +5816,17 @@ export const citationWebNotes = spideryarn.table(
     title: text("title"),
     /** When the search read the page — the press's moment. Exactly when `note`. */
     readAt: timestamp("read_at", { withTimezone: true }),
+    /**
+     * `WebNotePageKind`, only beside a note (plan 261025d): `own` — the work's
+     * doi.org or arXiv page, by its identifier; `looks-like` — a page titled
+     * as the work that names its first author. Decided by code at the press,
+     * never derived from `host`. **Null on a note means `own`**: only a writer
+     * from before the column leaves it null, and that writer took only the
+     * strict rule's pages — so the migration needs no backfill, and a code
+     * rollback can still write (GPT Sol's plan review #3). Today's writer
+     * always names it (`webNoteColumns`).
+     */
+    pageKind: text("page_kind"),
     /** When the press decided. A `none` is asked again a week after this. */
     checkedAt: timestamp("checked_at", { withTimezone: true }).notNull(),
     model: text("model").notNull(),
@@ -5855,6 +5866,10 @@ export const citationWebNotes = spideryarn.table(
     check(
       "citation_web_notes_note",
       sql`coalesce(${t.state} = 'note', false) = (${t.sentences} is not null) and coalesce(${t.state} = 'note', false) = (${t.url} is not null) and coalesce(${t.state} = 'note', false) = (${t.host} is not null) and coalesce(${t.state} = 'note', false) = (${t.readAt} is not null) and (${t.title} is null or ${t.url} is not null)`,
+    ),
+    check(
+      "citation_web_notes_page_kind",
+      sql`${t.pageKind} is null or (${t.pageKind} in ('own', 'looks-like') and coalesce(${t.state} = 'note', false))`,
     ),
     /* One or two sentences. `case` first, so `jsonb_array_length` never meets
        a non-array. */

@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "24 October 2026";
+const LAST_UPDATED = "25 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -498,8 +498,9 @@ export function PrivacyPage() {
           Crossref could not find it. Never the rest of the article’s text, and nothing about
           who you are. They learn that somebody using Spideryarn asked about that work, not who.
           When you open a cited work that has no note in Sources, from its card in the article, the
-          web is searched once for that work’s own page: the search is sent its title, authors, year
-          and DOI or arXiv identifier, and never the article’s text.
+          web is searched once for that work’s page: the search is sent its title, authors, year and,
+          when it has one, its DOI or arXiv identifier, and never the article’s text. In an article
+          from a file you uploaded, a cited work with no identifier is not searched.
           {/* Plan 261024o (src/situate.ts, src/situate-citers.ts): the owner's
               press on Search the literature, behind the experimental switch.
               The searches are planned by a model from the fenced title,
@@ -631,7 +632,7 @@ export function PrivacyPage() {
           names and the opening of the page, about 6,000 characters at most, and to write a short
           note on each work an article cites and check it, for which it is shown each cited work’s
           title, authors and year and its abstract from a public catalogue, and none of the
-          article’s own text, and to write a note on one cited work from a web search for its own
+          article’s own text, and to write a note on one cited work from a web search for its
           page, for which it is shown that work’s title, authors, year and identifier and what the
           search returned;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone

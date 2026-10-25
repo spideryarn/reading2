@@ -15,14 +15,14 @@
 import { BLURB_MAX_CHARS, BLURB_MAX_SENTENCES, BLURB_QUOTE_MAX_CHARS, type IdentityRow, rowIdentity } from "./citation-blurbs-identity.js";
 import type { Bibliography, CitationBlurbSentence, CitedWork, CitedWorkWebNote } from "./types.js";
 import { hasCredentials, hostOf, isWebUrl } from "./urls.js";
-import { REGISTRY_NEGATIVE_TTL_MS } from "./work-id.js";
+import { parseWorkId, REGISTRY_NEGATIVE_TTL_MS } from "./work-id.js";
 
 /**
  * **The prompt and the schema it answers in.** Stored on each row; it does not
  * hide a note (as for the abstract notes, a new prompt keeps a checked note on
  * screen), but it says which prompt wrote it.
  */
-export const CITATION_WEB_NOTE_PROMPT_VERSION = "citation-web-note/2";
+export const CITATION_WEB_NOTE_PROMPT_VERSION = "citation-web-note/3";
 
 /**
  * **The checks a web note must pass to be shown**: the identity rule (R1), the
@@ -35,8 +35,38 @@ export const CITATION_WEB_NOTE_PROMPT_VERSION = "citation-web-note/2";
  * at the DOI resolver or arXiv's own page. A note or a *none* stored under
  * either earlier rule may rest on a page the rule now refuses, so neither is
  * shown or trusted.
+ *
+ * `/4` loosened it (plan 261025d): a page that looks like the work's own —
+ * titled as the work, naming its first author, off a short list of hosts —
+ * counts too, as `looks-like`. **A `/3` note is still shown**, as `own`: the
+ * strict rule is a subset of today's, and its migration backfilled
+ * `page_kind`. **A `/3` *none* is no longer trusted**, since the looser rule
+ * may find a page where the strict one found none (`NOTES_STILL_SHOWN`).
  */
-export const CITATION_WEB_NOTE_VALIDATION_VERSION = "citation-web-note-checks/3";
+export const CITATION_WEB_NOTE_VALIDATION_VERSION = "citation-web-note-checks/4";
+
+/** Earlier versions whose *notes* still stand, every one of them `own`. Never their nones. */
+const NOTES_STILL_SHOWN: ReadonlySet<string> = new Set(["citation-web-note-checks/3"]);
+
+/**
+ * **Could this address be an `own` page?** `pageIsTheWork`'s shapes without
+ * its anchor, which is not stored: a DOI resolver whose path is a DOI, or
+ * arXiv's own `/abs|pdf|html/` page for an id. A cross-check that the column
+ * and the address agree; an `own` that fails it is not shown at all rather
+ * than shown with the stronger label (GPT Sol's plan review #2).
+ */
+function couldBeOwn(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const host = u.hostname.toLowerCase().replace(/\.$/, "").replace(/^www\./, "");
+  if (host === "doi.org" || host === "dx.doi.org") return parseWorkId(url) !== null;
+  if (host === "arxiv.org" || host === "export.arxiv.org") return /^\/(?:abs|pdf|html)\//.test(u.pathname) && parseWorkId(url) !== null;
+  return false;
+}
 
 /** The page's own title, as stored and as shown. */
 export const WEB_NOTE_TITLE_CAP = 300;
@@ -53,13 +83,16 @@ function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
-/** Stored for this row and checked under today's rules: the two things every use below needs first. */
+/**
+ * Stored for this row and checked under rules that still stand — today's, or
+ * for a note, one in `NOTES_STILL_SHOWN`: the two things every use below needs
+ * first.
+ */
 function belongsTo(e: Record<string, unknown>, row: IdentityRow): boolean {
-  return (
-    e.validationVersion === CITATION_WEB_NOTE_VALIDATION_VERSION &&
-    typeof e.identity === "string" &&
-    e.identity === rowIdentity(row)
-  );
+  const current =
+    e.validationVersion === CITATION_WEB_NOTE_VALIDATION_VERSION ||
+    (e.state === "note" && typeof e.validationVersion === "string" && NOTES_STILL_SHOWN.has(e.validationVersion));
+  return current && typeof e.identity === "string" && e.identity === rowIdentity(row);
 }
 
 /**
@@ -74,7 +107,9 @@ function belongsTo(e: Record<string, unknown>, row: IdentityRow): boolean {
  *   notes' caps, the whole within `BLURB_MAX_CHARS`;
  * - `url` an http(s) address with no user name or password in it, at most
  *   `WEB_NOTE_URL_CAP`; **`host` recomputed from it**, never the stored one;
- * - `readAt` a moment that parses, written back as ISO.
+ * - `readAt` a moment that parses, written back as ISO;
+ * - `pageKind` `own` or `looks-like`, and `own` only at an address an `own`
+ *   page can have (`couldBeOwn`).
  *
  * Every field is rebuilt rather than passed through, because a row's JSONB
  * arrives unchecked. The title is capped, and dropped when empty. No model,
@@ -102,8 +137,10 @@ export function shownWebNote(stored: unknown, row: IdentityRow): CitedWorkWebNot
   if (host === "") return null;
   const readAt = typeof e.readAt === "string" ? Date.parse(e.readAt) : Number.NaN;
   if (!Number.isFinite(readAt)) return null;
+  const pageKind = e.pageKind === "own" || e.pageKind === "looks-like" ? e.pageKind : null;
+  if (pageKind === null || (pageKind === "own" && !couldBeOwn(url))) return null;
   const title = typeof e.title === "string" ? e.title.trim().slice(0, WEB_NOTE_TITLE_CAP) : "";
-  return { sentences, url, host, ...(title !== "" ? { title } : {}), readAt: new Date(readAt).toISOString() };
+  return { sentences, url, host, ...(title !== "" ? { title } : {}), readAt: new Date(readAt).toISOString(), pageKind };
 }
 
 /**

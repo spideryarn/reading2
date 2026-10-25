@@ -98,6 +98,7 @@ function webNote(row: CitedWork, text: string, over: Partial<CitationWebNote> = 
     host: "example.org",
     title: "Scaling Laws for Neural Language Models",
     readAt: "2026-10-19T09:00:00.000Z",
+    pageKind: "looks-like",
     ...over,
   } as CitationWebNote;
 }
@@ -236,6 +237,40 @@ describe("citationWebNoteStore", () => {
     await expect(
       getDb().insert(citationWebNotes).values({ ...base, entryId: NOT_IN_LIST, state: "none", why: "made-up" }),
     ).rejects.toThrow();
+    /* 261025d: a page kind only beside a note, and only one of the two. */
+    await expect(
+      getDb().insert(citationWebNotes).values({ ...base, entryId: NOT_IN_LIST, state: "none", why: "not-the-work", pageKind: "own" }),
+    ).rejects.toThrow();
+    const page = { sentences: [{ text: "t", quote: "q" }], url: "https://doi.org/10.1/x", host: "doi.org", readAt: new Date() };
+    await expect(
+      getDb().insert(citationWebNotes).values({ ...base, entryId: NOT_IN_LIST, state: "note", ...page, pageKind: "certain" }),
+    ).rejects.toThrow();
+  });
+
+  it("reads a note from before the page kind as own, and keeps the page kind a later press writes", async () => {
+    const page = { sentences: [{ text: "t", quote: "q" }], url: "https://doi.org/10.1/x", host: "doi.org", readAt: new Date() };
+    /* The writer deployed before this column names no page kind; it must still be able to write. */
+    const columns = {
+      identity: "stale",
+      model: "m",
+      promptVersion: "p",
+      validationVersion: "v",
+      checkedAt: new Date(),
+      state: "note",
+      why: null,
+      title: null,
+      ...page,
+    };
+    await getDb()
+      .insert(citationWebNotes)
+      .values({ articleId: article?.articleId ?? "", ownerId: TEST_OWNER, entryId: ROW_B, ...columns })
+      .onConflictDoUpdate({ target: [citationWebNotes.articleId, citationWebNotes.entryId], set: { ...columns, pageKind: null } });
+    const old = await asTestOwner(() => citationWebNoteStore.read(SLUG, ROW_B));
+    expect(old?.note).toMatchObject({ state: "note", pageKind: "own" });
+    /* A stale identity, so the later tests' lists still show nothing on this row. */
+    await asTestOwner(() => citationWebNoteStore.save(SLUG, ROW_B, webNote(WORK_B, "t", { identity: "stale" })));
+    const later = await asTestOwner(() => citationWebNoteStore.read(SLUG, ROW_B));
+    expect(later?.note).toMatchObject({ state: "note", pageKind: "looks-like" });
   });
 });
 

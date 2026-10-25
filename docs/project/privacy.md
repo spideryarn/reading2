@@ -837,6 +837,13 @@ the article (deletion, export). Never shown to a visitor. The page says it in th
 paragraph and in Haiku's clause; `tests/privacy-page.test.ts` holds both, and `LAST_UPDATED` moved to
 19 October 2026.
 
+**Since 2026-10-25 a title-only work is searched too**
+([261025d](../plans/261025d-citation-web-note-looser-page-rule.md)): when the title lookups find no
+identifier, the search is sent the work's title, authors and year alone — but only for an article
+imported from a public web address, the abstract notes' G6 rule, so an uploaded file's title-only
+works are still never searched. The page's sentence says *when it has one* of the identifier and
+names the uploaded-file exception; `LAST_UPDATED` moved to 25 October 2026.
+
 ## Search the literature
 
 **Added 2026-10-24**, with [sources.md § Where this piece sits](sources.md#where-this-piece-sits)

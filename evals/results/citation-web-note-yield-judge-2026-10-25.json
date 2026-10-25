@@ -1,0 +1,414 @@
+{
+ "before": [
+  {
+   "id": "spya-fys39a",
+   "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+   "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+   "pageKind": null,
+   "pageType": "own-doi",
+   "sameWork": "yes",
+   "sameWorkWhy": "DOI page with matching title, all four authors, Consciousness and Cognition 2019.",
+   "sentences": [
+    {
+     "text": "Using mathematical results from the theory of computation, the authors argue that theories tying consciousness to the wiring pattern of a system (such as IIT) are either false or outside science.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Close paraphrase of the abstract sentence quoted."
+    },
+    {
+     "text": "Any recurrent network can be unfolded into a feedforward network with the same input-output behaviour, so these theories are neither necessary nor sufficient to explain the empirical data.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Both the unfolding claim and \"neither necessary nor sufficient\" appear in the excerpt (Implication I section)."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-texrr4",
+   "title": "Generative adversarial networks",
+   "url": "https://arxiv.org/abs/1406.2661",
+   "pageKind": null,
+   "pageType": "own-arxiv",
+   "sameWork": "yes",
+   "sameWorkWhy": "arXiv 1406.2661, Goodfellow et al., June 2014.",
+   "sentences": [
+    {
+     "text": "The paper trains two models at once: a generator G that learns the shape of the data, and a discriminator D that estimates whether a sample came from the training data or from G.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Paraphrase of abstract."
+    },
+    {
+     "text": "When both G and D are multilayer neural networks, the whole system can be trained with ordinary backpropagation, without needing Markov chains.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract states backprop and no Markov chains."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-vcbke4",
+   "title": "A defense of the rights of artificial intelligences",
+   "url": "https://doi.org/10.1111/misp.12032",
+   "pageKind": null,
+   "pageType": "own-doi",
+   "sameWork": "yes",
+   "sameWorkWhy": "DOI page, matching title, Schwitzgebel and Garza, Midwest Studies 2015.",
+   "sentences": [
+    {
+     "text": "The paper argues that possible artificial beings that differ from humans in no morally relevant way would deserve moral consideration (fair ethical treatment) similar to that of humans.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract states it."
+    },
+    {
+     "text": "It recommends that AI designers avoid building AIs whose moral status is unclear.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Principle (2) in abstract."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-z2en5u",
+   "title": "The attention schema theory: a foundation for engineering artificial consciousness",
+   "url": "https://doi.org/10.3389/frobt.2017.00060",
+   "pageKind": null,
+   "pageType": "own-doi",
+   "sameWork": "yes",
+   "sameWorkWhy": "DOI page, matching title, Frontiers in Robotics and AI 2017 (author not named in excerpt but DOI is the work).",
+   "sentences": [
+    {
+     "text": "Graziano offers the attention schema theory, which explains how the brain comes to claim it has subjective awareness, as a possible starting point for building artificial consciousness in machines.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Excerpt says the theory explains how the brain claims subjective awareness and is offered as a starting point for artificial consciousness."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  }
+ ],
+ "after2": [
+  {
+   "id": "spya-ejfr7q",
+   "title": "Absent qualia, fading qualia, dancing qualia",
+   "url": "https://consc.net/papers/qualia.html",
+   "pageKind": "looks-like",
+   "pageType": "author-site",
+   "sameWork": "yes",
+   "sameWorkWhy": "consc.net copy of Chalmers paper, published in Conscious Experience (Metzinger ed.) 1995.",
+   "sentences": [
+    {
+     "text": "Chalmers argues that if the 'absent' or 'inverted' qualia (experience with no felt quality, or with the felt quality reversed) were possible, then his 'dancing qualia' case, where experience keeps switching without the subject noticing, would also be possible.",
+     "verdict": "not-in-evidence",
+     "praise": "no",
+     "why": "Conditional is in the excerpt, but the gloss of dancing qualia as \"experience keeps switching without the subject noticing\" is not in the excerpt (the Dancing Qualia section is cut off); true of the work, but added."
+    },
+    {
+     "text": "Because he judges dancing qualia extremely implausible, he concludes that functional organization fully determines conscious experience.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Excerpt summary: \"extremely implausible that Dancing Qualia are possible ... functional organization fully determines conscious experience\"."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-yec6mc",
+   "title": "Theories of consciousness",
+   "url": "https://www.nature.com/articles/s41583-022-00587-4",
+   "pageKind": "looks-like",
+   "pageType": "publisher",
+   "sameWork": "yes",
+   "sameWorkWhy": "Nature Reviews Neuroscience page, Seth & Bayne, 2022, same title.",
+   "sentences": [
+    {
+     "text": "The review compares four leading theories of consciousness (higher-order, global workspace, re-entry and predictive processing, and integrated information) to show how they relate to each other and whether data can tell them apart.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract lists the four approaches and the aim of clarifying relations and empirical distinguishability."
+    },
+    {
+     "text": "It argues that theories need to be developed in three ways before they can support a mature way of testing them against each other.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract states three ways theories need developing."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-z64xsb",
+   "title": "Could a large language model be conscious?",
+   "url": "https://arxiv.org/abs/2303.07103v1",
+   "pageKind": "looks-like",
+   "pageType": "own-arxiv",
+   "sameWork": "yes",
+   "sameWorkWhy": "arXiv 2303.07103v1, Chalmers, March 2023 (v1 of the cited work).",
+   "sentences": [
+    {
+     "text": "Chalmers concludes that current large language models are somewhat unlikely to be conscious.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract conclusion."
+    },
+    {
+     "text": "He names significant obstacles to consciousness in current models, such as their lack of recurrent processing, a global workspace (a shared space where information is pooled for use across the system), and unified agency.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract lists the obstacles; gloss of global workspace is a harmless definition."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-fys39a",
+   "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+   "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+   "pageKind": "own",
+   "pageType": "own-doi",
+   "sameWork": "yes",
+   "sameWorkWhy": "DOI page, matching title and authors, 2019.",
+   "sentences": [
+    {
+     "text": "Using results from the theory of computation, the authors argue that theories which tie consciousness to the pattern of connections in a system (such as IIT) are either false or fall outside science.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Paraphrase of abstract."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-wbbuma",
+   "title": "A Cognitive Theory of Consciousness",
+   "url": "https://books.google.com/books/about/A_Cognitive_Theory_of_Consciousness.html?id=3tpFdVe3dacC",
+   "pageKind": "looks-like",
+   "pageType": "index-or-database",
+   "sameWork": "yes",
+   "sameWorkWhy": "Google Books entry, Baars 1988, same title (ISBN 0521301335).",
+   "sentences": [
+    {
+     "text": "Baars argues that consciousness is linked to a \"global workplace\", a kind of shared work space spread across the nervous system, and he presents data to support this.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Blurb: \"Adducing data to show that consciousness is associated with a kind of global workplace\"; copies the page's \"workplace\" typo for workspace."
+    },
+    {
+     "text": "He sets limits for any theory of consciousness by comparing conscious mental events with closely similar unconscious ones, such as stimuli that are attended versus those that are not.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Blurb on empirical constraints by contrasting conscious with comparable unconscious phenomena."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-u94u03",
+   "title": "Human and Animal Minds: The Consciousness Questions Laid to Rest",
+   "url": "https://academic.oup.com/book/32384",
+   "pageKind": "looks-like",
+   "pageType": "publisher",
+   "sameWork": "yes",
+   "sameWorkWhy": "Oxford Academic page, Carruthers, OUP 2019, same title.",
+   "sentences": [
+    {
+     "text": "Carruthers argues there is no determinate answer to whether animals are phenomenally conscious (have felt experience), because projecting our own first-person concepts onto very unlike minds fails to fix a clear truth.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract: no fact of the matter because projections fail to give determinate truth-conditions."
+    },
+    {
+     "text": "On many views, concern for animals can rest on sympathy, which needs only third-person understanding of an animal's desires and emotions, not first-person empathy.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract: on many views concern for animals grounded in sympathy, third-person understanding."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-jjrssn",
+   "title": "Consciousness in Action",
+   "url": "https://www.hup.harvard.edu/books/9780674007963",
+   "pageKind": "looks-like",
+   "pageType": "publisher",
+   "sameWork": "yes",
+   "sameWorkWhy": "Harvard University Press page for Hurley, Consciousness in Action (2002 paperback of the 1998 book).",
+   "sentences": [
+    {
+     "text": "Hurley argues that perception and action depend on each other more closely than people usually assume, meaning the two are more tightly linked than the common view allows.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Blurb says it; second clause merely restates the first. Page calls it \"important\", note did not repeat that."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-texrr4",
+   "title": "Generative adversarial networks",
+   "url": "https://arxiv.org/abs/1406.2661",
+   "pageKind": "own",
+   "pageType": "own-arxiv",
+   "sameWork": "yes",
+   "sameWorkWhy": "arXiv 1406.2661.",
+   "sentences": [
+    {
+     "text": "The paper proposes a way to learn a model that generates data by training two networks against each other: a generator G that makes samples, and a discriminator D that tries to tell real data from G's samples.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Paraphrase of abstract."
+    },
+    {
+     "text": "When both G and D are multilayer perceptrons (a basic type of neural network), the whole system can be trained with backpropagation, without Markov chains or approximate inference networks.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract; MLP gloss harmless."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-twybrn",
+   "title": "Neural optimal feedback control with local learning rules",
+   "url": "https://arxiv.org/abs/2111.06920",
+   "pageKind": "looks-like",
+   "pageType": "own-arxiv",
+   "sameWork": "yes",
+   "sameWorkWhy": "arXiv 2111.06920, Friedrich et al., Nov 2021, same title.",
+   "sentences": [
+    {
+     "text": "The paper presents an online method that pairs adaptive Kalman filtering (a way of estimating hidden states from noisy signals) with a model-free control method, which it builds as a neural network with local learning rules.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract: online algorithm combining adaptive Kalman filtering with model-free control, implemented in a network with local plasticity rules."
+    },
+    {
+     "text": "The network learns its control policy without knowing the system's dynamics, which avoids the need for weight transport.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract states it verbatim."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-artmnj",
+   "title": "Perceiver: General perception with iterative attention",
+   "url": "https://arxiv.org/abs/2103.03206",
+   "pageKind": "looks-like",
+   "pageType": "own-arxiv",
+   "sameWork": "yes",
+   "sameWorkWhy": "arXiv 2103.03206, Jaegle et al. 2021, same title.",
+   "sentences": [
+    {
+     "text": "The Perceiver, a model built on Transformers, repeatedly uses attention to squeeze very large inputs into a small set of latent units, which lets it handle very large inputs.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract."
+    },
+    {
+     "text": "The authors report it is competitive with or beats specialized models on classification across images, point clouds, audio, video, and video+audio.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract; the authors' own performance claim, attributed as reported, not praise."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-yatf88",
+   "title": "A mathematical framework for transformer circuits",
+   "url": "https://transformer-circuits.pub/2021/framework/",
+   "pageKind": "looks-like",
+   "pageType": "publisher",
+   "sameWork": "yes",
+   "sameWorkWhy": "transformer-circuits.pub, the work's own home (Elhage et al. 2021); not a doi/arXiv page.",
+   "sentences": [
+    {
+     "text": "The authors study very small transformer language models with two layers or fewer and only attention blocks, and find that \"induction heads\" explain in-context learning in these models and appear only when there are at least two attention layers.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Excerpt: study of transformers with two layers or less, attention-only; induction heads explain in-context learning and need two attention layers."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-vcbke4",
+   "title": "A defense of the rights of artificial intelligences",
+   "url": "https://doi.org/10.1111/misp.12032",
+   "pageKind": "own",
+   "pageType": "own-doi",
+   "sameWork": "yes",
+   "sameWorkWhy": "DOI page, same title, 2015.",
+   "sentences": [
+    {
+     "text": "The authors argue that possible artificially intelligent beings who match humans in every morally relevant respect would deserve moral consideration similar to that owed to humans.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract."
+    },
+    {
+     "text": "They also propose that AI designers should avoid building AIs whose moral status is unclear.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract principle (2)."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-b4349w",
+   "title": "Dimensions of animal consciousness",
+   "url": "https://doi.org/10.1016/j.tics.2020.07.007",
+   "pageKind": "own",
+   "pageType": "own-doi",
+   "sameWork": "yes",
+   "sameWorkWhy": "DOI of Birch, Schnell, Clayton TICS 2020; page title matches (excerpt is body text, authors not shown).",
+   "sentences": [
+    {
+     "text": "The authors argue that animal consciousness should not be ranked on one scale of more or less conscious; instead, each species has its own profile across several dimensions.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Excerpt: multidimensional profiles instead of levels."
+    },
+    {
+     "text": "They name five such dimensions: perceptual richness, evaluative richness, integration at a time (unity), integration across time (temporality), and self-consciousness (selfhood).",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Five dimensions listed verbatim."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  },
+  {
+   "id": "spya-pkmnk4",
+   "title": "Unsupervised learning for physical interaction through video prediction",
+   "url": "https://arxiv.org/abs/1605.07157",
+   "pageKind": "looks-like",
+   "pageType": "own-arxiv",
+   "sameWork": "yes",
+   "sameWorkWhy": "arXiv 1605.07157, Finn, Goodfellow, Levine 2016, same title.",
+   "sentences": [
+    {
+     "text": "The authors build a video prediction model that is conditioned on the robot's actions and predicts how pixels move from earlier frames, so it can learn physical object motion without labels.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract."
+    },
+    {
+     "text": "They report that their method makes more accurate video predictions than earlier methods, both by numbers and by how the videos look.",
+     "verdict": "supported",
+     "praise": "no",
+     "why": "Abstract; the authors' reported result, not praise."
+    }
+   ],
+   "restatesTitleOnly": "no"
+  }
+ ]
+}

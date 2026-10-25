@@ -208,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "24 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "25 October 2026"');
   });
 
   it("says what Search the literature sends, and to whom", () => {
@@ -286,10 +286,10 @@ describe("the privacy page", () => {
        the article's text. */
     const prose = PAGE.replace(/\s+/g, " ");
     expect(prose).toContain(
-      "When you open a cited work that has no note in Sources, from its card in the article, the web is searched once for that work’s own page: the search is sent its title, authors, year and DOI or arXiv identifier, and never the article’s text",
+      "When you open a cited work that has no note in Sources, from its card in the article, the web is searched once for that work’s page: the search is sent its title, authors, year and, when it has one, its DOI or arXiv identifier, and never the article’s text. In an article from a file you uploaded, a cited work with no identifier is not searched.",
     );
     expect(prose).toContain(
-      "and to write a note on one cited work from a web search for its own page, for which it is shown that work’s title, authors, year and identifier and what the search returned",
+      "and to write a note on one cited work from a web search for its page, for which it is shown that work’s title, authors, year and identifier and what the search returned",
     );
   });
 
