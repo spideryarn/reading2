@@ -673,3 +673,167 @@ describe("a footnote record that is only its label", () => {
     expect(listed(records)).toEqual(["Eleven runs on over the page."]);
   });
 });
+
+/**
+ * **Symbol notes printed at the back of a book** — Rovelli's *The Order of
+ * Time*, report spya-hrx8z2. Its 143 numbered endnotes come first and its
+ * eleven `*` notes after them, one to a page; the prose marks each with a `*`.
+ * All endnotes shared one cursor, so the `*` notes searched only past the last
+ * numbered marker and found nothing. And a `*` names no note, so order alone
+ * would hand every note after a dropped marker the next note's marker: the
+ * transcription dropped the second `*` on page 24, which the text layer prints.
+ * Shapes are the real ones, cut short.
+ * docs/plans/261025a-asterisk-and-dagger-notes-at-the-back-of-a-book-link-to-their-markers.md.
+ */
+describe("symbol notes printed at the back of a book (Rovelli)", () => {
+  const body = [
+    r(15, "paragraph", "And how times evolve relative to each other.*"),
+    r(19, "paragraph", "Not the equations of the world,13 the arrow of time appears only where there is heat.* It is fundamental."),
+    r(24, "paragraph", "No distinction between “cause” and “effect.”* There are regularities."),
+    r(24, "paragraph", "In which the past is different from the future. This is disconcerting."),
+    r(28, "paragraph", "For a moving object, time contracts.* Not only that."),
+    r(38, "paragraph", "To where it began.*32 The first to realise this was Gödel."),
+  ];
+  const numbered = [r(130, "footnote", "13 Zeh, Die Physik der Zeitrichtung."), r(131, "footnote", "32 Gödel, 1949.")];
+  const starred = [
+    r(148, "footnote", "* Grammatical note."),
+    r(149, "footnote", "* Strictly speaking."),
+    r(150, "footnote", "* More in chapter 11."),
+    r(151, "footnote", "* The teaspoon."),
+    r(152, "footnote", "* In motion relative to what?"),
+    r(153, "footnote", "* Closed temporal lines."),
+  ];
+  const records = [lead, ...body, ...numbered, ...starred];
+
+  /** The text layer by page: each page's records as printed, or `printed`'s override. */
+  function textLayer(recs: PdfRecord[], printed: Record<number, string> = {}): Map<number, string> {
+    const last = Math.max(...recs.map((x) => x.page));
+    return new Map(
+      Array.from({ length: last }, (_, i): [number, string] => [
+        i + 1,
+        printed[i + 1] ??
+          recs
+            .filter((x) => x.page === i + 1)
+            .map((x) => x.text)
+            .join("\n"),
+      ]),
+    );
+  }
+  /** Page 24 as printed: two markers, the second of which the model dropped. */
+  const printed24 = {
+    24: "No distinction between “cause” and “effect.”* There are regularities.\nIn which the past is different from the future.* This is disconcerting.",
+  };
+
+  const linksWith = (recs: PdfRecord[], pages?: ReadonlyMap<number, string>) => {
+    const { blocks } = splitIntoBlocks(renderHtml(recs, "T", RAW_SHA, undefined, pages));
+    const notes = blocks.filter((b) => b.role === "footnote");
+    return blocks.flatMap((block) =>
+      [...block.html.matchAll(/<a [^>]*data-spya-note-ref="([^"]+)"[^>]*>([^<]*)<\/a>/g)].map(
+        (m) => `${m[2]} → ${notes.find((n) => n.noteId === m[1])?.text.replace(/\s*↩$/, "") ?? "(nothing)"}`,
+      ),
+    );
+  };
+  const numberedOnly = ["13 → Zeh, Die Physik der Zeitrichtung."];
+
+  it("links each `*` note to the marker the text layer prints for it, past the numbered notes", () => {
+    expect(linksWith(records, textLayer(records, printed24))).toEqual([
+      "* → Grammatical note.",
+      "13 → Zeh, Die Physik der Zeitrichtung.",
+      "* → Strictly speaking.",
+      "* → More in chapter 11.",
+      "* → In motion relative to what?",
+      "* → Closed temporal lines.",
+    ]);
+  });
+
+  it("lists the note whose marker the model dropped, unlinked, still with its `*`", () => {
+    const { blocks } = splitIntoBlocks(renderHtml(records, "T", RAW_SHA, undefined, textLayer(records, printed24)));
+    const notes = blocks.filter((b) => b.role === "footnote").map((b) => b.text.replace(/\s*↩$/, ""));
+    expect(notes).toContain("* The teaspoon.");
+    expect(notes).toContain("Grammatical note.");
+    expect(notes).toContain("More in chapter 11.");
+  });
+
+  it("does not link a page's marker when two printed markers there share the word they are glued to", () => {
+    const pages = textLayer(records, {
+      24: "No distinction between “cause” and “effect.”* There are regularities.\nAnd the effect.* This is disconcerting.",
+    });
+    expect(linksWith(records, pages)).not.toContain("* → More in chapter 11.");
+    expect(linksWith(records, pages)).toContain("* → In motion relative to what?");
+  });
+
+  it("links none when adjacent-page matches would put the transcribed markers in the opposite order", () => {
+    const swapped = [
+      lead,
+      r(5, "paragraph", "The transcription puts second.* first."),
+      r(6, "paragraph", "It puts first.* second."),
+      r(20, "footnote", "* The first note."),
+      r(21, "footnote", "* The second note."),
+    ];
+    const pages = textLayer(swapped, {
+      5: "The source prints first.* first.",
+      6: "It prints second.* second.",
+    });
+    expect(linksWith(swapped, pages)).toEqual([]);
+  });
+
+  it("links none when a line-start text-layer glyph could be the marker that balances an extra `word*`", () => {
+    const lineStart = [
+      lead,
+      r(5, "paragraph", "The first claim.*"),
+      r(6, "paragraph", "The second claim.*"),
+      r(7, "paragraph", "An emphatic extra.*"),
+      r(20, "footnote", "* The first note."),
+      r(21, "footnote", "* The second note."),
+    ];
+    const pages = textLayer(lineStart, {
+      6: "The second claim.\n*",
+    });
+    expect(linksWith(lineStart, pages)).toEqual([]);
+  });
+
+  it("links none of the `*` notes without a text layer, even when the prose's count agrees", () => {
+    const whole = records.map((x) =>
+      x.text.startsWith("In which the past")
+        ? { ...x, text: "In which the past is different from the future.* This is disconcerting." }
+        : x,
+    );
+    expect(linksWith(records)).toEqual(numberedOnly);
+    expect(linksWith(whole)).toEqual(numberedOnly);
+  });
+
+  it("links none of them when the text layer prints a different number of markers than there are notes", () => {
+    expect(linksWith(records, textLayer(records))).toEqual(numberedOnly);
+  });
+
+  it("links none of them when a page before the notes has prose but an empty text layer", () => {
+    expect(linksWith(records, textLayer(records, { ...printed24, 28: "" }))).toEqual(numberedOnly);
+  });
+
+  it("links none of them when the same symbol also marks a footnote on its own page", () => {
+    const both = [lead, r(5, "paragraph", "A page claim.* More."), r(5, "footnote", "* The aside."), ...records.slice(1)];
+    expect(linksWith(both, textLayer(both, printed24))).toEqual(["* → The aside.", ...numberedOnly]);
+  });
+
+  it("does not count a note's own label in the text layer as a marker", () => {
+    const pages = textLayer(records, printed24);
+    expect(pages.get(148)).toBe("* Grammatical note.");
+    expect(linksWith(records, pages)).toHaveLength(6);
+  });
+
+  it("does not find `*` inside `**`", () => {
+    const doubled = [lead, r(3, "paragraph", "A claim.** More."), r(9, "footnote", "* A note.")];
+    expect(linksWith(doubled, textLayer(doubled))).toEqual([]);
+  });
+
+  it("still refuses a number after a symbol: 5*3, and word*3 with no symbol note (GPT Sol, F8)", () => {
+    expect(links([lead, r(3, "paragraph", "We counted 5*3 cases."), r(3, "footnote", "3 A note.")])).toEqual([]);
+    expect(links([lead, r(3, "paragraph", "The grammar accepts word*3 here."), r(3, "footnote", "3 A note.")])).toEqual([]);
+  });
+
+  it("still links a `*` footnote at the foot of its own page", () => {
+    expect(links([lead, r(5, "paragraph", "A claim.* More prose."), r(5, "footnote", "* The aside.")])).toEqual([
+      "* → The aside.",
+    ]);
+  });
+});

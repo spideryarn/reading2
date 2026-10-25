@@ -285,6 +285,15 @@ The differences that matter to a reader:
   end the run. *The Order of Time* lost notes 21–93 that way, since `reference` is transcribed and
   never shown. A footnote record that is only its label (`53`) is not listed as a note —
   [261023b](../plans/261023b-endnotes-typed-as-references-are-kept-as-notes.md).
+  **Symbol endnotes (`*`, `†`) are paired with the markers the text layer prints** (2026-10-25,
+  `symbolEndnotes`). Before that, every endnote shared one cursor, so *The Order of Time*'s
+  eleven `*` notes searched only past its 143 numbered markers and found nothing. A `*` names no
+  note, so taking markers in order would shift every later link onto the wrong passage after one
+  dropped marker. Instead, the k-th printed marker is the k-th note's, when the counts agree, and
+  it is found in the transcription by the word it is glued to. A scan's symbol endnotes stay
+  unlinked. On re-extraction, a paragraph that newly cites a `*` note is a new block if it already
+  cited a numbered one —
+  [261025a](../plans/261025a-asterisk-and-dagger-notes-at-the-back-of-a-book-link-to-their-markers.md).
 - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
   table was a caption over nothing, though the cells were transcribed and scored all

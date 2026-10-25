@@ -1,0 +1,414 @@
+diff --git a/docs/project/content-extraction.md b/docs/project/content-extraction.md
+index 52c1cbf98..9d3cddd9f 100644
+--- a/docs/project/content-extraction.md
++++ b/docs/project/content-extraction.md
+@@ -285,6 +285,15 @@ The differences that matter to a reader:
+   end the run. *The Order of Time* lost notes 21–93 that way, since `reference` is transcribed and
+   never shown. A footnote record that is only its label (`53`) is not listed as a note —
+   [261023b](../plans/261023b-endnotes-typed-as-references-are-kept-as-notes.md).
++  **Symbol endnotes (`*`, `†`) are paired with the markers the text layer prints** (2026-10-25,
++  `symbolEndnotes`). Before that, every endnote shared one cursor, so *The Order of Time*'s
++  eleven `*` notes searched only past its 143 numbered markers and found nothing. A `*` names no
++  note, so taking markers in order would shift every later link onto the wrong passage after one
++  dropped marker. Instead, the k-th printed marker is the k-th note's, when the counts agree, and
++  it is found in the transcription by the word it is glued to. A scan's symbol endnotes stay
++  unlinked. On re-extraction, a paragraph that newly cites a `*` note is a new block if it already
++  cited a numbered one —
++  [261025a](../plans/261025a-asterisk-and-dagger-notes-at-the-back-of-a-book-link-to-their-markers.md).
+ - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
+   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
+   table was a caption over nothing, though the cells were transcribed and scored all
+diff --git a/src/pdf-read.ts b/src/pdf-read.ts
+index 05bd17c52..5c1674791 100644
+--- a/src/pdf-read.ts
++++ b/src/pdf-read.ts
+@@ -1911,6 +1911,11 @@ export function renderHtml(
+   title: string,
+   rawSha256: string,
+   targets: readonly (number | null)[] = continuationTargets(transcribed),
++  /**
++   * The text layer by page number, running headers and footers out — where a
++   * symbol's markers are printed (`symbolEndnotes`). None for a scan.
++   */
++  pageTexts?: ReadonlyMap<number, string>,
+ ): string {
+   /* The one seam: the body loop, `collectNotes` and `findMarkers` all read the
+      records from here down, so a mistyped endnote leaves the body and joins the
+@@ -1996,7 +2001,7 @@ export function renderHtml(
+   }
+ 
+   const notes = collectNotes(records);
+-  const markers = findMarkers(blocks, notes);
++  const markers = findMarkers(blocks, notes, pageTexts);
+ 
+   const parts: string[] = [];
+   let list: "ul" | null = null;
+@@ -2603,6 +2608,41 @@ function markerSpellings(label: string): string[] {
+ /** What a marker is glued to: a letter, a closing bracket or quote, or a sentence's punctuation. */
+ const GLUED_TO = /[\p{L}\p{Pe}\p{Pf}.,;:!?"'’]/u;
+ 
++/** The characters a symbol label is made of — `LABEL`'s third alternative. */
++const SYMBOL = /[*†‡§¶]/u;
++
++/** A label that is a number, plain or superscript, rather than a symbol. */
++const isNumeric = (label: string) => /^\d+$/.test(markerSpellings(label)[0]!);
++
++/**
++ * Whether `spelling` at `at` in `text` is written the way a marker is: glued
++ * to what comes before, with no letter (and, for a number, no digit) after.
++ *
++ * **A symbol may be followed by a digit**: `began.*32`, Rovelli p. 38, is a
++ * `*` note and note 32 cited at one place. The `32` stays unlinked, as it was:
++ * letting a number follow a symbol would newly link `word*3` in an article
++ * with no symbol notes at all (GPT Sol, plan review F8). And a symbol run must
++ * be exactly the label, so `*` is not found inside `**` (F3).
++ */
++function writtenAsMarker(text: string, at: number, spelling: string): boolean {
++  const end = at + spelling.length;
++  const after = text[end] ?? "";
++  const symbol = SYMBOL.test(spelling);
++  if (symbol && (SYMBOL.test(text[at - 1] ?? "") || SYMBOL.test(after))) return false;
++  if (!GLUED_TO.test(text[at - 1] ?? "")) return false;
++  return !(symbol ? /\p{L}/u : /[\p{N}\p{L}]/u).test(after);
++}
++
++/**
++ * The word a marker is glued to, folded — `effect` for `“effect.”*` — which is
++ * how a marker the text layer prints is told apart from another on its page.
++ * Empty when there is no word before it on its line's reach.
++ */
++function wordBefore(text: string, at: number): string {
++  const head = text.slice(Math.max(0, at - 80), at).normalize("NFKC");
++  return /(\p{L}+)[^\p{L}\s]*$/u.exec(head)?.[1]?.toLowerCase() ?? "";
++}
++
+ /**
+  * Where a marker cannot be: in maths, `\(…\)` or `\[…\]`, which is drawn from
+  * its TeX later and would be broken by a tag inside it.
+@@ -2631,8 +2671,7 @@ function candidatesIn(text: string, label: string, from: number, to: number): {
+     for (let at = text.indexOf(spelling, from); at >= 0 && at + spelling.length <= to; at = text.indexOf(spelling, at + 1)) {
+       const end = at + spelling.length;
+       const before = text[at - 1] ?? "";
+-      if (!GLUED_TO.test(before)) continue;
+-      if (/[\p{N}\p{L}]/u.test(text[end] ?? "")) continue;
++      if (!writtenAsMarker(text, at, spelling)) continue;
+       if (spans.some(([s, e]) => at >= s && at < e)) continue;
+       if (plain) {
+         /* `2.7`, `1,000`: after a full stop or a comma, a digit before that means a number. */
+@@ -2675,9 +2714,22 @@ interface Marker {
+  *   through every page up to its own and takes the first. Uniqueness over a
+  *   whole paper would link almost nothing; the cursor is what keeps it in step.
+  *
++ * **And a cursor per series**: the numbers are one series, each symbol is
++ * another. Rovelli's *The Order of Time* prints 143 numbered endnotes and then
++ * eleven `*` notes; with one cursor the numbers had walked it to near the end
++ * of the prose before the `*` notes looked, and they found nothing (report
++ * spya-hrx8z2).
++ *
++ * **Symbol endnotes are paired as a series, not one at a time** —
++ * `symbolEndnotes` below, which says why.
++ *
+  * A note whose marker is not found is still listed, unlinked.
+  */
+-function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]): Marker[] {
++function findMarkers(
++  blocks: readonly RenderBlock[],
++  notes: readonly PdfNote[],
++  pageTexts?: ReadonlyMap<number, string>,
++): Marker[] {
+   if (!notes.length) return [];
+   /* Every piece of citing prose, in document order, with its span of its block's text. */
+   const pieces: { block: number; page: number; start: number; end: number }[] = [];
+@@ -2692,11 +2744,20 @@ function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]):
+ 
+   const markers: Marker[] = [];
+   const claimed = new Set<string>();
+-  const cursors = { footnote: { piece: 0, offset: 0 }, endnote: { piece: 0, offset: 0 } };
++  const cursors = new Map<string, { piece: number; offset: number }>();
++  /* Symbol endnotes, by label, in note order: paired after the rest, so the
++     numbered notes' marker ids are minted first and do not move. */
++  const symbolSeries = new Map<string, number[]>();
+   for (const [n, note] of notes.entries()) {
+     if (note.label === null) continue;
+     const kind = pagesWithProse.has(note.page) ? "footnote" : "endnote";
+-    const cursor = cursors[kind];
++    const numeric = isNumeric(note.label);
++    if (kind === "endnote" && !numeric) {
++      symbolSeries.set(note.label, [...(symbolSeries.get(note.label) ?? []), n]);
++      continue;
++    }
++    const series = `${kind}:${numeric ? "#" : note.label}`;
++    const cursor = cursors.get(series) ?? { piece: 0, offset: 0 };
+     const found: { piece: number; start: number; end: number }[] = [];
+     for (let k = cursor.piece; k < pieces.length; k++) {
+       const piece = pieces[k]!;
+@@ -2713,11 +2774,111 @@ function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]):
+     const block = pieces[pick.piece]!.block;
+     claimed.add(`${block}:${pick.start}`);
+     markers.push({ block, start: pick.start, end: pick.end, note: n, noteId: note.id, markerId: `spya-noteref-${markers.length + 1}` });
+-    cursors[kind] = { piece: pick.piece, offset: pick.end };
++    cursors.set(series, { piece: pick.piece, offset: pick.end });
++  }
++
++  for (const [label, series] of symbolSeries) {
++    for (const [n, place] of symbolEndnotes(label, series, notes, blocks, pieces, claimed, pageTexts)) {
++      claimed.add(`${place.block}:${place.start}`);
++      markers.push({ ...place, note: n, noteId: notes[n]!.id, markerId: `spya-noteref-${markers.length + 1}` });
++    }
+   }
+   return markers;
+ }
+ 
++/**
++ * **One symbol's endnotes, paired with the markers the text layer prints** —
++ * or as much of the series as that proves, and nothing without it.
++ *
++ * A number names its note, so a missing `13` costs one link. A `*` names
++ * nothing: taken in order, one dropped marker hands every later note the next
++ * note's marker, silently. Rovelli's text layer prints eleven `*` markers and
++ * the transcription has ten — the model dropped the second on page 24 — so
++ * order alone linked seven of the eleven notes to the wrong passage. Word
++ * overlap between a note and the marker's paragraph was measured as a way to
++ * find the gap and is far too weak (plan 261025a).
++ *
++ * So the text layer is the witness, and each step fails closed:
++ *
++ * 1. **The printed markers** are the symbol written as a marker on the pages
++ *    **before the series' first note**, running headers and footers taken out
++ *    (`baselineFor`). That leaves out the notes' own labels, which start their
++ *    lines and are not glued anyway, and anything a note's prose cites. There
++ *    must be exactly as many as notes, and the k-th printed marker is the k-th
++ *    note's.
++ * 2. **Each printed marker is found in the transcription by the word it is
++ *    glued to**, on its own page or the one either side — the model put
++ *    Rovelli's "one of these fields.*" on page 51, which the text layer prints
++ *    on 50. Linked only when exactly one place there has that word and that
++ *    place answers to no other printed marker. A dropped marker leaves its own
++ *    note unlinked and moves nothing else.
++ *
++ * And the series is left unlinked:
++ *
++ * - **without a text layer** (a scan). The transcription's own count is no
++ *   proof: one real marker it missed and one emphatic `significant*` it kept
++ *   balance (GPT Sol, plan review F4);
++ * - **when the transcription has the symbol on a page whose text layer has no
++ *   letters** — an image-only page in a PDF that is not a scan, whose marker is
++ *   then missing from the count (F6). Only such a page with a marker on it:
++ *   Rovelli's title page is an image the model transcribed, and refusing on
++ *   every image-only page refused the whole book;
++ * - **when the same symbol also marks a note at the foot of its own page.** A
++ *   page footnote's `*` is printed in the same prose, and telling the two apart
++ *   is not worth the risk (F2).
++ *
++ * The residual, named rather than hidden: a real marker the text layer does not
++ * print at all (inside an image) and a non-note `word*` both pages have would
++ * still balance the count. Every rule above narrows it; only the glyph's
++ * position could close it.
++ */
++function symbolEndnotes(
++  label: string,
++  series: readonly number[],
++  notes: readonly PdfNote[],
++  blocks: readonly RenderBlock[],
++  pieces: readonly { block: number; page: number; start: number; end: number }[],
++  claimed: ReadonlySet<string>,
++  pageTexts: ReadonlyMap<number, string> | undefined,
++): [number, { block: number; start: number; end: number }][] {
++  if (!pageTexts) return [];
++  const prosePages = new Set(pieces.map((p) => p.page));
++  if (notes.some((note) => note.label === label && prosePages.has(note.page))) return [];
++  const first = Math.min(...series.map((n) => notes[n]!.page));
++
++  const printed: { page: number; word: string }[] = [];
++  for (const [page, text] of [...pageTexts].sort(([a], [b]) => a - b)) {
++    if (page >= first) continue;
++    for (let at = text.indexOf(label); at >= 0; at = text.indexOf(label, at + 1)) {
++      if (writtenAsMarker(text, at, label)) printed.push({ page, word: wordBefore(text, at) });
++    }
++  }
++  if (printed.length !== series.length) return [];
++
++  const places: { block: number; page: number; start: number; end: number; word: string }[] = [];
++  for (const piece of pieces) {
++    if (piece.page >= first) continue;
++    const text = blocks[piece.block]!.text;
++    for (const c of candidatesIn(text, label, piece.start, piece.end)) {
++      if (!claimed.has(`${piece.block}:${c.start}`)) {
++        places.push({ block: piece.block, page: piece.page, ...c, word: wordBefore(text, c.start) });
++      }
++    }
++  }
++  if (places.some((place) => !/\p{L}/u.test(pageTexts.get(place.page) ?? ""))) return [];
++
++  const answers = (p: { page: number; word: string }, q: { page: number; word: string }) =>
++    p.word !== "" && Math.abs(p.page - q.page) <= 1 && p.word === q.word;
++  const out: [number, { block: number; start: number; end: number }][] = [];
++  printed.forEach((mark, k) => {
++    const found = places.filter((place) => answers(place, mark));
++    if (found.length !== 1 || printed.filter((other) => answers(other, found[0]!)).length !== 1) return;
++    const { block, start, end } = found[0]!;
++    out.push([series[k]!, { block, start, end }]);
++  });
++  return out;
++}
++
+ /**
+  * A block's text, escaped, with its markers written in as links to their notes.
+  *
+@@ -4129,7 +4290,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
+        matching wrongly. It is the same value `meta.rawSha256` above carries and
+        the same one `storeRawSource` puts the document under, computed once at
+        the top of this function. src/pdf-figures.ts § `pdfFigureRef`. */
+-    extractedHtml: renderHtml(mended, title, rawSha256, targets),
++    extractedHtml: renderHtml(
++      mended,
++      title,
++      rawSha256,
++      targets,
++      pass.isScan ? undefined : new Map(pass.pages.map((p) => [p.page, baselineFor(pass, p.page).join("\n")])),
++    ),
+     meta,
+     pages: pass.pages.length,
+     chunks: chunks.length,
+diff --git a/tests/pdf-footnotes.test.ts b/tests/pdf-footnotes.test.ts
+index d76615754..852cad342 100644
+--- a/tests/pdf-footnotes.test.ts
++++ b/tests/pdf-footnotes.test.ts
+@@ -673,3 +673,137 @@ describe("a footnote record that is only its label", () => {
+     expect(listed(records)).toEqual(["Eleven runs on over the page."]);
+   });
+ });
++
++/**
++ * **Symbol notes printed at the back of a book** — Rovelli's *The Order of
++ * Time*, report spya-hrx8z2. Its 143 numbered endnotes come first and its
++ * eleven `*` notes after them, one to a page; the prose marks each with a `*`.
++ * All endnotes shared one cursor, so the `*` notes searched only past the last
++ * numbered marker and found nothing. And a `*` names no note, so order alone
++ * would hand every note after a dropped marker the next note's marker: the
++ * transcription dropped the second `*` on page 24, which the text layer prints.
++ * Shapes are the real ones, cut short.
++ * docs/plans/261025a-asterisk-and-dagger-notes-at-the-back-of-a-book-link-to-their-markers.md.
++ */
++describe("symbol notes printed at the back of a book (Rovelli)", () => {
++  const body = [
++    r(15, "paragraph", "And how times evolve relative to each other.*"),
++    r(19, "paragraph", "Not the equations of the world,13 the arrow of time appears only where there is heat.* It is fundamental."),
++    r(24, "paragraph", "No distinction between “cause” and “effect.”* There are regularities."),
++    r(24, "paragraph", "In which the past is different from the future. This is disconcerting."),
++    r(28, "paragraph", "For a moving object, time contracts.* Not only that."),
++    r(38, "paragraph", "To where it began.*32 The first to realise this was Gödel."),
++  ];
++  const numbered = [r(130, "footnote", "13 Zeh, Die Physik der Zeitrichtung."), r(131, "footnote", "32 Gödel, 1949.")];
++  const starred = [
++    r(148, "footnote", "* Grammatical note."),
++    r(149, "footnote", "* Strictly speaking."),
++    r(150, "footnote", "* More in chapter 11."),
++    r(151, "footnote", "* The teaspoon."),
++    r(152, "footnote", "* In motion relative to what?"),
++    r(153, "footnote", "* Closed temporal lines."),
++  ];
++  const records = [lead, ...body, ...numbered, ...starred];
++
++  /** The text layer by page: each page's records as printed, or `printed`'s override. */
++  function textLayer(recs: PdfRecord[], printed: Record<number, string> = {}): Map<number, string> {
++    const last = Math.max(...recs.map((x) => x.page));
++    return new Map(
++      Array.from({ length: last }, (_, i): [number, string] => [
++        i + 1,
++        printed[i + 1] ??
++          recs
++            .filter((x) => x.page === i + 1)
++            .map((x) => x.text)
++            .join("\n"),
++      ]),
++    );
++  }
++  /** Page 24 as printed: two markers, the second of which the model dropped. */
++  const printed24 = {
++    24: "No distinction between “cause” and “effect.”* There are regularities.\nIn which the past is different from the future.* This is disconcerting.",
++  };
++
++  const linksWith = (recs: PdfRecord[], pages?: ReadonlyMap<number, string>) => {
++    const { blocks } = splitIntoBlocks(renderHtml(recs, "T", RAW_SHA, undefined, pages));
++    const notes = blocks.filter((b) => b.role === "footnote");
++    return blocks.flatMap((block) =>
++      [...block.html.matchAll(/<a [^>]*data-spya-note-ref="([^"]+)"[^>]*>([^<]*)<\/a>/g)].map(
++        (m) => `${m[2]} → ${notes.find((n) => n.noteId === m[1])?.text.replace(/\s*↩$/, "") ?? "(nothing)"}`,
++      ),
++    );
++  };
++  const numberedOnly = ["13 → Zeh, Die Physik der Zeitrichtung."];
++
++  it("links each `*` note to the marker the text layer prints for it, past the numbered notes", () => {
++    expect(linksWith(records, textLayer(records, printed24))).toEqual([
++      "* → Grammatical note.",
++      "13 → Zeh, Die Physik der Zeitrichtung.",
++      "* → Strictly speaking.",
++      "* → More in chapter 11.",
++      "* → In motion relative to what?",
++      "* → Closed temporal lines.",
++    ]);
++  });
++
++  it("lists the note whose marker the model dropped, unlinked, still with its `*`", () => {
++    const { blocks } = splitIntoBlocks(renderHtml(records, "T", RAW_SHA, undefined, textLayer(records, printed24)));
++    const notes = blocks.filter((b) => b.role === "footnote").map((b) => b.text.replace(/\s*↩$/, ""));
++    expect(notes).toContain("* The teaspoon.");
++    expect(notes).toContain("Grammatical note.");
++    expect(notes).toContain("More in chapter 11.");
++  });
++
++  it("does not link a page's marker when two printed markers there share the word they are glued to", () => {
++    const pages = textLayer(records, {
++      24: "No distinction between “cause” and “effect.”* There are regularities.\nAnd the effect.* This is disconcerting.",
++    });
++    expect(linksWith(records, pages)).not.toContain("* → More in chapter 11.");
++    expect(linksWith(records, pages)).toContain("* → In motion relative to what?");
++  });
++
++  it("links none of the `*` notes without a text layer, even when the prose's count agrees", () => {
++    const whole = records.map((x) =>
++      x.text.startsWith("In which the past")
++        ? { ...x, text: "In which the past is different from the future.* This is disconcerting." }
++        : x,
++    );
++    expect(linksWith(records)).toEqual(numberedOnly);
++    expect(linksWith(whole)).toEqual(numberedOnly);
++  });
++
++  it("links none of them when the text layer prints a different number of markers than there are notes", () => {
++    expect(linksWith(records, textLayer(records))).toEqual(numberedOnly);
++  });
++
++  it("links none of them when a page before the notes has prose but an empty text layer", () => {
++    expect(linksWith(records, textLayer(records, { ...printed24, 28: "" }))).toEqual(numberedOnly);
++  });
++
++  it("links none of them when the same symbol also marks a footnote on its own page", () => {
++    const both = [lead, r(5, "paragraph", "A page claim.* More."), r(5, "footnote", "* The aside."), ...records.slice(1)];
++    expect(linksWith(both, textLayer(both, printed24))).toEqual(["* → The aside.", ...numberedOnly]);
++  });
++
++  it("does not count a note's own label in the text layer as a marker", () => {
++    const pages = textLayer(records, printed24);
++    expect(pages.get(148)).toBe("* Grammatical note.");
++    expect(linksWith(records, pages)).toHaveLength(6);
++  });
++
++  it("does not find `*` inside `**`", () => {
++    const doubled = [lead, r(3, "paragraph", "A claim.** More."), r(9, "footnote", "* A note.")];
++    expect(linksWith(doubled, textLayer(doubled))).toEqual([]);
++  });
++
++  it("still refuses a number after a symbol: 5*3, and word*3 with no symbol note (GPT Sol, F8)", () => {
++    expect(links([lead, r(3, "paragraph", "We counted 5*3 cases."), r(3, "footnote", "3 A note.")])).toEqual([]);
++    expect(links([lead, r(3, "paragraph", "The grammar accepts word*3 here."), r(3, "footnote", "3 A note.")])).toEqual([]);
++  });
++
++  it("still links a `*` footnote at the foot of its own page", () => {
++    expect(links([lead, r(5, "paragraph", "A claim.* More prose."), r(5, "footnote", "* The aside.")])).toEqual([
++      "* → The aside.",
++    ]);
++  });
++});

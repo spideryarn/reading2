@@ -1911,6 +1911,11 @@ export function renderHtml(
   title: string,
   rawSha256: string,
   targets: readonly (number | null)[] = continuationTargets(transcribed),
+  /**
+   * The text layer by page number, running headers and footers out — where a
+   * symbol's markers are printed (`symbolEndnotes`). None for a scan.
+   */
+  pageTexts?: ReadonlyMap<number, string>,
 ): string {
   /* The one seam: the body loop, `collectNotes` and `findMarkers` all read the
      records from here down, so a mistyped endnote leaves the body and joins the
@@ -1996,7 +2001,7 @@ export function renderHtml(
   }
 
   const notes = collectNotes(records);
-  const markers = findMarkers(blocks, notes);
+  const markers = findMarkers(blocks, notes, pageTexts);
 
   const parts: string[] = [];
   let list: "ul" | null = null;
@@ -2603,6 +2608,49 @@ function markerSpellings(label: string): string[] {
 /** What a marker is glued to: a letter, a closing bracket or quote, or a sentence's punctuation. */
 const GLUED_TO = /[\p{L}\p{Pe}\p{Pf}.,;:!?"'’]/u;
 
+/** The characters a symbol label is made of — `LABEL`'s third alternative. */
+const SYMBOL = /[*†‡§¶]/u;
+
+/** A label that is a number, plain or superscript, rather than a symbol. */
+const isNumeric = (label: string) => /^\d+$/.test(markerSpellings(label)[0]!);
+
+/**
+ * Whether `spelling` at `at` in `text` is written the way a marker is: glued
+ * to what comes before, with no letter (and, for a number, no digit) after.
+ *
+ * **A symbol may be followed by a digit**: `began.*32`, Rovelli p. 38, is a
+ * `*` note and note 32 cited at one place. The `32` stays unlinked, as it was:
+ * letting a number follow a symbol would newly link `word*3` in an article
+ * with no symbol notes at all (GPT Sol, plan review F8). And a symbol run must
+ * be exactly the label, so `*` is not found inside `**` (F3).
+ */
+function writtenAsMarker(text: string, at: number, spelling: string): boolean {
+  const end = at + spelling.length;
+  const after = text[end] ?? "";
+  const symbol = SYMBOL.test(spelling);
+  if (symbol && (SYMBOL.test(text[at - 1] ?? "") || SYMBOL.test(after))) return false;
+  if (!GLUED_TO.test(text[at - 1] ?? "")) return false;
+  return !(symbol ? /\p{L}/u : /[\p{N}\p{L}]/u).test(after);
+}
+
+/**
+ * The word a marker is glued to, folded — `effect` for `“effect.”*` — which is
+ * how a marker the text layer prints is told apart from another on its page.
+ * Empty when there is no word before it on its line's reach.
+ */
+function wordBefore(text: string, at: number): string {
+  const head = text.slice(Math.max(0, at - 80), at).normalize("NFKC");
+  return /(\p{L}+)[^\p{L}\s]*$/u.exec(head)?.[1]?.toLowerCase() ?? "";
+}
+
+/** An exact symbol run with only whitespace before it on this text-layer line. */
+function symbolAtLineStart(text: string, at: number, label: string): boolean {
+  const before = text[at - 1] ?? "";
+  const after = text[at + label.length] ?? "";
+  const beforeOnLine = text.slice(text.lastIndexOf("\n", at - 1) + 1, at);
+  return beforeOnLine.trim() === "" && !SYMBOL.test(before) && !SYMBOL.test(after);
+}
+
 /**
  * Where a marker cannot be: in maths, `\(…\)` or `\[…\]`, which is drawn from
  * its TeX later and would be broken by a tag inside it.
@@ -2631,8 +2679,7 @@ function candidatesIn(text: string, label: string, from: number, to: number): { 
     for (let at = text.indexOf(spelling, from); at >= 0 && at + spelling.length <= to; at = text.indexOf(spelling, at + 1)) {
       const end = at + spelling.length;
       const before = text[at - 1] ?? "";
-      if (!GLUED_TO.test(before)) continue;
-      if (/[\p{N}\p{L}]/u.test(text[end] ?? "")) continue;
+      if (!writtenAsMarker(text, at, spelling)) continue;
       if (spans.some(([s, e]) => at >= s && at < e)) continue;
       if (plain) {
         /* `2.7`, `1,000`: after a full stop or a comma, a digit before that means a number. */
@@ -2675,9 +2722,22 @@ interface Marker {
  *   through every page up to its own and takes the first. Uniqueness over a
  *   whole paper would link almost nothing; the cursor is what keeps it in step.
  *
+ * **And a cursor per series**: the numbers are one series, each symbol is
+ * another. Rovelli's *The Order of Time* prints 143 numbered endnotes and then
+ * eleven `*` notes; with one cursor the numbers had walked it to near the end
+ * of the prose before the `*` notes looked, and they found nothing (report
+ * spya-hrx8z2).
+ *
+ * **Symbol endnotes are paired as a series, not one at a time** —
+ * `symbolEndnotes` below, which says why.
+ *
  * A note whose marker is not found is still listed, unlinked.
  */
-function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]): Marker[] {
+function findMarkers(
+  blocks: readonly RenderBlock[],
+  notes: readonly PdfNote[],
+  pageTexts?: ReadonlyMap<number, string>,
+): Marker[] {
   if (!notes.length) return [];
   /* Every piece of citing prose, in document order, with its span of its block's text. */
   const pieces: { block: number; page: number; start: number; end: number }[] = [];
@@ -2692,11 +2752,20 @@ function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]):
 
   const markers: Marker[] = [];
   const claimed = new Set<string>();
-  const cursors = { footnote: { piece: 0, offset: 0 }, endnote: { piece: 0, offset: 0 } };
+  const cursors = new Map<string, { piece: number; offset: number }>();
+  /* Symbol endnotes, by label, in note order: paired after the rest, so the
+     numbered notes' marker ids are minted first and do not move. */
+  const symbolSeries = new Map<string, number[]>();
   for (const [n, note] of notes.entries()) {
     if (note.label === null) continue;
     const kind = pagesWithProse.has(note.page) ? "footnote" : "endnote";
-    const cursor = cursors[kind];
+    const numeric = isNumeric(note.label);
+    if (kind === "endnote" && !numeric) {
+      symbolSeries.set(note.label, [...(symbolSeries.get(note.label) ?? []), n]);
+      continue;
+    }
+    const series = `${kind}:${numeric ? "#" : note.label}`;
+    const cursor = cursors.get(series) ?? { piece: 0, offset: 0 };
     const found: { piece: number; start: number; end: number }[] = [];
     for (let k = cursor.piece; k < pieces.length; k++) {
       const piece = pieces[k]!;
@@ -2713,9 +2782,119 @@ function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]):
     const block = pieces[pick.piece]!.block;
     claimed.add(`${block}:${pick.start}`);
     markers.push({ block, start: pick.start, end: pick.end, note: n, noteId: note.id, markerId: `spya-noteref-${markers.length + 1}` });
-    cursors[kind] = { piece: pick.piece, offset: pick.end };
+    cursors.set(series, { piece: pick.piece, offset: pick.end });
+  }
+
+  for (const [label, series] of symbolSeries) {
+    for (const [n, place] of symbolEndnotes(label, series, notes, blocks, pieces, claimed, pageTexts)) {
+      claimed.add(`${place.block}:${place.start}`);
+      markers.push({ ...place, note: n, noteId: notes[n]!.id, markerId: `spya-noteref-${markers.length + 1}` });
+    }
   }
   return markers;
+}
+
+/**
+ * **One symbol's endnotes, paired with the markers the text layer prints** —
+ * or as much of the series as that proves, and nothing without it.
+ *
+ * A number names its note, so a missing `13` costs one link. A `*` names
+ * nothing: taken in order, one dropped marker hands every later note the next
+ * note's marker, silently. Rovelli's text layer prints eleven `*` markers; an
+ * earlier transcription kept only eight and today's cursor matcher made one
+ * wrong link from that incomplete sequence. Word overlap between a note and
+ * the marker's paragraph was measured as a way to find the gaps and is far too
+ * weak (plan 261025a).
+ *
+ * So the text layer is the witness, and each step fails closed:
+ *
+ * 1. **The printed markers** are the symbol written as a marker on the pages
+ *    **before the series' first note**, running headers and footers taken out
+ *    (`baselineFor`). That leaves out the notes' own labels, which start their
+ *    lines and are not glued anyway, and anything a note's prose cites. There
+ *    must be exactly as many as notes, and the k-th printed marker is the k-th
+ *    note's.
+ * 2. **Each printed marker is found in the transcription by the word it is
+ *    glued to**, on its own page or the one either side — the model put
+ *    Rovelli's "one of these fields.*" on page 51, which the text layer prints
+ *    on 50. Linked only when exactly one place there has that word and that
+ *    place answers to no other printed marker. The resolved places must also
+ *    stay in printed order: the one-page tolerance can otherwise swap two
+ *    adjacent markers whose words the transcription swapped between pages.
+ *    A dropped marker leaves its own note unlinked and moves nothing else.
+ *
+ * And the series is left unlinked:
+ *
+ * - **without a text layer** (a scan). The transcription's own count is no
+ *   proof: one real marker it missed and one emphatic `significant*` it kept
+ *   balance (GPT Sol, plan review F4);
+ * - **when the transcription has the symbol on a page whose text layer has no
+ *   letters** — an image-only page in a PDF that is not a scan, whose marker is
+ *   then missing from the count (F6). Only such a page with a marker on it:
+ *   Rovelli's title page is an image the model transcribed, and refusing on
+ *   every image-only page refused the whole book;
+ * - **when the text layer puts the symbol at the start of a line.** Without
+ *   glyph geometry that may be a superscript belonging to the preceding line,
+ *   or an unrelated bullet. Ignoring it lets another `word*` balance the count
+ *   and take the missing marker's ordinal;
+ * - **when the same symbol also marks a note at the foot of its own page.** A
+ *   page footnote's `*` is printed in the same prose, and telling the two apart
+ *   is not worth the risk (F2).
+ *
+ * The residual, named rather than hidden: a real marker the text layer does not
+ * print at all (inside an image) and a non-note `word*` both pages have would
+ * still balance the count. Every rule above narrows it; only the glyph's
+ * position could close it.
+ */
+function symbolEndnotes(
+  label: string,
+  series: readonly number[],
+  notes: readonly PdfNote[],
+  blocks: readonly RenderBlock[],
+  pieces: readonly { block: number; page: number; start: number; end: number }[],
+  claimed: ReadonlySet<string>,
+  pageTexts: ReadonlyMap<number, string> | undefined,
+): [number, { block: number; start: number; end: number }][] {
+  if (!pageTexts) return [];
+  const prosePages = new Set(pieces.map((p) => p.page));
+  if (notes.some((note) => note.label === label && prosePages.has(note.page))) return [];
+  const first = Math.min(...series.map((n) => notes[n]!.page));
+
+  const printed: { page: number; word: string }[] = [];
+  for (const [page, text] of [...pageTexts].sort(([a], [b]) => a - b)) {
+    if (page >= first) continue;
+    for (let at = text.indexOf(label); at >= 0; at = text.indexOf(label, at + 1)) {
+      if (writtenAsMarker(text, at, label)) {
+        printed.push({ page, word: wordBefore(text, at) });
+        continue;
+      }
+      if (symbolAtLineStart(text, at, label)) return [];
+    }
+  }
+  if (printed.length !== series.length) return [];
+
+  const places: { block: number; page: number; start: number; end: number; word: string; order: number }[] = [];
+  for (const piece of pieces) {
+    if (piece.page >= first) continue;
+    const text = blocks[piece.block]!.text;
+    for (const c of candidatesIn(text, label, piece.start, piece.end)) {
+      if (!claimed.has(`${piece.block}:${c.start}`)) {
+        places.push({ block: piece.block, page: piece.page, ...c, word: wordBefore(text, c.start), order: places.length });
+      }
+    }
+  }
+  if (places.some((place) => !/\p{L}/u.test(pageTexts.get(place.page) ?? ""))) return [];
+
+  const answers = (p: { page: number; word: string }, q: { page: number; word: string }) =>
+    p.word !== "" && Math.abs(p.page - q.page) <= 1 && p.word === q.word;
+  const matched: [number, (typeof places)[number]][] = [];
+  printed.forEach((mark, k) => {
+    const found = places.filter((place) => answers(place, mark));
+    if (found.length !== 1 || printed.filter((other) => answers(other, found[0]!)).length !== 1) return;
+    matched.push([series[k]!, found[0]!]);
+  });
+  if (matched.some(([, place], i) => i > 0 && place.order <= matched[i - 1]![1].order)) return [];
+  return matched.map(([n, { block, start, end }]) => [n, { block, start, end }]);
 }
 
 /**
@@ -4129,7 +4308,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
        matching wrongly. It is the same value `meta.rawSha256` above carries and
        the same one `storeRawSource` puts the document under, computed once at
        the top of this function. src/pdf-figures.ts § `pdfFigureRef`. */
-    extractedHtml: renderHtml(mended, title, rawSha256, targets),
+    extractedHtml: renderHtml(
+      mended,
+      title,
+      rawSha256,
+      targets,
+      pass.isScan ? undefined : new Map(pass.pages.map((p) => [p.page, baselineFor(pass, p.page).join("\n")])),
+    ),
     meta,
     pages: pass.pages.length,
     chunks: chunks.length,
