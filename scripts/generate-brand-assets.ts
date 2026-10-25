@@ -33,6 +33,15 @@ export const BRAND_OUTPUTS = [
   { file: "app-icon-dark-1024.png", size: 1024, padding: 0.12, background: DARK },
 ] as const;
 
+/** Toolbar icons are transparent and use the same near-full crop as favicons.
+ * The extension/store 128px tile keeps its measured opaque ivory 12% inset. */
+export const EXTENSION_OUTPUTS = [
+  { file: "icon-16.png", size: 16, padding: 0.005 },
+  { file: "icon-32.png", size: 32, padding: 0.005 },
+  { file: "icon-48.png", size: 48, padding: 0.005 },
+  { file: "icon-128.png", size: 128, padding: 0.12, background: LIGHT },
+] as const;
+
 interface Bounds { x: number; y: number; width: number; height: number }
 interface Source { image: Image; bounds: Bounds; hash: string }
 interface RenderSpec { size: number; padding: number; background?: string }
@@ -220,6 +229,9 @@ ${[16, 32, 48].map((size) => `<link rel="icon" type="image/png" sizes="${size}x$
 export interface GenerateBrandOptions {
   readerPath?: string;
   outputDir?: string;
+  /** Temporary public outputs default extension files inside that directory,
+   * so test/library callers never write the real extension checkout. */
+  extensionDir?: string;
   check?: boolean;
   preview?: boolean;
   previewDir?: string;
@@ -259,10 +271,20 @@ async function collectProofs(input: Source, files: Map<string, Buffer>, previewD
   if (!html.equals(await committed(htmlFile) ?? Buffer.alloc(0))) stale.set(htmlFile, html);
 }
 
+async function collectExtensionOutputs(input: Source, extensionDir: string, stale: Map<string, Buffer>): Promise<void> {
+  for (const output of EXTENSION_OUTPUTS) {
+    const file = path.join(extensionDir, output.file);
+    const kept = await keepEquivalent(file, render(input, output));
+    if (kept.stale) stale.set(file, kept.bytes);
+  }
+}
+
 /** Exported so tests exercise the real pipeline against temporary destinations. */
 export async function generateBrandAssets(options: GenerateBrandOptions = {}): Promise<string[]> {
   const input = await source(options.readerPath ?? path.join(ROOT, "assets/brand/source/reader.png"));
   const outputDir = options.outputDir ?? path.join(ROOT, "public");
+  const extensionDir = options.extensionDir ?? (options.outputDir
+    ? path.join(outputDir, "extension-icons") : path.join(ROOT, "extension/icons"));
   const files = new Map<string, Buffer>();
   const stale = new Map<string, Buffer>();
   for (const output of BRAND_OUTPUTS) {
@@ -271,6 +293,7 @@ export async function generateBrandAssets(options: GenerateBrandOptions = {}): P
     files.set(output.file, kept.bytes);
     if (kept.stale) stale.set(file, kept.bytes);
   }
+  await collectExtensionOutputs(input, extensionDir, stale);
   // Packed from the kept PNGs, so the ICO is exact bytes on every machine.
   const frames = [16, 32, 48].map((size) => {
     const frame = files.get(`favicon-${size}x${size}.png`);
@@ -289,6 +312,7 @@ export async function generateBrandAssets(options: GenerateBrandOptions = {}): P
     if (labels.length) throw new Error(`Brand assets missing or stale: ${labels.join(", ")}. Run npm run brand:generate${options.preview ? " -- --preview" : ""}.`);
   } else {
     await mkdir(outputDir, { recursive: true });
+    await mkdir(extensionDir, { recursive: true });
     if (options.preview) await mkdir(previewDir, { recursive: true });
     for (const [file, bytes] of stale) await writeFile(file, bytes);
   }
@@ -301,5 +325,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const check = args.includes("--check");
   const preview = args.includes("--preview");
   const files = await generateBrandAssets({ check, preview });
-  console.log(`${check ? "Verified" : "Generated"} ${files.length} public brand assets${preview ? " and assets/brand image/browser proofs" : ""}.`);
+  console.log(`${check ? "Verified" : "Generated"} ${files.length} public brand assets and ${EXTENSION_OUTPUTS.length} extension icons${preview ? " and assets/brand image/browser proofs" : ""}.`);
 }

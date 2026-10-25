@@ -1,0 +1,13 @@
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/semaphore-geometry.test.ts
+
+
+ RUN  v4.1.11 /Users/greg/.codex/worktrees/spideryarn-knot-reader-logo/reading2
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  18:44:23
+   Duration  3.07s (transform 158ms, setup 162ms, import 199ms, tests 2.59s, environment 0ms)
+

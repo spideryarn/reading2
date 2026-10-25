@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -56,6 +57,10 @@ beforeAll(async () => {
 afterAll(async () => { if (temporary) await rm(temporary, { recursive: true, force: true }); });
 
 describe("brand assets", () => {
+  it("uses the independently selected airier C master", async () => {
+    const selected = await readFile(path.join(ROOT, "assets/brand/source/reader.png"));
+    expect(createHash("sha256").update(selected).digest("hex")).toBe("9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635");
+  });
   it("publishes the intended dimensions", async () => {
     const expected = new Map([
       ["spideryarn-logo.png", 256], ["favicon-16x16.png", 16], ["favicon-32x32.png", 32], ["favicon-48x48.png", 48],
@@ -276,9 +281,12 @@ describe("brand assets", () => {
       "android-chrome-512x512.png", "app-icon-light-1024.png", "app-icon-dark-1024.png", "favicon.ico",
     ];
     const publicBefore = await Promise.all(publicNames.map((name) => readFile(path.join(outputDir, name))));
+    const extensionFiles = [16, 32, 48, 128].map((size) => path.join(outputDir, "extension-icons", `icon-${size}.png`));
+    const extensionBefore = await Promise.all(extensionFiles.map((file) => readFile(file)));
     await expect(generateBrandAssets({ outputDir, readerPath: changedReader, check: true }))
-      .rejects.toThrow(/spideryarn-logo.png, favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, spideryarn-reader.png, apple-touch-icon.png, android-chrome-192x192.png, android-chrome-512x512.png, app-icon-light-1024.png, app-icon-dark-1024.png, favicon.ico/);
+      .rejects.toThrow(/spideryarn-logo.png, favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, spideryarn-reader.png, apple-touch-icon.png, android-chrome-192x192.png, android-chrome-512x512.png, app-icon-light-1024.png, app-icon-dark-1024.png, icon-16.png, icon-32.png, icon-48.png, icon-128.png, favicon.ico/);
     for (const [index, name] of publicNames.entries()) expect(await readFile(path.join(outputDir, name))).toEqual(publicBefore[index]);
+    for (const [index, file] of extensionFiles.entries()) expect(await readFile(file)).toEqual(extensionBefore[index]);
     await generateBrandAssets({ outputDir });
   });
 
@@ -316,8 +324,54 @@ describe("brand assets", () => {
     expect(await rastersEquivalent(pixel(0, 0), pixel(255, 0))).toBe(true);
   });
 
+  it("generates the extension from the same master with transparent toolbar and opaque store treatment", async () => {
+    const extensionDir = path.join(outputDir, "extension-icons");
+    for (const size of [16, 32, 48]) {
+      const file = path.join(extensionDir, `icon-${size}.png`);
+      const decoded = await pixels(file);
+      expect([decoded.width, decoded.height]).toEqual([size, size]);
+      expect(decoded.data[3]).toBe(0);
+      expect(await rastersEquivalent(await readFile(file), await readFile(path.join(outputDir, `favicon-${size}x${size}.png`)))).toBe(true);
+    }
+    const tile = await pixels(path.join(extensionDir, "icon-128.png"));
+    expect([tile.width, tile.height]).toEqual([128, 128]);
+    expect([...tile.data.slice(0, 4)]).toEqual([255, 249, 238, 255]);
+    for (let at = 3; at < tile.data.length; at += 4) expect(tile.data[at]).toBe(255);
+    let top = 128, bottom = -1, left = 128, right = -1;
+    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+      const at = (y * 128 + x) * 4;
+      if (Math.max(Math.abs((tile.data[at] ?? 255) - 255), Math.abs((tile.data[at + 1] ?? 249) - 249), Math.abs((tile.data[at + 2] ?? 238) - 238)) <= 20) continue;
+      left = Math.min(left, x); right = Math.max(right, x);
+      top = Math.min(top, y); bottom = Math.max(bottom, y);
+    }
+    expect(Math.abs(Math.max(right - left + 1, bottom - top + 1) - 128 * 0.76)).toBeLessThanOrEqual(2);
+  });
+
+  it("checks isolated extension files without writing or creating absent destinations", async () => {
+    const extensionDir = path.join(temporary, "explicit-extension");
+    await generateBrandAssets({ outputDir, extensionDir });
+    const names = [16, 32, 48, 128].map((size) => `icon-${size}.png`);
+    const bytes = await Promise.all(names.map((name) => readFile(path.join(extensionDir, name))));
+    await Promise.all(names.map((name) => utimes(path.join(extensionDir, name), 1_000, 1_000)));
+    const times = await Promise.all(names.map((name) => stat(path.join(extensionDir, name))));
+    await generateBrandAssets({ outputDir, extensionDir, check: true });
+    for (const [i, name] of names.entries()) {
+      expect(await readFile(path.join(extensionDir, name))).toEqual(bytes[i]);
+      expect((await stat(path.join(extensionDir, name))).mtimeMs).toBe(times[i]?.mtimeMs);
+    }
+    const corrupt = path.join(extensionDir, "icon-32.png");
+    await writeFile(corrupt, "stale extension image");
+    await rm(path.join(extensionDir, "icon-128.png"));
+    await expect(generateBrandAssets({ outputDir, extensionDir, check: true })).rejects.toThrow(/icon-32.png, icon-128.png/);
+    expect(await readFile(corrupt, "utf8")).toBe("stale extension image");
+    await expect(stat(path.join(extensionDir, "icon-128.png"))).rejects.toThrow(/ENOENT/);
+    const absent = path.join(temporary, "absent-extension");
+    await expect(generateBrandAssets({ outputDir, extensionDir: absent, check: true })).rejects.toThrow(/icon-16.png/);
+    await expect(stat(absent)).rejects.toThrow(/ENOENT/);
+  });
+
   it("keeps the committed public family fresh", async () => {
-    await expect(generateBrandAssets({ outputDir: path.join(ROOT, "public"), check: true })).resolves.toHaveLength(11);
+    await expect(generateBrandAssets({ outputDir: path.join(ROOT, "public"), extensionDir: path.join(ROOT, "extension/icons"), check: true })).resolves.toHaveLength(11);
   });
 
   it.each(["preview.png", "tiny-size-preview.png", "browser-preview.html"])("detects missing/stale %s without writing", async (file) => {
@@ -369,6 +423,7 @@ describe("brand assets", () => {
     await expect(generateBrandAssets({ outputDir: missingOutput, previewDir: missingPreview, preview: true, check: true })).rejects.toThrow(/missing or stale/);
     await expect(stat(missingOutput)).rejects.toThrow(/ENOENT/);
     await expect(stat(missingPreview)).rejects.toThrow(/ENOENT/);
+    await expect(stat(path.join(missingOutput, "extension-icons"))).rejects.toThrow(/ENOENT/);
   });
 
   it("preserves native favicon pixels and unsmoothed 8x diagnostic blocks in the tiny proof", async () => {
