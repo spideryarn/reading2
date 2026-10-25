@@ -395,41 +395,8 @@ td.text .quiz-in-prose-icon {
   top: 0.15em;
 }
 
-/* ------------------------------------------------------------ § share-pie ----
-   SharePie.tsx: a share of a whole as a small pie, the figure on its card.
-   Generic, but the quiz is its only user so far, so it lives here; move it to
-   its own sheet when a second mode draws one. Plan 261003e. */
-/* A 24px button round a 14px pie: the hit area a finger needs, with the
-   margin taking the extra 10px back so the row is no taller than the pie. */
-.share-pie {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin: -5px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--ink-soft);
-  cursor: default;
-}
-.share-pie:focus-visible {
-  outline: 1px solid var(--highlight-text);
-  outline-offset: -2px;
-}
-.share-pie svg {
-  display: block;
-}
-/* The slice is the ink's soft grey rather than the row's faint one: at 14px
-   a faint slice on a faint track read as nearly nothing in the browser look. */
-.share-pie-whole {
-  fill: color-mix(in oklab, var(--ink-faint) 30%, transparent);
-}
-.share-pie-part {
-  fill: currentColor;
-}
+/* ------------------------------------------------------- § only what I've read ----
+   The pie itself is share-pie.css, since the masthead draws one too. */
 /* The tick-box and its pie wrap as one, so the pie never sits alone on a
    line with nothing to say what it is a share of. */
 .quiz-only-read-what {
@@ -440,15 +407,11 @@ td.text .quiz-in-prose-icon {
 }
 /* **Under a finger, the tick-box's label and the pie are 40px** (plan 261021g
    § Stage 2; controls.md § The numbers): the label was 22px tall and the pie
-   24px, pulled 5px into its gap by the margin above. The pie drops that margin
-   so 8px stays between the two boxes, and the row grows instead. The label is
-   the target, not the 13px box inside it, so it is the label that grows. */
+   24px, pulled 5px into its gap by its negative margin. The pie drops that
+   margin (share-pie.css) so 8px stays between the two boxes, and the row grows
+   instead. The label is the target, not the 13px box inside it, so it is the
+   label that grows. */
 @media (any-pointer: coarse) {
   .quiz-only-read label { min-height: 40px; }
-  .share-pie {
-    width: 40px;
-    height: 40px;
-    margin: 0;
-  }
   .quiz-only-read-what { gap: 8px; }
 }

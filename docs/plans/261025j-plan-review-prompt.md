@@ -1,0 +1,5 @@
+Review this plan before it is built: docs/plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md (repo root is the current directory). Read-only: do not edit files.
+
+Read the code it touches: src/web/read-filter.ts, src/reading-so-far.ts, src/web/SharePie.tsx, src/web/Masthead.tsx (facts line, read-time fact), src/web/reader/Reader.tsx (bodyWords / readSoFar near line 2576, and where <Masthead> is rendered), src/web/matter-view.ts (matterStretches), src/web/masthead-echo.ts, src/web/TableView.tsx (echo/stretches/uncounted near line 797), src/web/useReadingTime.ts, tests/reading-so-far.test.ts, docs/project/reading-time.md, docs/project/front-and-back-matter.md.
+
+Look for: wrong thresholds against Greg's quoted request; anything that would make the mark lie (loading states, stale ids after re-extraction, a fold/matter edge case, the echo); privacy (docs/project/privacy.md § Reading time); places the plan forgot that must hear about a change to shareWords; simpler designs. Give findings as P0/P1/P2 with file:line, each with a concrete fix. Say plainly if you find nothing serious.

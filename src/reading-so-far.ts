@@ -24,7 +24,7 @@
  */
 import { countsTowardReadingTime } from "./block-policy.js";
 import type { Block, BlockId } from "./types.js";
-import { shareRead } from "./web/read-filter.js";
+import { readBand, shareRead } from "./web/read-filter.js";
 import { type ReadLevel, readLevel } from "./web/reading-time.js";
 
 export const READING_SO_FAR_HEADING = "READING SO FAR";
@@ -41,14 +41,31 @@ export function readingShare(seconds: Readonly<Record<string, number>>, blocks: 
   return shareRead(levels, words);
 }
 
-/** The share in words a model will not mistake for a measurement. */
+/**
+ * The share in words a model will not mistake for a measurement, on the
+ * masthead pie's bands (read-filter.ts § `readBand`) so the chat is never told
+ * "about three quarters" while the pie says Finished. Started is split once
+ * more, because a model can use the difference and the pie has no room for it.
+ * Plan 261025j.
+ */
 export function shareWords(share: number): string {
-  if (!(share >= 0.05)) return "little or none of it yet";
-  if (share < 0.15) return "a small part of it";
-  if (share < 0.375) return "about a quarter of it";
-  if (share < 0.625) return "about half of it";
-  if (share < 0.875) return "about three quarters of it";
-  return "most or all of it";
+  const band = readBand(share);
+  switch (band) {
+    case "none":
+      return "little or none of it yet";
+    case "started":
+      return share < 0.15 ? "a small part of it" : "about a quarter of it";
+    case "half":
+      return "about half of it";
+    case "most":
+      return "about three quarters of it";
+    case "finished":
+      return "most or all of it";
+    default: {
+      const never: never = band;
+      return never;
+    }
+  }
 }
 
 /**

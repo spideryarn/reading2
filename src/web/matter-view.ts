@@ -19,6 +19,7 @@
 import { SUMMARY_FALLBACK_LABEL, summaryStubLabel } from "../matter-summary.js";
 import type { Article, Block, BlockId, MatterKindName } from "../types.js";
 import { type FrontMatterArticle, frontMatter } from "./front-matter.js";
+import { type EchoArticle, mastheadEcho } from "./masthead-echo.js";
 
 /**
  * The kinds in the order `MATTER_KINDS` (src/matter.ts) has them, which is the
@@ -291,4 +292,17 @@ export const STUB_PRESS = "Press the line to read it here.";
 /** Whether a stretch is opening matter rather than closing: it starts in the first half. */
 export function atFront(stretch: Pick<ViewStretch, "start">, blocks: readonly Block[]): boolean {
   return stretch.start < blocks.length / 2;
+}
+
+/**
+ * **Every block a reader is not shown on arrival**: the masthead's echo of the
+ * title, which is never drawn, and each stretch of front and back matter,
+ * folded to a stub. One set, so the two things that leave these out cannot
+ * disagree about which they are: the glossary's fade (TableView.tsx §
+ * `uncounted`, annotate.ts § termProminence) and how much of the piece you
+ * have read (read-filter.ts § `readBandFor`; plan 261025j).
+ */
+export function foldedOnArrival(article: MatterViewArticle & EchoArticle): ReadonlySet<BlockId> {
+  const echo = mastheadEcho(article);
+  return new Set([...echo, ...matterStretches(article, echo).flatMap((s) => s.ids)]);
 }
