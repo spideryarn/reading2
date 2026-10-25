@@ -52,6 +52,7 @@
  */
 import { isSpideryarnId } from "./ids.js";
 import type { BlockId } from "./types.js";
+import type { Voice } from "./web/voice.js";
 
 /**
  * The sketch prompt's version; src/sketch.ts says why it lives here.
@@ -108,11 +109,53 @@ const REGION_STYLES: readonly SketchRegionStyle[] = ["band", "dashed", "bracket"
  *
  * The renderer wraps text by counting characters (the same trick and the same
  * hazard as `wrapText` in src/web/diagram.ts § Two things that are wrong in a
- * way you cannot see), so these numbers and the stylesheet's font stack share a
- * secret. `CHAR_W` is the number to move if the family changes.
+ * way you cannot see), so the width of a character and the face the labels are
+ * drawn in are **one decision**: `SKETCH_LABEL_VOICE`. The painted `<svg>` takes
+ * its face from it (`voiceClass` in SketchView.tsx), the offline exporter its
+ * font stack, and everything that measures — the painter, and the server's
+ * `nodeFits` that tells the model what overflows — its `CHAR_W`. It cannot be
+ * measured in the browser at paint time, because the server has to agree.
  */
 export const SIZE_PX: Record<SketchSize, number> = { xs: 10, sm: 12, md: 15, lg: 20 };
-export const CHAR_W = 0.53;
+
+/** The two voices a label could be drawn in: the app's own, or the model's whose words they are. */
+export type SketchLabelVoice = Extract<Voice, "ui" | "ai">;
+
+/**
+ * **Whose face the labels are drawn in.** The words are the model's, so the
+ * rule says `"ai"`; it stays `"ui"` (Geist) because the wider face cuts more
+ * labels short in pictures already stored. That is Greg's call, asked as
+ * docs/user-feedback/questions/q-ugekcv.md; the switch is this one word.
+ */
+export const SKETCH_LABEL_VOICE: SketchLabelVoice = "ui";
+
+/**
+ * Each face's measured average character width (em) times this, which is the
+ * room left for a label that runs wider than the average. One number for every
+ * face, so a switch of face changes the measure and nothing else.
+ * tests/sketch-label-face.test.ts measures the faces and holds the table below
+ * to it, in both directions.
+ */
+export const CHAR_W_MARGIN = 1.09;
+
+/**
+ * Em per character, per face. `ui` is the 0.53 the labels have always been
+ * wrapped at; `ai` is iA Writer Quattro under the same margin. Measured on the
+ * test's sample at 400/500/600 (2026-10-25): Geist 0.485, Quattro 0.549.
+ */
+export const CHAR_W_BY_VOICE: Record<SketchLabelVoice, number> = { ui: 0.53, ai: 0.6 };
+
+/**
+ * The same faces as literal stacks, for an SVG with no stylesheet
+ * (evals/sketch/svg.ts). Each must equal its `--font-*` token in
+ * styles/tokens.css, which tests/sketch-label-face.test.ts checks.
+ */
+export const FONT_STACK_BY_VOICE: Record<SketchLabelVoice, string> = {
+  ui: "'Geist Variable', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif",
+  ai: "'iA Writer Quattro', 'Courier New', Courier, monospace",
+};
+
+export const CHAR_W = CHAR_W_BY_VOICE[SKETCH_LABEL_VOICE];
 export const LINE_H = 1.25;
 
 /** How many positional hues there are. Same eight the searches and the tree use. */

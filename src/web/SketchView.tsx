@@ -80,7 +80,7 @@ import {
   zoomAnchor,
   type ZoomAnchor,
 } from "../sketch-paint.js";
-import { CANVAS_W, type Sketch, type SketchNode } from "../sketch-scene.js";
+import { CANVAS_W, SKETCH_LABEL_VOICE, type Sketch, type SketchNode } from "../sketch-scene.js";
 import type { Block, BlockId } from "../types.js";
 import type { PublicSketch } from "../public-types.js";
 import { BlockRef } from "./BlockRef.js";
@@ -92,6 +92,7 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { useSketch } from "./useSketch.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { voiceClass } from "./voice.js";
 
 /** One drawing primitive as an element. Nothing here knows a colour. */
 function Shape({ p }: { p: Prim }) {
@@ -1103,7 +1104,9 @@ function SketchBody({
       <div className="sk-scroll" ref={scroll}>
         <svg
           ref={svg}
-          className={`sk-svg${full ? "" : " enlarges"}`}
+          /* The face comes from the same constant as the measure the labels
+             were wrapped at (src/sketch-scene.ts § SKETCH_LABEL_VOICE). */
+          className={`sk-svg ${voiceClass(SKETCH_LABEL_VOICE)}${full ? "" : " enlarges"}`}
           viewBox={`0 0 ${painted.width} ${painted.height}`}
           /* **Always the container's width.** In the band that is 288–400px and
              the shape is what survives; in the overlay it is most of the window

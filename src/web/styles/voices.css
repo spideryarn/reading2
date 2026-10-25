@@ -184,8 +184,9 @@
     .marg-reception-applies,
     .marg-open-answer,
     /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
-       labels, which are wrapped in TypeScript at Geist's width (CHAR_W in
-       src/sketch-scene.ts) and would spill out of their shapes. */
+       labels: their face and the width they are wrapped at are one constant,
+       SKETCH_LABEL_VOICE in src/sketch-scene.ts, which puts voiceClass on the
+       <svg> (still "ui"; q-ugekcv). */
     .sk-card-title,
     .sk-card-sub,
     .sk-card-detail,

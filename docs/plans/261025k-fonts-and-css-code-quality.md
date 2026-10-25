@@ -91,8 +91,11 @@ specificity in `app` would lose to every component rule that sets a face, the op
 has to be the same number on the server and in the browser, and cannot be read from the browser at
 paint time. That is why the labels stay in Geist although they are the model's words.
 
-**Measured** (napi canvas, the self-hosted woff2s, one 98-character English sample): Geist 0.453 em
-a character, iA Writer Quattro 0.530, a ratio of 1.17. `CHAR_W` 0.53 is Geist plus a 17% margin.
+**Measured** (napi canvas, the self-hosted woff2s). A first, lower-case-only sample gave Geist 0.453
+em a character and Quattro 0.530. The test's sample, ~210 characters with capitals, digits and an
+uppercase run at weights 400/500/600, gives **Geist 0.485 and Quattro 0.549, a ratio of 1.13**. In
+capitals the two are the same width. So `CHAR_W` 0.53 is Geist plus a 9% margin, and Quattro under
+the same margin is 0.60.
 
 **Do.** One constant, `SKETCH_LABEL_VOICE`, and a table of per-voice widths, `CHAR_W_BY_VOICE`.
 The `ui` entry is exactly 0.53, so this commit moves no boundary. `CHAR_W` is the table's entry for
@@ -109,9 +112,9 @@ the same constant. It stays `"ui"` (Geist): nothing renders differently in this 
 
 **Switching it to `"ai"` is a product question**, because it changes existing pictures. Measured
 on production's 170 stored sketches (read only, 2026-10-25), with `nodeFits` at the Quattro width
-with Geist's margin (0.62):
+with Geist's margin (0.60):
 
-- node labels cut to fit go from 49 of 4,636 to 197;
+- node labels cut to fit go from 49 of 4,636 to 174;
 - sketches with at least one cut label go from 27 to 68.
 
 New sketches would adapt, since the model is told which labels overflow. Old ones would not until
