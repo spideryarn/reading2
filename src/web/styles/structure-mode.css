@@ -426,7 +426,7 @@
   display: block;
   margin: 0.2rem 0 0.1rem;
   color: var(--ink-soft);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: var(--structure-tier-mid);
   font-weight: 400;
   line-height: 1.4;

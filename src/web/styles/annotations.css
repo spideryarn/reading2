@@ -1094,7 +1094,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.55rem 0 0.75rem;
   padding-left: 0.7rem;
   border-left: 2px solid var(--highlight);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.98rem;
   line-height: 1.45;
   color: var(--ink-soft);

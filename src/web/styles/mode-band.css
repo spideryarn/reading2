@@ -850,7 +850,7 @@ svg.band-waiting-ghost { flex: none; }
   /* The band is narrow and the turns are prose, so they get the reading face
      rather than the UI one — an answer set in the interface font reads as a
      system message rather than as something written. */
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   line-height: 1.5;
 }
 

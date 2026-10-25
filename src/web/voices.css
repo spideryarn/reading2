@@ -180,7 +180,7 @@
     .rcp-key-why,
     /* the headline only when it is the model's reading of the page */
     .rcp-title-ai,
-    /* Tweets: the post, inside a <p> whose `tw:font-prose` would win */
+    /* Tweets: the post, inside a <p> whose `tw:font-sans` would win */
     .tweets-text,
     /* Marginalia: the part's question, the idea and its statement, the arc */
     .marg-question,

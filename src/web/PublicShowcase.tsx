@@ -126,7 +126,7 @@ export function PublicShowcase() {
           of them, and a heading that jumps a level is a heading a screen reader
           reads as a missing section. Visual reuse must not decide document
           structure — SiteBits.tsx § `Showcase`, which learned it the same way. */}
-      <h3 className="tw:mb-2 tw:font-prose tw:text-lg tw:text-foreground">
+      <h3 className="tw:mb-2 tw:font-sans tw:text-lg tw:text-foreground">
         {PUBLIC_SHOWCASE_HEADING}
       </h3>
       <p className="tw:max-w-[58ch] tw:text-sm tw:leading-relaxed">{PUBLIC_SHOWCASE_LEDE}</p>

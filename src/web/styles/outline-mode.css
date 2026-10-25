@@ -333,7 +333,7 @@
      reads as belonging to it. */
   grid-column: 2;
   margin: 0.2rem 0 0.1rem;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: var(--structure-tier-mid);
   font-weight: 400;
   line-height: 1.4;
@@ -364,7 +364,7 @@
 .outln-card { max-width: 22rem; }
 .outln-card-crumb { font-size: 0.85rem; color: var(--ink-faint); }
 .outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
-.outln-card-gist { margin: 0; font-family: var(--font-reading); }
+.outln-card-gist { margin: 0; font-family: var(--font-ui); }
 
 /* The L0 column's "arc still being written" tint went with the column on
    2026-09-05. Structure's list face simply omits the rung until the sentence

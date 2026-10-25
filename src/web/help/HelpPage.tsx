@@ -385,7 +385,7 @@ function HelpPageForReader() {
   );
 }
 
-const H1_CLASS = "tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground";
+const H1_CLASS = "tw:m-0 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground";
 
 /**
  * **How a page's words are styled**: plain elements — p, ul, strong, kbd,
@@ -513,7 +513,7 @@ function Question({ anchor }: { anchor: HelpAnchor }) {
   const body = useMemo(() => helpBody(anchor), [anchor]);
   return (
     <section id={anchor} data-section className="tw:group tw:mt-7 tw:scroll-mt-20">
-      <h2 className="tw:m-0 tw:mb-2 tw:flex tw:items-baseline tw:gap-2 tw:font-prose tw:text-lg tw:leading-snug tw:text-foreground">
+      <h2 className="tw:m-0 tw:mb-2 tw:flex tw:items-baseline tw:gap-2 tw:font-sans tw:text-lg tw:leading-snug tw:text-foreground">
         <span>{e.title}</span>
         {/* **Shown on hover or focus, and always on a touch screen**, where
             there is no hover to reveal it — the same pair of variants
@@ -543,7 +543,7 @@ function ContentsPage() {
     <nav aria-label="Help contents" className="tw:mt-8">
       {HELP_GROUPS.map((group) => (
         <section key={group.id} className="tw:mb-10">
-          <h2 className="tw:m-0 tw:mb-3 tw:border-b tw:border-rule tw:pb-2 tw:font-prose tw:text-xl tw:leading-snug tw:text-foreground">
+          <h2 className="tw:m-0 tw:mb-3 tw:border-b tw:border-rule tw:pb-2 tw:font-sans tw:text-xl tw:leading-snug tw:text-foreground">
             {group.together ? (
               <Link href={HELP_QUESTIONS_HREF} className="tw:text-inherit tw:no-underline tw:hover:underline">
                 {group.title}

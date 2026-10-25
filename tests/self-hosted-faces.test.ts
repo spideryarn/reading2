@@ -64,7 +64,7 @@ describe("self-hosted faces", () => {
   });
 
   it.each([
-    "--font-sans",
+    "--font-ui",
     "--font-mono",
     "--font-author",
     "--font-ai",

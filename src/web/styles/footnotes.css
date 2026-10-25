@@ -264,7 +264,7 @@ td.text.note-open {
   max-height: 16rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.9rem;
   line-height: 1.5;
   color: var(--ink-soft);

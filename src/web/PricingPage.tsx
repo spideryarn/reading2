@@ -435,7 +435,7 @@ function Answer({ q, children, wide }: { q: string; children: ReactNode; wide?: 
     <div className={`site-panel site-panel-hover tw:p-6 ${wide ? "tw:lg:col-span-2" : ""}`}>
       {/* `h3` under the section's `h2`, so the outline reads as a list of
           questions rather than as eight new sections. */}
-      <h3 className="tw:mb-2 tw:font-prose tw:text-base tw:text-foreground">{q}</h3>
+      <h3 className="tw:mb-2 tw:font-sans tw:text-base tw:text-foreground">{q}</h3>
       <p className="tw:text-sm tw:leading-relaxed tw:text-muted-foreground">{children}</p>
     </div>
   );

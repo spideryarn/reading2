@@ -75,7 +75,7 @@ function Section({
 }) {
   return (
     <section id={id} className="tw:mt-8 tw:scroll-mt-20">
-      <h2 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-lg tw:leading-snug tw:text-foreground">
+      <h2 className="tw:m-0 tw:mb-2 tw:font-sans tw:text-lg tw:leading-snug tw:text-foreground">
         {title}
       </h2>
       <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
@@ -142,7 +142,7 @@ export function PrivacyPage() {
       floor
       className="tw:mx-auto tw:flex tw:max-w-2xl tw:flex-col tw:px-6 tw:font-sans"
     >
-      <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+      <h1 className="tw:m-0 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground">
         Privacy
       </h1>
       <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint">

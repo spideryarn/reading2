@@ -178,7 +178,7 @@ describe("every tw: utility written in the client compiles to a rule", () => {
     expect(resolves("tw:bg-background")).toBe(true);
     expect(resolves("tw:text-ink-faint")).toBe(true);
     expect(resolves("tw:border-rule-strong")).toBe(true);
-    expect(resolves("tw:font-prose")).toBe(true);
+    expect(resolves("tw:font-sans")).toBe(true);
     expect(resolves("tw:hover:bg-accent")).toBe(true);
 
     expect(resolves("tw:text-nonesuch")).toBe(false);

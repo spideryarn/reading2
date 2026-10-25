@@ -40,7 +40,7 @@ view and every page outside it (the shelf, Metadata, /profile, /add, the public 
 | `--font-author` | the article, and verbatim quotes of it | Source Serif 4, variable | a screen serif; variable, so dark mode's 450 weight still works |
 | `--font-ai` | prose a model generated | iA Writer Quattro, static 400/700 upright and italic | still looks typed, so it reads as machine-made, but reads as prose; not Courier, which Greg found "really ugly", nor strict monospace, which a reader found hard going |
 | `--font-reader` | anything the reader typed | Shantell Sans, variable weight, upright and italic | a hint of a hand, so the reader's words are plainly theirs |
-| `--font-ui` | the chrome, every fixed sentence we wrote, and the wordmark (`--font-brand`) | Geist | the fourth voice, by being left alone |
+| `--font-ui` | the chrome, every fixed sentence we wrote, and the wordmark | Geist | the fourth voice, by being left alone |
 | `--font-mono` | code, whoever wrote it, and block ids | Geist Mono | Geist's monospace, so machine text reads as the app's |
 
 The tokens are in [`styles/tokens.css`](../../styles/tokens.css). All five faces (Source Serif 4,

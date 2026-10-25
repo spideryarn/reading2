@@ -367,11 +367,11 @@ export function ThreadPosts({
         >
           {/* `whitespace-pre-line`, because the prompt allows a line break
               inside a post and a paragraph that eats them changes what it says. */}
-          <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:whitespace-pre-line tw:text-foreground">
+          <p className="tw:m-0 tw:font-sans tw:text-[0.95rem] tw:leading-relaxed tw:whitespace-pre-line tw:text-foreground">
             <span className="tw:mr-2 tw:font-mono tw:text-xs tw:text-ink-faint">
               {i + 1}/{total}
             </span>
-            {/* The post is the model's; a span because `tw:font-prose` on the
+            {/* The post is the model's; a span because `tw:font-sans` on the
                 <p> would beat voices.css on the same element. */}
             <span className="tweets-text">{tweet.text}</span>
           </p>

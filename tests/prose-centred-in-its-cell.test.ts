@@ -86,6 +86,29 @@ describe("the reading column is centred in its cell", () => {
     expect(r).toContain("font-weight: var(--reading-weight)");
   });
 
+  it("every rule that measures the prose's measure says which face its `ch` is in", () => {
+    /* The list in the next test is only as good as its coverage: the skim door
+       (261009j) and the matter stub (261025b) were each added after it and
+       each measured `--reading-measure` in Geist zeroes. So this asks the
+       other way round: a rule whose declarations use `--reading-measure` sets
+       the author's face itself, or is the prose (voiced in voices.css), or is
+       named below with the reason its face does not matter. */
+    const allowed = new Map<string, string>([
+      ["td.text.note .blk-gutter", "the same element as `.blk-gutter`, whose own rule sets the author's face"],
+    ]);
+    const offenders: string[] = [];
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = (m[1] ?? "").replace(/\s+/g, " ").trim();
+      const body = m[2] ?? "";
+      if (!/var\(--reading-measure\)/.test(body)) continue;
+      if (/font-family:\s*var\(--font-author\)/.test(body)) continue;
+      if (selector.split(",").every((s) => /(^|\s)\S*\.prose\b/.test(s.trim()))) continue;
+      if (allowed.has(selector)) continue;
+      offenders.push(selector);
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("geometry beside the prose measures `ch` in the prose's own face", () => {
     /* A `ch` is the zero glyph of the font it is used on — family as well as
        size and weight. When the author's face became every reader's on
@@ -108,6 +131,11 @@ describe("the reading column is centred in its cell", () => {
     expect(rule(".blk-gutter")).toContain(`font-family: ${proseFace}`);
     expect(rule(".fold-toggle")).toContain(`font-family: ${proseFace}`);
     expect(rule("td.text .quiz-in-prose")).toContain(`font-family: ${proseFace}`);
+    /* A shut stretch of front or back matter sits on the prose's measure so its
+       first letter lines up with the article's; its buttons set the UI face. It
+       took `--font-reading` for the prose's face, which had been Geist since
+       2026-10-02 (found while collapsing that token, 261025k § 4). */
+    expect(rule(".matter-stub")).toContain(`font-family: ${proseFace}`);
     /* And both mastheads, which centre a measure-wide box on the prose's axis: in
        Geist they put the title ~80px off the first line of the article at 1440
        (261003c code review). Every visible child names its own face. */
