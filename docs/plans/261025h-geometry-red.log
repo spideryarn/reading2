@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /Users/greg/.codex/worktrees/spideryarn-knot-reader-logo/reading2
+
+ ❯ |unit| tests/semaphore-geometry.test.ts (5 tests | 1 failed) 2360ms
+     × selects both upper free limbs without lifting the body, other limbs or book 786ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/semaphore-geometry.test.ts > Semaphore's moving fragments > selects both upper free limbs without lifting the body, other limbs or book
+AssertionError: limb 1: body, book and other limbs: expected 8 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 8
+
+ ❯ assertLimb tests/semaphore-geometry.test.ts:96:69
+     94|   expect(result.coverage, `limb ${index}: coverage`).toBeGreaterThan(0…
+     95|   expect(result.unrelated, `limb ${index}: unrelated foreground`).toBe…
+     96|   expect(result.fixed, `limb ${index}: body, book and other limbs`).to…
+       |                                                                     ^
+     97| }
+     98|
+ ❯ tests/semaphore-geometry.test.ts:116:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  18:16:29
+   Duration  2.62s (transform 58ms, setup 70ms, import 112ms, tests 2.36s, environment 0ms)
+

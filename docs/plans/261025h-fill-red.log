@@ -1,0 +1,30 @@
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/brand-assets.test.ts -t gives smaller display
+
+
+ RUN  v4.1.11 /Users/greg/.codex/worktrees/spideryarn-knot-reader-logo/reading2
+
+ ❯ |unit| tests/brand-assets.test.ts (22 tests | 1 failed | 21 skipped) 588ms
+     × gives smaller display icons less margin while preserving larger export breathing room 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/brand-assets.test.ts > brand assets > gives smaller display icons less margin while preserving larger export breathing room
+AssertionError: spideryarn-logo.png: expected 11.439999999999998 to be less than or equal to 2.56
+ ❯ tests/brand-assets.test.ts:96:54
+     94|       // Ignore faint antialiased wool fibres at the boundary, with at…
+     95|       // one percent or two pixels of rasterisation allowance.
+     96|       expect(Math.abs(longest - width * fill), file).toBeLessThanOrEqu…
+       |                                                      ^
+     97|     }
+     98|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 21 skipped (22)
+   Start at  18:15:57
+   Duration  1.51s (transform 75ms, setup 72ms, import 759ms, tests 588ms, environment 0ms)
+

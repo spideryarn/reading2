@@ -1,0 +1,35 @@
+{
+  "sourceHash": "9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635",
+  "sourceBounds": {
+    "l": 128,
+    "t": 95,
+    "r": 1150,
+    "b": 1155
+  },
+  "limbs": [
+    {
+      "available": 1722,
+      "selected": 1626,
+      "intended": 1626,
+      "fixed": 0,
+      "wrong": 0,
+      "coverage": 0.9442508710801394,
+      "unrelated": 0
+    },
+    {
+      "available": 1705,
+      "selected": 1588,
+      "intended": 1588,
+      "fixed": 0,
+      "wrong": 0,
+      "coverage": 0.9313782991202346,
+      "unrelated": 0
+    }
+  ],
+  "reconstruction": {
+    "missing": 0,
+    "overlap": 32,
+    "foreground": 31066,
+    "overlapFraction": 0.0010300650228545678
+  }
+}
