@@ -117,6 +117,9 @@ Greg asked for it to be findable, not pushed (2026-10-25, when it went to the st
 >
 > — Greg, 2026-10-25
 
+**The store item is `eeedpogihlbbjghpanopajebiencekak`** (submitted for review 2026-10-25,
+Unlisted; public, and in `PRODUCTION_EXTENSION_ID` since f4d796440).
+
 So it is offered in three places, each where a reader needs it, and nowhere else (not `/features`,
 the footer, the shelf or the landing page). Plan
 [261025b](../plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md).
@@ -162,9 +165,9 @@ install it. **Every one takes its link from `EXTENSION_STORE_URL` in
    page). **Setting it is one line and the whole change**:
    `export const PRODUCTION_EXTENSION_ID: string | null = "<the id>";` in
    `src/web/extension-handoff.ts`, then deploy. That makes production ask the published extension
-   and switches on every place in § Where a reader finds it. The id lives in that line only, so
-   this doc points at it rather than copying it; `tests/extension-findable.test.tsx` refuses
-   anything but 32 letters `a`–`p`. Until then the extension installs but the Spideryarn tab says it
+   and switches on every place in § Where a reader finds it. Done on 2026-10-25 (f4d796440); the id is
+   in § Where a reader finds it. `tests/extension-findable.test.tsx` refuses anything but 32
+   letters `a`–`p`. Until then the extension installs but the Spideryarn tab says it
    did not answer.
 4. **For updates without the dashboard** (optional): in Google Cloud, a project with the *Chrome
    Web Store API* enabled and a service account with no roles; its email added under *Account* in

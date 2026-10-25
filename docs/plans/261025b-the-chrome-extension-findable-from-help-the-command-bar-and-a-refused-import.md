@@ -126,3 +126,11 @@ using `extensionStoreUrl` and the component's `url` prop rather than the constan
    Store yet.* while it is null. The corpus carries only the stable sentence, so it does not move.
 4. **The command-bar row has the same fine-pointer gate** (the bar is on phones too), and goes
    just before `APP_PAGES`, so Changelog stays the last page above Feedback.
+
+## While it was being built
+
+The id arrived mid-build: Greg's session set it (f4d796440, `eeedpogihlbbjghpanopajebiencekak`) and
+recorded it in chrome-extension.md (59000f581), and both were deployed (4b0d4dd3) before this
+landed. So finding 1's "one home" gave way to what was already there: the id is in the constant and
+in the doc, and it does not change again. The one-line property held: the merge needed no
+regenerated file, and every place switched on with it.
