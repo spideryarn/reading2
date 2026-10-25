@@ -127,4 +127,18 @@ describe("foldedOnArrival", () => {
     expect(out.has(id("bodbod"))).toBe(false);
     expect(out.size).toBe(0);
   });
+
+  it("uses the byline fallback when no stored matter answer has arrived", () => {
+    const fallback = [
+      { ...b("ttlttl", "A Title", "heading"), level: 1 } as Block,
+      b("authors", "Jane Roe and John Doe"),
+      b("bodbod", "The argument itself."),
+    ];
+    const out = foldedOnArrival({
+      blocks: fallback,
+      meta: { title: "Another", byline: "Jane Roe; John Doe" },
+      titleOverridden: false,
+    });
+    expect([...out]).toEqual([id("authors")]);
+  });
 });

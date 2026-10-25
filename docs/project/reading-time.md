@@ -178,8 +178,8 @@ experimental features off" pins it through the real `App`.
 
 - **The masthead**, since 2026-10-25: a small pie right after the read time, in five coarse bands
   (nothing drawn, started, about half, most, finished), each drawn as a whole quarter so the picture
-  is as coarse as the words. Finished is 80% of the counted words, so a skipped dull section or a
-  few skipped paragraphs still say finished; the card never prints a percentage. The words are the
+  is as coarse as the words. Finished is 80% of the counted words, so not every passage has to be
+  read; the card never prints a percentage. The words are the
   quiz's, less what is folded on arrival, and the quiz now leaves that out too. Owner only, and
   nothing until the opening read has answered. The chats' phrase reads the same cut points
   (`readBand`), on the server's word count, which still includes folded matter.

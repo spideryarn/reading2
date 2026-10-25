@@ -120,12 +120,11 @@ export function shareRead(levels: ReadonlyMap<BlockId, ReadLevel>, words: Readon
  * > like, not that interesting for some reason. So, yeah, it can be a coarse
  * > estimate, basically, is what I'm saying.
  *
- * **Finished from 80%**, because skipping a dull last section is typically a
- * tenth to a fifth of a piece, and a few skipped paragraphs less than that.
- * Not "reached the end": that is the case his second example rules out.
+ * **Finished from 80%**, deliberately forgiving up to a fifth of the counted
+ * words. Not "reached the end": that is the case his second example rules out.
  * The masthead's pie (`ReadSoFarMark` in Masthead.tsx) and the chats' phrase
- * (src/reading-so-far.ts § `shareWords`) both read these cut points, so the
- * two cannot disagree. Plan
+ * (src/reading-so-far.ts § `shareWords`) both read these cut points. Their
+ * inputs can still differ because chat includes folded matter. Plan
  * docs/plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md.
  */
 export type ReadBand = "none" | "started" | "half" | "most" | "finished";
@@ -169,9 +168,9 @@ export function readBandFor(sofar: ReadSoFar | undefined): ReadBand | undefined 
  * option, and would let a read abstract count as starting the piece.
  *
  * **The chats' phrase does not leave it out** (src/reading-so-far.ts): the
- * server has the blocks but not the reading view's fold rule. So the chat can
- * be told a band lower than the pie shows, never a higher one. Plan 261025j §
- * Deferred.
+ * server has the blocks but not the reading view's fold rule. So the two can
+ * differ: unread folded matter lowers chat's share, while read folded matter
+ * can raise it. Plan 261025j § Deferred.
  */
 export function readSoFarWords(
   blocks: readonly Block[],

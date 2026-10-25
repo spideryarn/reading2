@@ -10,6 +10,8 @@
  * percentage where a coarse word was promised; a mark with no band (still
  * loading, or nothing read) claiming something anyway.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,8 +77,17 @@ async function mount(readBand: ReadBand | undefined) {
 }
 
 const mark = () => host.querySelector<HTMLButtonElement>(".facts .share-pie.read-so-far");
+const readerSource = readFileSync(path.resolve(import.meta.dirname, "../src/web/reader/Reader.tsx"), "utf8");
 
 describe("the read-so-far mark", () => {
+  it("is wired from the owner's reading state into the masthead", () => {
+    /* The pure band and Masthead tests would both pass if Reader stopped
+       joining them. `owner?.` is also the visitor gate. */
+    expect(readerSource).toContain("const readingLevels = owner?.readingTime.levels;");
+    expect(readerSource).toContain("const readSoFarBand = useMemo(() => readBandFor(readSoFar), [readSoFar]);");
+    expect(readerSource).toContain("readBand={readSoFarBand}");
+  });
+
   it.each([
     ["started", "Read so far: started"],
     ["half", "Read so far: about half"],

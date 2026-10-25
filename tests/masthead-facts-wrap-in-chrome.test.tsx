@@ -105,8 +105,9 @@ const page = (siteName: string, extraCss = "", authors?: Author[]) =>
       article: article(siteName, authors),
       slug: SLUG,
       /* An owner gets author links rather than focusable spans. That is the
-         only owner/visitor difference inside the facts line. */
-      ...(authors ? { onRenamed: () => {} } : {}),
+         only owner/visitor difference inside the facts line before its
+         owner-only read-so-far mark. Include that mark in the wrapping case. */
+      ...(authors ? { onRenamed: () => {}, readBand: "finished" as const } : {}),
     }),
   )}</div>`;
 

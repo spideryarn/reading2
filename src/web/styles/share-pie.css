@@ -53,8 +53,3 @@
   margin-left: 0;
   vertical-align: middle;
 }
-@media (any-pointer: coarse) {
-  .facts .read-so-far {
-    margin-left: -4px;
-  }
-}

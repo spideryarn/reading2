@@ -20,9 +20,10 @@ Greg, 2026-10-25 (`spya-e5477u`), from Learn on `entropy-26-00481-with-cover-fro
   `src/web/read-filter.ts`).
 - **The share read** is words in read body blocks over words in body blocks (`shareRead`); body
   leaves out footnotes, endnotes and the bibliography. The quiz draws it as a pie (`SharePie`); the
-  chats are told it as a coarse phrase (`shareWords`, `src/reading-so-far.ts`).
+  chats are told a related, broader share as a coarse phrase (`shareWords`,
+  `src/reading-so-far.ts`) because chat still counts folded matter.
 
-Nothing new is measured. This is the same share, drawn at the top, in coarse bands.
+Nothing new is measured. The reading view's existing share is drawn at the top, in coarse bands.
 
 ## What changes
 
@@ -36,14 +37,13 @@ Nothing new is measured. This is the same share, drawn at the top, in coarse ban
    | 62.5% – 80%   | `most`     | three quarters | Most of it read     |
    | 80% and over  | `finished` | full           | Finished            |
 
-   **80% is the line for Finished** because of Greg's two examples. Skipping a dull last section is
-   typically 10–20% of a piece. Skipping a few paragraphs here and there is less than that. Both
-   should read as finished, not as "97%". **The pie is snapped to the band**, so the picture is the
-   coarse estimate rather than a precise slice. The card never prints a percentage, because a number
-   is what brings back the "97%".
+   **80% is the line for Finished** because of Greg's two examples: it deliberately forgives up to a
+   fifth of the counted words, without requiring the last passage. **The pie is snapped to the
+   band**, so the picture is the coarse estimate rather than a precise slice. The card never prints
+   a percentage, because a number is what brings back the "97%".
 
-   `shareWords` (the chats' phrase) moves onto the same bands, so the pie and what the chat is told
-   cannot disagree: `none` → little or none, `started` → a small part (under 15%) or about a quarter,
+   `shareWords` (the chats' phrase) moves onto the same cut points: `none` → little or none,
+   `started` → a small part (under 15%) or about a quarter,
    `half` → about half, `most` → about three quarters, `finished` → most or all. The only boundary
    that moves is three-quarters/most-or-all, from 87.5% to 80%. That is a one-word prompt change on a
    rough guide, so it is not measured.
@@ -58,15 +58,15 @@ Nothing new is measured. This is the same share, drawn at the top, in coarse ban
    the two cannot drift.
 
    **The chats still count matter**, because the server route has the blocks but not the validated
-   matter. The difference is the abstract and the byline: a few percent at most, on a phrase that
-   is already a rough guide. It is written down under § Deferred.
+   matter. That can include a long front summary as well as the abstract and byline, so the two
+   coarse bands can differ. It is written down under § Deferred.
 
 3. **A pie, `ReadSoFarMark`, in the masthead's facts line, directly after "~12 min"** and in the
    same fact, so it reads as one thing: how long the piece takes, and how much of it you have done.
    It reuses `SharePie` (button, controlled card, `aria-label` from the band's words). Card:
    *"Most of it read"* and then *"A rough guide, from how long each passage has been on your screen.
-   Skipping a section or a few paragraphs still counts as finished. The folded front and back matter
-   and the notes don't count."*
+   You don't need to read every passage for this to say finished. Folded front and back matter, and
+   the notes, don't count."*
 
 4. **Owner only, and only once the reading-time read has answered.** It is drawn when `useReadingTime`'s
    status is `loaded`, never while it is loading or after it failed, so a page still loading never
@@ -100,8 +100,9 @@ Nothing new is measured. This is the same share, drawn at the top, in coarse ban
 
 - `tests/read-band.test.ts`: every boundary of `readBand`; `shareWords`' table updated at 0.8.
 - `foldedOnArrival` unit test: echo plus a matter stretch, and no matter (the byline fallback).
-- A component test: the owner's masthead draws the pie with the band's label once the levels are
-  loaded, draws nothing while loading, nothing for `none`, and nothing for a visitor. Seen red first.
+- Unit and component tests: the band says nothing while loading or failed; the masthead draws each
+  visible label and nothing for `none`; and a wiring assertion pins the owner-only path from
+  reading state into the masthead. Seen red first.
 - `npm test`, `npm run typecheck`, lint on touched files; a Sonnet browser look at the masthead.
 
 ## After GPT Sol's plan review
@@ -115,7 +116,8 @@ Nothing new is measured. This is the same share, drawn at the top, in coarse ban
   Instead the reading view's one `bodyWords` map leaves the folded stretches out
   (`readSoFarWords`), so **the quiz and the masthead say the same share**. `readBandFor` lost its
   second argument. The chats still count matter, and the code and docs now say so rather than
-  claiming agreement: the chat may be told a band lower than the pie, never higher.
+  claiming agreement: unread folded matter can make chat's band lower, while read folded matter
+  can make it higher.
 - **P1, the card over-promised.** It now says *"You don't need to read every passage for this to say
   finished."*
 - **P2, a 5% share drawn as a quarter.** Kept, as a declared exception rather than a silent one. The
