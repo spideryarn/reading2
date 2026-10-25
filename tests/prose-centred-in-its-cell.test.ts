@@ -39,7 +39,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import { readerCssNoComments, stripComments, VOICES_SHEET } from "./helpers/stylesheets.js";
 
 /* The reading-view sheets as a set — one file until 2026-09-06 and thirty-eight
    since, and asking for the set is what makes a rule that has *moved* go on
@@ -89,7 +89,7 @@ describe("the reading column is centred in its cell", () => {
   it("geometry beside the prose measures `ch` in the prose's own face", () => {
     /* A `ch` is the zero glyph of the font it is used on — family as well as
        size and weight. When the author's face became every reader's on
-       2026-10-02 (styles/voices.css), `.prose` started measuring the then-65
+       2026-10-02 (voices.css), `.prose` started measuring the then-65
        serif zeroes while these geometry boxes went on measuring 65 Geist ones, and
        at 1440 the icons stood 88px off the text — on the left, and then on the
        right when the column moved there (261003c, measured in the browser). The in-prose
@@ -98,9 +98,9 @@ describe("the reading column is centred in its cell", () => {
        asserted against whatever voices.css gives `.prose`, not against a name:
        if the prose's face changes again, this goes red. */
     // Lazy, because a selector list holds `:not(…)`s; only `) {` ends one.
-    const voice = /:root :is\(([\s\S]*?)\)\s*\{\s*font-family:\s*([^;]+);/g;
+    const voice = /:where\(([\s\S]*?)\)\s*\{\s*font-family:\s*([^;]+);/g;
     let proseFace: string | undefined;
-    for (const m of css.matchAll(voice)) {
+    for (const m of stripComments(readFileSync(VOICES_SHEET, "utf8")).matchAll(voice)) {
       const selectors = (m[1] ?? "").split(",").map((x) => x.trim());
       if (selectors.includes(".prose")) proseFace = m[2]?.trim();
     }

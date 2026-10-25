@@ -44,6 +44,25 @@ export const ENTRY = "src/web/tailwind.css";
  */
 export const TONE_SHEET = "src/web/button-tone.css";
 
+/**
+ * **The per-voice faces, in a layer of their own between `app` and the
+ * utilities**, imported from `ENTRY` as `layer(voices)` (plan 261025k § 2; the
+ * note above its import in tailwind.css). After every app sheet, before tone.
+ */
+export const VOICES_SHEET = "src/web/voices.css";
+
+/**
+ * The cascade layer a reading-view sheet lands in, from `tailwind.css`'s
+ * `@layer theme, base, app, voices, utilities, tone;`. The utilities sit
+ * between `voices` and `tone` but are generated, so no hand-written sheet is
+ * in that layer.
+ */
+export type ReaderLayer = "app" | "voices" | "tone";
+
+export interface ReaderSheet extends Sheet {
+  layer: ReaderLayer;
+}
+
 /** The former contents of `styles.css`, rooted at the file that still names them. */
 const READER_ROOT = "src/web/styles.css";
 
@@ -62,11 +81,12 @@ export interface Sheet {
  * `--color-…` match something nobody in this repo wrote.
  *
  * The `layer(...)`/`prefix(...)`/`source(...)` suffixes are ignored rather than
- * parsed. **Two relative imports do carry one**, both in `tailwind.css`:
+ * parsed. **Three relative imports do carry one**, all in `tailwind.css`:
  * `@import "./styles.css" layer(app)`, which is the whole mechanism that puts
- * the reading-view rules in `@layer app` (see that file's header), and
- * `@import "./button-tone.css" layer(tone)`, the one sheet above the utilities.
- * A third anywhere would be the bug, and
+ * the reading-view rules in `@layer app` (see that file's header),
+ * `@import "./voices.css" layer(voices)`, the per-voice faces just above it,
+ * and `@import "./button-tone.css" layer(tone)`, the one sheet above the
+ * utilities. A fourth anywhere would be the bug, and
  * `tests/styles-entry-is-imports-only.test.ts` is what refuses it.
  */
 /**
@@ -192,7 +212,7 @@ function walk(start: string): Sheet[] {
 
 /**
  * **Every sheet the client loads**, in cascade order: the two under `styles/`,
- * the reading-view sheets, the tone sheet and `tailwind.css`.
+ * the reading-view sheets, the voices sheet, the tone sheet and `tailwind.css`.
  *
  * For a test that asks a question about *all* the CSS — that no sheet reads a
  * custom property nothing defines, say. `tests/css-tokens.test.ts` is the
@@ -213,8 +233,71 @@ export function allSheets(): Sheet[] {
  * existing assertions match, which is precisely the silent change this helper
  * was introduced to avoid.
  */
-export function readerSheets(): Sheet[] {
-  return [...walk(READER_ROOT), ...walk(TONE_SHEET)].filter((s) => s.path.startsWith("src/web/"));
+export function readerSheets(): ReaderSheet[] {
+  const inLayer = (layer: ReaderLayer, sheets: Sheet[]): ReaderSheet[] =>
+    sheets.filter((s) => s.path.startsWith("src/web/")).map((s) => ({ ...s, layer }));
+  return [
+    ...inLayer("app", walk(READER_ROOT)),
+    ...inLayer("voices", walk(VOICES_SHEET)),
+    ...inLayer("tone", walk(TONE_SHEET)),
+  ];
+}
+
+/** A rule's selector and its declarations, innermost rules only. Give it comment-stripped CSS. */
+const RULE = /([^{}]+)\{([^{}]*)\}/g;
+
+/** One declaration's `property: value` inside a rule body. */
+const DECLARATION = /(?:^|;)\s*([a-z-]+)\s*:\s*([^;]+?)\s*(?=;|$)/g;
+
+/** Five ids' weight that matches every element: `:not(#x)` weighs one id. */
+const LAYER_WEIGHT = ":not(#jsdom-voices-layer)".repeat(5);
+
+/**
+ * **One reader sheet's text for a `<style>` in jsdom, with the `voices` layer
+ * emulated.**
+ *
+ * jsdom implements no cascade layers: it drops an `@layer {…}` block's contents
+ * outright, and it decides between two rules by specificity and then order
+ * (jsdom 29.1.1, `living/css/helpers/computed-style.js`, read 2026-10-25). Fed
+ * `readerSheets()` as written, it lets every app rule that sets a face beat a
+ * voice, because every voice rule is `:where(…)` and weighs nothing — the
+ * opposite of the browser, where the later layer wins whatever the weights.
+ *
+ * So each voices rule goes in with five ids' weight in front of its `:where(…)`,
+ * as `:not(#…)` five times, which matches everything. That beats any app rule
+ * without ids, and the voices rules all weigh the same, so among them order
+ * decides: both halves of what the layer does. `!important` would be the
+ * obvious stand-in and does not work: jsdom drops the priority from a value
+ * that is a `var()`, and every face here is one (measured the same day).
+ *
+ * The stand-in is right only while nothing it cannot see is in play, so it
+ * **throws** rather than guesses when a sheet in another layer declares one of
+ * the voices' properties `!important` (the browser would let that beat a
+ * voice), under a selector with an id (it might outweigh the stand-in), or in
+ * `tone` at all (the browser puts tone over a voice; here it would lose).
+ */
+export function cssForJsdom(sheet: ReaderSheet): string {
+  if (sheet.layer !== "voices") return sheet.css;
+  const css = stripComments(sheet.css);
+  const declared = (body: string) => [...body.matchAll(DECLARATION)].map((d) => d);
+  const voiced = new Set([...css.matchAll(RULE)].flatMap((r) => declared(r[2]!).map((d) => d[1]!)));
+  for (const other of readerSheets()) {
+    if (other.layer === "voices") continue;
+    for (const [, selector, body] of stripComments(other.css).matchAll(RULE)) {
+      for (const [, property, value] of declared(body!)) {
+        if (!voiced.has(property!)) continue;
+        if (other.layer === "tone" || /!important$/.test(value!) || selector!.includes("#")) {
+          throw new Error(
+            `${other.path} declares \`${selector!.trim()} { ${property}: ${value} }\`, which ` +
+              "cssForJsdom cannot place against the voices layer: its stand-in for that layer is " +
+              "right only while no other sheet declares a voices property !important or under an " +
+              "id, and the tone sheet declares none.",
+          );
+        }
+      }
+    }
+  }
+  return css.replace(/(^|\})(\s*):where\(/g, `$1$2${LAYER_WEIGHT}:where(`);
 }
 
 /** `readerSheets()` concatenated, in cascade order. */

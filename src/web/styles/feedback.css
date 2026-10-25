@@ -301,7 +301,7 @@ a.fb-earlier-page:focus-visible {
   font-weight: 600;
 }
 /* The one line a note says about the report, under the reader's own words. A
-   model wrote it: styles/voices.css gives it the model's face, and the rule to
+   model wrote it: voices.css gives it the model's face, and the rule to
    its left sets it apart from what the reader wrote. `anywhere` for the same
    reason as the body: one long word must not push the panel sideways. */
 .fb-earlier-comment,

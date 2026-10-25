@@ -191,7 +191,7 @@
    whole reason the row exists. `<q>` supplies its own marks, so none here. */
 .ill-quote {
   display: block; margin-top: 0.2rem;
-  /* The article's own words. styles/voices.css applies the author face; this
+  /* The article's own words. voices.css applies the author face; this
      base token keeps the fallback in the reading family. */
   font-family: var(--font-reading);
   font-size: 0.82rem; line-height: 1.4; color: var(--ink-faint);

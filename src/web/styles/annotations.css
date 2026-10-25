@@ -1100,8 +1100,10 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-soft);
 }
 /* "Whole paragraph" is our label, not the author's words, so it is the app's
-   face even inside the quote (docs/project/fonts.md). */
-:root .cmt-quote .passage-whole { font-family: var(--font-ui); }
+   face even inside the quote (docs/project/fonts.md). The quote's voice only
+   reaches it by inheritance, and a face set on the element itself beats an
+   inherited one from any layer, so this needs no weight. */
+.cmt-quote .passage-whole { font-family: var(--font-ui); }
 
 .cmt-loading {
   display: flex;

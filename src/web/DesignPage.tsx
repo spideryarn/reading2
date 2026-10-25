@@ -428,7 +428,7 @@ const FACES: { token: string; used: string }[] = [
   { token: "--font-ui", used: "chrome: controls, masthead facts" },
   { token: "--font-mono", used: "code, block ids, and anything that wants to line up" },
   { token: "--font-brand", used: "the wordmark, and only the wordmark" },
-  /* The per-voice faces, read only by styles/voices.css, for everyone since
+  /* The per-voice faces, read only by voices.css, for everyone since
      2026-10-02. docs/project/fonts.md. */
   { token: "--font-author", used: "the article, and verbatim quotes of it" },
   { token: "--font-ai", used: "model-generated prose" },

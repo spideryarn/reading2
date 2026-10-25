@@ -168,7 +168,7 @@
      lines that will have moved it.
 
      **And the family, since 2026-10-03.** The author's face became every
-     reader's on 2026-10-02 (styles/voices.css), so `.prose` then measured 65 serif
+     reader's on 2026-10-02 (voices.css), so `.prose` then measured 65 serif
      zeroes; this column went on measuring 65 Geist ones and stood 88px off the
      text at 1440 — measured in the browser for 261003c. Nothing in the column
      is set in it: `.blk-n` and `.block-chat-n` name their own face.
