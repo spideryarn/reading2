@@ -17,6 +17,7 @@ the spike are [261024q](../plans/261024q-chrome-extension-one-click-add-the-page
 - [§ How it works](#how-it-works) — the handoff, and why the extension holds no secret
 - [§ Where the code is](#where-the-code-is)
 - [§ Checking it](#checking-it) — the tests, and a real Chromium on the box
+- [§ Where a reader finds it](#where-a-reader-finds-it) — offered where it is needed, and switched on by one constant
 - [§ Publishing](#publishing) — the one-time store setup (Greg's), and every update after it
 - [§ What it does not do yet](#what-it-does-not-do-yet)
 
@@ -90,6 +91,12 @@ forbids (`chrome://`, the Web Store) puts `!` on the button and says why in its 
 | [`scripts/publish-extension.ts`](../../scripts/publish-extension.ts) | `npm run extension:publish`: upload and submit, through the store's API |
 | [`src/web/AddFromExtension.tsx`](../../src/web/AddFromExtension.tsx), [`src/web/extension-handoff.ts`](../../src/web/extension-handoff.ts) | the page that receives |
 
+The extension icon artwork belongs to [main-icon.md](main-icon.md). Run `npm run brand:update`
+when its master changes: the same generator refreshes the public family and committed
+`extension/icons/`. `npm run brand:check` checks both. Then `npm run extension:build` copies the
+icons into both packages. This does not upload or publish them; store updates still follow the
+versioning/publication process below.
+
 **Two flavours from one source.** *Production* talks to `https://www.spideryarn.com` and carries no
 `key` (the store assigns the id). *Dev* talks to one local dev server
 (`npm run extension:build -- --dev-origin=http://localhost:5275` when yours is not on 5273) and
@@ -106,6 +113,39 @@ connect over CDP and send `Extensions.triggerAction {id, targetId}` with the *ta
 (`Target.getTargets` with `filter: [{type: "tab"}]`), and with `--enable-unsafe-extension-debugging`
 on the command line. It grants `activeTab` exactly as a click does. The plan's § Stage 0 has the
 spike and its numbers.
+
+## Where a reader finds it
+
+Greg asked for it to be findable, not pushed (2026-10-25, when it went to the store):
+
+> I don't think we want to push it because it's only worth them using the extension if they need
+> it rather than something that will really help them that much if they don't.
+>
+> — Greg, 2026-10-25
+
+**The store item is `eeedpogihlbbjghpanopajebiencekak`** (submitted for review 2026-10-25,
+Unlisted; public, and in `PRODUCTION_EXTENSION_ID` since f4d796440).
+
+So it is offered in three places, each where a reader needs it, and nowhere else (not `/features`,
+the footer, the shelf or the landing page). Plan
+[261025b](../plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md).
+
+- **The add page, under an import a site turned away**: a sentence and *Get it from the Chrome Web
+  Store*, above the *Save for Spideryarn* bookmarklet (`UploadInstead.tsx`). Only for the failures
+  it gets round, where the page may still open in the reader's browser: `SUGGESTS_EXTENSION` in
+  `src/messages.ts`, a subset of `SUGGESTS_UPLOAD`, with the decision for every code in
+  `tests/suggests-upload.test.ts`.
+- **Help, *Adding an article***: the `{{chrome-extension}}` token, one sentence in both states, then
+  the store link, or *It is not in the Chrome Web Store yet.* Search and the Help chatbot get the
+  sentence only, so neither generated file moves when the id is set.
+- **The command bar**: a typed-only *Chrome extension* row (`extension`, `chrome`, `plugin`, …) that
+  opens that Help page.
+
+The add page and the bar show it only to a fine pointer, as the bookmarklet is: a phone cannot
+install it. **Every one takes its link from `EXTENSION_STORE_URL` in
+[`src/web/extension-handoff.ts`](../../src/web/extension-handoff.ts), built from
+`PRODUCTION_EXTENSION_ID`**, and draws nothing of it while that is `null`
+(`ExtensionOffer.tsx`, `tests/extension-findable.test.tsx`).
 
 ## Publishing
 
@@ -128,9 +168,13 @@ spike and its numbers.
    [`extension/store/listing.md`](../../extension/store/listing.md), *Distribution* → Unlisted, and
    press *Submit for review*.
 3. **Tell an agent the item id** (the 32 letters in the dashboard's address and on the item's
-   page). It goes into `PRODUCTION_EXTENSION_ID` in `src/web/extension-handoff.ts`, and the web app
-   is deployed, so that production asks the published extension. Until then the extension
-   installs but the Spideryarn tab says it did not answer.
+   page). **Setting it is one line and the whole change**:
+   `export const PRODUCTION_EXTENSION_ID: string | null = "<the id>";` in
+   `src/web/extension-handoff.ts`, then deploy. That makes production ask the published extension
+   and switches on every place in § Where a reader finds it. Done on 2026-10-25 (f4d796440); the id is
+   in § Where a reader finds it. `tests/extension-findable.test.tsx` refuses anything but 32
+   letters `a`–`p`. Until then the extension installs but the Spideryarn tab says it
+   did not answer.
 4. **For updates without the dashboard** (optional): in Google Cloud, a project with the *Chrome
    Web Store API* enabled and a service account with no roles; its email added under *Account* in
    the store dashboard; a JSON key for it downloaded to a path outside the repo, `chmod 600`. Then
@@ -150,18 +194,6 @@ new permission is a product decision, not a line in the manifest.
 
 ## What it does not do yet
 
-- **Being found** (asked 2026-10-25, when it was submitted to the store; handed to the Overseer).
-  The store item id is public, so it goes in this doc as well as in `PRODUCTION_EXTENSION_ID`:
-  **`eeedpogihlbbjghpanopajebiencekak`** (submitted for review 2026-10-25, Unlisted).
-  Readers need a way to find the extension: in `/help`, in the command bar, and above all in the
-  import flow, so that when a pasted address hits a blocker (a site that turns our server away)
-  the reader is told they can add it with the extension instead, plus anywhere else it naturally
-  belongs. Signal it, do not push it:
-
-  > I don't think we want to push it because it's only worth them using the extension if they need
-  > it rather than something that will really help them that much if they don't.
-  >
-  > — Greg, 2026-10-25
 - **A passage selected, then a chat about it**, and **why you are reading it, asked on the
   publisher's page**: Greg's later ideas. The add page the extension lands on already has the
   purpose box.

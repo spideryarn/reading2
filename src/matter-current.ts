@@ -31,7 +31,7 @@ import type { BlockId, MatterStretchStored } from "./types.js";
  * gateway, which the public import graph may not reach
  * (tests/public-imports.test.ts). Plan 261018l.
  */
-export const MATTER_PROMPT_VERSION = "matter/3";
+export const MATTER_PROMPT_VERSION = "matter/4";
 
 /**
  * **The versions a read still folds.** Not the same thing as the version above,
@@ -43,8 +43,10 @@ export const MATTER_PROMPT_VERSION = "matter/3";
  * - `matter/3` (plan 261024h) added the linked contents run to the labels rule;
  *   it did not weaken the evidence or admission of any stretch `matter/2`
  *   stored, so those older folds remain safe to show.
+ * - `matter/4` (plan 261025f) added the front summary to the labels rule, and
+ *   the `summary` kind; the same holds for what `matter/3` stored.
  */
-export const MATTER_READABLE_VERSIONS: ReadonlySet<string> = new Set([MATTER_PROMPT_VERSION, "matter/2"]);
+export const MATTER_READABLE_VERSIONS: ReadonlySet<string> = new Set([MATTER_PROMPT_VERSION, "matter/3", "matter/2"]);
 
 /** As much of a block as the pass reads. Every `Block` satisfies it. */
 export interface MatterBlock {
@@ -60,7 +62,7 @@ export interface MatterBlock {
 }
 
 /** Prefixes the version of everything `matterInputHash` reads; bump it when that changes. */
-export const MATTER_HASH_VERSION = "m2";
+export const MATTER_HASH_VERSION = "m3";
 
 // ───────────────────────────────────────────────────────────────── the hash
 
@@ -77,18 +79,33 @@ export function inPageHrefs(html: string): string[] {
   return [...html.matchAll(IN_PAGE_HREF)].map((match) => match[1]!);
 }
 
+/** Whether stage 3 stored the block as a list item; a front summary that is a list ends at its last one (src/matter.ts § `summaryAt`). */
+export function isListItem(block: Pick<MatterBlock, "html">): boolean {
+  return /^<li\b/u.test(block.html);
+}
+
 /**
  * **What the pass reads, fingerprinted** (plan review F1): ordered `[id, text,
- * kind, level, words, inPageHrefs(html), role]`. The interpreted href targets
- * joined in matter/3 because the linked-contents rule reads them; without them
- * a re-extraction could remove those links while a carried fold still passed
- * the reader's freshness check. The rest of `html` is deliberately absent:
- * emphasis and other markup do not affect the pass. JSON over fixed-position
- * arrays, for `hashBlocks`' reason: no delimiter a page could contain.
+ * kind, level, words, inPageHrefs(html), role, isListItem]`. The interpreted
+ * href targets joined in matter/3 because the linked-contents rule reads them,
+ * and the list-item bit in matter/4 because a front summary's extent does;
+ * without each, a re-extraction could change it while a carried fold still
+ * passed the reader's freshness check. The rest of `html` is deliberately
+ * absent: emphasis and other markup do not affect the pass. JSON over
+ * fixed-position arrays, for `hashBlocks`' reason: no delimiter a page could
+ * contain.
  */
 export function matterInputHash(blocks: readonly MatterBlock[]): string {
-  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, inPageHrefs(b.html), b.role ?? null]));
+  const canon = JSON.stringify(
+    blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, inPageHrefs(b.html), b.role ?? null, isListItem(b)]),
+  );
   return `${MATTER_HASH_VERSION}:${createHash("sha256").update(canon).digest("hex").slice(0, 16)}`;
+}
+
+/** The matter/3 fingerprint, kept only while that stored version remains readable. */
+function matter3InputHash(blocks: readonly MatterBlock[]): string {
+  const canon = JSON.stringify(blocks.map((b) => [b.id, b.text, b.kind, b.level ?? null, b.words, inPageHrefs(b.html), b.role ?? null]));
+  return `m2:${createHash("sha256").update(canon).digest("hex").slice(0, 16)}`;
 }
 
 /** The matter/2 fingerprint, kept only while that stored version remains readable. */
@@ -117,7 +134,8 @@ function matter2InputHash(blocks: readonly MatterBlock[]): string {
 export function matterForReader(value: unknown, blocks: readonly MatterBlock[]): MatterStretchStored[] | undefined {
   if (!isMatterDocument(value) || value.status !== "ok") return undefined;
   if (!MATTER_READABLE_VERSIONS.has(value.version)) return undefined;
-  const sourceHash = value.version === "matter/2" ? matter2InputHash(blocks) : matterInputHash(blocks);
+  const sourceHash =
+    value.version === "matter/2" ? matter2InputHash(blocks) : value.version === "matter/3" ? matter3InputHash(blocks) : matterInputHash(blocks);
   if (value.sourceHash !== sourceHash) return undefined;
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   let last = -1;

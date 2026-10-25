@@ -38,6 +38,7 @@ const WEB_NOTE = {
   url: "https://arxiv.org/abs/2001.08361",
   host: "arxiv.org",
   readAt: "2026-10-19T08:00:00.000Z",
+  pageKind: "own" as const,
 };
 
 function artefact(row: CitedWork): Bibliography {

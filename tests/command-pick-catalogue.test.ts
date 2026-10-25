@@ -38,6 +38,7 @@ import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, subModeGenerates } from "../src/web/activation.js";
 import { appearanceRows } from "../src/web/appearance-commands.js";
 import { besideTheModes, experimentalRows, subModeRows } from "../src/web/CommandBar.js";
+import { extensionStoreUrl } from "../src/web/extension-handoff.js";
 import { PICK_SLUG } from "../src/command-pick.js";
 import {
   type Command,
@@ -136,6 +137,8 @@ function rowsIn(context: Context): readonly Command[] {
       openComments: context.comments ? () => {} : undefined,
       openFeedback: () => {},
       queue: { run: async () => null, lastFailure: () => null },
+      /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
+      extensionStore: extensionStoreUrl("a".repeat(32)),
     }),
     ...experimentalRows(experimental),
     /* One state is every state: the mark on the appearance in force is the

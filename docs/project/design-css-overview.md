@@ -249,8 +249,9 @@ CSS, both in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § `.m
   with zero slack. Its `z-index: 3` is local to the band, above a band's own sticky rows.
 - **The top row leaves room for it.** A band with an (i) has `has-about`, which sets
   `--band-about-room`; the band's top row adds that to its right padding. `.band-head` and
-  `.gloss-sort` do so already; any other top row does so in its mode's own stylesheet, and a
-  measured layout (Outline's `--outln-pad-r`) applies it to every copy it measures.
+  `.gloss-sort` do so already; any other top row does so in its mode's own stylesheet. Only the top
+  row: Structure's list once widened every row by it, a ~55px blank strip under a finger — plan
+  [261025e](../plans/261025e-structure-on-an-ipad-updates-calmly-and-uses-its-width.md).
 
 Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md). The owner's
 profile icon sits beside it, the same size, through `ModeSurface`'s `profile`, and
@@ -318,7 +319,7 @@ will eventually have to decide whether they are a system or an accident:
   axis, the six text roles (`--type-*`) a band's recurring lines take their size from, the vertical rhythm every gap in the article column is a multiple of, and the two kinds of
   content that cannot reflow: a wide code block, and a figure drawn in black ink for a white page.
 - **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in iA
-  Writer Quattro, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
+  Writer Quattro, the reader's in Shantell Sans, the chrome in Geist; the rule for deciding whose words an element
   shows, and how to put a new one in its voice.
 - **[controls.md](controls.md)** — **controls that do the same job look the same in every mode**:
   the shared piece for each kind and checks of the pieces and listed callers; then why a button in this

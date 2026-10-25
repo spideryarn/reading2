@@ -1035,6 +1035,7 @@ export async function exportArticle(
         host: row.host,
         title: row.title,
         readAt: row.readAt?.toISOString() ?? null,
+        pageKind: row.pageKind,
         checkedAt: row.checkedAt.toISOString(),
         model: row.model,
         promptVersion: row.promptVersion,

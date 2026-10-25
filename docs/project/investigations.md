@@ -28,6 +28,9 @@ measured with scripted readers and a blind judge:
 - [261024b](../investigations/261024b-situate-spike-searches-into-one-read-cost-and-quality.md) — sixteen
   Exa searches and one Sonnet read situate a paper for $0.35–0.55; Haiku is an eighth of the price
   and loses quotes
+- [261025h](../investigations/261025h-situate-eval-haiku-sonnet-opus.md) — Situate's plan and
+  read on Haiku, Sonnet and Opus over one fixed set of evidence per article, nine arms on six
+  articles, each finding judged blind for source support
 - [261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md) — Tutorial's prompt
   weighted towards the author, old against new, with the old run twice as the control.
 - [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md) —

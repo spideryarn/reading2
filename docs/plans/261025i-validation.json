@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-25",
+  "selected": "C from airier-upper-limbs round",
+  "sha256": {
+    "assets/brand/source/reader.png": "9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635",
+    "assets/brand/archive/reader-before-airier-limbs.png": "aa45d260a0ef1a95303d1aab65360bb586259d51382f9345996580797416b402",
+    "assets/brand/explorations/airier-limbs-b.png": "279bd78df0ccbd731effd4d350bb564e20b93637eaa93514a99c3fd9c2196d87",
+    "assets/brand/explorations/airier-limbs-c.png": "9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635",
+    "extension/icons/icon-16.png": "522a0ba83b6bf8864114c51db768791e7ed2302fd1ac148e0d42cd44c76856ed",
+    "extension/icons/icon-48.png": "448dd95083e531d873eaba639cda6cb1f5fcf6fe8bd90fc3edcafa0d8aeb1953",
+    "extension/icons/icon-128.png": "ea83b9b256be48cd6a94678dc205ec61054e84cf149e731bbb21feaf1450c803",
+    "extension/icons/icon-32.png": "bc2fd266a26d97ad82769522013bcf89c213bec6bec23f41b1654469bda407bf",
+    "public/favicon-16x16.png": "522a0ba83b6bf8864114c51db768791e7ed2302fd1ac148e0d42cd44c76856ed",
+    "public/favicon-32x32.png": "bc2fd266a26d97ad82769522013bcf89c213bec6bec23f41b1654469bda407bf",
+    "public/favicon-48x48.png": "448dd95083e531d873eaba639cda6cb1f5fcf6fe8bd90fc3edcafa0d8aeb1953",
+    "public/favicon.ico": "254d25aa0640fb83ad65229192c8f0f811d3c875ec91f85507104ecacadd2d21",
+    "public/spideryarn-logo.png": "a66151458cb093db24d21221a239c2678bb39abb64d00d55ad7929bd39be077a",
+    "public/spideryarn-reader.png": "383c0035f110aec57c51dbc9837796b34bf5151a93f22e8d6211d56b4bb1aeb3",
+    "public/apple-touch-icon.png": "236b6745aa99fb0bde6c186e7788d9cc449710588b0f1b2a71a9fe097cd2e8be",
+    "public/android-chrome-192x192.png": "2c124e3d81f0d658cedc79422d0077c703d4846554633f394af4566d95e7249a",
+    "public/android-chrome-512x512.png": "4062f78643ebf9ff94198c05d01d25059c6d4e7623c0f322ebf90cc7bbf1430e",
+    "public/app-icon-light-1024.png": "806876c678245b224590710ffc5ae314787a7633e1ead05dbfdec30c9a86cd54",
+    "public/app-icon-dark-1024.png": "58175448d57c1c01ed7d805def2dd176298b2319df47dfa2cae6e6632cb60482",
+    "public/og-card.png": "bfb6f8ca36abdf57263c0ac2b860138c6c0ee57c4b876a6823f16b3bfbc64ec4"
+  },
+  "brand_update": "passed",
+  "brand_check": {
+    "files": 10,
+    "tests": 314,
+    "result": "passed"
+  },
+  "typecheck": {
+    "source_files": 4015,
+    "result": "passed"
+  },
+  "build": "passed",
+  "extension_build": "passed;dev/production icon copies match",
+  "scoped_lint": "passed;existing complexity info",
+  "independent_review": "approved;37focusedtests and freshness passed",
+  "geometry": {
+    "sourceHash": "9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635",
+    "sourceBounds": {
+      "l": 128,
+      "t": 95,
+      "r": 1150,
+      "b": 1155
+    },
+    "limbs": [
+      {
+        "available": 1722,
+        "selected": 1626,
+        "intended": 1626,
+        "fixed": 0,
+        "wrong": 0,
+        "coverage": 0.9442508710801394,
+        "unrelated": 0
+      },
+      {
+        "available": 1705,
+        "selected": 1588,
+        "intended": 1588,
+        "fixed": 0,
+        "wrong": 0,
+        "coverage": 0.9313782991202346,
+        "unrelated": 0
+      }
+    ],
+    "reconstruction": {
+      "missing": 0,
+      "overlap": 32,
+      "foreground": 31066,
+      "overlapFraction": 0.0010300650228545678
+    }
+  },
+  "full_suite": "not rerun; prior unrelated failures recorded in261025b-validation.json",
+  "limitations": [
+    "no physical iPhone or installed-icon-cache verification",
+    "no live browser-motion/reduced-motion verification",
+    "no production deployment",
+    "no extension-store submission"
+  ]
+}

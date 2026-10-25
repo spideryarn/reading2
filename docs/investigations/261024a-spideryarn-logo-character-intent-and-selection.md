@@ -71,3 +71,39 @@ The source-to-assets command and current background/padding policy have one home
 ## Validation record
 
 Selection review found the old PNG-specific Semaphore animation to be an integration risk. Its previous clipping coordinates selected the wrong portions of the new optical mark; the implementation remeasures it rather than documenting a broken effect. Final code review and gate results are recorded in the [plan](../plans/261024a-eight-limbed-reading-spider-brand-assets.md).
+
+## 2026-10-25: one artwork across tab and app
+
+The separate optical favicon and later upright-knot trials were superseded. Greg compared A
+(the unchanged textured reader) and B (a flat study of the same pose), then chose:
+
+> Let's go with A. Proceed autonomously.
+>
+> — Greg, 2026-10-25
+
+[main-icon.md](../project/main-icon.md) owns the current single-master policy and Chrome tab review
+process; the [implementation plan](../plans/261025b-one-textured-reader-across-tab-and-app.md) records
+source preservation, animation geometry and validation. The earlier optical assessment above is
+history, not the current artwork decision.
+
+## 2026-10-25: airier upper limbs, C
+
+After choosing one textured reader for all sizes and adjusting the margins, Greg asked:
+
+> One more idea for the favicon. Would it look better if they were slightly thinner and longer the limbs?
+>
+> — Greg, 2026-10-25
+
+Two built-in image edits targeted only the four free rear limbs. B was restrained; C was airier.
+The target thickness/length percentages in their [exact prompts](../../assets/brand/explorations/airier-limbs-prompts.json)
+were approximate, not a measurement or a claim that other pixels stayed unchanged. The studies
+kept a hollow body, book and seated base; no face or fingers were added.
+
+> I can't really tell the difference between B and C. Maybe C? I think these are better, especially for the smaller verisons. Proceed.
+>
+> — Greg, 2026-10-25
+
+C became the master for the entire family, preserving the requested consistency rather than
+creating another favicon-only character. The [adoption plan](../plans/261025i-airier-reader-limbs-across-the-icon-family.md)
+records source/archive hashes, anatomy checks and generated variants; [main-icon.md](../project/main-icon.md)
+owns the current update process and unchanged margin/background choices.

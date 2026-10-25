@@ -51,7 +51,11 @@
      scroll. Nothing would error; the list would just run off the bottom. */
   --outln-pad-l: 0.75rem;
   --outln-pad-r: 0.5rem;
-  padding: 0.75rem var(--outln-pad-r) 0 var(--outln-pad-l);
+  /* The foot is the bottom bar's travel (mode-band.css § `--band-bar-travel`):
+     zero at rest, and while the bar is away exactly the room it gave back, so
+     the fit below measures the same room whether the bar is there or not and
+     the list does not redraw because a bar slid (Greg, spya-m5gxk9, plan 261025e). */
+  padding: 0.75rem var(--outln-pad-r) var(--band-bar-travel) var(--outln-pad-l);
 
   /* One step of nesting, and where that step's rail is drawn. Both are used by
      several rules below and by both pseudo-elements, so they are named once:
@@ -60,10 +64,13 @@
   --outln-indent: 1.15rem;
   --outln-rail: 0.45rem;
 }
-/* Clear of the (i) in the band's corner (mode-band.css § `.mode-band > .band-about`).
-   On the shared inset, not on the list, so the measuring copies are laid out
-   at the same narrower width and the rung chosen still matches what is drawn. */
-.mode-band.outln.has-about { --outln-pad-r: calc(0.5rem + var(--band-about-room)); }
+/* **No room kept for the (i) down the list.** The (i) sits in the band's
+   top-right corner, in the head row, and the head row keeps clear of it on its
+   own (mode-band.css § `.has-about > .band-head`). From 2026-10-01 this inset
+   added `--band-about-room` too, so every row gave up a strip to a button not
+   beside it — about 55px of a 300px band under a finger, where the corner
+   button is raised. Greg, on a portrait iPad: *"there's just a gap in the
+   right of the structure mode that's … being wasted"* (spya-tj0vqa, plan 261025e). */
 
 .outln-list {
   list-style: none;

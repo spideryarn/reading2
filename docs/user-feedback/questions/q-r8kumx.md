@@ -1,10 +1,11 @@
 ---
 id: q-r8kumx
 report: spya-hnw9xq
-status: open
+status: answered
 asked: 2026-10-24
 title: Should an executive summary be folded at import, like the abstract?
-refs: qi-j5sapfw2 · feedback #698 · docs/user-feedback/261024_1705-summary-links-the-passage-that-argues-the-point.md · docs/plans/261024x-summary-links-the-body-that-argues-a-point-not-the-abstract.md · docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md · q-f7zp3t
+acted: spya-p6gmn7
+refs: qi-j5sapfw2 · qi-mgtyaqrd · docs/plans/261025f-an-executive-summary-and-the-other-front-summaries-fold-like-the-abstract.md · feedback #698 · docs/user-feedback/261024_1705-summary-links-the-passage-that-argues-the-point.md · docs/plans/261024x-summary-links-the-body-that-argues-a-point-not-the-abstract.md · docs/plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md · q-f7zp3t
 ---
 Should the import fold a paper's executive summary to a one-line stub, the way it already folds the abstract?
 
@@ -25,3 +26,9 @@ Your article as it is in production has no folds yet. It was imported before fol
 The main point of your report is being built separately, with no question needed: the summary prompt now says to link the passage where the piece sets a point out in detail, and to use the abstract or executive summary only where nothing else says it. That works whatever you choose here. Your article keeps its current links until you press Rerun on Summary in Metadata.
 
 What would decide it: if you would sometimes rather read an executive summary than our Summary, C. If you would not, B.
+
+Greg's answer, 2026-10-25 08:54 (reply spya-p6gmn7):
+
+"B"
+
+Built and on dev, not yet deployed: the import now folds an executive summary, Key points, Highlights, Significance and Author summary at the front of a piece, each its own stub named by its label, still a row in Structure. The same label in the body of a piece is left showing. Old articles fold it only when re-imported, as you chose in q-f7zp3t. Plan docs/plans/261025f-an-executive-summary-and-the-other-front-summaries-fold-like-the-abstract.md.

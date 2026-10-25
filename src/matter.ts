@@ -15,7 +15,7 @@
  * stretches, each either a `range` of blocks it was shown, inside one window,
  * or a `section` under a heading (the only way to name a 251-entry
  * bibliography without showing all of it). `kinds` is the closed list
- * `MATTER_KINDS`.
+ * `MODEL_MATTER_KINDS`; the free label rule alone may add `summary`.
  *
  * **It fails towards showing.** Code then holds every stretch to the stored
  * blocks (`admitMatter`), and a stretch short of every check is dropped, not
@@ -29,11 +29,14 @@
  * Nothing here removes or rewrites a block; it says which to fold.
  */
 import { openRouterJson, type AiRequestBody } from "./ai-call.js";
-import type { MatterBlock } from "./matter-current.js";
+import { isListItem, type MatterBlock } from "./matter-current.js";
 import { withChatJsonSchema } from "./messages-structured-output.js";
+import { isSummaryLabel, normaliseLabel } from "./matter-summary.js";
 import { MATTER_MODEL } from "./models.js";
-import { sectionRanges } from "./section-ranges.js";
+import { headingLevel, sectionRanges } from "./section-ranges.js";
 import type { Author, BlockId } from "./types.js";
+
+export { normaliseLabel };
 
 // ──────────────────────────────────────────────────────────────── the types
 
@@ -42,6 +45,7 @@ export const MATTER_KINDS = [
   "title",
   "authors",
   "abstract",
+  "summary",
   "keywords",
   "contents",
   "dates",
@@ -51,6 +55,15 @@ export const MATTER_KINDS = [
   "references",
 ] as const;
 export type MatterKind = (typeof MATTER_KINDS)[number];
+
+/**
+ * The kinds the model may claim: all but `summary`, which only the label rule
+ * finds (src/matter-labels.ts § `summaryRuns`). An executive summary or a
+ * *Key points* box is prose, and its label, where it sits and how far it runs
+ * are its only evidence; the model's prompt still calls them the article's
+ * own, so its request did not change when the kind arrived (plan 261025f).
+ */
+export const MODEL_MATTER_KINDS = MATTER_KINDS.filter((k): k is Exclude<MatterKind, "summary"> => k !== "summary");
 
 /** One folded stretch, by the ids of its first and last block, inclusive. */
 export interface MatterStretch {
@@ -301,22 +314,6 @@ const LABELS: ReadonlyMap<string, readonly MatterKind[]> = new Map<string, Matte
     (l): [string, MatterKind[]] => [l, ["authors"]],
   ),
 ]);
-
-/**
- * A label's words, lower case, without a section number in front ("7.",
- * "VII.", "A.", an appendix's "A.1.1") or punctuation at either end, and with apostrophes dropped
- * ("Authors' contributions").
- */
-export function normaliseLabel(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[’'`]/gu, "")
-    .replace(/\s+/gu, " ")
-    .trim()
-    .replace(/^[^\p{L}\p{N}]+/u, "")
-    .replace(/^(?:\d+(?:\.\d+)*|[ivx]+|[a-z](?:\.\d+)*)(?:[.):]\s*|\s+)(?=\p{L})/u, "")
-    .replace(/[^\p{L}\p{N}]+$/u, "");
-}
 
 /** The kinds a whole label may head, or `null` when the text is not one. "Acknowledgements and funding" heads both. */
 export function labelKinds(text: string): readonly MatterKind[] | null {
@@ -679,6 +676,13 @@ function keywordsExplained(blocks: readonly MatterBlock[], start: number, end: n
   return explained;
 }
 
+/** A front summary's blocks, when `[start, end)` opens at its label and stays inside its run (`summaryAt`). */
+function summaryExplained(article: MatterArticle, start: number, end: number): Set<number> {
+  const run = summaryAt(article, start);
+  if (typeof run === "string" || end > run.end) return new Set();
+  return new Set(Array.from({ length: end - start }, (_, k) => start + k));
+}
+
 /**
  * Whether the blocks under heading `h`, to the next heading or `end`, are a
  * list of references: at least one, every one with reference evidence, few
@@ -731,6 +735,9 @@ const stretchEntries = (blocks: readonly MatterBlock[], start: number, end: numb
  *   `contents` explains a contents label and the entries that follow it
  *   (`contentsRun`), never the first block after them; `references` explains every entry once `REFERENCE_EVIDENCE_SHARE`
  *   of them look like references.
+ * - `summary` explains every block of a front summary from its label on
+ *   (`summaryAt`), prose and sub-headings included, when the stretch starts at
+ *   the label and ends within its run.
  * - Under an acknowledgements label, one block without the family's words
  *   between two with them stands.
  */
@@ -751,6 +758,7 @@ export function stretchEvidence(
   const abstract = has("abstract") ? abstractExplained(blocks, start, end) : new Set<number>();
   const contents = has("contents") ? contentsExplained(blocks, start, end, headedBy, entries).explained : new Set<number>();
   const keywords = has("keywords") ? keywordsExplained(blocks, start, end) : new Set<number>();
+  const summary = has("summary") ? summaryExplained(article, start, end) : new Set<number>();
   const office = kinds.some((k) => OFFICE.has(k));
   const labelText = (text: string): string | null => {
     if (labelKinds(text)?.some((k) => OFFICE.has(k))) return normaliseLabel(text);
@@ -786,7 +794,7 @@ export function stretchEvidence(
         continue;
       }
       if (has("title") && isTitle(block, article.meta.title)) continue;
-      if (abstract.has(i)) continue;
+      if (abstract.has(i) || summary.has(i)) continue;
       if (has("authors") && /^by\s/iu.test(block.text.trim()) && block.words <= 12) continue;
       return `block ${i} is a heading that is not a known label`;
     }
@@ -801,6 +809,7 @@ export function stretchEvidence(
       (has("authors") && block.words <= AUTHORS_MAX_WORDS && notProse(text) &&
         (authorEvidence(text, names) || (authorsSeen && block.words <= AUTHORS_BARE_LINE_WORDS))) ||
       abstract.has(i) ||
+      summary.has(i) ||
       keywords.has(i) ||
       contents.has(i) ||
       (has("dates") && block.words <= DATES_MAX_WORDS && fewSentenceWords(text) &&
@@ -887,7 +896,7 @@ An abstract is usually one paragraph, or a few under their own short headings (B
 
 Put blocks that sit together in one stretch: the title and the authors together; the abstract on its own; a group of acknowledgements, funding and declarations together. Stretches never overlap. Copy ids exactly as shown. An article with nothing to fold answers "stretches": [].`;
 
-const KIND_SCHEMA = { type: "array", items: { type: "string", enum: [...MATTER_KINDS] } } as const;
+const KIND_SCHEMA = { type: "array", items: { type: "string", enum: [...MODEL_MATTER_KINDS] } } as const;
 
 const SCHEMA = {
   type: "object",
@@ -959,7 +968,8 @@ export class MatterAnswerInvalid extends Error {
   }
 }
 
-const KIND_SET: ReadonlySet<string> = new Set(MATTER_KINDS);
+/** What the model may answer: a `summary` from it refuses the answer (`MODEL_MATTER_KINDS`). */
+const KIND_SET: ReadonlySet<string> = new Set(MODEL_MATTER_KINDS);
 const isKinds = (k: unknown): k is MatterKind[] =>
   Array.isArray(k) && k.length > 0 && k.every((x) => typeof x === "string" && KIND_SET.has(x)) && new Set(k).size === k.length;
 
@@ -1091,6 +1101,212 @@ export function labelledSection(
     return "a labelled section over the word cap";
   }
   return { start: r.start, end: r.end, headedBy: label };
+}
+
+/**
+ * The article's own prose before a summary label, in words: at most this,
+ * about two short paragraphs (NIST AI 100-1 has 208: a disclaimer and a note
+ * on its update schedule). Ten unheaded opening paragraphs and then
+ * *Highlights* is a body section (plan review, 261025f).
+ */
+export const SUMMARY_PROSE_BEFORE_MAX_WORDS = 300;
+/** A list summary may have one line before its items, this short ("Our main findings:"); longer, and it is a summary of paragraphs. */
+const SUMMARY_LIST_LEAD_MAX_WORDS = 25;
+/** Sub-headings a structured summary may have (JAMA's *Key points*: Question, Findings, Meaning). Any other ends it. */
+const SUMMARY_PARTS: ReadonlySet<string> = new Set([...ABSTRACT_PARTS, "question", "meaning", "importance"]);
+/** A line that is an *Abstract* or *Keywords* label, whole or before its text: "Keywords: aging, …". Not "Subjects were …". */
+const LABEL_LINE = /^\s*(?:abstract|key\s?words?|index terms)\s*(?:[:.\-–—]|$)/iu;
+/** The body's first section, left as a paragraph by extraction ("1 Introduction"). */
+const BODY_OPENING = /^\s*(?:(?:\d+(?:\.\d+)*|[IVX]+)\.?\s+)?(?:introduction|background|overview)\s*$/iu;
+
+/** A line that opens with a short label of its own: "Citation: …", "Received: …", "Funding: …". */
+const INLINE_LABEL = /^\s*(\p{Lu}[\p{L} ]{0,40}):\s+\S/u;
+
+/**
+ * Where a summary's run stops: another label of any kind, a line under an
+ * inline label that is not one of a structured summary's own parts (PLOS
+ * prints *Citation:*, *Received:* and *Funding:* inside its *Author summary*
+ * section), or the body's first section as a paragraph.
+ */
+function endsSummary(b: MatterBlock): boolean {
+  if (isLabel(b) || isSummaryLabel(b.text) || LABEL_LINE.test(b.text)) return true;
+  if (b.kind === "heading") return false;
+  const inline = INLINE_LABEL.exec(b.text);
+  return (inline !== null && !SUMMARY_PARTS.has(normaliseLabel(inline[1]!))) || BODY_OPENING.test(b.text);
+}
+
+/**
+ * A sub-heading a summary may hold: one of a structured summary's parts, or a
+ * question with only a list under it (PLOS Medicine's *Author summary*: "Why
+ * was this study done?" and its bullets). A body section under a coarse level
+ * is neither.
+ */
+function summaryPart(blocks: readonly MatterBlock[], h: number): boolean {
+  if (SUMMARY_PARTS.has(normaliseLabel(blocks[h]!.text))) return true;
+  if (!blocks[h]!.text.trim().endsWith("?")) return false;
+  let items = 0;
+  for (let j = h + 1; j < blocks.length && blocks[j]!.kind !== "heading"; j++) {
+    if (blocks[j]!.words === 0) continue;
+    if (endsSummary(blocks[j]!)) break;
+    if (!isListItem(blocks[j]!)) return false;
+    items++;
+  }
+  return items > 0;
+}
+
+/** Whether a heading has words of its own before the next heading: a *Figures* heading over a strip of pictures does not. */
+function headsWords(blocks: readonly MatterBlock[], h: number): boolean {
+  for (let j = h + 1; j < blocks.length && blocks[j]!.kind !== "heading"; j++) if (blocks[j]!.words > 0) return true;
+  return false;
+}
+
+type SummaryAtResult = { start: number; end: number } | string;
+
+interface SummaryContext {
+  openEnd: number;
+  sectionEnd: ReadonlyMap<number, number>;
+  results: Map<number, SummaryAtResult>;
+}
+
+function summaryContext(article: MatterArticle): SummaryContext {
+  return {
+    openEnd: matterWindows(article.blocks).openEnd,
+    sectionEnd: new Map(sectionRanges(article.blocks).map((s) => [s.start, s.end])),
+    results: new Map(),
+  };
+}
+
+/**
+ * The words of the article's own prose before block `i`: text and quote blocks
+ * with none of the cheap matter evidence, outside any abstract or earlier
+ * front summary. Short paragraphs count too; otherwise enough of them can
+ * cross the 300-word line without any one block looking long.
+ */
+function ownProseBefore(article: MatterArticle, i: number, context: SummaryContext): number {
+  const { blocks } = article;
+  const excused = new Set<number>();
+  for (let j = 0; j < i; j++) {
+    const text = blocks[j]!.text;
+    if (LABEL_LINE.test(text)) for (const k of abstractExplained(blocks, j, i)) excused.add(k);
+    if (isSummaryLabel(text)) {
+      const run = summaryAtWith(article, j, context);
+      if (typeof run !== "string") for (let k = run.start; k < run.end; k++) excused.add(k);
+    }
+  }
+  let words = 0;
+  for (let j = 0; j < i; j++) {
+    const b = blocks[j]!;
+    if ((b.kind !== "text" && b.kind !== "quote") || excused.has(j)) continue;
+    const t = b.text;
+    if (notProse(t) || isReferenceEntry(b) || ACKNOWLEDGEMENTS.test(t) || FUNDING_STRONG.test(t) || DECLARATIONS_STRONG.test(t) || DATES_STRONG.test(t)) continue;
+    words += b.words;
+  }
+  return words;
+}
+
+/**
+ * **A summary an author put at the front, under its label at `i`** — an
+ * executive summary, *Key points*, *Highlights*, *Significance*, *Author
+ * summary* (src/matter-summary.ts) — as `[start, end)` from the label, or the
+ * reason it is not one. Greg, 2026-10-25 (q-r8kumx, "B"); plan 261025f and
+ * its review.
+ *
+ * Its prose is the article's own kind of prose, so the label, where it sits
+ * and how far it runs are the whole of its evidence, and each is strict. Every
+ * doubt shows it.
+ *
+ * 1. **It opens the piece**, three ways at once: the label is inside the
+ *    opening window; no heading before it, other than the title and a known
+ *    label, is at its level or above (a paragraph label ranks below every
+ *    heading, so for it, none at all); and at most
+ *    `SUMMARY_PROSE_BEFORE_MAX_WORDS` of the article's own prose comes before
+ *    it, so a *Key points* after an *Introduction* is the body's even when
+ *    extraction gave the two inverted levels.
+ * 2. **It runs** under a heading to the end of its section, under a paragraph
+ *    label to the next heading, through a structured summary's own parts
+ *    (`summaryPart`), and to its last item when it is a list. It stops at any other label, an *Abstract* or
+ *    *Keywords* line, or the body's first section left as a paragraph.
+ * 3. **Whole or not at all**: a heading of any other name inside its section,
+ *    or more than `MAX_RANGE_WORDS`, and it is not folded, rather than folded
+ *    halfway or folded with the body sections a coarse level gave it.
+ */
+function summaryAtWith(article: MatterArticle, i: number, context: SummaryContext): SummaryAtResult {
+  const cached = context.results.get(i);
+  if (cached !== undefined) return cached;
+  const finish = (result: SummaryAtResult): SummaryAtResult => {
+    context.results.set(i, result);
+    return result;
+  };
+  const { blocks } = article;
+  const label = blocks[i];
+  if (label === undefined || (label.kind !== "heading" && label.kind !== "text") || !isSummaryLabel(label.text)) {
+    return finish("not a summary label");
+  }
+  if (isTitle(label, article.meta.title)) return finish("the article's title, not a summary label");
+  if (i >= context.openEnd) return finish("a summary label past the opening");
+  const rank = headingLevel(label) ?? Number.POSITIVE_INFINITY;
+  for (let j = 0; j < i; j++) {
+    const b = blocks[j]!;
+    if (b.kind !== "heading" || b.words === 0 || isLabel(b) || isSummaryLabel(b.text) || isTitle(b, article.meta.title)) continue;
+    if (headingLevel(b)! <= rank && headsWords(blocks, j)) return finish("a heading of the article's own before the summary");
+  }
+  if (ownProseBefore(article, i, context) > SUMMARY_PROSE_BEFORE_MAX_WORDS) return finish("the article's own prose before the summary");
+  const headed = label.kind === "heading";
+  let end = headed ? context.sectionEnd.get(i)! : blocks.length;
+  for (let j = i + 1; j < end; j++) {
+    const b = blocks[j]!;
+    if (endsSummary(b)) {
+      end = j;
+      break;
+    }
+    if (b.kind !== "heading" || b.words === 0 || summaryPart(blocks, j)) continue;
+    if (headed) return finish("a heading of the article's own inside the summary");
+    end = j;
+    break;
+  }
+  /* A summary that is a list ends at its last item, even when one short
+     line introduces the list. The prose after a *Key points* list is the
+     article's introduction, heading or not. Only a list that *is* the
+     summary: one whose list comes after paragraphs of its own (the reported
+     paper's executive summary lists its three contributions in the middle)
+     runs on by the rules above, and so does a structured one (PLOS's
+     question headings). */
+  let listLast = -1;
+  let lead = 0;
+  for (let j = i + 1; j < end; j++) {
+    const b = blocks[j]!;
+    if (b.words === 0) continue;
+    if (b.kind === "heading") break;
+    if (isListItem(b)) {
+      listLast = j;
+      continue;
+    }
+    if (listLast >= 0) {
+      end = listLast + 1;
+      break;
+    }
+    if (++lead > 1 || b.words > SUMMARY_LIST_LEAD_MAX_WORDS) break;
+  }
+  while (end > i + 1 && blocks[end - 1]!.words === 0) end--;
+  if (!blocks.slice(i + 1, end).some((b) => b.words > 0)) return finish("a summary label with nothing under it");
+  if (sumWords(blocks, i, end) > MAX_RANGE_WORDS) return finish("a summary over the word cap");
+  return finish({ start: i, end });
+}
+
+export function summaryAt(article: MatterArticle, i: number): SummaryAtResult {
+  return summaryAtWith(article, i, summaryContext(article));
+}
+
+/** Every admitted front summary in the opening, sharing the placement scan and its earlier-summary results. */
+export function summaryRuns(article: MatterArticle): { start: number; end: number }[] {
+  const context = summaryContext(article);
+  const runs: { start: number; end: number }[] = [];
+  for (let i = 0; i < context.openEnd; i++) {
+    if (!isSummaryLabel(article.blocks[i]!.text)) continue;
+    const run = summaryAtWith(article, i, context);
+    if (typeof run !== "string") runs.push(run);
+  }
+  return runs;
 }
 
 /**
@@ -1311,12 +1527,20 @@ export function holdStretches(article: MatterArticle, candidates: readonly Matte
  *    and end of any stretch from either.
  * 2. Each segment takes the kinds of the classifier's stretch covering it, or
  *    else the label rule's (one source's stretches never overlap each other).
- * 3. Touching segments with equal kinds are joined again.
+ *    **Except a front summary**, which only the label rule finds: its blocks
+ *    stay `summary` whatever the model called some of them, so a *Key points*
+ *    box whose bullets the model took for contents is still one stub (plan
+ *    review of 261025f).
+ * 3. Touching segments with equal kinds are joined again, but never two
+ *    different summaries: an *Executive summary* then *Key points* are two
+ *    stubs, each named by its own label.
  * 4. A segment the cut left too small for a stub of its own (one block under
  *    `ONE_BLOCK_MIN_WORDS`) is joined to the touching neighbour sharing most
  *    of its kinds, kinds unioned in `MATTER_KINDS` order. It is never dropped
  *    for being small: each source already admitted its blocks.
- * 5. An abstract segment is never joined to one that is not.
+ * 5. An abstract segment is never joined to one that is not, and a front
+ *    summary's only to its own (plan 261025f): each is the stub a reader
+ *    looks for by name.
  *
  * The result is held again (`holdStretches`): a range is held to
  * `MAX_RANGE_WORDS` as a whole, the share cap counts everything folded, and
@@ -1341,6 +1565,8 @@ export function combineMatter(
     end: number;
     kinds: MatterKind[];
     parts: MatterCandidate[];
+    /** The label rule's front summary covering it, if one does (rule 2's exception). */
+    summary?: MatterCandidate | undefined;
   }
   const join = (into: Segment, from: Segment): void => {
     into.start = Math.min(into.start, from.start);
@@ -1354,25 +1580,27 @@ export function combineMatter(
     const b = cuts[k + 1]!;
     const model = covering(classified.held, a, b);
     const label = covering(labelled.held, a, b);
-    const by = model ?? label;
+    const summary = label?.kinds.includes("summary") ? label : undefined;
+    const by = summary ?? model ?? label;
     if (by === undefined) continue;
-    const seg: Segment = { start: a, end: b, kinds: kindsOf(by.kinds), parts: [model, label].filter((c): c is MatterCandidate => c !== undefined) };
+    const seg: Segment = { start: a, end: b, kinds: kindsOf(by.kinds), parts: [model, label].filter((c): c is MatterCandidate => c !== undefined), summary };
     const last = segments[segments.length - 1];
-    if (last && last.end === a && sameKinds(last.kinds, seg.kinds)) join(last, seg);
+    if (last && last.end === a && sameKinds(last.kinds, seg.kinds) && last.summary === seg.summary) join(last, seg);
     else segments.push(seg);
   }
 
   /* Tiny segments, joined to a touching neighbour rather than dropped. */
   const tiny = (s: Segment) =>
     blocks.slice(s.start, s.end).filter((b) => b.words > 0).length <= 1 && sumWords(blocks, s.start, s.end) < ONE_BLOCK_MIN_WORDS;
-  const isAbstract = (s: Segment) => s.kinds.includes("abstract");
+  /** An abstract, and each front summary, are a stub of their own (rule 5). */
+  const ownStub = (s: Segment) => s.summary ?? (s.kinds.includes("abstract") ? "abstract" : null);
   for (let i = 0; i < segments.length; ) {
     const s = segments[i]!;
     const prev = segments[i - 1];
     const next = segments[i + 1];
     /* How many kinds a touching neighbour shares, or -1 if it may not take this one. */
     const shared = (o: Segment | undefined, touches: boolean) =>
-      o && touches && isAbstract(o) === isAbstract(s) ? o.kinds.filter((k) => s.kinds.includes(k)).length : -1;
+      o && touches && ownStub(o) === ownStub(s) ? o.kinds.filter((k) => s.kinds.includes(k)).length : -1;
     const left = shared(prev, prev?.end === s.start);
     const right = shared(next, next?.start === s.end);
     if (!tiny(s) || (left < 0 && right < 0)) {

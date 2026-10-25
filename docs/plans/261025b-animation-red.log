@@ -1,0 +1,43 @@
+
+> spideryarn@1.0.0 test
+> vitest run --project unit tests/semaphore-geometry.test.ts
+
+
+ RUN  v4.1.11 /Users/greg/.codex/worktrees/spideryarn-knot-reader-logo/reading2
+
+ ❯ |unit| tests/semaphore-geometry.test.ts (3 tests | 2 failed) 1149ms
+     × selects both upper free limbs without lifting the body, other limbs or book 763ms
+     × pivots on the selected upper stems, outside the stationary body 376ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/semaphore-geometry.test.ts > Semaphore's moving fragments > selects both upper free limbs without lifting the body, other limbs or book
+AssertionError: limb 0: unrelated foreground: expected 0.2106331168831169 to be less than 0.015
+ ❯ tests/semaphore-geometry.test.ts:104:71
+    102|       // stays attached to the oval instead of lifting part of the bod…
+    103|       expect(result.coverage, `limb ${index}: coverage`).toBeGreaterTh…
+    104|       expect(result.unrelated, `limb ${index}: unrelated foreground`).…
+       |                                                                       ^
+    105|       expect(result.fixed, `limb ${index}: body, book and other limbs`…
+    106|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |unit| tests/semaphore-geometry.test.ts > Semaphore's moving fragments > pivots on the selected upper stems, outside the stationary body
+AssertionError: expected 255 to be less than 128
+ ❯ tests/semaphore-geometry.test.ts:138:34
+    136|       expect(contains(polygon(selector), x, y)).toBe(true);
+    137|       expect(mark[offset]).toBeGreaterThan(200);
+    138|       expect(stationary[offset]).toBeLessThan(128);
+       |                                  ^
+    139|     }
+    140|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  11:23:12
+   Duration  1.42s (transform 58ms, setup 71ms, import 112ms, tests 1.15s, environment 0ms)
+

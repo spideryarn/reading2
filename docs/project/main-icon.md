@@ -15,18 +15,61 @@ and pose suggest character without eyes, eyebrows or fingers. Overlap deliberate
 attachments to the imagination. The [design investigation](../investigations/261024a-spideryarn-logo-character-intent-and-selection.md)
 preserves Greg's exact brief, alternatives, selection and later limb-proportion refinement.
 
-- [Detailed master](../../assets/brand/source/reader.png): wool texture, book and shading for
-  install icons, social previews and large use. [Prompt/input history](../../assets/brand/source/reader-generation.json)
-  distinguishes generative renderings from exact pixel extraction.
-- [Optical SVG](../../assets/brand/source/mark.svg): the same loop, fan, book and crossed base
-  with broad gaps and one orange, for favicons and small app wordmarks. It is a size treatment
-  of the same identity; shrinking the wool illustration alone loses too much detail.
+> I can't really tell the difference between B and C. Maybe C? I think these are better, especially for the smaller verisons. Proceed.
+>
+> — Greg, 2026-10-25
+
+The current master is **C from the upper-limb study**: the textured seated reader with slimmer,
+longer free rear limbs. It refines the earlier A selection; the body, book and seated pose retain
+the same identity. The four free rear strands, two book supports and two crossed lower strands
+still suggest eight limbs without a literal face or hands. One master serves favicons, the small
+in-app mark, install icons, extension icons and social images. The
+[airier-limb adoption](../plans/261025i-airier-reader-limbs-across-the-icon-family.md) records the
+exact source and validation; the earlier [A selection](../plans/261025b-one-textured-reader-across-tab-and-app.md)
+explains why the separate optical mark was dropped.
+
+- [Reader master](../../assets/brand/source/reader.png): the sole active artwork input, including
+  wool texture, book and shading. [Prompt/input history](../../assets/brand/source/reader-generation.json)
+  distinguishes generative renderings from exact pixel extraction. C is a new generative rendering,
+  not a mathematically exact limb edit; prompt percentages are visual aims, not measured changes.
+  The [previous master](../../assets/brand/archive/reader-before-airier-limbs.png) and
+  [B/C studies](../../assets/brand/explorations/airier-limbs-prompts.json) preserve the comparison.
+- [Former optical SVG](../../assets/brand/source/mark.svg): historical evidence only; no longer
+  loaded by generation. The [flat reader study](../../assets/brand/archive/flat-reader-study-2026-10-25.svg)
+  was B, considered but not selected. The separate upright-knot favicon direction was also dropped.
 - [Archive](../../assets/brand/archive/) and [explorations](../../assets/brand/explorations/):
-  previous masters and the retained selection evidence. Change sources, then regenerate derivatives.
+  previous masters and retained selection evidence. Change the master, then regenerate derivatives.
+
+### Margin follows display size
+
+> So I guess what I'm suggesting, the smaller the icon, the less margin.
+>
+> — Greg, 2026-10-25
+
+Favicons and the shared small in-app mark nearly fill their image box, retaining only a sampling
+allowance at the tips. Home-screen tiles use the middle fuller treatment Greg preferred; large
+reader/social and theme exports retain their existing breathing room. Intended **display size**
+matters: a high-resolution phone tile is still a small icon when installed.
+The `BRAND_OUTPUTS` and `EXTENSION_OUTPUTS` tables in
+[generate-brand-assets.ts](../../scripts/generate-brand-assets.ts) own exact inset values, measured around
+the longest visible-alpha dimension. The
+[margin follow-up](../plans/261025h-less-margin-in-smaller-reader-icons.md) records the choice and checks.
+
+Ivory remains the default opaque phone background by agent judgment under Greg's instruction to
+choose: it separates the dark book from the orange yarn better than charcoal. Dark remains an
+export, not an automatically selected iPhone theme. [Apple's app-icon guidance](https://developer.apple.com/design/human-interface-guidelines/app-icons)
+describes opaque full-bleed background layers and system-applied corner masks for native icons;
+those native clear/layered appearances are not a promise about our flat web-clip PNG.
+[WebKit's transparency report](https://bugs.webkit.org/show_bug.cgi?id=255596) documents unexpected
+black backgrounds/borders with transparent web-clip icons; this historical report is a reason for
+a predictable opaque tile, not a claim that every current iOS appearance forbids transparency.
+[Apple-touch-icon takes precedence over manifest icons](https://webkit.org/blog/13878/) on the
+web-app path. Physical iPhone appearance and cached installations still need device verification.
 
 One transparent treatment works in both app themes. Install tiles have opaque backgrounds and
 breathing room for the OS's corner mask. Exact colours, padding, filenames and dimensions have
-one home: `BRAND_OUTPUTS` in [generate-brand-assets.ts](../../scripts/generate-brand-assets.ts).
+one home: the public and extension output tables in
+[generate-brand-assets.ts](../../scripts/generate-brand-assets.ts).
 The [manifest](../../public/site.webmanifest) uses ordinary `any` icons; no separately verified
 maskable safe-zone treatment is supplied. The light/dark 1024px files are available exports;
 the shipped Apple/Android consumers use the cream tile. The app's theme setting does not select
@@ -35,14 +78,15 @@ between those installed-icon exports.
 ## Updating the artwork
 
 1. Read the intent above and the investigation before changing the character. Archive the previous
-   detailed master, optical SVG and generation provenance under a descriptive version name; keep
+   reader master and generation provenance under a descriptive version name; keep
    selected intermediate variants and the exact input/prompt for an AI edit. The current sources
    must live in Git, not only in an image tool's output directory.
 2. Refine the detailed artwork with genuine transparency, including through the body and limb gaps.
-   Preserve opaque book pages. Match meaningful silhouette/proportion changes in the optical SVG,
-   editing that vector directly. Check the crossed strand's duplicated mask geometry as well as its
-   visible path. The [limb-refinement plan](../plans/261024a-reading-spider-limb-refinement.md)
+   Preserve opaque book pages. Do not introduce a second artwork source for small sizes. The [limb-refinement plan](../plans/261024a-reading-spider-limb-refinement.md)
    shows the archived inputs and why concealed paths are not a literal limb-length measurement.
+   Deliberately refresh the selected-master identity guard in [brand tests](../../tests/brand-assets.test.ts)
+   and the independently annotated source/hash in [anatomy checks](../../tests/semaphore-geometry.test.ts)
+   when accepting a new master; do not weaken the checks to accommodate an unreviewed file.
 3. Regenerate and check from the repository root:
 
    ```sh
@@ -51,7 +95,7 @@ between those installed-icon exports.
    ```
 
    The aliases in [package.json](../../package.json) own the command sequence and focused test list.
-   `brand:update` rebuilds PNG/ICO, both size-review sheets and the static animation proof, then
+   `brand:update` rebuilds public/extension PNGs and ICO, both size-review sheets, the browser review page and static animation proof, then
    the social card. `brand:check` checks
    PNG/ICO/proof freshness and the focused image, animation, metadata and doc contracts.
    Freshness compares decoded pixels within a small tolerance, not bytes, so the Mac and the Linux
@@ -85,12 +129,34 @@ PNGs. Open at 100% in an image viewer: fitting the whole sheet to a narrow windo
 supposedly native-size samples. Judge the normal rows first; the enlarged pixel grid is diagnostic.
 
 The tiny sheet includes actual favicon pixels, the app PNG reduced to ordinary and zoom-equivalent
-sizes, and the detailed install tile reduced below its normal size, on light and dark. It is a
-static raster inspection, not proof of a browser, Retina screen or physical phone rendering.
-On 2026-10-24, parent and simulated icon-expert inspection found the simplified 16px mark tidy
-but abstract, the 20px wordmark companion balanced, and the detailed reader clear at 48–60px.
-The book and limbs merged in the detailed 24px reduction; at 10px the optical mark was only an
-orange accent. These are observations about this artwork, not guarantees for its next revision.
+sizes, and the install tile reduced below its normal size, on light and dark. It is a static raster
+inspection, not proof of browser or physical phone rendering. The earlier optical-mark assessment
+was superseded by Greg's concern that its lower overlaps looked busy and confused. Do not use that
+old assessment as acceptance evidence for the current textured mark.
+
+### Chrome tab target
+
+Chrome's ordinary tab favicon is about **16 logical pixels** across; on a 2× display that can use
+**32 image pixels** across. A raw 32px image shown at 32 logical pixels exaggerates the icon's
+apparent tab size, while a raw 16px reduction alone understates the available detail on a Retina
+display. Prioritise the actual Chrome tab at the user's display scale, with 16px as the 1× fallback.
+[Chromium's favicon size/scaling contract](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/components/favicon_base/favicon_url_parser.h)
+and [coordinate spaces](https://www.chromium.org/developers/design-documents/blink-coordinate-spaces/)
+explain the distinction.
+
+`brand:update` generates [browser-preview.html](../../assets/brand/browser-preview.html) from the
+current public assets. Serve the repository root locally and open `/assets/brand/browser-preview.html`
+in Chrome at 100% page zoom. Its fixed-size samples distinguish 16 logical pixels from the 16px/32px
+resources, show larger app marks on both backgrounds, and declare the actual generated favicon
+files for the page's tab. Check the selected file/cache and active/inactive tab backgrounds before
+judging a replacement; page samples do not prove what Chrome loaded into its own tab strip.
+
+[RealFaviconGenerator](https://realfavicongenerator.net/developers/favicon-generation) was tried in
+an isolated preview with A. Its generated desktop formats passed its checker; the comprehensive
+report also warned about a missing touch title. It helps with packaging and platform declarations,
+not character design. It added no visual benefit requiring another project dependency, so the
+existing generator remains authoritative. An SVG wrapping raster input does not create vector detail.
+
 For a physical-device check, inspect a newly added home-screen entry and record the device/OS,
 appearance and installation state. A regenerated file alone does not demonstrate that an existing
 installation has refreshed its icon.
@@ -110,6 +176,12 @@ its source changes, including still/reduced-motion appearance.
 markup; preserve them when replacing artwork. If output names change, follow the consumers in
 the [shell head](../../index.html), manifest, email templates and
 [site brand list](../../src/site-pages.ts), including robots/public-shell fixtures.
+The [Chrome extension](chrome-extension.md) uses the same master on cream. `brand:update` and
+`brand:check` now generate/check `extension/icons/` as well as the public family; the
+[build](../../scripts/build-extension.ts) packages those committed icons. Rebuild its package after
+an artwork change. Building/pushing assets does not submit a store update; the extension guide
+owns versioning and publication.
+
 [Brand tests](../../tests/brand-assets.test.ts) cover alpha, gaps, padding, ICO pixels and declared
 dimensions; [OG tests](../../tests/og-card.test.ts) cover its separate structural contract.
 For live page/theme/motion checks, start at [browser-control.md](browser-control.md) and use the

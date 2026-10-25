@@ -59,6 +59,14 @@
      56px strip of nothing under the band on an uninstalled iPhone — tokens.css
      § `--hint-now` has the whole account. */
   bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now));
+  /* **How far that edge has moved from where it rests**, for a band whose
+     content is fitted to its height: zero with the bar home, the bar's room
+     (and the install hint's) while the bar has slid away. Structure pads its
+     foot by this, so its box still runs to the bar and its rows do not change
+     because a bar moved (structure-mode.css, outline-mode.css; Greg,
+     spya-m5gxk9, plan 261025e). The resting terms are the ones the bar's
+     guards restore (narrow-window.css § a small device). */
+  --band-bar-travel: calc(max(var(--dock-space), var(--safe-bottom)) + var(--hint-h) - max(var(--dock-bottom), var(--safe-bottom)) - var(--hint-now));
   z-index: 44; /* under the spine (45), over the controls bar (40) */
   display: flex;
   flex-direction: column;

@@ -121,6 +121,31 @@ news article's edit log, which no cheap test separates from a real update.
 - **No production article was used**, so this says nothing about the 49+ already imported; those
   keep the 261007d rule until re-extracted.
 
+## Addendum, 2026-10-25: front summaries are matter
+
+Greg's answer to q-r8kumx made an executive summary and the other summaries at the front a kind of
+matter, `summary`, found by the label rule alone (plan
+[261025f](../plans/261025f-an-executive-summary-and-the-other-front-summaries-fold-like-the-abstract.md)).
+The gold gained two stretches, the reported paper's *Executive Summary* (blocks 39–53) and NIST AI
+100-1's (46–60); nothing else in the 52 is a labelled front summary. Re-run on all three sets,
+every classifier call from the cache, so the model's request is byte for byte what it was:
+
+| | old gold: prose folded (union, 3 draws) | new gold: prose folded | summary found (union) | other numbers |
+|---|---|---|---|---|
+| development | 45 blocks / 3,555 words — exactly the executive summary, ×3 | **0 / 0** | 45/45 | unchanged |
+| held-out 1 | 45 / 3,588 — exactly NIST's, ×3 | **0 / 0** | 45/45 | unchanged |
+| held-out 2 | 0 / 0 | **0 / 0** | – | unchanged |
+
+**The corpus has no *Key points*, *Highlights*, *Significance* or *Author summary*,** so recall
+on those was checked on live pages, extracted as import does with nothing stored: ten PLOS
+articles (Comp Bio, Genetics, NTDs, Pathogens, Medicine) fold their *Author summary* from label to
+last line, stopping before the *Citation:* line; a Europe PMC *Significance* folds and leaves its
+*Keywords:* line to its own stretch. As negatives, Wikipedia's *Significance* and *Highlights*
+sections, a PLOS ONE *Significance* inside a structured abstract, and RAND's *Key Takeaways* and
+*Summary* stay showing; across about 60 pages no body section folded. Missed, on purpose: a
+gov.uk report whose summary follows 90 blocks of forewords (past the opening window), and a PLOS
+page with a *Retraction* heading before its abstract.
+
 ## Reproducing it
 
 `scripts/matter-eval.ts <dir> [--corpus <dir>] [--gold <dir>] [--draws=3] [--only=a,b] [--show=slug]`,

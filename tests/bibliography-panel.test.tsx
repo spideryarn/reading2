@@ -2356,6 +2356,7 @@ const WEB_NOTE: NonNullable<CitedWork["webNote"]> = {
   host: "arxiv.org",
   title: "Scaling Laws for Neural Language Models",
   readAt: "2026-10-19T08:00:00.000Z",
+  pageKind: "own",
 };
 
 describe("a cited work's note from one web search", () => {
@@ -2379,6 +2380,20 @@ describe("a cited work's note from one web search", () => {
     expect(text).toContain(BLURB_ASK_IN_CHAT);
   });
 
+  it("labels a note from a page that only looks like the work's own as possibly someone else's (261025d)", async () => {
+    const lookalike = { ...WEB_NOTE, url: "https://philpapers.org/rec/KAPSLF", host: "philpapers.org", pageKind: "looks-like" as const };
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, webNote: lookalike }]) }));
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-blurb-basis")?.textContent).toBe("From a web search · philpapers.org · may not be the work's own page");
+    await press(r.querySelector(".cite-blurb-basis")!, "touch", "mouse");
+    const text = document.querySelector('[role="dialog"]')?.textContent ?? "";
+    expect(text).toContain(
+      "the search engine's extract of a page at philpapers.org whose title matches this work's and which names its first author.",
+    );
+    expect(text).toContain("it may be someone else's description of it, such as a catalogue entry, a publisher's blurb or a review.");
+    expect(text).not.toContain("its own page at");
+  });
+
   it("draws the abstract note and not the web note when a row somehow has both", async () => {
     await draw(owner({ bibliography: artefact([{ ...NOTED, webNote: WEB_NOTE }]) }));
     expect(row(NOTED.id).querySelectorAll(".cite-blurb")).toHaveLength(1);
@@ -2395,7 +2410,7 @@ describe("a cited work's note from one web search", () => {
   it("says what the search is doing while it runs, by stage, on that row only", async () => {
     await draw(owner({ bibliography: artefact([CENTRAL, FAMOUS]), webNoting: CENTRAL.id, webNoteStage: "searching" }));
     expect(row(CENTRAL.id).querySelector(".cite-web-note-progress")?.textContent).toBe(
-      "Looking for this work's own page on the web…",
+      "Looking for this work's page on the web…",
     );
     expect(row(FAMOUS.id).querySelector(".cite-web-note-progress")).toBeNull();
     await draw(owner({ bibliography: artefact([CENTRAL, FAMOUS]), webNoting: CENTRAL.id, webNoteStage: "checking" }));
@@ -2405,7 +2420,7 @@ describe("a cited work's note from one web search", () => {
   it("says that the search found no page it could be sure of", async () => {
     await draw(owner({ bibliography: artefact([CENTRAL]), webNoteNone: CENTRAL.id }));
     expect(row(CENTRAL.id).querySelector(".cite-web-note-none")?.textContent).toBe(
-      "We searched the web for this work's own page and found none we could be sure of.",
+      "We searched the web for this work's page and found none we could use.",
     );
   });
 

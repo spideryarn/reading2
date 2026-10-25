@@ -220,6 +220,10 @@ Three things worth carrying to whatever is built next:
   its drawer is open, while focus is in it, while a dialog or a band that covers the article is up,
   and — since 2026-10-07 — while its own **More menu** is open, which is portalled out of the bar and
   takes focus with it, so *focus is in the bar* stops being true the moment the list appears.
+  **A band fitted to its height must not grow with the bar either**: Structure's band adds the bar's
+  travel (`--band-bar-travel`, mode-band.css) to its foot padding, so its box reaches the bar while
+  its content box stays the resting height, and its list does not redraw because a bar slid
+  ([structure.md § While the reader scrolls](structure.md#while-the-reader-scrolls)).
 
 **The width layout.ts divides is the layout viewport's, not `innerWidth`.** On iPad Safari
 `innerWidth` is the *visual* viewport and shrinks when the page is zoomed in, while every media query

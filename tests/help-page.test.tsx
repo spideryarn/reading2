@@ -40,6 +40,7 @@ import { HelpPage } from "../src/web/help/HelpPage.js";
 import { SignedInShell } from "../src/web/BackLink.js";
 import { SignedInReader } from "../src/web/lib/made-for.js";
 import { HELP_HREF, navigate, parseRoute } from "../src/web/router.js";
+import { EXTENSION_STORE_URL } from "../src/web/extension-handoff.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -648,6 +649,14 @@ describe("every link Help draws", () => {
         const href = a.getAttribute("href") ?? "";
         seen += 1;
         if (a.closest("article div")) inWords += 1;
+        /* **The one link off the site**: the Chrome extension's store page,
+           drawn by `{{chrome-extension}}` only once there is a store item, in a
+           new tab (plan 261025b). Anything else off the site is refused. */
+        if (EXTENSION_STORE_URL !== null && href === EXTENSION_STORE_URL) {
+          expect(a.target).toBe("_blank");
+          expect(a.rel).toBe("noopener noreferrer");
+          continue;
+        }
         expect(href, `${at}: “${a.textContent}”`).toMatch(/^\/[^/]/);
         if (href === HELP_HREF || href.startsWith(`${HELP_HREF}/`)) {
           expect(HELP_ADDRESSES.has(href), `${at}: “${a.textContent}” → ${href}`).toBe(true);

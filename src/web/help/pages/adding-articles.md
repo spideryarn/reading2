@@ -1,7 +1,7 @@
 ---
 title: Adding an article
 summary: How to add an article from a web address or a file, and what to try when one will not come in.
-keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet bookmark save for spideryarn refused blocked bot check new article stop cancel give up
+keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet bookmark save for spideryarn extension chrome plugin add-on refused blocked bot check new article stop cancel give up
 related: shelf, plans, first-article
 ---
 
@@ -17,22 +17,25 @@ authors and abstract read; open one and press **Read this** when you want the wh
 You can also add a page from its address: go to `/add/` followed by the full URL, for example
 `spideryarn.com/add/https://example.com/essay`. That makes a bookmarklet easy.
 
-Some sites turn Spideryarn away but let you in. For those there is **Save for Spideryarn**, a
-bookmark that saves the page you are looking at as a web page file, which you then upload. You find
-it under the upload button when an article fails to come in for that reason: drag it to your
-browser's bookmarks bar (on a computer; phones and tablets usually have no bookmarks bar). On the
+Some sites turn Spideryarn away but let you in. For those there are two ways round.
+
+{{chrome-extension}}
+
+In any browser on a computer there is **Save for Spideryarn**, a bookmark that saves the page you
+are looking at as a web page file, which you then upload. You find it under the upload button when
+an article fails to come in for that reason: drag it to your browser's bookmarks bar. On the
 article's page, click the bookmark, then upload the file it saved.
 
-It saves the page as you see it, so anything personal on it, such as your name in the site's menu,
-can come too. It leaves out executable scripts, hidden and password fields, and values in ordinary
+Both take the page as you see it, so anything personal on it, such as your name in the site's menu,
+can come too. They leave out executable scripts, hidden and password fields, and values in ordinary
 text inputs, but text in an editor on the page can still come with it. The saved source file stays
 private even if you share the article; anything Spideryarn extracts into the article is part of
 what you share. Pictures may not come through, because they are fetched from the same site that
 turned us away.
 
-The file also remembers the address it was saved from, so the article says **Saved from** and the
+Either way, the page remembers the address it was saved from, so the article says **Saved from** and the
 site's name under its title, as a link back to that page. Spideryarn never fetches that address:
-it is the file's word for where it came from. If you share the article, readers see that line too,
+it is the page's word for where it came from. If you share the article, readers see that line too,
 unless the address has a `?` in it, which can carry a sign-in, so it is then left off. Pasting the
 same address later opens the article you already uploaded instead of trying the site again.
 

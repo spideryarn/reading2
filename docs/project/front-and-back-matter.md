@@ -25,7 +25,8 @@ of it in place.
 
 - **A stub per stretch**: one faint line, in the interface face, with a chevron, a label made from
   what is in it (*Abstract*; *Authors and affiliations*; *Title and authors* when the title is in
-  it; *Acknowledgements, funding and declarations*; *References*), a count, and an ⓘ saying what it is and that nothing is removed.
+  it; *Acknowledgements, funding and declarations*; *References*; a front summary by its own label,
+  *Executive summary* or *Key points*), a count, and an ⓘ saying what it is and that nothing is removed.
   Pressing it opens the stretch in place; a fold chevron in its first row's gutter shuts it again.
 - **Shut on every arrival**, and not remembered. A jump into a stretch (a search hit, a Structure
   row, a comment, a pasted `?at=`) opens it. The reading position never names a block inside a
@@ -39,8 +40,18 @@ of it in place.
   block. Leaving the paperwork out of what automatic modes *say* is the prompts' job
   ([`src/paperwork.ts`](../../src/paperwork.ts), plans 261003c and 261003d); taking it out of what
   they *read* is not built (queue `qi-2byhh6nc`).
-- **Not matter, and never folded:** appendices, glossaries, footnotes and endnotes, a standfirst,
-  a *Significance* or *Key points* box, an executive summary, an essay's own opening or closing.
+- **The author's own summaries at the front fold too**: an *Executive summary*, *Key points*,
+  *Highlights*, *Significance* or *Author summary*, each its own stub, named by its label. Summary
+  and Structure do that job, and one press opens it.
+
+  > B
+  >
+  > — Greg, 2026-10-25 (`spya-p6gmn7`), answering [q-r8kumx](../user-feedback/questions/q-r8kumx.md):
+  > fold them like the abstract, a row in Structure, the stub saying which kind.
+
+  The same label in the body (a *Key points* after the introduction) is the article's own and stays.
+- **Not matter, and never folded:** appendices, glossaries, footnotes and endnotes, a standfirst, a
+  section called *Summary* or *TL;DR*, an essay's own opening or closing.
 
 ## Where it comes from
 
@@ -60,7 +71,20 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
   *Table of contents* heading can be lost at extraction (Readability dropped
   `<h1 class="toc-header">`, report `spya-jk0xw5`) or never be there. The link is the evidence: a
   line must name the heading that its own anchor targets, and a run under *Key points*, *Highlights*,
-  *Significance*, *Executive summary* or *Author summary* stays showing even when it links onward.
+  *Significance*, *Executive summary* or *Author summary* is never contents even when it links
+  onward (at the front, it folds as a summary instead).
+- **A front summary is the label rule's alone** (`summaryAt` in src/matter.ts, plan
+  [261025f](../plans/261025f-an-executive-summary-and-the-other-front-summaries-fold-like-the-abstract.md)).
+  Its prose is prose, so the label, where it sits and how far it runs are its whole evidence, and
+  every doubt shows it: the label in the opening window, no heading of the article's own before it
+  at its level or above, at most 300 words of the article's own prose before it; it runs to the
+  end of its heading's section (or the next heading, under a paragraph label), to its last item
+  when it is a list, and stops at any other label, an inline *Citation:* or *Funding:* line, or a
+  bare *Introduction*; a sub-heading inside it that is neither a structured summary's part
+  (*Question*, *Findings*) nor a question over bullets (PLOS Medicine's), or over 1,500 words, and
+  it does not fold at all. The model is not told the kind and its request did not change: its schema leaves
+  `summary` out, and an answer claiming one is refused. In the union a summary keeps its blocks
+  whatever the model called them, and two summaries never join.
 - **A rule change that leaves older admitted folds sound keeps older values readable.** The step's version
   (`MATTER_PROMPT_VERSION`) decides when it runs again; `MATTER_READABLE_VERSIONS` decides what a
   read still folds, so a new source does not take every stored fold away until each article is
@@ -88,7 +112,9 @@ A step, `matter`, after `blocks`, run as a free successor job when a publication
 [261018b](../investigations/261018b-front-and-back-matter-eval.md) measured it on 52 articles in
 three sets, two held out: no prose folded, 67–96% of matter found, about $0.0013 an article. **A
 change to a check or the prompt is re-run on all three sets** with `scripts/matter-eval.ts` before
-it lands; the gold labels' guide is in that investigation's folder. The reasoning, the plan review
+it lands; the gold labels' guide is in that investigation's folder. Since 261025f the gold marks
+a front summary as matter (`summary`), and the corpus has only two, both executive summaries; the
+investigation's addendum says what else was checked by hand. The reasoning, the plan review
 and what building changed are in
 [261018a](../plans/261018a-front-and-back-matter-marked-at-import-and-folded-by-default.md).
 

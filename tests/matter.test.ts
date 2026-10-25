@@ -108,7 +108,7 @@ describe("matterInputHash", () => {
   it("is versioned, stable, and changes with every block field the matter pass reads", () => {
     const a = paper();
     const h = matterInputHash(a.blocks);
-    expect(h).toMatch(/^m2:[0-9a-f]{16}$/u);
+    expect(h).toMatch(/^m3:[0-9a-f]{16}$/u);
     expect(matterInputHash(a.blocks.map((b) => ({ ...b })))).toBe(h);
     const changed = (f: (b: MatterBlock) => MatterBlock) => matterInputHash(a.blocks.map((b, i) => (i === 2 ? f(b) : b)));
     expect(changed((b) => ({ ...b, kind: "heading" }))).not.toBe(h);
@@ -117,6 +117,8 @@ describe("matterInputHash", () => {
     expect(changed((b) => ({ ...b, text: "Summary" }))).not.toBe(h);
     expect(changed((b) => ({ ...b, html: `<p><a href="#spya-zzzzzz">${b.text}</a></p>` }))).not.toBe(h);
     expect(changed((b) => ({ ...b, html: `<p><strong>${b.text}</strong></p>` }))).toBe(h);
+    /* A front summary that is a list ends at its last item (plan 261025f). */
+    expect(changed((b) => ({ ...b, html: `<li>${b.text}</li>` }))).not.toBe(h);
     expect(changed((b) => ({ ...b, id: "spya-zzzzzz" as MatterBlock["id"] }))).not.toBe(h);
     expect(changed((b) => ({ ...b, role: "footnote" }))).not.toBe(h);
     /* An absent level or role and a `null` one are the same block: the owner's
@@ -1069,18 +1071,23 @@ describe("a contents list with no label", () => {
     expect(contents).toEqual([[a.at.first, a.at.last, "contents"]]);
   });
 
-  it("leaves a Key points list showing whose lines repeat later headings but link nowhere", () => {
+  /* A Key points list is never contents. At the front it folds as a summary,
+     label to last item, and the unheaded introduction after it stays showing
+     (Greg's answer to q-r8kumx; plan 261025f). */
+  const keyPoints = (a: ReturnType<typeof mcp>) => [[a.at.first - 1, a.at.last, "summary"]];
+
+  it("folds a Key points list whose lines repeat later headings as a summary, not contents", () => {
     const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(bare), { before: "Key points" });
-    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual(keyPoints(a));
   });
 
-  it("leaves a fully linked Key points list showing", () => {
+  it("folds a fully linked Key points list as a summary, not contents", () => {
     const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(linked), { before: "Key points" });
-    expect(spans(a, matterByLabels(a, new Set()))).toEqual([]);
+    expect(spans(a, matterByLabels(a, new Set()))).toEqual(keyPoints(a));
   });
 
   it("leaves it showing when each line names a heading but its link targets a different one", () => {
-    const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(linked), { before: "Key points" });
+    const a = mcp(["The Benefits", "Adding the Pick Tool", "In Conclusion"].map(linked));
     const wrong = ["My Browser DevTools Use Cases", "The Start Tool", "A Contrived Example"].map(
       (text) => a.blocks.find((b) => b.kind === "heading" && b.text === text)!,
     );

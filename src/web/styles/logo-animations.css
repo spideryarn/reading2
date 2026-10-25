@@ -904,7 +904,7 @@
     /* `100% 100%` of a box that is exactly the spider (`inset: 0` on
        `.logo-mark`), rather than the `20px 20px` it was. The original mark
        was taller than it was wide, so a fixed square made the sweep too
-       short. The optical reader is square, but the mask still follows the
+       short. The reader PNG is square, but the mask still follows the
        actual image box in every host and at every size. */
     -webkit-mask: url(/spideryarn-logo.png) center / 100% 100% no-repeat;
     mask: url(/spideryarn-logo.png) center / 100% 100% no-repeat;
@@ -1216,19 +1216,20 @@
    complement — the same two quadrants cut out as holes — so the real legs
    are not drawn under the moving copies. At rest the copies sit exactly
    where the holes are, so the class on with nothing moving (the guard's
-   still) is the spider, whole. These coordinates select the optical yarn
-   reader's two UPPER free ends, whose tips sit near (20%, 8%) and (80%, 10%).
-   The cuts stop above the side limbs and outside the body oval; the lower
-   stems, body and book remain on the still image. The pivots are at those
-   cuts, near (28.5%, 36.01%) and (71.5%, 36.01%). They belong to the cropped
-   public PNG, not the uncropped source SVG. A new silhouette or crop needs
-   them measured again; tests/semaphore-geometry.test.ts checks which actual
-   foreground pixels the polygons select. Shortening the crossed lower folds
-   on 2026-10-24 reduced the source crop's height by 6px: the same upper paths
-   consequently moved down 3.23px in this 256px PNG. The cut lines and pivots
-   moved with them, rather than changing the anatomy checks.
+   still) is the spider, whole. These coordinates select the textured
+   reader's two UPPER free ends. The diagonal cuts stop before the visible
+   body occludes each upper limb; the body, book and six remaining limbs stay
+   on the still image. Their pivots sit in the opaque upper stems, near
+   (34.37%, 26.87%) and (65.63%, 26.87%). They belong to the alpha-cropped public PNG,
+   not the uncropped reader master. A new silhouette or crop needs them
+   measured again. tests/semaphore-geometry.test.ts checks against separately
+   hand-labelled source anatomy with a source hash guard, rather than deriving
+   the intended limb from these polygons.
 
-   **Each copy reaches 0.5% further down than its hole.** Where two clipped
+   The 2026-10-25 small-mark fill change enlarges the same source crop from
+   95% to 99% about the canvas centre; cuts and pivots follow that transform.
+
+   **Each copy reaches about 0.52% further down than its hole.** Where two clipped
    edges meet exactly, each is antialiased against the other and the page
    shows through the seam: the first version drew a thin dark line across both
    legs at rest, visible at 2× and on the 2.2× loader (browser check,
@@ -1252,8 +1253,8 @@
   .spya-semaphore .logo-image {
     clip-path: polygon(evenodd,
       0 0, 100% 0, 100% 100%, 0 100%, 0 0,
-      15% 0, 33% 0, 33% 31.26%, 31.5% 36.26%, 15% 36.26%, 15% 0, 0 0,
-      67% 0, 85% 0, 85% 36.26%, 68.5% 36.26%, 67% 31.26%, 67% 0, 0 0);
+      13.5263% 0, 37.4947% 0, 37.4947% 22.9053%, 31.2421% 30.7211%, 27.0737% 30.7211%, 13.5263% 18.7368%, 13.5263% 0, 0 0,
+      62.5053% 0, 86.4737% 0, 86.4737% 18.7368%, 72.9263% 30.7211%, 68.7579% 30.7211%, 62.5053% 22.9053%, 62.5053% 0, 0 0);
   }
   .spya-semaphore .logo-mark::before,
   .spya-semaphore .logo-mark::after {
@@ -1265,15 +1266,15 @@
     transform: rotate(0deg);
   }
   .spya-semaphore .logo-mark::before {
-    clip-path: polygon(15% 0, 33% 0, 33% 31.26%, 31.5% 36.76%, 15% 36.76%);
+    clip-path: polygon(13.5263% 0, 37.4947% 0, 37.4947% 23.4263%, 31.2421% 31.2421%, 27.0737% 31.2421%, 13.5263% 18.7368%);
     transform: rotate(0deg);
-    transform-origin: 28.5% 36.01%;
+    transform-origin: 34.3684% 26.8653%;
     animation: spya-flag-left 1.8s ease-in-out infinite;
   }
   .spya-semaphore .logo-mark::after {
-    clip-path: polygon(67% 0, 85% 0, 85% 36.76%, 68.5% 36.76%, 67% 31.26%);
+    clip-path: polygon(62.5053% 0, 86.4737% 0, 86.4737% 18.7368%, 72.9263% 31.2421%, 68.7579% 31.2421%, 62.5053% 23.4263%);
     transform: rotate(0deg);
-    transform-origin: 71.5% 36.01%;
+    transform-origin: 65.6316% 26.8653%;
     animation: spya-flag-right 1.8s ease-in-out infinite;
   }
 }

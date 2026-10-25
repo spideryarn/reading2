@@ -853,11 +853,21 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 
    **The bar it pins is taller on a narrow window**, since 2026-10-03: the same
    `> .controls > .crumbs` raises `--bar-h` there (crumbs.css § a narrow
-   window), and both declarations below read it. */
+   window), and both declarations below read it.
+
+   **And Structure's band, since 2026-10-25**, which is fitted to its own
+   height: the band's top is `--bar-bottom`, so a bar sliding away grew it and
+   the list redrew for a bar rather than for the reader (Greg, spya-m5gxk9;
+   GPT Sol's plan review of 261025e, F1). The bottom bar's half is padded out
+   instead (mode-band.css § `--band-bar-travel`); this half is held, because
+   `top` animates and a padding cannot follow an animation. It reaches only a
+   reader with a bar in a band mode — a visitor's chip — and the selector's
+   specificity is unchanged: `.mode-band:is(.outln, .struct)` is (0,2,0). */
 :root:has(:where(.reader) > .controls):has(
     :where(.reader) > .controls:focus-within,
     :where(.reader) > .controls > .crumbs,
-    :where(.reader.band-covers) .mode-band
+    :where(.reader.band-covers) .mode-band,
+    :where(.reader) .mode-band:is(.outln, .struct)
   ) {
   --bar-bottom: calc(var(--bar-h) + var(--safe-top));
   /* Both, or the bar a keyboard reader is standing in stays off the top of the
@@ -866,24 +876,32 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 }
 
 /* **And when a mode opens, the bar arrives rather than slides.** The guard above
-   brings it back the instant `.mode-band` exists; the band is `position: fixed`
-   and takes its final bounds on the same frame, so for the 180ms the bar spends
-   travelling the band is the right size with nothing above it and the article is
-   painted at the top of the screen. A slide is how a bar announces that it is
-   getting out of the way; a bar coming back because the reader opened a panel is
-   not announcing anything. Nothing else here transitions on `.mode-band`, so
-   this only ever fires on that switch. The dock's twin is in narrow-window.css,
-   where the dock's half of the switch lives. GPT Sol, 2026-09-03.
+   brings it back the instant a covering band — or Structure's fitted band —
+   exists; the band is `position: fixed` and takes its final bounds on the same
+   frame, so for the 180ms the bar would spend travelling the band would be the
+   right size with nothing above it and the article painted at the top of the
+   screen. A slide is how a bar announces that it is getting out of the way; a
+   bar coming back because the reader opened a panel is not announcing anything.
+   Nothing else here transitions on `.mode-band`, so this only ever fires on
+   that switch. The dock's twin is in narrow-window.css, where the dock's half
+   of the switch lives. GPT Sol, 2026-09-03; plan 261025e code review.
 
    **`.band-covers` on it since 2026-09-08**, with the guard above and for the
    same reason: everything written here is about a bar that came back *because a
    panel opened*, which is only true where the band took the screen. Side by
    side a visitor's bar now hides and shows on scroll like any other, and
    killing its transition there would make it snap on every change of direction.
+   Structure is the one side-by-side exception: the fitted band guard above now
+   holds that bar home throughout, so there is no direction change to animate;
+   omitting it here made the bar slide over an already-full-height band only on
+   the opening frame.
 
    Specificity goes from (0,3,0) to (0,3,0) — `:where()` zeroes the two added
    classes, so the `:has()` argument stays `.mode-band` at (0,1,0). */
-:root:has(:where(.reader.band-covers) .mode-band) .controls {
+:root:has(
+    :where(.reader.band-covers) .mode-band,
+    :where(.reader) .mode-band:where(.outln, .struct)
+  ) .controls {
   transition: none;
 }
 

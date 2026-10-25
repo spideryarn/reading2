@@ -45,6 +45,14 @@ npm run db:admin-password   # the email and password to sign in with, on this ma
 npm run db:reown       # move every row from one owner to another — dry run without --apply
 ```
 
+**Start the stack from the primary checkout, never from a worktree.** `supabase start` bind-mounts
+files from the checkout it runs in (the auth email templates into Kong, the edge function into
+edge-runtime). Started from a worktree that is later removed, those two containers cannot start
+again. Kong exits 127 and sign-in fails with `ECONNREFUSED` on 54361, while the database on 54362
+stays healthy. Found on 2026-10-25 after 13 days down, with the stack still mounting the deleted
+`mcp-remote-on` worktree. From inside a worktree, stop and start it with
+`supabase stop --workdir <primary> && supabase start --workdir <primary>`. A stop keeps the data.
+
 **`npm run setup` is the one to reach for on a fresh checkout** — a box, a rebuild, a new clone. It
 runs `db:start`, `db:migrate`, `db:seed-owner` and `db:seed-dev` in that order and stops at the first
 failure with

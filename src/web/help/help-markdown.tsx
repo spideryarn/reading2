@@ -46,7 +46,7 @@
  *
  * ## The tokens
  *
- * Six facts live in code and would go stale in prose, so a file names them:
+ * Seven facts live in code and would go stale in prose, so a file names them:
  *
  * | token | stands for |
  * |---|---|
@@ -56,8 +56,15 @@
  * | `{{max-pdf-pages}}` | `MAX_PAGES`, the longest PDF we take (src/uploads.ts) |
  * | `{{pages-per-article}}` | `PAGES_PER_SLOT`, the pages one article's worth buys |
  * | `{{modes-table}}`, alone in a paragraph | the *Which mode when* table |
+ * | `{{chrome-extension}}`, alone in a paragraph | the Chrome extension's paragraph and store link (ExtensionOffer.tsx § `ExtensionHelp`) |
  *
- * All but the table are replaced inside a run of text **after** parsing, so a
+ * **The extension's paragraph is a token because its link is not a path on
+ * this site** (`targetOf` refuses one) and exists only once the store item
+ * does: `PRODUCTION_EXTENSION_ID`, plan 261025b. Its sentence is the same in
+ * both states, and only that sentence reaches the search text and the
+ * chatbot's corpus, so setting the id moves no generated file.
+ *
+ * All but the two block tokens are replaced inside a run of text **after** parsing, so a
  * label can never be read as Markdown. An unknown token throws.
  */
 import type { ReactNode } from "react";
@@ -69,6 +76,7 @@ import { MODE_CATALOG } from "../../mode-catalog.js";
 import { MODES } from "../../modes.js";
 import { MAX_PAGES, PAGES_PER_SLOT } from "../../uploads.js";
 import { MODE_LABEL } from "../../title-text.js";
+import { EXTENSION_HELP_SENTENCE, ExtensionHelp } from "../ExtensionOffer.js";
 import { CHANGELOG_LABEL, HELP_HREF } from "../router.js";
 import { helpHref, resolveHelpAnchor, type HelpAnchor } from "./help-anchors.js";
 import { MODE_WHEN, ModesTable } from "./help-mode-when.js";
@@ -97,6 +105,10 @@ const TEXT_TOKENS: Readonly<Record<string, () => string>> = {
 };
 
 const TABLE_TOKEN = "modes-table";
+const EXTENSION_TOKEN = "chrome-extension";
+/** The tokens that are a paragraph of their own, never a word in one. */
+const BLOCK_TOKENS = [TABLE_TOKEN, EXTENSION_TOKEN] as const;
+type BlockToken = (typeof BLOCK_TOKENS)[number];
 const TOKEN = /\{\{([^{}]*)\}\}/g;
 
 /** One text token's words, or a throw naming it. */
@@ -104,8 +116,8 @@ function textToken(name: string, where: string): string {
   const read = Object.hasOwn(TEXT_TOKENS, name) ? TEXT_TOKENS[name] : undefined;
   if (read === undefined) {
     throw new Error(
-      name === TABLE_TOKEN
-        ? `Help page ${where}: {{${TABLE_TOKEN}}} must be alone in its own paragraph`
+      (BLOCK_TOKENS as readonly string[]).includes(name)
+        ? `Help page ${where}: {{${name}}} must be alone in its own paragraph`
         : `Help page ${where}: unknown token {{${name}}}`,
     );
   }
@@ -141,15 +153,18 @@ function modesTableMarkdown(): string {
  * component. `where` is only for the message if a token is unknown.
  */
 export function expandHelpTokens(raw: string, where = "(text)"): string {
-  return expand(raw, where, (name) => (name === TABLE_TOKEN ? modesTableMarkdown() : textToken(name, where)));
+  return expand(raw, where, (name) =>
+    name === TABLE_TOKEN ? modesTableMarkdown() : name === EXTENSION_TOKEN ? EXTENSION_HELP_SENTENCE : textToken(name, where),
+  );
 }
 
 /* ───────────────────────────── shared reading ───────────────────────────── */
 
-/** A paragraph that is the table's token and nothing else. */
-function isTableToken(node: Paragraph): boolean {
+/** The block token a paragraph is and nothing else, or `null`. */
+function blockToken(node: Paragraph): BlockToken | null {
   const only = node.children.length === 1 ? node.children[0] : undefined;
-  return only?.type === "text" && only.value.trim() === `{{${TABLE_TOKEN}}}`;
+  if (only?.type !== "text") return null;
+  return BLOCK_TOKENS.find((name) => only.value.trim() === `{{${name}}}`) ?? null;
 }
 
 /** A soft line break in the file is a space on the page. */
@@ -388,7 +403,9 @@ function HelpFigure({ image, alt, caption }: Figure) {
 function drawBlock(node: RootContent, key: number, ctx: Ctx): ReactNode {
   switch (node.type) {
     case "paragraph": {
-      if (isTableToken(node)) return <ModesTable key={key} />;
+      const token = blockToken(node);
+      if (token === TABLE_TOKEN) return <ModesTable key={key} />;
+      if (token === EXTENSION_TOKEN) return <ExtensionHelp key={key} />;
       const figure = figureOf(node, ctx.where);
       if (figure !== null) return <HelpFigure key={key} {...figure} />;
       return <p key={key}>{drawInlines(node.children, ctx)}</p>;
@@ -539,7 +556,9 @@ function plainList(list: List, where: string): string[] {
 function plainBlock(node: RootContent, where: string): string[] {
   switch (node.type) {
     case "paragraph": {
-      if (isTableToken(node)) return MODES.map((m) => `${MODE_LABEL[m]}: reach for it when ${MODE_WHEN[m]}`);
+      const token = blockToken(node);
+      if (token === TABLE_TOKEN) return MODES.map((m) => `${MODE_LABEL[m]}: reach for it when ${MODE_WHEN[m]}`);
+      if (token === EXTENSION_TOKEN) return [EXTENSION_HELP_SENTENCE];
       /* A picture is its caption: the words a reader can search for. */
       const figure = figureOf(node, where);
       if (figure !== null) return [figure.caption];

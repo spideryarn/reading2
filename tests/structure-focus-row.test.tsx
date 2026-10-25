@@ -159,6 +159,202 @@ describe("Structure's current-row measurement", () => {
 });
 
 /**
+ * **Structure hears where the reader is at most once a second while they
+ * scroll** (Greg, spya-m5gxk9: *"It probably only needs to update every second
+ * or two"*). Each publish redraws a fitted list in a fixed band, and on an iPad
+ * a band redrawn under a moving finger flickers. The first change after a quiet
+ * second goes at once, the rest wait for the second to be up, and a jump never
+ * waits. docs/plans/261025e-structure-on-an-ipad-updates-calmly-and-uses-its-width.md.
+ */
+describe("Structure's current row, held while the reader scrolls", () => {
+  const C = "spya-cccccc";
+  const THREE = [...FIRST, { row: 9, blockId: C, nodeId: "n0003", title: "Third", titleVoice: "ai" }] as Section[];
+  let tops: Record<string, number>;
+  let published: number[];
+
+  function Held({ holdMs, layoutKey = "k" }: { holdMs?: number; layoutKey?: string }): ReactNode {
+    const { focusRow } = useColumnContext({ sections: THREE, enabled: true, layoutKey, ...(holdMs === undefined ? {} : { holdMs }) });
+    if (published.at(-1) !== focusRow) published.push(focusRow);
+    return (
+      <table className="zoom">
+        <tbody>
+          {THREE.map((s) => (
+            <tr data-block={s.blockId} key={s.blockId}>
+              <td>{s.title}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  /** Put the reader's focus line (80px) in one section, and tell the hook. */
+  function scrollInto(blockId: string): void {
+    tops = { [A]: -400, [B]: blockId === A ? 150 : -200, [C]: blockId === C ? 50 : 300 };
+    if (blockId === A) tops[A] = 0;
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+      flushFrames();
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] });
+    tops = { [A]: 0, [B]: 150, [C]: 300 };
+    published = [];
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const top = tops[this.dataset.block ?? ""] ?? 0;
+      return { top, bottom: top + 20, height: 20 } as DOMRect;
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("publishes the first crossing at once, holds the rest, and ends on where the reader stopped", () => {
+    act(() => root.render(<Held holdMs={1000} />));
+    act(() => vi.advanceTimersByTime(2000));
+    expect(published).toEqual([0]);
+
+    scrollInto(B);
+    expect(published).toEqual([0, 5]);
+
+    const reads = vi.mocked(HTMLElement.prototype.getBoundingClientRect).mock.calls.length;
+    act(() => vi.advanceTimersByTime(300));
+    scrollInto(C);
+    /* Inside the hold a scroll frame reads nothing (Sol, plan review F3). */
+    expect(vi.mocked(HTMLElement.prototype.getBoundingClientRect).mock.calls.length).toBe(reads);
+    act(() => vi.advanceTimersByTime(300));
+    scrollInto(A);
+    act(() => vi.advanceTimersByTime(100));
+    scrollInto(C);
+    /* Three crossings inside the second, and none of them drawn yet. */
+    expect(published).toEqual([0, 5]);
+
+    act(() => vi.advanceTimersByTime(400));
+    expect(published).toEqual([0, 5, 9]);
+
+    /* Nothing more is owed, so nothing more is drawn. */
+    act(() => vi.advanceTimersByTime(3000));
+    expect(published).toEqual([0, 5, 9]);
+  });
+
+  it("never holds a jump", () => {
+    act(() => root.render(<Held holdMs={1000} />));
+    act(() => vi.advanceTimersByTime(2000));
+    scrollInto(B);
+    expect(published).toEqual([0, 5]);
+
+    /* A row pressed in the band lands its block centred, inside the held second. */
+    tops = { [A]: -400, [B]: -200, [C]: 90 };
+    act(() => {
+      scrollToBlock(C, "auto", undefined, { align: "centre" });
+      flushFrames();
+    });
+    expect(published).toEqual([0, 5, 9]);
+  });
+
+  /* Sol, plan review F2: a jump that replaces another before a frame runs
+     goes from "anchored" to "anchored", so a sampled flag sees no jump. */
+  it("never holds a jump that replaces another before a frame runs", () => {
+    act(() => root.render(<Held holdMs={1000} />));
+    act(() => vi.advanceTimersByTime(2000));
+    tops = { [A]: -400, [B]: -200, [C]: 90 };
+    act(() => {
+      scrollToBlock(C, "auto", undefined, { align: "centre" });
+      flushFrames();
+    });
+    expect(published).toEqual([0, 9]);
+
+    tops = { [A]: 90, [B]: 300, [C]: 500 };
+    act(() => {
+      scrollToBlock(A, "auto", undefined, { align: "centre" });
+      flushFrames();
+    });
+    expect(published).toEqual([0, 9, 0]);
+  });
+
+  it("does not leave a jump frame armed when the trailing timer publishes it", () => {
+    act(() => root.render(<Held holdMs={1000} />));
+    act(() => vi.advanceTimersByTime(2000));
+    scrollInto(B);
+
+    act(() => vi.advanceTimersByTime(300));
+    scrollInto(C); // Arms the trailing measurement for t=3000ms.
+    act(() => vi.advanceTimersByTime(699));
+
+    /* The arrival queues its immediate frame just before the trailing timer.
+       The timer wins this race and publishes the jump; its release must cancel
+       that queued frame, or the same rows are scanned again on the next paint. */
+    tops = { [A]: 90, [B]: 300, [C]: 500 };
+    act(() => {
+      scrollToBlock(A, "auto", undefined, { align: "centre" });
+      vi.advanceTimersByTime(1);
+    });
+    expect(published).toEqual([0, 5, 0]);
+
+    const reads = vi.mocked(HTMLElement.prototype.getBoundingClientRect).mock.calls.length;
+    act(() => flushFrames());
+    expect(vi.mocked(HTMLElement.prototype.getBoundingClientRect).mock.calls.length).toBe(reads);
+  });
+
+  it("does not leave the trailing timer armed when a same-section jump frame wins", () => {
+    act(() => root.render(<Held holdMs={1000} />));
+    act(() => vi.advanceTimersByTime(2000));
+    scrollInto(B);
+
+    act(() => vi.advanceTimersByTime(300));
+    scrollInto(C); // Arms the trailing measurement for t=3000ms.
+
+    /* This time the arrival frame wins, but it still names the last published
+       section. That completed scan makes the old trailing timer obsolete even
+       though there is no state change to publish. */
+    tops = { [A]: -400, [B]: 90, [C]: 300 };
+    act(() => {
+      scrollToBlock(B, "auto", undefined, { align: "centre" });
+      flushFrames();
+    });
+    expect(published).toEqual([0, 5]);
+
+    const reads = vi.mocked(HTMLElement.prototype.getBoundingClientRect).mock.calls.length;
+    act(() => vi.advanceTimersByTime(700));
+    expect(vi.mocked(HTMLElement.prototype.getBoundingClientRect).mock.calls.length).toBe(reads);
+  });
+
+  it("starts a fresh hold and measurement when the layout effect re-runs", () => {
+    act(() => root.render(<Held holdMs={1000} layoutKey="before" />));
+    act(() => vi.advanceTimersByTime(2000));
+    scrollInto(B);
+
+    act(() => vi.advanceTimersByTime(300));
+    scrollInto(C); // Arms the old effect's trailing timer.
+    tops = { [A]: 0, [B]: 150, [C]: 300 };
+    act(() => root.render(<Held holdMs={1000} layoutKey="after" />));
+    expect(published).toEqual([0, 5, 0]);
+
+    /* The old timer was cleared with the old rows and cannot publish later. */
+    act(() => vi.advanceTimersByTime(1000));
+    expect(published).toEqual([0, 5, 0]);
+  });
+
+  it("is not held at all without `holdMs` (the breadcrumb's use)", () => {
+    act(() => root.render(<Held />));
+    scrollInto(B);
+    scrollInto(C);
+    expect(published).toEqual([0, 5, 9]);
+  });
+
+  it("is not held with an explicit zero-length hold", () => {
+    act(() => root.render(<Held holdMs={0} />));
+    scrollInto(B);
+    scrollInto(C);
+    expect(published).toEqual([0, 5, 9]);
+  });
+});
+
+/**
  * **Block 0 is the first section's start and the masthead's echo at once.**
  * It is hidden through the fold store, and its section is still on screen, so
  * it is not skipped the way a folded section's start is (fold.ts §

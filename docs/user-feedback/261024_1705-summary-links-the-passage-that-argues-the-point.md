@@ -1,7 +1,7 @@
 ---
 reports: spya-hnw9xq
 ending: shipped
-comment: Summary's links now go to the passage that argues each point, not the abstract or executive summary. Still waiting on you: should an executive summary be folded like the abstract (q-r8kumx)?
+comment: Summary now links the passage that argues each point, not the abstract or executive summary. And, per your answer B, executive summaries and the other front summaries now fold like the abstract (this article: once re-imported).
 ---
 # Summary links the passage that argues the point, not the abstract
 
@@ -36,3 +36,15 @@ because it predates the step and he chose no backfill (q-f7zp3t, 1A), so only a 
 fold its abstract. Whether to fold executive summaries too is
 [q-r8kumx](questions/q-r8kumx.md), recommending B (they and the other author summaries at the
 front); queued as `qi-j5sapfw2`, waiting on that answer.
+
+**The fold: answered B, shipped on `dev` (2026-10-25, session `fbhnw9xq-fold-front-summaries`,
+queue `qi-mgtyaqrd`).** Greg, reply `spya-p6gmn7`: *"B"*. A new matter kind, `summary`, found by
+the free label rule alone: an *Executive summary*, *Key points*, *Highlights*, *Significance* or
+*Author summary* label that opens the piece, folded to its own stub named by that label, still a
+row in Structure. The same label in the body stays showing. The model's request is unchanged.
+On the 261018b eval with the gold updated for it, no prose folded on any of the three sets and both
+labelled executive summaries (this article's, blocks 39–53, and NIST's) fold; across about 60 live
+pages no body section folded. Plan
+[261025f](../plans/261025f-an-executive-summary-and-the-other-front-summaries-fold-like-the-abstract.md).
+No backfill (q-f7zp3t, 1A): this article folds its executive summary once re-imported; nothing in
+production was written.

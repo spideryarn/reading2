@@ -226,6 +226,9 @@ import { voiceClass } from "./voice.js";
 import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
 import { dictationReporter } from "./dictation-report.js";
 import { findHref } from "./search-hrefs.js";
+import { EXTENSION_STORE_URL } from "./extension-handoff.js";
+import { extensionDevice } from "./ExtensionOffer.js";
+import { helpHref } from "./help/help-anchors.js";
 
 /**
  * **The article the bar was opened over**, or `undefined` where there is none.
@@ -416,6 +419,7 @@ export function besideTheModes({
   openComments,
   openFeedback,
   queue,
+  extensionStore,
 }: {
   article: CommandBarArticle | undefined;
   /** The Dock drawer's `onPanel`, already bound to `"questions"`, or absent. */
@@ -424,6 +428,9 @@ export function besideTheModes({
   openFeedback: (() => void) | null;
   /** The job queue the *Run again* rows post through — `RerunQueue`. */
   queue: RerunQueue;
+  /** `EXTENSION_STORE_URL`, or `null` on a device the extension is not for
+   *  (§ `extensionRow`). Tests that mean every row the bar can draw pass one. */
+  extensionStore: string | null;
 }): readonly Command[] {
   return [
     ...(article === undefined ? [] : articleRows(article)),
@@ -467,6 +474,9 @@ export function besideTheModes({
             },
           } as const,
         ]),
+    /* Before the app pages, so the changelog stays the last page above
+       Feedback (tests/command-bar.test.tsx). */
+    ...(extensionStore === null ? [] : [extensionRow]),
     ...APP_PAGES,
     ...(openFeedback === null
       ? []
@@ -1487,6 +1497,45 @@ function helpRow(href: string | undefined): Command {
 }
 
 /**
+ * **The Chrome extension, typed-only** — for a reader who goes looking for it
+ * by name, not a row the bar opens on: Greg asked for it to be findable, not
+ * pushed (ExtensionOffer.tsx, plan 261025b). It opens Help's *Adding an
+ * article*, which says what the extension does and links to the store, rather
+ * than leaving the site from a row.
+ *
+ * **An action, not a page row, though all it does is navigate**: the picker
+ * gives every `/help/…` page one key (command-match.ts § `pickKey`), so a page
+ * row here would be the Help row to the server, and two rows in one context
+ * may not share an id (tests/command-pick-catalogue.test.ts).
+ *
+ * Drawn only once the store item exists and on a device that can install it
+ * (`extensionDevice`); the picker's catalogue always holds it, so setting the
+ * id moves no generated file.
+ */
+const extensionRow: Extract<Command, { kind: "action" }> = {
+  kind: "action",
+  id: "chrome-extension",
+  label: "Chrome extension",
+  description: "Add the page you are reading in one press, from Chrome. Opens instructions in Help.",
+  aliases: ["extension", "browser extension", "chrome", "plugin", "add-on"],
+  typedOnly: true,
+  /* Help is words the build shipped; opening it runs nothing. */
+  generates: false,
+  opensOnly: true,
+  run: () => {
+    navigate(helpHref("adding-articles"));
+    return CLOSE;
+  },
+};
+
+/** What `besideTheModes` is handed for the extension row in the running app.
+ *  The argument lets the gate be proved in both store states without changing
+ *  the production id (tests/extension-findable.test.tsx). */
+export function extensionStoreHere(url: string | null = EXTENSION_STORE_URL): string | null {
+  return extensionDevice() ? url : null;
+}
+
+/**
  * **The app's own pages, which are the same wherever the bar is opened.**
  *
  * A module constant because nothing in it depends on where you are standing —
@@ -2068,6 +2117,8 @@ export function CommandBar({
   /* The appearance in force, for which of its three rows is marked `current`
      (appearance-commands.ts). The store's own hook, as /profile reads it. */
   const appearance = useAppearance();
+  /* Read once: the pointer is the device's and does not change under the bar. */
+  const [extensionStore] = useState(extensionStoreHere);
   const pickable = useMemo(
     () => [
       ...modes.map(modeCommand),
@@ -2082,7 +2133,7 @@ export function CommandBar({
           ? structureInSearch(article?.search ?? "")
           : undefined,
       }),
-      ...besideTheModes({ article, openComments, openFeedback, queue }),
+      ...besideTheModes({ article, openComments, openFeedback, queue, extensionStore }),
       /* Typed-only, so where it sits matters only on a tie — and there the
          page's own rows should win. */
       ...experimentalRows(experimental),
@@ -2090,7 +2141,7 @@ export function CommandBar({
          the choice is the device's, and the write is synchronous. */
       ...appearanceRows(appearance, setAppearance),
     ],
-    [modes, experimental, diagram, article, openComments, openFeedback, queue, appearance],
+    [modes, experimental, diagram, article, openComments, openFeedback, queue, appearance, extensionStore],
   );
   /**
    * **The administrator's rows, after everything else** (admin-commands.ts,

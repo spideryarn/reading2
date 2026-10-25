@@ -6069,6 +6069,15 @@ export type CitationWebNoteWhy =
   | "not-supported";
 
 /**
+ * **Which page a web note rests on** (plan 261025d): `own` — the work's own by
+ * its identifier, its doi.org address or its arXiv page (`pageIsTheWork`);
+ * `looks-like` — another page titled as the work that names its first author
+ * (`pageLooksLikeTheWork`), which may be someone else's description of it.
+ * Decided by code at the press and stored, never derived from the host.
+ */
+export type WebNotePageKind = "own" | "looks-like";
+
+/**
  * **A web note as `citation_web_notes` keeps it** — one row per `(article,
  * entry)`, overwritten by a later press. `identity` is `rowIdentity` of the
  * row as the list stores it when the press ran; the read attaches a note only
@@ -6094,6 +6103,7 @@ export type CitationWebNote = {
       title: string | null;
       /** When the search read the page, ISO: the press's moment. */
       readAt: string;
+      pageKind: WebNotePageKind;
     }
   | { state: "none"; why: CitationWebNoteWhy }
 );
@@ -6111,6 +6121,8 @@ export interface CitedWorkWebNote {
   host: string;
   title?: string;
   readAt: string;
+  /** The tier the page passed; a `looks-like` note is labelled as possibly someone else's description. */
+  pageKind: WebNotePageKind;
 }
 
 /** The SSE stages of a web-note press: one search, then the separate check. */
@@ -7090,6 +7102,7 @@ export type MatterKindName =
   | "title"
   | "authors"
   | "abstract"
+  | "summary"
   | "keywords"
   | "contents"
   | "dates"

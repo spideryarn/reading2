@@ -565,8 +565,9 @@ to the browser. It jumps through App's `onJump` rather than by navigation, becau
 intercepts no anchor clicks globally**: an unprevented one would reload the reading view to arrive at
 the paragraph already on screen.
 
-Where an id is still drawn as characters, the type is small, faint and Courier (`--font-id` in
-[`styles/tokens.css`](../../styles/tokens.css)), at Greg's asking: an id is machine text sitting
+Where an id is still drawn as characters, the type is small, faint and monospace (`--font-mono` in
+[`styles/tokens.css`](../../styles/tokens.css); Courier, at Greg's asking, until the faces were cut
+back on 2026-10-25 — [fonts.md](fonts.md)): an id is machine text sitting
 beside prose and should read as a footnote to the block, not as part of it. That was also the
 argument for taking it out of the gutter — beside a paragraph, a footnote to the block is still a
 column of machine text running the length of the article.
