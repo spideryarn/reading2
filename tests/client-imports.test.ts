@@ -77,6 +77,11 @@ const SHARED = new Set([
      front- and back-matter pass's, one definition so the two cannot disagree.
      Imports nothing. Plan 261018a, review F8. */
   "section-ranges.js",
+  /* Which labels name a summary at the front, and what its folded stub calls
+     it: the matter pass finds the stretch by them and the reading view names
+     the stub from them, so the two cannot disagree. Imports nothing. Plan
+     261025f. */
+  "matter-summary.js",
   /* Which modes' "older version of the article" notices may be dismissed, and
      what a dismissal may say — the route checks a body with it and the hook
      builds one, so the two cannot disagree. Imports nothing. Plan 261010a. */
