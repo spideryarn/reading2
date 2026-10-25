@@ -1152,14 +1152,25 @@ export function dockerInventory(): DockerInventory {
 
   const inspect = spawnSync("docker", ["inspect", ...ids], { ...opts, timeout: 30_000 });
   if (inspect.error !== undefined) return { kind: "cannot-tell", why: `docker inspect failed: ${inspect.error.message}` };
-  const stderr = inspect.stderr.split("\n").filter((l) => l.trim() !== "");
-  const onlyVanished = stderr.every((l) => /no such (object|container)/i.test(l));
-  if (inspect.status !== 0 && !onlyVanished) {
-    return { kind: "cannot-tell", why: `docker inspect exited ${String(inspect.status)}: ${stderr.slice(-3).join(" ")}` };
+  return dockerInspectInventory(inspect.status, inspect.stdout, inspect.stderr);
+}
+
+/**
+ * Turn `docker inspect`'s reply into an inventory. Kept pure because the one
+ * tolerated non-zero exit is precise: every error line must say a container
+ * vanished between `ps` and `inspect`. An empty stderr must not satisfy that
+ * condition vacuously and turn an unexplained failure into an empty inventory.
+ */
+export function dockerInspectInventory(status: number | null, stdout: string, stderrText: string): DockerInventory {
+  const stderr = stderrText.split("\n").filter((l) => l.trim() !== "");
+  const onlyVanished = stderr.length > 0 && stderr.every((l) => /no such (object|container)/i.test(l));
+  if (status !== 0 && !onlyVanished) {
+    const detail = stderr.slice(-3).join(" ");
+    return { kind: "cannot-tell", why: `docker inspect exited ${String(status)}${detail === "" ? " with no error text" : `: ${detail}`}` };
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(inspect.stdout);
+    parsed = JSON.parse(stdout);
   } catch (err) {
     return { kind: "cannot-tell", why: `docker inspect printed something that is not JSON: ${(err as Error).message}` };
   }

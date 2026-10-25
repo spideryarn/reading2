@@ -96,4 +96,23 @@ show the blocker and each unknown.
 - Plan review (GPT Sol, 2026-10-25): "revise before implementation — the two-guard architecture is
   right". Seven findings (P-1…P-7), all accepted and folded in above; P-4's "a missing workdir label
   is unknown" softened to a warning, since an older CLI would make it a permanent refusal.
-- Code review (GPT Sol): _pending_
+- Code review (GPT Sol, 2026-10-25, write-capable, on 0735047b8): two P1s, both fixed by the
+  reviewer and read by me. **C-1**: the removal and sweep fixture tests asked the live Docker daemon,
+  so a `docker ps` timeout under the box's load became a fail-closed blocker — the flake the
+  implementer saw once. `RemoveOptions.docker` and `classifyAll(cwd, readDocker)` now let tests pass
+  a fixed inventory; production still scans fresh at the removal. **C-2**: a failed `docker inspect`
+  with empty stderr passed the "only vanished containers" test vacuously; now `cannot-tell`. No
+  wider findings. One round was enough: the fixes are small, and both are covered by new tests.
+
+## What landed
+
+- `scripts/db-start.ts`; `npm run db:start` now runs it. Run live in this worktree: it refuses,
+  exit 1, naming `cd /home/greg/code/spideryarn2 && npm run db:start`.
+- `worktree:check` mount blocker. Run live: in this tree it printed `ok   no Docker container,
+  running or stopped, is mounted from inside this directory (24 inspected)`. With `--root` on the
+  primary, which the box's stack is mounted from, it printed `FAIL 12 Docker containers are mounted
+  from this directory`. That is the positive control.
+- Gates: worktree-check, worktree-remove, worktree-sweep, db-start and doc-links suites 214 passed,
+  1 skipped; typecheck clean; biome clean on the touched files.
+- Docs: [supabase-local.md § The ways this goes wrong quietly](../project/supabase-local.md#the-ways-this-goes-wrong-quietly),
+  [worktrees.md § Before you remove one](../project/worktrees.md#before-you-remove-one) and § Traps.

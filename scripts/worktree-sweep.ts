@@ -109,12 +109,12 @@ import { TRUNK_BRANCH } from "./deploy-checks.js";
 import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 /* `gather` is aliased: this file has one of its own, and two functions of the
    same name at one seam is how the wrong one gets called. */
-import { blockers, type CheckFacts, dockerInventory, fetchTrunkSha, gather as checkGather, type TrunkSha } from "./worktree-check.js";
+import { blockers, type CheckFacts, type DockerInventory, dockerInventory, fetchTrunkSha, gather as checkGather, type TrunkSha } from "./worktree-check.js";
 import type { InUse } from "./worktree-inuse.js";
 /* The liveness question and the removal itself live in worktree-remove.ts. This
    file classifies; that one removes. `RemoveOutcome` is re-exported so the
    sweep's own tests and callers keep their import site. */
-import { classifyRegistration, inBulk, liveness, removeWorktree, type RemoveOutcome } from "./worktree-remove.js";
+import { classifyRegistration, inBulk, liveness, removeWorktree, type RemoveOptions, type RemoveOutcome } from "./worktree-remove.js";
 import { GIT_LOCATION_ENV } from "../tools/fleet/readiness-git.js";
 
 export type { RemoveOutcome };
@@ -269,13 +269,13 @@ export interface Classified {
   verdict: Verdict;
 }
 
-export function classifyAll(cwd: string): Classified[] {
+export function classifyAll(cwd: string, readDocker: () => DockerInventory = dockerInventory): Classified[] {
   /* Once, for the whole sweep. See the header: `gather()` fetches for itself,
      which across thirty worktrees is one shared ref fetched thirty times. */
   const trunk = fetchTrunkSha(cwd);
   /* And Docker once, for the same reason: one `docker inspect` of every
      container answers for every tree (docs/plans/261025i). */
-  const docker = dockerInventory();
+  const docker = readDocker();
   return gatherAll(cwd, listWorktrees(cwd), trunk, (root, sha) => checkGather(root, sha, docker)).map((f) => ({
     facts: f,
     verdict: classifyOne(f),
@@ -295,10 +295,11 @@ export function classifyAll(cwd: string): Classified[] {
  * construction, which is the same argument the header already makes for why this
  * file has no `dirty` or `merged` check of its own.
  */
-export function removeOne(cwd: string, branch: string, opts?: { dryRun?: boolean; bulk?: boolean }): RemoveOutcome {
+export function removeOne(cwd: string, branch: string, opts?: Pick<RemoveOptions, "dryRun" | "bulk" | "docker">): RemoveOutcome {
   return removeWorktree(cwd, branch, {
     ...(opts?.dryRun === undefined ? {} : { dryRun: opts.dryRun }),
     ...(opts?.bulk === undefined ? {} : { bulk: opts.bulk }),
+    ...(opts?.docker === undefined ? {} : { docker: opts.docker }),
   });
 }
 
@@ -351,8 +352,8 @@ function nameOf(facts: SweepFacts): string {
 export function removeAll(
   cwd: string,
   rows: readonly Classified[],
-  opts: { dryRun?: boolean } = {},
-  remove: (cwd: string, branch: string, opts: { dryRun?: boolean; bulk?: boolean }) => RemoveOutcome = removeOne,
+  opts: { dryRun?: boolean; docker?: () => DockerInventory } = {},
+  remove: (cwd: string, branch: string, opts: Pick<RemoveOptions, "dryRun" | "bulk" | "docker">) => RemoveOutcome = removeOne,
 ): SweepOutcome[] {
   const out: SweepOutcome[] = [];
   for (const { facts, verdict } of rows) {
@@ -378,7 +379,11 @@ export function removeAll(
           });
           break;
         }
-        const r = remove(cwd, facts.branch, { ...(opts.dryRun === undefined ? {} : { dryRun: opts.dryRun }), bulk: true });
+        const r = remove(cwd, facts.branch, {
+          ...(opts.dryRun === undefined ? {} : { dryRun: opts.dryRun }),
+          ...(opts.docker === undefined ? {} : { docker: opts.docker }),
+          bulk: true,
+        });
         out.push({ kind: r.ok ? "removed" : "refused", name, steps: r.steps });
         break;
       }

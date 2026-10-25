@@ -20,14 +20,46 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { blockers, type CheckFacts } from "../scripts/worktree-check.js";
-import { classifyAll, classifyOne, gatherAll, removeAll, removeOne, type SweepFacts, type Verdict } from "../scripts/worktree-sweep.js";
+import { blockers, type CheckFacts, type DockerInventory } from "../scripts/worktree-check.js";
+import {
+  classifyAll as classifyAllReal,
+  classifyOne,
+  gatherAll,
+  removeAll as removeAllReal,
+  removeOne as removeOneReal,
+  type SweepFacts,
+  type Verdict,
+} from "../scripts/worktree-sweep.js";
 import { listWorktrees } from "../scripts/worktree-admin.js";
 import { myLockStart, orphanProcessIn } from "./helpers/live-process.js";
 
 let root: string;
 let origin: string;
 let primary: string;
+
+const EMPTY_DOCKER: DockerInventory = { kind: "listed", containers: [] };
+
+/** These are git/sweep tests, not integration tests for the host's Docker daemon. */
+function classifyAll(cwd: string): ReturnType<typeof classifyAllReal> {
+  return classifyAllReal(cwd, () => EMPTY_DOCKER);
+}
+
+function removeOne(
+  cwd: string,
+  branch: string,
+  opts: NonNullable<Parameters<typeof removeOneReal>[2]> = {},
+): ReturnType<typeof removeOneReal> {
+  return removeOneReal(cwd, branch, { docker: () => EMPTY_DOCKER, ...opts });
+}
+
+function removeAll(
+  cwd: string,
+  rows: Parameters<typeof removeAllReal>[1],
+  opts: NonNullable<Parameters<typeof removeAllReal>[2]> = {},
+  remove: NonNullable<Parameters<typeof removeAllReal>[3]> = removeOne,
+): ReturnType<typeof removeAllReal> {
+  return removeAllReal(cwd, rows, { docker: () => EMPTY_DOCKER, ...opts }, remove);
+}
 
 function git(args: string[], cwd: string): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -114,6 +146,21 @@ function rowFor(rows: ReturnType<typeof classifyAll>, branch: string) {
 }
 
 describe("classifyAll, against real worktrees", () => {
+  it("reads Docker once for the whole sweep and passes an unknown through as a blocker", () => {
+    freshWorktree("docker-unknown");
+    let scans = 0;
+
+    const rows = classifyAllReal(primary, () => {
+      scans += 1;
+      return { kind: "cannot-tell", why: "docker inspect timed out" };
+    });
+
+    expect(scans).toBe(1);
+    const row = rowFor(rows, "worktree-docker-unknown");
+    expect(row.verdict.kind).toBe("keep");
+    if (row.verdict.kind === "keep") expect(row.verdict.reasons.join("\n")).toContain("Docker container");
+  });
+
   it("advertises a brand-new landed tree that nobody owns or is in as REMOVABLE — there is no age floor", () => {
     freshWorktree("fresh-and-done");
     const row = rowFor(classifyAll(primary), "worktree-fresh-and-done");

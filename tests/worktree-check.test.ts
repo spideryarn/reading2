@@ -38,6 +38,7 @@ import {
   gather,
   hiddenFromStatus,
   containersUnder,
+  dockerInspectInventory,
   listenersUnder,
   logStrays,
   mountsUnder,
@@ -1067,5 +1068,19 @@ describe("mountsUnder, against an inventory", () => {
   it("names the project supabase/config.toml declares", () => {
     const toml = readFileSync(path.join(process.cwd(), "supabase", "config.toml"), "utf8");
     expect(toml).toMatch(new RegExp(`^project_id = "${SUPABASE_PROJECT}"$`, "m"));
+  });
+});
+
+describe("dockerInspectInventory", () => {
+  it("does not forgive a failed inspect with no error text as if containers merely vanished", () => {
+    expect(dockerInspectInventory(1, "[]", "")).toEqual({
+      kind: "cannot-tell",
+      why: "docker inspect exited 1 with no error text",
+    });
+  });
+
+  it("accepts partial JSON only when every reported error says a container vanished", () => {
+    expect(dockerInspectInventory(1, "[]", "Error: No such object: gone\n")).toEqual({ kind: "listed", containers: [] });
+    expect(dockerInspectInventory(1, "[]", "permission denied\n").kind).toBe("cannot-tell");
   });
 });
