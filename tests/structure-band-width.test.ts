@@ -189,7 +189,7 @@ describe("structure-mode.css agrees with the constants", () => {
   };
 
   it("pads the band 0.75rem a side", () => {
-    expect(rule(".mode-band.struct")).toContain(`padding: 0.75rem ${STRUCT_PAD_X_REM / 2}rem 0.5rem;`);
+    expect(rule(".mode-band.struct")).toContain(`padding: 0.75rem ${STRUCT_PAD_X_REM / 2}rem calc(0.5rem + var(--band-bar-travel));`);
   });
 
   it("puts the gutter between the columns, in the grid and in its measuring copy", () => {

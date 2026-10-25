@@ -88,6 +88,12 @@ export function structureFace(
   return bandWidth >= structureColumnsBand(rootFontPx).min ? "columns" : "list";
 }
 
+/**
+ * How often, at most, Structure follows a scroll: Greg's *"maybe every second
+ * might be fine"* (spya-m5gxk9). A jump is never held. Plan 261025e.
+ */
+export const STRUCTURE_HOLD_MS = 1000;
+
 /** The second paragraph of each chip's card: what it does that its name does not say. */
 const VIEW_HOW: Readonly<Record<StructureView, string>> = {
   fisheye: "It opens up as you read. With room it is two columns, otherwise one list.",
@@ -273,8 +279,12 @@ export function StructureBand({
    * above. **Section-granular**: `focusRow` is a
    * section's first row, never the exact block, which is why no paragraph in
    * either face is ever marked current.
+   *
+   * **Held to once a second while the reader scrolls** (useColumnContext.ts §
+   * `holdMs`): each change redraws and re-measures a fitted tree, and on an
+   * iPad a band redrawn under a moving finger flickered (Greg, spya-m5gxk9).
    */
-  const live = useColumnContext({ sections, enabled: true, layoutKey });
+  const live = useColumnContext({ sections, enabled: true, layoutKey, holdMs: STRUCTURE_HOLD_MS });
 
   /**
    * **Both halves of "may we draw paragraph rows", answered here rather than in

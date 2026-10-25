@@ -21,6 +21,22 @@
  * sketch in granularity-zoom.md. Not the sticky line `?at=` uses: a view that
  * marked the item under the header would describe a section the eye had
  * already left.
+ *
+ * **`holdMs`: published at most once in that long while the reader scrolls**,
+ * since 2026-10-25, for Structure's band only. Every publish there rebuilds and
+ * re-measures a fitted list in a `position: fixed` band, and on an iPad that
+ * band redrawn several times a second under a moving finger flickered, its
+ * sub-mode row included. Greg, spya-m5gxk9: *"It probably only needs to update
+ * every second or two … We don't want to use too much CPU. We don't want to
+ * distract the reader too much."* A throttle, leading and trailing: the first
+ * change after a quiet hold is published at once, so a slow reader sees no lag;
+ * later ones wait for the hold to end and the latest is published then, so a
+ * fast scroll is followed about once a second and always ends on the right
+ * section. **A jump is never held** (an arrival anchor appearing or clearing),
+ * nor is a new layout: somebody pressed something and is waiting for it.
+ * Inside a hold nothing is read either: the rects are read on a scroll frame
+ * outside one, and once when it ends.
+ * docs/plans/261025e-structure-on-an-ipad-updates-calmly-and-uses-its-width.md.
  */
 import { useEffect, useState } from "react";
 import { activeSectionIndex, type Section } from "./position.js";
@@ -44,9 +60,14 @@ interface Options {
   enabled: boolean;
   /** Re-measure when the layout changes — same key as the `?at=` tracker. */
   layoutKey: string;
+  /**
+   * Publish a scroll's change at most once per this many ms (the header §
+   * `holdMs`). Absent: every change at once, as the breadcrumb wants.
+   */
+  holdMs?: number;
 }
 
-export function useColumnContext({ sections, enabled, layoutKey }: Options): LiveContext {
+export function useColumnContext({ sections, enabled, layoutKey, holdMs = 0 }: Options): LiveContext {
   const [live, setLive] = useState<LiveContext>(EMPTY);
 
   // `layoutKey` is a re-run trigger, not a value the effect reads: the layout
@@ -65,6 +86,15 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
        answer for an unchanged measurement and leave the stale row selected. */
     let last: number | null = null;
     let frame = 0;
+    /* The hold (header § `holdMs`): when the last publish was, the timer that
+       measures again once the hold is up, and whether an arrival anchor has
+       changed since the last measure — heard when it happens, not sampled,
+       because a glide can clear one anchor and leave the next before a frame
+       runs, and a sampled "was there one" would see no change (GPT Sol, plan
+       review of 261025e, finding 2). */
+    let publishedAt = Number.NEGATIVE_INFINITY;
+    let held = 0;
+    let jumpPending = false;
 
     const measure = () => {
       frame = 0;
@@ -95,14 +125,61 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
             return s !== undefined && isFoldedAway(s.blockId);
           })
         ]?.row ?? 0;
+      /* A jump starting or ending is somebody pressing something: never held. */
+      const jumped = jumpPending;
+      jumpPending = false;
+      /* This scan supersedes the trailing one whether or not its answer
+         changed. In particular, an arrival frame can confirm the same section
+         and hit the early return below; leaving `held` armed there would scan
+         the same rows again when the old scroll timer expired. */
+      if (held) {
+        window.clearTimeout(held);
+        held = 0;
+      }
       if (focusRow === last) return;
+      if (!jumped && holding()) {
+        hold();
+        return;
+      }
       last = focusRow;
+      publishedAt = performance.now();
       setLive({ focusRow });
     };
+    const holding = () => performance.now() < publishedAt + holdMs;
+    /* One timer for the rest of the hold; when it fires, measure again rather
+       than replay an answer from the middle of it. */
+    const hold = () => {
+      if (!held) held = window.setTimeout(release, publishedAt + holdMs - performance.now());
+    };
+    const release = () => {
+      held = 0;
+      /* An arrival can queue its unheld frame just before this timer wins the
+         event-loop race. `measure` clears `frame`, but it cannot cancel that
+         callback; without doing so here the callback scans every row again on
+         the next paint. The timer has the latest geometry and jumpPending, so
+         it is the one measurement to keep. */
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      measure();
+    };
+    /* **During the hold nothing is read**, not only nothing published: a
+       scroll frame inside it arms the one trailing measure and stops there,
+       so a fast scroll costs a rect scan about once a second rather than every
+       frame (Sol, finding 3). */
     const schedule = () => {
+      if (holding()) {
+        hold();
+        return;
+      }
       if (!frame) frame = requestAnimationFrame(measure);
     };
-    const unsubscribeAnchor = subscribeArrivalAnchor(schedule);
+    const onArrival = () => {
+      jumpPending = true;
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    const unsubscribeAnchor = subscribeArrivalAnchor(onArrival);
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     // Scroll and resize are not the only ways the answer changes. A late image
@@ -119,8 +196,9 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
       window.removeEventListener("resize", schedule);
       ro?.disconnect();
       if (frame) cancelAnimationFrame(frame);
+      if (held) window.clearTimeout(held);
     };
-  }, [sections, enabled, layoutKey]);
+  }, [sections, enabled, layoutKey, holdMs]);
 
   return enabled ? live : EMPTY;
 }
