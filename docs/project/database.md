@@ -1612,7 +1612,12 @@ week. It is `citation_finds`' shape: one row per `(article_id, entry_id)`, `owne
 row only at the owner's read (`attachWebNotes` in `loadBibliography`) while `identity` is still the
 row's `rowIdentity` and no abstract note is there. It is never written into the `citation_blurbs`
 artefact, which has one writer. The CHECKs tie every field to its state with `coalesce`, for
-261004a's reason. Like its siblings it is in deletion, transfer, `ArticleRows` and both exports
+261004a's reason. `page_kind` (`own` | `looks-like`, 2026-10-25,
+[261025d](../plans/261025d-citation-web-note-looser-page-rule.md)) is allowed only beside a note
+and may be null there, which reads as `own`: the writer from before the column names none and took
+only the strict rule's pages, so the migration needed no backfill. A small compatibility trigger
+nulls an inherited kind when that old writer updates a row the new one already touched; without it,
+an old note-to-none upsert would retain the kind and fail the CHECK. Like its siblings it is in deletion, transfer, `ArticleRows` and both exports
 (`citation-web-notes.json`); [`src/store/pg-citation-web-notes.ts`](../../src/store/pg-citation-web-notes.ts)
 is the store.
 

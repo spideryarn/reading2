@@ -37,7 +37,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ A row](#a-row) — what one row draws, and where its two scores come from
 - [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
 - [§ A note from the abstract](#a-note-from-the-abstract) — an AI's sentence or two about the work, from its abstract alone, and when it is shown
-- [§ A note from one web search](#a-note-from-one-web-search) — the owner's *Open in Sources* on a row with no note: one search for the work's own page, by its identifier
+- [§ A note from one web search](#a-note-from-one-web-search) — the owner's *Open in Sources* on a row with no note: one search for the work's page
 - [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
 - [§ What we have read of the work](#what-we-have-read-of-the-work) — said once in the band's (i), and on a row only when it differs
 - [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
@@ -289,6 +289,17 @@ as amended by its review's R1, R4, R7, R8 and R9). Greg's choice on
 > and require a quote the code finds in the page. About 0.8 cents and 6 seconds a press. Even with
 > those checks, expect roughly 1 sentence in 6 to say more than the page does.
 
+**Since 2026-10-25 it may also take a page that looks like the work's own**
+([261025d](../plans/261025d-citation-web-note-looser-page-rule.md); the yield is
+[261025d](../investigations/261025d-citation-web-note-looser-rule-yield.md)). The strict rule found
+a note for 4 of the Butlin paper's 42 works with none; Greg, on
+[q-x9srvv](../user-feedback/questions/q-x9srvv.md):
+
+> I don't think we want to be so restrictive that we only trust DOI or archive pages. I think we
+> want to be looser.
+>
+> — Greg, 2026-10-25
+
 Only that press: not opening Sources, not a row click, not a chat's way back, never a visitor's,
 never for every work. `POST /api/bibliography/:slug/:id/web-note`
 ([`src/citation-web-note.ts`](../../src/citation-web-note.ts)), in this order:
@@ -298,10 +309,13 @@ never for every work. `POST /api/bibliography/:slug/:id/web-note`
    web note, or a *none* under a week old.
 2. **The work's identifier** — the row's DOI or arXiv id, or the DOI the strict title rule finds
    (Crossref, then OpenAlex with its key; a title search only for an article from a public address,
-   as for the abstract notes). **None, and nothing is searched** (409 `no-identifier`, not stored):
-   a page can be shown to be the work's own only by its identifier (R1), so this fires on fewer
-   rows than 1B imagined — most rows with no note have no identifier. Loosening it to pages titled
-   as the work is Greg's call, below.
+   as for the abstract notes). **None, and the row is searched by its title and first author**, but
+   only when the article came from a public address (G6: an uploaded file's cited work may be
+   unpublished, and its title is not sent out), the row has a first author, and the registries said
+   no for a reason about themselves (`not-found`, `not-identified`). An author–year label, a work the
+   list calls unpublished, a title too plain to search, and an identifier its registry record
+   contradicts are refused for nothing (409 `no-identifier`, not stored). A registry that was busy
+   is a 503, not a title search.
 3. **Its own allowance**, `citation-web-note` — one at a time per reader, 10 an hour and 30 a day,
    a global fuse of 200 presses a day (about $5) — then the list, the article and the store are
    read again, so a note or an abstract that arrived meanwhile still makes the press free. **A
@@ -313,19 +327,30 @@ never for every work. `POST /api/bibliography/:slug/:id/web-note`
    prompt's JSON answer `{url, sentences: [{text, quote}]}` (not a `response_format` schema: none
    has been measured beside the search tool, and under `require_parameters` an unsupported field is
    a 404 — `src/reception.ts` found the same). Then code, every clause required: the URL is one of
-   the call's own annotations and what is kept is the annotation's; **the page is the work's own by
-   its identifier** — `doi.org/<the DOI>`, or arXiv's own `/abs/`, `/pdf/` or `/html/` page for the
-   exact id, and nothing else (`pageIsTheWork`). A publisher's page carrying the DOI under the
-   work's whole title was accepted until GPT Sol's review of this stage: a DOI and a title show a
-   page is *about* the work, and a citation index or a review carries both. The prompt asks for
-   the doi.org result when the search returns one, and states the note's limit (two sentences,
-   under `BLURB_MAX_CHARS` characters), which an early live run overshot; the
+   the call's own annotations and what is kept is the annotation's; **the page is one of two
+   kinds**, decided by code and stored as `page_kind`:
+   - **`own`** — the work's own by its identifier: `doi.org/<the DOI>`, or arXiv's own `/abs/`,
+     `/pdf/` or `/html/` page for the exact id (`pageIsTheWork`);
+   - **`looks-like`** — any other page whose search title names the work (`titleNamesWork`: the
+     work's title, at most a short site tail; a cut title needs the year too), whose title or
+     extract names the work's first author's surname, whose title is longer than two words or
+     whose text has the year, and whose host is not Wikipedia, Goodreads, Amazon, NDPR or a summary
+     site (`pageLooksLikeTheWork`). A doi.org or arXiv page for a *different* identifier is
+     neither. **The residual risk, accepted:** a page off that list, titled exactly as the work and
+     naming its author, that is somebody else's account of it — a blog post, a syllabus, a
+     publisher's blurb. The label says so, and the check refuses praise.
+
+   The prompt asks for the doi.org or arXiv result first when there is an identifier, otherwise a
+   page titled as the work whose text names its first author, and states the note's limit (two
+   sentences, under `BLURB_MAX_CHARS` characters), which an early live run overshot; the
    page is not the article being read (its address, or a copy of its prose by shingle density, or a
    quote in the article's own words); and `judgeNote` over the page's extract.
 5. **`checking`**: the abstract notes' separate check, made provenance-neutral (it is told its
-   evidence is *an extract of that work's own web page*; the abstract notes' prompt is unchanged byte
-   for byte), shown only the extract, fenced, with no tools. Anything but every sentence supported
-   keeps no note.
+   evidence is *an extract of that work's own web page*, or for a `looks-like` page *an extract of a
+   web page that may be that work's own or someone else's description of it*, and to refuse a
+   sentence that gives praise or someone's judgement rather than what the work argues; the abstract
+   notes' prompt is unchanged byte for byte), shown only the extract, fenced, with no tools.
+   Anything but every sentence supported keeps no note.
 6. **Stored, then `done`**: `{outcome: "note", webNote}` or `{outcome: "none", why}`. Only a
    completed *none* is stored, for a week; a call that failed, was cut off or could not be read, or a
    check that could not be read, stores nothing and the next press asks again.
@@ -333,7 +358,7 @@ never for every work. `POST /api/bibliography/:slug/:id/web-note`
 **Stages, not words — a stated exception to *stream any model call a person waits on***. No
 sentence may be shown before code and the check have passed it, a note is one or two sentences, and
 a streamed sentence later withdrawn reads as the answer. So the stream carries `stage` frames, and
-the row says what the ~6 s are for: *Looking for this work's own page on the web…*, then *Checking
+the row says what the ~6 s are for: *Looking for this work's page on the web…*, then *Checking
 the note against the page…*. **Once the paid call has started the server finishes and stores
 whatever the connection does**; before it, a gone connection frees the slot and spends nothing.
 
@@ -343,8 +368,11 @@ work: the search engine's extract of its own page at arxiv.org, read on 19 Octob
 a reading of the paper, and a web page can say more or less than the paper, so it can be wrong. Code
 checked that it rests on these words of the page:* the quotes, a link to the page
 (`rel="noopener noreferrer nofollow"`) on the band's card, and *To look closer, ask in chat.* A
-search that found nothing says, on that row, *We searched the web for this work's own page and found
-none we could be sure of.* A failed press stores nothing and leaves its safe failure sentence on the
+`looks-like` note is labelled *From a web search · philpapers.org · may not be the work's own page*,
+and its card says the page's title matches the work's and it names the first author, that *it may
+be someone else's description of it, such as a catalogue entry, a publisher's blurb or a review*,
+and that it is not a reading of the work. A search that found nothing says, on that row, *We
+searched the web for this work's page and found none we could use.* A failed press stores nothing and leaves its safe failure sentence on the
 row for this session; a row with no identifier says nothing new. The band's (i) adds a sentence
 about web notes once one is on screen. Marginalia's opened *Cites* line does not draw web notes in
 v1; its hover card does, since it is the prose's `CiteCard` (2026-10-20,
@@ -357,7 +385,10 @@ through one read guard, `shownWebNote`
 ([`src/citation-web-note-shown.ts`](../../src/citation-web-note-shown.ts)) — every field rebuilt
 and capped, the address `isWebUrl` with no credentials, the host recomputed — only while its
 identity is the stored row's `rowIdentity`, its checks are today's
-(`CITATION_WEB_NOTE_VALIDATION_VERSION`), and **the row has no abstract note, which always wins**.
+(`CITATION_WEB_NOTE_VALIDATION_VERSION`; a note — never a *none* — made under the strict `/3` still
+stands, as `own`), an `own` note's address is one an `own` page can have, and **the row has no
+abstract note, which always wins**. A null `page_kind` on a note is `own`: only the writer from
+before the column leaves it null, and it took only the strict rule's pages.
 
 **Prompt injection through the extract is a residual risk**, as for *Look it up*
 ([§ It reads the search extract](#it-reads-the-search-extract-never-the-work)): the search runs
@@ -1255,12 +1286,11 @@ v1.
 ## Deferred
 
 **The web note's open edges** (plan 261018o stage 2): showing it to a visitor; giving it to chat's
-`article_citations`; accepting a publisher's or repository's page by a list of hosts the
-registry gives for the DOI (Crossref's `link`, a resolver redirect), so that a page off doi.org
-and arXiv can count as the work's own on evidence code holds; and loosening R1 to pages titled as
-the work but carrying no identifier, labelled as possibly someone else's — which goes to Greg with
-the yield once measured, since it reopens the *only the work's own page* promise he chose.
-Drawing it in Marginalia's opened *Cites* line (its hover card already does).
+`article_citations`; accepting a publisher's or repository's page as `own` by a list of hosts the
+registry gives for the DOI (Crossref's `link`, a resolver redirect), so that such a page could
+drop the *may not be the work's own page* label on evidence code holds. Drawing it in
+Marginalia's opened *Cites* line (its hover card already does). Loosening to pages that look like
+the work's own was built on 2026-10-25 (above).
 
 **Not deferred, but next door:** the article's hyperlinks that are not works have their own list,
 [Sources › Links](sources.md#links), whose row says *In Bibliography* when its address is a work's
