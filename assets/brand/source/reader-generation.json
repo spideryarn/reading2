@@ -1,9 +1,15 @@
 {
   "tool": "Built-in image_gen",
-  "date": "2026-10-24",
-  "selected": "../explorations/03-eight-limbs-compact.png",
-  "input": "../archive/reader-before-limb-refinement.png",
-  "previous_generation": "../archive/reader-before-limb-refinement-generation.json",
-  "prompt": "Use case: precise-object-edit. Asset type: final Spideryarn logo character, transparent master. Image 1 is the edit target, the approved faceless orange wool/yarn reading spider. Make ONE subtle proportion refinement: bring all EIGHT limbs closer to the same implied length, like a spider, rather than human arms and disproportionately long crossed legs. Keep four free rear/upward limbs, two bent limbs gently holding the open book, and two crossed lower limbs. Shorten the overlong crossed lower strands by roughly 15–20%, reducing their broad sprawling loops and long extensions; modestly rebalance the shorter free strands if necessary. The eight strands should feel like comparable-length yarn limbs bent into different poses, with consistent thickness, NOT eight identical projected straight lines. Preserve the compact seated reading pose, hollow oval knot/body (not another limb), warm orange wool material and fine fibers, dark charcoal book with ivory pages, friendly abstract character, the same restrained rear fan, existing perspective, lighting and overall identity. No face, eyes, eyebrows, fingers, shoes, extra limbs, added props, text or ground shadow. Keep a square canvas and the entire figure with breathing room. Genuine RGBA transparency around the figure AND through the body loop and limb gaps; ivory book pages must remain opaque. This should read immediately as a small refinement of the SAME character, not a redesign.",
-  "note": "Targeted generative refinement of the approved transparent reader. Lower crossed limbs are more compact, bringing implied limb lengths closer together; pose, eight intended limbs, faceless yarn identity and book are retained. This is a new rendering, not a deterministic pixel transform."
+  "date": "2026-10-25",
+  "round": "airier upper limbs",
+  "selected_label": "C",
+  "selected": "../explorations/airier-limbs-c.png",
+  "input": "../archive/reader-before-airier-limbs.png",
+  "previous_generation": "../archive/reader-before-airier-limbs-generation.json",
+  "prompt_history": "../explorations/airier-limbs-prompts.json",
+  "prompt": "Use case: precise-object-edit, preview-only optical experiment for the existing Spideryarn favicon. Image 1 is the EDIT TARGET. Preserve its exact identity: faceless orange knitted-yarn spider reading the same dark charcoal book with opaque ivory pages, hollow oval body, two book-supporting limbs and two crossed lower limbs, same rendering/material/lighting/view. Change ONLY the four free upper/rear cord limbs: make them visibly but tastefully about 25% slimmer and their curved lengths about 15% longer, to expose clearer negative spaces around the body. Keep them softly rounded, upturned and cheerful. Do not make a spiky insect; do not change the body's oval cord thickness or thin the book-holding or crossed seated limbs. Preserve eight intended limbs, seated reading pose, book size, no eyes/face/fingers/text/additions. The goal is to test a slightly more airy silhouette at tiny tab sizes while recognisably the SAME main character. Entire figure centred on square transparent RGBA canvas with room around extremities; real transparency through the body and limb gaps as well as outside. No backdrop, baked checkerboard, frame, ground shadow or contact sheet. The numeric proportional targets are visual aims, not claims of exact pixel preservation.",
+  "transparent_background": true,
+  "generated_file": "/Users/greg/.codex/generated_images/01a16af8-7ad5-7ee1-b6a2-3a341d2500d5/exec-e161cf5c-9870-48e6-8d74-e432890132ff.png",
+  "master_sha256": "9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635",
+  "note": "Greg selected C after comparing actual tab-size previews. Adopted byte-for-byte across icon family; no retouch. Generative edit targets four free upper limbs; material/body details may also differ. Source ivory pages are visually solid (alpha mostly254), not a claim every page pixel has alpha255; installed tiles are composited opaque."
 }

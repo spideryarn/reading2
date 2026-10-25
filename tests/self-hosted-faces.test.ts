@@ -10,7 +10,7 @@
  * names the family you meant. Written when the model's face became iA Writer
  * Quattro (261021f).
  *
- * The model's two faces also need all the styles they are drawn in: a missing
+ * The model's and reader's faces also need all the styles they are drawn in: a missing
  * italic or 700 is synthesised by the browser, which on these faces looks like
  * a bug, not a choice.
  */
@@ -68,7 +68,7 @@ describe("self-hosted faces", () => {
     "--font-mono",
     "--font-author",
     "--font-ai",
-    "--font-ai-code",
+    "--font-reader",
   ])("%s names a family an imported file declares", (token) => {
     const family = primaryFamily(TOKENS, token);
     expect(FACES.map((f) => f.family)).toContain(family);
@@ -76,7 +76,7 @@ describe("self-hosted faces", () => {
 
   it.each([
     ["--font-ai", ["normal", "italic"], [400, 700]],
-    ["--font-ai-code", ["normal", "italic"], [400, 700]],
+    ["--font-reader", ["normal", "italic"], [400, 500, 600, 700]],
   ] as const)("%s has every style it is drawn in", (token, styles, weights) => {
     const family = primaryFamily(TOKENS, token);
     for (const style of styles) {
@@ -89,9 +89,12 @@ describe("self-hosted faces", () => {
     }
   });
 
-  it("would catch a misspelt family", () => {
-    const misspelt = TOKENS.replace("'iA Writer Quattro'", "'iA Writer Quatro'");
+  it.each([
+    ["--font-ai", "iA Writer Quattro", "iA Writer Quatro"],
+    ["--font-reader", "Shantell Sans Variable", "Shantell Sans"],
+  ])("would catch a wrong family for %s", (token, family, wrong) => {
+    const misspelt = TOKENS.replace(`'${family}'`, `'${wrong}'`);
     expect(misspelt).not.toBe(TOKENS);
-    expect(FACES.map((f) => f.family)).not.toContain(primaryFamily(misspelt, "--font-ai"));
+    expect(FACES.map((f) => f.family)).not.toContain(primaryFamily(misspelt, token));
   });
 });

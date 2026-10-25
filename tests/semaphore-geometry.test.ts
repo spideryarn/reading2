@@ -43,7 +43,7 @@ async function pixels(input: string | Buffer) {
   return ctx.getImageData(0, 0, 256, 256).data;
 }
 
-/** Hand-labelled source-space anatomy, authored against the untouched master,
+/** Hand-labelled source-space anatomy, authored against the selected C master,
  * independently of CSS clipping. All opaque pixels outside the two labelled
  * upper free limbs are stationary, including body, book and six other limbs. */
 async function sourcePart(part: "upper" | "stationary") {

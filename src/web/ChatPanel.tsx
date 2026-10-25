@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { Fragment, type MutableRefObject, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type MutableRefObject, type RefObject, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -102,6 +102,7 @@ import type {
 } from "../types.js";
 import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { onFontsChanged } from "./fonts.js";
 import { GuideGreeting } from "./GuideGreeting.js";
 import { GuideNextSteps } from "./GuideNextSteps.js";
 import { GuideSaveOffers } from "./GuideSaveOffer.js";
@@ -3577,8 +3578,7 @@ export function Composer({
 
   // Height follows content. Reset to `auto` first, or the box can only ever
   // grow: `scrollHeight` of an element already tall enough is its own height.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect measures the DOM rather than reading `value`, but `value` is what changed it
-  useLayoutEffect(() => {
+  const fitBox = useCallback(() => {
     const el = box.current;
     if (!el) return;
     /* **Empty, the rows decide.** An empty textarea's `scrollHeight` counts its
@@ -3591,7 +3591,10 @@ export function Composer({
     el.style.height = "auto";
     /* `rows` below sets the floor; this sets the roof. `boxSize` says why each. */
     el.style.height = `${Math.min(el.scrollHeight, size.roof())}px`;
-  }, [value, size]);
+  }, [size]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` triggers a fresh measurement of the DOM
+  useLayoutEffect(fitBox, [value, fitBox]);
+  useEffect(() => onFontsChanged(fitBox), [fitBox]);
 
   /**
    * **Dictation, in the box where it is worth most.**
