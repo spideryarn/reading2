@@ -1,7 +1,7 @@
 ---
 id: q-x9srvv
 report: spya-m53cdk
-status: open
+status: answered
 asked: 2026-10-19
 title: Citation-note keys: will you make the OpenAlex and Semantic Scholar accounts, given S2's non-commercial licence?
 refs: SPIDERYARN-READING2-JF · qi-nkc5gbyh · q-ny49p3 · docs/plans/261018o-citation-notes-web-search-for-the-clicked-work-and-registry-keys.md · docs/user-feedback/261017_2026-sources-land-flash-and-citation-blurbs.md
@@ -40,3 +40,17 @@ How the web search press works, as built. It runs only when you, the owner, pres
 The note is then kept, so a second press costs nothing. If no page passes, the row says so, and pressing again within a week does not search again. It costs about 0.8 cents and about 6 seconds a press, and there is a cap per hour and per day. Its card says it came from one web search, is not a reading of the paper, and can be wrong.
 
 A first live try, on three cited works: one got a correct note from its doi.org page (Bryson, Robots should be slaves). One got none, because the search's text of the page was only a fragment (Nagel's bat paper). One was refused for running too long; the prompt now states the limit, and on a second try it got a correct note from its arXiv page (Chollet, On the measure of intelligence). Each took about 6 to 7 seconds and 0.8 cents.
+
+Greg's answers, 2026-10-25, in chat, relayed in the brief for this work.
+
+Part 1:
+
+> I'm not going to use Semantic Scholar then because I don't want to break their terms of use.
+
+1B: Semantic Scholar stays off; OPENALEX_API_KEY is on Vercel, not yet on the box (qi-7ttvvyjm).
+
+Part 2:
+
+> re q-x9srvv - I don't fully understand, but I don't think we want to be so restrictive that we only trust DOI or archive pages. I think we want to be looser.
+
+Built (plan 261025d): a page titled as the work that names its first author also counts, labelled "may not be the work's own page". Butlin paper: 4 notes before, 14 after, all on the right work.

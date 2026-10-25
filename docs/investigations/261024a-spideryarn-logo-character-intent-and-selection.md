@@ -71,3 +71,17 @@ The source-to-assets command and current background/padding policy have one home
 ## Validation record
 
 Selection review found the old PNG-specific Semaphore animation to be an integration risk. Its previous clipping coordinates selected the wrong portions of the new optical mark; the implementation remeasures it rather than documenting a broken effect. Final code review and gate results are recorded in the [plan](../plans/261024a-eight-limbed-reading-spider-brand-assets.md).
+
+## 2026-10-25: one artwork across tab and app
+
+The separate optical favicon and later upright-knot trials were superseded. Greg compared A
+(the unchanged textured reader) and B (a flat study of the same pose), then chose:
+
+> Let's go with A. Proceed autonomously.
+>
+> — Greg, 2026-10-25
+
+[main-icon.md](../project/main-icon.md) owns the current single-master policy and Chrome tab review
+process; the [implementation plan](../plans/261025b-one-textured-reader-across-tab-and-app.md) records
+source preservation, animation geometry and validation. The earlier optical assessment above is
+history, not the current artwork decision.

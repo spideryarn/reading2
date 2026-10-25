@@ -151,7 +151,8 @@ new permission is a product decision, not a line in the manifest.
 ## What it does not do yet
 
 - **Being found** (asked 2026-10-25, when it was submitted to the store; handed to the Overseer).
-  The store item id is public, so it goes in this doc as well as in `PRODUCTION_EXTENSION_ID`.
+  The store item id is public, so it goes in this doc as well as in `PRODUCTION_EXTENSION_ID`:
+  **`eeedpogihlbbjghpanopajebiencekak`** (submitted for review 2026-10-25, Unlisted).
   Readers need a way to find the extension: in `/help`, in the command bar, and above all in the
   import flow, so that when a pasted address hits a blocker (a site that turns our server away)
   the reader is told they can add it with the extension instead, plus anywhere else it naturally

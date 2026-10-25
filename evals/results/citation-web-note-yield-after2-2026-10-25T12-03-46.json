@@ -1,0 +1,2276 @@
+{
+  "summary": {
+    "slug": "arxiv-2308-08708-spya-xax6v4",
+    "label": "after2",
+    "works": 70,
+    "withAbstractNote": 28,
+    "pressed": 42,
+    "tally": {
+      "none:too-long": 2,
+      "none:not-the-work": 17,
+      "note": 14,
+      "none:quote-not-in-evidence": 4,
+      "none:declined": 1,
+      "refused:no-identifier": 1,
+      "none:not-supported": 2,
+      "none:quote-too-long": 1
+    }
+  },
+  "rows": [
+    {
+      "id": "spya-tzqkhu",
+      "title": "Phenomenal consciousness, defined and defended as innocently as I can manage",
+      "authors": "Schwitzgebel",
+      "year": "2016",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "too-long"
+      },
+      "stored": {
+        "identity": "d6fa6c35aaf2ed57",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:56:50.011Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "too-long"
+      },
+      "picked": "https://faculty.ucr.edu/~eschwitz/SchwitzAbs/DefiningConsciousness.htm",
+      "results": [
+        {
+          "url": "https://faculty.ucr.edu/~eschwitz/SchwitzAbs/DefiningConsciousness.htm",
+          "title": "Phenomenal Consciousness, Defined and Defended as Innocently as I Can Manage - Eric Schwitzgebel"
+        },
+        {
+          "url": "https://faculty.ucr.edu/~eschwitz/SchwitzPapers/DefiningConsciousness-160712.pdf",
+          "title": "Definition by example allows us this innocence. Positive examples include sensory experiences, imagery experiences, vivid emotions, and dreams. Negative examples include growth hormone release, dispositional knowledge, standing intentions, and sensory reactivity to masked visual displays. Phenomenal consciousness is the most folk psychologically obvious thing or feature that the positive examples possess and that the negative examples lack, and which preserves our ability to wonder, at least temporarily, about antecedently unclear issues such as consciousness without attention and consciousness in simpler animals. As long as this concept is not empty, or broken, or a hodgepodge, we can be phenomenal realists without committing to dubious"
+        },
+        {
+          "url": "https://eschwitz.substack.com/p/phenomenal-consciousness-conceptualized",
+          "title": "Phenomenal Consciousness, Conceptualized as Innocently as I Can Manage"
+        },
+        {
+          "url": "https://www.ingentaconnect.com/contentone/imp/jcs/2016/00000023/f0020011/art00018",
+          "title": "Phenomenal Consciousness, Defined and Defended as Innocently as I...: Ingenta Connect"
+        },
+        {
+          "url": "https://philpapers.org/rec/SCHPCD-6",
+          "title": "Phenomenal Consciousness, Defined and Defended as Innocently as I Can Manage"
+        }
+      ],
+      "ms": 9337
+    },
+    {
+      "id": "spya-knwnnn",
+      "title": "What is it like to be a bat?",
+      "authors": "Nagel",
+      "year": "1974",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "3c8f4e03fe1aa342",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:57:02.755Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://cse.buffalo.edu/courses/cse725/peter/Nagel_1974.pdf",
+      "results": [
+        {
+          "url": "https://doi.org/10.2307/2183914",
+          "title": "What Is It Like to Be a Bat?"
+        },
+        {
+          "url": "https://www.jstor.org/stable/2183914",
+          "title": "What Is It Like to Be a Bat?"
+        },
+        {
+          "url": "https://pdcnet.org/phr/content/phr_1974_0083_0004_0435_0450",
+          "title": "The Philosophical Review"
+        },
+        {
+          "url": "https://cse.buffalo.edu/courses/cse725/peter/Nagel_1974.pdf",
+          "title": "Philosophical Review"
+        },
+        {
+          "url": "https://philosophy.uconn.edu/wp-content/uploads/sites/365/2020/03/Nagel-What-is-it-like-to-be-a-bat.pdf",
+          "title": "What Is It Like to Be a Bat?"
+        }
+      ],
+      "ms": 12744
+    },
+    {
+      "id": "spya-y2b2tm",
+      "title": "Minds, brains, and programs",
+      "authors": "Searle",
+      "year": "1980",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "359c92dfd6e07efd",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:57:10.055Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://doi.org/10.1017/s0140525x00005756",
+      "results": [
+        {
+          "url": "https://doi.org/10.1017/s0140525x00005756",
+          "title": "Minds, brains, and programs"
+        },
+        {
+          "url": "https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/minds-brains-and-programs/DC644B47A4299C637C89772FACC2706A",
+          "title": "Minds, brains, and programs | Behavioral and Brain Sciences"
+        },
+        {
+          "url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/DC644B47A4299C637C89772FACC2706A/S0140525X00005756a.pdf/div-class-title-minds",
+          "title": "Minds, brains, and programs"
+        },
+        {
+          "url": "https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/abs/minds-brains-and-programs/DC644B47A4299C637C89772FACC2706A",
+          "title": "Minds, brains, and programs | Behavioral and Brain Sciences | Cambridge Core"
+        },
+        {
+          "url": "https://psycnet.apa.org/record/1981-27235-001",
+          "title": "Minds, brains, and programs."
+        }
+      ],
+      "ms": 7300
+    },
+    {
+      "id": "spya-ejfr7q",
+      "title": "Absent qualia, fading qualia, dancing qualia",
+      "authors": "Chalmers",
+      "year": "1995",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Chalmers argues that if the 'absent' or 'inverted' qualia (experience with no felt quality, or with the felt quality reversed) were possible, then his 'dancing qualia' case, where experience keeps switching without the subject noticing, would also be possible.",
+              "quote": "if absent qualia or inverted qualia are possible, then a phenomenon involving what I will call Dancing Qualia is possible"
+            },
+            {
+              "text": "Because he judges dancing qualia extremely implausible, he concludes that functional organization fully determines conscious experience.",
+              "quote": "It follows that we have good reason to believe that the principle of organizational invariance is true, and that functional organization fully determines conscious experience."
+            }
+          ],
+          "url": "https://consc.net/papers/qualia.html",
+          "host": "consc.net",
+          "title": "Absent Qualia, Fading Qualia, Dancing Qualia",
+          "readAt": "2026-10-25T11:57:24.933Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "0fe52ccef4b181c0",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:57:24.933Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Chalmers argues that if the 'absent' or 'inverted' qualia (experience with no felt quality, or with the felt quality reversed) were possible, then his 'dancing qualia' case, where experience keeps switching without the subject noticing, would also be possible.",
+            "quote": "if absent qualia or inverted qualia are possible, then a phenomenon involving what I will call Dancing Qualia is possible"
+          },
+          {
+            "text": "Because he judges dancing qualia extremely implausible, he concludes that functional organization fully determines conscious experience.",
+            "quote": "It follows that we have good reason to believe that the principle of organizational invariance is true, and that functional organization fully determines conscious experience."
+          }
+        ],
+        "url": "https://consc.net/papers/qualia.html",
+        "host": "consc.net",
+        "title": "Absent Qualia, Fading Qualia, Dancing Qualia",
+        "readAt": "2026-10-25T11:57:24.933Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://consc.net/papers/qualia.html",
+      "results": [
+        {
+          "url": "https://consc.net/papers/qualia.html",
+          "title": "Absent Qualia, Fading Qualia, Dancing Qualia"
+        },
+        {
+          "url": "http://cogprints.org/318/1/qualia.html",
+          "title": "Absent Qualia, Fading Qualia, Dancing Qualia"
+        },
+        {
+          "url": "https://philpapers.org/rec/CHAAQF",
+          "title": "David J. Chalmers, Absent qualia, fading qualia, dancing qualia - PhilPapers"
+        },
+        {
+          "url": "https://www.semanticscholar.org/paper/Absent-Qualia,-Fading-Qualia,-Dancing-Qualia-Chalmers/7e69564002617f1f132b8caf71bc1bdc13803dad",
+          "title": "Absent Qualia, Fading Qualia, Dancing Qualia"
+        },
+        {
+          "url": "https://web-archive.southampton.ac.uk/cogprints.org/318/1/qualia.html",
+          "title": "Absent Qualia, Fading Qualia, Dancing Qualia"
+        }
+      ],
+      "ms": 14878
+    },
+    {
+      "id": "spya-yec6mc",
+      "title": "Theories of consciousness",
+      "authors": "Seth, Bayne",
+      "year": "2022",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The review compares four leading theories of consciousness (higher-order, global workspace, re-entry and predictive processing, and integrated information) to show how they relate to each other and whether data can tell them apart.",
+              "quote": "we review four prominent theoretical approaches to consciousness: higher-order theories, global workspace theories, re-entry and predictive processing theories and integrated information theory"
+            },
+            {
+              "text": "It argues that theories need to be developed in three ways before they can support a mature way of testing them against each other.",
+              "quote": "we outline three ways in which theories need to be developed to deliver a mature regimen of theory-testing in the neuroscience of consciousness"
+            }
+          ],
+          "url": "https://www.nature.com/articles/s41583-022-00587-4",
+          "host": "nature.com",
+          "title": "Theories of consciousness | Nature Reviews Neuroscience",
+          "readAt": "2026-10-25T11:57:35.551Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "02369788725d81c2",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:57:35.551Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The review compares four leading theories of consciousness (higher-order, global workspace, re-entry and predictive processing, and integrated information) to show how they relate to each other and whether data can tell them apart.",
+            "quote": "we review four prominent theoretical approaches to consciousness: higher-order theories, global workspace theories, re-entry and predictive processing theories and integrated information theory"
+          },
+          {
+            "text": "It argues that theories need to be developed in three ways before they can support a mature way of testing them against each other.",
+            "quote": "we outline three ways in which theories need to be developed to deliver a mature regimen of theory-testing in the neuroscience of consciousness"
+          }
+        ],
+        "url": "https://www.nature.com/articles/s41583-022-00587-4",
+        "host": "nature.com",
+        "title": "Theories of consciousness | Nature Reviews Neuroscience",
+        "readAt": "2026-10-25T11:57:35.551Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://www.nature.com/articles/s41583-022-00587-4",
+      "results": [
+        {
+          "url": "https://www.nature.com/articles/s41583-022-00587-4",
+          "title": "Theories of consciousness | Nature Reviews Neuroscience"
+        },
+        {
+          "url": "https://doi.org/10.1038/s41583-022-00587-4",
+          "title": "Theories of consciousness"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/35505255",
+          "title": "Theories of consciousness - PubMed"
+        },
+        {
+          "url": "https://sussex.figshare.com/articles/journal_contribution/Theories_of_consciousness/23488103",
+          "title": "Theories of consciousness"
+        },
+        {
+          "url": "https://www.nature.com/articles/s41583-022-00587-4/tables/1?code=c61e7d56-69bc-4f10-84f9-3ac6f9b7820d&error=cookies_not_supported",
+          "title": "Table 1 A selection of theories of consciousness"
+        }
+      ],
+      "ms": 10617
+    },
+    {
+      "id": "spya-uu82sj",
+      "title": "Birch's animal / The ConTraSt database",
+      "authors": "Yaron, Melloni, Pitts, Mudrik",
+      "year": "2022",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "a80c12a4f8e538ac",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:57:42.408Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://www.nature.com/articles/s41562-021-01284-5",
+      "results": [
+        {
+          "url": "https://www.nature.com/articles/s41562-021-01284-5",
+          "title": "The ConTraSt database for analysing and comparing empirical studies of consciousness theories | Nature Human Behaviour"
+        },
+        {
+          "url": "https://doi.org/10.1038/s41562-021-01284-5",
+          "title": "The ConTraSt database for analysing and comparing empirical studies of consciousness theories"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/35190711/",
+          "title": "The ConTraSt database for analysing and comparing empirical studies of consciousness theories - PubMed"
+        },
+        {
+          "url": "http://contrastdb.tau.ac.il/",
+          "title": "ConTraSt"
+        },
+        {
+          "url": "https://researchonline.lse.ac.uk/id/eprint/115949/1/art00001.pdf",
+          "title": "Version: Published Version Licence: Creative Commons: Attribution 4.0"
+        }
+      ],
+      "ms": 6857
+    },
+    {
+      "id": "spya-ws9me9",
+      "title": "The search for invertebrate consciousness",
+      "authors": "Birch",
+      "year": "2022",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "too-long"
+      },
+      "stored": {
+        "identity": "a6881a450b897805",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:57:53.678Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "too-long"
+      },
+      "picked": "https://researchonline.lse.ac.uk/id/eprint/106210/",
+      "results": [
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7612530/",
+          "title": "The search for invertebrate consciousness"
+        },
+        {
+          "url": "https://doi.org/10.1111/nous.12351",
+          "title": "The search for invertebrate consciousness"
+        },
+        {
+          "url": "https://onlinelibrary.wiley.com/doi/pdf/10.1111/nous.12351",
+          "title": "The search for invertebrate consciousness - Birch - 2022 - Noûs - Wiley Online Library"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/35321054/",
+          "title": "The search for invertebrate consciousness"
+        },
+        {
+          "url": "https://researchonline.lse.ac.uk/id/eprint/106210/",
+          "title": "The search for invertebrate consciousness"
+        }
+      ],
+      "ms": 11270
+    },
+    {
+      "id": "spya-kaptbh",
+      "title": "Artificial You: AI and the Future of Your Mind",
+      "authors": "Schneider",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "55acd0d56628d0e8",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:58:01.958Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://press.princeton.edu/books/hardcover/9780691180144/artificial-you",
+      "results": [
+        {
+          "url": "https://www.jstor.org/stable/j.ctvfjd00r",
+          "title": "Artificial You: AI and the Future of Your Mind on JSTOR"
+        },
+        {
+          "url": "https://press.princeton.edu/books/hardcover/9780691180144/artificial-you",
+          "title": "Artificial You | Princeton University Press"
+        },
+        {
+          "url": "https://press.princeton.edu/books/ebook/9780691197777/artificial-you",
+          "title": "Artificial You | Princeton University Press"
+        },
+        {
+          "url": "http://cds.cern.ch/record/2691663",
+          "title": "Artificial You: AI and the Future of Your Mind"
+        },
+        {
+          "url": "https://www.degruyterbrill.com/document/doi/10.1515/9780691197777/html",
+          "title": "Artificial You - AI and the Future of Your Mind"
+        }
+      ],
+      "ms": 8279
+    },
+    {
+      "id": "spya-dzsh79",
+      "title": "Awareness of the problem of testing consciousness in AI: Susan Schneider's proposed tests for AI consciousness…",
+      "authors": "Udell, Schwitzgebel",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "b0bf49be7df978eb",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:58:10.144Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://faculty.ucr.edu/~eschwitz/SchwitzAbs/SchneiderCrit.htm",
+      "results": [
+        {
+          "url": "https://faculty.ucr.edu/~eschwitz/SchwitzAbs/SchneiderCrit.htm",
+          "title": "Susan Schneider's Proposed Tests for AI Consciousness: Promising but Flawed, by David Billy Udell and Eric Schwitzgebel"
+        },
+        {
+          "url": "https://faculty.ucr.edu/~eschwitz/SchwitzPapers/SchneiderCrit-200828.pdf",
+          "title": "Eric Schwitzgebel Department of Philosophy University of California at Riverside Riverside, CA 92521-0201 USA eschwitz@ucr.edu"
+        },
+        {
+          "url": "https://philarchive.org/rec/UDESSP",
+          "title": "Susan Schneider's Proposed Tests for AI Consciousness: Promising but Flawed"
+        },
+        {
+          "url": "https://www.ingentaconnect.com/content/imp/jcs/2021/00000028/f0020005/art00006",
+          "title": "Susan Schneider's Proposed Tests for AI Consciousness: Promising ...: Ingenta Connect"
+        },
+        {
+          "url": "https://doi.org/10.1093/oso/9780190905033.003.0016",
+          "title": "How to Catch an AI Zombie"
+        }
+      ],
+      "ms": 8185
+    },
+    {
+      "id": "spya-z64xsb",
+      "title": "Could a large language model be conscious?",
+      "authors": "Chalmers",
+      "year": "2023",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Chalmers concludes that current large language models are somewhat unlikely to be conscious.",
+              "quote": "it is somewhat unlikely that current large language models are conscious"
+            },
+            {
+              "text": "He names significant obstacles to consciousness in current models, such as their lack of recurrent processing, a global workspace (a shared space where information is pooled for use across the system), and unified agency.",
+              "quote": "their lack of recurrent processing, a global workspace, and unified agency"
+            }
+          ],
+          "url": "https://arxiv.org/abs/2303.07103v1",
+          "host": "arxiv.org",
+          "title": "[2303.07103v1] Could a Large Language Model be Conscious?",
+          "readAt": "2026-10-25T11:58:21.461Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "5b02db530ffab584",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:58:21.461Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Chalmers concludes that current large language models are somewhat unlikely to be conscious.",
+            "quote": "it is somewhat unlikely that current large language models are conscious"
+          },
+          {
+            "text": "He names significant obstacles to consciousness in current models, such as their lack of recurrent processing, a global workspace (a shared space where information is pooled for use across the system), and unified agency.",
+            "quote": "their lack of recurrent processing, a global workspace, and unified agency"
+          }
+        ],
+        "url": "https://arxiv.org/abs/2303.07103v1",
+        "host": "arxiv.org",
+        "title": "[2303.07103v1] Could a Large Language Model be Conscious?",
+        "readAt": "2026-10-25T11:58:21.461Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://arxiv.org/abs/2303.07103v1",
+      "results": [
+        {
+          "url": "https://www.bostonreview.net/articles/could-a-large-language-model-be-conscious/",
+          "title": "Could a Large Language Model Be Conscious? - Boston Review"
+        },
+        {
+          "url": "https://arxiv.org/pdf/2303.07103",
+          "title": "llm-consciousness-bostonreview"
+        },
+        {
+          "url": "https://doi.org/10.48550/arxiv.2303.07103",
+          "title": "Could a Large Language Model be Conscious?"
+        },
+        {
+          "url": "https://neurips.cc/virtual/2022/invited-talk/55867",
+          "title": "NeurIPS Invited Talk Could a Large Language Model be Conscious?"
+        },
+        {
+          "url": "https://arxiv.org/abs/2303.07103v1",
+          "title": "[2303.07103v1] Could a Large Language Model be Conscious?"
+        }
+      ],
+      "ms": 11318
+    },
+    {
+      "id": "spya-grsk3d",
+      "title": "Towards a true neural stance on consciousness",
+      "authors": "Lamme",
+      "year": "2006",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "stored": {
+        "identity": "17f0378f96c60267",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:58:30.015Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "picked": "https://doi.org/10.1016/j.tics.2006.09.001",
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.tics.2006.09.001",
+          "title": "Towards a true neural stance on consciousness"
+        },
+        {
+          "url": "https://www.cell.com/trends/cognitive-sciences/abstract/S1364-6613(06)00237-3",
+          "title": "Towards a true neural stance on consciousness: Trends in Cognitive Sciences"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/abs/pii/S1364661306002373",
+          "title": "Towards a true neural stance on consciousness"
+        },
+        {
+          "url": "https://www.cell.com/trends/cognitive-sciences/pdf/S1364-6613(06)00237-3.pdf",
+          "title": "Towards a true neural stance on consciousness: Trends in Cognitive Sciences"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/16997611/",
+          "title": "Towards a true neural stance on consciousness - PubMed"
+        }
+      ],
+      "ms": 8554
+    },
+    {
+      "id": "spya-h4hp4h",
+      "title": "Visual functions generate conscious seeing",
+      "authors": "Lamme",
+      "year": "2020",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "207a011b18ff5809",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:58:37.989Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2020.00083/full",
+      "results": [
+        {
+          "url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2020.00083/full",
+          "title": "Frontiers | Visual Functions Generating Conscious Seeing"
+        },
+        {
+          "url": "https://doi.org/10.3389/fpsyg.2020.00083",
+          "title": "Visual Functions Generating Conscious Seeing"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32116908/",
+          "title": "Visual Functions Generating Conscious Seeing"
+        },
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7034432/",
+          "title": "Visual Functions Generating Conscious Seeing"
+        },
+        {
+          "url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2020.00083/pdf",
+          "title": "Visual Functions Generating Conscious Seeing"
+        }
+      ],
+      "ms": 7974
+    },
+    {
+      "id": "spya-fys39a",
+      "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+      "authors": "Doerig, Schurger, Hess, Herzog",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Using results from the theory of computation, the authors argue that theories which tie consciousness to the pattern of connections in a system (such as IIT) are either false or fall outside science.",
+              "quote": "using theorems from the theory of computation, we show that causal structure theories are either false or outside the realm of science"
+            }
+          ],
+          "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+          "host": "doi.org",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+          "readAt": "2026-10-25T11:58:52.212Z",
+          "pageKind": "own"
+        }
+      },
+      "stored": {
+        "identity": "05b31c65aa1ee617",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:58:52.212Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Using results from the theory of computation, the authors argue that theories which tie consciousness to the pattern of connections in a system (such as IIT) are either false or fall outside science.",
+            "quote": "using theorems from the theory of computation, we show that causal structure theories are either false or outside the realm of science"
+          }
+        ],
+        "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+        "host": "doi.org",
+        "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness",
+        "readAt": "2026-10-25T11:58:52.212Z",
+        "pageKind": "own"
+      },
+      "picked": "https://doi.org/10.1016/j.concog.2019.04.002",
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.concog.2019.04.002",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/pii/S105381001830521X",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness - ScienceDirect"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/31078047/",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness - PubMed"
+        },
+        {
+          "url": "https://infoscience.epfl.ch/entities/publication/8e1eed36-db86-4289-b19c-67535e671644/articledetails",
+          "title": "The unfolding argument: Why IIT and other causal structure theories cannot explain consciousness"
+        },
+        {
+          "url": "https://digitalcommons.chapman.edu/psychology_articles/161/",
+          "title": "\"The Unfolding Argument: Why IIT and Other Causal Structure Theories Ca\" by Adrian Doerig, Aaron Schurger et al."
+        }
+      ],
+      "ms": 14223
+    },
+    {
+      "id": "spya-wbbuma",
+      "title": "A Cognitive Theory of Consciousness",
+      "authors": "Baars",
+      "year": "1988",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Baars argues that consciousness is linked to a \"global workplace\", a kind of shared work space spread across the nervous system, and he presents data to support this.",
+              "quote": "Adducing data to show that consciousness is associated with a kind of global workplace in the nervous system"
+            },
+            {
+              "text": "He sets limits for any theory of consciousness by comparing conscious mental events with closely similar unconscious ones, such as stimuli that are attended versus those that are not.",
+              "quote": "contrasting well-established conscious phenomena - such as stimulus representations known to be attended, perceptual, and informative - with closely comparable unconscious ones"
+            }
+          ],
+          "url": "https://books.google.com/books/about/A_Cognitive_Theory_of_Consciousness.html?id=3tpFdVe3dacC",
+          "host": "books.google.com",
+          "title": "A Cognitive Theory of Consciousness - Bernard J. Baars - Google Books",
+          "readAt": "2026-10-25T11:59:03.261Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "906aa215ab12d6a8",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:59:03.261Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Baars argues that consciousness is linked to a \"global workplace\", a kind of shared work space spread across the nervous system, and he presents data to support this.",
+            "quote": "Adducing data to show that consciousness is associated with a kind of global workplace in the nervous system"
+          },
+          {
+            "text": "He sets limits for any theory of consciousness by comparing conscious mental events with closely similar unconscious ones, such as stimuli that are attended versus those that are not.",
+            "quote": "contrasting well-established conscious phenomena - such as stimulus representations known to be attended, perceptual, and informative - with closely comparable unconscious ones"
+          }
+        ],
+        "url": "https://books.google.com/books/about/A_Cognitive_Theory_of_Consciousness.html?id=3tpFdVe3dacC",
+        "host": "books.google.com",
+        "title": "A Cognitive Theory of Consciousness - Bernard J. Baars - Google Books",
+        "readAt": "2026-10-25T11:59:03.261Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://books.google.com/books/about/A_Cognitive_Theory_of_Consciousness.html?id=3tpFdVe3dacC",
+      "results": [
+        {
+          "url": "http://loc.gov/catdir/description/cam032/87020923.html",
+          "title": "A cognitive theory of consciousness"
+        },
+        {
+          "url": "https://search.worldcat.org/title/16354559",
+          "title": "A cognitive theory of consciousness"
+        },
+        {
+          "url": "https://archive.org/details/cognitivetheoryo0000baar",
+          "title": "A cognitive theory of consciousness : Baars, Bernard J : Free Download, Borrow, and Streaming : Internet Archive"
+        },
+        {
+          "url": "https://books.google.com/books/about/A_Cognitive_Theory_of_Consciousness.html?id=3tpFdVe3dacC",
+          "title": "A Cognitive Theory of Consciousness - Bernard J. Baars - Google Books"
+        },
+        {
+          "url": "https://digitalcommons.memphis.edu/cgi/viewcontent.cgi?article=1151&context=ccrg_papers",
+          "title": "A Cognitive Theory of Consciousness"
+        }
+      ],
+      "ms": 11049
+    },
+    {
+      "id": "spya-apz7z8",
+      "title": "Towards a cognitive neuroscience of consciousness: Basic evidence and a workspace framework",
+      "authors": "Dehaene, Naccache",
+      "year": "2001",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "stored": {
+        "identity": "8e7e5f5fdb175d8c",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:59:12.545Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "picked": "https://doi.org/10.1016/s0010-0277(00)00123-2",
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/s0010-0277(00)00123-2",
+          "title": "Towards a cognitive neuroscience of consciousness: basic evidence and a workspace framework"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/abs/pii/S0010027700001232",
+          "title": "Towards a cognitive neuroscience of consciousness: basic evidence and a workspace framework"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/11164022/",
+          "title": "Towards a cognitive neuroscience of consciousness"
+        },
+        {
+          "url": "https://europepmc.org/article/MED/11164022",
+          "title": "Towards a cognitive neuroscience of consciousness: basic evidence and a workspace framework. - Abstract - Europe PMC"
+        },
+        {
+          "url": "https://www.sciencedirect.com/journal/cognition/vol/79/issue/1",
+          "title": "Cognition | The Cognitive Neuroscience of Consciousness (Dehaene S.I.) | ScienceDirect.com by Elsevier"
+        }
+      ],
+      "ms": 9283
+    },
+    {
+      "id": "spya-u94u03",
+      "title": "Human and Animal Minds: The Consciousness Questions Laid to Rest",
+      "authors": "Carruthers",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Carruthers argues there is no determinate answer to whether animals are phenomenally conscious (have felt experience), because projecting our own first-person concepts onto very unlike minds fails to fix a clear truth.",
+              "quote": "such projections fail to result in determinate truth-conditions when the mind of the other is significantly unlike our own"
+            },
+            {
+              "text": "On many views, concern for animals can rest on sympathy, which needs only third-person understanding of an animal's desires and emotions, not first-person empathy.",
+              "quote": "concern for animals can be grounded in sympathy, which requires only third-person understanding of the desires and emotions of the animal in question"
+            }
+          ],
+          "url": "https://academic.oup.com/book/32384",
+          "host": "academic.oup.com",
+          "title": "Human and Animal Minds: The Consciousness Questions Laid to Rest | Oxford Academic",
+          "readAt": "2026-10-25T11:59:24.685Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "7dd629cf449b900d",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:59:24.685Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Carruthers argues there is no determinate answer to whether animals are phenomenally conscious (have felt experience), because projecting our own first-person concepts onto very unlike minds fails to fix a clear truth.",
+            "quote": "such projections fail to result in determinate truth-conditions when the mind of the other is significantly unlike our own"
+          },
+          {
+            "text": "On many views, concern for animals can rest on sympathy, which needs only third-person understanding of an animal's desires and emotions, not first-person empathy.",
+            "quote": "concern for animals can be grounded in sympathy, which requires only third-person understanding of the desires and emotions of the animal in question"
+          }
+        ],
+        "url": "https://academic.oup.com/book/32384",
+        "host": "academic.oup.com",
+        "title": "Human and Animal Minds: The Consciousness Questions Laid to Rest | Oxford Academic",
+        "readAt": "2026-10-25T11:59:24.685Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://academic.oup.com/book/32384",
+      "results": [
+        {
+          "url": "https://academic.oup.com/book/32384",
+          "title": "Human and Animal Minds: The Consciousness Questions Laid to Rest | Oxford Academic"
+        },
+        {
+          "url": "https://faculty.philosophy.umd.edu/pcarruthers/Blurb-HaAM.htm",
+          "title": null
+        },
+        {
+          "url": "https://searchworks.stanford.edu/view/13449386",
+          "title": "Human and animal minds : the consciousness questions laid to rest"
+        },
+        {
+          "url": "https://findit.library.nd.edu/Record/005460004",
+          "title": "Holdings: Human and animal minds : :: University of Notre Dame Library Catalog"
+        },
+        {
+          "url": "https://librarycatalog.ecu.edu/catalog/5509558",
+          "title": "Human and animal minds the consciousness questions laid to rest / Peter Carruthers. - ECU Libraries Catalog"
+        }
+      ],
+      "ms": 12141
+    },
+    {
+      "id": "spya-fae0g7",
+      "title": "Conscious processing and the global neuronal workspace hypothesis",
+      "authors": "Mashour, Roelfsema, Changeux, Dehaene",
+      "year": "2020",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "declined"
+      },
+      "stored": {
+        "identity": "1d2c3f44835959d4",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:59:33.206Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "declined"
+      },
+      "picked": "https://doi.org/10.1016/j.neuron.2020.01.026",
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.neuron.2020.01.026",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis"
+        },
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8770991/",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis - PMC"
+        },
+        {
+          "url": "https://www.cell.com/neuron/fulltext/S0896-6273%2820%2930052-0",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis: Neuron"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/pii/S0896627320300520",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis - ScienceDirect"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32135090/",
+          "title": "Conscious Processing and the Global Neuronal Workspace Hypothesis - PubMed"
+        }
+      ],
+      "ms": 8521
+    },
+    {
+      "id": "spya-q62pcv",
+      "title": "Neuronal discharges and gamma oscillations explicitly reflect visual consciousness in the lateral prefrontal cortex",
+      "authors": "Panagiotaropoulos, Deco, Kapoor, Logothetis",
+      "year": "2012",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "bf600dce4d94c93a",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:59:45.174Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://www.sciencedirect.com/science/article/pii/S0896627312003807",
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.neuron.2012.04.013",
+          "title": "Neuronal Discharges and Gamma Oscillations Explicitly Reflect Visual Consciousness in the Lateral Prefrontal Cortex"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/pii/S0896627312003807",
+          "title": "Article Neuronal Discharges and Gamma Oscillations Explicitly Reflect Visual Consciousness in the Lateral Prefrontal Cortex"
+        },
+        {
+          "url": "https://www.cell.com/neuron/fulltext/S0896-6273(12)00516-8",
+          "title": "Neuronal Discharges and Gamma Oscillations Explicitly Reflect Visual Consciousness in the Lateral Prefrontal Cortex: Neuron"
+        },
+        {
+          "url": "https://www.cell.com/neuron/fulltext/S0896-6273(12)00380-7",
+          "title": "Neuronal Discharges and Gamma Oscillations Explicitly Reflect Visual Consciousness in the Lateral Prefrontal Cortex: Neuron"
+        },
+        {
+          "url": "https://publikationen.uni-tuebingen.de/xmlui/handle/10900/51697",
+          "title": "Neuronal Discharges and Gamma Oscillations Explicitly Reflect Visual Consciousness in the Lateral Prefrontal Cortex"
+        }
+      ],
+      "ms": 11967
+    },
+    {
+      "id": "spya-xukadt",
+      "title": "Birch: Global workspace theory and animal consciousness",
+      "authors": "Birch",
+      "year": "2020",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "3d118d94ceab03b5",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:59:53.117Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://doi.org/10.5840/philtopics20204812",
+      "results": [
+        {
+          "url": "https://doi.org/10.5840/philtopics20204812",
+          "title": "Global Workspace Theory and Animal Consciousness"
+        },
+        {
+          "url": "https://philsci-archive.pitt.edu/18031/",
+          "title": "Global Workspace Theory and Animal Consciousness - PhilSci-Archive"
+        },
+        {
+          "url": "https://philsci-archive.pitt.edu/18031/1/GWTpreprint%2819-08-20%29.pdf",
+          "title": "Global Workspace Theory and Animal Consciousness"
+        },
+        {
+          "url": "https://researchonline.lse.ac.uk/id/eprint/112796/",
+          "title": "Global workspace theory and animal consciousness"
+        },
+        {
+          "url": "https://researchonline.lse.ac.uk/id/eprint/112796/1/GWTpreprint_19_08_20_.pdf",
+          "title": "Birch, Jonathan (2021) Global workspace theory and animal consciousness. Philosophical Topics, 48(1), 21 - 37. https://doi.org/10.5840/philtopics20204812 https://researchonline.lse.ac.uk/id/eprint/112796/"
+        }
+      ],
+      "ms": 7942
+    },
+    {
+      "id": "spya-rp3sca",
+      "title": "Reflections on higher-order theories: Understanding the higher-order approach to consciousness",
+      "authors": "Brown, Lau, LeDoux",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "e01186240151075b",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T11:59:59.137Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://doi.org/10.1016/j.tics.2019.06.009",
+      "results": [
+        {
+          "url": "https://www.cell.com/trends/cognitive-sciences/fulltext/S1364-6613(19)30161-5",
+          "title": "Understanding the Higher-Order Approach to Consciousness: Trends in Cognitive Sciences"
+        },
+        {
+          "url": "https://doi.org/10.1016/j.tics.2019.06.009",
+          "title": "Understanding the Higher-Order Approach to Consciousness"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/31375408/",
+          "title": "Understanding the Higher-Order Approach to Consciousness"
+        },
+        {
+          "url": "http://www.cell.com/article/S1364661319301615/pdf",
+          "title": "Understanding the Higher-Order Approach to Consciousness"
+        },
+        {
+          "url": "https://doi.org/10.31234/osf.io/xpy8h",
+          "title": "The Misunderstood Higher-Order Approach to Consciousness"
+        }
+      ],
+      "ms": 6020
+    },
+    {
+      "id": "spya-e5rse3",
+      "title": "Higher-order theories do just fine",
+      "authors": "Michel, Lau",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "42a14bc45e48a8f2",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:00:10.808Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://www.tandfonline.com/doi/full/10.1080/17588928.2020.1839402",
+      "results": [
+        {
+          "url": "https://www.tandfonline.com/doi/full/10.1080/17588928.2020.1839402",
+          "title": "Higher-order theories do just fine: Cognitive Neuroscience ..."
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/33176557/",
+          "title": "Higher-order theories do just fine"
+        },
+        {
+          "url": "https://consciousnesslibrary.org/research/69640-higher-order-theories-do-just-fine",
+          "title": "Higher-order theories do just fine - The Consciousness Library"
+        },
+        {
+          "url": "https://philarchive.org/archive/MICHTD-2",
+          "title": "Higher-order theories do just fine"
+        },
+        {
+          "url": "https://philpapers.org/go.pl?id=MICHTD-2&proxyId=&u=https%3A%2F%2Fphilpapers.org%2Farchive%2FMICHTD-2.pdf",
+          "title": "Higher-order theories do just fine"
+        }
+      ],
+      "ms": 11671
+    },
+    {
+      "id": "spya-hx3eb6",
+      "title": "Rethinking Consciousness: A Scientific Theory of Subjective Experience",
+      "authors": "Graziano",
+      "year": "2019",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "e1b2a5dd043adb64",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:00:18.765Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://wwnorton.co.uk/books/9780393541342-rethinking-consciousness-0e82bbe2-06f1-4bac-a4d5-665615229eef",
+      "results": [
+        {
+          "url": "https://grazianolab.princeton.edu/publications/rethinking-consciousness-scientific-theory-subjective-experience",
+          "title": "Rethinking Consciousness: A Scientific Theory of Subjective Experience | Graziano Lab: CONSCIOUSNESS AND THE SOCIAL BRAIN"
+        },
+        {
+          "url": "https://wwnorton.co.uk/books/9780393541342-rethinking-consciousness-0e82bbe2-06f1-4bac-a4d5-665615229eef",
+          "title": "Rethinking Consciousness - Description | W. W. Norton & Company Ltd."
+        },
+        {
+          "url": "https://books.google.com/books?id=vvaKDwAAQBAJ",
+          "title": "Rethinking Consciousness: A Scientific Theory of Subjective Experience - Michael S A Graziano - Google Books"
+        },
+        {
+          "url": "https://search.worldcat.org/title/1084330876",
+          "title": "Rethinking consciousness : a scientific theory of subjective experience"
+        },
+        {
+          "url": "https://books.google.com/books/about/Rethinking_Consciousness.html?id=9l6NEAAAQBAJ",
+          "title": "Rethinking Consciousness: A Scientific Theory of Subjective Experience - Michael S. A. Graziano - Google Books"
+        }
+      ],
+      "ms": 7956
+    },
+    {
+      "id": "spya-zhvng9",
+      "title": "Being You: A New Science of Consciousness",
+      "authors": "Seth",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "4378512aa441951e",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:00:27.694Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://www.faber.co.uk/product/9780571337729-being-you/",
+      "results": [
+        {
+          "url": "https://www.anilseth.com/being-you/",
+          "title": "Being You – Anil Seth"
+        },
+        {
+          "url": "https://www.penguinrandomhouse.com/books/566315/being-you-by-anil-seth/",
+          "title": "Being You by Anil Seth: 9781524742874 | PenguinRandomHouse.com: Books"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Being_You:_A_New_Science_of_Consciousness",
+          "title": "Being You: A New Science of Consciousness"
+        },
+        {
+          "url": "https://www.faber.co.uk/product/9780571337729-being-you/",
+          "title": "Being You: A New Science of Consciousness by Anil Seth"
+        },
+        {
+          "url": "https://www.theguardian.com/books/2021/aug/25/being-you-by-professor-anil-seth-review-the-exhilarating-new-science-of-consciousness",
+          "title": "Being You by Professor Anil Seth review – the exhilarating new science of consciousness | Science and nature books | The Guardian"
+        }
+      ],
+      "ms": 8929
+    },
+    {
+      "id": "spya-jjrssn",
+      "title": "Consciousness in Action",
+      "authors": "Hurley",
+      "year": "1998",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "Hurley argues that perception and action depend on each other more closely than people usually assume, meaning the two are more tightly linked than the common view allows.",
+              "quote": "argues that perception and action are more deeply interdependent than we usually assume"
+            }
+          ],
+          "url": "https://www.hup.harvard.edu/books/9780674007963",
+          "host": "hup.harvard.edu",
+          "title": "Consciousness in Action — Harvard University Press",
+          "readAt": "2026-10-25T12:00:41.290Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "616be9925dfce692",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:00:41.290Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "Hurley argues that perception and action depend on each other more closely than people usually assume, meaning the two are more tightly linked than the common view allows.",
+            "quote": "argues that perception and action are more deeply interdependent than we usually assume"
+          }
+        ],
+        "url": "https://www.hup.harvard.edu/books/9780674007963",
+        "host": "hup.harvard.edu",
+        "title": "Consciousness in Action — Harvard University Press",
+        "readAt": "2026-10-25T12:00:41.290Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://www.hup.harvard.edu/books/9780674007963",
+      "results": [
+        {
+          "url": "https://www.hup.harvard.edu/books/9780674007963",
+          "title": "Consciousness in Action — Harvard University Press"
+        },
+        {
+          "url": "https://archive.org/details/consciousnessina0000hurl",
+          "title": "Consciousness in action : Hurley, S. L. (Susan L.) : Free Download, Borrow, and Streaming : Internet Archive"
+        },
+        {
+          "url": "https://www.google.co.uk/books/edition/Consciousness_in_Action/OYjO5N2l7l4C?hl=en&gbpv=1&printsec=frontcover",
+          "title": "Google Books"
+        },
+        {
+          "url": "https://obnb.uk/p11969977-consciousness-in-action",
+          "title": "Consciousness in action :: S. L. Hurley :: ISBN 0674164202 :: Harvard University Press 1998 :: OBNB, the Open British National Bibliography"
+        },
+        {
+          "url": "https://philpapers.org/rec/HURCIA",
+          "title": "Consciousness in Action"
+        }
+      ],
+      "ms": 13597
+    },
+    {
+      "id": "spya-uwr296",
+      "title": "Animal cognition and human values / Machines, plants and animals: The origins of agency",
+      "authors": "Dretske",
+      "year": "1999",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "9bd74e0bdaf85b38",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:00:48.847Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://doi.org/10.1023/a:1005541307925",
+      "results": [
+        {
+          "url": "https://doi.org/10.1023/a:1005541307925",
+          "title": "Machines, Plants and Animals: the Origins of Agency"
+        },
+        {
+          "url": "https://philpapers.org/rec/DREMPA",
+          "title": "Fred I. Dretske, Machines, plants and animals: The origins of agency - PhilPapers"
+        },
+        {
+          "url": "https://philpeople.org/profiles/fred-dretske",
+          "title": "Fred Dretske (Last affiliation: Duke University)"
+        },
+        {
+          "url": "https://doi.org/10.1023/a:1005509828398",
+          "title": "Are Animals Capable of Concepts?"
+        },
+        {
+          "url": "https://iep.utm.edu/animal-mind/",
+          "title": "Animal Minds"
+        }
+      ],
+      "ms": 7556
+    },
+    {
+      "id": "spya-cqcmhw",
+      "title": "Reinforcement Learning",
+      "authors": "Sutton, Barto",
+      "year": "2018",
+      "linkFrom": "search",
+      "refused": {
+        "status": 409,
+        "reason": "no-identifier",
+        "message": "This work has no DOI or arXiv id, and either the article is a file you uploaded, whose cited works we do not search for by title, or the list gives too little to recognise its page by, so nothing was searched."
+      },
+      "ms": 1,
+      "results": []
+    },
+    {
+      "id": "spya-xsyqxm",
+      "title": "Sensorimotor subjectivity and the enactive approach to experience",
+      "authors": "Thompson",
+      "year": "2005",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "stored": {
+        "identity": "036fe4f0c004f259",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:00:58.972Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "picked": "https://doi.org/10.1007/s11097-005-9003-x",
+      "results": [
+        {
+          "url": "https://doi.org/10.1007/s11097-005-9003-x",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        },
+        {
+          "url": "https://evanthompson.me/wp-content/uploads/2012/11/sensorimotor-subjectivity.pdf",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        },
+        {
+          "url": "https://link.springer.com/article/10.1007/s11097-005-9003-x?code=8d24e380-8697-448a-be93-b033d1b0aea6&error=cookies_not_supported",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        },
+        {
+          "url": "https://topologicalmedialab.net/xinwei/classes/readings/Thompson/Sensorimotor%20subjectivity%20enactive%20experience.pdf",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        },
+        {
+          "url": "http://espra.scicog.fr/ThompsonPCS.pdf",
+          "title": "Sensorimotor subjectivity and the enactive approach to experience"
+        }
+      ],
+      "ms": 10122
+    },
+    {
+      "id": "spya-xh9v7p",
+      "title": "Mind, matter, and metabolism",
+      "authors": "Godfrey-Smith",
+      "year": "2016",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-supported"
+      },
+      "stored": {
+        "identity": "b42e8d2e68a835f6",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:01:11.606Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-supported"
+      },
+      "picked": "https://www.pdcnet.org/jphil/content/jphil_2016_0113_0010_0481_0506",
+      "results": [
+        {
+          "url": "https://doi.org/10.5840/jphil20161131034",
+          "title": "Mind, Matter, and Metabolism"
+        },
+        {
+          "url": "https://www.pdcnet.org/jphil/content/jphil_2016_0113_0010_0481_0506",
+          "title": "Mind, Matter, and Metabolism - Peter Godfrey-Smith"
+        },
+        {
+          "url": "https://philpapers.org/rec/GODMMA-6",
+          "title": "Mind, Matter, and Metabolism"
+        },
+        {
+          "url": "https://petergodfreysmith.com/wp-content/uploads/2013/06/Mind_Matter_Metabolism_PGS_2014_DW6.pdf",
+          "title": "Mind, Matter, and Metabolism | Peter Godfrey-Smith"
+        },
+        {
+          "url": "https://petergodfreysmith.com/metazoan.net/Mind_Matter_Metabolism_PGS_2015_preprint.htm",
+          "title": "Mind, Matter, and Metabolism - Peter Godfrey-Smith"
+        }
+      ],
+      "ms": 12634
+    },
+    {
+      "id": "spya-kbxamx",
+      "title": "Dehaene, Lau, Kouider: What is consciousness, and could machines have it?",
+      "authors": "Dehaene, Lau, Kouider",
+      "year": "2017",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "fb9c7024df15ce5d",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:01:18.947Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://www.science.org/doi/10.1126/science.aan8871",
+      "results": [
+        {
+          "url": "https://www.science.org/doi/10.1126/science.aan8871",
+          "title": "What is consciousness, and could machines have it? | Science"
+        },
+        {
+          "url": "https://doi.org/10.1126/science.aan8871",
+          "title": "What is consciousness, and could machines have it?"
+        },
+        {
+          "url": "https://escholarship.org/content/qt56b2q8h9/qt56b2q8h9.pdf",
+          "title": "Science Journals — AAAS"
+        },
+        {
+          "url": "https://escholarship.org/uc/item/56b2q8h9",
+          "title": "What is consciousness, and could machines have it?"
+        },
+        {
+          "url": "https://escholarship.org/uc/item/qt56b2q8h9",
+          "title": "What is consciousness, and could machines have it?"
+        }
+      ],
+      "ms": 7341
+    },
+    {
+      "id": "spya-texrr4",
+      "title": "Generative adversarial networks",
+      "authors": "Goodfellow et al.",
+      "year": "2014",
+      "linkFrom": "arxiv",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The paper proposes a way to learn a model that generates data by training two networks against each other: a generator G that makes samples, and a discriminator D that tries to tell real data from G's samples.",
+              "quote": "We propose a new framework for estimating generative models via an adversarial process"
+            },
+            {
+              "text": "When both G and D are multilayer perceptrons (a basic type of neural network), the whole system can be trained with backpropagation, without Markov chains or approximate inference networks.",
+              "quote": "In the case where G and D are defined by multilayer perceptrons, the entire system can be trained with backpropagation"
+            }
+          ],
+          "url": "https://arxiv.org/abs/1406.2661",
+          "host": "arxiv.org",
+          "title": "[1406.2661] Generative Adversarial Networks",
+          "readAt": "2026-10-25T12:01:30.339Z",
+          "pageKind": "own"
+        }
+      },
+      "stored": {
+        "identity": "67e5472a33d695d1",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:01:30.339Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The paper proposes a way to learn a model that generates data by training two networks against each other: a generator G that makes samples, and a discriminator D that tries to tell real data from G's samples.",
+            "quote": "We propose a new framework for estimating generative models via an adversarial process"
+          },
+          {
+            "text": "When both G and D are multilayer perceptrons (a basic type of neural network), the whole system can be trained with backpropagation, without Markov chains or approximate inference networks.",
+            "quote": "In the case where G and D are defined by multilayer perceptrons, the entire system can be trained with backpropagation"
+          }
+        ],
+        "url": "https://arxiv.org/abs/1406.2661",
+        "host": "arxiv.org",
+        "title": "[1406.2661] Generative Adversarial Networks",
+        "readAt": "2026-10-25T12:01:30.339Z",
+        "pageKind": "own"
+      },
+      "picked": "https://arxiv.org/abs/1406.2661",
+      "results": [
+        {
+          "url": "https://arxiv.org/abs/1406.2661",
+          "title": "[1406.2661] Generative Adversarial Networks"
+        },
+        {
+          "url": "https://arxiv.org/pdf/1406.2661",
+          "title": null
+        },
+        {
+          "url": "https://doi.org/10.48550/arxiv.1406.2661",
+          "title": "Generative Adversarial Networks"
+        },
+        {
+          "url": "https://proceedings.neurips.cc/paper/5423-generative-adversarial-nets.",
+          "title": "Generative Adversarial Nets"
+        },
+        {
+          "url": "https://ar5iv.labs.arxiv.org/html/1406.2661",
+          "title": "[1406.2661] Generative Adversarial Nets"
+        }
+      ],
+      "ms": 11391
+    },
+    {
+      "id": "spya-djsfq5",
+      "title": "Attention schema theory in a neural network agent",
+      "authors": "Wilterson, Graziano",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "19d682d847d3da01",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:01:40.082Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://www.pnas.org/doi/10.1073/pnas.2102421118",
+      "results": [
+        {
+          "url": "https://www.pnas.org/doi/10.1073/pnas.2102421118",
+          "title": "The attention schema theory in a neural network agent: Controlling visuospatial attention using a descriptive model of attention | PNAS"
+        },
+        {
+          "url": "https://doi.org/10.1073/pnas.2102421118",
+          "title": "The attention schema theory in a neural network agent: Controlling visuospatial attention using a descriptive model of attention"
+        },
+        {
+          "url": "https://www.pnas.org/doi/epub/10.1073/pnas.2102421118",
+          "title": "The attention schema theory in a neural network agent: Controlling visuospatial attention using a descriptive model of attention"
+        },
+        {
+          "url": "https://grazianolab.princeton.edu/publications/attention-schema-theory-neural-network-agent-controlling-visuospatial",
+          "title": "The Attention Schema Theory in a Neural Network Agent: Controlling Visuospatial Attention Using a Descriptive Model of Attention. | Graziano Lab: CONSCIOUSNESS AND THE SOCIAL BRAIN"
+        },
+        {
+          "url": "https://dataspace.princeton.edu/handle/88435/dsp01kp78gk430?mode=full",
+          "title": "DataSpace: The Attention Schema Theory in an Artificial Neural Network Agent: Controlling Visuospatial Attention Using a Descriptive Model of Attention"
+        }
+      ],
+      "ms": 9742
+    },
+    {
+      "id": "spya-twybrn",
+      "title": "Neural optimal feedback control with local learning rules",
+      "authors": "Friedrich et al.",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The paper presents an online method that pairs adaptive Kalman filtering (a way of estimating hidden states from noisy signals) with a model-free control method, which it builds as a neural network with local learning rules.",
+              "quote": "we introduce a novel online algorithm which combines adaptive Kalman filtering with a model free control approach (i.e., policy gradient algorithm)"
+            },
+            {
+              "text": "The network learns its control policy without knowing the system's dynamics, which avoids the need for weight transport.",
+              "quote": "It learns the control policy without requiring any knowledge of the dynamics, thus avoiding the need for weight transport."
+            }
+          ],
+          "url": "https://arxiv.org/abs/2111.06920",
+          "host": "arxiv.org",
+          "title": "Neural optimal feedback control with local learning rules",
+          "readAt": "2026-10-25T12:01:51.402Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "7547e4ef7739631e",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:01:51.402Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The paper presents an online method that pairs adaptive Kalman filtering (a way of estimating hidden states from noisy signals) with a model-free control method, which it builds as a neural network with local learning rules.",
+            "quote": "we introduce a novel online algorithm which combines adaptive Kalman filtering with a model free control approach (i.e., policy gradient algorithm)"
+          },
+          {
+            "text": "The network learns its control policy without knowing the system's dynamics, which avoids the need for weight transport.",
+            "quote": "It learns the control policy without requiring any knowledge of the dynamics, thus avoiding the need for weight transport."
+          }
+        ],
+        "url": "https://arxiv.org/abs/2111.06920",
+        "host": "arxiv.org",
+        "title": "Neural optimal feedback control with local learning rules",
+        "readAt": "2026-10-25T12:01:51.402Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://arxiv.org/abs/2111.06920",
+      "results": [
+        {
+          "url": "https://doi.org/10.48550/arxiv.2111.06920",
+          "title": "Neural optimal feedback control with local learning rules"
+        },
+        {
+          "url": "https://arxiv.org/abs/2111.06920",
+          "title": "Neural optimal feedback control with local learning rules"
+        },
+        {
+          "url": "https://proceedings.neurips.cc/paper_files/paper/2021/file/88591b4d3219675bdeb33584b755f680-Paper.pdf",
+          "title": "Neural optimal feedback control with local learning rules"
+        },
+        {
+          "url": "https://proceedings.neurips.cc/paper/2021/file/88591b4d3219675bdeb33584b755f680-Paper.pdf",
+          "title": "Neural optimal feedback control with local learning rules"
+        },
+        {
+          "url": "https://meetings-archive.aps.org/mas/2021/d04/1/",
+          "title": "Neural Optimal Feedback Control with Local Learning Rules - Mid-Atlantic Section Meeting 2021"
+        }
+      ],
+      "ms": 11321
+    },
+    {
+      "id": "spya-artmnj",
+      "title": "Perceiver: General perception with iterative attention",
+      "authors": "Jaegle, Gimeno, Brock, Vinyals, Zisserman, Carreira",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The Perceiver, a model built on Transformers, repeatedly uses attention to squeeze very large inputs into a small set of latent units, which lets it handle very large inputs.",
+              "quote": "The model leverages an asymmetric attention mechanism to iteratively distill inputs into a tight latent bottleneck, allowing it to scale to handle very large inputs."
+            },
+            {
+              "text": "The authors report it is competitive with or beats specialized models on classification across images, point clouds, audio, video, and video+audio.",
+              "quote": "We show that this architecture is competitive with or outperforms strong, specialized models on classification tasks across various modalities: images, point clouds, audio, video, and video+audio."
+            }
+          ],
+          "url": "https://arxiv.org/abs/2103.03206",
+          "host": "arxiv.org",
+          "title": "[2103.03206] Perceiver: General Perception with Iterative Attention",
+          "readAt": "2026-10-25T12:02:03.107Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "34ba4e9e031d58a9",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:02:03.107Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The Perceiver, a model built on Transformers, repeatedly uses attention to squeeze very large inputs into a small set of latent units, which lets it handle very large inputs.",
+            "quote": "The model leverages an asymmetric attention mechanism to iteratively distill inputs into a tight latent bottleneck, allowing it to scale to handle very large inputs."
+          },
+          {
+            "text": "The authors report it is competitive with or beats specialized models on classification across images, point clouds, audio, video, and video+audio.",
+            "quote": "We show that this architecture is competitive with or outperforms strong, specialized models on classification tasks across various modalities: images, point clouds, audio, video, and video+audio."
+          }
+        ],
+        "url": "https://arxiv.org/abs/2103.03206",
+        "host": "arxiv.org",
+        "title": "[2103.03206] Perceiver: General Perception with Iterative Attention",
+        "readAt": "2026-10-25T12:02:03.107Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://arxiv.org/abs/2103.03206",
+      "results": [
+        {
+          "url": "http://proceedings.mlr.press/v139/jaegle21a.html",
+          "title": "Perceiver: General Perception with Iterative Attention"
+        },
+        {
+          "url": "https://arxiv.org/abs/2103.03206",
+          "title": "[2103.03206] Perceiver: General Perception with Iterative Attention"
+        },
+        {
+          "url": "https://doi.org/10.48550/arxiv.2103.03206",
+          "title": "Perceiver: General Perception with Iterative Attention"
+        },
+        {
+          "url": "https://arxiv.org/pdf/2103.03206",
+          "title": "Perceiver: General Perception with Iterative Attention"
+        },
+        {
+          "url": "https://icml.cc/virtual/2021/poster/10291",
+          "title": "ICML Poster Perceiver: General Perception with Iterative Attention"
+        }
+      ],
+      "ms": 11705
+    },
+    {
+      "id": "spya-bvdf50",
+      "title": "The Perceiver architecture is a functional global workspace",
+      "authors": "Juliani, Kanai, Sasai",
+      "year": "2022",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "33b3d5d93e1a17ff",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:02:14.585Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 2,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://escholarship.org/content/qt2g55b9xx/qt2g55b9xx.pdf",
+      "results": [
+        {
+          "url": "https://doi.org/10.48448/phj9-7y34",
+          "title": "The Perceiver Architecture is a Functional Global Workspace"
+        },
+        {
+          "url": "https://escholarship.org/uc/item/2g55b9xx",
+          "title": "The Perceiver Architecture is a Functional Global Workspace"
+        },
+        {
+          "url": "https://escholarship.org/content/qt2g55b9xx/qt2g55b9xx.pdf",
+          "title": "UC Merced"
+        },
+        {
+          "url": "https://escholarship.org/content/qt2g55b9xx/qt2g55b9xx_noSplash_c60e72d5eabbaae941e9ab65b3459676.pdf",
+          "title": "The Perceiver Architecture is a Functional Global Workspace"
+        },
+        {
+          "url": "https://awjuliani.github.io/",
+          "title": "Arthur W. Juliani"
+        }
+      ],
+      "ms": 11478
+    },
+    {
+      "id": "spya-yatf88",
+      "title": "A mathematical framework for transformer circuits",
+      "authors": "Elhage et al.",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The authors study very small transformer language models with two layers or fewer and only attention blocks, and find that \"induction heads\" explain in-context learning in these models and appear only when there are at least two attention layers.",
+              "quote": "can explain in-context learning in these small models, and that these heads only develop in models with at least two attention layers"
+            }
+          ],
+          "url": "https://transformer-circuits.pub/2021/framework/",
+          "host": "transformer-circuits.pub",
+          "title": "A Mathematical Framework for Transformer Circuits",
+          "readAt": "2026-10-25T12:02:28.644Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "02a1f07223216006",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:02:28.644Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The authors study very small transformer language models with two layers or fewer and only attention blocks, and find that \"induction heads\" explain in-context learning in these models and appear only when there are at least two attention layers.",
+            "quote": "can explain in-context learning in these small models, and that these heads only develop in models with at least two attention layers"
+          }
+        ],
+        "url": "https://transformer-circuits.pub/2021/framework/",
+        "host": "transformer-circuits.pub",
+        "title": "A Mathematical Framework for Transformer Circuits",
+        "readAt": "2026-10-25T12:02:28.644Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://transformer-circuits.pub/2021/framework/",
+      "results": [
+        {
+          "url": "https://transformer-circuits.pub/2021/framework/",
+          "title": "A Mathematical Framework for Transformer Circuits"
+        },
+        {
+          "url": "https://www.anthropic.com/research/a-mathematical-framework-for-transformer-circuits",
+          "title": "A mathematical framework for Transformer Circuits \\ Anthropic"
+        },
+        {
+          "url": "https://transformer-circuits.pub/2021/framework/index.html",
+          "title": "A Mathematical Framework for Transformer Circuits"
+        },
+        {
+          "url": "https://web.archive.org/web/20230204224450/https:/www.transformer-circuits.pub/",
+          "title": "Transformer Circuits Thread"
+        },
+        {
+          "url": "https://www.neelnanda.io/mechanistic-interpretability/a-walkthrough-of-a-mathematical-framework-for-transformer-circuits",
+          "title": "A Walkthrough of A Mathematical Framework for Transformer Circuits — Neel Nanda"
+        }
+      ],
+      "ms": 14058
+    },
+    {
+      "id": "spya-vfh2ny",
+      "title": "Human-timescale adaptation in an open-ended task space (AdA)",
+      "authors": "DeepMind Adaptive Agents Team",
+      "year": "2023",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-the-work"
+      },
+      "stored": {
+        "identity": "a99ac805d7fb23b6",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:02:41.118Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 2,
+        "state": "none",
+        "why": "not-the-work"
+      },
+      "picked": "https://arxiv.org/abs/2301.07608",
+      "results": [
+        {
+          "url": "https://proceedings.mlr.press/v202/bauer23a.html",
+          "title": "Human-Timescale Adaptation in an Open-Ended Task Space"
+        },
+        {
+          "url": "https://arxiv.org/abs/2301.07608",
+          "title": "[2301.07608] Human-Timescale Adaptation in an Open-Ended Task Space"
+        },
+        {
+          "url": "https://proceedings.mlr.press/v202/bauer23a/bauer23a.pdf",
+          "title": "Human-Timescale Adaptation in an Open-Ended Task Space"
+        },
+        {
+          "url": "https://doi.org/10.48550/arxiv.2301.07608",
+          "title": "Human-Timescale Adaptation in an Open-Ended Task Space"
+        },
+        {
+          "url": "https://icml.cc/virtual/2023/poster/24626",
+          "title": "ICML Poster Human-Timescale Adaptation in an Open-Ended Task Space"
+        }
+      ],
+      "ms": 12474
+    },
+    {
+      "id": "spya-vcbke4",
+      "title": "A defense of the rights of artificial intelligences",
+      "authors": "Schwitzgebel, Garza",
+      "year": "2015",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The authors argue that possible artificially intelligent beings who match humans in every morally relevant respect would deserve moral consideration similar to that owed to humans.",
+              "quote": "Such possible beings would deserve moral consideration similar to that of human beings."
+            },
+            {
+              "text": "They also propose that AI designers should avoid building AIs whose moral status is unclear.",
+              "quote": "avoid designing AIs whose moral status is unclear"
+            }
+          ],
+          "url": "https://doi.org/10.1111/misp.12032",
+          "host": "doi.org",
+          "title": "A Defense of the Rights of Artificial Intelligences",
+          "readAt": "2026-10-25T12:02:52.947Z",
+          "pageKind": "own"
+        }
+      },
+      "stored": {
+        "identity": "78a5cfd3afb0e197",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:02:52.947Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The authors argue that possible artificially intelligent beings who match humans in every morally relevant respect would deserve moral consideration similar to that owed to humans.",
+            "quote": "Such possible beings would deserve moral consideration similar to that of human beings."
+          },
+          {
+            "text": "They also propose that AI designers should avoid building AIs whose moral status is unclear.",
+            "quote": "avoid designing AIs whose moral status is unclear"
+          }
+        ],
+        "url": "https://doi.org/10.1111/misp.12032",
+        "host": "doi.org",
+        "title": "A Defense of the Rights of Artificial Intelligences",
+        "readAt": "2026-10-25T12:02:52.947Z",
+        "pageKind": "own"
+      },
+      "picked": "https://doi.org/10.1111/misp.12032",
+      "results": [
+        {
+          "url": "https://doi.org/10.1111/misp.12032",
+          "title": "A Defense of the Rights of Artificial Intelligences"
+        },
+        {
+          "url": "https://pdcnet.org/msp/content/msp_2015_0039_0098_0119",
+          "title": "Midwest Studies in Philosophy"
+        },
+        {
+          "url": "https://faculty.ucr.edu/%7Eeschwitz/SchwitzAbs/AIRights.htm",
+          "title": "AI Rights - Eric Schwitzgebel and Mara Garza"
+        },
+        {
+          "url": "https://faculty.ucr.edu/~eschwitz/SchwitzPapers/AIRights-150915.pdf",
+          "title": "Department of Philosophy University of California at Riverside Riverside, CA 92521-0201"
+        },
+        {
+          "url": "https://philpapers.org/rec/SCHADO-9",
+          "title": "A Defense of the Rights of Artificial Intelligences"
+        }
+      ],
+      "ms": 11830
+    },
+    {
+      "id": "spya-jgd27h",
+      "title": "The Intentional Stance",
+      "authors": "Dennett",
+      "year": "1987",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "quote-too-long"
+      },
+      "stored": {
+        "identity": "a16de0a9b6c48861",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:03:02.006Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "quote-too-long"
+      },
+      "picked": "https://mitpress.mit.edu/9780262040938/the-intentional-stance/",
+      "results": [
+        {
+          "url": "https://mitpress.mit.edu/9780262040938/the-intentional-stance/",
+          "title": "The Intentional Stance"
+        },
+        {
+          "url": "https://search.worldcat.org/title/15793656",
+          "title": "The intentional stance"
+        },
+        {
+          "url": "https://mitpress.mit.edu/9780262540537/the-intentional-stance/",
+          "title": "The Intentional Stance"
+        },
+        {
+          "url": "https://books.google.com/books?id=78IW4xjd3akC&printsec=frontcover",
+          "title": "The Intentional Stance - Daniel C. Dennett - Google Books"
+        },
+        {
+          "url": "https://en.wikipedia.org/wiki/Intentional_stance",
+          "title": "Intentional stance"
+        }
+      ],
+      "ms": 9058
+    },
+    {
+      "id": "spya-z2en5u",
+      "title": "The attention schema theory: a foundation for engineering artificial consciousness",
+      "authors": "Graziano",
+      "year": "2017",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "not-supported"
+      },
+      "stored": {
+        "identity": "067d333a420f5968",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:03:14.498Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "not-supported"
+      },
+      "picked": "https://doi.org/10.3389/frobt.2017.00060",
+      "results": [
+        {
+          "url": "https://doi.org/10.3389/frobt.2017.00060",
+          "title": "The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness"
+        },
+        {
+          "url": "https://www.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00060/full",
+          "title": "Frontiers | The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness"
+        },
+        {
+          "url": "https://www.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00060/pdf",
+          "title": "The Attention Schema Theory: A Foundation for Engineering Artificial Consciousness"
+        },
+        {
+          "url": "https://grazianolab.princeton.edu/publications/attention-schema-theory-foundation-engineering-artificial-consciousness",
+          "title": "The Attention Schema Theory: A foundation for engineering artificial consciousness | Graziano Lab: CONSCIOUSNESS AND THE SOCIAL BRAIN"
+        },
+        {
+          "url": "https://public-pages-files-2025.frontiersin.org/journals/robotics-and-ai/articles/10.3389/frobt.2017.00060/text",
+          "title": null
+        }
+      ],
+      "ms": 12493
+    },
+    {
+      "id": "spya-b4349w",
+      "title": "Dimensions of animal consciousness",
+      "authors": "Birch, Schnell, Clayton",
+      "year": "2020",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The authors argue that animal consciousness should not be ranked on one scale of more or less conscious; instead, each species has its own profile across several dimensions.",
+              "quote": "Instead of thinking about variation between species in terms of levels of consciousness, we should think about multidimensional consciousness profiles."
+            },
+            {
+              "text": "They name five such dimensions: perceptual richness, evaluative richness, integration at a time (unity), integration across time (temporality), and self-consciousness (selfhood).",
+              "quote": "We will highlight five significant dimensions of variation: perceptual richness (p-richness), evaluative richness (e-richness), integration at a time (unity) and across time (temporality), and self-consciousness (selfhood)."
+            }
+          ],
+          "url": "https://doi.org/10.1016/j.tics.2020.07.007",
+          "host": "doi.org",
+          "title": "Dimensions of Animal Consciousness",
+          "readAt": "2026-10-25T12:03:27.767Z",
+          "pageKind": "own"
+        }
+      },
+      "stored": {
+        "identity": "55d2431defbfd4be",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:03:27.767Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The authors argue that animal consciousness should not be ranked on one scale of more or less conscious; instead, each species has its own profile across several dimensions.",
+            "quote": "Instead of thinking about variation between species in terms of levels of consciousness, we should think about multidimensional consciousness profiles."
+          },
+          {
+            "text": "They name five such dimensions: perceptual richness, evaluative richness, integration at a time (unity), integration across time (temporality), and self-consciousness (selfhood).",
+            "quote": "We will highlight five significant dimensions of variation: perceptual richness (p-richness), evaluative richness (e-richness), integration at a time (unity) and across time (temporality), and self-consciousness (selfhood)."
+          }
+        ],
+        "url": "https://doi.org/10.1016/j.tics.2020.07.007",
+        "host": "doi.org",
+        "title": "Dimensions of Animal Consciousness",
+        "readAt": "2026-10-25T12:03:27.767Z",
+        "pageKind": "own"
+      },
+      "picked": "https://doi.org/10.1016/j.tics.2020.07.007",
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.tics.2020.07.007",
+          "title": "Dimensions of Animal Consciousness"
+        },
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7116194/",
+          "title": "Dimensions of Animal Consciousness - PMC"
+        },
+        {
+          "url": "https://www.cell.com/trends/cognitive-sciences/fulltext/S1364-6613(20)30192-3",
+          "title": "Dimensions of Animal Consciousness: Trends in Cognitive Sciences"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/pii/S1364661320301923",
+          "title": "Dimensions of Animal Consciousness"
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32830051/",
+          "title": "Dimensions of Animal Consciousness - PubMed"
+        }
+      ],
+      "ms": 13269
+    },
+    {
+      "id": "spya-pkmnk4",
+      "title": "Unsupervised learning for physical interaction through video prediction",
+      "authors": "Finn, Goodfellow, Levine",
+      "year": "2016",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "note",
+        "webNote": {
+          "sentences": [
+            {
+              "text": "The authors build a video prediction model that is conditioned on the robot's actions and predicts how pixels move from earlier frames, so it can learn physical object motion without labels.",
+              "quote": "we develop an action-conditioned video prediction model that explicitly models pixel motion, by predicting a distribution over pixel motion from previous frames"
+            },
+            {
+              "text": "They report that their method makes more accurate video predictions than earlier methods, both by numbers and by how the videos look.",
+              "quote": "Our experiments show that our proposed method produces more accurate video predictions both quantitatively and qualitatively, when compared to prior methods."
+            }
+          ],
+          "url": "https://arxiv.org/abs/1605.07157",
+          "host": "arxiv.org",
+          "title": "[1605.07157] Unsupervised Learning for Physical Interaction through Video Prediction",
+          "readAt": "2026-10-25T12:03:37.927Z",
+          "pageKind": "looks-like"
+        }
+      },
+      "stored": {
+        "identity": "78dbd80a8ca9aa53",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:03:37.927Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 2,
+        "state": "note",
+        "sentences": [
+          {
+            "text": "The authors build a video prediction model that is conditioned on the robot's actions and predicts how pixels move from earlier frames, so it can learn physical object motion without labels.",
+            "quote": "we develop an action-conditioned video prediction model that explicitly models pixel motion, by predicting a distribution over pixel motion from previous frames"
+          },
+          {
+            "text": "They report that their method makes more accurate video predictions than earlier methods, both by numbers and by how the videos look.",
+            "quote": "Our experiments show that our proposed method produces more accurate video predictions both quantitatively and qualitatively, when compared to prior methods."
+          }
+        ],
+        "url": "https://arxiv.org/abs/1605.07157",
+        "host": "arxiv.org",
+        "title": "[1605.07157] Unsupervised Learning for Physical Interaction through Video Prediction",
+        "readAt": "2026-10-25T12:03:37.927Z",
+        "pageKind": "looks-like"
+      },
+      "picked": "https://arxiv.org/abs/1605.07157",
+      "results": [
+        {
+          "url": "https://arxiv.org/abs/1605.07157",
+          "title": "[1605.07157] Unsupervised Learning for Physical Interaction through Video Prediction"
+        },
+        {
+          "url": "https://papers.nips.cc/paper/6161-unsupervised-learning-for-physical-interaction-through-video-prediction",
+          "title": "Unsupervised Learning for Physical Interaction through Video Prediction"
+        },
+        {
+          "url": "https://proceedings.neurips.cc/paper_files/paper/2016/file/d9d4f495e875a2e075a1a4a6e1b9770f-Paper.pdf",
+          "title": "Unsupervised Learning for Physical Interaction through Video Prediction"
+        },
+        {
+          "url": "https://proceedings.neurips.cc/paper_files/paper/6161-unsupervised-learning-for-physical-interaction-through-video-prediction.pdf",
+          "title": "Unsupervised Learning for Physical Interaction through ..."
+        },
+        {
+          "url": "https://doi.org/10.48550/arxiv.1605.07157",
+          "title": "Unsupervised Learning for Physical Interaction through Video Prediction"
+        }
+      ],
+      "ms": 10159
+    },
+    {
+      "id": "spya-ecxqj4",
+      "title": "Deep learning and the global workspace theory",
+      "authors": "VanRullen, Kanai",
+      "year": "2021",
+      "linkFrom": "search",
+      "outcome": {
+        "outcome": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "stored": {
+        "identity": "5c43ecddbcd4587b",
+        "validationVersion": "citation-web-note-checks/4",
+        "promptVersion": "citation-web-note/3",
+        "checkedAt": "2026-10-25T12:03:46.782Z",
+        "model": "anthropic/claude-haiku-5.5",
+        "searches": 1,
+        "state": "none",
+        "why": "quote-not-in-evidence"
+      },
+      "picked": "https://doi.org/10.1016/j.tins.2021.04.005",
+      "results": [
+        {
+          "url": "https://doi.org/10.1016/j.tins.2021.04.005",
+          "title": "Deep learning and the Global Workspace Theory"
+        },
+        {
+          "url": "https://www.cell.com/trends/neurosciences/abstract/S0166-2236(21)00077-1",
+          "title": "Deep learning and the Global Workspace Theory"
+        },
+        {
+          "url": "https://www.sciencedirect.com/science/article/abs/pii/S0166223621000771",
+          "title": "Deep learning and the Global Workspace Theory"
+        },
+        {
+          "url": "https://arxiv.org/abs/2012.10390",
+          "title": "Computer Science > Artificial Intelligence"
+        },
+        {
+          "url": "https://doi.org/10.48550/arxiv.2012.10390",
+          "title": "Deep Learning and the Global Workspace Theory"
+        }
+      ],
+      "ms": 8855
+    }
+  ]
+}

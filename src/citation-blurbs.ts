@@ -184,14 +184,37 @@ export interface CheckEvidence {
   whose: string;
   /** The fence's label. */
   fence: string;
+  /**
+   * One more reason to answer false, for a web page's extract only (plan
+   * 261025d): a page can carry praise or a reviewer's verdict, which a note
+   * must not pass off as the work's finding. Absent for the abstract, so its
+   * prompt stays byte for byte.
+   */
+  alsoFalse?: string;
 }
 
 export const ABSTRACT_EVIDENCE: CheckEvidence = { the: "the abstract", whose: "that work's abstract", fence: "abstract" };
+const NOT_A_JUDGEMENT =
+  "Answer false if the sentence gives someone's praise or judgement of the work rather than what the work itself argues or finds.";
+
 /** A web note's evidence: the search engine's extract of what code checked is the work's own page. */
 export const WEB_EXTRACT_EVIDENCE: CheckEvidence = {
   the: "the extract",
   whose: "an extract of that work's own web page",
   fence: "extract of a web page",
+  alsoFalse: NOT_A_JUDGEMENT,
+};
+
+/**
+ * A `looks-like` web note's evidence (plan 261025d): a page titled as the
+ * work that names its first author, which may be someone else's description
+ * of it, and the check is told so.
+ */
+export const WEB_LOOKALIKE_EVIDENCE: CheckEvidence = {
+  the: "the extract",
+  whose: "an extract of a web page that may be that work's own or someone else's description of it",
+  fence: "extract of a web page",
+  alsoFalse: NOT_A_JUDGEMENT,
 };
 
 /**
@@ -205,6 +228,7 @@ export function checkSystem(e: CheckEvidence): string {
     `You are given ${e.the} and the note's sentences, numbered.`,
     `For each sentence, answer supported true only if everything it says is stated in ${e.the} or follows directly from what ${e.the} states.`,
     `Answer false if the sentence adds anything ${e.the} does not say, says it more strongly or more widely, reverses or misreads it, or describes a different work.`,
+    ...(e.alsoFalse !== undefined ? [e.alsoFalse] : []),
     `Judge only against ${e.the} given. Do not use anything you know about the work.`,
     "",
     'Answer with JSON: "verdicts", one for each numbered sentence, each with "n" (the sentence\'s number) and "supported".',
