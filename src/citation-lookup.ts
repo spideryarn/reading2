@@ -214,7 +214,7 @@ export function surnameOf(authors: string | null): string | null {
 }
 
 /** A four-digit year in the list's `year`, or nothing. */
-function yearOf(year: string | null): string | null {
+export function yearOf(year: string | null): string | null {
   return year?.match(/\b(1[5-9]|20)\d{2}\b/)?.[0] ?? null;
 }
 
@@ -301,7 +301,11 @@ export function titleNamesWork(pageTitle: string | undefined, workTitle: string)
         part.length > 0 &&
         part.length <= MAX_SITE_TAIL_TOKENS &&
         !part.some((w) => NOTICE_TAIL.has(w)) &&
-        part[0] !== "review",
+        part[0] !== "review" &&
+        /* A lone "Reviews" part is a review section ("<title> | Reviews |
+           Notre Dame Philosophical Reviews", plan 261025d); "Reviews of
+           Modern Physics" is a journal and still a site. */
+        !(part.length === 1 && part[0] === "reviews"),
     );
     return aSite ? "whole" : null;
   }

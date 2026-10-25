@@ -142,7 +142,7 @@ export interface CitationDig {
 /**
  * **A web note for one cited work** (plan 261018o stage 2) — the owner's
  * *Open in Sources* from a citation's card in the prose, on a row with no
- * note, looks for the work's own page with one web search. On the read, as
+ * note, looks for the work's page with one web search. On the read, as
  * `investigate` is, because the press starts from the prose in any mode and
  * the row it lands on is in the band. One at a time, as the server's
  * allowance is.
@@ -157,7 +157,7 @@ export interface CitationWebNoteSearch {
   /** A transient press failure, safe reader-facing copy from the server. */
   webNoteFailed: { id: string; message: string } | null;
   /**
-   * **Look for one work's own page on the web**, unless the row already has a
+   * **Look for one work's page on the web**, unless the row already has a
    * note of either kind. The server refuses for nothing what it has already
    * answered (409 with a `reason`), so a second press costs nothing.
    */

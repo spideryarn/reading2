@@ -98,6 +98,7 @@ function webNote(row: CitedWork, text: string, over: Partial<CitationWebNote> = 
     host: "example.org",
     title: "Scaling Laws for Neural Language Models",
     readAt: "2026-10-19T09:00:00.000Z",
+    pageKind: "looks-like",
     ...over,
   } as CitationWebNote;
 }
@@ -236,6 +237,58 @@ describe("citationWebNoteStore", () => {
     await expect(
       getDb().insert(citationWebNotes).values({ ...base, entryId: NOT_IN_LIST, state: "none", why: "made-up" }),
     ).rejects.toThrow();
+    /* 261025d: a page kind only beside a note, and only one of the two. A
+       none written with one has it cleared by the old-writer trigger before
+       the CHECK sees it, so it is stored without one rather than refused. */
+    await getDb().insert(citationWebNotes).values({ ...base, entryId: NOT_IN_LIST, state: "none", why: "not-the-work", pageKind: "own" });
+    const where = and(eq(citationWebNotes.articleId, article?.articleId ?? ""), eq(citationWebNotes.entryId, NOT_IN_LIST));
+    const [cleared] = await getDb().select({ pageKind: citationWebNotes.pageKind }).from(citationWebNotes).where(where);
+    expect(cleared).toEqual({ pageKind: null });
+    await getDb().delete(citationWebNotes).where(where);
+    const page = { sentences: [{ text: "t", quote: "q" }], url: "https://doi.org/10.1/x", host: "doi.org", readAt: new Date() };
+    await expect(
+      getDb().insert(citationWebNotes).values({ ...base, entryId: NOT_IN_LIST, state: "note", ...page, pageKind: "certain" }),
+    ).rejects.toThrow();
+  });
+
+  it("keeps the writer from before page_kind compatible with rows a later writer already touched", async () => {
+    await clearNotes();
+    await storeList(list([WORK_A, WORK_B]));
+    const page = { sentences: [{ text: "t", quote: "q" }], url: "https://doi.org/10.1/x", host: "doi.org", readAt: new Date() };
+    /* The writer deployed before this column names no page kind in either
+       half of its upsert. Start with a row the new writer marked looks-like:
+       the old writer must be able to replace it with a none, rather than
+       retaining the kind and failing the CHECK. */
+    await asTestOwner(() => citationWebNoteStore.save(SLUG, ROW_B, webNote(WORK_B, "new", { identity: "stale" })));
+    const oldNone = {
+      identity: "stale",
+      model: "m",
+      promptVersion: "citation-web-note/2",
+      validationVersion: "citation-web-note-checks/3",
+      checkedAt: new Date(),
+      state: "none",
+      why: "not-the-work",
+      sentences: null,
+      url: null,
+      host: null,
+      title: null,
+      readAt: null,
+    };
+    await getDb()
+      .insert(citationWebNotes)
+      .values({ articleId: article?.articleId ?? "", ownerId: TEST_OWNER, entryId: ROW_B, ...oldNone })
+      .onConflictDoUpdate({ target: [citationWebNotes.articleId, citationWebNotes.entryId], set: oldNone });
+    expect((await asTestOwner(() => citationWebNoteStore.read(SLUG, ROW_B)))?.note).toMatchObject({ state: "none" });
+
+    /* The reverse overlap matters too: a strict old note replacing a newer
+       looks-like note must read as own, not inherit the weaker label. */
+    await asTestOwner(() => citationWebNoteStore.save(SLUG, ROW_B, webNote(WORK_B, "new", { identity: "stale" })));
+    const oldNote = { ...oldNone, state: "note", why: null, title: null, ...page };
+    await getDb()
+      .insert(citationWebNotes)
+      .values({ articleId: article?.articleId ?? "", ownerId: TEST_OWNER, entryId: ROW_B, ...oldNote })
+      .onConflictDoUpdate({ target: [citationWebNotes.articleId, citationWebNotes.entryId], set: oldNote });
+    expect((await asTestOwner(() => citationWebNoteStore.read(SLUG, ROW_B)))?.note).toMatchObject({ state: "note", pageKind: "own" });
   });
 });
 

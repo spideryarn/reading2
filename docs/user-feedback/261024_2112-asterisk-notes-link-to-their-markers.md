@@ -1,7 +1,7 @@
 ---
 reports: spya-hrx8z2
 ending: shipped
-comment: Fixed on dev: all 11 asterisk notes in The Order of Time will link. Your copy changes only after a Refresh, which moves about 7 minutes of reading time; that is the open question.
+comment: Done. All 11 asterisk notes in your copy of The Order of Time now link both ways. It was refreshed on 25 October, and the 7 minutes of reading time moved with it.
 ---
 # Asterisk notes at the back of a book link to their markers
 
@@ -26,3 +26,12 @@ else changes, except a wrong `*` link that today's code makes on another copy of
 Greg's copy changes only on re-extraction, which would give four marker paragraphs new ids (about
 400 seconds of his reading time). So that waits on his answer:
 [q-yc2fp3](questions/q-yc2fp3.md).
+
+**Greg's copy, refreshed.** He chose A (reply `spya-s4qkhh`, 2026-10-25). Report re-read before
+this addition: no addenda. The fix was live in `a9b65cd3`. On 2026-10-25 at 14:02 UTC his article
+was re-extracted (job `spya-ee4zdd`, $0.75, no chunk re-read). Exactly the four paragraphs above
+got new ids, and the 11 asterisk notes link. The 401.5 seconds of reading time on them moved to
+the new ids, and his 6 bookmarks were not touched. A first attempt failed before doing any work, on
+a bug in the session's script; its failed job was dismissed. Plan and full record:
+[261025g](../plans/261025g-refresh-the-order-of-time-for-its-asterisk-notes-and-move-greg-s-reading-time.md).
+Session `fbhrx8z2-refresh-order-of-time`.

@@ -1,7 +1,7 @@
 ---
 reports: spya-m53cdk
 ending: shipped
-comment: Shipped: Open in Sources lands on the work, each cited work gets a checked note from its abstract, and a work with no note gets one web search for its own page. Waiting on you for the Semantic Scholar and OpenAlex keys.
+comment: Shipped: Open in Sources lands on the work, cited works get checked notes from their abstracts, and one with no note gets a web search for a page that is or looks like its own: 4 to 14 notes of 42 on your paper.
 ---
 
 # Open in Sources lands on the work and flashes it, a roomier list, and a note per cited work
@@ -49,5 +49,15 @@ design [261017h stage 3](../plans/261017h-stage-3-design-citation-blurbs.md), sp
   *Open in Sources* on a work with no note runs one web search for it, owner only, and keeps a
   note only from the work's own doi.org or arXiv page, quoted and checked. Semantic Scholar
   abstracts and OpenAlex title search are built, each off until its key is set.
-- **What is open:** the keys (and Semantic Scholar's non-commercial licence), and whether to loosen
-  the web search: [q-x9srvv](questions/q-x9srvv.md). Coverage is re-measured once the keys exist.
+- **Then, after [q-x9srvv](questions/q-x9srvv.md)** (Greg, 2026-10-25: Semantic Scholar stays off,
+  because of its terms; and *"I think we want to be looser"*), plan
+  [261025d](../plans/261025d-citation-web-note-looser-page-rule.md): the web search may also keep a
+  note from a page that only looks like the work's own (its title is the work's and its text
+  names the first author, and it is not Wikipedia, a shop or a review or summary site), labelled
+  *may not be the work's own page*. A work with no DOI or arXiv id is now searched by title,
+  for an article from a web address. On the Butlin paper: 4 web notes before, 14 after, out of 42
+  works with no note, every one on the right work
+  ([261025d](../investigations/261025d-citation-web-note-looser-rule-yield.md)).
+- **What is left, not waiting on this report:** the OpenAlex key on the box (it is on Vercel), in
+  queue item `qi-7ttvvyjm`, and re-measuring the abstract notes' coverage with it, `qi-tyhsexa6`
+  (now OpenAlex only).

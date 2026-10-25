@@ -99,21 +99,38 @@ export const CITE_LIST_READ_ABSTRACTS =
 
 /* ------------------------------------------------- a web note (261018o) --
    The owner's *Open in Sources* on a row with no note: one web search for the
-   work's own page (src/citation-web-note.ts). The same component draws it
+   work's page (src/citation-web-note.ts). The same component draws it
    (`CiteBlurb`), so the words for what it is are here beside the abstract
    note's, and say what it is **not** just as plainly. */
 
-/** The row's quiet label: *From a web search · arxiv.org*. */
-export function webNoteBasis(note: Pick<CitedWorkWebNote, "host">): string {
-  return `From a web search · ${note.host}`;
+/**
+ * The row's quiet label: *From a web search · arxiv.org*, and for a page that
+ * only looks like the work's own (plan 261025d) *… · may not be the work's
+ * own page*.
+ */
+export function webNoteBasis(note: Pick<CitedWorkWebNote, "host" | "pageKind">): string {
+  return note.pageKind === "own" ? `From a web search · ${note.host}` : `From a web search · ${note.host} · may not be the work's own page`;
 }
 
-/** The card's first paragraph: one search, whose page, which day, and that it can be wrong. */
-export function webNoteCardNote(note: Pick<CitedWorkWebNote, "host" | "readAt">): string {
+/**
+ * The card's first paragraph: one search, whose page, which day, and that it
+ * can be wrong. For a `looks-like` page it says exactly what code checked —
+ * the result's title is the work's and its title or extract names the
+ * work's first author — and not more (GPT Sol's plan review #6).
+ */
+export function webNoteCardNote(note: Pick<CitedWorkWebNote, "host" | "readAt" | "pageKind">): string {
+  if (note.pageKind === "own") {
+    return (
+      `A short note an AI wrote from one web search for this work: the search engine's extract of its own page at ${note.host}, ` +
+      `read on ${blurbDay(note.readAt)}. It is not a reading of the paper, and a web page can say more or less than the paper, ` +
+      "so it can be wrong."
+    );
+  }
   return (
-    `A short note an AI wrote from one web search for this work: the search engine's extract of its own page at ${note.host}, ` +
-    `read on ${blurbDay(note.readAt)}. It is not a reading of the paper, and a web page can say more or less than the paper, ` +
-    "so it can be wrong."
+    `A short note an AI wrote from one web search for this work: the search engine's extract of a page at ${note.host} ` +
+    "whose title matches this work's and which names its first author. It looks like the work's own page, but it may be " +
+    "someone else's description of it, such as a catalogue entry, a publisher's blurb or a review. " +
+    `Read on ${blurbDay(note.readAt)}. It is not a reading of the work, and it can be wrong.`
   );
 }
 
@@ -125,11 +142,11 @@ export function webNoteQuotesLead(sentences: number): string {
 }
 
 /** The row while the search runs. */
-export const WEB_NOTE_SEARCHING = "Looking for this work's own page on the web…";
+export const WEB_NOTE_SEARCHING = "Looking for this work's page on the web…";
 /** The row while the note is checked against the page, before it is shown. */
 export const WEB_NOTE_CHECKING = "Checking the note against the page…";
-/** The row once a search found no page code could be sure is the work's own. */
-export const WEB_NOTE_NONE = "We searched the web for this work's own page and found none we could be sure of.";
+/** The row once a search found no page code could use for the work. */
+export const WEB_NOTE_NONE = "We searched the web for this work's page and found none we could use.";
 /** Added to the band's (i) when a row on screen has a web note. */
 export const CITE_LIST_WEB_NOTES =
-  "A note labelled “From a web search” was written instead from a search engine's extract of the work's own web page.";
+  "A note labelled “From a web search” was written instead from a search engine's extract of a web page that is, or looks like, the work's own.";
