@@ -22,11 +22,11 @@ import { MAX_UPLOAD_BYTES } from "../uploads.js";
 import { savedSource } from "../urls.js";
 
 /**
- * The store's id for the published extension, once Greg has created the item
- * (the store assigns it then; until then there is none, and production asks
- * nobody). docs/user-feedback/questions/ has the steps.
+ * The store's id for the published extension (the Chrome Web Store item Greg
+ * created on 2026-10-25, Unlisted). It is public; docs/project/chrome-extension.md
+ * records it too.
  */
-export const PRODUCTION_EXTENSION_ID: string | null = null;
+export const PRODUCTION_EXTENSION_ID: string | null = "eeedpogihlbbjghpanopajebiencekak";
 
 /** extension/manifest.ts § `DEV_EXTENSION_ID`, held equal by
  *  tests/extension-handoff.test.ts. Trusted only by a dev build of this app,
