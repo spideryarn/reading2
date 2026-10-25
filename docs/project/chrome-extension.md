@@ -150,6 +150,17 @@ new permission is a product decision, not a line in the manifest.
 
 ## What it does not do yet
 
+- **Being found** (asked 2026-10-25, when it was submitted to the store; handed to the Overseer).
+  The store item id is public, so it goes in this doc as well as in `PRODUCTION_EXTENSION_ID`.
+  Readers need a way to find the extension: in `/help`, in the command bar, and above all in the
+  import flow, so that when a pasted address hits a blocker (a site that turns our server away)
+  the reader is told they can add it with the extension instead, plus anywhere else it naturally
+  belongs. Signal it, do not push it:
+
+  > I don't think we want to push it because it's only worth them using the extension if they need
+  > it rather than something that will really help them that much if they don't.
+  >
+  > — Greg, 2026-10-25
 - **A passage selected, then a chat about it**, and **why you are reading it, asked on the
   publisher's page**: Greg's later ideas. The add page the extension lands on already has the
   purpose box.
