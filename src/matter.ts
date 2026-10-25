@@ -15,7 +15,7 @@
  * stretches, each either a `range` of blocks it was shown, inside one window,
  * or a `section` under a heading (the only way to name a 251-entry
  * bibliography without showing all of it). `kinds` is the closed list
- * `MATTER_KINDS`.
+ * `MODEL_MATTER_KINDS`; the free label rule alone may add `summary`.
  *
  * **It fails towards showing.** Code then holds every stretch to the stored
  * blocks (`admitMatter`), and a stretch short of every check is dropped, not
@@ -1110,8 +1110,8 @@ export function labelledSection(
  * *Highlights* is a body section (plan review, 261025f).
  */
 export const SUMMARY_PROSE_BEFORE_MAX_WORDS = 300;
-/** A block counts as prose before a summary from this many words: shorter is a line of furniture. */
-const SUMMARY_PROSE_BLOCK_MIN_WORDS = 25;
+/** A list summary may have one line before its items, this short ("Our main findings:"); longer, and it is a summary of paragraphs. */
+const SUMMARY_LIST_LEAD_MAX_WORDS = 25;
 /** Sub-headings a structured summary may have (JAMA's *Key points*: Question, Findings, Meaning). Any other ends it. */
 const SUMMARY_PARTS: ReadonlySet<string> = new Set([...ABSTRACT_PARTS, "question", "meaning", "importance"]);
 /** A line that is an *Abstract* or *Keywords* label, whole or before its text: "Keywords: aging, …". Not "Subjects were …". */
@@ -1160,26 +1160,43 @@ function headsWords(blocks: readonly MatterBlock[], h: number): boolean {
   return false;
 }
 
+type SummaryAtResult = { start: number; end: number } | string;
+
+interface SummaryContext {
+  openEnd: number;
+  sectionEnd: ReadonlyMap<number, number>;
+  results: Map<number, SummaryAtResult>;
+}
+
+function summaryContext(article: MatterArticle): SummaryContext {
+  return {
+    openEnd: matterWindows(article.blocks).openEnd,
+    sectionEnd: new Map(sectionRanges(article.blocks).map((s) => [s.start, s.end])),
+    results: new Map(),
+  };
+}
+
 /**
- * The words of the article's own prose before block `i`: long text and quote
- * blocks with none of the cheap matter evidence, outside any abstract or
- * earlier front summary.
+ * The words of the article's own prose before block `i`: text and quote blocks
+ * with none of the cheap matter evidence, outside any abstract or earlier
+ * front summary. Short paragraphs count too; otherwise enough of them can
+ * cross the 300-word line without any one block looking long.
  */
-function ownProseBefore(article: MatterArticle, i: number): number {
+function ownProseBefore(article: MatterArticle, i: number, context: SummaryContext): number {
   const { blocks } = article;
   const excused = new Set<number>();
   for (let j = 0; j < i; j++) {
     const text = blocks[j]!.text;
-    if (ABSTRACT_LABEL.test(text)) for (const k of abstractExplained(blocks, j, i)) excused.add(k);
+    if (LABEL_LINE.test(text)) for (const k of abstractExplained(blocks, j, i)) excused.add(k);
     if (isSummaryLabel(text)) {
-      const run = summaryAt(article, j);
+      const run = summaryAtWith(article, j, context);
       if (typeof run !== "string") for (let k = run.start; k < run.end; k++) excused.add(k);
     }
   }
   let words = 0;
   for (let j = 0; j < i; j++) {
     const b = blocks[j]!;
-    if ((b.kind !== "text" && b.kind !== "quote") || b.words < SUMMARY_PROSE_BLOCK_MIN_WORDS || excused.has(j)) continue;
+    if ((b.kind !== "text" && b.kind !== "quote") || excused.has(j)) continue;
     const t = b.text;
     if (notProse(t) || isReferenceEntry(b) || ACKNOWLEDGEMENTS.test(t) || FUNDING_STRONG.test(t) || DECLARATIONS_STRONG.test(t) || DATES_STRONG.test(t)) continue;
     words += b.words;
@@ -1213,22 +1230,29 @@ function ownProseBefore(article: MatterArticle, i: number): number {
  *    or more than `MAX_RANGE_WORDS`, and it is not folded, rather than folded
  *    halfway or folded with the body sections a coarse level gave it.
  */
-export function summaryAt(article: MatterArticle, i: number): { start: number; end: number } | string {
+function summaryAtWith(article: MatterArticle, i: number, context: SummaryContext): SummaryAtResult {
+  const cached = context.results.get(i);
+  if (cached !== undefined) return cached;
+  const finish = (result: SummaryAtResult): SummaryAtResult => {
+    context.results.set(i, result);
+    return result;
+  };
   const { blocks } = article;
   const label = blocks[i];
   if (label === undefined || (label.kind !== "heading" && label.kind !== "text") || !isSummaryLabel(label.text)) {
-    return "not a summary label";
+    return finish("not a summary label");
   }
-  if (i >= matterWindows(blocks).openEnd) return "a summary label past the opening";
+  if (isTitle(label, article.meta.title)) return finish("the article's title, not a summary label");
+  if (i >= context.openEnd) return finish("a summary label past the opening");
   const rank = headingLevel(label) ?? Number.POSITIVE_INFINITY;
   for (let j = 0; j < i; j++) {
     const b = blocks[j]!;
     if (b.kind !== "heading" || b.words === 0 || isLabel(b) || isSummaryLabel(b.text) || isTitle(b, article.meta.title)) continue;
-    if (headingLevel(b)! <= rank && headsWords(blocks, j)) return "a heading of the article's own before the summary";
+    if (headingLevel(b)! <= rank && headsWords(blocks, j)) return finish("a heading of the article's own before the summary");
   }
-  if (ownProseBefore(article, i) > SUMMARY_PROSE_BEFORE_MAX_WORDS) return "the article's own prose before the summary";
+  if (ownProseBefore(article, i, context) > SUMMARY_PROSE_BEFORE_MAX_WORDS) return finish("the article's own prose before the summary");
   const headed = label.kind === "heading";
-  let end = headed ? sectionRanges(blocks).find((s) => s.start === i)!.end : blocks.length;
+  let end = headed ? context.sectionEnd.get(i)! : blocks.length;
   for (let j = i + 1; j < end; j++) {
     const b = blocks[j]!;
     if (endsSummary(b)) {
@@ -1236,22 +1260,53 @@ export function summaryAt(article: MatterArticle, i: number): { start: number; e
       break;
     }
     if (b.kind !== "heading" || b.words === 0 || summaryPart(blocks, j)) continue;
-    if (headed) return "a heading of the article's own inside the summary";
+    if (headed) return finish("a heading of the article's own inside the summary");
     end = j;
     break;
   }
-  /* A summary that is a list ends at its last item: the paragraphs after a
-     *Key points* list are the article's introduction, heading or not. */
-  const first = blocks.findIndex((b, j) => j > i && j < end && b.words > 0);
-  if (first >= 0 && isListItem(blocks[first]!)) {
-    let last = first;
-    for (let j = first + 1; j < end && (blocks[j]!.words === 0 || isListItem(blocks[j]!)); j++) if (blocks[j]!.words > 0) last = j;
-    end = last + 1;
+  /* A summary that is a list ends at its last item, even when one short
+     line introduces the list. The prose after a *Key points* list is the
+     article's introduction, heading or not. Only a list that *is* the
+     summary: one whose list comes after paragraphs of its own (the reported
+     paper's executive summary lists its three contributions in the middle)
+     runs on by the rules above, and so does a structured one (PLOS's
+     question headings). */
+  let listLast = -1;
+  let lead = 0;
+  for (let j = i + 1; j < end; j++) {
+    const b = blocks[j]!;
+    if (b.words === 0) continue;
+    if (b.kind === "heading") break;
+    if (isListItem(b)) {
+      listLast = j;
+      continue;
+    }
+    if (listLast >= 0) {
+      end = listLast + 1;
+      break;
+    }
+    if (++lead > 1 || b.words > SUMMARY_LIST_LEAD_MAX_WORDS) break;
   }
   while (end > i + 1 && blocks[end - 1]!.words === 0) end--;
-  if (!blocks.slice(i + 1, end).some((b) => b.words > 0)) return "a summary label with nothing under it";
-  if (sumWords(blocks, i, end) > MAX_RANGE_WORDS) return "a summary over the word cap";
-  return { start: i, end };
+  if (!blocks.slice(i + 1, end).some((b) => b.words > 0)) return finish("a summary label with nothing under it");
+  if (sumWords(blocks, i, end) > MAX_RANGE_WORDS) return finish("a summary over the word cap");
+  return finish({ start: i, end });
+}
+
+export function summaryAt(article: MatterArticle, i: number): SummaryAtResult {
+  return summaryAtWith(article, i, summaryContext(article));
+}
+
+/** Every admitted front summary in the opening, sharing the placement scan and its earlier-summary results. */
+export function summaryRuns(article: MatterArticle): { start: number; end: number }[] {
+  const context = summaryContext(article);
+  const runs: { start: number; end: number }[] = [];
+  for (let i = 0; i < context.openEnd; i++) {
+    if (!isSummaryLabel(article.blocks[i]!.text)) continue;
+    const run = summaryAtWith(article, i, context);
+    if (typeof run !== "string") runs.push(run);
+  }
+  return runs;
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
  * **The stretches the reading view folds, and the words on each one's stub** —
- * front and back matter: title, authors, abstract, keywords, contents, dates,
- * acknowledgements, funding, declarations, references.
+ * front and back matter: title, authors, abstract, front summaries, keywords,
+ * contents, dates, acknowledgements, funding, declarations, references.
  *
  * Greg, 2026-10-17 (`spya-ftsqsn`): *"Mark it up as being less interesting
  * … And default-collapse it"*; and `spya-k7gm2b`: *"delicate UI (including an

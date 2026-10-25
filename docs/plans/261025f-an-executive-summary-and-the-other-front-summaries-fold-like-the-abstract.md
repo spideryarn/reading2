@@ -173,6 +173,26 @@ Found while building, not in the review:
 - The acknowledgements label's run needed no stop at a summary label: its shrink-to-evidence loop
   already stops there, and a guard no test can turn red was taken out.
 
+## The code review
+
+GPT Sol on the built code
+([review](261025f-an-executive-summary-and-the-other-front-summaries-fold-like-the-abstract-code-review-sol.md)),
+fixing inside the stage: an article *titled* "Highlights" is not a summary label; short body
+paragraphs now count towards the 300-word prose budget, and only a real *Abstract* label line
+excuses what follows it; the linked-contents veto uses the full summary label list; the label
+pass memoises `summaryAt` and computes the windows and sections once (a 3,000-block case is in
+the tests); stale comments.
+
+One of its fixes was wrong and was corrected before commit: to let a short line introduce a
+*Highlights* list, it ended any summary at the last list item it met, which cut the reported
+paper's executive summary in half (39–44 of 39–53), because that summary lists its three
+contributions in its middle. The eval caught it (summary recall 15 → 6 on the development set);
+the test fixture had stored those points as paragraphs, so it had not. Now the fixture stores
+them as list items, and a list ends the summary only when at most one short line (25 words)
+comes before it. After: eval as before (0 prose folded on all three sets, 15/15 summaries in each
+of the two sets that have one, every call from the cache), the ten live PLOS pages unchanged, and
+each guard removed in turn still turns a test red.
+
 ## Not in scope
 
 - An unlabelled executive summary (the model would have to judge prose).

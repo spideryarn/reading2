@@ -3,8 +3,9 @@
  * executive summary, *Key points*, *Highlights*, *Significance*, *Author
  * summary* (Greg's answer to q-r8kumx, "B"; plan 261025f). Found by the label
  * rule alone (src/matter.ts § `summaryAt`, src/matter-labels.ts), named on its
- * stub from a closed map (src/matter-summary.ts). The three shapes the 261018b
- * corpus has fold; every placement and extent guard has a case that fails it.
+ * stub from a closed map (src/matter-summary.ts). The two corpus shapes and the
+ * live-page Significance shape fold; every placement and extent guard has a
+ * case that fails it.
  */
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +18,7 @@ import {
   parseMatterAnswer,
   stretchEvidence,
   summaryAt,
+  summaryRuns,
 } from "../src/matter.js";
 import type { MatterBlock } from "../src/matter-current.js";
 import { matterByLabels, type LabelsArticle } from "../src/matter-labels.js";
@@ -42,6 +44,9 @@ const block = (text: string, kind = "text", level?: number): MatterBlock & Block
     html: `<p>${text}</p>`,
     gistable: true,
   }) as MatterBlock & Block;
+
+/** A list item as stage 3 stores one: `<li …>` markup. */
+const listItem = (text: string): MatterBlock & Block => ({ ...block(text), tag: "li", html: `<li>${text}</li>` }) as MatterBlock & Block;
 
 type Named = LabelsArticle & { at: Record<string, number>; blocks: (MatterBlock & Block)[] };
 
@@ -77,7 +82,8 @@ function reportedShape(): Named {
     ["summaryLabel", block("Executive Summary")],
     ["summaryFirst", block(prose(900))],
     [null, block("We take our principal contributions in this report to be:")],
-    [null, block("1. Showing that the assessment of consciousness in AI is scientifically tractable.")],
+    [null, listItem("1. Showing that the assessment of consciousness in AI is scientifically tractable.")],
+    [null, listItem("2. Proposing a rubric for assessing consciousness in AI.")],
     [null, block(prose(901))],
     ["summaryLast", block(prose(902))],
     ["contents", block("Contents", "heading", 6)],
@@ -184,6 +190,20 @@ describe("a front summary folds", () => {
       ["summaryLast", li("The change is regional.")],
       [null, block(prose(814))],
       [null, block(prose(815))],
+    ]);
+    expect(span(a, summaries(a)[0]!)).toEqual([a.at.summaryLabel, a.at.summaryLast]);
+  });
+
+  it("as a list after its own introductory line, without taking the unheaded article after it", () => {
+    const li = (text: string) => ({ ...block(text), tag: "li", html: `<li>${text}</li>` }) as MatterBlock & Block;
+    const a = article([
+      ["summaryLabel", block("Highlights")],
+      [null, block("The report has two central points:")],
+      [null, li("Astrocytes change more with age than neurons do.")],
+      ["summaryLast", li("The change is regional.")],
+      ["articleFirst", block(prose(816))],
+      [null, block(prose(817))],
+      [null, block("Introduction", "heading", 2)],
     ]);
     expect(span(a, summaries(a)[0]!)).toEqual([a.at.summaryLabel, a.at.summaryLast]);
   });
@@ -322,6 +342,39 @@ describe("a summary label that is not a front summary stays showing", () => {
     expect(summaries(inverted)).toEqual([]);
   });
 
+  it("after more than 300 words split across short body paragraphs", () => {
+    const short = Array.from({ length: 24 }, (_, i) => (i === 0 ? "We" : `word${i}`)).join(" ");
+    const opening: [string | null, MatterBlock & Block][] = Array.from(
+      { length: 13 },
+      (): [null, MatterBlock & Block] => [null, block(short)],
+    );
+    const a = article([...opening, ["label", block("Highlights")], [null, block(prose(894))]]);
+    expect(summaries(a)).toEqual([]);
+    expect(reasonAt(a, "label")).toBe("the article's own prose before the summary");
+  });
+
+  it("when the article's title is itself a summary label", () => {
+    const a = article([
+      ["label", block("Highlights")],
+      [null, block(prose(895))],
+      [null, block("Introduction", "heading", 2)],
+    ]);
+    a.meta.title = "Highlights";
+    expect(summaries(a)).toEqual([]);
+    expect(reasonAt(a, "label")).toBe("the article's title, not a summary label");
+  });
+
+  it("after body prose whose first word happens to be Abstract", () => {
+    const body = `Abstract reasoning matters here. ${Array.from({ length: 310 }, (_, i) => `word${i}`).join(" ")}`;
+    const a = article([
+      [null, block(body)],
+      ["label", block("Highlights")],
+      [null, block(prose(896))],
+    ]);
+    expect(summaries(a)).toEqual([]);
+    expect(reasonAt(a, "label")).toBe("the article's own prose before the summary");
+  });
+
   it("but an abstract before it is not the article's own prose (PLOS: Abstract, then Author summary)", () => {
     const a = article([
       [null, block("Abstract", "heading", 2)],
@@ -449,5 +502,39 @@ describe("combineMatter keeps a summary its own stub", () => {
     const s = u.stretches.find((x) => x.kinds.includes("summary"))!;
     expect(s.kinds).toEqual(["summary"]);
     expect(span(a, s)).toEqual([a.at.summaryLabel, a.at.summaryLast]);
+  });
+});
+
+describe("a summary-labelled body list is not a table of contents", () => {
+  it.each(["Research highlights", "Significance statement"])("keeps %s showing", (label) => {
+    const headings = ["Methods", "Results", "Discussion"].map((text) => block(text, "heading", 2));
+    const linked = headings.map(
+      (heading) =>
+        ({ ...block(heading.text), tag: "li", html: `<li><a href="#${heading.id}">${heading.text}</a></li>` }) as MatterBlock & Block,
+    );
+    const a = article([
+      [null, block("Introduction", "heading", 2)],
+      [null, block(prose(1800))],
+      ["label", block(label)],
+      ...linked.map((b): [null, MatterBlock & Block] => [null, b]),
+      ...headings.flatMap((heading): [null, MatterBlock & Block][] => [
+        [null, heading],
+        [null, block(prose(1801))],
+      ]),
+    ]);
+    expect(summaryAt(a, a.at.label!)).toBe("a heading of the article's own before the summary");
+    expect(matterByLabels(a, new Set()).stretches.some((s) => s.kinds.includes("contents") || s.kinds.includes("summary"))).toBe(false);
+  });
+});
+
+describe("the opening summary scan", () => {
+  it("handles the maximum opening of repeated labels in one memoized pass", () => {
+    const blocks: (MatterBlock & Block)[] = [];
+    for (let i = 0; i < 60; i++) {
+      blocks.push(block(i % 2 === 0 ? "Highlights" : "Key points"), block("One authored point appears here."));
+    }
+    blocks.push(block("Introduction", "heading", 2));
+    while (blocks.length < 3_000) blocks.push(block(prose(2000 + blocks.length)));
+    expect(summaryRuns({ blocks, meta: {} })).toHaveLength(60);
   });
 });

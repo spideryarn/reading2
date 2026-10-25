@@ -4,7 +4,7 @@
  * classifier (src/matter.ts) as the second baseline. If it matches the
  * classifier with no prose folded, it is what gets built.
  *
- * Four sources, then the classifier's own shared checks (`holdStretches`):
+ * Five sources, then the classifier's own shared checks (`holdStretches`):
  *
  * - **Today's byline rule** (src/web/front-matter.ts § `frontMatter`), as one
  *   `authors` stretch. Its evidence test is its own, so it is trusted.
@@ -24,7 +24,7 @@
  *   as a *Contents* label would be. A page's label can be lost before this
  *   (Readability dropped `<h1 class="toc-header">`, spya-jk0xw5) or never be
  *   there at all.
- * - **A summary the author put at the front** (`summaryAt`, plan 261025f): an
+ * - **A summary the author put at the front** (`summaryRuns`, plan 261025f): an
  *   *Executive summary*, *Key points*, *Highlights*, *Significance* or
  *   *Author summary* label in the opening that nothing of the article's own
  *   outranks, and its run. Only this rule finds them; the model is not asked.
@@ -44,9 +44,10 @@ import {
   labelledSection,
   matterWindows,
   stretchEvidence,
-  summaryAt,
+  summaryRuns,
 } from "./matter.js";
 import { inPageHrefs } from "./matter-current.js";
+import { isSummaryLabel } from "./matter-summary.js";
 import type { Block, BlockId } from "./types.js";
 import { type FrontMatterArticle, frontMatter } from "./web/front-matter.js";
 
@@ -54,9 +55,6 @@ import { type FrontMatterArticle, frontMatter } from "./web/front-matter.js";
 const FRONT: ReadonlySet<MatterKind> = new Set(["abstract", "keywords", "contents", "authors"]);
 /** Kinds that may sit either side: "Details" at the top of a report, "Acknowledgements" at the end of a paper. */
 const EITHER: ReadonlySet<MatterKind> = new Set(["acknowledgements", "funding", "declarations"]);
-/** Substantive previews that may link to their later sections but are never a contents list: at the front, one is a summary (`summaryAt`). */
-const CONTENTS_PREVIEW_LABEL = /^\s*(?:key points?|highlights?|significance|executive summary|author summary)\s*:?\s*$/iu;
-
 export type LabelsArticle = MatterArticle & FrontMatterArticle & { blocks: readonly Block[] };
 
 export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId>): MatterAdmitted {
@@ -117,11 +115,8 @@ export function matterByLabels(article: LabelsArticle, echo: ReadonlySet<BlockId
     while (end > i + 1 && stretchEvidence(article, i, end, kinds) !== null) end--;
     candidates.push({ item: item++, start: i, end, kinds: [...kinds], headedBy: null, shape: "range" });
   }
-  /* A front summary under its label (`summaryAt` holds where it sits and how far it runs). */
-  for (let i = 0; i < w.openEnd; i++) {
-    const run = summaryAt(article, i);
-    if (typeof run !== "string") candidates.push({ item: item++, ...run, kinds: ["summary"], headedBy: null, shape: "range" });
-  }
+  /* A front summary under its label (`summaryRuns` holds where it sits and how far it runs). */
+  for (const run of summaryRuns(article)) candidates.push({ item: item++, ...run, kinds: ["summary"], headedBy: null, shape: "range" });
   for (const run of inlineLabelRuns(blocks, placed)) candidates.push({ item: item++, ...run, headedBy: null, shape: "range" });
   for (const run of linked) candidates.push({ item: item++, ...run, kinds: ["contents"], headedBy: null, shape: "range" });
   return holdStretches(article, candidates, echo);
@@ -137,7 +132,7 @@ function placedLinkedContentsRuns(
   const followsPreviewLabel = (start: number): boolean => {
     let i = start - 1;
     while (i >= 0 && blocks[i]!.words === 0) i--;
-    return i >= 0 && CONTENTS_PREVIEW_LABEL.test(blocks[i]!.text);
+    return i >= 0 && isSummaryLabel(blocks[i]!.text);
   };
   return linkedContentsRuns(blocks).filter((run) => placed(run.start) && !followsPreviewLabel(run.start));
 }
