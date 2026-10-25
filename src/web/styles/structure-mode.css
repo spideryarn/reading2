@@ -48,8 +48,11 @@
      and that border — 609px at a 16px root (layout.ts § `structureColumnsBand`, which `fitMode`
      sizes the band from and `structureFace` picks the face from). **Change it
      and change `STRUCT_PAD_X_REM`** in layout.ts, which is this arithmetic
-     written down as a number; tests/structure-band-width.test.ts reads both. */
-  padding: 0.75rem 0.75rem 0.5rem;
+     written down as a number; tests/structure-band-width.test.ts reads both.
+     The foot adds the bottom bar's travel (mode-band.css § `--band-bar-travel`),
+     so the columns' capacity is measured against the same room whether the bar
+     is home or not (Greg, spya-m5gxk9, plan 261025e). */
+  padding: 0.75rem 0.75rem calc(0.5rem + var(--band-bar-travel));
 }
 
 /* **Always two tracks.** A band too narrow for them gets Outline's list instead

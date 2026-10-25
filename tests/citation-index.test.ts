@@ -401,6 +401,127 @@ describe("citersOf", () => {
     expect(invalid.api.asked).toEqual([openAlexWorkUrl(arxivDoi), CITERS_URL]);
   });
 
+  /* Investigation 261025a: OpenAlex's record for arXiv 2308.08708 (Butlin, Long et
+     al.) has the right authors and its 196 real citers, but a Zenodo deposit
+     merged into it gave it another title. When the article's own arXiv address
+     independently names that DOI, two of its structured authors can stand in
+     for the title. One author does not. */
+  it("confirms an arXiv DOI's record whose title is another's when two of our authors agree", async () => {
+    const arxivDoi = "10.48550/arxiv.2308.08708";
+    const arxivId = `doi:${arxivDoi}` as CitersKey;
+    const retitled = {
+      ...WORK,
+      display_name: "Cheap Correlate or Discriminating Property? An Executable Validation Protocol",
+      title: "Cheap Correlate or Discriminating Property? An Executable Validation Protocol",
+      authorships: authorships(["Patrick Butlin", "Long, Robert", "Eric Elmoznino", "Yoshua Bengio"]),
+    };
+    const article = {
+      title: "Consciousness in Artificial Intelligence: Insights from the Science of Consciousness",
+      byline: "Patrick Butlin, Robert Long, Eric Elmoznino, Yoshua Bengio",
+      authors: ["Patrick Butlin", "Robert Long", "Eric Elmoznino", "Yoshua Bengio"]
+        .map((name) => ({ name, affiliations: [] })),
+      doi: arxivDoi,
+      url: "https://arxiv.org/html/2308.08708",
+    };
+    const h = harness({ [openAlexWorkUrl(arxivDoi)]: retitled, [CITERS_URL]: CITERS });
+    expect((await citersOf(article, h.deps)).kind).toBe("found");
+    /* …off the cache too, which is checked by the same rule. */
+    expect((await citersOf(article, h.deps)).kind).toBe("found");
+    expect(await citersOf({ ...article, title: "A Later Paper", url: "https://example.com/later" }, h.deps)).toEqual({
+      kind: "unconfirmed",
+    });
+    /* …and off a stale fallback after OpenAlex becomes unavailable. */
+    h.store.age(arxivId);
+    h.api.fetchJson.mockRejectedValue(failure(503));
+    expect((await citersOf(article, h.deps)).kind).toBe("found");
+
+    /* One agreeing author is not enough without the title. */
+    const lone = harness({ [openAlexWorkUrl(arxivDoi)]: retitled, [CITERS_URL]: CITERS });
+    expect(await citersOf({
+      ...article,
+      byline: "Patrick Butlin, Ada Lovelace",
+      authors: ["Patrick Butlin", "Ada Lovelace"].map((name) => ({ name, affiliations: [] })),
+    }, lone.deps)).toEqual({ kind: "unconfirmed" });
+
+    /* And a DOI that is not arXiv's keeps the title rule, two authors or not. */
+    const journal = harness({ [WORK_URL]: retitled, [CITERS_URL]: CITERS });
+    const { url: _url, ...noAddress } = article;
+    expect(await citersOf({ ...noAddress, doi: DOI }, journal.deps)).toEqual({ kind: "unconfirmed" });
+  });
+
+  it("does not let an arXiv DOI override the title unless the article's own address names that paper", async () => {
+    const arxivDoi = "10.48550/arxiv.2308.08708";
+    const retitled = {
+      ...WORK,
+      title: "An Earlier Paper by the Same Team",
+      authorships: authorships(["Patrick Butlin", "Robert Long"]),
+    };
+    const identity = {
+      title: "A Later Paper by the Same Team",
+      byline: "Patrick Butlin, Robert Long",
+      authors: ["Patrick Butlin", "Robert Long"].map((name) => ({ name, affiliations: [] })),
+      doi: arxivDoi,
+    };
+
+    /* A later paper or blog post can accidentally carry the team's earlier DOI. */
+    const later = harness({ [openAlexWorkUrl(arxivDoi)]: retitled, [CITERS_URL]: CITERS });
+    expect(await citersOf({ ...identity, url: "https://example.com/later-paper" }, later.deps)).toEqual({
+      kind: "unconfirmed",
+    });
+
+    /* A stored DOI can also disagree with the arXiv paper named by the address. */
+    const mistyped = harness({ [openAlexWorkUrl(arxivDoi)]: retitled, [CITERS_URL]: CITERS });
+    expect(await citersOf({ ...identity, url: "https://arxiv.org/html/2401.12345" }, mistyped.deps)).toEqual({
+      kind: "unconfirmed",
+    });
+  });
+
+  it("requires two distinct article authors, rather than two matches somewhere in the byline", async () => {
+    const arxivDoi = "10.48550/arxiv.2308.08708";
+    const singleAuthorTarget = {
+      ...WORK,
+      title: "Another Article Entirely",
+      authorships: authorships(["John Smith", "Jane Jones"]),
+    };
+    const single = harness({ [openAlexWorkUrl(arxivDoi)]: singleAuthorTarget, [CITERS_URL]: CITERS });
+    expect(await citersOf({
+      title: "A Single-author Paper",
+      byline: "J. Smith Jones",
+      authors: [{ name: "J. Smith Jones", affiliations: [] }],
+      doi: arxivDoi,
+      url: "https://arxiv.org/html/2308.08708",
+    }, single.deps)).toEqual({ kind: "unconfirmed" });
+
+    /* The free-text matcher must not cross the boundary between two authors. */
+    const recombinedTarget = {
+      ...WORK,
+      title: "Another Article Entirely",
+      authorships: authorships(["Robert Butlin", "Patrick Long"]),
+    };
+    const recombined = harness({ [openAlexWorkUrl(arxivDoi)]: recombinedTarget, [CITERS_URL]: CITERS });
+    expect(await citersOf({
+      title: "The Actual Article",
+      byline: "Patrick Butlin, Robert Long",
+      authors: ["Patrick Butlin", "Robert Long"].map((name) => ({ name, affiliations: [] })),
+      doi: arxivDoi,
+      url: "https://arxiv.org/html/2308.08708",
+    }, recombined.deps)).toEqual({ kind: "unconfirmed" });
+
+    /* Two spellings of one OpenAlex author are still only one person. */
+    const duplicatedTarget = {
+      ...WORK,
+      title: "Another Article Entirely",
+      authorships: authorships(["Patrick Butlin", "P. Butlin"]),
+    };
+    const duplicated = harness({ [openAlexWorkUrl(arxivDoi)]: duplicatedTarget, [CITERS_URL]: CITERS });
+    expect(await citersOf({
+      title: "The Actual Article",
+      authors: ["Patrick Butlin", "Robert Long"].map((name) => ({ name, affiliations: [] })),
+      doi: arxivDoi,
+      url: "https://arxiv.org/html/2308.08708",
+    }, duplicated.deps)).toEqual({ kind: "unconfirmed" });
+  });
+
   it("calls a 404 not-indexed, remembers it, and does not ask again", async () => {
     const h = harness({ [WORK_URL]: failure(404, "not-found") });
     expect(await citersOf(LEVIN, h.deps)).toEqual({ kind: "not-indexed" });

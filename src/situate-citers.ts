@@ -7,7 +7,8 @@
  * owner-only step would change what every reader's panel stores. So this asks
  * its own page — the 40 most-cited citing works, with `abstract_inverted_index`
  * — and **reuses everything else**: the identity confirmation (the DOI's record
- * must carry the article's title and an author, or one title-search match),
+ * must carry the article's title and an author, or for an arXiv paper at its own
+ * arXiv address two of its authors; or one title-search match),
  * the shared polite limiter, and the citers' text parser. Nothing is cached:
  * Situate runs on a press, a few times a day at most.
  *

@@ -249,8 +249,9 @@ CSS, both in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § `.m
   with zero slack. Its `z-index: 3` is local to the band, above a band's own sticky rows.
 - **The top row leaves room for it.** A band with an (i) has `has-about`, which sets
   `--band-about-room`; the band's top row adds that to its right padding. `.band-head` and
-  `.gloss-sort` do so already; any other top row does so in its mode's own stylesheet, and a
-  measured layout (Outline's `--outln-pad-r`) applies it to every copy it measures.
+  `.gloss-sort` do so already; any other top row does so in its mode's own stylesheet. Only the top
+  row: Structure's list once widened every row by it, a ~55px blank strip under a finger — plan
+  [261025e](../plans/261025e-structure-on-an-ipad-updates-calmly-and-uses-its-width.md).
 
 Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md). The owner's
 profile icon sits beside it, the same size, through `ModeSurface`'s `profile`, and

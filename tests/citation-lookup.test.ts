@@ -308,6 +308,7 @@ describe("resultIsTheWork — R-1, stricter than Find it's title rule", () => {
     }
     /* A journal whose name merely contains "Review" is still a site tail. */
     expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} | Physical Review`, excerpt: "Jared Kaplan" }, search)).toBe(true);
+    expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} | Reviews of Modern Physics`, excerpt: "Jared Kaplan" }, search)).toBe(true);
     /* …but a tail that is a review of it is not (Sol's re-check). */
     expect(resultIsTheWork({ url: "https://x.example", title: `${TITLE} - Review`, excerpt: "Jared Kaplan" }, search)).toBe(false);
   });

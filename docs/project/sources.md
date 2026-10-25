@@ -276,6 +276,12 @@ plan's next stage. The plan, with its research and review, is
 the tests are `tests/situate-dossier.test.tsx`, and the switch on and off in
 `tests/reception-lens-in-chat.test.tsx`.
 
+**Tried on six articles beside Reception, Cited by and Not cited** (2026-10-25):
+[261025a](../investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md).
+What Sources might become as a result, folded to three chips, is proposed for Greg in
+[261025c](../plans/261025c-sources-proposals-what-it-shows-first-and-fewer-sub-modes.md)
+(question q-vg2b69); nothing of it is built.
+
 ## The address, and old links
 
 `?mode=sources`, and `?sources=` names Bibliography, Not cited, Links, Reception, Claims or

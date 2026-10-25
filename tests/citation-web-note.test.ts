@@ -31,17 +31,20 @@ import {
   WEB_EXTRACT_EVIDENCE,
 } from "../src/citation-blurbs.js";
 import { rowIdentity } from "../src/citation-blurbs-identity.js";
+import type { AiRequestBody } from "../src/ai-call.js";
 import type { EvidenceDeps } from "../src/citation-evidence.js";
 import {
   articleSelf,
   type CitationWebNoteDeps,
   makeCitationWebNote,
   pageIsTheWork,
+  pageLooksLikeTheWork,
   readWebNote,
   type WebNoteCall,
   WebNoteRefused,
   type WebNoteWork,
   WEB_NOTE_SYSTEM,
+  webNotePrompt,
 } from "../src/citation-web-note.js";
 import { BLURB_MAX_CHARS } from "../src/citation-blurbs-identity.js";
 import {
@@ -200,11 +203,124 @@ describe("pageIsTheWork (R1): the work's own page by its identifier, never a pag
     ).toBe(false);
   });
 
+  it("normalises resolver hosts but refuses credentials and non-default ports", () => {
+    expect(pageIsTheWork({ url: "https://WWW.DOI.ORG./10.1038/nature05357" }, doi)).toBe(true);
+    expect(pageIsTheWork({ url: "https://user@doi.org/10.1038/nature05357" }, doi)).toBe(false);
+    expect(pageIsTheWork({ url: "https://doi.org:8443/10.1038/nature05357" }, doi)).toBe(false);
+    expect(pageIsTheWork({ url: "https://ARXIV.ORG.:8443/abs/2001.08361" }, ANCHOR)).toBe(false);
+  });
+
   it("checks an arXiv id by its address only, never by a page's prose", () => {
     expect(pageIsTheWork({ url: "https://site.example/p", title: TITLE, excerpt: "arXiv:2001.08361" }, ANCHOR)).toBe(false);
     /* Not even arXiv's own DOI for it, on somebody else's page under its whole title. */
     const arxivDoi = { url: "https://site.example/10.48550/arXiv.2001.08361", title: TITLE, excerpt: "doi:10.48550/arXiv.2001.08361" };
     expect(pageIsTheWork(arxivDoi, ANCHOR)).toBe(false);
+  });
+});
+
+describe("pageLooksLikeTheWork (261025d): a page titled as the work that names its first author", () => {
+  const bat = { title: "What is it like to be a bat?", authors: "Nagel, T.", year: "1974" };
+  const batExtract = "Thomas Nagel argues that consciousness is what makes the mind-body problem really intractable.";
+
+  it("takes a publisher's, a catalogue's or an author's page titled as the work that names its first author", () => {
+    expect(pageLooksLikeTheWork({ url: "https://philpapers.org/rec/NAGWIL", title: "What is it like to be a bat?", excerpt: batExtract }, bat)).toBe(true);
+    expect(
+      pageLooksLikeTheWork({ url: "https://pubmed.ncbi.nlm.nih.gov/1", title: "What Is It Like to Be a Bat? - PubMed", excerpt: batExtract }, bat),
+    ).toBe(true);
+    /* The surname in the page's title is enough, as in the extract. */
+    expect(pageLooksLikeTheWork({ url: "https://www.jstor.org/stable/2183914", title: "What Is It Like to Be a Bat? | Nagel | JSTOR", excerpt: "" }, bat)).toBe(
+      true,
+    );
+  });
+
+  it("needs the first author's surname, and gives a row with no authors no looser tier", () => {
+    const page = { url: "https://philpapers.org/rec/NAGWIL", title: "What is it like to be a bat?", excerpt: "A classic paper on consciousness." };
+    expect(pageLooksLikeTheWork(page, bat)).toBe(false);
+    expect(pageLooksLikeTheWork({ ...page, excerpt: batExtract }, { title: bat.title })).toBe(false);
+  });
+
+  it("refuses a page whose title only contains the work's, or is a review, a correction or a comment on it", () => {
+    const base = { url: "https://site.example/p", excerpt: batExtract };
+    expect(pageLooksLikeTheWork({ ...base, title: "Review of What is it like to be a bat?" }, bat)).toBe(false);
+    expect(pageLooksLikeTheWork({ ...base, title: "What is it like to be a bat? Revisited" }, bat)).toBe(false);
+    expect(pageLooksLikeTheWork({ ...base, title: "What is it like to be a bat? - Correction" }, bat)).toBe(false);
+    /* NDPR's shape: a "Reviews" tail is a review, as a "Review" one is. */
+    expect(
+      pageLooksLikeTheWork({ ...base, title: "What is it like to be a bat? | Reviews | Notre Dame Philosophical Reviews" }, bat),
+    ).toBe(false);
+    expect(pageLooksLikeTheWork({ ...base, title: "What is it like to be a bat? | Reviews of Modern Physics" }, bat)).toBe(true);
+  });
+
+  it("refuses the named general encyclopedia, reader-review, shop and summary hosts, whatever the title", () => {
+    for (const url of [
+      "https://en.wikipedia.org/wiki/What_Is_It_Like_to_Be_a_Bat%3F",
+      "https://www.wikiwand.com/en/What_Is_It_Like_to_Be_a_Bat",
+      "https://www.goodreads.com/book/show/1",
+      "https://www.amazon.co.uk/dp/1",
+      "https://amazon.com/dp/1",
+      "https://WWW.AMAZON.CO.UK.:8443/dp/1",
+      "https://books.amazon.com.br/dp/1",
+      "https://amazon.de/dp/1",
+      "https://ndpr.nd.edu/reviews/1",
+      "https://www.sparknotes.com/x",
+      "https://www.supersummary.com/x",
+    ]) {
+      expect(pageLooksLikeTheWork({ url, title: "What is it like to be a bat?", excerpt: batExtract }, bat), url).toBe(false);
+    }
+    /* A host that merely ends in a listed name is not that site. */
+    expect(pageLooksLikeTheWork({ url: "https://notwikipedia.org/x", title: "What is it like to be a bat?", excerpt: batExtract }, bat)).toBe(true);
+    expect(pageLooksLikeTheWork({ url: "https://amazonian.example/x", title: "What is it like to be a bat?", excerpt: batExtract }, bat)).toBe(true);
+    /* Not the scholarly encyclopedias: an entry there is often the very work cited (Sol's plan review #4). */
+    const entry = { title: "Consciousness", authors: "Van Gulick, R.", year: "2014" };
+    expect(
+      pageLooksLikeTheWork(
+        { url: "https://plato.stanford.edu/entries/consciousness/", title: "Consciousness (Stanford Encyclopedia of Philosophy)", excerpt: "Robert Van Gulick, 2014" },
+        entry,
+      ),
+    ).toBe(false); /* its title has a parenthesised tail, which no title rule takes — a limit, named in the investigation */
+    expect(
+      pageLooksLikeTheWork({ url: "https://plato.stanford.edu/entries/consciousness/", title: "Consciousness", excerpt: "Robert Van Gulick, 2014" }, entry),
+    ).toBe(true);
+  });
+
+  it("takes the shapes real search results come in (Sol's plan review #4)", () => {
+    const gnw = {
+      title: "Conscious processing and the global neuronal workspace hypothesis",
+      authors: "Mashour, G. A., Roelfsema, P., Changeux, J.-P., Dehaene, S.",
+      year: "2020",
+    };
+    const extract = "Mashour GA, Roelfsema P, Changeux JP, Dehaene S. We review the central tenets of the global neuronal workspace.";
+    for (const [url, title] of [
+      ["https://pubmed.ncbi.nlm.nih.gov/32135090/", "Conscious Processing and the Global Neuronal Workspace Hypothesis - PubMed"],
+      ["https://www.cell.com/neuron/fulltext/S0896-6273(20)30052-0", "Conscious Processing and the Global Neuronal Workspace Hypothesis: Neuron"],
+      ["https://pmc.ncbi.nlm.nih.gov/articles/PMC8770991/", "Conscious Processing and the Global Neuronal Workspace Hypothesis - PMC"],
+      ["https://www.semanticscholar.org/paper/abc", "[PDF] Conscious Processing and the Global Neuronal Workspace Hypothesis | Semantic Scholar"],
+      ["https://philpapers.org/rec/MASCPA", "Conscious Processing and the Global Neuronal Workspace Hypothesis - PhilPapers"],
+      ["https://books.google.com/books?id=1", "Conscious Processing and the Global Neuronal Workspace Hypothesis - Google Books"],
+      ["https://philosophy.stanford.edu/people/x", "Conscious processing and the global neuronal workspace hypothesis"],
+    ]) {
+      expect(pageLooksLikeTheWork({ url: url!, title: title!, excerpt: extract }, gnw), url).toBe(true);
+    }
+    /* An author's PDF whose result title is its file name: not titled as the work, so refused — a limit, not a choice. */
+    expect(pageLooksLikeTheWork({ url: "https://x.edu/~a/gnw.pdf", title: "gnw_final.pdf", excerpt: extract }, gnw)).toBe(false);
+  });
+
+  it("asks a cut title for the year as well as the surname", () => {
+    const cut = { url: "https://site.example/p", title: "Towards a cognitive neuroscience of consciousness: Basic …" };
+    const row = { title: "Towards a cognitive neuroscience of consciousness: Basic evidence and a workspace framework", authors: "Dehaene, S.", year: "2001" };
+    expect(pageLooksLikeTheWork({ ...cut, excerpt: "Dehaene and Naccache propose a workspace." }, row)).toBe(false);
+    expect(pageLooksLikeTheWork({ ...cut, excerpt: "Dehaene and Naccache (2001) propose a workspace." }, row)).toBe(true);
+  });
+
+  it("asks a title of two words or fewer for the year as well", () => {
+    const row = { title: "Being You", authors: "Seth, A.", year: "2021" };
+    const page = { url: "https://www.penguin.co.uk/books/1", title: "Being You", excerpt: "Anil Seth on the new science of consciousness." };
+    expect(pageLooksLikeTheWork(page, row)).toBe(false);
+    expect(pageLooksLikeTheWork({ ...page, excerpt: `${page.excerpt} Published 2021.` }, row)).toBe(true);
+  });
+
+  it("refuses a page that is not an http(s) address", () => {
+    expect(pageLooksLikeTheWork({ url: "javascript:alert(1)", title: bat.title, excerpt: batExtract }, bat)).toBe(false);
   });
 });
 
@@ -219,10 +335,29 @@ describe("readWebNote: every clause is code's", () => {
     expect(r).toMatchObject({ kind: "none", why: "not-a-result" });
   });
 
-  it("refuses a returned page that is not the work's own by its identifier", () => {
+  it("refuses a returned page that is neither the work's own by its identifier nor names its first author", () => {
     const blog = { url: "https://blog.example/scaling-laws", title: TITLE, content: EXTRACT };
     const r = readWebNote(answer({ url: blog.url, results: [blog] }), WORK, SELF);
     expect(r).toMatchObject({ kind: "none", why: "not-the-work" });
+  });
+
+  it("refuses a resolver or arXiv page for another identifier, even titled as the work (Sol's plan review #2)", () => {
+    const sibling = { url: "https://arxiv.org/abs/2001.08362", title: `[2001.08362] ${TITLE}`, content: `Kaplan ${EXTRACT}` };
+    expect(readWebNote(answer({ url: sibling.url, results: [sibling] }), WORK, SELF)).toMatchObject({ kind: "none", why: "not-the-work" });
+    const doiWork: WebNoteWork = { ...WORK, anchor: "doi:10.1000/scaling" as WorkId };
+    const chapter = { url: "https://doi.org/10.1000/scaling.ch1", title: TITLE, content: `Kaplan ${EXTRACT}` };
+    expect(readWebNote(answer({ url: chapter.url, results: [chapter] }), doiWork, SELF)).toMatchObject({ kind: "none", why: "not-the-work" });
+  });
+
+  it("takes a page titled as the work that names its first author, as looks-like, when it is not the work's own by id", () => {
+    const repo = { url: "https://repository.example.edu/handle/1", title: TITLE, content: `Kaplan, J. ${EXTRACT}` };
+    expect(readWebNote(answer({ url: repo.url, results: [repo] }), WORK, SELF)).toMatchObject({ kind: "candidate", pageKind: "looks-like" });
+    expect(readWebNote(answer({}), WORK, SELF)).toMatchObject({ kind: "candidate", pageKind: "own" });
+    /* With no identifier, only looks-like is possible — even on arXiv's own host. */
+    expect(readWebNote(answer({ results: [{ ...ARXIV_PAGE, content: `Kaplan ${EXTRACT}` }] }), { ...WORK, anchor: null }, SELF)).toMatchObject({
+      kind: "candidate",
+      pageKind: "looks-like",
+    });
   });
 
   it("refuses the article itself: its own address, and a copy of its prose", () => {
@@ -274,12 +409,23 @@ describe("readWebNote: every clause is code's", () => {
 });
 
 describe("the writer's prompt", () => {
-  it("names only the pages code will accept, the doi.org address first", () => {
-    /* Sol's review #2: code takes only the resolver and arXiv, so a prompt that
-       sent the model to a publisher's page would buy a refusal every time. */
-    expect(WEB_NOTE_SYSTEM).toContain("The work's own page is its doi.org address, or its arXiv page");
-    expect(WEB_NOTE_SYSTEM).not.toMatch(/publisher's page|author's own copy/);
-    expect(CITATION_WEB_NOTE_PROMPT_VERSION).toBe("citation-web-note/2");
+  it("asks for the doi.org or arXiv page first, then a page that is the work itself, never one about it", () => {
+    /* Plan 261025d: code now takes a page that looks like the work's own, so
+       the prompt may send the model to one — after the two it can prove. */
+    expect(WEB_NOTE_SYSTEM).toContain("the work's own page is best its doi.org address or its arXiv page");
+    expect(WEB_NOTE_SYSTEM).toContain("whose text as the search returned it names the work's first author");
+    expect(WEB_NOTE_SYSTEM).toContain("its publisher's page, a library or repository record, or its author's own copy");
+    expect(WEB_NOTE_SYSTEM).toContain("not an encyclopedia entry, a book review");
+    expect(WEB_NOTE_SYSTEM).toContain("never praise or anyone's judgement of it");
+    expect(CITATION_WEB_NOTE_PROMPT_VERSION).toBe("citation-web-note/3");
+  });
+
+  it("gives the identifier when there is one, and only the title and authors when there is not", () => {
+    expect(webNotePrompt(WORK)).toContain("arXiv id: 2001.08361");
+    const titleOnly = webNotePrompt({ ...WORK, anchor: null });
+    expect(titleOnly).not.toMatch(/arXiv id|DOI:/);
+    expect(titleOnly).toContain(`Title: ${TITLE}`);
+    expect(titleOnly).toContain("Authors: Kaplan, J.");
   });
 
   it("states the note's length limit, from the number code enforces", () => {
@@ -335,8 +481,9 @@ function stored(over: Partial<Extract<CitationWebNote, { state: "note" }>> = {},
     host: "forged.example",
     title: ARXIV_PAGE.title,
     readAt: "2026-10-19T09:00:00.000Z",
+    pageKind: "own",
     ...over,
-  };
+  } as CitationWebNote;
 }
 
 const NEGATIVE = (checkedAt: string, row = work()): CitationWebNote => ({
@@ -368,7 +515,26 @@ describe("shownWebNote and attachWebNotes: the read guard (R8)", () => {
       host: "arxiv.org",
       title: ARXIV_PAGE.title,
       readAt: "2026-10-19T09:00:00.000Z",
+      pageKind: "own",
     });
+  });
+
+  it("still shows a note made under the strict checks (/3), as own; but no longer trusts their none (261025d)", () => {
+    const old = { ...stored(), validationVersion: "citation-web-note-checks/3" };
+    expect(shownWebNote(old, work())).toMatchObject({ pageKind: "own" });
+    expect(searchedRecently({ ...NEGATIVE("2026-10-19T09:00:00.000Z"), validationVersion: "citation-web-note-checks/3" }, work(), NOW)).toBe(false);
+    expect(searchedRecently(NEGATIVE("2026-10-19T09:00:00.000Z"), work(), NOW)).toBe(true);
+  });
+
+  it("shows own only at an address an own page can have, and passes looks-like anywhere", () => {
+    expect(shownWebNote(stored({ url: "https://philpapers.org/rec/X" }), work())).toBeNull();
+    expect(shownWebNote(stored({ url: "https://arxiv.org/list/cs.LG" }), work())).toBeNull();
+    expect(shownWebNote(stored({ url: "https://doi.org/10.1000/scaling" }), work())).toMatchObject({ pageKind: "own", host: "doi.org" });
+    expect(shownWebNote(stored({ url: "https://philpapers.org/rec/X", pageKind: "looks-like" }), work())).toMatchObject({
+      pageKind: "looks-like",
+      host: "philpapers.org",
+    });
+    expect(shownWebNote({ ...stored(), pageKind: "certain" }, work())).toBeNull();
   });
 
   it("hides it when the row is no longer the one it was made for, or the checks have moved", () => {
@@ -413,6 +579,8 @@ describe("shownWebNote and attachWebNotes: the read guard (R8)", () => {
 interface Harness {
   deps: CitationWebNoteDeps;
   calls: string[];
+  /** Each call's request, in order, so a test can read the prompt and the check it was sent. */
+  bodies: AiRequestBody[];
   saved: CitationWebNote[];
   taken: number;
   finished: number;
@@ -434,13 +602,15 @@ function harness(opts: {
   /** What the article read after the allowance returns. */
   articleAfterAllowance?: Article;
   save?: (n: CitationWebNote) => Promise<void>;
+  evidence?: EvidenceDeps;
 } = {}): Harness {
   const row = opts.row ?? work();
-  const h: Harness = { calls: [], saved: [], taken: 0, finished: 0, reads: 0, deps: undefined as unknown as CitationWebNoteDeps };
+  const h: Harness = { calls: [], bodies: [], saved: [], taken: 0, finished: 0, reads: 0, deps: undefined as unknown as CitationWebNoteDeps };
   let bibliographyReads = 0;
   let articleReads = 0;
-  const call: WebNoteCall = async (job) => {
+  const call: WebNoteCall = async (job, body) => {
     h.calls.push(job);
+    h.bodies.push(body);
     const json = job === "citation-web-note" ? await (opts.writer ?? (() => answer({})))() : (opts.check ?? (() => verdicts([true])))();
     return { json, answeredBy: "anthropic/claude-haiku" };
   };
@@ -476,11 +646,39 @@ function harness(opts: {
         h.finished++;
       },
     },
-    evidence: async () => ({ now: () => NOW }) as unknown as EvidenceDeps,
+    evidence: async () => opts.evidence ?? ({ now: () => NOW } as unknown as EvidenceDeps),
     call,
     now: () => NOW,
   };
   return h;
+}
+
+/**
+ * **Registries that know nothing** — every identifier lookup not found, every
+ * Crossref title search empty — so a title-only row of a public-address
+ * article ends `not-found` and may be searched by title alone (261025d).
+ */
+function registriesThatKnowNothing(): EvidenceDeps & { fetched: string[] } {
+  const fetched: string[] = [];
+  const quiet = { debug() {}, info() {}, warn() {}, error() {}, child: () => quiet };
+  return {
+    fetched,
+    lookup: async () => ({ kind: "not-found" }),
+    fetchJson: async (url: string) => {
+      fetched.push(url);
+      return { status: "ok", message: { items: [] } };
+    },
+    limiter: {
+      coolingDown: async () => false,
+      takeSlot: async (service: string, leaseMs: number) => ({ service, slot: 1, until: new Date(Date.now() + leaseMs) }),
+      freeSlot: async () => {},
+      takeStart: async () => ({ kind: "start", waitMs: 0 }),
+      coolDown: async () => {},
+    },
+    sleep: async () => {},
+    now: () => NOW,
+    log: quiet,
+  } as unknown as EvidenceDeps & { fetched: string[] };
 }
 
 async function drain(run: { stream(): AsyncGenerator<unknown> }): Promise<unknown[]> {
@@ -554,7 +752,7 @@ describe("the press", () => {
     expect(h.calls).toEqual(["citation-web-note", "citation-web-note-check"]);
   });
 
-  it("searches nothing for a row with no identifier, and takes no allowance (R1)", async () => {
+  it("searches nothing for an uploaded file's title-only row, and takes no allowance (G6, 261025d)", async () => {
     /* A title-only row in an uploaded article: no title search (G6), so no identifier. */
     const titleOnly = work({ key: "t:scaling", url: "https://scholar.google.com/scholar?q=Scaling", linkFrom: "search" });
     const upload = { ...ARTICLE, meta: { ...ARTICLE.meta, filename: "paper.pdf" } } as unknown as Article;
@@ -564,6 +762,104 @@ describe("the press", () => {
     expect(h.calls).toEqual([]);
     expect(h.taken).toBe(0);
     expect(h.saved).toEqual([]);
+  });
+
+  describe("a row with no identifier, in an article from a public address (261025d)", () => {
+    const titleOnly = work({ key: "t:scaling", url: "https://scholar.google.com/scholar?q=Scaling", linkFrom: "search" });
+    const PHILPAPERS = { url: "https://philpapers.org/rec/KAPSLF", title: `${TITLE} - PhilPapers`, content: `Jared Kaplan et al. ${EXTRACT}` };
+
+    it("is searched by its title and first author, and a page that looks like its own keeps a note labelled so", async () => {
+      const h = harness({
+        row: titleOnly,
+        shown: titleOnly,
+        evidence: registriesThatKnowNothing(),
+        writer: () => answer({ url: PHILPAPERS.url, results: [PHILPAPERS] }),
+      });
+      const events = await drain(await makeCitationWebNote(h.deps)(SLUG, ID));
+      expect(h.calls).toEqual(["citation-web-note", "citation-web-note-check"]);
+      const prompt = JSON.stringify(h.bodies[0]);
+      expect(prompt).not.toMatch(/arXiv id:|DOI:/);
+      expect(prompt).toContain("Authors: Kaplan, J.");
+      /* The check is told the page may be someone else's description, and to refuse praise. */
+      const check = JSON.stringify(h.bodies[1]);
+      expect(check).toContain("may be that work's own or someone else's description of it");
+      expect(check).toContain("praise or judgement of the work");
+      expect(h.saved).toMatchObject([{ state: "note", url: PHILPAPERS.url, pageKind: "looks-like" }]);
+      expect(events.at(-1)).toMatchObject({ type: "done", done: { outcome: "note", webNote: { pageKind: "looks-like", host: "philpapers.org" } } });
+    });
+
+    it("is refused for nothing when the list gives no first author", async () => {
+      const noAuthor = { ...titleOnly, authors: undefined } as unknown as CitedWork;
+      const evidence = registriesThatKnowNothing();
+      const h = harness({ row: noAuthor, shown: noAuthor, evidence });
+      const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+      expect((err as WebNoteRefused).reason).toBe("no-identifier");
+      expect(evidence.fetched).toEqual([]);
+      expect(h.calls).toEqual([]);
+      expect(h.taken).toBe(0);
+    });
+
+    it("is refused for nothing when its identifier contradicts the registry's record", async () => {
+      const conflicted = work({ registry: { kind: "conflict", source: "crossref" } });
+      const h = harness({ row: conflicted, shown: conflicted, evidence: registriesThatKnowNothing() });
+      const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+      expect((err as WebNoteRefused).reason).toBe("no-identifier");
+      expect((err as WebNoteRefused).message).toContain("identifier conflicts with the list");
+      expect((err as WebNoteRefused).message).not.toContain("has no DOI or arXiv id");
+      expect(h.calls).toEqual([]);
+      expect(h.taken).toBe(0);
+    });
+
+    it("is refused for nothing when the list calls the work unpublished", async () => {
+      const unpublished = { ...titleOnly, title: "Scaling Laws for Neural Language Models (unpublished manuscript)" } as CitedWork;
+      const h = harness({ row: unpublished, shown: unpublished, evidence: registriesThatKnowNothing() });
+      const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+      expect((err as WebNoteRefused).reason).toBe("no-identifier");
+      expect(h.calls).toEqual([]);
+      expect(h.taken).toBe(0);
+    });
+
+    it("is refused for nothing for an author-year label or a title too plain to identify", async () => {
+      for (const row of [
+        { ...titleOnly, title: "Kaplan (2020)" },
+        { ...titleOnly, title: "Introduction" },
+      ] as CitedWork[]) {
+        const evidence = registriesThatKnowNothing();
+        const h = harness({ row, shown: row, evidence });
+        const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+        expect((err as WebNoteRefused).reason).toBe("no-identifier");
+        expect(evidence.fetched).toEqual([]);
+        expect(h.calls).toEqual([]);
+        expect(h.taken).toBe(0);
+      }
+    });
+
+    it("does not send a title-only work when the article becomes an upload while the allowance is taken", async () => {
+      const upload = { ...ARTICLE, meta: { ...ARTICLE.meta, filename: "paper.pdf" } } as unknown as Article;
+      const h = harness({
+        row: titleOnly,
+        shown: titleOnly,
+        articleAfterAllowance: upload,
+        evidence: registriesThatKnowNothing(),
+      });
+      const err = await makeCitationWebNote(h.deps)(SLUG, ID).catch((e: unknown) => e);
+      expect(err).toMatchObject({ status: 409, reason: "no-identifier" });
+      expect(h.calls).toEqual([]);
+      expect(h.saved).toEqual([]);
+      expect(h.finished).toBe(1);
+    });
+  });
+
+  it("stores the page kind: own for the arXiv page, looks-like for a publisher's page of an identified work", async () => {
+    const own = harness();
+    await drain(await makeCitationWebNote(own.deps)(SLUG, ID));
+    expect(own.saved).toMatchObject([{ state: "note", pageKind: "own" }]);
+    expect(JSON.stringify(own.bodies[1])).toContain("an extract of that work's own web page");
+
+    const publisher = { url: "https://www.example-press.org/scaling", title: `${TITLE} | Example Press`, content: `Kaplan et al. ${EXTRACT}` };
+    const h = harness({ writer: () => answer({ url: publisher.url, results: [publisher] }) });
+    await drain(await makeCitationWebNote(h.deps)(SLUG, ID));
+    expect(h.saved).toMatchObject([{ state: "note", pageKind: "looks-like" }]);
   });
 
   it("is a 404 for an entry the list does not have", async () => {
