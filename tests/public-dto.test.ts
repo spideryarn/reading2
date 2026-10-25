@@ -1580,6 +1580,7 @@ describe("the artefacts a shared link carries", () => {
           host: "web-note-page-sentinel.example",
           title: "web note page title sentinel",
           readAt: "2026-10-19T09:00:00.000Z",
+          pageKind: "looks-like",
         },
         /* The work's reference entry (plan 260930i) — owner-only until the
            public DTO names it, which is Greg's call on a defence. */

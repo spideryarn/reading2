@@ -14,7 +14,7 @@
  * every field before anything is shown.
  */
 import type { citationWebNotes } from "../db/schema.js";
-import type { CitationWebNote, CitationWebNoteWhy } from "../types.js";
+import type { CitationWebNote, CitationWebNoteWhy, WebNotePageKind } from "../types.js";
 
 /**
  * **Without `created_at`, on purpose** — the first press's time, written only
@@ -44,9 +44,16 @@ export function webNoteColumns(note: CitationWebNote): Columns {
       host: note.host,
       title: note.title,
       readAt: new Date(note.readAt),
+      pageKind: note.pageKind,
     };
   }
-  return { ...common, why: note.why, sentences: null, url: null, host: null, title: null, readAt: null };
+  return { ...common, why: note.why, sentences: null, url: null, host: null, title: null, readAt: null, pageKind: null };
+}
+
+/** The CHECK holds `page_kind` to these two; anything else is a row we cannot vouch for. */
+function pageKindOf(value: string): WebNotePageKind {
+  if (value === "own" || value === "looks-like") return value;
+  throw new Error(`citation_web_notes: unknown page_kind ${JSON.stringify(value)}`);
 }
 
 function present<T>(value: T | null, column: string): T {
@@ -74,6 +81,9 @@ export function webNoteFromRow(row: Row): CitationWebNote {
         host: present(row.host, "host"),
         title: row.title,
         readAt: present(row.readAt, "read_at").toISOString(),
+        /* Null is a note from before the column, every one of which passed
+           the strict rule: `own` (src/db/schema.ts § pageKind). */
+        pageKind: row.pageKind === null ? "own" : pageKindOf(row.pageKind),
       };
     case "none":
       /* The CHECK holds `why` to `CitationWebNoteWhy`'s closed list. */

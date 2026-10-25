@@ -51,13 +51,18 @@ for that.
   are written by themselves a minute or so after the list, for every work at once, and visitors to a
   shared article see them too.
 - **A work with no note can get one from the web.** Point at a citation in the article and press
-  *Open in Sources* on its card: if the work has a DOI or an arXiv id, we search the web once for
-  its own page — its DOI page or its arXiv page, and no other — and an AI writes a sentence from the search engine’s extract of that page, which code
-  and a second check hold to the page’s own words. While it looks, the row says so; it labels the
-  note *From a web search ·* and the page’s site. A web page can say more or less than the paper,
-  so it can be wrong. If no page could be shown to be the work’s own, the row says that, and it is
-  not searched again for a week. A work with no identifier is not searched. Only you see these
-  notes, not visitors.
+  *Open in Sources* on its card: we search the web once for the work’s page, and an AI writes a
+  sentence from the search engine’s extract of that page, which code and a second check hold to the
+  page’s own words. Its DOI page or its arXiv page is its own, and the note is labelled *From a web
+  search ·* and the site. Any other page counts only when its title names the work and its title or
+  extract names the work’s first author — a publisher’s page, a library record, an author’s own
+  copy. Code refuses Wikipedia, Goodreads, Amazon, one review journal and a short list of summary
+  sites, but elsewhere the page can still be someone else’s catalogue entry, blurb, review or
+  encyclopedia entry. That is why the note says *may not be the work’s own page*. A web page can
+  say more or less than the paper, so either can be wrong. While it looks, the row says so. If no page passed, the row says
+  that, and it is not searched again for a week. A work with no DOI or arXiv id is searched by its
+  title and first author only when the article came from a web address; in a file you uploaded it
+  is not searched. Only you see these notes, not visitors.
 - Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the
   model’s memory of the work, not a citation count. New lists give a number only when the model is
   confident it knows the work; a low number then means a work it knows and thinks minor. If
