@@ -37,7 +37,10 @@ name is no longer there to reach for.
 2. **A list in a test is only as good as its coverage.** A geometry box added later is not on the
    list, and this is the fourth time: the gutter, the fold toggle, the mastheads (261003c), the
    Skim door (261009j, 160px too wide) and now the stub. So
-   `tests/prose-centred-in-its-cell.test.ts` asks the other way round, done in this run: **every
-   rule whose declarations use `var(--reading-measure)` sets `--font-author` itself, is the prose,
-   or is named with the reason its face does not matter.** One is named (the note gutter, the same
-   element as `.blk-gutter`). Turning either the fold toggle or the stub back to Geist turns it red.
+   `tests/prose-centred-in-its-cell.test.ts` asks the other way round: **every rule in every client
+   sheet whose declarations use `var(--reading-measure)` sets `--font-author` itself, is the prose,
+   or is named with the reason its face does not matter.** Its first version searched only the
+   reading-view sheets and missed the repo-root `styles/tokens.css`; review widened it to the whole
+   import graph and found `.reading-column` making the same mistake. One exception remains (the
+   note gutter, the same element as `.blk-gutter`). The test names examples from both sheets and
+   from `clamp()` and `calc()`, so an empty or narrowed scan does not pass.

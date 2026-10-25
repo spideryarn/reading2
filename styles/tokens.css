@@ -352,7 +352,7 @@
 .reading-column {
     max-width: clamp(45ch, 90vw, var(--reading-measure));
     margin-inline: auto;
-    font-family: var(--font-ui);
+    font-family: var(--font-author);
     font-size: var(--reading-size);
     line-height: var(--reading-line-height);
     font-weight: var(--reading-weight);

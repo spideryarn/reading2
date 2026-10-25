@@ -158,3 +158,20 @@ different value without breaking fonts.md's rule, so it only misleads.
 ## Order
 
 1, 3, 2, 4 by ease and value. Each is its own commit, with a code review by Sol before pushing.
+
+## What landed
+
+- **1** `019479ab4` and **3** `c8c25e588`, plus Sol's code-review fixes in `eae5ae98e`
+  ([-code-review-1-sol.md](261025k-fonts-and-css-code-quality-code-review-1-sol.md)). Three P1s:
+  the email test did not pin the middle rows, napi canvas falls back silently when a face fails to
+  register, and the import of `web/voice.ts` broke the client-imports allowlist. Whether Sketch's
+  labels take the AI face is with Greg as q-ugekcv.
+- **2** `85036122b`. The computed-style capture (130,421 records over the sampled pages) is
+  identical before and after, once class names are normalised.
+- **4** `5ac90bfa4`. Tailwind keeps `--font-sans` as `var(--font-ui)`, because `tw:font-sans` is
+  its own utility name. tokens.css no longer defines it. The capture is identical here too.
+- **A bug found doing 4.** `.matter-stub` measured its `ch` in Geist through `--font-reading`,
+  because that name still said "reading". It now takes `--font-author`, and a guard test asks every
+  rule on `--reading-measure` which face it is in. Postmortem
+  [261025b](../postmortems/261025b-matter-stub-measured-in-the-wrong-face.md).
+- Sol's review of 2 and 4: [-code-review-2-sol.md](261025k-fonts-and-css-code-quality-code-review-2-sol.md).

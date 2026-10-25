@@ -39,7 +39,12 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { readerCssNoComments, stripComments, VOICES_SHEET } from "./helpers/stylesheets.js";
+import {
+  allSheets,
+  readerCssNoComments,
+  stripComments,
+  VOICES_SHEET,
+} from "./helpers/stylesheets.js";
 
 /* The reading-view sheets as a set — one file until 2026-09-06 and thirty-eight
    since, and asking for the set is what makes a rule that has *moved* go on
@@ -96,16 +101,29 @@ describe("the reading column is centred in its cell", () => {
     const allowed = new Map<string, string>([
       ["td.text.note .blk-gutter", "the same element as `.blk-gutter`, whose own rule sets the author's face"],
     ]);
+    const measured: string[] = [];
     const offenders: string[] = [];
-    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = (m[1] ?? "").replace(/\s+/g, " ").trim();
-      const body = m[2] ?? "";
-      if (!/var\(--reading-measure\)/.test(body)) continue;
-      if (/font-family:\s*var\(--font-author\)/.test(body)) continue;
-      if (selector.split(",").every((s) => /(^|\s)\S*\.prose\b/.test(s.trim()))) continue;
-      if (allowed.has(selector)) continue;
-      offenders.push(selector);
+    for (const sheet of allSheets()) {
+      for (const m of stripComments(sheet.css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = (m[1] ?? "").replace(/\s+/g, " ").trim();
+        const body = m[2] ?? "";
+        if (!/var\(--reading-measure\)/.test(body)) continue;
+        const named = `${sheet.path}: ${selector}`;
+        measured.push(named);
+        if (/font-family:\s*var\(--font-author\)/.test(body)) continue;
+        if (selector.split(",").every((s) => /\.prose(?![\w-])/.test(s))) continue;
+        if (allowed.has(selector)) continue;
+        offenders.push(named);
+      }
     }
+    /* Calibration in both directions: the shared root sheet is in scope, and
+       `clamp()` / `calc()` users are candidates even when the measure is not
+       the declaration's whole value. Without these, an empty or narrowed scan
+       reports perfect coverage. */
+    expect(measured).toContain("styles/tokens.css: .reading-column");
+    expect(measured).toContain("src/web/styles/prose.css: .prose");
+    expect(measured).toContain("src/web/styles/prose.css: .prose blockquote");
+    expect(measured.length).toBeGreaterThan(10);
     expect(offenders).toEqual([]);
   });
 
