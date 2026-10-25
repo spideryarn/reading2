@@ -265,6 +265,32 @@ describe("where the panel is attached", () => {
     expect(document.querySelector("aside.chat-dialog")).toBeNull();
   });
 
+  it("refits a kept draft when its webfont loads", () => {
+    const fonts = new EventTarget();
+    const unwatch = vi.spyOn(fonts, "removeEventListener");
+    Object.defineProperty(document, "fonts", { configurable: true, value: fonts });
+    let height = 44;
+    const measure = vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get")
+      .mockImplementation(() => height);
+    try {
+      chatDraftsFor("a-piece").setThread(ANSWERED.id, "Why bumps?");
+      draw(THREAD, {});
+      const box = panel().querySelector("textarea")!;
+      expect(box.style.height).toBe("44px");
+      height = 88;
+      act(() => fonts.dispatchEvent(new Event("loadingdone")));
+      expect(box.style.height).toBe("88px");
+      act(() => root.render(null));
+      expect(unwatch).toHaveBeenCalledWith("loadingdone", expect.any(Function));
+      height = 120;
+      fonts.dispatchEvent(new Event("loadingdone"));
+      expect(box.style.height).toBe("88px");
+    } finally {
+      measure.mockRestore();
+      Reflect.deleteProperty(document, "fonts");
+    }
+  });
+
   /* The composer sizes itself in a layout effect by measuring `scrollHeight`,
      and a detached element measures 0. So the container has to be attached
      before the panel's children run theirs. */

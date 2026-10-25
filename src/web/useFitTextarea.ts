@@ -30,6 +30,8 @@
  */
 import { type RefObject, useEffect, useLayoutEffect } from "react";
 
+import { onFontsChanged } from "./fonts.js";
+
 export function useFitTextarea(box: RefObject<HTMLTextAreaElement | null>, value: string, mounted = true): void {
   const fitBox = () => {
     const el = box.current;
@@ -48,6 +50,8 @@ export function useFitTextarea(box: RefObject<HTMLTextAreaElement | null>, value
   };
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect measures the DOM, and `value` is what changed it; `mounted` is the box arriving
   useLayoutEffect(fitBox, [value, mounted]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the callback reads the current box; `mounted` is when it arrives
+  useEffect(() => onFontsChanged(fitBox), [mounted]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `mounted` is the box mounting and unmounting, which is when there is an element to watch
   useEffect(() => {
     const el = box.current;

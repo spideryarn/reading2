@@ -227,7 +227,8 @@
     .dock-question-state.done:not(.own),
     /* the chat list's last line, when the model said it */
     .chat-thread-last.model,
-    /* code inside a model's answer keeps its box but takes the model's face */
+    /* code inside a model's answer: listed for the specificity, and set back
+       to the one monospace by the rule below */
     .chat-turn.model :is(.fmt-code, .fmt-pre code),
     .cnd-answer :is(.fmt-code, .fmt-pre code),
     /* Candidates: only the affiliation, not our "said to be at" */
@@ -244,15 +245,17 @@
     font-family: var(--font-ai);
 }
 
-/* The same code, on one width. It stays in the list above, so that rule's
-   specificity is unchanged; this one ties with it and comes later. Quattro
-   gives letters four widths, which knocks the columns of code out of line, so
-   code takes iA Writer Mono: the same letters, every one as wide (261021f). */
+/* Code is code, whoever wrote it: the one monospace, as it is everywhere
+   else. It stays in the list above, so that rule's specificity is unchanged;
+   this one ties with it and comes later. Quattro gives letters four widths,
+   which knocks columns of code out of line. It was iA Writer Mono from
+   2026-10-21 until the faces were cut back on 2026-10-25 (Greg: "that should
+   be three fonts consistent across the site") — docs/project/fonts.md. */
 :root :is(
     .chat-turn.model :is(.fmt-code, .fmt-pre code),
     .cnd-answer :is(.fmt-code, .fmt-pre code)
 ) {
-    font-family: var(--font-ai-code);
+    font-family: var(--font-mono);
 }
 
 /* ---- the reader: what they typed ----------------------------------------- */
