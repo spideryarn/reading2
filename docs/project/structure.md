@@ -60,6 +60,30 @@ asked to see are the gists. The plan, and GPT Sol's review of it, is
 [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
 it are [keyboard.md § ← / → in Structure](keyboard.md).
 
+## While the reader scrolls
+
+> I think it's nice that the structure mode updates as we scroll. It probably only needs to update
+> every second or two. […] We don't want to use too much CPU. We don't want to distract the reader
+> too much.
+>
+> — Greg, 2026-10-25, spya-m5gxk9, on an iPad, in
+> [261025e](../plans/261025e-structure-on-an-ipad-updates-calmly-and-uses-its-width.md)
+
+Every change of "where you are" rebuilds and re-measures the fitted tree in a fixed band, and on an
+iPad a band redrawn several times a second under a moving finger flickered. So, in both faces:
+
+- **The band follows a scroll at most once a second.** The first change after a quiet second is
+  drawn at once; later ones wait, and the band always ends on the section the reader stopped in. A
+  jump (a row pressed, a link, a Hover glance) is never held. Keyboard ← / → is a plain scroll and
+  is held like one. `holdMs` in [`useColumnContext.ts`](../../src/web/useColumnContext.ts), which
+  also stops reading the page during the hold; `STRUCTURE_HOLD_MS` is the number.
+- **The band's content does not change size when a bar slides.** The bottom bar's travel is added
+  to the band's foot padding (`--band-bar-travel`, mode-band.css), and a present top bar is held
+  home while Structure is open (shell.css § the guard), so rows change when the reader moves, not
+  when a bar does.
+
+`scripts/structure-scroll-trace.ts` counts the redraws in one scroll at an iPad's size, in WebKit.
+
 ## Hover, an experiment
 
 > when the user hovers their mouse over a section, it automatically opens up that section in the

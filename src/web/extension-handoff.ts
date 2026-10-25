@@ -25,8 +25,20 @@ import { savedSource } from "../urls.js";
  * The store's id for the published extension (the Chrome Web Store item Greg
  * created on 2026-10-25, Unlisted). It is public; docs/project/chrome-extension.md
  * records it too.
+ *
+ * **Every place that points a reader at the extension takes its link from
+ * `EXTENSION_STORE_URL` below**, and draws nothing of it if this is `null`
+ * (plan 261025b), so a change of id is this one line.
  */
 export const PRODUCTION_EXTENSION_ID: string | null = "eeedpogihlbbjghpanopajebiencekak";
+
+/** The store's page for an item: Chromium builds it as this prefix plus the id. */
+export function extensionStoreUrl(id: string | null): string | null {
+  return id === null ? null : `https://chromewebstore.google.com/detail/${id}`;
+}
+
+/** Where a reader installs the extension, or `null` while there is no item. */
+export const EXTENSION_STORE_URL: string | null = extensionStoreUrl(PRODUCTION_EXTENSION_ID);
 
 /** extension/manifest.ts § `DEV_EXTENSION_ID`, held equal by
  *  tests/extension-handoff.test.ts. Trusted only by a dev build of this app,

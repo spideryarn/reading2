@@ -442,7 +442,11 @@ honestly finds nothing.
 - **The DOI is checked before it is trusted.** OpenAlex's record for the DOI must carry the
   article's whole title and one of its authors, as imported (never a reader's rename). The check
   runs on a fresh answer, on a cache hit and on a stale fallback alike, so a second article carrying
-  the same DOI by mistake gets nothing.
+  the same DOI by mistake gets nothing. **One exception, since 2026-10-25**: for an arXiv paper
+  read from its own arxiv.org address, whose DOI that address names, two of its structured authors
+  matched one-to-one stand in for the title. OpenAlex had given *Consciousness in AI*'s record a
+  merged Zenodo deposit's title, and arXiv papers are retitled between versions
+  ([261025a](../investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md)).
 - **Every outcome has its own sentence** (`CitersResult` in `src/types.ts`, the words in
   `src/messages.ts`): no DOI to ask with, no record a title search could be sure of, not in
   OpenAlex, could not be confirmed, could not be

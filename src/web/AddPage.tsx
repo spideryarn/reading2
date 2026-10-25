@@ -57,6 +57,7 @@ import {
   ADDING_SENDS_TEXT_AWAY,
   codeOfMessage,
   DIRECT_ADD_SENT_TEXT_AWAY,
+  failureSuggestsExtension,
   failureSuggestsUpload,
   UPLOAD_STILL_ARRIVING,
   ADD_IMPORT_LOST,
@@ -1947,7 +1948,7 @@ export function AddPage({
         isImportJob(job) &&
         job.url !== undefined &&
         failureSuggestsUpload(job.error) && (
-        <UploadInstead />
+        <UploadInstead extension={failureSuggestsExtension(job.error)} />
       )}
 
       {/* **The tab is the worker, said where somebody is watching it work.**

@@ -2418,6 +2418,9 @@ its addresses made absolute (in-page `#` links left alone) and what may be a cre
 the reader to upload here. It makes no request, so the
 upload path is unchanged ([`save-page-bookmarklet.ts`](../../src/web/save-page-bookmarklet.ts),
 [261017b](../plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md)).
+Above it, for the failures the Chrome extension gets round (`SUGGESTS_EXTENSION`), the picker offers
+the extension, once its store item exists:
+[chrome-extension.md § Where a reader finds it](chrome-extension.md#where-a-reader-finds-it).
 
 ## The one security check
 

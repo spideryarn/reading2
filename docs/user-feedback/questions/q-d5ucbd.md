@@ -1,11 +1,11 @@
 ---
 id: q-d5ucbd
 report: spya-xsfrsg
-status: open
+status: answered
 asked: 2026-10-24
 title: The Chrome extension is built: when you're at your laptop, will you do the Web Store step and send me the item id?
 refs: qi-64ngfhks · qi-4ma69gtp · qi-mpjegxhn · docs/plans/261024q-chrome-extension-one-click-add-the-page.md · docs/plans/261024y-a-second-press-on-a-page-already-on-the-shelf-opens-it.md · docs/project/chrome-extension.md · docs/user-feedback/261023_2231-chrome-extension-one-click-add-the-page.md · SPIDERYARN-READING2-NE
-acted: spya-fs5wyy
+acted: spya-fs5wyy, spya-bk5etj
 ---
 One thing left, and you said you'd do it from the laptop: put the Chrome extension in the Chrome Web Store, then send me the item id it shows (32 letters). I then wire production to it and add a Help section, and the next deploy makes it work for you. One sitting of about 20 minutes; the steps are below under Details.
 
@@ -34,3 +34,8 @@ Greg's reply spya-fs5wyy, 2026-10-24:
 "Yes let's do 1A when I'm back in front of my computer. Keep this report open.
 
 2A"
+
+Greg's reply spya-bk5etj, 2026-10-25 11:21:
+"I think you should have received it right now."
+
+Settled: the store item is eeedpogihlbbjghpanopajebiencekak (submitted for review, Unlisted). It is wired into production (f4d796440, 59000f581, deployed in 4b0d4dd3), and the extension is now findable from Help's Adding an article, the command bar, and the add page when a site turns our server away (plan 261025b, on dev). Nothing more is owed.

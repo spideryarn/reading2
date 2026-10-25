@@ -15,12 +15,18 @@
  * navigates to `/add/upload/<id>` exactly as the shelf's Add does. Nothing here
  * uploads anything of its own. The caller decides when to draw it, from
  * `failureSuggestsUpload` in src/messages.ts.
+ *
+ * **Above the bookmarklet, the Chrome extension**, where it gets round the
+ * failure (`extension`, from `failureSuggestsExtension`): one press, nothing to
+ * save or upload, so it is the better way round where it reaches. It draws
+ * nothing until the store item exists (ExtensionOffer.tsx, plan 261025b).
  */
 import { Button } from "@/components/ui/button";
+import { ExtensionOffer } from "./ExtensionOffer.js";
 import { SavePageBookmarklet } from "./SavePageBookmarklet.js";
 import { UploadPicker } from "./UploadPicker.js";
 
-export function UploadInstead() {
+export function UploadInstead({ extension }: { extension: boolean }) {
   return (
     <UploadPicker single>
       {(slots) => (
@@ -37,6 +43,7 @@ export function UploadInstead() {
             )}
           </div>
           {slots.uploadStatus}
+          {extension && <ExtensionOffer />}
           <SavePageBookmarklet />
         </section>
       )}

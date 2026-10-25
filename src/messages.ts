@@ -2664,6 +2664,36 @@ export const SUGGESTS_UPLOAD: ReadonlySet<string> = new Set([
   "jb-bot-check",
 ]);
 
+/**
+ * **The ones of those the Chrome extension gets round**, so the add page
+ * offers it there too (src/web/ExtensionOffer.tsx). The extension adds the page
+ * as the reader's own browser shows it, so it helps wherever the sentence says
+ * the page may still open there: a site that turned the app away, a sign-in,
+ * a bot check, a private address (an intranet page the reader can see), a
+ * certificate or a redirect loop the browser gets past. Not an address that is
+ * wrong or not http(s), not a file that is not a web page (a PDF tab goes back
+ * to our server to fetch), and not a paper source's missing PDF. Greg's
+ * "only worth them using the extension if they need it", plan 261025b;
+ * tests/suggests-upload.test.ts names the decision for every code above.
+ */
+export const SUGGESTS_EXTENSION: ReadonlySet<string> = new Set([
+  "fetch-private",
+  "fetch-certificate",
+  "fetch-redirects",
+  "fetch-login",
+  "fetch-refused",
+  "fetch-empty",
+  "fetch-declined",
+  "fetch-incomplete",
+  "jb-bot-check",
+]);
+
+/** Whether a stored failure message is one of `SUGGESTS_EXTENSION`'s. */
+export function failureSuggestsExtension(message: string | undefined): boolean {
+  const code = message === undefined ? null : codeOfMessage(message);
+  return code !== null && SUGGESTS_EXTENSION.has(code);
+}
+
 /** Whether a stored failure message is one of `SUGGESTS_UPLOAD`'s. */
 export function failureSuggestsUpload(message: string | undefined): boolean {
   const code = message === undefined ? null : codeOfMessage(message);

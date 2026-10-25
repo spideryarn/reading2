@@ -58,9 +58,11 @@ mode's body is `## In short`, required, then up to two more, `## When to use it`
 in that order (`help-markdown.tsx` § `helpModeSections`, the one parser the page and the corpus
 share). Links are site paths
 (`/help/spine`, `/pricing`), so a file reads the same on GitHub and to a model handed it raw. The only
-HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Six tokens stand for facts kept in code — `{{experimental-modes}}`,
-`{{public-shelf-label}}`, `{{whats-new-label}}`, `{{max-pdf-pages}}`, `{{pages-per-article}}` and
-`{{modes-table}}` — and `help-markdown.tsx` §
+HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Seven tokens stand for facts kept in code — `{{experimental-modes}}`,
+`{{public-shelf-label}}`, `{{whats-new-label}}`, `{{max-pdf-pages}}`, `{{pages-per-article}}`,
+`{{modes-table}}` and `{{chrome-extension}}` (the extension's paragraph, whose store link exists only
+once `PRODUCTION_EXTENSION_ID` does: [chrome-extension.md § Where a reader finds
+it](chrome-extension.md#where-a-reader-finds-it)) — and `help-markdown.tsx` §
 `expandHelpTokens` gives the plain text with them filled in, for anything that wants to read Help
 rather than draw it. **A limit a reader can hit is a token, not a typed number**: the PDF page cap
 and the pages one article buys ([billing.md § A long document costs a slot per 50

@@ -42,6 +42,7 @@ import { MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { appearanceRows } from "../src/web/appearance-commands.js";
 import { besideTheModes, experimentalRows, subModeRows } from "../src/web/CommandBar.js";
+import { extensionStoreUrl } from "../src/web/extension-handoff.js";
 import {
   type Command,
   canonical,
@@ -92,6 +93,8 @@ function rows(archived: boolean): readonly Command[] {
       openComments: () => {},
       openFeedback: () => {},
       queue: { run: async () => null, lastFailure: () => null },
+      /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
+      extensionStore: extensionStoreUrl("a".repeat(32)),
     }),
     ...experimentalRows({
       on: true,
