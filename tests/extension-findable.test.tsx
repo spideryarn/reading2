@@ -25,7 +25,7 @@ vi.mock("../src/web/router.js", async (importActual) => ({
   },
 }));
 
-import { besideTheModes } from "../src/web/CommandBar.js";
+import { besideTheModes, extensionStoreHere } from "../src/web/CommandBar.js";
 import { EXTENSION_HELP_SENTENCE, EXTENSION_NOT_YET, ExtensionHelp } from "../src/web/ExtensionOffer.js";
 import { EXTENSION_STORE_URL, PRODUCTION_EXTENSION_ID, extensionStoreUrl } from "../src/web/extension-handoff.js";
 import { expandHelpTokens, helpMarkdownText, renderHelpMarkdown } from "../src/web/help/help-markdown.js";
@@ -38,6 +38,7 @@ const STORE = `https://chromewebstore.google.com/detail/${ID}`;
 
 let root: Root | null = null;
 let host: HTMLElement;
+const matchMediaBefore = Object.getOwnPropertyDescriptor(window, "matchMedia");
 
 function draw(node: Parameters<Root["render"]>[0]): HTMLElement {
   host = document.createElement("div");
@@ -51,6 +52,8 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   host?.remove();
+  if (matchMediaBefore === undefined) delete (window as { matchMedia?: unknown }).matchMedia;
+  else Object.defineProperty(window, "matchMedia", matchMediaBefore);
 });
 
 describe("the store item's id", () => {
@@ -114,6 +117,22 @@ describe("the command bar's Chrome extension row", () => {
 
   it("is not there while there is no store address", () => {
     expect(labels(null)).not.toContain("Chrome extension");
+  });
+
+  it("hands the row no address on a coarse pointer, in either store state", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({ matches: query === "(pointer: fine)", media: query }),
+    });
+    expect(extensionStoreHere(STORE)).toBe(STORE);
+    expect(extensionStoreHere(null)).toBeNull();
+
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({ matches: query === "(pointer: coarse)", media: query }),
+    });
+    expect(extensionStoreHere(STORE)).toBeNull();
+    expect(extensionStoreHere(null)).toBeNull();
   });
 
   it("opens Help's Adding an article, typed-only, just before the app pages", () => {

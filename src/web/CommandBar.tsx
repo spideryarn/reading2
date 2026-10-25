@@ -1516,7 +1516,7 @@ const extensionRow: Extract<Command, { kind: "action" }> = {
   kind: "action",
   id: "chrome-extension",
   label: "Chrome extension",
-  description: "Add the page you are reading in one press, from Chrome. How, in Help.",
+  description: "Add the page you are reading in one press, from Chrome. Opens instructions in Help.",
   aliases: ["extension", "browser extension", "chrome", "plugin", "add-on"],
   typedOnly: true,
   /* Help is words the build shipped; opening it runs nothing. */
@@ -1528,9 +1528,11 @@ const extensionRow: Extract<Command, { kind: "action" }> = {
   },
 };
 
-/** What `besideTheModes` is handed for the extension row in the running app. */
-function extensionStoreHere(): string | null {
-  return extensionDevice() ? EXTENSION_STORE_URL : null;
+/** What `besideTheModes` is handed for the extension row in the running app.
+ *  The argument lets the gate be proved in both store states without changing
+ *  the production id (tests/extension-findable.test.tsx). */
+export function extensionStoreHere(url: string | null = EXTENSION_STORE_URL): string | null {
+  return extensionDevice() ? url : null;
 }
 
 /**

@@ -1,0 +1,1191 @@
+diff --git a/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import-review-prompt.md b/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import-review-prompt.md
+new file mode 100644
+index 000000000..957e44de2
+--- /dev/null
++++ b/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import-review-prompt.md
+@@ -0,0 +1,10 @@
++You are reviewing a plan before it is built, in the Spideryarn repo (this working tree). Read-only: do not edit any file.
++
++The plan: docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md
++The ask it answers: docs/project/chrome-extension.md § What it does not do yet → Being found, and Greg's brief: make the Chrome extension findable from /help, the command bar and above all the import flow when a pasted address hits a site that turns our server away; signal it, do not push it; every place takes the store link from PRODUCTION_EXTENSION_ID in src/web/extension-handoff.ts (null today); while null each place shows nothing (or Help text without a broken link); when the id arrives, setting that constant must be the ONLY change needed.
++
++Read the code the plan touches before judging: src/web/extension-handoff.ts, src/web/UploadInstead.tsx, src/web/SavePageBookmarklet.tsx, src/web/AddPage.tsx (around UploadInstead), src/messages.ts (SUGGESTS_UPLOAD, the fetch failure sentences and codes), src/web/help/help-markdown.tsx (tokens, drawBlock, plainBlock, expandHelpTokens, targetOf), src/web/help/pages/adding-articles.md, tests/help-corpus.test.ts, src/web/CommandBar.tsx (besideTheModes, helpRow, APP_PAGES), tests/command-pick-catalogue.test.ts, tests/command-match-arguments.test.ts, docs/project/help-page.md.
++
++Look hard for: anything that would make the Overseer's one-line change insufficient (another generated/committed file or test that depends on the id; a snapshot); anything that would draw a broken or dead link while null; the right subset of failure codes for SUGGESTS_EXTENSION (read each code's sentence — which failures would the extension, which captures the page as the reader's own browser renders it, actually get round?); whether the store URL form is right; security (an off-site link from our pages, new tab handling); and whether the "corpus is always empty for the token" trade-off is the right call versus the alternatives listed. Also say if anything is simpler.
++
++Answer with a verdict (GO / GO WITH CHANGES / REWORK) and numbered findings, each with severity, evidence (file:line) and the concrete fix.
+diff --git a/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import-review-sol.md b/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import-review-sol.md
+new file mode 100644
+index 000000000..4cd3bd259
+--- /dev/null
++++ b/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import-review-sol.md
+@@ -0,0 +1,41 @@
++## Verdict: GO WITH CHANGES
++
++1. **High — The debrief contradicts the “only one change” requirement.**
++
++   Evidence: the plan promises one-line activation at [plan:18](/var/tmp/spideryarn-worktrees/extension-findable/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md:18), but later requires recording the literal ID in the project doc at [plan:95](/var/tmp/spideryarn-worktrees/extension-findable/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md:95). The existing doc already says the ID must live in both places at [chrome-extension.md:151](/var/tmp/spideryarn-worktrees/extension-findable/docs/project/chrome-extension.md:151).
++
++   Concrete fix: make `PRODUCTION_EXTENSION_ID` the sole literal. Update `chrome-extension.md` during this implementation to point to that constant without promising to copy the value into the doc. The later procedure must be exactly: change the constant, deploy. A conditional test should also accept `null` or require a 32-letter `[a-p]` ID, so a typo cannot activate dead links.
++
++2. **High — `SUGGESTS_EXTENSION` omits failures the extension can genuinely bypass.**
++
++   Evidence: the proposed set excludes `fetch-private`, `fetch-certificate`, and `fetch-redirects` at [plan:44](/var/tmp/spideryarn-worktrees/extension-findable/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md:44). Yet all three sentences explicitly say the page may open in the reader’s browser: [messages.ts:2469](/var/tmp/spideryarn-worktrees/extension-findable/src/messages.ts:2469), [messages.ts:2489](/var/tmp/spideryarn-worktrees/extension-findable/src/messages.ts:2489), [messages.ts:2503](/var/tmp/spideryarn-worktrees/extension-findable/src/messages.ts:2503). The extension accepts any HTTP(S) tab and captures its rendered DOM through `activeTab`: [handoff.ts:154](/var/tmp/spideryarn-worktrees/extension-findable/extension/src/handoff.ts:154), [manifest.ts:13](/var/tmp/spideryarn-worktrees/extension-findable/extension/manifest.ts:13), [save-page-bookmarklet.ts:99](/var/tmp/spideryarn-worktrees/extension-findable/src/web/save-page-bookmarklet.ts:99). In particular, a private intranet or localhost page is exactly something the browser can see while the server correctly refuses to fetch it.
++
++   Concrete fix: include at least:
++
++   - `fetch-private`
++   - `fetch-certificate`
++   - `fetch-redirects`
++   - `fetch-login`
++   - `fetch-refused`
++   - `fetch-empty`
++   - `fetch-declined`
++   - `fetch-incomplete`
++   - `jb-bot-check`
++
++   Continue excluding `fetch-scheme` and `fetch-type`: the extension refuses non-HTTP(S) tabs, and a PDF tab is sent back through server fetching rather than captured. Keep `fetch-address` and `fetch-paper-missing` out unless a separate product case is made. Add a table-driven test stating the decision for every `SUGGESTS_UPLOAD` code.
++
++3. **Medium — Making the Help corpus permanently empty is the wrong trade-off.**
++
++   Evidence: the plan intentionally removes the extension from the chatbot forever at [plan:52](/var/tmp/spideryarn-worktrees/extension-findable/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md:52). That breaks Help’s documented promise that every page is copied into the corpus at [help-page.md:130](/var/tmp/spideryarn-worktrees/extension-findable/docs/project/help-page.md:130). It also adds static extension keywords while the visible and searchable block is empty under `null` ([plan:65](/var/tmp/spideryarn-worktrees/extension-findable/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md:65)); Help searches keywords and body text at [help-content.tsx:38](/var/tmp/spideryarn-worktrees/extension-findable/src/web/help/help-content.tsx:38). Thus, while null, “extension” can return a page containing no extension information.
++
++   Concrete fix: use the alternative the brief expressly permits—Help text without a broken link. Keep one stable explanatory sentence visible and in `plainBlock`/`expandHelpTokens` in both states; render only the Web Store link when the URL is non-null. The generated corpus then remains stable when the ID changes, search remains honest, and the chatbot can point readers to `/help/adding-articles` once the link is live.
++
++4. **Medium — The command-bar row needs the same device gate and a pinned insertion point.**
++
++   Evidence: `ExtensionOffer` is deliberately hidden without a fine pointer at [plan:30](/var/tmp/spideryarn-worktrees/extension-findable/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md:30), but the command row is conditioned only on the URL at [plan:66](/var/tmp/spideryarn-worktrees/extension-findable/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md:66). The command bar explicitly exists on phones via its button at [CommandBar.tsx:52](/var/tmp/spideryarn-worktrees/extension-findable/src/web/CommandBar.tsx:52). Once activated, a phone would therefore get a “Chrome extension” command leading to a Help page whose install offer is hidden.
++
++   The row’s exact placement also matters: the existing test requires Changelog to remain the last page immediately before Feedback at [command-bar.test.tsx:387](/var/tmp/spideryarn-worktrees/extension-findable/tests/command-bar.test.tsx:387). Tests that pass a fake store URL into the catalogue do not protect that runtime order.
++
++   Concrete fix: at runtime pass `null` to `besideTheModes` unless `(pointer: fine)` matches, following `SavePageBookmarklet`. Insert the extension row before `APP_PAGES`, preserving Changelog’s position. Add a direct `besideTheModes` test proving null/coarse absence, fine/non-null presence, destination, and ordering.
++
++The proposed Web Store URL is correct: Chromium itself constructs item URLs as `https://chromewebstore.google.com/detail/` plus the extension ID. The fixed-origin URL and `target="_blank" rel="noopener noreferrer"` are also the right security shape, and keeping arbitrary external URLs out of `targetOf` is sound. [Chromium source](https://chromium.googlesource.com/chromium/src/+/refs/tags/135.0.7049.120/extensions/common/extension_urls.cc)
+\ No newline at end of file
+diff --git a/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md b/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md
+new file mode 100644
+index 000000000..baaae4e4c
+--- /dev/null
++++ b/docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md
+@@ -0,0 +1,136 @@
++# The Chrome extension, findable from Help, the command bar and a refused import
++
++Report `spya-xsfrsg` (Greg, admin), open question
++[q-d5ucbd](../user-feedback/questions/q-d5ucbd.md); the ask is
++[chrome-extension.md § What it does not do yet → Being found](../project/chrome-extension.md#what-it-does-not-do-yet)
++(commit f6d968c29). Greg submitted the extension to the store on 2026-10-25, Unlisted; the item id
++has not arrived.
++
++> I don't think we want to push it because it's only worth them using the extension if they need it
++> rather than something that will really help them that much if they don't.
++>
++> — Greg, 2026-10-25
++
++## What it must do
++
++- Point readers at the extension from `/help`, the command bar and, above all, the add page when a
++  pasted address failed because the site turned us away. Signal it, do not push it.
++- **One constant decides everything.** `PRODUCTION_EXTENSION_ID` in
++  `src/web/extension-handoff.ts` is `null` today. Every place takes the store link from it, and
++  while it is `null` every place draws **nothing**. When the Overseer sets it, that one line is the
++  whole change: no regenerated file, no test to update.
++
++## The design
++
++1. **`EXTENSION_STORE_URL`**, in `extension-handoff.ts` beside the id:
++   `PRODUCTION_EXTENSION_ID === null ? null : \`https://chromewebstore.google.com/detail/${id}\``.
++   The store's address for an item is `chromewebstore.google.com/detail/<id>` (a slug before the id
++   is optional, and the bare id redirects). Exported as a function of the id too
++   (`extensionStoreUrl(id)`) so a test can draw both states without changing the constant.
++2. **`ExtensionOffer`** (`src/web/ExtensionOffer.tsx`), the one component that draws the link:
++   takes `url: string | null` (default `EXTENSION_STORE_URL`) and returns `null` when it is null.
++   The link opens in a new tab (`target="_blank" rel="noopener noreferrer"`): it leaves our site,
++   and on the add page the reader's failed import is what they are standing on. Shown only where
++   the primary pointer is fine, as `SavePageBookmarklet` is: a phone or a bare iPad cannot install a
++   Chrome extension. Not narrowed to Chrome by user agent: Edge and Brave install from the Chrome
++   Web Store too, a UA sniff is the kind of guess that goes stale, and the sentence says "Chrome".
++3. **The add page, after a refusal** (`UploadInstead.tsx`). The extension line goes **above** the
++   bookmarklet, because it is the better way round (one press, nothing to upload), and the
++   bookmarklet stays for the browsers it does not reach. One sentence, quiet text, a link:
++
++   > In Chrome on a computer, the Spideryarn extension adds a page like this in one press, as your
++   > browser shows it. **Get it from the Chrome Web Store**
++
++   `UploadInstead` draws under every `SUGGESTS_UPLOAD` code. That includes codes where the
++   extension does not help (`fetch-address`, `fetch-scheme`, `fetch-private`: an address that is
++   wrong or not public). Narrowing to the refusals (`fetch-refused`, `fetch-declined`,
++   `fetch-login`, `jb-bot-check`, `fetch-empty`, `fetch-incomplete`) is the "need it" in Greg's
++   words: the offer is made only where the extension is the answer. So `UploadInstead` takes the
++   failure code and a new `SUGGESTS_EXTENSION` set in `src/messages.ts`, a subset of
++   `SUGGESTS_UPLOAD`, decides.
++   **Is the bookmarklet line also narrowed?** No: not this plan's call.
++4. **Help** (`src/web/help/pages/adding-articles.md`). Help's links must be site paths
++   (`targetOf` throws on a full URL, "how it opens is a decision to make then"), and the page is
++   Markdown, which cannot ask a constant. So a new **block token**, `{{chrome-extension}}`, alone in
++   its paragraph like `{{modes-table}}`, placed before the *Save for Spideryarn* paragraph:
++   - **drawn** (`drawBlock`): `<ExtensionOffer variant="help">`, a paragraph with the link, or
++     nothing while null;
++   - **search text** (`plainBlock`): the paragraph's words when set, nothing when null;
++   - **the chatbot's corpus** (`expandHelpTokens`): **the empty string, always**. The corpus is a
++     committed file that `tests/help-corpus.test.ts` compares; if it depended on the id, setting the
++     id would turn that test red until someone regenerates, which is not a one-line change. The cost
++     is that the Help chatbot will not volunteer the extension; it can still answer from the
++     *Save for Spideryarn* paragraph, and a reader who asks about refused sites is pointed at
++     *Adding an article*, which draws the link. Weighed below.
++   - keywords gain `extension chrome plugin add-on`, harmless either way.
++5. **The command bar**: a page row *Chrome extension* → `helpHref("adding-articles")`, description
++   "Add the page you are reading in one press, from Chrome.", aliases `extension`, `chrome`,
++   `plugin`, `add-on`, `browser extension`; present only while `EXTENSION_STORE_URL` is set. It goes
++   to Help rather than straight to the store, because a row that leaves the site is a new kind of
++   row for the bar (it navigates in-app), and Help says what the extension does before the reader
++   installs it. **The bar's row catalogue is a committed, compared file**
++   (`src/command-pick-catalogue.generated.json`, built from `besideTheModes` by
++   `tests/command-pick-catalogue.test.ts`), so a row that appears with the id would turn it red.
++   `besideTheModes` takes `extensionStore?: string | null` (default `EXTENSION_STORE_URL`), and the
++   tests that mean *every row the bar can draw* (the catalogue, the argument collision matrix, the
++   mode-alias test) pass a store address, so the catalogue holds the row in both states and the
++   collision matrix checks its aliases now. The server only ever answers for keys the browser
++   shows, so a catalogue entry the bar is not drawing yet costs nothing.
++6. **Not added**: `/features`, the footer, the shelf's add box, the landing page. Each is a push to
++   somebody who has not needed it. `/add-from-extension`'s *didn't answer* already presumes it is
++   installed. `/privacy` already describes it.
++
++## Options passed over
++
++- **Help text present while null, without a link.** The brief allows it, but the extension cannot
++  be got while the id is null (production trusts no id, and the Unlisted listing has no public
++  address), so a paragraph about it would describe something a reader cannot have.
++- **The corpus following the id**, with `src/web/extension-handoff.ts` added to the commit hook's
++  sources so the corpus regenerates in the Overseer's commit. Truer for the chatbot, but the change
++  is then two files and depends on the hook running.
++- **A Help topic page of its own** (`/help/chrome-extension`). An anchor is a promise forever, and
++  a page that draws nothing while null is a dead page in the contents. A paragraph in *Adding an
++  article*, where the problem it solves is already described, is enough.
++
++## The one-line change, for the debrief
++
++`export const PRODUCTION_EXTENSION_ID: string | null = "<the 32 letters>";` in
++`src/web/extension-handoff.ts`, then record the id in `chrome-extension.md` (a doc line, not code)
++and deploy. A test asserts that with an id every place draws the link and with `null` none does,
++using `extensionStoreUrl` and the component's `url` prop rather than the constant.
++
++## Stages
++
++1. The constant, `ExtensionOffer`, `SUGGESTS_EXTENSION`, the add page, the Help token, the command
++   bar row, tests for both states. Docs: chrome-extension.md, help-page.md (the token), ingest-queue
++   if it describes `UploadInstead`.
++2. Browser check (Sonnet subagent) of the add page after a refusal and of `/help/adding-articles`
++   with the dev id temporarily set locally, not committed.
++3. GPT Sol code review, gates, push to `dev`.
++
++## After GPT Sol's plan review (GO WITH CHANGES, four findings, all taken)
++
++[Review](261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import-review-sol.md).
++
++1. **The id has one home**: `chrome-extension.md` points at the constant rather than holding a
++   copy, so setting it is the whole change. A test refuses an id that is not 32 letters `a`–`p`, so
++   a typo cannot switch on a link to nowhere.
++2. **`SUGGESTS_EXTENSION` is wider**: `fetch-private`, `fetch-certificate` and `fetch-redirects`
++   join the refusals, since each sentence says the page may still open in the reader's browser, and
++   the extension captures whatever the tab shows (an intranet page included). Still out:
++   `fetch-address`, `fetch-scheme`, `fetch-type`, `fetch-paper-missing`. A table names the decision
++   for every `SUGGESTS_UPLOAD` code.
++3. **Help keeps its sentence in both states**, so search and the chatbot's corpus stay honest and
++   stable: one sentence on what the extension does, in the corpus and the search text always; drawn
++   with *Get it from the Chrome Web Store* when the id is set, and with *It is not in the Chrome Web
++   Store yet.* while it is null. The corpus carries only the stable sentence, so it does not move.
++4. **The command-bar row has the same fine-pointer gate** (the bar is on phones too), and goes
++   just before `APP_PAGES`, so Changelog stays the last page above Feedback.
++
++## While it was being built
++
++The id arrived mid-build: Greg's session set it (f4d796440, `eeedpogihlbbjghpanopajebiencekak`) and
++recorded it in chrome-extension.md (59000f581), and both were deployed (4b0d4dd3) before this
++landed. So finding 1's "one home" gave way to what was already there: the id is in the constant and
++in the doc, and it does not change again. The one-line property held: the merge needed no
++regenerated file, and every place switched on with it.
+diff --git a/docs/project/chrome-extension.md b/docs/project/chrome-extension.md
+index b1a880b08..1dc365499 100644
+--- a/docs/project/chrome-extension.md
++++ b/docs/project/chrome-extension.md
+@@ -17,6 +17,7 @@ the spike are [261024q](../plans/261024q-chrome-extension-one-click-add-the-page
+ - [§ How it works](#how-it-works) — the handoff, and why the extension holds no secret
+ - [§ Where the code is](#where-the-code-is)
+ - [§ Checking it](#checking-it) — the tests, and a real Chromium on the box
++- [§ Where a reader finds it](#where-a-reader-finds-it) — offered where it is needed, and switched on by one constant
+ - [§ Publishing](#publishing) — the one-time store setup (Greg's), and every update after it
+ - [§ What it does not do yet](#what-it-does-not-do-yet)
+ 
+@@ -107,6 +108,39 @@ connect over CDP and send `Extensions.triggerAction {id, targetId}` with the *ta
+ on the command line. It grants `activeTab` exactly as a click does. The plan's § Stage 0 has the
+ spike and its numbers.
+ 
++## Where a reader finds it
++
++Greg asked for it to be findable, not pushed (2026-10-25, when it went to the store):
++
++> I don't think we want to push it because it's only worth them using the extension if they need
++> it rather than something that will really help them that much if they don't.
++>
++> — Greg, 2026-10-25
++
++**The store item is `eeedpogihlbbjghpanopajebiencekak`** (submitted for review 2026-10-25,
++Unlisted; public, and in `PRODUCTION_EXTENSION_ID` since f4d796440).
++
++So it is offered in three places, each where a reader needs it, and nowhere else (not `/features`,
++the footer, the shelf or the landing page). Plan
++[261025b](../plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md).
++
++- **The add page, under an import a site turned away**: a sentence and *Get it from the Chrome Web
++  Store*, above the *Save for Spideryarn* bookmarklet (`UploadInstead.tsx`). Only for the failures
++  it gets round, where the page may still open in the reader's browser: `SUGGESTS_EXTENSION` in
++  `src/messages.ts`, a subset of `SUGGESTS_UPLOAD`, with the decision for every code in
++  `tests/suggests-upload.test.ts`.
++- **Help, *Adding an article***: the `{{chrome-extension}}` token, one sentence in both states, then
++  the store link, or *It is not in the Chrome Web Store yet.* Search and the Help chatbot get the
++  sentence only, so neither generated file moves when the id is set.
++- **The command bar**: a typed-only *Chrome extension* row (`extension`, `chrome`, `plugin`, …) that
++  opens that Help page.
++
++The add page and the bar show it only to a fine pointer, as the bookmarklet is: a phone cannot
++install it. **Every one takes its link from `EXTENSION_STORE_URL` in
++[`src/web/extension-handoff.ts`](../../src/web/extension-handoff.ts), built from
++`PRODUCTION_EXTENSION_ID`**, and draws nothing of it while that is `null`
++(`ExtensionOffer.tsx`, `tests/extension-findable.test.tsx`).
++
+ ## Publishing
+ 
+ ### Once, by Greg
+@@ -128,9 +162,13 @@ spike and its numbers.
+    [`extension/store/listing.md`](../../extension/store/listing.md), *Distribution* → Unlisted, and
+    press *Submit for review*.
+ 3. **Tell an agent the item id** (the 32 letters in the dashboard's address and on the item's
+-   page). It goes into `PRODUCTION_EXTENSION_ID` in `src/web/extension-handoff.ts`, and the web app
+-   is deployed, so that production asks the published extension. Until then the extension
+-   installs but the Spideryarn tab says it did not answer.
++   page). **Setting it is one line and the whole change**:
++   `export const PRODUCTION_EXTENSION_ID: string | null = "<the id>";` in
++   `src/web/extension-handoff.ts`, then deploy. That makes production ask the published extension
++   and switches on every place in § Where a reader finds it. Done on 2026-10-25 (f4d796440); the id is
++   in § Where a reader finds it. `tests/extension-findable.test.tsx` refuses anything but 32
++   letters `a`–`p`. Until then the extension installs but the Spideryarn tab says it
++   did not answer.
+ 4. **For updates without the dashboard** (optional): in Google Cloud, a project with the *Chrome
+    Web Store API* enabled and a service account with no roles; its email added under *Account* in
+    the store dashboard; a JSON key for it downloaded to a path outside the repo, `chmod 600`. Then
+@@ -150,18 +188,6 @@ new permission is a product decision, not a line in the manifest.
+ 
+ ## What it does not do yet
+ 
+-- **Being found** (asked 2026-10-25, when it was submitted to the store; handed to the Overseer).
+-  The store item id is public, so it goes in this doc as well as in `PRODUCTION_EXTENSION_ID`:
+-  **`eeedpogihlbbjghpanopajebiencekak`** (submitted for review 2026-10-25, Unlisted).
+-  Readers need a way to find the extension: in `/help`, in the command bar, and above all in the
+-  import flow, so that when a pasted address hits a blocker (a site that turns our server away)
+-  the reader is told they can add it with the extension instead, plus anywhere else it naturally
+-  belongs. Signal it, do not push it:
+-
+-  > I don't think we want to push it because it's only worth them using the extension if they need
+-  > it rather than something that will really help them that much if they don't.
+-  >
+-  > — Greg, 2026-10-25
+ - **A passage selected, then a chat about it**, and **why you are reading it, asked on the
+   publisher's page**: Greg's later ideas. The add page the extension lands on already has the
+   purpose box.
+diff --git a/docs/project/help-page.md b/docs/project/help-page.md
+index ecbe13b16..f62803c41 100644
+--- a/docs/project/help-page.md
++++ b/docs/project/help-page.md
+@@ -58,9 +58,11 @@ mode's body is `## In short`, required, then up to two more, `## When to use it`
+ in that order (`help-markdown.tsx` § `helpModeSections`, the one parser the page and the corpus
+ share). Links are site paths
+ (`/help/spine`, `/pricing`), so a file reads the same on GitHub and to a model handed it raw. The only
+-HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Six tokens stand for facts kept in code — `{{experimental-modes}}`,
+-`{{public-shelf-label}}`, `{{whats-new-label}}`, `{{max-pdf-pages}}`, `{{pages-per-article}}` and
+-`{{modes-table}}` — and `help-markdown.tsx` §
++HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Seven tokens stand for facts kept in code — `{{experimental-modes}}`,
++`{{public-shelf-label}}`, `{{whats-new-label}}`, `{{max-pdf-pages}}`, `{{pages-per-article}}`,
++`{{modes-table}}` and `{{chrome-extension}}` (the extension's paragraph, whose store link exists only
++once `PRODUCTION_EXTENSION_ID` does: [chrome-extension.md § Where a reader finds
++it](chrome-extension.md#where-a-reader-finds-it)) — and `help-markdown.tsx` §
+ `expandHelpTokens` gives the plain text with them filled in, for anything that wants to read Help
+ rather than draw it. **A limit a reader can hit is a token, not a typed number**: the PDF page cap
+ and the pages one article buys ([billing.md § A long document costs a slot per 50
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index 3a66f2108..6d22f6146 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -2418,6 +2418,9 @@ its addresses made absolute (in-page `#` links left alone) and what may be a cre
+ the reader to upload here. It makes no request, so the
+ upload path is unchanged ([`save-page-bookmarklet.ts`](../../src/web/save-page-bookmarklet.ts),
+ [261017b](../plans/261017b-a-refused-site-the-free-copy-and-the-bookmarklet-after-greg-s-reply.md)).
++Above it, for the failures the Chrome extension gets round (`SUGGESTS_EXTENSION`), the picker offers
++the extension, once its store item exists:
++[chrome-extension.md § Where a reader finds it](chrome-extension.md#where-a-reader-finds-it).
+ 
+ ## The one security check
+ 
+diff --git a/src/messages.ts b/src/messages.ts
+index 31c76fa40..e1a7d908d 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -2664,6 +2664,36 @@ export const SUGGESTS_UPLOAD: ReadonlySet<string> = new Set([
+   "jb-bot-check",
+ ]);
+ 
++/**
++ * **The ones of those the Chrome extension gets round**, so the add page
++ * offers it there too (src/web/ExtensionOffer.tsx). The extension adds the page
++ * as the reader's own browser shows it, so it helps wherever the sentence says
++ * the page may still open there: a site that turned the app away, a sign-in,
++ * a bot check, a private address (an intranet page the reader can see), a
++ * certificate or a redirect loop the browser gets past. Not an address that is
++ * wrong or not http(s), not a file that is not a web page (a PDF tab goes back
++ * to our server to fetch), and not a paper source's missing PDF. Greg's
++ * "only worth them using the extension if they need it", plan 261025b;
++ * tests/suggests-upload.test.ts names the decision for every code above.
++ */
++export const SUGGESTS_EXTENSION: ReadonlySet<string> = new Set([
++  "fetch-private",
++  "fetch-certificate",
++  "fetch-redirects",
++  "fetch-login",
++  "fetch-refused",
++  "fetch-empty",
++  "fetch-declined",
++  "fetch-incomplete",
++  "jb-bot-check",
++]);
++
++/** Whether a stored failure message is one of `SUGGESTS_EXTENSION`'s. */
++export function failureSuggestsExtension(message: string | undefined): boolean {
++  const code = message === undefined ? null : codeOfMessage(message);
++  return code !== null && SUGGESTS_EXTENSION.has(code);
++}
++
+ /** Whether a stored failure message is one of `SUGGESTS_UPLOAD`'s. */
+ export function failureSuggestsUpload(message: string | undefined): boolean {
+   const code = message === undefined ? null : codeOfMessage(message);
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index 11fe466a8..384b514aa 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -57,6 +57,7 @@ import {
+   ADDING_SENDS_TEXT_AWAY,
+   codeOfMessage,
+   DIRECT_ADD_SENT_TEXT_AWAY,
++  failureSuggestsExtension,
+   failureSuggestsUpload,
+   UPLOAD_STILL_ARRIVING,
+   ADD_IMPORT_LOST,
+@@ -1947,7 +1948,7 @@ export function AddPage({
+         isImportJob(job) &&
+         job.url !== undefined &&
+         failureSuggestsUpload(job.error) && (
+-        <UploadInstead />
++        <UploadInstead extension={failureSuggestsExtension(job.error)} />
+       )}
+ 
+       {/* **The tab is the worker, said where somebody is watching it work.**
+diff --git a/src/web/CommandBar.tsx b/src/web/CommandBar.tsx
+index 5d5ceac67..c5af6d4d8 100644
+--- a/src/web/CommandBar.tsx
++++ b/src/web/CommandBar.tsx
+@@ -226,6 +226,9 @@ import { voiceClass } from "./voice.js";
+ import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
+ import { dictationReporter } from "./dictation-report.js";
+ import { findHref } from "./search-hrefs.js";
++import { EXTENSION_STORE_URL } from "./extension-handoff.js";
++import { extensionDevice } from "./ExtensionOffer.js";
++import { helpHref } from "./help/help-anchors.js";
+ 
+ /**
+  * **The article the bar was opened over**, or `undefined` where there is none.
+@@ -416,6 +419,7 @@ export function besideTheModes({
+   openComments,
+   openFeedback,
+   queue,
++  extensionStore,
+ }: {
+   article: CommandBarArticle | undefined;
+   /** The Dock drawer's `onPanel`, already bound to `"questions"`, or absent. */
+@@ -424,6 +428,9 @@ export function besideTheModes({
+   openFeedback: (() => void) | null;
+   /** The job queue the *Run again* rows post through — `RerunQueue`. */
+   queue: RerunQueue;
++  /** `EXTENSION_STORE_URL`, or `null` on a device the extension is not for
++   *  (§ `extensionRow`). Tests that mean every row the bar can draw pass one. */
++  extensionStore: string | null;
+ }): readonly Command[] {
+   return [
+     ...(article === undefined ? [] : articleRows(article)),
+@@ -467,6 +474,9 @@ export function besideTheModes({
+             },
+           } as const,
+         ]),
++    /* Before the app pages, so the changelog stays the last page above
++       Feedback (tests/command-bar.test.tsx). */
++    ...(extensionStore === null ? [] : [extensionRow]),
+     ...APP_PAGES,
+     ...(openFeedback === null
+       ? []
+@@ -1486,6 +1496,43 @@ function helpRow(href: string | undefined): Command {
+   };
+ }
+ 
++/**
++ * **The Chrome extension, typed-only** — for a reader who goes looking for it
++ * by name, not a row the bar opens on: Greg asked for it to be findable, not
++ * pushed (ExtensionOffer.tsx, plan 261025b). It opens Help's *Adding an
++ * article*, which says what the extension does and links to the store, rather
++ * than leaving the site from a row.
++ *
++ * **An action, not a page row, though all it does is navigate**: the picker
++ * gives every `/help/…` page one key (command-match.ts § `pickKey`), so a page
++ * row here would be the Help row to the server, and two rows in one context
++ * may not share an id (tests/command-pick-catalogue.test.ts).
++ *
++ * Drawn only once the store item exists and on a device that can install it
++ * (`extensionDevice`); the picker's catalogue always holds it, so setting the
++ * id moves no generated file.
++ */
++const extensionRow: Extract<Command, { kind: "action" }> = {
++  kind: "action",
++  id: "chrome-extension",
++  label: "Chrome extension",
++  description: "Add the page you are reading in one press, from Chrome. How, in Help.",
++  aliases: ["extension", "browser extension", "chrome", "plugin", "add-on"],
++  typedOnly: true,
++  /* Help is words the build shipped; opening it runs nothing. */
++  generates: false,
++  opensOnly: true,
++  run: () => {
++    navigate(helpHref("adding-articles"));
++    return CLOSE;
++  },
++};
++
++/** What `besideTheModes` is handed for the extension row in the running app. */
++function extensionStoreHere(): string | null {
++  return extensionDevice() ? EXTENSION_STORE_URL : null;
++}
++
+ /**
+  * **The app's own pages, which are the same wherever the bar is opened.**
+  *
+@@ -2068,6 +2115,8 @@ export function CommandBar({
+   /* The appearance in force, for which of its three rows is marked `current`
+      (appearance-commands.ts). The store's own hook, as /profile reads it. */
+   const appearance = useAppearance();
++  /* Read once: the pointer is the device's and does not change under the bar. */
++  const [extensionStore] = useState(extensionStoreHere);
+   const pickable = useMemo(
+     () => [
+       ...modes.map(modeCommand),
+@@ -2082,7 +2131,7 @@ export function CommandBar({
+           ? structureInSearch(article?.search ?? "")
+           : undefined,
+       }),
+-      ...besideTheModes({ article, openComments, openFeedback, queue }),
++      ...besideTheModes({ article, openComments, openFeedback, queue, extensionStore }),
+       /* Typed-only, so where it sits matters only on a tie — and there the
+          page's own rows should win. */
+       ...experimentalRows(experimental),
+@@ -2090,7 +2139,7 @@ export function CommandBar({
+          the choice is the device's, and the write is synchronous. */
+       ...appearanceRows(appearance, setAppearance),
+     ],
+-    [modes, experimental, diagram, article, openComments, openFeedback, queue, appearance],
++    [modes, experimental, diagram, article, openComments, openFeedback, queue, appearance, extensionStore],
+   );
+   /**
+    * **The administrator's rows, after everything else** (admin-commands.ts,
+diff --git a/src/web/ExtensionOffer.tsx b/src/web/ExtensionOffer.tsx
+new file mode 100644
+index 000000000..c38d34050
+--- /dev/null
++++ b/src/web/ExtensionOffer.tsx
+@@ -0,0 +1,70 @@
++/**
++ * **Where a reader is told about the Chrome extension, and the one link to it.**
++ * Greg asked for it to be findable, not pushed (docs/project/chrome-extension.md
++ * § Being found; plan docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md):
++ *
++ * > I don't think we want to push it because it's only worth them using the
++ * > extension if they need it
++ *
++ * So it is offered where a reader needs it: under an import a site turned
++ * away (`UploadInstead`), in Help's *Adding an article*, and as a typed-only
++ * row in the command bar. Every one takes the link from `EXTENSION_STORE_URL`,
++ * so setting `PRODUCTION_EXTENSION_ID` is the whole change when the store item
++ * exists. The `url` prop is for tests, which draw both states without
++ * changing the constant.
++ *
++ * The link leaves our site, so it opens a new tab with no opener: on the add
++ * page the failed import is what the reader is standing on.
++ */
++import { useState } from "react";
++
++import { EXTENSION_STORE_URL } from "./extension-handoff.js";
++import { media } from "./media.js";
++
++export const EXTENSION_STORE_LABEL = "Get it from the Chrome Web Store";
++
++/** Help's sentence, the same in both states, so search and the Help chatbot's corpus do not move when the id is set. */
++export const EXTENSION_HELP_SENTENCE =
++  "In Chrome on a computer, the Spideryarn extension adds the page you are looking at in one press, as your browser shows it, with nothing to save or upload.";
++
++/** What Help says after the sentence while there is no store item. */
++export const EXTENSION_NOT_YET = "It is not in the Chrome Web Store yet.";
++
++/**
++ * **Whether this device is one the extension is for.** A mouse or a trackpad,
++ * as `SavePageBookmarklet` asks: a phone or a bare iPad cannot install a Chrome
++ * extension. Not narrowed by user agent: Edge and Brave install from the
++ * Chrome Web Store too, and the sentence says Chrome.
++ */
++export function extensionDevice(): boolean {
++  return media("(pointer: fine)");
++}
++
++function StoreLink({ url }: { url: string }) {
++  return (
++    <a href={url} target="_blank" rel="noopener noreferrer">
++      {EXTENSION_STORE_LABEL}
++    </a>
++  );
++}
++
++/** Under a failed import (UploadInstead.tsx): nothing while there is no item, or on a phone. */
++export function ExtensionOffer({ url = EXTENSION_STORE_URL }: { url?: string | null }) {
++  const [device] = useState(extensionDevice);
++  if (url === null || !device) return null;
++  return (
++    <p className="tw:mt-3 tw:text-sm tw:text-muted-foreground">
++      In Chrome on a computer, the Spideryarn extension adds a page like this in one press, as your browser
++      shows it, with nothing to save or upload. <StoreLink url={url} />
++    </p>
++  );
++}
++
++/** Help's paragraph (`{{chrome-extension}}`, help-markdown.tsx): the sentence, then the link or "not yet". */
++export function ExtensionHelp({ url = EXTENSION_STORE_URL }: { url?: string | null }) {
++  return (
++    <p>
++      {EXTENSION_HELP_SENTENCE} {url === null ? EXTENSION_NOT_YET : <StoreLink url={url} />}
++    </p>
++  );
++}
+diff --git a/src/web/UploadInstead.tsx b/src/web/UploadInstead.tsx
+index 36905604a..4712feae7 100644
+--- a/src/web/UploadInstead.tsx
++++ b/src/web/UploadInstead.tsx
+@@ -15,12 +15,18 @@
+  * navigates to `/add/upload/<id>` exactly as the shelf's Add does. Nothing here
+  * uploads anything of its own. The caller decides when to draw it, from
+  * `failureSuggestsUpload` in src/messages.ts.
++ *
++ * **Above the bookmarklet, the Chrome extension**, where it gets round the
++ * failure (`extension`, from `failureSuggestsExtension`): one press, nothing to
++ * save or upload, so it is the better way round where it reaches. It draws
++ * nothing until the store item exists (ExtensionOffer.tsx, plan 261025b).
+  */
+ import { Button } from "@/components/ui/button";
++import { ExtensionOffer } from "./ExtensionOffer.js";
+ import { SavePageBookmarklet } from "./SavePageBookmarklet.js";
+ import { UploadPicker } from "./UploadPicker.js";
+ 
+-export function UploadInstead() {
++export function UploadInstead({ extension }: { extension: boolean }) {
+   return (
+     <UploadPicker single>
+       {(slots) => (
+@@ -37,6 +43,7 @@ export function UploadInstead() {
+             )}
+           </div>
+           {slots.uploadStatus}
++          {extension && <ExtensionOffer />}
+           <SavePageBookmarklet />
+         </section>
+       )}
+diff --git a/src/web/extension-handoff.ts b/src/web/extension-handoff.ts
+index f41658436..937b922d9 100644
+--- a/src/web/extension-handoff.ts
++++ b/src/web/extension-handoff.ts
+@@ -25,9 +25,21 @@ import { savedSource } from "../urls.js";
+  * The store's id for the published extension (the Chrome Web Store item Greg
+  * created on 2026-10-25, Unlisted). It is public; docs/project/chrome-extension.md
+  * records it too.
++ *
++ * **Every place that points a reader at the extension takes its link from
++ * `EXTENSION_STORE_URL` below**, and draws nothing of it if this is `null`
++ * (plan 261025b), so a change of id is this one line.
+  */
+ export const PRODUCTION_EXTENSION_ID: string | null = "eeedpogihlbbjghpanopajebiencekak";
+ 
++/** The store's page for an item: Chromium builds it as this prefix plus the id. */
++export function extensionStoreUrl(id: string | null): string | null {
++  return id === null ? null : `https://chromewebstore.google.com/detail/${id}`;
++}
++
++/** Where a reader installs the extension, or `null` while there is no item. */
++export const EXTENSION_STORE_URL: string | null = extensionStoreUrl(PRODUCTION_EXTENSION_ID);
++
+ /** extension/manifest.ts § `DEV_EXTENSION_ID`, held equal by
+  *  tests/extension-handoff.test.ts. Trusted only by a dev build of this app,
+  *  because its key is public and anybody can load an extension with it. */
+diff --git a/src/web/help/help-markdown.tsx b/src/web/help/help-markdown.tsx
+index fb1b50c58..0f21657d3 100644
+--- a/src/web/help/help-markdown.tsx
++++ b/src/web/help/help-markdown.tsx
+@@ -46,7 +46,7 @@
+  *
+  * ## The tokens
+  *
+- * Six facts live in code and would go stale in prose, so a file names them:
++ * Seven facts live in code and would go stale in prose, so a file names them:
+  *
+  * | token | stands for |
+  * |---|---|
+@@ -56,8 +56,15 @@
+  * | `{{max-pdf-pages}}` | `MAX_PAGES`, the longest PDF we take (src/uploads.ts) |
+  * | `{{pages-per-article}}` | `PAGES_PER_SLOT`, the pages one article's worth buys |
+  * | `{{modes-table}}`, alone in a paragraph | the *Which mode when* table |
++ * | `{{chrome-extension}}`, alone in a paragraph | the Chrome extension's paragraph and store link (ExtensionOffer.tsx § `ExtensionHelp`) |
+  *
+- * All but the table are replaced inside a run of text **after** parsing, so a
++ * **The extension's paragraph is a token because its link is not a path on
++ * this site** (`targetOf` refuses one) and exists only once the store item
++ * does: `PRODUCTION_EXTENSION_ID`, plan 261025b. Its sentence is the same in
++ * both states, and only that sentence reaches the search text and the
++ * chatbot's corpus, so setting the id moves no generated file.
++ *
++ * All but the two block tokens are replaced inside a run of text **after** parsing, so a
+  * label can never be read as Markdown. An unknown token throws.
+  */
+ import type { ReactNode } from "react";
+@@ -69,6 +76,7 @@ import { MODE_CATALOG } from "../../mode-catalog.js";
+ import { MODES } from "../../modes.js";
+ import { MAX_PAGES, PAGES_PER_SLOT } from "../../uploads.js";
+ import { MODE_LABEL } from "../../title-text.js";
++import { EXTENSION_HELP_SENTENCE, ExtensionHelp } from "../ExtensionOffer.js";
+ import { CHANGELOG_LABEL, HELP_HREF } from "../router.js";
+ import { helpHref, resolveHelpAnchor, type HelpAnchor } from "./help-anchors.js";
+ import { MODE_WHEN, ModesTable } from "./help-mode-when.js";
+@@ -97,6 +105,10 @@ const TEXT_TOKENS: Readonly<Record<string, () => string>> = {
+ };
+ 
+ const TABLE_TOKEN = "modes-table";
++const EXTENSION_TOKEN = "chrome-extension";
++/** The tokens that are a paragraph of their own, never a word in one. */
++const BLOCK_TOKENS = [TABLE_TOKEN, EXTENSION_TOKEN] as const;
++type BlockToken = (typeof BLOCK_TOKENS)[number];
+ const TOKEN = /\{\{([^{}]*)\}\}/g;
+ 
+ /** One text token's words, or a throw naming it. */
+@@ -104,8 +116,8 @@ function textToken(name: string, where: string): string {
+   const read = Object.hasOwn(TEXT_TOKENS, name) ? TEXT_TOKENS[name] : undefined;
+   if (read === undefined) {
+     throw new Error(
+-      name === TABLE_TOKEN
+-        ? `Help page ${where}: {{${TABLE_TOKEN}}} must be alone in its own paragraph`
++      (BLOCK_TOKENS as readonly string[]).includes(name)
++        ? `Help page ${where}: {{${name}}} must be alone in its own paragraph`
+         : `Help page ${where}: unknown token {{${name}}}`,
+     );
+   }
+@@ -141,15 +153,18 @@ function modesTableMarkdown(): string {
+  * component. `where` is only for the message if a token is unknown.
+  */
+ export function expandHelpTokens(raw: string, where = "(text)"): string {
+-  return expand(raw, where, (name) => (name === TABLE_TOKEN ? modesTableMarkdown() : textToken(name, where)));
++  return expand(raw, where, (name) =>
++    name === TABLE_TOKEN ? modesTableMarkdown() : name === EXTENSION_TOKEN ? EXTENSION_HELP_SENTENCE : textToken(name, where),
++  );
+ }
+ 
+ /* ───────────────────────────── shared reading ───────────────────────────── */
+ 
+-/** A paragraph that is the table's token and nothing else. */
+-function isTableToken(node: Paragraph): boolean {
++/** The block token a paragraph is and nothing else, or `null`. */
++function blockToken(node: Paragraph): BlockToken | null {
+   const only = node.children.length === 1 ? node.children[0] : undefined;
+-  return only?.type === "text" && only.value.trim() === `{{${TABLE_TOKEN}}}`;
++  if (only?.type !== "text") return null;
++  return BLOCK_TOKENS.find((name) => only.value.trim() === `{{${name}}}`) ?? null;
+ }
+ 
+ /** A soft line break in the file is a space on the page. */
+@@ -388,7 +403,9 @@ function HelpFigure({ image, alt, caption }: Figure) {
+ function drawBlock(node: RootContent, key: number, ctx: Ctx): ReactNode {
+   switch (node.type) {
+     case "paragraph": {
+-      if (isTableToken(node)) return <ModesTable key={key} />;
++      const token = blockToken(node);
++      if (token === TABLE_TOKEN) return <ModesTable key={key} />;
++      if (token === EXTENSION_TOKEN) return <ExtensionHelp key={key} />;
+       const figure = figureOf(node, ctx.where);
+       if (figure !== null) return <HelpFigure key={key} {...figure} />;
+       return <p key={key}>{drawInlines(node.children, ctx)}</p>;
+@@ -539,7 +556,9 @@ function plainList(list: List, where: string): string[] {
+ function plainBlock(node: RootContent, where: string): string[] {
+   switch (node.type) {
+     case "paragraph": {
+-      if (isTableToken(node)) return MODES.map((m) => `${MODE_LABEL[m]}: reach for it when ${MODE_WHEN[m]}`);
++      const token = blockToken(node);
++      if (token === TABLE_TOKEN) return MODES.map((m) => `${MODE_LABEL[m]}: reach for it when ${MODE_WHEN[m]}`);
++      if (token === EXTENSION_TOKEN) return [EXTENSION_HELP_SENTENCE];
+       /* A picture is its caption: the words a reader can search for. */
+       const figure = figureOf(node, where);
+       if (figure !== null) return [figure.caption];
+diff --git a/src/web/help/pages/adding-articles.md b/src/web/help/pages/adding-articles.md
+index bdb2805a6..026ba3943 100644
+--- a/src/web/help/pages/adding-articles.md
++++ b/src/web/help/pages/adding-articles.md
+@@ -1,7 +1,7 @@
+ ---
+ title: Adding an article
+ summary: How to add an article from a web address or a file, and what to try when one will not come in.
+-keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet bookmark save for spideryarn refused blocked bot check new article stop cancel give up
++keywords: add import paste url link pdf upload file html save page word docx markdown md text txt paywall failed error stuck bookmarklet bookmark save for spideryarn extension chrome plugin add-on refused blocked bot check new article stop cancel give up
+ related: shelf, plans, first-article
+ ---
+ 
+@@ -17,22 +17,25 @@ authors and abstract read; open one and press **Read this** when you want the wh
+ You can also add a page from its address: go to `/add/` followed by the full URL, for example
+ `spideryarn.com/add/https://example.com/essay`. That makes a bookmarklet easy.
+ 
+-Some sites turn Spideryarn away but let you in. For those there is **Save for Spideryarn**, a
+-bookmark that saves the page you are looking at as a web page file, which you then upload. You find
+-it under the upload button when an article fails to come in for that reason: drag it to your
+-browser's bookmarks bar (on a computer; phones and tablets usually have no bookmarks bar). On the
++Some sites turn Spideryarn away but let you in. For those there are two ways round.
++
++{{chrome-extension}}
++
++In any browser on a computer there is **Save for Spideryarn**, a bookmark that saves the page you
++are looking at as a web page file, which you then upload. You find it under the upload button when
++an article fails to come in for that reason: drag it to your browser's bookmarks bar. On the
+ article's page, click the bookmark, then upload the file it saved.
+ 
+-It saves the page as you see it, so anything personal on it, such as your name in the site's menu,
+-can come too. It leaves out executable scripts, hidden and password fields, and values in ordinary
++Both take the page as you see it, so anything personal on it, such as your name in the site's menu,
++can come too. They leave out executable scripts, hidden and password fields, and values in ordinary
+ text inputs, but text in an editor on the page can still come with it. The saved source file stays
+ private even if you share the article; anything Spideryarn extracts into the article is part of
+ what you share. Pictures may not come through, because they are fetched from the same site that
+ turned us away.
+ 
+-The file also remembers the address it was saved from, so the article says **Saved from** and the
++Either way, the page remembers the address it was saved from, so the article says **Saved from** and the
+ site's name under its title, as a link back to that page. Spideryarn never fetches that address:
+-it is the file's word for where it came from. If you share the article, readers see that line too,
++it is the page's word for where it came from. If you share the article, readers see that line too,
+ unless the address has a `?` in it, which can carry a sign-in, so it is then left off. Pasting the
+ same address later opens the article you already uploaded instead of trying the site again.
+ 
+diff --git a/tests/add-page-upload-instead.test.tsx b/tests/add-page-upload-instead.test.tsx
+index 00bc8e008..b6caa5725 100644
+--- a/tests/add-page-upload-instead.test.tsx
++++ b/tests/add-page-upload-instead.test.tsx
+@@ -8,7 +8,9 @@
+  *  - a site that refused the app (`[fetch-refused]`) gets the control; a
+  *    timeout, whose sentence says to try again, and a running import do not;
+  *  - choosing a file and pressing Add hands it to the shelf's own upload
+- *    engine and goes to `/add/upload/<id>`, as the shelf's Add does.
++ *    engine and goes to `/add/upload/<id>`, as the shelf's Add does;
++ *  - the Chrome extension is offered above the bookmarklet only where it gets
++ *    round the failure, and only once there is a store item (plan 261025b).
+  */
+ import { act, createElement } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+@@ -88,6 +90,18 @@ vi.mock("../src/web/batchUpload.js", async (importActual) => {
+   };
+ });
+ 
++/** `EXTENSION_STORE_URL`, as each test wants it: `null` is today's production. */
++let storeUrl: string | null = null;
++vi.mock("../src/web/extension-handoff.js", async (importActual) => {
++  const actual = await importActual<typeof import("../src/web/extension-handoff.js")>();
++  return {
++    ...actual,
++    get EXTENSION_STORE_URL() {
++      return storeUrl;
++    },
++  };
++});
++
+ const navigations: string[] = [];
+ vi.mock("../src/web/router.js", async (importActual) => ({
+   ...(await importActual<typeof import("../src/web/router.js")>()),
+@@ -171,6 +185,12 @@ beforeEach(() => {
+   forgotten = 0;
+   batched.length = 0;
+   navigations.length = 0;
++  storeUrl = null;
++  /* A mouse: the extension and the bookmarklet are offered only to a fine pointer. */
++  Object.defineProperty(window, "matchMedia", {
++    configurable: true,
++    value: (query: string) => ({ matches: query === "(pointer: fine)", media: query }),
++  });
+   host = document.createElement("div");
+   document.body.appendChild(host);
+   root = createRoot(host);
+@@ -275,3 +295,46 @@ describe("Upload a file instead, on the add page", () => {
+     expect(navigations).toContain(addUploadHref("up-1"));
+   });
+ });
++
++describe("the Chrome extension, under a failed import (plan 261025b)", () => {
++  const STORE = "https://chromewebstore.google.com/detail/abcdefghijklmnopabcdefghijklmnop";
++  const storeLink = () => control()?.querySelector<HTMLAnchorElement>(`a[href="${STORE}"]`) ?? null;
++
++  it("is offered under a site that refused the app, opening the store in a new tab", async () => {
++    storeUrl = STORE;
++    await show(makeJob("error", fetchFailed("forbidden", 403).message));
++    const link = storeLink();
++    expect(link?.textContent).toBe("Get it from the Chrome Web Store");
++    expect(link?.target).toBe("_blank");
++    expect(link?.rel).toBe("noopener noreferrer");
++    /* Above the bookmarklet: the better way round where it reaches. */
++    const bookmarklet = [...(control()?.querySelectorAll("a") ?? [])].find((a) => a.textContent?.includes("Save for Spideryarn"));
++    expect(bookmarklet).toBeDefined();
++    expect(link!.compareDocumentPosition(bookmarklet!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
++  });
++
++  it("is not offered where it would not help, though the upload is", async () => {
++    storeUrl = STORE;
++    await show(makeJob("error", fetchFailed("invalid-url", null).message));
++    expect(control()).not.toBeNull();
++    expect(storeLink()).toBeNull();
++    expect(control()?.textContent).not.toContain("Chrome");
++  });
++
++  it("is not offered while there is no store item", async () => {
++    await show(makeJob("error", fetchFailed("forbidden", 403).message));
++    expect(control()).not.toBeNull();
++    expect(control()?.textContent).not.toContain("Chrome");
++  });
++
++  it("is not offered on a phone", async () => {
++    storeUrl = STORE;
++    Object.defineProperty(window, "matchMedia", {
++      configurable: true,
++      value: (query: string) => ({ matches: query === "(pointer: coarse)", media: query }),
++    });
++    await show(makeJob("error", fetchFailed("forbidden", 403).message));
++    expect(control()).not.toBeNull();
++    expect(storeLink()).toBeNull();
++  });
++});
+diff --git a/tests/command-bar-guide-row.test.ts b/tests/command-bar-guide-row.test.ts
+index bb48f9fba..d30f1c055 100644
+--- a/tests/command-bar-guide-row.test.ts
++++ b/tests/command-bar-guide-row.test.ts
+@@ -28,6 +28,7 @@ function rows(openGuide?: () => { kind: "close" }): readonly Command[] {
+     openComments: undefined,
+     openFeedback: null,
+     queue,
++    extensionStore: null,
+   });
+ }
+ 
+diff --git a/tests/command-match-arguments.test.ts b/tests/command-match-arguments.test.ts
+index 8665dba5e..f912a8508 100644
+--- a/tests/command-match-arguments.test.ts
++++ b/tests/command-match-arguments.test.ts
+@@ -38,6 +38,7 @@ import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "../
+ import { subModesOf } from "../src/web/sub-modes.js";
+ import { appearanceRows } from "../src/web/appearance-commands.js";
+ import { besideTheModes, experimentalCommand } from "../src/web/CommandBar.js";
++import { extensionStoreUrl } from "../src/web/extension-handoff.js";
+ import { FIND_MORE_MODES } from "../src/web/find-more.js";
+ 
+ const close = () => ({ kind: "close" }) as const;
+@@ -195,6 +196,8 @@ function everyRow(): readonly Command[] {
+       openComments: () => {},
+       openFeedback: () => {},
+       queue: { run: async () => null, lastFailure: () => null },
++      /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
++      extensionStore: extensionStoreUrl("a".repeat(32)),
+     }),
+     ...METADATA_RERUN_STEPS.map((step) => rerunCommand(step, close)),
+     ...SECTION_ROWS.map((row) => sectionCommand(row, close)),
+diff --git a/tests/command-match-mode-aliases.test.ts b/tests/command-match-mode-aliases.test.ts
+index 14afcdb5a..d12833fec 100644
+--- a/tests/command-match-mode-aliases.test.ts
++++ b/tests/command-match-mode-aliases.test.ts
+@@ -42,6 +42,7 @@ import { MODES, type Mode } from "../src/modes.js";
+ import { MODE_LABEL } from "../src/title-text.js";
+ import { appearanceRows } from "../src/web/appearance-commands.js";
+ import { besideTheModes, experimentalRows, subModeRows } from "../src/web/CommandBar.js";
++import { extensionStoreUrl } from "../src/web/extension-handoff.js";
+ import {
+   type Command,
+   canonical,
+@@ -92,6 +93,8 @@ function rows(archived: boolean): readonly Command[] {
+       openComments: () => {},
+       openFeedback: () => {},
+       queue: { run: async () => null, lastFailure: () => null },
++      /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
++      extensionStore: extensionStoreUrl("a".repeat(32)),
+     }),
+     ...experimentalRows({
+       on: true,
+diff --git a/tests/command-pick-catalogue.test.ts b/tests/command-pick-catalogue.test.ts
+index 05e24bbf2..3c8d3bdd4 100644
+--- a/tests/command-pick-catalogue.test.ts
++++ b/tests/command-pick-catalogue.test.ts
+@@ -38,6 +38,7 @@ import { MODE_LABEL } from "../src/title-text.js";
+ import { modeGenerates, subModeGenerates } from "../src/web/activation.js";
+ import { appearanceRows } from "../src/web/appearance-commands.js";
+ import { besideTheModes, experimentalRows, subModeRows } from "../src/web/CommandBar.js";
++import { extensionStoreUrl } from "../src/web/extension-handoff.js";
+ import { PICK_SLUG } from "../src/command-pick.js";
+ import {
+   type Command,
+@@ -136,6 +137,8 @@ function rowsIn(context: Context): readonly Command[] {
+       openComments: context.comments ? () => {} : undefined,
+       openFeedback: () => {},
+       queue: { run: async () => null, lastFailure: () => null },
++      /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
++      extensionStore: extensionStoreUrl("a".repeat(32)),
+     }),
+     ...experimentalRows(experimental),
+     /* One state is every state: the mark on the appearance in force is the
+diff --git a/tests/extension-findable.test.tsx b/tests/extension-findable.test.tsx
+new file mode 100644
+index 000000000..6a47c8d23
+--- /dev/null
++++ b/tests/extension-findable.test.tsx
+@@ -0,0 +1,129 @@
++// @vitest-environment jsdom
++/**
++ * **The Chrome extension is findable, and one constant switches every place
++ * on** — plan docs/plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md.
++ *
++ *  - `PRODUCTION_EXTENSION_ID` is `null` or a store id, never a typo that
++ *    would switch on a link to nowhere;
++ *  - Help's `{{chrome-extension}}` draws its sentence in both states, the store
++ *    link only with an id, and gives search and the chatbot the same sentence
++ *    either way, so setting the id moves no generated file;
++ *  - the command bar's row is there only with a store address, typed-only,
++ *    opening Help, and before the app pages.
++ *
++ * The add page's half is tests/add-page-upload-instead.test.tsx.
++ */
++import { act, createElement, Fragment } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, describe, expect, it, vi } from "vitest";
++
++const navigations: string[] = [];
++vi.mock("../src/web/router.js", async (importActual) => ({
++  ...(await importActual<typeof import("../src/web/router.js")>()),
++  navigate: (href: string) => {
++    navigations.push(href);
++  },
++}));
++
++import { besideTheModes } from "../src/web/CommandBar.js";
++import { EXTENSION_HELP_SENTENCE, EXTENSION_NOT_YET, ExtensionHelp } from "../src/web/ExtensionOffer.js";
++import { EXTENSION_STORE_URL, PRODUCTION_EXTENSION_ID, extensionStoreUrl } from "../src/web/extension-handoff.js";
++import { expandHelpTokens, helpMarkdownText, renderHelpMarkdown } from "../src/web/help/help-markdown.js";
++import { helpPage } from "../src/web/help/help-pages.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++const ID = "abcdefghijklmnopabcdefghijklmnop";
++const STORE = `https://chromewebstore.google.com/detail/${ID}`;
++
++let root: Root | null = null;
++let host: HTMLElement;
++
++function draw(node: Parameters<Root["render"]>[0]): HTMLElement {
++  host = document.createElement("div");
++  document.body.appendChild(host);
++  root = createRoot(host);
++  act(() => root!.render(node));
++  return host;
++}
++
++afterEach(() => {
++  act(() => root?.unmount());
++  root = null;
++  host?.remove();
++});
++
++describe("the store item's id", () => {
++  it("is null, or 32 letters a to p, as the store assigns them", () => {
++    if (PRODUCTION_EXTENSION_ID !== null) expect(PRODUCTION_EXTENSION_ID).toMatch(/^[a-p]{32}$/);
++    expect(EXTENSION_STORE_URL).toBe(extensionStoreUrl(PRODUCTION_EXTENSION_ID));
++  });
++
++  it("makes the store's address for the item, or none", () => {
++    expect(extensionStoreUrl(ID)).toBe(STORE);
++    expect(extensionStoreUrl(null)).toBeNull();
++  });
++});
++
++describe("Help's {{chrome-extension}}", () => {
++  it("draws the sentence and the store link once there is an item", () => {
++    const page = draw(createElement(ExtensionHelp, { url: STORE }));
++    expect(page.textContent).toContain(EXTENSION_HELP_SENTENCE);
++    expect(page.textContent).not.toContain(EXTENSION_NOT_YET);
++    const link = page.querySelector("a");
++    expect(link?.href).toBe(STORE);
++    expect(link?.target).toBe("_blank");
++    expect(link?.rel).toBe("noopener noreferrer");
++  });
++
++  it("draws the sentence and no link while there is none", () => {
++    const page = draw(createElement(ExtensionHelp, { url: null }));
++    expect(page.textContent).toBe(`${EXTENSION_HELP_SENTENCE} ${EXTENSION_NOT_YET}`);
++    expect(page.querySelector("a")).toBeNull();
++  });
++
++  it("is in Adding an article, drawn from the token", () => {
++    const body = helpPage("adding-articles").body;
++    expect(body).toMatch(/^\{\{chrome-extension\}\}$/m);
++    const page = draw(createElement(Fragment, null, renderHelpMarkdown(body, "adding-articles")));
++    expect(page.textContent).toContain(EXTENSION_HELP_SENTENCE);
++    /* Today's constant decides the rest: a link exactly when there is an item. */
++    expect(page.querySelector('a[href^="https://chromewebstore.google.com/"]') !== null).toBe(EXTENSION_STORE_URL !== null);
++  });
++
++  it("gives search and the chatbot the same sentence in either state", () => {
++    expect(expandHelpTokens("{{chrome-extension}}")).toBe(EXTENSION_HELP_SENTENCE);
++    expect(helpMarkdownText("{{chrome-extension}}", "test")).toBe(EXTENSION_HELP_SENTENCE);
++  });
++
++  it("must be a paragraph of its own", () => {
++    expect(() => renderHelpMarkdown("Get {{chrome-extension}} now.", "test")).toThrow(/alone in its own paragraph/);
++  });
++});
++
++describe("the command bar's Chrome extension row", () => {
++  const rows = (extensionStore: string | null) =>
++    besideTheModes({
++      article: undefined,
++      openComments: undefined,
++      openFeedback: () => {},
++      queue: { run: async () => null, lastFailure: () => null },
++      extensionStore,
++    });
++  const labels = (extensionStore: string | null) => rows(extensionStore).map((row) => ("label" in row ? row.label : ""));
++
++  it("is not there while there is no store address", () => {
++    expect(labels(null)).not.toContain("Chrome extension");
++  });
++
++  it("opens Help's Adding an article, typed-only, just before the app pages", () => {
++    const all = rows(STORE);
++    const row = all.find((r) => "label" in r && r.label === "Chrome extension");
++    expect(row).toMatchObject({ kind: "action", id: "chrome-extension", typedOnly: true, generates: false, opensOnly: true });
++    if (row?.kind !== "action") throw new Error("no row");
++    expect(row.run()).toEqual({ kind: "close" });
++    expect(navigations).toEqual(["/help/adding-articles"]);
++    const order = labels(STORE);
++    expect(order.indexOf("Chrome extension") + 1).toBe(order.indexOf("Library"));
++  });
++});
+diff --git a/tests/help-page.test.tsx b/tests/help-page.test.tsx
+index f81968f09..c0681c72e 100644
+--- a/tests/help-page.test.tsx
++++ b/tests/help-page.test.tsx
+@@ -40,6 +40,7 @@ import { HelpPage } from "../src/web/help/HelpPage.js";
+ import { SignedInShell } from "../src/web/BackLink.js";
+ import { SignedInReader } from "../src/web/lib/made-for.js";
+ import { HELP_HREF, navigate, parseRoute } from "../src/web/router.js";
++import { EXTENSION_STORE_URL } from "../src/web/extension-handoff.js";
+ 
+ (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+ 
+@@ -648,6 +649,14 @@ describe("every link Help draws", () => {
+         const href = a.getAttribute("href") ?? "";
+         seen += 1;
+         if (a.closest("article div")) inWords += 1;
++        /* **The one link off the site**: the Chrome extension's store page,
++           drawn by `{{chrome-extension}}` only once there is a store item, in a
++           new tab (plan 261025b). Anything else off the site is refused. */
++        if (EXTENSION_STORE_URL !== null && href === EXTENSION_STORE_URL) {
++          expect(a.target).toBe("_blank");
++          expect(a.rel).toBe("noopener noreferrer");
++          continue;
++        }
+         expect(href, `${at}: “${a.textContent}”`).toMatch(/^\/[^/]/);
+         if (href === HELP_HREF || href.startsWith(`${HELP_HREF}/`)) {
+           expect(HELP_ADDRESSES.has(href), `${at}: “${a.textContent}” → ${href}`).toBe(true);
+diff --git a/tests/rewrite-hold.test.tsx b/tests/rewrite-hold.test.tsx
+index 2d7f669f5..ebfd51d94 100644
+--- a/tests/rewrite-hold.test.tsx
++++ b/tests/rewrite-hold.test.tsx
+@@ -1797,6 +1797,7 @@ it("the command bar's Run again refuses while the mode's rewrite is held (C4)",
+     openComments: undefined,
+     openFeedback: null,
+     queue: useJobs("quiet"),
++    extensionStore: null,
+   }).find((command) => command.kind === "action" && command.id === "rerun-faq");
+   expect(again?.kind).toBe("action");
+   if (again?.kind !== "action") return;
+diff --git a/tests/suggests-upload.test.ts b/tests/suggests-upload.test.ts
+index af73324b5..56623a3f8 100644
+--- a/tests/suggests-upload.test.ts
++++ b/tests/suggests-upload.test.ts
+@@ -14,8 +14,10 @@ import {
+   codeOfMessage,
+   documentIsABotCheck,
+   FETCH_PAPER_MISSING,
++  failureSuggestsExtension,
+   failureSuggestsUpload,
+   fetchFailed,
++  SUGGESTS_EXTENSION,
+   SUGGESTS_UPLOAD,
+ } from "../src/messages.js";
+ 
+@@ -76,3 +78,44 @@ describe("SUGGESTS_UPLOAD", () => {
+     expect(failureSuggestsUpload(undefined)).toBe(false);
+   });
+ });
++
++/**
++ * **Which of those also offer the Chrome extension**, one decision per code, so
++ * a code added to `SUGGESTS_UPLOAD` is a red test here until somebody decides
++ * it. True where the page may still open in the reader's own browser, which the
++ * extension adds as shown; plan 261025b, GPT Sol's plan review finding 2.
++ */
++const EXTENSION_HELPS: Record<string, boolean> = {
++  "fetch-address": false, // a slip in the address: the browser cannot open it either
++  "fetch-scheme": false, // the extension takes only http(s) tabs
++  "fetch-private": true, // an intranet page the reader can see
++  "fetch-certificate": true,
++  "fetch-redirects": true,
++  "fetch-login": true,
++  "fetch-refused": true,
++  "fetch-type": false, // not a web page; a PDF tab goes back to our server
++  "fetch-empty": true,
++  "fetch-declined": true,
++  "fetch-incomplete": true,
++  "fetch-paper-missing": false, // the paper is not there for anybody
++  "jb-bot-check": true,
++};
++
++describe("SUGGESTS_EXTENSION", () => {
++  it("has a decision for exactly the codes that suggest an upload", () => {
++    expect(Object.keys(EXTENSION_HELPS).sort()).toEqual([...SUGGESTS_UPLOAD].sort());
++  });
++
++  for (const [code, helps] of Object.entries(EXTENSION_HELPS)) {
++    it(`[${code}] ${helps ? "offers" : "does not offer"} the extension`, () => {
++      expect(SUGGESTS_EXTENSION.has(code)).toBe(helps);
++    });
++  }
++
++  it("is read off a stored message's bracketed code", () => {
++    expect(failureSuggestsExtension(fetchFailed("forbidden", 403).message)).toBe(true);
++    expect(failureSuggestsExtension(documentIsABotCheck("url").message)).toBe(true);
++    expect(failureSuggestsExtension(fetchFailed("invalid-url", null).message)).toBe(false);
++    expect(failureSuggestsExtension(undefined)).toBe(false);
++  });
++});

@@ -2184,7 +2184,7 @@
  {
   "id": "action:chrome-extension",
   "label": "Chrome extension",
-  "description": "Add the page you are reading in one press, from Chrome. How, in Help.",
+  "description": "Add the page you are reading in one press, from Chrome. Opens instructions in Help.",
   "aliases": [
    "extension",
    "browser extension",

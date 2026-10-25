@@ -90,7 +90,7 @@ vi.mock("../src/web/batchUpload.js", async (importActual) => {
   };
 });
 
-/** `EXTENSION_STORE_URL`, as each test wants it: `null` is today's production. */
+/** `EXTENSION_STORE_URL`, as each test wants it; the mock starts at `null` to exercise the off state. */
 let storeUrl: string | null = null;
 vi.mock("../src/web/extension-handoff.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/web/extension-handoff.js")>();

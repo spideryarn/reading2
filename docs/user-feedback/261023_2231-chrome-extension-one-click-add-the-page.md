@@ -1,7 +1,7 @@
 ---
 reports: spya-xsfrsg
-ending: awaiting
-comment: Built on dev, and a second press on a page you already have now opens that one. Kept open, as you asked, until you do the Chrome Web Store step and send me the item id; the steps are in the question.
+ending: shipped
+comment: In the Chrome Web Store (Unlisted) and wired into production. Help, the command bar and a refused import now point to it. Still to come: select a passage and arrive in a chat about it.
 ---
 # A Chrome extension: one click adds the page you are reading
 
@@ -20,8 +20,8 @@ filed 2026-10-23 22:31 UTC from an article's Learn mode. Queue item `qi-64ngfhks
 > then just I'll do the final stage. […] ideally make it so that we can update relatively
 > seamlessly.
 
-**Ending: Awaiting Greg** (the store step; the code is on `dev`, not deployed — see the reply
-below). Plan, reviews and spike:
+**Ending: Shipped** (2026-10-25; it was Awaiting Greg for the store step until then — see the
+replies below). Plan, reviews and spike:
 [261024q](../plans/261024q-chrome-extension-one-click-add-the-page.md); research:
 [261024c](../research/261024c-chrome-extension-mv3-store-and-updates.md); the doc:
 [chrome-extension.md](../project/chrome-extension.md).
@@ -62,3 +62,19 @@ computer. Keep this report open. 2A"*. So:
 - **The ending is now Awaiting Greg**, at his word: the report stays open until he has done the
   store step (1A) and sent the item id, which `qi-4ma69gtp` then wires in. q-d5ucbd stays open and
   now asks only that.
+
+**2026-10-25, the store step done.** Greg submitted the item (Unlisted; id
+`eeedpogihlbbjghpanopajebiencekak`) and sent the id. Reply `spya-bk5etj` to q-d5ucbd: *"I think
+you should have received it right now."* So:
+
+- **Wired**: `PRODUCTION_EXTENSION_ID` set in f4d796440 and 59000f581, deployed in 4b0d4dd3.
+- **Findable, not pushed** (`qi-4ma69gtp`'s Help half, and more), at Greg's word: *"I don't think
+  we want to push it because it's only worth them using the extension if they need it"*. Three
+  places, each taking its link from that one constant: a block in Help's *Adding an article*; a
+  typed-only *Chrome extension* row in the command bar that opens it; and a sentence on the add
+  page, above the bookmarklet, only when a site turned our server away in a way the extension gets
+  round. Plan and reviews:
+  [261025b](../plans/261025b-the-chrome-extension-findable-from-help-the-command-bar-and-a-refused-import.md).
+  On `dev`; the next deploy makes it live.
+- **Ending: Shipped.** q-d5ucbd answered. The one half not built, a passage to a chat, keeps its
+  own queue entry (`qi-wqxwwxsx`).
