@@ -290,16 +290,19 @@
        visible words by src/web/styles/voices.css, for every reader since 2026-10-02.
        Geometry-only boxes that resolve the prose's `ch` measure also read
        `--font-author`; their visible children set their own face. Greg, 2026-10-01:
-       Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
+       originally Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
        becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
        "Courier is really ugly" — and Plex became iA Writer Quattro on 2026-10-21, after a
        reader found the monospace hard going: Plex's letters on four widths rather than one,
        so it still looks typed but reads as prose. Code, whoever wrote it, is --font-mono:
        iA Writer Mono for a model's code and Courier for block ids went on 2026-10-25, so
-       there is one monospace. docs/project/fonts.md. */
+       there is one monospace. The reader's words were Arial until 2026-10-25, when Greg
+       asked for them to be set a little apart, "a hint of being handwritten ... without
+       hurting readability": Shantell Sans, a marker hand drawn for legibility, at its
+       default (least informal) setting. docs/project/fonts.md. */
     --font-author: 'Source Serif 4 Variable', 'Times New Roman', Times, serif;
     --font-ai: 'iA Writer Quattro', 'Courier New', Courier, monospace;
-    --font-reader: Arial, Helvetica, 'Liberation Sans', sans-serif;
+    --font-reader: 'Shantell Sans Variable', Arial, Helvetica, 'Liberation Sans', sans-serif;
 
     /* ---- reading measure --------------------------------------------- */
     /* About 60 real characters a line (median), and at most ~65 on most lines — the rule is

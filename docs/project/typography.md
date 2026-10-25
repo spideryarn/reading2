@@ -130,8 +130,8 @@ plan, [261022d](../plans/261022d-reading-measure-in-real-characters.md).
 
 ## A face per voice
 
-For every reader, on every page, since 2026-10-02: the author, the model and the reader each get
-their own face — a serif, iA Writer Quattro and Arial — and Geist stays the chrome. The rule,
+For every reader, on every page: the author, the model and the reader each get
+their own face — a serif, iA Writer Quattro and Shantell Sans — and Geist stays the chrome. The rule,
 the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
 ## Text roles in a band

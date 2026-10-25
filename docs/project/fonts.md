@@ -39,14 +39,13 @@ view and every page outside it (the shelf, Metadata, /profile, /add, the public 
 |---|---|---|---|
 | `--font-author` | the article, and verbatim quotes of it | Source Serif 4, variable | a screen serif; variable, so dark mode's 450 weight still works |
 | `--font-ai` | prose a model generated | iA Writer Quattro, static 400/700 upright and italic | still looks typed, so it reads as machine-made, but reads as prose; not Courier, which Greg found "really ugly", nor strict monospace, which a reader found hard going |
-| `--font-reader` | anything the reader typed | Arial, from the system | Greg's word, no download |
+| `--font-reader` | anything the reader typed | Shantell Sans, variable weight, upright and italic | a hint of a hand, so the reader's words are plainly theirs |
 | `--font-ui` | the chrome, every fixed sentence we wrote, and the wordmark (`--font-brand`) | Geist | the fourth voice, by being left alone |
 | `--font-mono` | code, whoever wrote it, and block ids | Geist Mono | Geist's monospace, so machine text reads as the app's |
 
-The tokens are in [`styles/tokens.css`](../../styles/tokens.css). The four downloaded faces (Source
-Serif 4, iA Writer Quattro, Geist and Geist Mono) are
-self-hosted through `@fontsource` packages imported in
-[`tailwind.css`](../../src/web/tailwind.css); Arial is the system face. **A new downloaded face must
+The tokens are in [`styles/tokens.css`](../../styles/tokens.css). All five faces (Source Serif 4,
+iA Writer Quattro, Shantell Sans, Geist and Geist Mono) are self-hosted through `@fontsource`
+packages imported in [`tailwind.css`](../../src/web/tailwind.css). **A new downloaded face must
 be self-hosted too**: a font CDN would be a new outside party seeing every reader's page loads
 ([privacy.md](privacy.md)).
 
@@ -78,10 +77,22 @@ looked almost the same as Plex. **There is no reader setting for any face**: Gre
 >
 > — Greg, 2026-10-25
 
-So the faces are the three voices, plus the reader's own words in Arial — kept because Greg asked
-for user-generated text to have its own face on 2026-10-01 (above), and folding it into Geist is a
-one-line change in `tokens.css` if he decides otherwise — plus **one** monospace for code. The
-wordmark is Geist, the UI face; the emails draw it in an explicit system sans stack matching
+So the faces are the three voices, plus the reader's own words — Greg asked for user-generated
+text to have its own face on 2026-10-01 (above) — plus **one** monospace for code. The reader's
+face was Arial, which sat so close to Geist that their words read as the app's; the same day,
+asked whether it deserved its own face:
+
+> I think it does make sense to set the reader's words slightly apart, and giving it a hint of
+> being handwritten sounds nice, if we can do it without hurting readability.
+>
+> — Greg, 2026-10-25
+
+So it is Shantell Sans, with only weight variable and the other axes at their defaults. The
+upright and italic imports cover weights 300–800; the family and the styles used by reader text
+are checked in [`self-hosted-faces.test.ts`](../../tests/self-hosted-faces.test.ts). Readability
+in a long note still needs judging in use.
+
+The wordmark is Geist, the UI face; the emails draw it in an explicit system sans stack matching
 their text. On 2026-10-25 two monospaces went: iA Writer Mono for code in a model's
 answer (code is code, whoever wrote it, and its columns must line up) and Courier New for block ids
 (which, as this doc had noted, had come to look like the model's face). **Adding a face is a

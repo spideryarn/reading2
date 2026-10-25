@@ -448,7 +448,7 @@ const ROLE_VOICES: { voice: Voice; head: string }[] = [
   { voice: "ui", head: "Geist — ours" },
   { voice: "ai", head: "Quattro — the model's" },
   { voice: "author", head: "serif — the author's" },
-  { voice: "reader", head: "Arial — the reader's" },
+  { voice: "reader", head: "Shantell — the reader's" },
 ];
 const TEXT_ROLES: {
   token: string;

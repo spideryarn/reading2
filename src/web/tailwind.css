@@ -72,6 +72,10 @@
 @import "@fontsource/ia-writer-quattro/400-italic.css";
 @import "@fontsource/ia-writer-quattro/700.css";
 @import "@fontsource/ia-writer-quattro/700-italic.css";
+/* The reader's face (2026-10-25): variable on weight only; the other axes
+   stay at their defaults. Both styles cover 300–800. */
+@import "@fontsource-variable/shantell-sans/wght.css";
+@import "@fontsource-variable/shantell-sans/wght-italic.css";
 
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
