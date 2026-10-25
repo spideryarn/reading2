@@ -146,6 +146,8 @@ export interface CheckFacts {
   trunk: TrunkStanding;
   /** Servers currently listening on a port from inside this directory. */
   listeners: ListenerScan;
+  /** Docker containers, running or stopped, with a bind or a Supabase workdir in this directory. */
+  mounts: MountScan;
 }
 
 export interface Blocker {
@@ -220,6 +222,45 @@ export function blockers(f: CheckFacts): Blocker[] {
         "`serveStatic` calls readFileSync on each request, so it would serve 404s",
         "from an open port. Anything watching the port would say it was up.",
         "Move the server, prove the new one answers, then remove this.",
+      ],
+    });
+  }
+
+  if (f.mounts.kind === "checked" && f.mounts.found.length > 0) {
+    const found = f.mounts.found;
+    const ours = found.filter((c) => c.project === SUPABASE_PROJECT);
+    const theirs = found.filter((c) => c.project !== SUPABASE_PROJECT);
+    const detail = found.map((c) => `${c.name}  ${c.state}  project=${c.project ?? "(none)"}  ${c.matched.join(", ")}`);
+    detail.push(
+      "",
+      "Deleting the directory does not stop these, and nothing goes wrong at once —",
+      "until one restarts. Docker will not start a container whose bind source has",
+      "gone, so it stays down: local auth was down for 13 days this way, Kong",
+      "unable to restart from a deleted worktree's email templates (261024a).",
+    );
+    if (ours.length > 0) {
+      detail.push(
+        "",
+        `The local Supabase stack (${SUPABASE_PROJECT}) was started from here. Move it back`,
+        "to the primary at a quiet moment — every session shares it:",
+        "  cd <the primary checkout> && npm run db:stop && npm run db:start",
+        "A plain stop keeps the local data. Never add --no-backup, which deletes it.",
+      );
+    }
+    if (theirs.length > 0) {
+      detail.push("", "For any other container above: stop it, or recreate it from somewhere else, with whatever owns it.");
+    }
+    out.push({ why: `${found.length} Docker ${plural(found.length, "container is", "containers are")} mounted from this directory`, detail });
+  }
+
+  if (f.mounts.kind === "cannot-tell") {
+    out.push({
+      why: "could not tell whether a Docker container is mounted from this directory",
+      detail: [
+        f.mounts.why,
+        "Docker is installed but would not answer. A stopped daemon is exactly when",
+        "containers sit waiting to restart from a mount you are about to delete, so",
+        "unknown counts as unsafe here. Start Docker (or OrbStack) and rerun.",
       ],
     });
   }
@@ -846,13 +887,6 @@ function corpusHalf(t: IgnoredTriage, root: string, linked: boolean, p: string):
   else t.unexplained.push(...strays);
 }
 
-/**
- * Everything the judgement needs, for one tree.
- *
- * `trunkSha` is optional and skips the fetch: pass one when you are gathering
- * across many worktrees and have already fetched (`fetchTrunkSha`). Omit it and
- * this fetches for itself, which is what the single-tree CLI wants.
- */
 /* --------------------------------------------------- servers still running -- */
 
 export type Listener = { pid: number; addr: string; command: string };
@@ -948,7 +982,208 @@ function commandOf(pid: number): string {
   }
 }
 
-export function gather(root: string, trunkSha?: string): CheckFacts {
+/* ------------------------------------------------ Docker mounted from here -- */
+
+/**
+ * The local Supabase stack's project name — `project_id` in
+ * `supabase/config.toml`, which a test holds this to. The CLI writes it on
+ * every container as `com.supabase.cli.project`.
+ */
+export const SUPABASE_PROJECT = "spideryarn2";
+
+const LABEL_PROJECT = "com.supabase.cli.project";
+const LABEL_WORKDIR = "com.supabase.cli.workdir";
+
+/**
+ * One container out of `docker inspect`, reduced to what this file reads.
+ * Every field optional and nullable, because Docker writes `null` for an empty
+ * `Mounts` or `Labels` and older engines leave fields out.
+ */
+export interface InspectedContainer {
+  Id?: string;
+  Name?: string;
+  State?: { Status?: string } | null;
+  Mounts?: { Type?: string; Source?: string }[] | null;
+  Config?: { Labels?: Record<string, string> | null } | null;
+}
+
+/** A container with something of this tree in it, and what that something is. */
+export interface MountedContainer {
+  id: string;
+  name: string;
+  /** `running`, `exited`, `created`… — stopped counts as much as running. */
+  state: string;
+  /** `com.supabase.cli.project`, or `undefined` for a container that is not Supabase's. */
+  project: string | undefined;
+  /** One line per bind source or label that put it here. */
+  matched: string[];
+}
+
+/**
+ * Every container on this machine, or why there is no list.
+ *
+ * Fetched once and handed to `mountsUnder` per tree, so the sweep asks Docker
+ * once rather than once per worktree — the same shape as `fetchTrunkSha`.
+ */
+export type DockerInventory =
+  | { kind: "listed"; containers: InspectedContainer[] }
+  | { kind: "no-docker"; why: string }
+  | { kind: "cannot-tell"; why: string };
+
+/**
+ * What `blockers()` gets. Three answers rather than two, unlike `ListenerScan`:
+ * "this machine has no Docker" is a fact that clears, and "Docker is here but
+ * would not answer" is an unknown that does not — see `blockers`.
+ */
+export type MountScan =
+  | { kind: "checked"; found: MountedContainer[]; inspected: number }
+  | { kind: "no-docker"; why: string }
+  | { kind: "cannot-tell"; why: string };
+
+/**
+ * A path in the one spelling both sides get compared in.
+ *
+ * Docker Desktop on macOS reports a bind source as `/host_mnt/Users/…`; that
+ * prefix is stripped there and only there. Then the real path, so `/var` and
+ * `/private/var`, or a symlinked alias of a worktree, compare equal — and for a
+ * path that has **gone**, which is the incident's own shape, the real path of
+ * its nearest surviving ancestor with the rest appended by spelling. A plain
+ * lexical fallback would miss `/var/…/gone` against a root resolved to
+ * `/private/var/…`.
+ */
+function canonical(p: string, platform: NodeJS.Platform): string {
+  let s = p;
+  if (platform === "darwin" && (s === "/host_mnt" || s.startsWith("/host_mnt/"))) s = s.slice("/host_mnt".length) || "/";
+  s = path.resolve(s);
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      return path.join(realpathSync(s), ...rest);
+    } catch {
+      const parent = path.dirname(s);
+      if (parent === s) return path.resolve(p);
+      rest.unshift(path.basename(s));
+      s = parent;
+    }
+  }
+}
+
+function inside(candidate: string, root: string): boolean {
+  const rel = path.relative(root, candidate);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
+/**
+ * **Is `candidate` the tree at `root`, or inside it?** On a component boundary,
+ * so `…/tree-old` is not under `…/tree`, which the bare `startsWith` in
+ * `listenersUnder` gets right only by appending a separator by hand.
+ *
+ * Compared both canonically and as spelled, and either counts: a false "inside"
+ * costs a list to read, a false "outside" a gateway that will not restart.
+ */
+export function pathUnder(candidate: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
+  return inside(canonical(candidate, platform), canonical(root, platform)) || inside(path.resolve(candidate), path.resolve(root));
+}
+
+/** The same path, however spelled — `db:start`'s question, which is equality and not containment. */
+export function samePath(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+  return canonical(a, platform) === canonical(b, platform);
+}
+
+/**
+ * The classifier, pure, so every case can be tested with a fake `docker
+ * inspect` and no Docker. A container matches if any **bind source** or its
+ * **Supabase workdir label** is the tree or under it. The label counts on its
+ * own: Kong on the box had no binds at all until `content_path` email
+ * templates arrived, but the stack still belongs to the directory it names.
+ */
+export function containersUnder(containers: readonly InspectedContainer[], root: string, platform: NodeJS.Platform = process.platform): MountedContainer[] {
+  const out: MountedContainer[] = [];
+  for (const c of containers) {
+    const labels = c.Config?.Labels ?? {};
+    const matched: string[] = [];
+    for (const m of c.Mounts ?? []) {
+      if (typeof m.Source === "string" && m.Source !== "" && pathUnder(m.Source, root, platform)) {
+        matched.push(`${m.Type ?? "mount"} ${m.Source}`);
+      }
+    }
+    const workdir = labels[LABEL_WORKDIR];
+    if (typeof workdir === "string" && workdir !== "" && pathUnder(workdir, root, platform)) {
+      matched.push(`${LABEL_WORKDIR}=${workdir}`);
+    }
+    if (matched.length === 0) continue;
+    out.push({
+      id: (c.Id ?? "?").slice(0, 12),
+      name: (c.Name ?? "?").replace(/^\//, ""),
+      state: c.State?.Status ?? "unknown",
+      project: labels[LABEL_PROJECT],
+      matched,
+    });
+  }
+  return out;
+}
+
+/**
+ * Ask Docker for every container, running **or stopped**: `docker ps -aq`, then
+ * one `docker inspect` of them all. Finite timeouts and a bounded buffer, so a
+ * wedged daemon is an answer rather than a hang.
+ *
+ * Only a missing **binary** is `no-docker` — `ENOENT` from the spawn. Anything
+ * else (daemon down, permission denied, a timeout, output that will not parse)
+ * is `cannot-tell`, because each is a machine that does have containers, just
+ * not ones we could see.
+ *
+ * A container removed between the two commands makes `docker inspect` exit 1
+ * with "No such object" while still printing the rest; that, and only that, is
+ * forgiven.
+ */
+export function dockerInventory(): DockerInventory {
+  const opts = { encoding: "utf8" as const, maxBuffer: 64 * 1024 * 1024 };
+  const ps = spawnSync("docker", ["ps", "-aq", "--no-trunc"], { ...opts, timeout: 15_000 });
+  if ((ps.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+    return { kind: "no-docker", why: "the docker command is not installed on this machine" };
+  }
+  if (ps.error !== undefined || ps.status !== 0) {
+    const why = ps.error?.message ?? (ps.stderr.trim() || `exited ${String(ps.status)}`);
+    return { kind: "cannot-tell", why: `docker ps failed: ${why}` };
+  }
+  const ids = ps.stdout.split("\n").map((l) => l.trim()).filter((l) => l !== "");
+  if (ids.length === 0) return { kind: "listed", containers: [] };
+
+  const inspect = spawnSync("docker", ["inspect", ...ids], { ...opts, timeout: 30_000 });
+  if (inspect.error !== undefined) return { kind: "cannot-tell", why: `docker inspect failed: ${inspect.error.message}` };
+  const stderr = inspect.stderr.split("\n").filter((l) => l.trim() !== "");
+  const onlyVanished = stderr.every((l) => /no such (object|container)/i.test(l));
+  if (inspect.status !== 0 && !onlyVanished) {
+    return { kind: "cannot-tell", why: `docker inspect exited ${String(inspect.status)}: ${stderr.slice(-3).join(" ")}` };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(inspect.stdout);
+  } catch (err) {
+    return { kind: "cannot-tell", why: `docker inspect printed something that is not JSON: ${(err as Error).message}` };
+  }
+  if (!Array.isArray(parsed) || !parsed.every((c) => typeof c === "object" && c !== null)) {
+    return { kind: "cannot-tell", why: "docker inspect printed JSON that is not a list of containers" };
+  }
+  return { kind: "listed", containers: parsed as InspectedContainer[] };
+}
+
+/** This tree's answer, from an inventory fetched here or handed in by the sweep. */
+export function mountsUnder(root: string, inventory: DockerInventory = dockerInventory()): MountScan {
+  if (inventory.kind !== "listed") return inventory;
+  return { kind: "checked", found: containersUnder(inventory.containers, root), inspected: inventory.containers.length };
+}
+
+/**
+ * Everything the judgement needs, for one tree.
+ *
+ * `trunkSha` is optional and skips the fetch: pass one when you are gathering
+ * across many worktrees and have already fetched (`fetchTrunkSha`). Omit it and
+ * this fetches for itself, which is what the single-tree CLI wants. `docker`
+ * is the same bargain for `dockerInventory`.
+ */
+export function gather(root: string, trunkSha?: string, docker?: DockerInventory): CheckFacts {
   let linked = false;
   try {
     linked = inLinkedWorktree(root);
@@ -977,6 +1212,7 @@ export function gather(root: string, trunkSha?: string): CheckFacts {
     ...triaged,
     trunk: trunkSha === undefined ? standingAgainstTrunk(root) : standingAgainstSha(root, trunkSha),
     listeners: listenersUnder(root),
+    mounts: mountsUnder(root, docker),
   };
 }
 
@@ -1006,6 +1242,13 @@ export function report(facts: CheckFacts): Report {
   }
   if (facts.listeners.kind === "cannot-tell") {
     lines.push(`  ·    did not check for running servers: ${facts.listeners.why}`);
+  }
+  if (facts.mounts.kind === "checked" && facts.mounts.found.length === 0) {
+    const n = facts.mounts.inspected;
+    lines.push(`  ok   no Docker container, running or stopped, is mounted from inside this directory (${n} inspected)`);
+  }
+  if (facts.mounts.kind === "no-docker") {
+    lines.push(`  ·    did not check for Docker containers: ${facts.mounts.why}`);
   }
   for (const v of facts.verified) lines.push(`  ok   ${v}`);
   if (facts.disposable > 0) {

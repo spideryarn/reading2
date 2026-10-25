@@ -89,6 +89,10 @@
  * becomes `trunk: unknown` for every tree, which `blockers()` already treats as
  * unsafe, so failing closed survives the optimisation.
  *
+ * Docker is asked once too (`dockerInventory`), for the mount check: a failed
+ * scan becomes `mounts: cannot-tell` for every tree, which also blocks. The
+ * removal itself re-scans fresh rather than trusting this one.
+ *
  * ## `REMOVABLE` means the removal command would accept it
  *
  * So the report asks the same liveness question the removal asks, rather than
@@ -105,7 +109,7 @@ import { TRUNK_BRANCH } from "./deploy-checks.js";
 import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 /* `gather` is aliased: this file has one of its own, and two functions of the
    same name at one seam is how the wrong one gets called. */
-import { blockers, type CheckFacts, fetchTrunkSha, gather as checkGather, type TrunkSha } from "./worktree-check.js";
+import { blockers, type CheckFacts, dockerInventory, fetchTrunkSha, gather as checkGather, type TrunkSha } from "./worktree-check.js";
 import type { InUse } from "./worktree-inuse.js";
 /* The liveness question and the removal itself live in worktree-remove.ts. This
    file classifies; that one removes. `RemoveOutcome` is re-exported so the
@@ -269,7 +273,13 @@ export function classifyAll(cwd: string): Classified[] {
   /* Once, for the whole sweep. See the header: `gather()` fetches for itself,
      which across thirty worktrees is one shared ref fetched thirty times. */
   const trunk = fetchTrunkSha(cwd);
-  return gatherAll(cwd, listWorktrees(cwd), trunk).map((f) => ({ facts: f, verdict: classifyOne(f) }));
+  /* And Docker once, for the same reason: one `docker inspect` of every
+     container answers for every tree (docs/plans/261025i). */
+  const docker = dockerInventory();
+  return gatherAll(cwd, listWorktrees(cwd), trunk, (root, sha) => checkGather(root, sha, docker)).map((f) => ({
+    facts: f,
+    verdict: classifyOne(f),
+  }));
 }
 
 /* ------------------------------------------------------------------ */
