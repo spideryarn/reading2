@@ -114,7 +114,10 @@ spike and its numbers.
 1. **A developer account**: https://chrome.google.com/webstore/devconsole, signed in as the Google
    account that should own it, with 2-step verification on. Pay the one-time fee, verify the
    contact email. **The publishing account is greg@gregdetre.com** (Greg, 2026-10-25: *"we'll use
-   my greg@gregdetre.com Google account for publishing"*).
+   my greg@gregdetre.com Google account for publishing"*). **An agent cannot do this step or the
+   next for you**: Chrome forbids every extension, Claude-in-Chrome included, to script the Web
+   Store's pages, so screenshot, read and click all fail with "The extensions gallery cannot be
+   scripted" (tried 2026-10-25). Do it by hand, or use `npm run extension:publish` for updates.
 2. **The item**: *New item*, upload `extension/dist/spideryarn-extension-<version>.zip`. Fill the
    *Store listing* and *Privacy practices* tabs from
    [`extension/store/listing.md`](../../extension/store/listing.md), *Distribution* → Unlisted, and
