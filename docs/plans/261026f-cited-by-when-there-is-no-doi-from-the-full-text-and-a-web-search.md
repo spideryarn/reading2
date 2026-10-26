@@ -336,3 +336,42 @@ GPT Sol, fixing in place: [261026f-stage1-code-review-sol.md](261026f-stage1-cod
 - **S1-F6** (taken): the spike's `shown` builds its requests with the shipped
   `openAlexFulltextUrl`, and the investigation's whole-list numbers are from that run. Its
   `precision` pass keeps the first draft's own-record rule and is labelled as the first pass.
+
+## Stage 2, as built
+
+The neighbours' rename of *After it* to *Papers that cite it* (261025h) had landed by the time this
+was built, so it went into `CitersAnswer` directly: `NoListAnswer` and `PossibleCitersList` in
+`src/web/ReceptionAndClaimsPanel.tsx`, beside `CitersList` and reusing `CiterRow`, rather than a
+file of its own (which would have imported `CiterRow` back from the panel, a cycle). One addition to
+the plan: the *See all* link (`openAlexFulltextPageUrl`, `src/citer-link.ts`) asks OpenAlex's own
+page for the same phrase and year window as the count beside it, so the answer carries `fromYear`
+and `toYear`. Tests: `tests/possible-citers.test.tsx` (new) and `tests/use-citers.test.tsx`, each
+seen red under a deliberate break.
+
+## Stage 2's code review
+
+GPT Sol, fixing in place: [261026f-stage2-code-review-sol.md](261026f-stage2-code-review-sol.md)
+(prompt: [261026f-stage2-code-review-prompt.md](261026f-stage2-code-review-prompt.md), diff:
+[261026f-stage2-code-review.diff](261026f-stage2-code-review.diff)). Five findings, one P1, all
+fixed by Sol and checked here:
+
+- **S2-F1** (P1): *See all* asked `publication_year:>from-1` with no upper bound, a different set
+  from the count's when OpenAlex holds future-dated records; the answer now carries `toYear` and the
+  link repeats the inclusive range.
+- **S2-F2**: the browser's phrase check was wider than `fulltextPhraseOf`'s output and unbounded;
+  now the producer's word shape and its 300-character limit, shared from `src/citer-link.ts`.
+- **S2-F3**: `NoListAnswer` now switches on every `PossibleCiters` kind with a `never` default.
+- **S2-F4**: a test that the switch going off while a `?with=possible` answer is in flight strips
+  it when it lands, and that a drawn list goes without a request.
+- **S2-F5**: the drawing test asserts the reader-facing promises as literal words (never *Cited
+  by*, unchecked, papers only), not through the same constants, and pins the hidden icon.
+
+## Stage 2's browser check
+
+A Sonnet subagent on the local stack, 1280px and 390px, on *LLM Powered Autonomous Agents* and
+*More is Different for AI* (the Graham and reported pieces are not local): the block draws in
+*Papers that cite it* and in Reception's *Cited by* with no overflow; *See all*'s filter is
+`publication_year:2022-2026` and OpenAlex's API counts 278 for it, the panel's number; the switch
+off drops the block and the next load asks without `?with=possible`; on again asks once. No console
+errors. Short titles (*Simulators*, *Feature Visualization*) keep the plain sentence, as the
+six-word rule says; the common-phrase sentence had no local piece to show it.

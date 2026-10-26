@@ -6062,6 +6062,49 @@ export const CITERS_ABOUT =
   "the piece's DOI, or the words of its title when we have no DOI, and our contact address; " +
   "never its text or reader details. No AI is involved, and we have not read the papers.";
 
+/* ---- *Possible citations*: when the list above cannot be made ----
+
+   Under a `no-doi` or `no-match` answer, with the experimental switch on: the
+   works whose full text matched OpenAlex's search for the piece's title
+   (src/citation-fulltext.ts, plan 261026f). The plain words are the persona
+   reviews' and GPT Sol's (F2: "matched a search", never "contains the exact
+   title", because the search stems words and also reads titles and
+   abstracts). */
+
+export const POSSIBLE_CITERS_HEADING = "Possible citations";
+/** Under the heading, once. Two hedges in one line read as noise (the persona reviews). */
+export const POSSIBLE_CITERS_WHAT =
+  "Research papers whose text matched a search for this piece's title. Most will refer to it; " +
+  "we have not checked each one.";
+/** `25 of 134`: the rows listed, of OpenAlex's count. One count, said once (the designer). */
+export function possibleCitersCount(listed: number, total: number): string {
+  return listed >= total ? `${total}` : `${listed} of ${total}`;
+}
+/** The link to the rest, naming what OpenAlex is for a reader who has never heard of it. */
+export function possibleCitersAll(total: number): string {
+  return `See all ${total} at OpenAlex, a free index of research papers`;
+}
+/** Beside the count: which rows come first when there are more than fit (`orderFor`, src/citation-fulltext.ts). */
+export const POSSIBLE_CITERS_ORDER = { newest: "newest first", "most-cited": "most cited first" } as const;
+/** What it does not find, so it is not read as complete. */
+export const POSSIBLE_CITERS_PAPERS_ONLY =
+  "This finds research papers only. Blog posts and web pages that cite it are not here.";
+/** A count with no row we could show (GPT Sol's S1-F2): the count and the link are still worth having. */
+export const POSSIBLE_CITERS_NO_ROWS = "None of them could be shown here.";
+/** The phrase gate (plan 261026f, decision 3), in Sol's evidenced words. */
+export const POSSIBLE_CITERS_COMMON_PHRASE =
+  "Older papers used the words of this title too often for a search of papers' text to tell " +
+  "citations of this piece from other uses of them.";
+export const POSSIBLE_CITERS_NONE = "No research paper's text matched a search for its title either.";
+/**
+ * **The sentence above the list when there is one** — the no-DOI sentence,
+ * moved to the empty case and said as what we did instead (the persona
+ * reviews: the reader met "cannot" and then a list).
+ */
+export const POSSIBLE_CITERS_LEAD =
+  "We have no DOI or sure OpenAlex record for this piece, so there is no citation list. " +
+  "Instead, a search of research papers' text:";
+
 const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
 
 /**

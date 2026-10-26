@@ -23,7 +23,7 @@ neither gets made properly.
 - [§ The three controls](#the-three-controls) — the /profile checkbox, the bar button, the command-bar row, and how each failure state is drawn
 - [§ Putting a feature behind it](#putting-a-feature-behind-it) — adding a gate, and what must happen mid-flight
 - [§ What is behind it today](#what-is-behind-it-today) — the list, and a reader says a mode has vanished; plus the history of what left the switch and when
-- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, Sources' two experiments, and Learn's Explore until 2026-10-11
+- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, Sources' two experiments, *Possible citations*, and Learn's Explore until 2026-10-11
 - [§ See also](#see-also)
 
 ## The four rules
@@ -486,7 +486,7 @@ not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
 ## Gated below mode level
 
-Four of Diagram's pictures, and Sources' two experiments ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
+Four of Diagram's pictures, Sources' two experiments and *Possible citations* ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
 2026-10-11 ([§ What is behind it today](#what-is-behind-it-today) has the history); the flag it
 used, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), is
 still read for Learn by `visibleLearnViews` there and by `subModeRows`
@@ -533,6 +533,17 @@ keeping nothing the reader does. The flag is `experimental: true` on their rows 
 with the switch on: the tools row is their only door. Hidden is still not unreachable: a pasted
 `?sources=guess-first` draws the experiment with the switch off, and its crumb leads back to
 *Where it sits*.
+
+**Possible citations, since 2026-10-26**: under a *no DOI* or *no sure record* answer in *Papers
+that cite it* and in Reception's *Cited by*, the papers whose full text matched OpenAlex's search
+for the piece's title ([261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md);
+[reception.md § Cited by](reception.md#cited-by-the-papers-that-cite-the-piece)). Behind the switch
+because it was measured below the 95% a list shown to everyone should meet: 82% of the rows it
+would show cite the piece
+([261026a](../investigations/261026a-cited-by-with-no-doi-full-text-and-web-search-recall-and-cost.md)).
+**This one is gated on the server's question, not only on the drawing**: `useCiters` asks
+`?with=possible` only with the switch on, so with it off the title is not sent to the full-text
+search at all, and a cached answer carrying the list is stripped of it when the switch goes off.
 
 ## See also
 

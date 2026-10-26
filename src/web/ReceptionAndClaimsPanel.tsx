@@ -207,6 +207,16 @@ import {
   CITERS_UNCONFIRMED,
   citedTimes,
   citersLines,
+  POSSIBLE_CITERS_COMMON_PHRASE,
+  POSSIBLE_CITERS_HEADING,
+  POSSIBLE_CITERS_LEAD,
+  POSSIBLE_CITERS_NONE,
+  POSSIBLE_CITERS_NO_ROWS,
+  POSSIBLE_CITERS_ORDER,
+  POSSIBLE_CITERS_PAPERS_ONLY,
+  POSSIBLE_CITERS_WHAT,
+  possibleCitersAll,
+  possibleCitersCount,
   RECEPTION_BEFORE_SEARCH,
   SOURCES_CLAIM_CHECK_FOUND_NOTHING,
   SOURCES_CLAIM_CHECK_NOT_ANSWERED,
@@ -251,6 +261,7 @@ import {
   type BlockId,
   type Citer,
   type CitersResult,
+  type PossibleCiters,
   type ClaimOrigin,
   type Reception,
   type SourcesClaimsBears,
@@ -294,7 +305,7 @@ import {
 } from "./reception-order.js";
 import { registryAuthorName } from "../registry-work.js";
 import { scholarUrl } from "../scholar-search.js";
-import { citerUrl } from "../citer-link.js";
+import { citerUrl, openAlexFulltextPageUrl } from "../citer-link.js";
 import { keyByRow, shownInThread, type Thread, threadsOf } from "./reception-threads.js";
 import { readStoredSynthesis } from "../reception-synthesis.js";
 import type { ReceptionAndClaimsView } from "./params.js";
@@ -1832,9 +1843,9 @@ export function CitersAnswer({
 }) {
   switch (result.kind) {
     case "no-doi":
-      return <p className="rcp-citers-note">{CITERS_NO_DOI}</p>;
+      return <NoListAnswer sentence={CITERS_NO_DOI} possible={result.possible} shown={shown} />;
     case "no-match":
-      return <p className="rcp-citers-note">{CITERS_NO_MATCH}</p>;
+      return <NoListAnswer sentence={CITERS_NO_MATCH} possible={result.possible} shown={shown} />;
     case "not-indexed":
       return <p className="rcp-citers-note">{CITERS_NOT_INDEXED}</p>;
     case "unconfirmed":
@@ -1894,6 +1905,94 @@ function CitersList({ found, shown: first }: { found: Extract<CitersResult, { ki
           Show all {listed}
         </button>
       )}
+    </>
+  );
+}
+
+/**
+ * **No list, and what we found instead.** `possible` is there only with the
+ * experimental switch on (useCiters.ts); without it, or when the full-text
+ * search could not be asked, the plain sentence is the whole answer. With a
+ * list, the sentence gives way to one that says what was done instead, so the
+ * reader does not meet "cannot" and then a list (plan 261026f).
+ */
+function NoListAnswer({
+  sentence,
+  possible,
+  shown,
+}: {
+  sentence: string;
+  possible: PossibleCiters | undefined;
+  shown: number;
+}) {
+  const plain = (more: string | null = null) => (
+    <>
+      <p className="rcp-citers-note">{sentence}</p>
+      {more !== null && <p className="rcp-citers-note">{more}</p>}
+    </>
+  );
+  if (possible === undefined) return plain();
+  switch (possible.kind) {
+    case "found":
+      return <PossibleCitersList found={possible} shown={shown} />;
+    case "common-phrase":
+      return plain(POSSIBLE_CITERS_COMMON_PHRASE);
+    case "none":
+      return plain(POSSIBLE_CITERS_NONE);
+    case "unavailable":
+      return plain();
+    default: {
+      const unreachable: never = possible;
+      return unreachable;
+    }
+  }
+}
+
+/**
+ * **Possible citations**: works whose full text matched OpenAlex's search for
+ * the title (src/citation-fulltext.ts). Never called *Cited by* and never
+ * added to a count: about four rows in five were measured to cite the piece
+ * (docs/investigations/261026a), so it says it has not checked them.
+ */
+function PossibleCitersList({ found, shown: first }: { found: Extract<PossibleCiters, { kind: "found" }>; shown: number }) {
+  const [all, setAll] = useState(false);
+  const listed = found.citers.length;
+  const shown = all ? found.citers : found.citers.slice(0, first);
+  return (
+    <>
+      <p className="rcp-citers-note">{POSSIBLE_CITERS_LEAD}</p>
+      <div className="rcp-possible">
+        <p className="rcp-possible-head">
+          <span className="rcp-possible-label">{POSSIBLE_CITERS_HEADING}</span>
+          <span className="rcp-possible-count">{possibleCitersCount(listed, found.total)}</span>
+          {listed > 1 && <span className="rcp-possible-order">{POSSIBLE_CITERS_ORDER[found.order]}</span>}
+        </p>
+        <p className="rcp-citers-note">{POSSIBLE_CITERS_WHAT}</p>
+        {listed > 0 ? (
+          <ul className="rcp-citers-list">
+            {shown.map((citer) => (
+              <CiterRow key={citer.openalexId} citer={citer} />
+            ))}
+          </ul>
+        ) : (
+          <p className="rcp-citers-note">{POSSIBLE_CITERS_NO_ROWS}</p>
+        )}
+        {!all && listed > first && (
+          <button type="button" className="rcp-more rcp-citers-all" onClick={() => setAll(true)}>
+            Show all {listed}
+          </button>
+        )}
+        <a
+          className="rcp-possible-all"
+          href={openAlexFulltextPageUrl(found.phrase, found.fromYear, found.toYear)}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          {possibleCitersAll(found.total)}
+          <ExternalLink size={11} aria-hidden="true" />
+        </a>
+        <p className="rcp-citers-note">{POSSIBLE_CITERS_PAPERS_ONLY}</p>
+      </div>
     </>
   );
 }

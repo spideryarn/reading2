@@ -42,6 +42,7 @@
 import { registryTitleIsDistinctive } from "./citation-registry.js";
 import { tokens } from "./citation-lookup.js";
 import { importedFromAPublicAddress } from "./citation-blurbs.js";
+import { MAX_FULLTEXT_PHRASE } from "./citer-link.js";
 import {
   type ArticleIdentity,
   type CitersDeps,
@@ -86,9 +87,6 @@ export interface FulltextQuestion {
   year: number | undefined;
 }
 
-/** The longest phrase sent, in characters, cut at a word: `titleQueryOf`'s bound. */
-const MAX_PHRASE = 300;
-
 /**
  * **The title as the phrase OpenAlex's full-text search is sent**: NFKC,
  * lower-cased, letter-and-digit runs joined by single spaces — `tokens`'
@@ -109,7 +107,7 @@ export function fulltextPhraseOf(title: string): string | null {
   let phrase = "";
   for (const word of words) {
     const next = phrase === "" ? word : `${phrase} ${word}`;
-    if (next.length > MAX_PHRASE) break;
+    if (next.length > MAX_FULLTEXT_PHRASE) break;
     phrase = next;
   }
   return phrase === "" ? null : phrase;
@@ -225,11 +223,13 @@ export async function possibleCitersOf(article: PossibleIdentity, deps: Possible
       if (before === null) return done({ kind: "unavailable" });
     }
     const order = orderFor(year, now);
+    const fromYear = year === undefined ? null : year - BEFORE_TO + 1;
+    const toYear = year === undefined ? null : now;
     const listed = await openAlexInTurn(
       "fulltext",
       openAlexFulltextUrl(
         phrase,
-        year === undefined ? null : { from: year - BEFORE_TO + 1, to: now },
+        fromYear === null || toYear === null ? null : { from: fromYear, to: toYear },
         { perPage: POSSIBLE_PER_PAGE, order },
       ),
       deps,
@@ -247,7 +247,7 @@ export async function possibleCitersOf(article: PossibleIdentity, deps: Possible
     const everyObservedResultIsOwn = page.dropped === 0 && page.returned > 0 && ownRecords === page.returned;
     if (observedEveryResult && everyObservedResultIsOwn) return done({ kind: "none" }, { since: page.count });
     return done(
-      { kind: "found", total: page.count, dropped: page.dropped + ownRecords, order, phrase, citers },
+      { kind: "found", total: page.count, dropped: page.dropped + ownRecords, order, phrase, fromYear, toYear, citers },
       { since: page.count, listed: citers.length, ...(before !== null ? { before } : {}) },
     );
   } catch {
