@@ -17,17 +17,17 @@
  * ```
  *  ┌ Where it sits │ Bibliography 17 │ Links 4 ┐                              (i)
  *  │ A piece from 1998: what has been said since       ← no dossier yet
+ *  │ Tools [Pages about it 0] [Check a claim 8] [Close to it, not cited] [Ask your own question]
  *  │ SEARCH OF THE LITERATURE  [ Search the literature ]  …what leaves
- *  │ AFTER IT                    ← OpenAlex's citers, most cited first
+ *  │ PAPERS THAT CITE IT         ← OpenAlex's citers, most cited first
  *  │   Whatever next? · Clark · 2013 · cited 4,210 times  …  [ Show all 40 ]
- *  │ BEFORE IT                   ← Bibliography's works it leans on most
- *  │   Kirsh & Maglio 1994 · Putnam 1975 · Burge 1979 …
- *  │ Tools: Pages about it · Check a claim · Close to it, not cited · Ask your own question
+ *  │ WHAT IT BUILDS ON           ← Bibliography's works it leans on most
+ *  │   Epistemic actions in Tetris  Kirsh, Maglio 1994 · Putnam 1975 · Burge 1979 …
  * ```
  *
- * **What it costs to open: nothing paid.** *After it* is the free OpenAlex
- * read Reception's *Cited by* already made (`useCiters`), *Before it* is
- * Bibliography, made on import and armed by a press here if missing
+ * **What it costs to open: nothing paid.** *Papers that cite it* is the free
+ * OpenAlex read Reception's *Cited by* already made (`useCiters`), *What it
+ * builds on* is Bibliography, made on import and armed by a press here if missing
  * (activation.ts § `activationForSources`), and the dossier is the stored
  * one. *Search the literature*, the dearest press in Sources, is the
  * dossier's own button and nothing else (SituateDossier.tsx).
@@ -38,13 +38,25 @@
  * recent one has not, so what it leans on leads (`whereOrder`). With no year,
  * side by side.
  *
- * **The tools are plain links**, each setting `?sources=` and arming nothing
+ * **The year is the piece's metadata's, and only that is ever printed**
+ * (`articleYear`: `publishedAt`, else `publishedYear`, the rule Not cited's
+ * search uses, src/related-work.ts § `relatedWorkYearOf`). The dossier's
+ * year is the planner model's reading of the text: it may still choose which
+ * list leads, which claims nothing, but neither head line prints it, so the
+ * band never says *from 1998* beside Not cited's *we do not know when this
+ * piece was published* (a persona review, 2026-10-26).
+ *
+ * **The tools come first, under the head line** (the same review: three of
+ * four readers never found them at the foot of a band 2000px tall). Each is
+ * a part-switcher button (`.summ-view-btn`, mode-band.css), alone in its own
+ * outline so the row wraps between whole tools, which a joined bar must not
+ * (docs/project/narrow-windows.md). Each sets `?sources=` and arms nothing
  * (plan § The simpler option; GPT Sol's F5): Reception, Claims, Not cited and
  * Investigate keep their panels, their addresses and their own buttons, and
  * each carries *Where it sits › its name* in its head, the first word the
  * way back (`ToolBack`). With the experimental switch on, *Experiments*
  * follows them: Guess first and Evidence first (plan 261025h, Stage 4;
- * SourcesExperiments.tsx), plain links too.
+ * SourcesExperiments.tsx), drawn the same way.
  *
  * **Owner only.** A visitor's band has no *Where it sits* and reads the bare
  * address as Bibliography (params.ts § `visitorSourcesView`): the citers have
@@ -105,7 +117,7 @@ function whereChildLabel(child: WhereChild): string {
     : SOURCES_TOOL_LABEL[child as SourcesTool];
 }
 
-/** *After it*'s two views (plan 261025h, decision 10): every citer, or those about the work's keyword. */
+/** *Papers that cite it*'s two views (plan 261025h, decision 10): every citer, or those about the work's keyword. */
 export const WHERE_AFTER_ALL = "Most cited";
 export const WHERE_AFTER_VIEWS = "Which papers that cite it";
 /** The second view's label: OpenAlex's keyword, in quotes. */
@@ -123,23 +135,34 @@ export const WHERE_BACK_TIP = "Back to Where it sits";
 
 /** The tools row's lead-in. */
 export const WHERE_TOOLS_HEAD = "Tools";
-/** The two lists' headings, and the line under each. */
-export const WHERE_AFTER_HEAD = "After it";
-export const WHERE_AFTER_WHAT = "Papers that cite it, most cited first";
-export const WHERE_BEFORE_HEAD = "Before it";
-export const WHERE_BEFORE_WHAT = "The works it leans on most";
+/**
+ * **The two lists' headings**, in words a first-time reader can place. They
+ * were *After it* and *Before it* until 2026-10-26, when a persona review
+ * found the "it" vague (*"I don't know what 'it' refers to"*); these keep the
+ * time sense, one looking forward and one back. The code keeps the old
+ * names (`AfterIt`, `.where-after`), which no reader sees.
+ */
+export const WHERE_AFTER_HEAD = "Papers that cite it";
+export const WHERE_BEFORE_HEAD = "What it builds on";
+/*
+ * *Papers that cite it* has no line under its heading. It had *Papers that
+ * cite it, most cited first*, which said the order a third time: the *Most
+ * cited* chip says it, and so does the answer's own sentence (messages.ts §
+ * `citersLines`, *Most cited first.* or *The 100 most cited are listed.*).
+ */
+export const WHERE_BEFORE_WHAT = "The works it cites that it leans on most";
 /** How many of each list are on screen before *Show all* (After) or the way into Bibliography (Before). */
 export const WHERE_AFTER_SHOWN = 5;
 export const WHERE_BEFORE_SHOWN = 5;
-/** *Before it*'s states with no rows. */
+/** *What it builds on*'s states with no rows. */
 export const WHERE_BEFORE_LOADING = "Looking for the works it cites…";
 export const WHERE_BEFORE_LISTING = "Listing the works it cites…";
 export const WHERE_BEFORE_NONE = "The works this piece cites have not been listed yet.";
 export const WHERE_BEFORE_EMPTY = "No works cited were found in this piece.";
 export const WHERE_BEFORE_UNRATED = "None of the works it cites has been rated for how much the piece leans on it yet.";
-/** *Before it*'s way to the whole list. */
+/** *What it builds on*'s way to the whole list. */
 export const WHERE_BEFORE_ALL = "All of them in Bibliography";
-/** A row of *Before it*: what a press does. */
+/** A row of *What it builds on*: what a press does. */
 export const WHERE_BEFORE_OPEN = "Open in Bibliography";
 
 /**
@@ -166,14 +189,14 @@ export function whereHeadLine(year: number | null, now: number): string {
     : `A piece from ${year}: where it sits now`;
 }
 
-/** **Which list leads**: *After it* for an older piece, *Before it* for a recent one, side by side with no year. */
+/** **Which list leads**: *Papers that cite it* for an older piece, *What it builds on* for a recent one, side by side with no year. */
 export type WhereOrder = "after-first" | "before-first" | "side-by-side";
 export function whereOrder(year: number | null, now: number): WhereOrder {
   if (year === null) return "side-by-side";
   return now - year > WHERE_OLD_AFTER_YEARS ? "after-first" : "before-first";
 }
 
-/** What *Before it* is handed: Bibliography's state, enough to say why there are no rows. */
+/** What *What it builds on* is handed: Bibliography's state, enough to say why there are no rows. */
 export interface WhereBefore {
   status: "loading" | "none" | "ready" | "error";
   works: readonly CitedWork[] | null;
@@ -204,7 +227,11 @@ export function WhereItSitsPanel({
   /** OpenAlex's citers, Reception's *Cited by* read (useCiters.ts). */
   citers: UseCiters;
   before: WhereBefore;
-  /** The piece's year from its metadata, or `null`. The dossier's own year stands in when this has none. */
+  /**
+   * The piece's year from its metadata (`publishedAt`, else `publishedYear`),
+   * or `null`. The only year printed; the dossier's stands in for the order
+   * alone (the file's header says why).
+   */
   articleYear: number | null;
   /** A finding's chat (SituateDossier.tsx § `SituateChats`). */
   chats: SituateChats;
@@ -213,7 +240,11 @@ export function WhereItSitsPanel({
   onOpenWork(workId: string): void;
   /** Go to another sub-mode: a tool, or Bibliography. A plain move: it arms nothing. */
   onView(view: SourcesView): void;
-  /** A tool's number beside its link, when it has one worth saying (sources-counts.ts). */
+  /**
+   * A tool's number beside its name, present exactly when its stored result
+   * has been read, and then drawn even when it is 0 (sources-counts.ts §
+   * `whereToolCounts`).
+   */
   toolCounts?: Partial<Record<SourcesTool, number>>;
   /** One finding to bring into view, once — a margin line's *Open in Sources*, or its chat's way back. */
   findingFocus?: ItemFocus | null;
@@ -223,15 +254,15 @@ export function WhereItSitsPanel({
   now?: ThisYear;
 }) {
   const made = situate.status === "ready" ? situate.situate : null;
-  const year = articleYear ?? (typeof made?.year === "number" ? made.year : null);
   const nowYear = now();
-  const order = whereOrder(year, nowYear);
+  /* The model's year may order the lists; it is never printed (header). */
+  const orderYear = articleYear ?? (typeof made?.year === "number" ? made.year : null);
+  const order = whereOrder(orderYear, nowYear);
   const after = (
     <section key="after" className="where-section where-after" aria-labelledby="where-after-head">
       <h3 id="where-after-head" className="rcp-group-head where-head">
         {WHERE_AFTER_HEAD}
       </h3>
-      <p className="gloss-quiet where-what">{WHERE_AFTER_WHAT}</p>
       <AfterIt citers={citers} />
     </section>
   );
@@ -261,9 +292,33 @@ export function WhereItSitsPanel({
         {/* The dossier's own head line says what the planner made of the
             piece once it has run; before then, this one says what the band
             is looking at (plan § Stage 2). Never both. */}
-        {made === null && <p className="where-headline">{whereHeadLine(year, nowYear)}</p>}
+        {made === null && <p className="where-headline">{whereHeadLine(articleYear, nowYear)}</p>}
+        <nav className="where-tools" aria-label={`${SOURCES_SUB_MODES.where.label}: ${WHERE_TOOLS_HEAD.toLowerCase()}`}>
+          <span className="where-tools-head">{WHERE_TOOLS_HEAD}</span>
+          {SOURCES_TOOLS.map((tool) => (
+            <WhereTool key={tool} view={tool} label={SOURCES_TOOL_LABEL[tool]} count={toolCounts[tool]} onView={onView} />
+          ))}
+          {/* Behind the experimental switch, and nowhere else: no chip, no
+              command-bar row (params.ts § `SOURCES_EXPERIMENTS`). Plain moves,
+              arming nothing, as the tools are. */}
+          {experiments && (
+            <span className="where-experiments">
+              <span className="where-tools-head">{WHERE_EXPERIMENTS_HEAD}</span>
+              {SOURCES_EXPERIMENTS.map((experiment) => (
+                <WhereTool
+                  key={experiment}
+                  view={experiment}
+                  label={SOURCES_EXPERIMENT_LABEL[experiment]}
+                  count={undefined}
+                  onView={onView}
+                />
+              ))}
+            </span>
+          )}
+        </nav>
         <SituateDossier
           owner={situate}
+          articleYear={articleYear}
           chats={chats}
           onJump={onJump}
           focus={findingFocus}
@@ -272,45 +327,6 @@ export function WhereItSitsPanel({
         <div className={`where-lists where-lists-${order}`} data-where-order={order}>
           {order === "before-first" ? [beforeList, after] : [after, beforeList]}
         </div>
-        <nav className="where-tools" aria-label={`${SOURCES_SUB_MODES.where.label}: ${WHERE_TOOLS_HEAD.toLowerCase()}`}>
-          <span className="where-tools-head">{WHERE_TOOLS_HEAD}:</span>
-          {SOURCES_TOOLS.map((tool) => {
-            const n = toolCounts[tool];
-            return (
-              <button
-                key={tool}
-                type="button"
-                className="where-tool"
-                data-tool={tool}
-                data-tip={`${SOURCES_SUB_MODES[tool].description}.`}
-                onClick={() => onView(tool)}
-              >
-                {SOURCES_TOOL_LABEL[tool]}
-                {n !== undefined && n > 0 && <span className="rcp-view-count">{n}</span>}
-              </button>
-            );
-          })}
-          {/* Behind the experimental switch, and nowhere else: no chip, no
-              command-bar row (params.ts § `SOURCES_EXPERIMENTS`). Plain moves,
-              arming nothing, as the tools are. */}
-          {experiments && (
-            <span className="where-experiments">
-              <span className="where-tools-head">{WHERE_EXPERIMENTS_HEAD}:</span>
-              {SOURCES_EXPERIMENTS.map((experiment) => (
-                <button
-                  key={experiment}
-                  type="button"
-                  className="where-tool"
-                  data-tool={experiment}
-                  data-tip={`${SOURCES_SUB_MODES[experiment].description}.`}
-                  onClick={() => onView(experiment)}
-                >
-                  {SOURCES_EXPERIMENT_LABEL[experiment]}
-                </button>
-              ))}
-            </span>
-          )}
-        </nav>
       </div>
     </ModeSurface>
   );
@@ -318,12 +334,70 @@ export function WhereItSitsPanel({
 
 /** The (i)'s first paragraph: what the band is made of, and what costs what. */
 export const WHERE_ABOUT =
-  "After it and Before it cost nothing and use no AI: the papers that cite this piece, from OpenAlex, and the works Bibliography rates the piece as leaning on most. Search the literature is the one press here that pays for an AI: it runs only when you press it. The tools below each open their own view, and nothing starts until you press a button there.";
+  "Papers that cite it and What it builds on cost nothing and use no AI: the papers that cite this piece, from OpenAlex, and the works Bibliography rates the piece as leaning on most. Search the literature is the one press here that pays for an AI: it runs only when you press it. The tools at the top each open their own view, and nothing starts until you press a button there.";
 
 /**
- * ***Before it*** — Bibliography's works the piece leans on most, a press
- * each opening its row there. The ranking is Investigate's (`investigateWorks`):
- * by the model's `relevance`, a work with no rating left out.
+ * **One tool, or one experiment, on the tools row**: the part-switcher's
+ * button (`.summ-view-btn`) alone in its own outline (`.summ-views`), so it
+ * looks like the chips above it and the row wraps between whole tools. A
+ * move, never a choice held here, so no radio role and never `.on`. The
+ * count is the chips' (`.rcp-view-count`), drawn whenever it is known, 0
+ * included.
+ */
+function WhereTool({
+  view,
+  label,
+  count,
+  onView,
+}: {
+  view: WhereChild;
+  label: string;
+  count: number | undefined;
+  onView(view: SourcesView): void;
+}) {
+  return (
+    <span className="summ-views where-tool-frame">
+      <button
+        type="button"
+        className="summ-view-btn where-tool"
+        data-tool={view}
+        data-tip={`${SOURCES_SUB_MODES[view].description}.`}
+        onClick={() => onView(view)}
+      >
+        {label}
+        {count !== undefined && <span className="rcp-view-count">{count.toLocaleString("en-GB")}</span>}
+      </button>
+    </span>
+  );
+}
+
+/**
+ * **A Bibliography title that is only its authors and year** — *Putnam
+ * (1975)*, which the bibliography step writes when the article names a work
+ * by its citation alone — so the row does not say *Putnam (1975) Putnam
+ * 1975*. True when every word of the title is a word of the by-line (the
+ * authors and the year), ignoring *et al.*, *and* and punctuation.
+ */
+export function titleIsOnlyByline(title: string, authors: string | undefined, year: string | undefined): boolean {
+  const words = (text: string) =>
+    text
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((w) => w !== "" && w !== "et" && w !== "al" && w !== "and");
+  const titleWords = words(title);
+  if (titleWords.length === 0) return true;
+  const bylineWords = new Set(words(`${authors ?? ""} ${year ?? ""}`));
+  return bylineWords.size > 0 && titleWords.every((w) => bylineWords.has(w));
+}
+
+/**
+ * ***What it builds on*** (*Before it* until 2026-10-26) — Bibliography's
+ * works the piece leans on most, a press each opening its row there. The
+ * ranking is Investigate's (`investigateWorks`): by the model's `relevance`,
+ * a work with no rating left out. Each row is the work's title, unless
+ * Bibliography has only an author–year label for it (`titleIsOnlyByline`),
+ * then its authors and year once. The words are in the dossier's link colour
+ * (`.where-work`), because a press opens the row.
  */
 function BeforeIt({
   before,
@@ -351,24 +425,27 @@ function BeforeIt({
       ) : (
         <ul className="where-before-list">
           {shown.map((work) => {
+            const title = work.title.trim();
             const byline = workShortName({
               title: "",
               ...(work.authors !== undefined ? { authors: work.authors } : {}),
               ...(work.year !== undefined ? { year: work.year } : {}),
             }).trim();
+            /* An author–year label is the by-line again: say the by-line once, in the title's place. */
+            const labelOnly = byline !== "" && titleIsOnlyByline(title, work.authors, work.year);
             return (
               <li key={work.id} data-citation-id={work.id}>
                 <button
                   type="button"
                   className="where-work"
                   data-tip={WHERE_BEFORE_OPEN}
-                  aria-label={`${WHERE_BEFORE_OPEN}: ${work.title.trim()}`}
+                  aria-label={`${WHERE_BEFORE_OPEN}: ${labelOnly ? byline : title}`}
                   onClick={() => onOpenWork(work.id)}
                 >
                   {/* The article's own reference words, so the author's face
                       (docs/project/fonts.md), as Investigate draws them. */}
-                  <span className="where-work-title voice-author">{shortTitle(work.title.trim())}</span>
-                  {byline !== "" && <span className="where-work-by">{byline}</span>}
+                  <span className="where-work-title voice-author">{labelOnly ? byline : shortTitle(title)}</span>
+                  {!labelOnly && byline !== "" && <span className="where-work-by">{byline}</span>}
                 </button>
               </li>
             );
@@ -404,7 +481,8 @@ export function ToolBack({ tool, onBack }: { tool: WhereChild; onBack(): void })
 }
 
 /**
- * ***After it*** — OpenAlex's citers, and for a much-cited piece a second
+ * ***Papers that cite it*** (*After it* until 2026-10-26) — OpenAlex's
+ * citers, and for a much-cited piece a second
  * view beside *Most cited*: *About "extended mind"*, the citers whose title or
  * abstract mentions OpenAlex's own keyword for the work (plan 261025h,
  * decision 10, GPT Sol's F15). A reader's choice, never an automatic filter:

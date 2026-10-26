@@ -1,10 +1,11 @@
 ---
 id: q-vg2b69
 report: spya-w95xmq
-status: open
+status: answered
 asked: 2026-10-25
+acted: spya-c03jnn
 title: What should Sources show first, and should six sub-modes become three?
-refs: docs/plans/261025c-sources-proposals-what-it-shows-first-and-fewer-sub-modes.md · docs/investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md · docs/user-feedback/261023_2305-sources-situate-the-piece-in-the-literature.md · docs/project/sources.md · qi-mbh8appj
+refs: docs/plans/261025c-sources-proposals-what-it-shows-first-and-fewer-sub-modes.md · docs/investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md · docs/user-feedback/261023_2305-sources-situate-the-piece-in-the-literature.md · docs/project/sources.md · qi-mbh8appj · docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md · docs/investigations/261025h-situate-eval-haiku-sonnet-opus.md
 ---
 I tried Search the literature on six real articles. On five of them it found what a careful reader in the field would point to (on the blog post it was thinner), for about $0.33 and 45 seconds an article; Reception, Cited by and Not cited mostly did not. So in every option, Sources goes from six chips to three: Where it sits, Bibliography, Links. Reception, Claims, Not cited and Investigate move inside the first one, folded, with nothing lost.
 
@@ -22,20 +23,21 @@ Details
 
 What this is for. Over 22 reports since 11 September you have asked Sources for the same five things: who cited the piece and whether they agreed; whether its citations hold up; something beyond paraphrasing the article; the key themes and landmark papers; and fewer sub-modes. You answered on 25 October that before or after "depends on whether this is an old or a new article", and asked for proposals on what to show first.
 
-What I tried. Six articles on my own machine (never production): Clark & Chalmers, The Extended Mind (1998); Dropout (2014); Evaluating AGENTS.md (February 2026); Anil Seth's essay The Mythology of Conscious AI; Scott Alexander's Heuristics That Almost Always Work; and Consciousness in AI (2023). On each I ran Search the literature, today's Reception, Cited by and Not cited.
+What I tried, what came back, and what each option means in use, with sketches, are in the plan and the investigation (refs). In short: on five of six articles Search the literature found what a careful reader in the field would point to; Reception, Cited by and Not cited mostly did not. A spends money and sends the article out on every open; B opens on free lists and spends only on a press; C organises everything by paper, which loses the findings that are not a citing paper. Question 2 changes two rules chosen on purpose: a paper held twice refuses to show citers, and the piece's own translations count as works it did not cite.
 
-What came back. Search the literature, on The Extended Mind: Adams & Aizawa's "coupling is not constitution" beside the sentence they attack, Rupert's rival view, the "second wave" of the debate, and Clark's own 2025 paper on AI. On Dropout: the 2017 challenge to its main explanation, the Bayesian reading, why plain dropout is weak in image networks, and why large language models stopped using it. On the 2026 AGENTS.md paper: its wording softened between versions, and its headline result rests on a borderline statistical test. On Seth's essay: the academic paper behind it and the fifty published replies to that. Reception found nothing on three of the six and one page on each of the others. Cited by found nothing for The Extended Mind (the database holds it twice) and, until I fixed it today, nothing for Consciousness in AI (the database's record carries another paper's title). Not cited listed The Extended Mind's own Spanish translation as a paper it does not cite.
+(The question as first published was longer; it was shortened here, after the answer, to fit the published body.)
 
-What each option means in use, with sketches, is in the plan (refs). In short:
+Greg's reply, 2026-10-25 (spya-c03jnn):
 
-A gives you the best part straight away, but spends money and sends the article out every time you open Sources, even for a glance at the bibliography, and after four articles in an hour it stops working until the hour is up. It also hands you a verdict before you have read.
+"1 It's hard for me to really make these judgments, so I'd be tempted to say just build a bunch of new submodes that exhibit different behaviors and interfaces, and I'll play with them and then have a sense of what's better and be able to give really concrete feedback. / 2 Yeah, use your judgment. I mean, it makes sense to avoid duplicates, unless they're somehow meaningfully distinct, or it makes sense to keep them as such.."
 
-B opens on lists that cost nothing and send nothing new. For The Extended Mind, After it shows the 556 citing papers that mention "extended mind", led by Sterelny, Rupert and Gallagher, which is close to the landmark papers you asked for. Before it shows Kirsh & Maglio, Putnam, Burge and Hutchins. You press for the findings. Once you have, they are what you see first on that article. An essay or blog post with no record in the database gets only the button. About three sessions (afternoons) to build, plus one for the parts shared by every option.
+And his answer the same day, given with the job:
 
-C organises everything by paper. That reads well for citation lists, but the best findings often are not a citing paper at all (Adams & Aizawa came from a web search), and abstracts rarely say whether they agree, so most marks would say only "mentions". About a week.
+> I'm not totally sure what's best or that I fully understand the proposal. Here's what I'd suggest: if there's something we can do for free, great, let's do that proactively. If there's something that's going to cost money, only do that when we open the sources mode. If it's going to cost a lot of money, like per citation or something, then maybe we only do that when the user requests something for that citation rather than proactively.
+>
+> I mean ideally a mode would only cost a few cents. Given this is an important mode, you know, if it costs $0.30, okay, but then that should be upon user request. Do an eval to see if we can get away with using Haiku more heavily, with maybe Opus for anything that we think requires intelligence. And you know, yeah, be proactive if you think things can be unified into one submode. Great, let's do that.
+>
+> I think take screenshots, ask sub agents to take on the personas of UI/UX experts or product managers or researchers or naive users to look for things that might be confusing or where we can improve them, if you think that's worth doing. And if in doubt, I think it's cheap to create new experimental submodes that I can play around with, that each showcase left field ideas, some of which might have the seed of something really good. So I'd encourage that proceed autonomously, and I'd rather play than discuss.
 
-On "who cited it and did they agree": in every option the findings read the citing papers' abstracts. For a paper with thousands of citers, they read the ones about its subject rather than the most cited, which for Dropout are image-network papers that mention it in passing. The citing sentence itself would be better still, and waits on your Semantic Scholar licence question (q-x9srvv).
+Built as 1B and 2A (plan 261025h): three chips, Where it sits, Bibliography and Links, with Reception, Claims, Not cited and Investigate as tools inside the first. Where it sits opens on free lists. Search the literature runs only on a press, has left the experimental switch, and reads through a Haiku shortlist: about $0.30 with Sonnet, $0.52 under high-powered AI (eval 261025h). A paper held twice is joined; the piece's own editions and its authors' other works are listed apart from Not cited. Two experiments, Guess first and Evidence first, sit behind the experimental switch.
 
-Question 2 is yours because both change a rule chosen on purpose. Today, when the database holds one paper as two records, Cited by refuses to choose. Taking them together only when the title, two authors and the year all match is the change. Hiding the piece's own translations is tidier; grouping them keeps a useful edition findable.
-
-Decided without asking: the findings will be checked in code so that "Since" only cites work dated after the piece, and a note naming a paper it has no source for is trimmed. Fixed today: Consciousness in AI's citers, so Cited by now finds its 196. Not built: any of A, B or C.

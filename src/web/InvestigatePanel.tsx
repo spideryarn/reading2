@@ -160,7 +160,7 @@ export function investigateClaims(claims: readonly ListedClaim[] | null): readon
  * **The works Investigate offers**: the few the piece leans on most, by the model's
  * `relevance`, ties in the bibliography's order. A work with no score is left
  * out rather than ranked, because "leans on most" is the score's claim.
- * *Where it sits*' *Before it* is the same ranking, with its own length
+ * *Where it sits*' *What it builds on* is the same ranking, with its own length
  * (WhereItSitsPanel.tsx, plan 261025h).
  */
 export function investigateWorks(

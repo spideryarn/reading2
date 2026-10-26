@@ -753,7 +753,7 @@ indexes"*:
 - **OpenAlex**, since 2026-10-04: which papers cite the article, when its owner has Sources'
   Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)), and since 2026-10-25
   when its owner opens Sources at all, because *Where it sits*, the owner's default, draws the
-  same list as *After it* ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+  same list as *Papers that cite it* ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
   GPT Sol's F7). The page says *"when you open Sources on an article of yours"*. Who is sent what
   did not change, only when.
 

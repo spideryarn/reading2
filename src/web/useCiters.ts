@@ -1,7 +1,7 @@
 /**
  * **Which papers cite this article**, for Reception's *Cited by* and *Where
- * it sits*' *After it* — one `GET /api/citers/:slug`, and, only when the
- * reader presses *After it*'s *About "keyword"*, one `GET
+ * it sits*' *Papers that cite it* — one `GET /api/citers/:slug`, and, only when the
+ * reader presses *Papers that cite it*'s *About "keyword"*, one `GET
  * /api/citers/:slug?about=topic` (plan 261025h, decision 10; `askTopic`).
  * Nothing else.
  *
@@ -54,7 +54,7 @@ export interface UseCiters {
 
 /**
  * **The plain list alone**, for Reception's *Cited by*, which has no keyword
- * view: the toggle is *After it*'s (WhereItSitsPanel.tsx § `AfterIt`).
+ * view: the toggle is *Papers that cite it*'s (WhereItSitsPanel.tsx § `AfterIt`).
  */
 export type CitersRead = Pick<UseCiters, "result" | "retry">;
 

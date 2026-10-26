@@ -4,10 +4,10 @@
  * since plan
  * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md.
  *
- * - The head line and the order of *After it* and *Before it*, from the
+ * - The head line and the order of *Papers that cite it* and *What it builds on*, from the
  *   piece's year (`whereHeadLine`, `whereOrder`).
- * - *After it* is Reception's *Cited by* answer, with the same sentences.
- * - *Before it* is Bibliography's most relied-on works, each opening its row.
+ * - *Papers that cite it* is Reception's *Cited by* answer, with the same sentences.
+ * - *What it builds on* is Bibliography's most relied-on works, each opening its row.
  * - The tools row moves to a tool and arms nothing; a tool's *← Where it
  *   sits* comes back.
  * - The literature search's button is there with nothing stored.
@@ -20,15 +20,21 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sourcesHead } from "./helpers/sources-head.js";
 import { CITERS_NO_MATCH } from "../src/messages.js";
+import { relatedWorkYearOf } from "../src/related-work.js";
 import type { CitedWork, CitersResult } from "../src/types.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
+import { pieceYear } from "../src/web/modes/sources/SourcesMode.js";
 import type { SourcesView } from "../src/web/params.js";
 import { SITUATE_RUN } from "../src/web/situate-dossier.js";
+import { whereToolCounts } from "../src/web/sources-counts.js";
 import type { UseSituate } from "../src/web/useSituate.js";
 import {
   SOURCES_TOOL_LABEL,
   SOURCES_TOOLS,
+  titleIsOnlyByline,
   ToolBack,
+  WHERE_AFTER_HEAD,
+  WHERE_BEFORE_HEAD,
   WHERE_BEFORE_NONE,
   WHERE_BEFORE_UNRATED,
   whereHeadLine,
@@ -163,7 +169,7 @@ describe("the head line and the order, from the piece's year", () => {
     ]);
   });
 
-  it("puts After it first for an older piece and Before it first for a recent one", () => {
+  it("puts Papers that cite it first for an older piece and What it builds on first for a recent one", () => {
     const order = () => [...host.querySelectorAll(".where-lists > section")].map((s) => s.className);
     draw({ year: 1998 });
     expect(text()).toContain("A piece from 1998: what has been said since");
@@ -175,7 +181,7 @@ describe("the head line and the order, from the piece's year", () => {
   });
 });
 
-describe("After it", () => {
+describe("Papers that cite it", () => {
   it("is the citers, most cited first, five and then Show all", () => {
     draw();
     const rows = [...host.querySelectorAll(".where-after .rcp-citer")];
@@ -183,6 +189,23 @@ describe("After it", () => {
     expect(rows[0]?.textContent).toContain("Citing paper 1");
     act(() => button("Show all 7")?.click());
     expect(host.querySelectorAll(".where-after .rcp-citer")).toHaveLength(7);
+  });
+
+  /* A persona review, 2026-10-26: "After it" and "Before it" left a
+     first-time reader asking what "it" was; and "Papers that cite it, most
+     cited first" said again what the Most cited chip says. */
+  it("heads the two lists in plain words, and says the citers' order once", () => {
+    draw();
+    const heads = [...host.querySelectorAll(".where-lists h3")].map((h) => h.textContent);
+    expect(heads.sort()).toEqual(["Papers that cite it", "What it builds on"]);
+    expect([WHERE_AFTER_HEAD, WHERE_BEFORE_HEAD].sort()).toEqual(heads);
+    const order = () => (host.querySelector(".where-after")?.textContent ?? "").match(/most cited/gi) ?? [];
+    expect(order(), "the answer's own sentence says the order, once").toHaveLength(1);
+    const found = FOUND as Extract<CitersResult, { kind: "found" }>;
+    draw({ citers: { ...found, topic: { keyword: "extended mind" } } });
+    /* The chip, and the answer's sentence; no line under the heading as well. */
+    expect(order()).toHaveLength(2);
+    expect(host.querySelector(".where-after .where-what")).toBeNull();
   });
 
   it("says the same honest sentence Reception's Cited by says when there is no list", () => {
@@ -194,7 +217,7 @@ describe("After it", () => {
 /* Plan 261025h, decision 10 (GPT Sol's F15): a labelled second view beside
    Most cited, the reader's choice; the keyword list is asked on that press
    only (S1-F5). */
-describe("After it's keyword view, About “keyword”", () => {
+describe("Papers that cite it's keyword view, About “keyword”", () => {
   const found = FOUND as Extract<CitersResult, { kind: "found" }>;
   const LANDMARK: CitersResult = { ...found, count: 5849, topic: { keyword: "extended mind" } };
   const ABOUT: CitersResult = {
@@ -257,7 +280,7 @@ describe("After it's keyword view, About “keyword”", () => {
   });
 });
 
-describe("Before it", () => {
+describe("What it builds on", () => {
   it("lists the works rated as leaned on, most first, leaves an unrated one out, and opens a row in Bibliography", () => {
     draw();
     const rows = [...host.querySelectorAll<HTMLButtonElement>(".where-before .where-work")];
@@ -267,6 +290,28 @@ describe("Before it", () => {
     expect(openedWorks).toEqual(["w1"]);
     act(() => host.querySelector<HTMLButtonElement>(".where-before-all")?.click());
     expect(moved).toEqual(["bibliography"]);
+  });
+
+  /* A persona review, 2026-10-26: "Putnam (1975) Putnam 1975". */
+  it("says a work's authors and year once when Bibliography's title is only those", () => {
+    const putnam = { id: "w9", title: "Putnam (1975)", authors: "Putnam", year: "1975", relevance: 0.8 } as CitedWork;
+    const kirsh = {
+      id: "w8",
+      title: "Epistemic actions in Tetris",
+      authors: "Kirsh, D. and Maglio, P.",
+      year: "1994",
+      relevance: 0.9,
+    } as CitedWork;
+    draw({ before: { status: "ready", works: [putnam, kirsh], listing: false } });
+    const rows = [...host.querySelectorAll<HTMLButtonElement>(".where-before .where-work")];
+    expect(rows.map((r) => (r.textContent ?? "").replace(/\s+/g, " ").trim())).toEqual([
+      expect.stringMatching(/^Epistemic actions in Tetris\s*Kirsh.*1994$/),
+      "Putnam 1975",
+    ]);
+    expect(rows[1]?.querySelector(".where-work-title")?.textContent).toBe("Putnam 1975");
+    expect(rows[1]?.querySelector(".where-work-by")).toBeNull();
+    expect(titleIsOnlyByline("Zacks et al. (2007)", "Zacks, J. and Speer, N.", "2007")).toBe(true);
+    expect(titleIsOnlyByline("Deep learning in 2016", "LeCun", "2016")).toBe(false);
   });
 
   it("says why there are no rows", () => {
@@ -291,13 +336,30 @@ describe("the tools row", () => {
     const tools = [...host.querySelectorAll<HTMLButtonElement>(".where-tool")];
     expect(tools.map((t) => t.getAttribute("data-tool"))).toEqual([...SOURCES_TOOLS]);
     expect(tools.map((t) => t.firstChild?.textContent)).toEqual(SOURCES_TOOLS.map((t) => SOURCES_TOOL_LABEL[t]));
-    /* A count only where there is something to count. */
+    /* A count wherever a stored result was read, 0 included; none where nothing is stored. */
     expect(tools[0]?.querySelector(".rcp-view-count")?.textContent).toBe("3");
-    expect(tools[1]?.querySelector(".rcp-view-count")).toBeNull();
+    expect(tools[1]?.querySelector(".rcp-view-count")?.textContent).toBe("0");
+    expect(tools[2]?.querySelector(".rcp-view-count")).toBeNull();
+    expect(tools[3]?.querySelector(".rcp-view-count")).toBeNull();
     for (const tool of tools) act(() => tool.click());
     expect(moved).toEqual([...SOURCES_TOOLS]);
     for (const target of ["reception", "sources-claims", "bibliography"] as const) {
       expect(pendingActivation("a-piece", target), target).toBeNull();
+    }
+  });
+
+  /* A persona review, 2026-10-26: at the foot of a tall band, in small grey
+     links, three of four readers never found the tools. */
+  it("comes first, under the head line and above the literature search, each tool drawn as the chips are", () => {
+    draw({ experiments: true });
+    const nav = host.querySelector("nav.where-tools");
+    const dossier = host.querySelector(".where-situate");
+    const headline = host.querySelector(".where-headline");
+    expect(nav?.compareDocumentPosition(dossier as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(headline?.compareDocumentPosition(nav as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    for (const tool of host.querySelectorAll(".where-tool")) {
+      expect(tool.classList.contains("summ-view-btn"), tool.textContent ?? "").toBe(true);
+      expect(tool.parentElement?.classList.contains("summ-views")).toBe(true);
     }
   });
 
@@ -324,5 +386,28 @@ describe("the tools row", () => {
     act(() => button("Where it sits")?.click());
     expect(back).toEqual(["where"]);
     expect(pendingActivation("a-piece", "bibliography")).toBeNull();
+  });
+});
+
+/* Item 10 of a persona review, 2026-10-26: Where it sits read the year from
+   `publishedAt` alone, Not cited from `publishedYear` too. One rule now, and
+   never the planner model's year. */
+describe("the piece's year", () => {
+  it("is the metadata's, publishedAt or publishedYear, as Not cited's search reads it", () => {
+    expect(pieceYear("2024-05-31", undefined)).toBe(2024);
+    expect(pieceYear(undefined, 2026)).toBe(2026);
+    expect(pieceYear(undefined, undefined)).toBeNull();
+    for (const [at, year] of [["2024-05-31", undefined], [undefined, 2026], [undefined, undefined]] as const) {
+      expect(pieceYear(at, year), `${at} ${year}`).toBe(relatedWorkYearOf({ ...(at ? { publishedAt: at } : {}), ...(year ? { publishedYear: year } : {}) }));
+    }
+  });
+});
+
+describe("the tools row's numbers", () => {
+  const counts = { bibliography: 17, notCited: null, links: 0, reception: 0, claims: { n: 8, unit: "claim" as const } };
+  it("has one for every stored result, 0 included, and none where nothing is stored", () => {
+    expect(whereToolCounts(counts, { reception: true, claims: true })).toEqual({ reception: 0, claims: 8 });
+    expect(whereToolCounts(counts, { reception: false, claims: false })).toEqual({});
+    expect(whereToolCounts({ ...counts, notCited: 0 }, { reception: false, claims: false })).toEqual({ "not-cited": 0 });
   });
 });

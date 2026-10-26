@@ -120,7 +120,8 @@ interface Answer {
 }
 
 /**
- * @param wanted whether the Not cited chip is on screen. Nothing is read until
+ * @param wanted whether Not cited, or *Where it sits* (its tools row numbers it),
+ *   is on screen. Nothing is read until
  *   it first is.
  * @param bibliographyBasis the current Bibliography object. A new object means
  *   its rows may exclude different works, so the stored search is read again.

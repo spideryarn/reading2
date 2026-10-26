@@ -72,11 +72,15 @@
 }
 /* **One chip with Search's** (`.srch-sort-btn`, search.css): the same corner,
    height and "on" — plan 261007h § F4. 28px, the height the shelf's own sort
-   chips are (docs/project/controls.md § The numbers); it was 23px here. */
+   chips are (docs/project/controls.md § The numbers); it was 23px here.
+   The gap is the part-switcher's (mode-band.css), so a chip carrying a count
+   (Sources' *About "keyword"* 556) spaces it as Sources' chips do; it had
+   none, and drew *About "extended mind"556* (2026-10-26). */
 .gloss-sort-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.25rem;
   min-height: 1.75rem;
   padding: 0.1rem 0.4rem;
   border: 1px solid transparent;

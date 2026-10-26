@@ -6,6 +6,9 @@
  * § Stage 4 (GPT Sol's F12 and F13).
  *
  * - *Reveal* hides the search's reading until pressed, and shows it after.
+ * - Each passage takes the reader's guess or reading first, a radio in the
+ *   house's part-switcher, and its reveal sets that beside the search's kind
+ *   in plain words, marking nothing right or wrong.
  * - With no dossier, each says so and points at *Search the literature* with a
  *   plain move: nothing starts.
  * - Nothing the reader does is sent or kept: the fetch double and the
@@ -24,14 +27,21 @@ import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { SOURCES_EXPERIMENTS, type SourcesExperiment, type SourcesView, visitorSourcesView } from "../src/web/params.js";
 import {
   EVIDENCE_REVEAL,
+  evidenceLine,
   EXPERIMENT_GO_SEARCH,
   EXPERIMENT_NO_DOSSIER,
   EXPERIMENT_NO_FINDINGS,
   type ExperimentRead,
-  GUESS_HIDE,
+  GUESS_CHOICE_LABEL,
+  GUESS_CHOICES,
+  GUESS_HIDE_ALL,
+  GUESS_OF_KIND,
   GUESS_REVEAL,
+  GUESS_REVEAL_ALL,
+  guessLine,
   SourcesExperimentPanel,
 } from "../src/web/SourcesExperiments.js";
+import { SITUATE_FINDING_KINDS } from "../src/types.js";
 import { SITUATE_FINDING_LABEL } from "../src/web/situate-dossier.js";
 import { subModesOf } from "../src/web/sub-modes.js";
 
@@ -154,34 +164,71 @@ const text = () => (host.textContent ?? "").replace(/\s+/g, " ");
 const button = (words: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").trim().startsWith(words));
 
+/** A row's radio by its words (the part-switcher as a radio group, SourcesExperiments.tsx § `ChoiceBar`). */
+const radio = (row: Element | undefined, words: string) =>
+  [...(row?.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]') ?? [])].find((b) => b.textContent === words);
+const rowsOf = (cls: string) => [...host.querySelectorAll<HTMLElement>(cls)];
+
 describe("Guess first", () => {
-  it("shows the passages and hides every kind, note and source until Reveal, then shows them, then hides them again", () => {
+  const hidden = () => {
+    expect(text()).not.toContain(CHALLENGED_NOTE);
+    expect(text()).not.toContain(SUPPORTED_NOTE);
+    expect(text()).not.toContain("Source si-000000000001");
+    expect(host.querySelector("[data-situate-kind]")).toBeNull();
+  };
+
+  it("shows the passages and hides every kind, note and source until Reveal them all, then shows them, then hides them again", () => {
     draw("guess-first");
     expect(text()).toContain("The effect is large and robust");
     expect(text()).toContain("Sleep helps memory");
     expect(text()).toMatch(/what do you think critics, supporters and later work said/i);
-    const hidden = () => {
-      expect(text()).not.toContain(CHALLENGED_NOTE);
-      expect(text()).not.toContain(SUPPORTED_NOTE);
-      expect(text()).not.toContain(SITUATE_FINDING_LABEL.challenged);
-      expect(text()).not.toContain(SITUATE_FINDING_LABEL.supported);
-      expect(text()).not.toContain("Source si-000000000001");
-      expect(host.querySelector("[data-situate-kind]")).toBeNull();
-    };
     hidden();
-    act(() => button(GUESS_REVEAL)?.click());
+    act(() => button(GUESS_REVEAL_ALL)?.click());
     expect(text()).toContain(CHALLENGED_NOTE);
     expect(text()).toContain(SUPPORTED_NOTE);
-    expect(text()).toContain(SITUATE_FINDING_LABEL.challenged);
+    expect(host.querySelector('[data-situate-kind="challenged"]')).not.toBeNull();
     expect(text()).toContain("Source si-000000000001");
-    act(() => button(GUESS_HIDE)?.click());
+    act(() => button(GUESS_HIDE_ALL)?.click());
     hidden();
   });
 
-  it("draws the passage in the author's face and the note in the model's", () => {
+  /* A persona review, 2026-10-26: with nothing to commit to, readers skipped
+     straight to Reveal. A guess per passage, from words mapped onto the
+     dossier's kinds, and a reveal per passage that sets it beside the search's. */
+  it("takes a guess per passage, and that passage's Reveal shows it beside what the search found", () => {
     draw("guess-first");
-    act(() => button(GUESS_REVEAL)?.click());
-    expect(host.querySelector(".rcp-group-quote")?.textContent).toContain("The effect is large and robust");
+    const rows = rowsOf(".experiment-guess-row");
+    expect(rows).toHaveLength(2);
+    const options = [...(rows[0]?.querySelectorAll('[role="radio"]') ?? [])].map((b) => b.textContent);
+    expect(options).toEqual(GUESS_CHOICES.map((c) => GUESS_CHOICE_LABEL[c]));
+    const supported = radio(rows[0], GUESS_CHOICE_LABEL.supported);
+    act(() => supported?.click());
+    expect(supported?.getAttribute("aria-checked")).toBe("true");
+    expect(supported?.classList.contains("on")).toBe(true);
+    act(() => [...(rows[0]?.querySelectorAll("button") ?? [])].find((b) => b.textContent === GUESS_REVEAL)?.click());
+    expect(rows[0]?.textContent).toContain("You guessed Supported · the search found Challenged");
+    expect(rows[0]?.textContent).toContain(CHALLENGED_NOTE);
+    expect(supported?.disabled, "the guess is locked once revealed").toBe(true);
+    /* The other passage is still hidden, and with no guess says only the search's half. */
+    expect(rows[1]?.textContent).not.toContain(SUPPORTED_NOTE);
+    act(() => [...(rows[1]?.querySelectorAll("button") ?? [])].find((b) => b.textContent === GUESS_REVEAL)?.click());
+    expect(rows[1]?.textContent).toContain("The search found Supported");
+    /* Both open now, so the foot offers to hide them. */
+    expect(button(GUESS_HIDE_ALL)).toBeDefined();
+  });
+
+  it("maps every kind of the dossier onto one of the guesses", () => {
+    for (const kind of SITUATE_FINDING_KINDS) expect(GUESS_CHOICES).toContain(GUESS_OF_KIND[kind]);
+    expect(guessLine(null, "since")).toBe(`The search found ${SITUATE_FINDING_LABEL.since}`);
+  });
+
+  it("draws the passage in the author's face, as the link to it with no block id, and the note in the model's", () => {
+    draw("guess-first");
+    act(() => button(GUESS_REVEAL_ALL)?.click());
+    const quote = host.querySelector(".rcp-group-quote");
+    expect(quote?.textContent).toContain("The effect is large and robust");
+    expect(quote?.querySelector("a.block-ref")?.textContent).toMatch(/^“.+”$/);
+    expect(text()).not.toContain("aaaaaa");
     expect(host.querySelector(".situate-note")?.classList.contains("voice-ai")).toBe(true);
   });
 });
@@ -193,21 +240,28 @@ describe("Evidence first", () => {
     expect(text()).toContain("the effect did not replicate in a larger sample");
     expect(text()).not.toContain(CHALLENGED_NOTE);
     expect(host.querySelector("[data-situate-kind]")).toBeNull();
-    const rows = [...host.querySelectorAll<HTMLElement>(".experiment-evidence-row")];
+    const rows = rowsOf(".experiment-evidence-row");
     expect(rows).toHaveLength(2);
-    /* The reader's choice first: local, pressed, and locked once revealed. */
-    const challenges = [...(rows[0]?.querySelectorAll<HTMLButtonElement>(".gloss-sort-btn") ?? [])].find(
-      (b) => b.textContent === "Challenges",
-    );
+    /* The reader's choice first: a radio in the house's part-switcher, chosen visibly, and locked once revealed. */
+    const options = [...(rows[0]?.querySelectorAll('.summ-views[role="radiogroup"] .summ-view-btn') ?? [])].map((b) => b.textContent);
+    expect(options).toEqual(["Supports it", "Challenges it", "Adds to it"]);
+    const challenges = radio(rows[0], "Challenges it");
     act(() => challenges?.click());
-    expect(challenges?.getAttribute("aria-pressed")).toBe("true");
-    act(() => rows[0]?.querySelector<HTMLButtonElement>(".experiment-reveal")?.click());
+    expect(challenges?.getAttribute("aria-checked")).toBe("true");
+    expect(challenges?.classList.contains("on")).toBe(true);
+    /* Reveal is a real button: the house's shadcn Button. */
+    const reveal = rows[0]?.querySelector<HTMLButtonElement>(".experiment-reveal");
+    expect(reveal?.getAttribute("data-slot")).toBe("button");
+    act(() => reveal?.click());
+    expect(rows[0]?.textContent).toContain("You said Challenges it; the search read it as Challenged");
     expect(rows[0]?.textContent).toContain(CHALLENGED_NOTE);
-    expect(rows[0]?.textContent).toContain(SITUATE_FINDING_LABEL.challenged);
     expect(challenges?.disabled).toBe(true);
+    /* No right or wrong mark: the six kinds do not map onto three words. */
+    expect(rows[0]?.textContent).not.toMatch(/correct|right|wrong|✓|✗/i);
     /* The other finding is still hidden. */
     expect(rows[1]?.textContent).not.toContain(SUPPORTED_NOTE);
     expect(button(EVIDENCE_REVEAL)).toBeDefined();
+    expect(evidenceLine(null, "supported")).toBe("The search read it as Supported");
   });
 });
 
@@ -230,11 +284,15 @@ describe("what they cost and keep", () => {
 
   it("sends nothing and stores nothing through every press in both", () => {
     draw("guess-first");
-    act(() => button(GUESS_REVEAL)?.click());
-    act(() => button(GUESS_HIDE)?.click());
+    for (const b of [...host.querySelectorAll<HTMLButtonElement>('.experiment-guess-row [role="radio"]')]) act(() => b.click());
+    for (const b of [...host.querySelectorAll<HTMLButtonElement>(".experiment-guess-row .experiment-reveal")]) act(() => b.click());
+    act(() => button(GUESS_HIDE_ALL)?.click());
+    act(() => button(GUESS_REVEAL_ALL)?.click());
+    expect(host.querySelectorAll(".experiment-guess-row [data-situate-kind]"), "the presses did reveal").toHaveLength(2);
     draw("evidence-first");
-    for (const b of [...host.querySelectorAll<HTMLButtonElement>(".experiment-evidence-row .gloss-sort-btn")]) act(() => b.click());
+    for (const b of [...host.querySelectorAll<HTMLButtonElement>('.experiment-evidence-row [role="radio"]')]) act(() => b.click());
     for (const b of [...host.querySelectorAll<HTMLButtonElement>(".experiment-reveal")]) act(() => b.click());
+    expect(host.querySelectorAll(".experiment-evidence-row [data-situate-kind]"), "the presses did reveal").toHaveLength(2);
     expect(requests).toEqual([]);
     expect(stored).toEqual([]);
     expect(addressWrites).toEqual([]);

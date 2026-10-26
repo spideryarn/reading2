@@ -169,14 +169,25 @@ function situate(over: Partial<Situate> = {}): Situate {
 }
 
 describe("the words and the order", () => {
-  it("heads the dossier with the kind, the year and what it looked for", () => {
-    expect(situateHeadLine({ kind: "review", year: 2023, angle: "since" })).toBe(
-      "A review from 2023: what has happened since",
-    );
-    expect(situateHeadLine({ kind: "empirical", year: 2026, angle: "now" })).toBe("A study from 2026: where it sits now");
-    expect(situateHeadLine({ kind: "theory", year: null, angle: "now" }), "a year it could not tell is left out").toBe(
+  it("heads the dossier with the kind, the piece's year from its metadata, and what it looked for", () => {
+    expect(situateHeadLine({ kind: "review", angle: "since" }, 2023)).toBe("A review from 2023: what has happened since");
+    expect(situateHeadLine({ kind: "empirical", angle: "now" }, 2026)).toBe("A study from 2026: where it sits now");
+    expect(situateHeadLine({ kind: "theory", angle: "now" }, null), "no year in the metadata, none printed").toBe(
       "A theoretical piece: where it sits now",
     );
+  });
+
+  /* A persona review, 2026-10-26: on Clark & Chalmers the head line said
+     "from 1998", the planner model's reading, while Not cited, reading the
+     metadata, said it did not know when the piece was published. */
+  it("never prints the planner's year when the metadata has none", () => {
+    const headline = () => host.querySelector(".situate-headline")?.textContent ?? "";
+    act(() => root.render(panel(owner(), [], null, null)));
+    expect(owner().situate?.year, "the planner did read a year").toBe(2023);
+    expect(headline()).toContain("A review: what has happened since");
+    expect(headline()).not.toMatch(/\d/);
+    act(() => root.render(panel(owner(), [], null, 2023)));
+    expect(headline()).toContain("A review from 2023: what has happened since");
   });
 
   it("groups by kind in the reader's order, strongest first within, with no empty groups", () => {
@@ -249,13 +260,14 @@ function panel(
   situateOwner: UseSituate,
   summaries: ThreadSummary[] = [],
   focus: { findingFocus: { id: string; n: number }; onFindingFocusTaken(f: { id: string }): void } | null = null,
+  articleYear: number | null = 2023,
 ): ReactElement {
   return createElement(WhereItSitsPanel, {
     head: sourcesHead({ view: "where", onView: () => {}, ownerSlug: "a-piece" }),
     situate: situateOwner,
     citers: { result: { kind: "no-doi" }, retry: () => {}, topic: undefined, askTopic: () => {}, retryTopic: () => {} },
     before: { status: "none", works: null, listing: false },
-    articleYear: null,
+    articleYear,
     chats: {
       summaries,
       onFinding: (f: SituateFinding) => askedFindings.push(f.id),
@@ -390,7 +402,7 @@ describe("the section", () => {
     expect(host.textContent).not.toContain(SITUATE_QUESTIONS_HEAD);
   });
 
-  it("sits above After it and Before it once it has run (plan 261025h, decision 1)", () => {
+  it("sits above Papers that cite it and What it builds on once it has run (plan 261025h, decision 1)", () => {
     paint(owner());
     const after = host.querySelector(".where-after");
     expect(section()?.compareDocumentPosition(after as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
@@ -417,6 +429,19 @@ describe("the section", () => {
     const first = section()?.querySelector<HTMLAnchorElement>(".situate-finding a.block-ref");
     act(() => first?.click());
     expect(jumped).toEqual([A]);
+  });
+
+  /* A persona review, 2026-10-26: the grey block id after each quote
+     (`df4crx`) meant nothing to a reader. The quote is the link now; the
+     address, the card's hook and the jump are kept. */
+  it("makes the quoted passage the link, and draws no block id", () => {
+    paint(owner());
+    const head = section()?.querySelector<HTMLElement>(".situate-finding .situate-finding-head");
+    const link = head?.querySelector<HTMLAnchorElement>("a.block-ref");
+    expect(link?.textContent).toMatch(/^“.+”$/);
+    expect(link?.getAttribute("href")).toContain(`at=${A}`);
+    expect(link?.getAttribute("data-block-link")).toBe(A);
+    expect(head?.textContent).not.toContain(A.replace(/^spya-/, ""));
   });
 
   it("links each source and shows what it says one press away", () => {

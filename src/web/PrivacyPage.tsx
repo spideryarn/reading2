@@ -505,7 +505,7 @@ export function PrivacyPage() {
               press on Search the literature, in Sources › Where it sits and
               out of the experimental switch since plan 261025h.
               The citers are asked on opening Sources since the same plan,
-              because Where it sits is the owner's default and its After it
+              because Where it sits is the owner's default and its Papers that cite it
               is that list (SourcesMode.tsx § `useCiters`).
               The searches are planned by a model from the fenced title,
               headings and opening, never the profile, and each is one forced

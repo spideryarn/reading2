@@ -270,6 +270,14 @@ describe("the order chips are one chip", () => {
     expect(decl(base(".srch-sort-btn"), "border-radius")).toBe("var(--radius)");
   });
 
+  /* Sources' *About "extended mind"* carries a count, and with no gap it drew
+     `About “extended mind”556` (a persona review, 2026-10-26). */
+  it("space a count from its label as the part-switcher does", () => {
+    const partGap = decl(base(".summ-view-btn"), "gap");
+    expect(partGap).toBeDefined();
+    expect(decl(base(".gloss-sort-btn"), "gap")).toBe(partGap);
+  });
+
   it("share one height", () => {
     const g = decl(base(".gloss-sort-btn"), "min-height");
     expect(g).toBeDefined();

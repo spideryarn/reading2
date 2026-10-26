@@ -766,7 +766,7 @@ describe("Sources' seven sub-modes", () => {
   });
 
   /* Where it sits is the default (plan 261025h): a mode row with nothing
-     named buys the citations, for *Before it*, and never the search. */
+     named buys the citations, for *What it builds on*, and never the search. */
   it("arms the citations from the mode row when Sources would open on Where it sits", () => {
     const onMode = vi.fn();
     reading({ onMode });

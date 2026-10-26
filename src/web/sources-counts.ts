@@ -190,3 +190,31 @@ export function listedClaims(
   if (list.kind === "owner") return list.status === "ready" ? (list.claimList?.claims ?? null) : null;
   return list.claimList?.claims ?? null;
 }
+
+/** What *Where it sits*' tools row can number (WhereItSitsPanel.tsx § `SOURCES_TOOLS`, less Investigate). */
+export interface WhereToolCounts {
+  reception?: number;
+  claims?: number;
+  "not-cited"?: number;
+}
+
+/**
+ * **The tools row's numbers: one wherever a stored result has been read, 0
+ * included**, and none where nothing is stored. Until 2026-10-26 a tool drew
+ * its number only above 0, so *Pages about it* showed nothing over a stored
+ * search that had confirmed no page, the same as a search never run; and Not
+ * cited's stored answer was not read on *Where it sits* at all, so it never
+ * had one there (a persona review; SourcesMode.tsx now reads it, which is a
+ * read of our own table and asks OpenAlex nothing). The numbers are the
+ * chips' own (`sourcesCounts`), so a tool and its list cannot disagree.
+ */
+export function whereToolCounts(
+  counts: SourcesCounts,
+  stored: { reception: boolean; claims: boolean },
+): WhereToolCounts {
+  return {
+    ...(stored.reception ? { reception: counts.reception } : {}),
+    ...(stored.claims ? { claims: counts.claims.n } : {}),
+    ...(counts.notCited !== null ? { "not-cited": counts.notCited } : {}),
+  };
+}

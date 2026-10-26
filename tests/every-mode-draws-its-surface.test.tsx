@@ -1292,7 +1292,7 @@ const SPENDS: Record<Mode, Spend> = {
 
      **Since plan 261025h only the citations are ever bought by a press**:
      Where it sits, the bare address and the owner's default, arms them for its
-     *Before it* (decision 8), as Bibliography does, and Reception's search and
+     *What it builds on* (decision 8), as Bibliography does, and Reception's search and
      Claims' list are each their panel's own button (decision 6, GPT Sol's F5),
      so a `reception` or `sources-claims` POST here is red. */
   sources: {

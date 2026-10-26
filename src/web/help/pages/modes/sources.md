@@ -1,5 +1,5 @@
 ---
-keywords: where it sits after it before it peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier
+keywords: where it sits papers that cite it what it builds on after it before it peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier
 related: mode-referee, faq-beyond-the-article
 ---
 
@@ -39,8 +39,11 @@ for that.
 
 **Where it sits**
 
-- A line at the top says how old the piece is, when we know: for an older piece, what has been said
-  since; for a recent one, where it sits now.
+- A line at the top says how old the piece is, when its details give a year: for an older piece,
+  what has been said since; for a recent one, where it sits now.
+- **Tools**, under that line, open the other four views. Opening one starts nothing, and a number
+  on one is how much it already holds; inside, **Where it sits**, at the top beside the view’s name,
+  brings you back.
 - **Search the literature** is one press. Over a few minutes an AI plans a dozen or so web searches
   from the piece, reads what they find and the later papers that cite it, and lists the passages
   later work challenges, supports or has moved on from, each with its sources and what they say,
@@ -50,31 +53,30 @@ for that.
   Once it has run, its findings come first, and its own questions appear in Ask your own question as
   **Suggested for this piece**. A finding’s chat icon asks about that finding in
   [Chat](/help/mode-chat); the chat goes back to the finding. Only you see any of it.
-- **After it** lists the papers that cite the piece, most cited first, from OpenAlex, a free public
-  index of published work. It is the same list as Cited by in Pages about it. No AI is involved, and
-  we have not read what those papers say about the piece.
+- **Papers that cite it** lists the papers that cite the piece, most cited first, from OpenAlex, a
+  free public index of published work. It is the same list as Cited by in Pages about it. No AI is
+  involved, and we have not read what those papers say about the piece.
 - For a much-cited piece, a second button sits beside **Most cited**: **About** and a keyword in
   quotes, such as *About “extended mind”*. The keyword is OpenAlex’s own for the piece. Pressing it
-  lists only the citing papers whose title or abstract mentions that keyword, which often cite the
-  piece for more than a passing nod. It is asked from OpenAlex when you press it, not before, and
-  once it has been asked the button shows how many there are. Leaving Where it sits puts the list
-  back to Most cited.
-- **Before it** lists the works the piece leans on most, as Bibliography rated them. Press one to
-  open its row in Bibliography.
-- For an older piece, After it comes first; for a recent one, Before it; with no year, side by side.
-- **Tools** at the foot open the other four views. Opening one starts nothing; inside, **Where it
-  sits**, at the top beside the view's name, brings you back.
+  lists only the citing papers whose title or abstract contains that keyword. That is a match on
+  words, not a reading of how those papers cite the piece. It is asked from OpenAlex when you press
+  it, not before, and once it has been asked the button shows how many there are. Leaving Where it
+  sits puts the list back to Most cited.
+- **What it builds on** lists the works the piece leans on most, as Bibliography rated them. Press
+  one to open its row in Bibliography.
+- For an older piece, Papers that cite it comes first; for a recent one, What it builds on; with no
+  year, side by side.
 - With [experimental features](/help/experimental-features) turned on, **Experiments** after the
   tools offers two ways to meet the search of the literature before reading its verdicts. Both use
   the search already made for this piece, cost nothing and start nothing; with no search yet, they
   say so and take you to **Search the literature**. Nothing you choose in them is saved or sent.
-  - **Guess first** shows the passages the search found something about, without saying what. Take
-    a moment to predict what critics, supporters and later work said about each, then press
-    **Reveal what the search found**.
+  - **Guess first** shows the passages the search found something about, without saying what. For
+    each, pick a guess (Challenged, Supported, Added to since, or Something else), then press its
+    **Reveal** to see your guess beside what the search found; **Reveal them all** shows every one.
   - **Evidence first** shows each passage beside what a source says. Decide whether the source
-    supports it, challenges it or updates it, then press **Reveal the search’s reading** to see how
-    the search read it. Your answer is not marked: the search’s own labels do not map onto those
-    three words.
+    supports it, challenges it or adds to it, then press **Reveal the search’s reading** to see your
+    answer beside how the search read it. Neither is marked right or wrong: the search’s own six
+    labels do not map exactly onto your choices.
 
 **Bibliography**
 

@@ -597,7 +597,7 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
  * 2026-10-09 (plan 261009l).
  *
  * **Where it sits arms Bibliography** (plan 261025h, decision 8, GPT Sol's
- * F4), because its *Before it* list is drawn from Bibliography's works, and an
+ * F4), because its *What it builds on* list is drawn from Bibliography's works, and an
  * article can arrive without one (Rebuild, Start again, a re-add): the mode
  * contract says opening an unmade artefact's sub-mode starts it
  * (docs/project/mode.md § The client). Its other lists are free reads with no
@@ -620,7 +620,7 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 export function activationForSources(view: SourcesView): AutoRunTarget | null {
   switch (view) {
     /* Citations' fixed target until 2026-10-09: the list of works cited.
-       *Where it sits* draws *Before it* from it (plan 261025h, F4). */
+       *Where it sits* draws *What it builds on* from it (plan 261025h, F4). */
     case "where":
     case "bibliography":
       return "bibliography";

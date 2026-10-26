@@ -96,13 +96,19 @@ const ANGLE_WORDS: Record<SituateAngle, string> = {
 };
 
 /**
- * **The dossier's first line**: what the planner judged the piece to be, when,
- * and so what the search looked for — *A review from 2023: what has happened
- * since*. A year the planner could not tell is left out rather than guessed.
+ * **The dossier's first line**: what the planner judged the piece to be, and
+ * so what the search looked for, with the piece's year from its metadata —
+ * *A review from 2023: what has happened since*.
+ *
+ * **The year is `articleYear`, never the planner's `year`**, which is a
+ * model's reading of the text: on Clark & Chalmers it printed *from 1998*
+ * while Not cited, reading the metadata, said *we do not know when this piece
+ * was published* (a persona review, 2026-10-26). With no year in the
+ * metadata the line names none.
  */
-export function situateHeadLine(situate: Pick<Situate, "kind" | "year" | "angle">): string {
+export function situateHeadLine(situate: Pick<Situate, "kind" | "angle">, articleYear: number | null): string {
   const noun = KIND_NOUN[situate.kind] ?? KIND_NOUN.other;
-  const when = typeof situate.year === "number" && Number.isFinite(situate.year) ? ` from ${situate.year}` : "";
+  const when = articleYear !== null && Number.isFinite(articleYear) ? ` from ${articleYear}` : "";
   return `${noun}${when}: ${ANGLE_WORDS[situate.angle] ?? ANGLE_WORDS.now}`;
 }
 

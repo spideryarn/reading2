@@ -93,12 +93,20 @@ export function findingChat(summaries: readonly ThreadSummary[], finding: Situat
 
 export function SituateDossier({
   owner,
+  articleYear,
   chats,
   onJump,
   focus = null,
   onFocusTaken,
 }: {
   owner: UseSituate;
+  /**
+   * The piece's year from its metadata, or `null` — the only year the head
+   * line prints. The planner's own `year` is its reading of the text, and
+   * printing it said *from 1998* beside Not cited's *we do not know when this
+   * piece was published* (situate-dossier.ts § `situateHeadLine`).
+   */
+  articleYear: number | null;
   chats: SituateChats;
   onJump(id: BlockId): void;
   /**
@@ -191,7 +199,7 @@ export function SituateDossier({
               Greg, 2026-09-29, *"it's not worth bugging the user about it"*
               (plan 260929c). Search again is at the foot. */}
           <p className="situate-headline">
-            <span>{situateHeadLine(made)}</span>
+            <span>{situateHeadLine(made, articleYear)}</span>
             <WrittenForYou
               written={made.profileHash !== null}
               changed={owner.profileChanged}
@@ -252,10 +260,7 @@ function Finding({
   return (
     <li className="situate-finding" data-finding={finding.id}>
       <p className="situate-finding-head">
-        <span className="rcp-group-quote situate-quote">
-          “<Excerpt blockId={finding.blockId} words={finding.quote} />”
-        </span>
-        <BlockRef id={finding.blockId} onJump={onJump} />
+        <FindingPassage finding={finding} onJump={onJump} />
         {chat ? (
           <OriginChatMark chat={chat} label={OPEN_FINDING_CHAT} className="situate-chat" onOpen={chats.onOpen} />
         ) : (
@@ -273,6 +278,29 @@ function Finding({
         ))}
       </ul>
     </li>
+  );
+}
+
+/**
+ * **A finding's passage, as the link to it** — the quoted words themselves
+ * are the one block link (`BlockRef` with children, as Bibliography's *first
+ * cited* words are), so a press jumps to the passage, the `href` carries
+ * `?at=` for a new tab or *copy link*, and `data-block-link` gives the card.
+ *
+ * Until 2026-10-26 the link was the passage's short block id (`df4crx`)
+ * after the quote, which a persona review found meant nothing to a reader:
+ * it was not the finding's id and no reader purpose needed its characters,
+ * only the link they carried. `preview={false}`, because the words the card
+ * would preview are already the link. Also the experiments' passage
+ * (SourcesExperiments.tsx).
+ */
+export function FindingPassage({ finding, onJump }: { finding: SituateFinding; onJump(id: BlockId): void }) {
+  return (
+    <span className="rcp-group-quote situate-quote">
+      <BlockRef id={finding.blockId} onJump={onJump} preview={false} className="situate-quote-link">
+        “<Excerpt blockId={finding.blockId} words={finding.quote} />”
+      </BlockRef>
+    </span>
   );
 }
 

@@ -2649,6 +2649,9 @@ export function Reader({
      meta has no `publishedAt` in its type (it does not cross the public
      boundary), and then there is simply no marker. */
   const publishedAt = (article.meta as { publishedAt?: unknown }).publishedAt;
+  /* The year alone, when that is all the registry gave (Meta.publishedYear):
+     Sources takes the piece's year from either (SourcesMode.tsx § `pieceYear`). */
+  const publishedYear = (article.meta as { publishedYear?: unknown }).publishedYear;
 
   /**
    * **What every block link's card says** — each block's text and the section
@@ -4223,6 +4226,7 @@ export function Reader({
             onJump={bandJump}
             blockOrder={blockOrder}
             publishedAt={publishedAt}
+            publishedYear={publishedYear}
             articleTitle={article.meta.title}
             workChats={workChats}
             claimChats={claimChats}

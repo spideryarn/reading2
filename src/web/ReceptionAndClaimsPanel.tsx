@@ -1817,7 +1817,7 @@ function CitedBy({ citers, scholar }: { citers: CitersRead; scholar: string | nu
 /**
  * One outcome of the lookup, as its sentence or its list. The `never` makes a new outcome a type error here.
  *
- * **Shared with *Where it sits*' *After it*** (WhereItSitsPanel.tsx, plan
+ * **Shared with *Where it sits*' *Papers that cite it*** (WhereItSitsPanel.tsx, plan
  * 261025h), so the two say the same honest sentence for every outcome rather
  * than two copies drifting; `shown` is how many rows come before *Show all*.
  */

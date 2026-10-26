@@ -370,6 +370,17 @@ let experimentalSince: string | null = null;
 /** The stored literature search, or `null` for none yet (§ Where it sits). */
 let storedSituate: unknown = null;
 
+const RELATED = {
+  kind: "found",
+  works: [{ openalexId: "W77", title: "A close paper", authors: ["C. Author"], authorCount: 1, year: 2010 }],
+  excluded: 0,
+  bibliographyStale: false,
+  bibliographyCapped: false,
+  yearLimited: null,
+  queryChanged: false,
+  searchedAt: "2026-10-20T10:00:00.000Z",
+};
+
 function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
@@ -378,6 +389,8 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/situate/${SLUG}`) return json(storedSituate);
   if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
   if (url === `/api/sources-claims/${SLUG}`) return json({ claimList: CLAIM_LIST, stale: false, outdated: false });
+  /* Not cited's stored answer: one paper. The GET reads our table; only a POST asks OpenAlex. */
+  if (url === `/api/related-work/${SLUG}` && method === "GET") return json(RELATED);
   if (url === `/api/bibliography/${SLUG}`) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
   if (url === `/api/chat/${SLUG}` && method === "POST") {
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
@@ -1036,6 +1049,21 @@ describe("Where it sits", () => {
     expect(chip("Where it sits")?.getAttribute("aria-checked")).toBe("true");
     expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"), "no job on arrival").toEqual([]);
     expect(chatPosts()).toEqual([]);
+  });
+
+  /* A persona review, 2026-10-26 (shot 05): a stored Reception search that
+     confirmed no page showed no number, the same as no search; and Not
+     cited's stored answer was never read on Where it sits. */
+  it("numbers each tool whose stored result it has read, 0 included, asking OpenAlex nothing", async () => {
+    who.set(OWNER);
+    await open("?mode=sources");
+    const count = (view: string) => tool(view)?.querySelector(".rcp-view-count")?.textContent ?? null;
+    await until(() => count("not-cited") !== null && count("reception") !== null, "the tools' numbers");
+    expect(count("reception"), "a stored search with no page about it").toBe("0");
+    expect(count("not-cited")).toBe("1");
+    expect(count("claims")).not.toBeNull();
+    expect(count("investigate")).toBeNull();
+    expect(trace.filter((r) => r.url === `/api/related-work/${SLUG}` && r.method !== "GET"), "no search").toEqual([]);
   });
 
   it("goes to a tool and back, and Back and Forward keep one chip checked, buying nothing", async () => {

@@ -5,7 +5,7 @@
  *
  * ```
  *  ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                           (i)
- *  │ WhereItSitsPanel: After it, Before it, the dossier  ← Where it sits (owner default)
+ *  │ WhereItSitsPanel: Papers that cite it, What it builds on, the dossier  ← Where it sits (owner default)
  *  │   Tools: Pages about it · Check a claim · Close to it, not cited · Ask your own question
  *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (a visitor's default)
  *  │ LinksPanel, read from the article's markup                    ← Links
@@ -98,7 +98,14 @@ import type { CitedWorkChats } from "../../OriginChat.js";
 import type { ItemFocus } from "../../item-focus.js";
 import { yearOf } from "../../reception-order.js";
 import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js";
-import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from "../../sources-counts.js";
+import {
+  checkedSources,
+  listedClaims,
+  type SourcesCounts,
+  sourcesCounts,
+  whereToolCounts,
+} from "../../sources-counts.js";
+import { publishedYearOf } from "../../../types.js";
 import { type LinkableWork, type LinkedBlock, type OutboundLink, outboundLinks } from "../../outbound-links.js";
 import { LinksPanel } from "../../LinksPanel.js";
 import { useRelatedWork } from "../../useRelatedWork.js";
@@ -136,6 +143,7 @@ export function SourcesBand({
   onJump,
   blockOrder,
   publishedAt,
+  publishedYear,
   articleTitle,
   workChats,
   claimChats,
@@ -163,6 +171,11 @@ export function SourcesBand({
   blockOrder: ReadonlyMap<BlockId, number>;
   /** The article's `Meta.publishedAt`, unread — Reception's *date* marker takes its year. */
   publishedAt: unknown;
+  /**
+   * The article's `Meta.publishedYear`, unread: the year alone, set only when
+   * there is no `publishedAt` (`pieceYear`).
+   */
+  publishedYear?: unknown;
   /** The article's title, for Reception's *Who cites it* search (ReceptionAndClaimsPanel § Props). */
   articleTitle: string | null;
   /** A chat about one cited work (BibliographyPanel § `BibliographyAccess`). */
@@ -206,10 +219,12 @@ export function SourcesBand({
      search. Plan 261004h; asked on *Where it sits* since plan 261025h, so on
      opening Sources (privacy.md § OpenAlex). */
   const citers = useCiters(slug, view === "reception" || view === "where");
-  /* Not cited's stored answer, read when its chip is first shown and when
-     Bibliography changes, then kept for its count; its search is the panel's
-     button alone. Plan 261011ac. */
-  const related = useRelatedWork(slug, view === "not-cited", bibliography.bibliography);
+  /* Not cited's stored answer, read when it or *Where it sits* is first shown
+     and when Bibliography changes, then kept for its count; its search is the
+     panel's button alone. Plan 261011ac. Read on *Where it sits* since
+     2026-10-26 for the tools row's number: the GET reads our own table and
+     never asks OpenAlex (routes.ts § related-work). */
+  const related = useRelatedWork(slug, view === "not-cited" || view === "where", bibliography.bibliography);
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
   const links = useOutboundLinks(blocks, sourceUrl);
@@ -234,6 +249,7 @@ export function SourcesBand({
   );
   const head = chips;
   const works = bibliography.bibliography?.citations ?? null;
+  const articleYear = pieceYear(publishedAt, publishedYear);
 
   switch (view) {
     case "where":
@@ -247,7 +263,7 @@ export function SourcesBand({
             works,
             listing: bibliography.job !== null || bibliography.starting,
           }}
-          articleYear={yearOf(publishedAt)}
+          articleYear={articleYear}
           chats={{
             summaries: investigateChats.summaries,
             onFinding: investigateChats.onFinding,
@@ -256,7 +272,10 @@ export function SourcesBand({
           onJump={onJump}
           onOpenWork={onOpenWork}
           onView={(next) => void setView(next)}
-          toolCounts={{ reception: counts.reception, claims: counts.claims.n, "not-cited": counts.notCited ?? 0 }}
+          toolCounts={whereToolCounts(counts, {
+            reception: reception.reception !== null,
+            claims: claimList.status === "ready" || (reception.reception?.claims.rows.length ?? 0) > 0,
+          })}
           findingFocus={findingFocus}
           onFindingFocusTaken={onFindingFocusTaken}
           experiments={experimental.on}
@@ -325,7 +344,7 @@ export function SourcesBand({
           onView={setView}
           {...receptionAndClaimsControls}
           blockOrder={blockOrder}
-          articleYear={yearOf(publishedAt)}
+          articleYear={articleYear}
           articleTitle={articleTitle}
           focus={claimFocus}
           onFocusTaken={onClaimFocusTaken}
@@ -337,6 +356,17 @@ export function SourcesBand({
       return unhandled;
     }
   }
+}
+
+/**
+ * **The piece's year from its metadata**: the year of `publishedAt`, else
+ * `publishedYear` (an article holds one or the other, never both) — the rule
+ * Not cited's search limits by (src/related-work.ts § `relatedWorkYearOf`),
+ * so *Where it sits* and Not cited cannot disagree about whether the year is
+ * known. Never a model's reading of the text (WhereItSitsPanel.tsx header).
+ */
+export function pieceYear(publishedAt: unknown, publishedYear: unknown): number | null {
+  return yearOf(publishedAt) ?? publishedYearOf(publishedYear) ?? null;
 }
 
 /**
@@ -661,8 +691,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
 
 /** The second paragraph of each chip's card: how its rows were got, and what was checked. */
 const VIEW_HOW: Record<SourcesView, string> = {
-  /* Checked against WhereItSitsPanel.tsx: After it is `useCiters`' OpenAlex
-     read, Before it Bibliography's `relevance`, and the dossier's press is its
+  /* Checked against WhereItSitsPanel.tsx: Papers that cite it is `useCiters`' OpenAlex
+     read, What it builds on Bibliography's `relevance`, and the dossier's press is its
      own button (SituateDossier.tsx). */
   where:
     "The papers that cite it come from OpenAlex and the works it leans on from Bibliography, with no AI and nothing to press. Search the literature is one press that pays for an AI to search the web and read what it finds; every quote it shows is checked against its source by the app.",

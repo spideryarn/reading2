@@ -8,15 +8,16 @@
  * ```
  *  ┌ Where it sits │ Bibliography │ Links ┐  Where it sits › Guess first
  *  │ What do you think critics, supporters and later work said about this?
- *  │   “Ignition is a step-function …”  k3m9qt
- *  │   “The report is a reference point …”  q7w2dn
- *  │ [ Reveal what the search found ]
+ *  │   “Ignition is a step-function …”
+ *  │   [Challenged│Supported│Added to since│Something else]  [ Reveal ]
+ *  │   You guessed Supported · the search found Challenged: …
+ *  │ [ Reveal them all ]
  *
  *  ┌ … ┐  Where it sits › Evidence first
- *  │   The piece: “Ignition is a step-function …”  k3m9qt
+ *  │   The piece: “Ignition is a step-function …”
  *  │   Nature: “the 2025 collaboration found little ignition …”
- *  │   Does it support, challenge or update the passage?  [Supports] [Challenges] [Updates]
- *  │   [ Reveal the search's reading ]
+ *  │   [Supports it│Challenges it│Adds to it]  [ Reveal the search's reading ]
+ *  │   You said Challenges it; the search read it as Challenged: …
  * ```
  *
  * **Small and honest, on purpose**: left-field ideas for Greg to play with,
@@ -28,29 +29,37 @@
  * with none stored says so and points at *Search the literature*, a plain
  * move to *Where it sits* that starts nothing either.
  *
- * **Nothing the reader does leaves the component.** Guess first asks for no
- * typing at all: the prediction is in the reader's head. Evidence first's
- * choice and every *Reveal* are `useState` here, never the address, never
- * storage, never a request, and forgotten on leaving (F12).
+ * **Something to commit to, in both** (a persona review, 2026-10-26: with
+ * nothing to choose, readers skipped straight to *Reveal*). Guess first asks
+ * for a guess per passage from a few plain words mapped onto the dossier's own
+ * kinds; Evidence first for a reading of each source. Each is the house's
+ * part-switcher (`.summ-views`, mode-band.css) as a radio group, so the
+ * choice shows as chosen, and is locked once that passage is revealed so the
+ * comparison stays honest. **Neither is scored**: the search's six kinds do
+ * not map one-to-one onto the reader's words, so the reveal puts the two side
+ * by side in plain words and marks nothing right or wrong.
  *
- * **Whose words**: the passage is the article's (`Excerpt`, the author's
- * face), a source's quote a stranger's page's characters (left in the UI
- * face, as the dossier draws it), and the note the model's (`voice-ai`) —
- * docs/project/fonts.md. Every one is a React child, never markup.
+ * **Nothing the reader does leaves the component.** Every guess, choice and
+ * *Reveal* is `useState` here, never the address, never storage, never a
+ * request, and forgotten on leaving (F12).
+ *
+ * **Whose words**: the passage is the article's (`FindingPassage`, the
+ * author's face, and the link to it), a source's quote a stranger's page's
+ * characters (left in the UI face, as the dossier draws it), and the note the
+ * model's (`voice-ai`) — docs/project/fonts.md. Every one is a React child,
+ * never markup.
  */
 import { Eye, EyeOff } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { MODE_LABEL } from "../title-text.js";
-import type { BlockId, SituateFinding } from "../types.js";
+import type { BlockId, SituateFinding, SituateFindingKind } from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { BandWaiting } from "./BandWaiting.js";
-import { BlockRef } from "./BlockRef.js";
-import { Excerpt } from "./Excerpt.js";
+import { Button } from "./components/ui/button.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { OrderGroup } from "./OrderGroup.js";
 import type { SourcesExperiment, SourcesView } from "./params.js";
 import { ReadError } from "./ReadError.js";
-import { SourceRow } from "./SituateDossier.js";
+import { FindingPassage, SourceRow } from "./SituateDossier.js";
 import {
   SITUATE_FINDING_LABEL,
   SITUATE_FINDING_TIP,
@@ -78,26 +87,69 @@ export const EXPERIMENT_KEPT = "An experiment. Nothing you choose here is saved 
 /* ---- Guess first ---- */
 
 export const GUESS_PROMPT =
-  "Before you see what the search of the literature found: what do you think critics, supporters and later work said about each of these passages? Take a moment to predict, in your head.";
-export const GUESS_REVEAL = "Reveal what the search found";
-export const GUESS_HIDE = "Hide it again";
+  "Before you see what the search of the literature found: what do you think critics, supporters and later work said about each of these passages? Pick a guess for each, then reveal what the search found.";
+/** One passage's reveal, and the one for every passage at the foot. */
+export const GUESS_REVEAL = "Reveal";
+export const GUESS_REVEAL_ALL = "Reveal them all";
+export const GUESS_HIDE_ALL = "Hide them all again";
+export const GUESS_YOURS = "Your guess";
+/**
+ * **The reader's guesses, mapped onto the dossier's kinds** (`SituateFindingKind`):
+ * the three a reader can predict from a passage, in plain words, and one for
+ * the rest (*Citation?*, *Not cited?*, *Reception*), which ask about the
+ * piece's citing rather than what later work found.
+ */
+export const GUESS_CHOICES = ["challenged", "supported", "since", "other"] as const;
+export type GuessChoice = (typeof GUESS_CHOICES)[number];
+export const GUESS_CHOICE_LABEL: Record<GuessChoice, string> = {
+  challenged: "Challenged",
+  supported: "Supported",
+  since: "Added to since",
+  other: "Something else",
+};
+/** Which guess a kind falls under: the map the choices stand on, exhaustive over the kinds. */
+export const GUESS_OF_KIND: Record<SituateFindingKind, GuessChoice> = {
+  challenged: "challenged",
+  supported: "supported",
+  since: "since",
+  citation: "other",
+  missing: "other",
+  reception: "other",
+};
+
+/** *You guessed Supported · the search found Challenged*, or with no guess, only the search's half. */
+export function guessLine(guess: GuessChoice | null, kind: SituateFindingKind): string {
+  const found = `the search found ${SITUATE_FINDING_LABEL[kind]}`;
+  return guess === null ? `${found[0]?.toUpperCase()}${found.slice(1)}` : `You guessed ${GUESS_CHOICE_LABEL[guess]} · ${found}`;
+}
 
 /* ---- Evidence first ---- */
 
 export const EVIDENCE_PROMPT =
-  "Each passage is beside what a source says. Decide for yourself whether the source supports it, challenges it or updates it, then see how the search read it.";
+  "Each passage is beside what a source says. Decide for yourself whether the source supports the passage, challenges it or adds to it, then see how the search read it.";
 export const EVIDENCE_THE_PIECE = "The piece";
 export const EVIDENCE_YOUR_READING = "Your reading of this source";
 export const EVIDENCE_REVEAL = "Reveal the search's reading";
 /** The reader's three answers. The search's own kinds are six, so no answer is marked right or wrong. */
-export const EVIDENCE_CHOICES = ["supports", "challenges", "updates"] as const;
+export const EVIDENCE_CHOICES = ["supports", "challenges", "adds"] as const;
 export type EvidenceChoice = (typeof EVIDENCE_CHOICES)[number];
+/**
+ * In words that need no gloss. The third was *Updates* until 2026-10-26, which
+ * a persona review found unclear; *Adds to it* is the dossier's own *Since*
+ * in the reader's words (`SITUATE_FINDING_TIP.since`: work that changes or
+ * adds to the picture).
+ */
 export const EVIDENCE_CHOICE_LABEL: Record<EvidenceChoice, string> = {
-  supports: "Supports",
-  challenges: "Challenges",
-  updates: "Updates",
+  supports: "Supports it",
+  challenges: "Challenges it",
+  adds: "Adds to it",
 };
-export const EVIDENCE_SEARCH_READ = "The search read it as";
+
+/** *You said Challenges it; the search read it as Challenged*, or with no choice, only the search's half. */
+export function evidenceLine(choice: EvidenceChoice | null, kind: SituateFindingKind): string {
+  const read = `the search read it as ${SITUATE_FINDING_LABEL[kind]}`;
+  return choice === null ? `${read[0]?.toUpperCase()}${read.slice(1)}` : `You said ${EVIDENCE_CHOICE_LABEL[choice]}; ${read}`;
+}
 
 /**
  * **One experiment's band**: the head with its crumb, the dossier's read
@@ -167,25 +219,76 @@ function NoDossier({ onGo }: { onGo(): void }) {
   );
 }
 
-/** The article's passage, with its jump: what both experiments start every finding from. */
+/** The article's passage, which is the link to it: what both experiments start every finding from. */
 function Passage({ finding, onJump }: { finding: SituateFinding; onJump(id: BlockId): void }) {
   return (
     <p className="situate-finding-head">
-      <span className="rcp-group-quote situate-quote">
-        “<Excerpt blockId={finding.blockId} words={finding.quote} />”
-      </span>
-      <BlockRef id={finding.blockId} onJump={onJump} />
+      <FindingPassage finding={finding} onJump={onJump} />
     </p>
   );
 }
 
-/** What the search made of a finding: its kind, what the kind means, and the model's note. */
-function SearchReading({ finding }: { finding: SituateFinding }) {
+/**
+ * **The reader's choice, as the house's part-switcher** (`.summ-views` /
+ * `.summ-view-btn`, mode-band.css): joined, with the chosen part raised, as a
+ * radio group. Disabled once its passage is revealed, so the choice cannot be
+ * changed after seeing the answer.
+ */
+function ChoiceBar<K extends string>({
+  label,
+  keys,
+  labels,
+  chosen,
+  locked,
+  onChoose,
+}: {
+  label: string;
+  keys: readonly K[];
+  labels: Record<K, string>;
+  chosen: K | null;
+  locked: boolean;
+  onChoose(key: K): void;
+}) {
+  return (
+    <div className="summ-views experiment-choices" role="radiogroup" aria-label={label}>
+      {keys.map((key) => (
+        // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s, as Sources' own chips (SourcesMode.tsx § SourcesViews) draw it
+        <button
+          key={key}
+          type="button"
+          role="radio"
+          aria-checked={chosen === key}
+          tabIndex={0}
+          className={`summ-view-btn${chosen === key ? " on" : ""}`}
+          disabled={locked}
+          onClick={() => onChoose(key)}
+        >
+          {labels[key]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A reveal: a real button (shadcn `Button`, outline, small), with the eye. */
+function RevealButton({ label, onReveal }: { label: string; onReveal(): void }) {
+  return (
+    <Button type="button" variant="outline" size="sm" className="experiment-reveal" onClick={onReveal}>
+      <Eye size={13} aria-hidden="true" />
+      {label}
+    </Button>
+  );
+}
+
+/**
+ * What the search made of a finding: the reader's answer beside the search's
+ * kind (`line`), what the kind means, and the model's note.
+ */
+function SearchReading({ finding, line }: { finding: SituateFinding; line: string }) {
   return (
     <div className="experiment-reading">
       <p className="experiment-kind" data-situate-kind={finding.kind}>
-        {EVIDENCE_SEARCH_READ} <strong>{SITUATE_FINDING_LABEL[finding.kind]}</strong>:{" "}
-        <span className="gloss-quiet">{SITUATE_FINDING_TIP[finding.kind]}</span>
+        <strong>{line}</strong>: <span className="gloss-quiet">{SITUATE_FINDING_TIP[finding.kind]}</span>
       </p>
       <p className="situate-note voice-ai">
         {finding.note}
@@ -197,42 +300,60 @@ function SearchReading({ finding }: { finding: SituateFinding }) {
 
 /**
  * ***Guess first*** — every finding's passage with its kind, note and sources
- * left out of the page until *Reveal*, in the dossier's stored order
- * (strongest first), never grouped by kind, which would give the answer
- * away. One reveal for all of them: the pause is to predict the whole
- * picture, then compare.
+ * left out of the page until that passage's *Reveal*, or *Reveal them all*,
+ * in the dossier's stored order (strongest first), never grouped by kind,
+ * which would give the answer away. Each passage takes a guess first.
  */
 function GuessFirst({ findings, onJump }: { findings: readonly SituateFinding[]; onJump(id: BlockId): void }) {
-  const [shown, setShown] = useState(false);
+  const [guesses, setGuesses] = useState<Readonly<Record<string, GuessChoice>>>({});
+  const [shown, setShown] = useState<ReadonlySet<string>>(new Set());
+  const allShown = findings.every((f) => shown.has(f.id));
   return (
     <section className="where-section experiment-guess" aria-label={SOURCES_SUB_MODES["guess-first"].label}>
       <p className="gloss-hint experiment-prompt">{GUESS_PROMPT}</p>
       <ul className="situate-findings">
-        {findings.map((finding) => (
-          <li key={finding.id} className="situate-finding" data-finding={finding.id}>
-            <Passage finding={finding} onJump={onJump} />
-            {shown && (
-              <>
-                <SearchReading finding={finding} />
-                <ul className="situate-sources">
-                  {finding.sources.map((source) => (
-                    <SourceRow key={source.url} source={source} />
-                  ))}
-                </ul>
-              </>
-            )}
-          </li>
-        ))}
+        {findings.map((finding) => {
+          const open = shown.has(finding.id);
+          const guess = guesses[finding.id] ?? null;
+          return (
+            <li key={finding.id} className="situate-finding experiment-guess-row" data-finding={finding.id}>
+              <Passage finding={finding} onJump={onJump} />
+              <div className="experiment-answer">
+                <ChoiceBar
+                  label={GUESS_YOURS}
+                  keys={GUESS_CHOICES}
+                  labels={GUESS_CHOICE_LABEL}
+                  chosen={guess}
+                  locked={open}
+                  onChoose={(key) => setGuesses((was) => ({ ...was, [finding.id]: key }))}
+                />
+                {!open && <RevealButton label={GUESS_REVEAL} onReveal={() => setShown((was) => new Set([...was, finding.id]))} />}
+              </div>
+              {open && (
+                <>
+                  <SearchReading finding={finding} line={guessLine(guess, finding.kind)} />
+                  <ul className="situate-sources">
+                    {finding.sources.map((source) => (
+                      <SourceRow key={source.url} source={source} />
+                    ))}
+                  </ul>
+                </>
+              )}
+            </li>
+          );
+        })}
       </ul>
-      <button
+      <Button
         type="button"
-        className="rcp-more experiment-reveal"
-        aria-pressed={shown}
-        onClick={() => setShown((was) => !was)}
+        variant="outline"
+        size="sm"
+        className="experiment-reveal experiment-reveal-all"
+        aria-pressed={allShown}
+        onClick={() => setShown(allShown ? new Set() : new Set(findings.map((f) => f.id)))}
       >
-        {shown ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
-        {shown ? GUESS_HIDE : GUESS_REVEAL}
-      </button>
+        {allShown ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+        {allShown ? GUESS_HIDE_ALL : GUESS_REVEAL_ALL}
+      </Button>
     </section>
   );
 }
@@ -241,9 +362,7 @@ function GuessFirst({ findings, onJump }: { findings: readonly SituateFinding[];
  * ***Evidence first*** — each finding as the article's passage beside the
  * checked quote of each source it rests on, the kind and the note left out
  * until that finding's *Reveal*. The reader may choose an answer first; the
- * choice is this component's state alone, and locked once revealed, so the
- * comparison stays honest. No answer is scored: the search's six kinds do not
- * map onto three words, and a mark would claim more than the model knows.
+ * choice is this component's state alone, and locked once revealed.
  */
 function EvidenceFirst({ findings, onJump }: { findings: readonly SituateFinding[]; onJump(id: BlockId): void }) {
   return (
@@ -287,28 +406,18 @@ function EvidenceRow({ finding, onJump }: { finding: SituateFinding; onJump(id: 
           );
         })}
       </ul>
-      <OrderGroup label={EVIDENCE_YOUR_READING} selected={choice ?? ""}>
-        {EVIDENCE_CHOICES.map((key) => (
-          <button
-            key={key}
-            type="button"
-            className={`gloss-sort-btn${choice === key ? " on" : ""}`}
-            aria-pressed={choice === key}
-            disabled={shown}
-            onClick={() => setChoice(key)}
-          >
-            {EVIDENCE_CHOICE_LABEL[key]}
-          </button>
-        ))}
-      </OrderGroup>
-      {shown ? (
-        <SearchReading finding={finding} />
-      ) : (
-        <button type="button" className="rcp-more experiment-reveal" onClick={() => setShown(true)}>
-          <Eye size={13} aria-hidden="true" />
-          {EVIDENCE_REVEAL}
-        </button>
-      )}
+      <div className="experiment-answer">
+        <ChoiceBar
+          label={EVIDENCE_YOUR_READING}
+          keys={EVIDENCE_CHOICES}
+          labels={EVIDENCE_CHOICE_LABEL}
+          chosen={choice}
+          locked={shown}
+          onChoose={setChoice}
+        />
+        {!shown && <RevealButton label={EVIDENCE_REVEAL} onReveal={() => setShown(true)} />}
+      </div>
+      {shown && <SearchReading finding={finding} line={evidenceLine(choice, finding.kind)} />}
     </li>
   );
 }
