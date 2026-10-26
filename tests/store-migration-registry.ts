@@ -4275,7 +4275,7 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     },
   },
   "tests/read-so-far-shelf.test.ts": {
-    "00000000-0000-4000-8000-0000000000aa": {
+    "00000000-0000-4000-8000-00000000a5f1": {
       kind: "no-row-needed",
       why:
         "the stranger only runs `refreshShelfWords` for a slug they do not own, which must answer " +
