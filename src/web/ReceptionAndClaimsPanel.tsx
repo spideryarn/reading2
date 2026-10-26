@@ -318,7 +318,7 @@ import type { UseReception } from "./useReception.js";
 import type { UseSourcesClaims } from "./useSourcesClaims.js";
 import type { UseSourcesClaimChecks } from "./useSourcesClaimChecks.js";
 import { anyPending, type CheckGroup, type ClaimFindings, drawChecks } from "./sources-claim-checks.js";
-import type { UseCiters } from "./useCiters.js";
+import type { CitersRead } from "./useCiters.js";
 import { dayOf } from "./relative-time.js";
 import type {
   PublicClaimReceptionRow,
@@ -1007,7 +1007,7 @@ export type ReceptionAndClaimsAccess =
       owner: ReceptionOwner;
       claimList: UseSourcesClaims;
       checks: UseSourcesClaimChecks;
-      citers: UseCiters;
+      citers: CitersRead;
       claimChats: ReceptionAndClaimsChats;
     }
   /* **The visitor's arm, since 2026-09-29** (plan 260929c stage 4): the stored
@@ -1782,7 +1782,7 @@ const CITERS_SHOWN = 10;
  * Its content is drawn closed as well as open: unlike an AI section, it is
  * the only place these rows are.
  */
-function CitedBy({ citers, scholar }: { citers: UseCiters; scholar: string | null }) {
+function CitedBy({ citers, scholar }: { citers: CitersRead; scholar: string | null }) {
   const [open, setOpen] = useState(false);
   const found = citers.result?.kind === "found" ? citers.result.citers.length : null;
   return (

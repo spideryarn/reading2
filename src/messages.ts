@@ -6057,15 +6057,26 @@ const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
  * we `listed`; whether the page limit left some out (`capped`, of `returned`
  * asked for); and how many records could not be shown (`dropped`).
  *
+ * **The keyword view says what it is a list of** (`filteredBy`, plan
+ * 261025h, decision 10): its `count` is the citers that mention the keyword,
+ * not every citer, so the first sentence says so and never reads as the
+ * piece's whole count.
+ *
  * @param day the day OpenAlex answered, already formatted, or undefined.
  */
 export function citersLines(
-  found: { count: number; returned: number; dropped: number; capped: boolean; listed: number },
+  found: { count: number; returned: number; dropped: number; capped: boolean; listed: number; filteredBy?: string },
   day: string | undefined,
 ): string[] {
-  if (found.count === 0 && found.returned === 0) return [CITERS_NONE];
+  const about = found.filteredBy;
+  const when = `by OpenAlex's count${day ? ` on ${day}` : ""}`;
+  if (found.count === 0 && found.returned === 0) {
+    return [about === undefined ? CITERS_NONE : `None of the papers that cite this piece mention “${about}” in their title or abstract, ${when}.`];
+  }
   const lines = [
-    `${papers(found.count)} ${found.count === 1 ? "cites" : "cite"} this piece, by OpenAlex's count${day ? ` on ${day}` : ""}.`,
+    about === undefined
+      ? `${papers(found.count)} ${found.count === 1 ? "cites" : "cite"} this piece, ${when}.`
+      : `${papers(found.count)} that ${found.count === 1 ? "cites" : "cite"} this piece ${found.count === 1 ? "mentions" : "mention"} “${about}” in ${found.count === 1 ? "its" : "their"} title or abstract, ${when}.`,
   ];
   if (found.listed === 0) {
     lines.push("None of them could be shown here.");

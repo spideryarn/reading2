@@ -42,14 +42,16 @@
  * (plan § The simpler option; GPT Sol's F5): Reception, Claims, Not cited and
  * Investigate keep their panels, their addresses and their own buttons, and
  * each carries *Where it sits › its name* in its head, the first word the
- * way back (`ToolBack`).
+ * way back (`ToolBack`). With the experimental switch on, *Experiments*
+ * follows them: Guess first and Evidence first (plan 261025h, Stage 4;
+ * SourcesExperiments.tsx), plain links too.
  *
  * **Owner only.** A visitor's band has no *Where it sits* and reads the bare
  * address as Bibliography (params.ts § `visitorSourcesView`): the citers have
  * no public projection yet (GPT Sol's F3).
  */
 import { LoaderCircle } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { CITERS_ABOUT, CITERS_LOADING } from "../messages.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, CitedWork } from "../types.js";
@@ -57,7 +59,8 @@ import { shortTitle, workShortName } from "./cited-in-paragraph.js";
 import { investigateWorks } from "./InvestigatePanel.js";
 import type { ItemFocus } from "./item-focus.js";
 import { ModeSurface } from "./ModeSurface.js";
-import type { SourcesChip, SourcesView } from "./params.js";
+import { OrderGroup } from "./OrderGroup.js";
+import { SOURCES_EXPERIMENTS, type SourcesChip, type SourcesExperiment, type SourcesView } from "./params.js";
 import { CitersAnswer } from "./ReceptionAndClaimsPanel.js";
 import { type SituateChats, SituateDossier } from "./SituateDossier.js";
 import { SOURCES_SUB_MODES } from "./sub-modes.js";
@@ -65,7 +68,9 @@ import type { UseCiters } from "./useCiters.js";
 import type { UseSituate } from "./useSituate.js";
 
 /** The four addresses that are tools inside *Where it sits* rather than chips (params.ts § `chipOf`). */
-export type SourcesTool = Exclude<SourcesView, SourcesChip>;
+export type SourcesTool = Exclude<SourcesView, SourcesChip | SourcesExperiment>;
+/** What a crumb back to *Where it sits* can stand on: a tool, or one of the two experiments. */
+export type WhereChild = SourcesTool | SourcesExperiment;
 
 /** The tools row's order: what others wrote, the piece's own claims, what it leaves out, your own question. */
 export const SOURCES_TOOLS: readonly SourcesTool[] = ["reception", "claims", "not-cited", "investigate"];
@@ -81,6 +86,37 @@ export const SOURCES_TOOL_LABEL: Readonly<Record<SourcesTool, string>> = {
   "not-cited": "Close to it, not cited",
   investigate: "Ask your own question",
 };
+
+/**
+ * **The experiments' row**, after the tools, drawn only with the experimental
+ * switch on (plan 261025h, Stage 4): their own lead-in, so a reader can tell
+ * a finished tool from something to play with. Their labels are their names.
+ */
+export const WHERE_EXPERIMENTS_HEAD = "Experiments";
+export const SOURCES_EXPERIMENT_LABEL: Readonly<Record<SourcesExperiment, string>> = {
+  "guess-first": SOURCES_SUB_MODES["guess-first"].label,
+  "evidence-first": SOURCES_SUB_MODES["evidence-first"].label,
+};
+
+/** What a crumb names the page it stands on. */
+function whereChildLabel(child: WhereChild): string {
+  return (SOURCES_EXPERIMENTS as readonly WhereChild[]).includes(child)
+    ? SOURCES_EXPERIMENT_LABEL[child as SourcesExperiment]
+    : SOURCES_TOOL_LABEL[child as SourcesTool];
+}
+
+/** *After it*'s two views (plan 261025h, decision 10): every citer, or those about the work's keyword. */
+export const WHERE_AFTER_ALL = "Most cited";
+export const WHERE_AFTER_VIEWS = "Which papers that cite it";
+/** The second view's label: OpenAlex's keyword, in quotes. */
+export function whereAboutLabel(keyword: string): string {
+  return `About “${keyword}”`;
+}
+export const WHERE_ABOUT_TIP =
+  "Only the papers citing it whose title or abstract mentions OpenAlex's own keyword for this piece. Asked from OpenAlex when you press it; no AI.";
+export const WHERE_ABOUT_LOADING = "Asking OpenAlex for the papers about it…";
+/** The server answered the plain list instead: the keyword view could not be read. */
+export const WHERE_ABOUT_FELL_BACK = "OpenAlex's papers about it could not be listed just now, so these are all the papers that cite it.";
 
 /** The crumb's way back, in its tooltip. */
 export const WHERE_BACK_TIP = "Back to Where it sits";
@@ -158,6 +194,7 @@ export function WhereItSitsPanel({
   toolCounts = {},
   findingFocus = null,
   onFindingFocusTaken,
+  experiments = false,
   now = thisYear,
 }: {
   /** Sources' chip row (SourcesMode.tsx § `SourcesViews`), drawn as this band's header. */
@@ -181,6 +218,8 @@ export function WhereItSitsPanel({
   /** One finding to bring into view, once — a margin line's *Open in Sources*, or its chat's way back. */
   findingFocus?: ItemFocus | null;
   onFindingFocusTaken?: ((focus: ItemFocus) => void) | undefined;
+  /** The experimental switch: draw the experiments' links after the tools (plan 261025h, Stage 4). */
+  experiments?: boolean;
   now?: ThisYear;
 }) {
   const made = situate.status === "ready" ? situate.situate : null;
@@ -193,13 +232,7 @@ export function WhereItSitsPanel({
         {WHERE_AFTER_HEAD}
       </h3>
       <p className="gloss-quiet where-what">{WHERE_AFTER_WHAT}</p>
-      {citers.result === null ? (
-        <p className="rcp-citers-note" role="status">
-          <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" /> {CITERS_LOADING}
-        </p>
-      ) : (
-        <CitersAnswer result={citers.result} onRetry={citers.retry} shown={WHERE_AFTER_SHOWN} />
-      )}
+      <AfterIt citers={citers} />
     </section>
   );
   const beforeList = (
@@ -257,6 +290,26 @@ export function WhereItSitsPanel({
               </button>
             );
           })}
+          {/* Behind the experimental switch, and nowhere else: no chip, no
+              command-bar row (params.ts § `SOURCES_EXPERIMENTS`). Plain moves,
+              arming nothing, as the tools are. */}
+          {experiments && (
+            <span className="where-experiments">
+              <span className="where-tools-head">{WHERE_EXPERIMENTS_HEAD}:</span>
+              {SOURCES_EXPERIMENTS.map((experiment) => (
+                <button
+                  key={experiment}
+                  type="button"
+                  className="where-tool"
+                  data-tool={experiment}
+                  data-tip={`${SOURCES_SUB_MODES[experiment].description}.`}
+                  onClick={() => onView(experiment)}
+                >
+                  {SOURCES_EXPERIMENT_LABEL[experiment]}
+                </button>
+              ))}
+            </span>
+          )}
         </nav>
       </div>
     </ModeSurface>
@@ -335,17 +388,97 @@ function BeforeIt({
  * they are, and *Where it sits* is the way back (plan § The simpler option,
  * which calls it *← Where it sits*). A crumb in words rather than an arrow and
  * words, which the house has retired for a way back (tests/back-link.test.tsx).
- * A plain move, arming nothing.
+ * A plain move, arming nothing. The two experiments carry the same crumb.
  */
-export function ToolBack({ tool, onBack }: { tool: SourcesTool; onBack(): void }) {
+export function ToolBack({ tool, onBack }: { tool: WhereChild; onBack(): void }) {
   return (
     <span className="where-crumb">
       <button type="button" className="where-back" data-tip={WHERE_BACK_TIP} onClick={onBack}>
         {SOURCES_SUB_MODES.where.label}
       </button>
       <span className="where-crumb-tool" aria-current="page">
-        {SOURCES_TOOL_LABEL[tool]}
+        {whereChildLabel(tool)}
       </span>
     </span>
+  );
+}
+
+/**
+ * ***After it*** — OpenAlex's citers, and for a much-cited piece a second
+ * view beside *Most cited*: *About "extended mind"*, the citers whose title or
+ * abstract mentions OpenAlex's own keyword for the work (plan 261025h,
+ * decision 10, GPT Sol's F15). A reader's choice, never an automatic filter:
+ * the list starts unfiltered, and the keyword view is asked of OpenAlex on
+ * the press that chooses it (`askTopic`), never on open (S1-F5).
+ *
+ * **Which view is on is this panel's state, not the address.** A link
+ * carrying it would have to either fetch the keyword view on arrival, which
+ * the press-only rule forbids, or name a view it is not showing; it is
+ * *Show all*'s kind of choice, a fold in one list, and leaving *Where it
+ * sits* puts it back to *Most cited*. sources.md § Where it sits.
+ *
+ * The count beside the label is there only once OpenAlex's keyword list has
+ * been fetched once (the server's `#topic` row, or this press's answer).
+ */
+function AfterIt({ citers }: { citers: UseCiters }) {
+  const [about, setAbout] = useState(false);
+  const plain = citers.result;
+  if (plain === null) {
+    return (
+      <p className="rcp-citers-note" role="status">
+        <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" /> {CITERS_LOADING}
+      </p>
+    );
+  }
+  const topic = plain.kind === "found" ? plain.topic : undefined;
+  if (topic === undefined) return <CitersAnswer result={plain} onRetry={citers.retry} shown={WHERE_AFTER_SHOWN} />;
+  const asked = citers.topic;
+  const filtered = asked?.kind === "found" && asked.filteredBy !== undefined ? asked : null;
+  const count = filtered?.topic?.count ?? topic.count;
+  const label = whereAboutLabel(topic.keyword);
+  return (
+    <>
+      <OrderGroup label={WHERE_AFTER_VIEWS} selected={about ? "about" : "all"}>
+        <button
+          type="button"
+          className={`gloss-sort-btn${about ? "" : " on"}`}
+          aria-pressed={!about}
+          onClick={() => setAbout(false)}
+        >
+          {WHERE_AFTER_ALL}
+        </button>
+        <button
+          type="button"
+          className={`gloss-sort-btn where-about${about ? " on" : ""}`}
+          aria-pressed={about}
+          aria-label={count === undefined ? label : `${label}, ${count} papers`}
+          data-tip={WHERE_ABOUT_TIP}
+          onClick={() => {
+            setAbout(true);
+            citers.askTopic();
+          }}
+        >
+          {/* OpenAlex's keyword: a stranger's words, drawn as text. */}
+          {label}
+          {count !== undefined && <span className="rcp-view-count">{count.toLocaleString("en-GB")}</span>}
+        </button>
+      </OrderGroup>
+      {!about ? (
+        <CitersAnswer key="all" result={plain} onRetry={citers.retry} shown={WHERE_AFTER_SHOWN} />
+      ) : asked === null || asked === undefined ? (
+        <p className="rcp-citers-note" role="status">
+          <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" /> {WHERE_ABOUT_LOADING}
+        </p>
+      ) : filtered !== null ? (
+        <CitersAnswer key="about" result={filtered} onRetry={citers.retryTopic} shown={WHERE_AFTER_SHOWN} />
+      ) : asked.kind === "found" ? (
+        <>
+          <p className="rcp-citers-note where-about-fell-back">{WHERE_ABOUT_FELL_BACK}</p>
+          <CitersAnswer key="all" result={plain} onRetry={citers.retry} shown={WHERE_AFTER_SHOWN} />
+        </>
+      ) : (
+        <CitersAnswer key="about" result={asked} onRetry={citers.retryTopic} shown={WHERE_AFTER_SHOWN} />
+      )}
+    </>
   );
 }

@@ -253,7 +253,7 @@ function panel(
   return createElement(WhereItSitsPanel, {
     head: sourcesHead({ view: "where", onView: () => {}, ownerSlug: "a-piece" }),
     situate: situateOwner,
-    citers: { result: { kind: "no-doi" }, retry: () => {} },
+    citers: { result: { kind: "no-doi" }, retry: () => {}, topic: undefined, askTopic: () => {}, retryTopic: () => {} },
     before: { status: "none", works: null, listing: false },
     articleYear: null,
     chats: {

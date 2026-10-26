@@ -29,7 +29,7 @@
 import type { Mode } from "../modes.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
-import type { LearnView, SourcesView, StructureView, SummaryView } from "./params.js";
+import type { LearnView, SourcesExperiment, SourcesView, StructureView, SummaryView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
@@ -250,11 +250,13 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * **Sources' seven sub-modes**: *Where it sits* (since 2026-10-25, plan
+ * **Sources' nine sub-modes**: *Where it sits* (since 2026-10-25, plan
  * 261025h, the owner's default), Bibliography (the Citations mode until
  * 2026-10-09), Not cited and Links (since 2026-10-11), then Reception and Claims (the Debate
- * mode's two, since 2026-10-03), and Investigate last (since 2026-10-20, plan 261020n).
- * The command bar lists all seven, in this order (`subModesOf`); the owner's
+ * mode's two, since 2026-10-03), Investigate (since 2026-10-20, plan 261020n), and
+ * last the two experiments behind the switch, Guess first and Evidence first
+ * (since 2026-10-26, plan 261025h, Stage 4). The command bar lists the first
+ * seven, in this order (`subModesOf`), and not the experiments; the owner's
  * chip row draws three of them, *Where it sits*, Bibliography and Links
  * (params.ts § `SOURCES_CHIPS`), and the other four are tools reached from
  * *Where it sits*, which keep their rows and aliases here. Greg,
@@ -360,7 +362,29 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
     experimental: false,
     aliases: ["inquiry", "research", "ask the web", "what do others say", "sources chat", "dig deeper"],
   },
+  /* **The two experiments**, behind the switch (plan 261025h, Stage 4, GPT
+     Sol's F12 and F13). Reached only from *Where it sits*' tools row, so
+     `subModesOf` leaves them out of the command bar; the words are the tools
+     row's tooltips and the panels' own. */
+  "guess-first": {
+    label: "Guess first",
+    description: "Predict what later work said about each passage before the search's verdicts are shown",
+    experimental: true,
+  },
+  "evidence-first": {
+    label: "Evidence first",
+    description: "Read each passage beside what a source says, decide for yourself, then see the search's reading",
+    experimental: true,
+  },
 };
+
+/**
+ * **Sources' experiments, as keys** — params.ts § `SOURCES_EXPERIMENTS`, which
+ * this module may not import as a value (it would bring nuqs in). A `Record`
+ * over the type, so a third experiment fails to compile here until it is
+ * named.
+ */
+const SOURCES_EXPERIMENT_KEYS: Readonly<Record<SourcesExperiment, true>> = { "guess-first": true, "evidence-first": true };
 
 /** The words for one sub-mode. A `switch` so a seventh mode with sub-modes fails to compile here. */
 export function subModeWords(sub: SubMode): SubModeWords {
@@ -404,8 +428,12 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
       return (Object.keys(SUMMARY_SUB_MODES) as SummaryView[]).map((view) => ({ mode, view }));
     case "structure":
       return (Object.keys(STRUCTURE_SUB_MODES) as StructureView[]).map((view) => ({ mode, view }));
+    /* Not the two experiments, which are reached only from *Where it sits*'
+       tools row (plan 261025h, Stage 4; params.ts § `SOURCES_EXPERIMENTS`). */
     case "sources":
-      return (Object.keys(SOURCES_SUB_MODES) as SourcesView[]).map((view) => ({ mode, view }));
+      return (Object.keys(SOURCES_SUB_MODES) as SourcesView[])
+        .filter((view) => !(view in SOURCES_EXPERIMENT_KEYS))
+        .map((view) => ({ mode, view }));
     default:
       return [];
   }
