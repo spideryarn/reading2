@@ -21,7 +21,7 @@
  * React StrictMode. A prop has none of those problems, which is the argument
  * for the change rather than a happy accident.
  */
-import { type BibliographyOrigin, type GlossaryOrigin, type IdeasOrigin, originName } from "../types.js";
+import { type BibliographyOrigin, type GlossaryOrigin, type IdeasOrigin, originName, type SituateOrigin } from "../types.js";
 /* The builders the server checks a question against live in src/chat-question.ts,
    so the browser and the route share one copy (plan 261024m, GPT Sol's C4). */
 import { fencedQuote } from "../chat-question.js";
@@ -405,18 +405,19 @@ export function askAboutIdea(idea: { name: string; statement: string }): string 
 }
 
 /**
- * **The origin a chat about a Glossary entry, a cited work or an idea will store**:
- * the entry's durable id, and its name cut to what the route accepts
+ * **The origin a chat about a Glossary entry, a cited work, an idea or a
+ * literature-search finding will store** (a finding since plan 261025h: its
+ * id, and its passage as the name): the entry's durable id, and its name cut to what the route accepts
  * (`originName`), so an ordinary press is never refused for a long name.
  *
  * Nothing for a blank name, which the route would refuse: the chat is then an
  * ordinary one, with no mark on the entry.
  */
 export function itemOrigin(
-  mode: "glossary" | "bibliography" | "ideas",
+  mode: "glossary" | "bibliography" | "ideas" | "situate",
   itemId: string,
   name: string,
-): GlossaryOrigin | BibliographyOrigin | IdeasOrigin | undefined {
+): GlossaryOrigin | BibliographyOrigin | IdeasOrigin | SituateOrigin | undefined {
   const quote = originName(name);
   return quote === "" ? undefined : { mode, itemId, quote };
 }

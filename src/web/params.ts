@@ -1454,13 +1454,17 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' six sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' seven sub-modes the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
  * `liftLegacySources`; docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md).
  *
- * `bibliography` is what the piece cites (the Citations mode until that day);
+ * `where` is *Where it sits*, the owner's default since 2026-10-25 (plan
+ * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md,
+ * decision 7): the papers that came after the piece, the works it leans on,
+ * and the literature search;
+ * `bibliography` is what the piece cites (the Citations mode until 2026-10-09);
  * `not-cited` is papers close to it that its bibliography does not list, from
  * OpenAlex, for the owner only (since 2026-10-11, plan 261011ac);
  * `links` is the web addresses in the article's own markup;
@@ -1474,38 +1478,85 @@ export function learnInSearch(search: string): LearnView {
  * before anything reads it (router.ts § `liftLegacySources`). *Which thing, within this
  * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
  * changes the whole band, and pushed, because switching is a deliberate act
- * Back should undo. **`bibliography` is the default** (Greg: "this should be
- * the first submode") and is omitted from the address; an unknown value reads
- * as Bibliography.
+ * Back should undo.
+ *
+ * **These are the addresses, not the chips.** Since plan 261025h the owner's
+ * chip row is three (`SOURCES_CHIPS`), and Reception, Claims, Not cited and
+ * Investigate are tools reached from inside *Where it sits*, at the addresses
+ * they always had; `chipOf` says which chip each address lights.
+ *
+ * **`where` is the default** and is omitted from the address; an unknown
+ * value reads as it. It was `bibliography` until 2026-10-25 (Greg: "this
+ * should be the first submode", 2026-10-09), so an old address that meant
+ * Bibliography is lifted to an explicit `sources=bibliography` (router.ts §
+ * `liftLegacySources`), while a bare `?mode=sources` gets the new default on
+ * purpose. A visitor has no *Where it sits* and reads `where` as Bibliography
+ * (`visitorSourcesView`), so a visitor's default is unchanged.
  *
  * **Writing it never spends.** Each sub-mode's work starts on its owner's
  * press and only then — the mode's button, the sub-mode's command-bar row or
- * its chip: a press landing on Bibliography arms the `bibliography` list, on
- * Reception the `reception` search, on Claims the `sources-claims` list
- * (activation.ts § `activationForSources`). Links, the article's own
+ * its chip: a press landing on *Where it sits* or Bibliography arms the
+ * `bibliography` list, and nothing else does (activation.ts §
+ * `activationForSources`). Reception's search and Claims' list are their
+ * panels' own buttons since plan 261025h. Links, the article's own
  * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
  * off the blocks in the browser. Not cited arms nothing either: its search is
  * the panel's own button, because it sends the piece's words to OpenAlex. Investigate
  * arms nothing: each of its rows is one press that sends one chat question.
  * Back, a pasted link and a last-view restore arrive here and buy nothing.
  */
-export const SOURCES_VIEWS = ["bibliography", "not-cited", "links", "reception", "claims", "investigate"] as const;
+export const SOURCES_VIEWS = ["where", "bibliography", "not-cited", "links", "reception", "claims", "investigate"] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
- * **The sub-modes a visitor's band draws**: all but Not cited and Investigate, which
- * are the owner's. Not cited's route is owner-only, and a visitor's search
- * would spend our OpenAlex allowance (plan 261011ac § Who sees it); Investigate's
- * every row hands a question to Chat, and a visitor has no chat (plan
- * 261020n § Visitors).
+ * **The owner's chip row** (plan 261025h, decision 7 and GPT Sol's F2): three
+ * chips, *Where it sits* first because it is the default. The other four
+ * addresses are tools inside *Where it sits* (`chipOf`).
+ */
+export const SOURCES_CHIPS = ["where", "bibliography", "links"] as const satisfies readonly SourcesView[];
+export type SourcesChip = (typeof SOURCES_CHIPS)[number];
+/**
+ * **Which chip an address lights** — one exhaustive answer for the chip row's
+ * `aria-checked`, its `.on` and `useRevealChosen`, so exactly one radio is
+ * checked for every legal `?sources=` (GPT Sol's F2 on plan 261025h). The four
+ * tools are reached from *Where it sits* and carry its link back, so they
+ * light it. The owner's row only: a visitor's chips are their views.
+ */
+export function chipOf(view: SourcesView): SourcesChip {
+  switch (view) {
+    case "where":
+    case "reception":
+    case "claims":
+    case "not-cited":
+    case "investigate":
+      return "where";
+    case "bibliography":
+      return "bibliography";
+    case "links":
+      return "links";
+    default: {
+      const unhandled: never = view;
+      throw new Error(`unhandled Sources view: ${String(unhandled)}`);
+    }
+  }
+}
+/**
+ * **The sub-modes a visitor's band draws**: all but *Where it sits*, Not cited and
+ * Investigate, which are the owner's. *Where it sits* reads the owner's citer
+ * list, which has no public projection yet (plan 261025h, GPT Sol's F3); Not
+ * cited's route is owner-only, and a visitor's search would spend our OpenAlex
+ * allowance (plan 261011ac § Who sees it); Investigate's every row hands a
+ * question to Chat, and a visitor has no chat (plan 261020n § Visitors). A
+ * visitor's chip row is these four, unchanged by plan 261025h.
  */
 export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter(
-  (v) => v !== "not-cited" && v !== "investigate",
+  (v) => v !== "where" && v !== "not-cited" && v !== "investigate",
 );
 /**
  * **What a visitor's band draws for `?sources=`**: the view it names, or
- * Bibliography for one the visitor does not have, so a shared
- * `?sources=not-cited` or `?sources=investigate` link opens the default list rather
- * than an empty band.
+ * Bibliography for one the visitor does not have, so a bare Sources address
+ * (the owner's *Where it sits*) or a shared `?sources=not-cited` or
+ * `?sources=investigate` link opens the visitor's default list rather than an
+ * empty band.
  */
 export function visitorSourcesView(view: SourcesView): SourcesView {
   return VISITOR_SOURCES_VIEWS.includes(view) ? view : "bibliography";
@@ -1523,7 +1574,7 @@ export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),
   serialize: (v) => v,
 })
-  .withDefault("bibliography")
+  .withDefault("where")
   .withOptions({ history: "push" });
 
 /**

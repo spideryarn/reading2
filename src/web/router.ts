@@ -1477,11 +1477,17 @@ const DEBATE_CLAIMS = "debate=claims";
  * sub-mode each became, and Peer review, Sources' name for part of that day,
  * to Sources**:
  *
- * - `?mode=citations` → `?mode=sources` (Bibliography, the default);
+ * - `?mode=citations` → `?mode=sources&sources=bibliography`: explicit since
+ *   2026-10-25, when *Where it sits* became the default and a bare Sources
+ *   address stopped meaning Bibliography (plan 261025h, decision 7, GPT
+ *   Sol's F1);
  * - `?mode=debate` → `?mode=sources&sources=reception`, or `claims`
  *   when the old address said `debate=claims`;
  * - `?mode=peer-review` → `?mode=sources`, and its sub-mode pair
- *   `peer-review=X` → `sources=X`, wherever it appears;
+ *   `peer-review=X` → `sources=X`, wherever it appears. A bare
+ *   `?mode=peer-review` meant "the mode's default", and so gets today's,
+ *   *Where it sits*, as a bare `?mode=sources` does: the intended change of
+ *   plan 261025h;
  * - `?chatfrom=debate`, `?chatfrom=citations` and `?chatfrom=peer-review` →
  *   `?chatfrom=sources`, Chat's list filter for conversations started from
  *   any of the three sub-modes;
@@ -1535,7 +1541,14 @@ function liftLegacySources(at: Address): Address {
   /* The sub-mode the old address meant, unless it names a newer one itself. */
   const explicit = pairs.some((pair) => hasKey(pair, "sources"));
   const debateView = pairValue(pairs.find((pair) => hasKey(pair, "debate"))) === "claims" ? "claims" : "reception";
-  const view = oldMode === "debate" && !explicit && !oldSubMode ? debateView : null;
+  const view =
+    explicit || oldSubMode
+      ? null
+      : oldMode === "debate"
+        ? debateView
+        : oldMode === "citations"
+          ? "bibliography"
+          : null;
 
   let wroteMode = false;
   let wroteSubMode = explicit;

@@ -399,12 +399,97 @@
   .investigate-yours-more { min-height: max(40px, 2.5rem); }
 }
 
-/* **Where this piece sits** — Investigate's dossier (SituateDossier.tsx, plan
-   261024o). Group heads and the source quote reuse Reception's `.rcp-group-head`
-   and `.rcp-quote`; what is here is placement, and the few parts with no
-   sibling to borrow from. */
-.situate-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
-.situate-experimental { font-weight: 400; letter-spacing: 0.04em; }
+/* **Sources › Where it sits** (WhereItSitsPanel.tsx, plan 261025h): a head
+   line, the literature search's dossier, *After it* and *Before it*, and the
+   tools row. Each section is spaced as Investigate's are. The two lists stack
+   when the piece's year says which leads (`data-where-order`), and sit side
+   by side with no year, each asking for 16rem before it shares its line, so
+   a narrow band stacks them anyway (docs/project/narrow-windows.md). The
+   tools are plain links in the app's face; a tool's head carries
+   *Where it sits › the tool's name* after the chip row (`.where-crumb`). */
+.where-section { padding: 0.2rem 0.7rem 0.35rem; }
+.where-head { padding-top: 0.15rem; }
+.where-headline {
+  margin: 0.3rem 0.7rem 0.1rem;
+  color: var(--ink);
+  font-size: var(--type-item);
+  font-weight: 600;
+}
+.where-what { margin: 0 0 0.2rem; }
+.where-lists { display: flex; flex-direction: column; }
+.where-lists-side-by-side {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+}
+.where-before-list { margin: 0; padding: 0; list-style: none; }
+.where-work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.4rem;
+  width: 100%;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.82rem);
+  text-align: left;
+  cursor: pointer;
+}
+.where-work-title { min-width: 0; overflow-wrap: anywhere; }
+.where-work-by { color: var(--ink-faint); }
+.where-work:focus-visible,
+.where-tool:focus-visible,
+.where-back:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.where-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.7rem;
+  margin-top: 0.3rem;
+  padding: 0.45rem 0.7rem 0.4rem;
+  border-top: 1px solid var(--rule);
+  font-size: max(var(--text-min), 0.82rem);
+}
+.where-tools-head { color: var(--ink-faint); }
+.where-tool,
+.where-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--highlight-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.where-crumb {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-left: 0.6rem;
+  font-size: max(var(--text-min), 0.8rem);
+  white-space: nowrap;
+}
+.where-crumb-tool { color: var(--ink-soft); }
+.where-crumb-tool::before { content: "›"; margin-right: 0.4rem; color: var(--ink-faint); }
+@media (hover: hover) {
+  .where-work:hover,
+  .where-tool:hover,
+  .where-back:hover { color: var(--ink); }
+}
+@media (any-pointer: coarse) {
+  .where-work,
+  .where-tool,
+  .where-back { min-height: max(40px, 2.5rem); }
+}
+
+/* **The literature search's dossier** (SituateDossier.tsx, plan 261024o), in
+   *Where it sits* since plan 261025h. Group heads and the source quote reuse
+   Reception's `.rcp-group-head` and `.rcp-quote`; what is here is placement,
+   and the few parts with no sibling to borrow from. */
 .situate-before { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; padding: 0.2rem 0 0.4rem; }
 .situate-what,
 .situate-disclosure,
@@ -573,6 +658,20 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   font-size: max(var(--text-min), 0.82rem);
   line-height: 1.45;
 }
+/* *Other editions of this piece* and *By the same authors*, under the list
+   (NotCitedPanel.tsx, plan 261025h decision 3): never hidden, ruled off from
+   the list above, headed as Reception's groups are, with the count quiet. */
+.rcp-related-group { margin-top: 0.6rem; padding-top: 0.4rem; border-top: 1px solid var(--rule); }
+.rcp-related-group-title {
+  margin: 0 0 0.15rem;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.78rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.rcp-related-group-title .rcp-meta { margin-left: 0.3rem; font-weight: 400; letter-spacing: 0; }
 
 .rcp-list { margin: 0; padding: 0; list-style: none; }
 /* **A row is two lines until opened** (ReceptionAndClaimsPanel.tsx § Row, plan

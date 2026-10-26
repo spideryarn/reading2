@@ -263,7 +263,8 @@ it("explains rows withheld by the real public boundary in each empty sub-mode", 
 it("lifts an old Citations link to Bibliography, which says it has no list", () => {
   boot("?mode=citations&citeby=document");
   expect(params().get("mode")).toBe("sources");
-  expect(params().has("sources")).toBe(false);
+  /* Explicit since plan 261025h, when a bare Sources address became Where it sits. */
+  expect(params().get("sources")).toBe("bibliography");
   expect(params().get("citeby")).toBe("document");
   expect(host.querySelector('[aria-label="Bibliography"]')?.getAttribute("aria-checked")).toBe("true");
   expect(host.textContent).toContain("Nobody has listed the works this one cites yet.");

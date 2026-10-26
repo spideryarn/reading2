@@ -718,7 +718,10 @@ describe("a press", () => {
   });
 
   /* The fourth positive control, and the dearest. See SourcesBand above. */
-  it("runs the debate search, which nothing else here presses", async () => {
+  /* Since plan 261025h (decision 6, GPT Sol's F5) the Sources press that
+     lands on Reception buys nothing: the search is Reception's own *Search
+     the web*. The free citers read still happens. */
+  it("starts no search when the Sources press lands on Reception: the search is the panel's own button", async () => {
     setSourcesView("reception");
     await open("plain");
     await act(async () => arriveView("reception"));
@@ -726,10 +729,8 @@ describe("a press", () => {
     await settle();
 
     expect(artefactGets("reception").length).toBeGreaterThan(0);
-    /* Exactly the one search it started before *Cited by* existed: the citers
-       read beside it is a GET and adds no job (plan 261004h, F8). */
     expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["reception"] }]);
+    expect(posts).toEqual([]);
   });
 
   /* **The other half, and the one that guards the money.** A bookmarked
@@ -770,7 +771,8 @@ describe("a press", () => {
      Reception search; Reception's press, above, asks for the search and never
      the list (that test's `posts` is exactly one request, with the list's
      hook mounted beside it). */
-  it("lists the claims when the Sources press lands on Claims, and starts no search", async () => {
+  /* And Claims' list is its own *List its claims* since plan 261025h. */
+  it("makes nothing when the Sources press lands on Claims: the list is the panel's own button", async () => {
     setSourcesView("claims");
     await open("plain");
     await act(async () => arriveView("claims"));
@@ -778,7 +780,7 @@ describe("a press", () => {
     await settle();
 
     expect(artefactGets("sources-claims").length).toBeGreaterThan(0);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["sources-claims"] }]);
+    expect(posts).toEqual([]);
   });
 
   it("only reads the claims list when a link, Back or a restore lands on Claims", async () => {

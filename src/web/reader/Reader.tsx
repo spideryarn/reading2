@@ -76,7 +76,7 @@ import {
 } from "../modes/skim/SkimMode.js";
 import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
-import type { ChatAnchor, Quote } from "../../types.js";
+import type { ChatAnchor, Quote, SituateFinding } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
@@ -106,6 +106,7 @@ import {
   askToCheckClaim,
 } from "../chat-handoff.js";
 import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
+import { findingLens, findingLensOrigin, findingOrigin } from "../situate-dossier.js";
 import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
@@ -1150,6 +1151,16 @@ export function Reader({
     (question: string) => lensInChat(question, askInSources, "send"),
     [lensInChat],
   );
+  /* **A literature-search finding's *Ask in chat*** (plan 261025h, decision 9;
+     queue item qi-mmtsxdhg): the same question as before, asked as a Sources
+     question, but stored with the finding's own origin, so its mark is found
+     by the finding's id and its way back opens *Where it sits* on it. Wrapped
+     in `reopenItemChat` below (`askFinding`), as every item sender is. */
+  const askFindingInChat = useCallback(
+    (finding: Pick<SituateFinding, "id" | "quote" | "note">) =>
+      handToChat(askInSources(findingLens(finding)), "send", findingOrigin(finding)),
+    [handToChat],
+  );
   const suggestedLensInChat = useCallback(
     (lens: string) => lensInChat(lens, askReceptionThroughLens, "wait"),
     [lensInChat],
@@ -1883,7 +1894,7 @@ export function Reader({
          well; a move between Sources' own lists is still a sub-mode move. */
       if (mode !== "sources") leavePassageChat();
       if (mode !== "sources" || sourcesView !== "bibliography" || thread !== null) {
-        void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
+        void setSourcesWay({ mode: "sources", sources: "bibliography", thread: null }, { history: "push" });
       }
     },
     [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
@@ -1899,22 +1910,25 @@ export function Reader({
    */
   const findWebNote = owner?.bibliography.findWebNote;
   /**
-   * **Open Investigate on one Situate finding** — a margin *literature*
-   * line's *Open in Sources* (plan 261024o § Marginalia). The focus and the
-   * move in one tick, as `openBibliographyWork` does; the dossier lands on the
+   * **Open *Where it sits* on one literature-search finding** — a margin
+   * *literature* line's *Open in Sources* (plan 261024o § Marginalia), and
+   * since plan 261025h a finding's chat's way back (`openOrigin`). It opened
+   * Investigate until that plan moved the dossier. The focus and the move in
+   * one tick, as `openBibliographyWork` does; the dossier lands on the
    * finding once it has drawn it (SituateDossier.tsx, `data-finding`), and a
    * finding a newer search has replaced is dropped there, opening on the list.
-   * This is a destination press, not a chat's way back: an open conversation
-   * is cleared so it cannot cover the row, and Investigate's arrival does not
-   * reopen another while the focus is being served.
+   * An open conversation is cleared so it cannot cover the row.
+   *
+   * `sources: null` is *Where it sits*: the default is written as no
+   * parameter, as nuqs writes it (sub-modes.ts § `subModeParams`).
    */
   const openFindingInSources = useCallback(
     (findingId: string) => {
       setBandAway(false);
       setFindingFocus(focusOn(findingId));
       if (mode !== "sources") leavePassageChat();
-      if (mode !== "sources" || sourcesView !== "investigate" || thread !== null) {
-        void setSourcesWay({ mode: "sources", sources: "investigate", thread: null }, { history: "push" });
+      if (mode !== "sources" || sourcesView !== "where" || thread !== null) {
+        void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
       }
     },
     [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
@@ -2007,13 +2021,29 @@ export function Reader({
         case "quiz":
           openQuizAt(origin.batchId, origin.itemId);
           return;
+        /* A literature-search finding lands on *Where it sits*, on its row
+           (plan 261025h, decision 9): the way *Open in Sources* goes, with
+           `?thread=` cleared as a claim's is, so the chat cannot cover the
+           row it went back to. A finding a newer search replaced opens the
+           dossier on its list (SituateDossier § `focus`). */
+        case "situate":
+          openFindingInSources(origin.itemId);
+          return;
         default: {
           const never: never = origin;
           return never;
         }
       }
     },
-    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, leavePassageChat, openQuizAt],
+    [
+      openTermAndLand,
+      openBibliographyWork,
+      setIdeaWay,
+      setSourcesWay,
+      leavePassageChat,
+      openQuizAt,
+      openFindingInSources,
+    ],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -3105,6 +3135,15 @@ export function Reader({
     },
     [reopenItemChat, checkClaimInChat],
   );
+  /* A finding's chat, reopened if it has one: by its id, or (a chat started
+     before plan 261025h) by the lens it stored then. */
+  const askFinding = useCallback(
+    (finding: SituateFinding) => {
+      if (reopenItemChat(findingOrigin(finding)) || reopenItemChat(findingLensOrigin(finding))) return;
+      askFindingInChat(finding);
+    },
+    [reopenItemChat, askFindingInChat],
+  );
   /* What Debate's claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
@@ -3129,6 +3168,7 @@ export function Reader({
       onQuestion: askSourcesQuestion,
       onCheck: checkClaim,
       onAskWork: askWork,
+      onFinding: askFinding,
       onOpen: openClaimChat,
     }),
     [
@@ -3141,6 +3181,7 @@ export function Reader({
       askSourcesQuestion,
       checkClaim,
       askWork,
+      askFinding,
       openClaimChat,
     ],
   );

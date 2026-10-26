@@ -160,6 +160,21 @@ Budget about $10–15, hard stop $25. Written up under `docs/investigations/`. A
 needs a per-phase model and generator stamp (today one power and one `generator` cover both calls,
 and `isOutdated` compares one), so it is its own small change after the write-up.
 
+**Result (2026-10-25)**: [261025h eval](../investigations/261025h-situate-eval-haiku-sonnet-opus.md),
+$8.96 metered. The planner stays Sonnet (Haiku found 20 of 26 known works against 26, to save two
+cents). Haiku alone fails as the reader (half the findings, coverage 2.4 against 3.67). **Adopted:
+Haiku shortlists the evidence, then the capable model writes** — Sonnet at standard power (arm C,
+about $0.30 an article, unsupported findings 2 against 8 and 3, kind errors 10 against 16–17), and
+Opus under [high-powered AI](../project/high-powered-ai.md) (arm D, about $0.52, unsupported 1,
+kind errors 1, judged second only to a full Opus read at 80% of its cost). Why not Opus for
+everyone: it is $0.52 against Greg's "$0.30 okay", and 60–90 s against 20–40 s while a reader
+watches; the setting puts it one switch away, and the debrief says so. The triage is a third call
+with its own task (`situate-triage`, pinned to Haiku, thinking budgeted), and the stamp records it.
+Two findings changed Stage 1: the *Since* date check catches only 1–2 errors a run (most sources
+are undated web pages), and the unsourced-name check was noisy on real output, so it is recorded
+as a count and cuts nothing. The OpenRouter key used locally hit its monthly limit at the end of
+the run (production's key is a different one).
+
 ### Stage 4 — experiments, behind the switch
 
 Two sub-modes, reached from *Where it sits*'s tools row only with the experimental switch on, both
@@ -209,3 +224,13 @@ same authors*; F11, F16, F17 the eval's redesign in Stage 3; F12 *Guess first* s
 *Hostile referee* dropped for Sol's *Evidence first*; F14 the measured range and the accepted cost;
 F15 *After it* unfiltered with a labelled keyword view; F18 *Lineage* dropped. Stages renumbered:
 the eval moved to run now, and the chips and the lists became one client stage.
+
+Stage 1's code went to Sol three times. Round 1
+([261025h-stage1-review-sol.md](261025h-stage1-review-sol.md)) found S1-F1 … F6: the twin rule
+letting a stranger's record in on one agreeing author, the Since check trusting a model's year,
+editions inferred from a DOI prefix, operators slipping through the code-written query, the topic
+list fetched on every open, and its provenance unlogged. Round 2
+([261025h-stage1-review2-sol.md](261025h-stage1-review2-sol.md)) closed four and found two the
+fixes introduced: S1-F7, surname-first bylines refused by the one-to-one author match, and S1-F8,
+bracketed operators still getting through while title colons were mangled. Both were fixed, and a
+narrow check ([261025h-stage1-review3-sol.md](261025h-stage1-review3-sol.md)) confirmed them.

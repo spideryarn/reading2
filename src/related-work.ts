@@ -59,6 +59,20 @@
  * bibliography*, never *not cited*, with a warning when that list is stale or
  * capped (F4).
  *
+ * **What is left is sorted into three, and none is hidden** (plan 261025h,
+ * decision 3; GPT Sol's F10). A work carrying the piece's authors (two of them,
+ * or the one a sole author has: `sharesTheAuthors`) is *Other editions of this
+ * piece* only when its title says so — an explicit marker (*reprint*,
+ * *translation*, *traducción*, *Übersetzung*, *edition*, *version*…) beside
+ * the piece's own title (`titleIsAnEdition`) — and otherwise *By the same
+ * authors*, a neutral label. A subtitle, a bracketed aside or a DOI that
+ * begins with the piece's proves no lineage (GPT Sol's S1-F3): *The Extended
+ * Mind: A New Theory* would be another paper, DOI suffixes are opaque, and
+ * neither the Czech *[Rozren mysel]* reprint nor the Spanish *La mente
+ * extendida* says what it is. Everything else is an ordinary row. The trial found four
+ * of *The Extended Mind*'s nineteen rows were the piece in another form
+ * (investigation 261025a § Failures 3).
+ *
  * **OpenAlex is an outside party, and everything it sends is text** (F5). The
  * address is built with `URLSearchParams`; every string goes through
  * `plainRegistryText` with a bound; ids and DOIs are kept only when they have
@@ -618,13 +632,84 @@ export function isThisPiece(work: Pick<RelatedWork, "doi" | "title" | "authors" 
   return year !== null && work.year !== undefined && Math.abs(year - work.year) <= 1;
 }
 
-/** The works neither in the Bibliography nor the piece itself, and how many the Bibliography took out. */
+/** A name as surname and first initial, folded: `Andrew G. Clark` and `ANDY CLARK` are both `clark a`. */
+function nameKeys(names: readonly string[]): { family: string; initial: string }[] {
+  const fold = (value: string) => tokens(value.normalize("NFD").replace(/\p{M}+/gu, "")).join(" ");
+  return openAlexAuthors(names.map((name) => name.trim()).filter((name) => name !== "")).map((author) => ({
+    family: fold(author.family),
+    initial: fold(author.given ?? "").charAt(0),
+  }));
+}
+
+/** The piece's authors as names: the structured list, else the byline split at its commas, semicolons and *and*s. */
+function pieceAuthorNames(article: RelatedWorkArticle): string[] {
+  const structured = (article.authors ?? []).map((author) => author.name).filter((name) => tokens(name).length > 0);
+  if (structured.length > 0) return structured;
+  return (article.byline ?? "").split(/\s*(?:[,;&]|\band\b)\s*/i).filter((part) => tokens(part).length > 0);
+}
+
+/**
+ * **The work carries the piece's authors**: two of them, or all of them when
+ * the piece has fewer than two — each matched by surname and first initial,
+ * so `Andrew G. Clark` is the byline's `ANDY CLARK` (as he is, on the trial's
+ * Czech reprint). A piece with no author shares none.
+ */
+export function sharesTheAuthors(work: Pick<RelatedWork, "authors">, article: RelatedWorkArticle): boolean {
+  const ours = nameKeys(pieceAuthorNames(article)).filter((key, at, all) =>
+    key.family !== "" && all.findIndex((other) => other.family === key.family && other.initial === key.initial) === at);
+  if (ours.length === 0) return false;
+  const theirs = nameKeys(work.authors);
+  const shared = ours.filter((mine) =>
+    theirs.some((them) => them.family === mine.family && (mine.initial === "" || them.initial === "" || them.initial === mine.initial)));
+  return shared.length >= Math.min(2, ours.length);
+}
+
+/**
+ * A word that says a work is another form of one: a reprint, a translation, an
+ * edition, a version — in English and the languages a reprint of an English
+ * paper is likeliest to be in. Whole words only.
+ */
+const EDITION_MARKER =
+  /(?<![\p{L}\p{N}])(?:reprint(?:ed)?|repr\.|republished|re-?issued?|translation|translated|traducci[oó]n|traduction|traduzione|tradu[cç][aã]o|[üu]bersetzung|[üu]bersetzt|edition|[ée]dition|edici[oó]n|edizione|version|revised)(?![\p{L}\p{N}])/giu;
+/** What may stand beside a marker without being title: `2nd`, `new`, `in`, `from`. */
+const MARKER_COMPANION = /(?<![\p{L}\p{N}])(?:\d+(?:st|nd|rd|th)|new|second|third|in|from|of)(?![\p{L}\p{N}])/giu;
+
+/** A title's words once its brackets, its markers and their companions are set aside. */
+function withoutMarkers(title: string): string {
+  return title.replace(/[[\]()]/g, " ").replace(EDITION_MARKER, " ").replace(MARKER_COMPANION, " ");
+}
+
+/** The title before its subtitle (a colon, or a spaced dash), as words — or null when it has none. */
+function mainTitleWords(title: string): string[] | null {
+  const main = /^(.+?)\s*(?::|\s[-–—]\s)\s*\S/.exec(title.trim())?.[1];
+  return main === undefined ? null : tokens(main);
+}
+
+/**
+ * **The work's title says it is another form of the piece** (Sol's S1-F3): it
+ * carries an explicit marker (`EDITION_MARKER`), and with the markers set aside
+ * it is the piece's title, or the piece's title with a subtitle. A subtitle
+ * alone, a bracket alone (`[Rozren mysel]`), or a marker beside another title
+ * (`La mente extendida (traducción)`) is not enough. Never a title too short
+ * to be told apart.
+ */
+export function titleIsAnEdition(piece: string, work: string): boolean {
+  if (!registryTitleIsDistinctive(piece) || !new RegExp(EDITION_MARKER.source, "iu").test(work)) return false;
+  const a = tokens(piece);
+  const bare = withoutMarkers(work);
+  const same = (x: readonly string[] | null) => x !== null && x.length === a.length && x.every((word, i) => a[i] === word);
+  return same(tokens(bare)) || same(mainTitleWords(bare));
+}
+
+/** The works neither in the Bibliography nor the piece itself, sorted into three, and how many the Bibliography took out. */
 export function notInBibliography(
   works: readonly RelatedWork[],
   rows: readonly CitedWork[],
   article: RelatedWorkArticle,
-): { works: RelatedWork[]; excluded: number } {
+): { works: RelatedWork[]; editions: RelatedWork[]; sameAuthors: RelatedWork[]; excluded: number } {
   const kept: RelatedWork[] = [];
+  const editions: RelatedWork[] = [];
+  const sameAuthors: RelatedWork[] = [];
   let excluded = 0;
   for (const work of works) {
     if (isThisPiece(work, article)) continue;
@@ -632,9 +717,12 @@ export function notInBibliography(
       excluded++;
       continue;
     }
-    kept.push({ ...work, authors: work.authors.slice(0, RELATED_WORK_AUTHORS) });
+    const shown = { ...work, authors: work.authors.slice(0, RELATED_WORK_AUTHORS) };
+    if (!sharesTheAuthors(work, article)) kept.push(shown);
+    else if (article.title !== null && titleIsAnEdition(article.title, work.title)) editions.push(shown);
+    else sameAuthors.push(shown);
   }
-  return { works: kept, excluded };
+  return { works: kept, editions, sameAuthors, excluded };
 }
 
 /* ------------------------------------------------------------ the answers -- */
@@ -645,10 +733,12 @@ function answerFor(
   article: RelatedWorkArticle,
   fingerprint: string,
 ): RelatedWorkResult {
-  const { works, excluded } = notInBibliography(stored.works, bibliography.citations, article);
+  const { works, editions, sameAuthors, excluded } = notInBibliography(stored.works, bibliography.citations, article);
   return {
     kind: "found",
     works,
+    editions,
+    sameAuthors,
     excluded,
     bibliographyStale: bibliography.stale,
     bibliographyCapped: bibliography.capped,

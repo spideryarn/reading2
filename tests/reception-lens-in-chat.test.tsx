@@ -365,15 +365,17 @@ function answerTurn(body: { threadId: string; question: string; origin?: ThreadO
   return new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
-/** The reader's experimental switch: off unless a test turns it on (§ Where this piece sits). */
+/** The reader's experimental switch: off unless a test turns it on. Off for § Where it sits, which no longer asks it. */
 let experimentalSince: string | null = null;
+/** The stored literature search, or `null` for none yet (§ Where it sits). */
+let storedSituate: unknown = null;
 
 function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince });
   /* Nobody has searched the literature for this one (`200 null`, the none-yet answer). */
-  if (url === `/api/situate/${SLUG}`) return json(null);
+  if (url === `/api/situate/${SLUG}`) return json(storedSituate);
   if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
   if (url === `/api/sources-claims/${SLUG}`) return json({ claimList: CLAIM_LIST, stale: false, outdated: false });
   if (url === `/api/bibliography/${SLUG}`) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
@@ -418,6 +420,7 @@ beforeEach(() => {
   minted = 0;
   summaryGate = null;
   experimentalSince = null;
+  storedSituate = null;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -506,6 +509,9 @@ function prosePoint(within: HTMLElement, offset: number): [Node, number] {
   }
   throw new Error(`offset ${offset} is past the end of the prose`);
 }
+/** One of *Where it sits*' tools (WhereItSitsPanel.tsx), by its address. */
+const tool = (view: string): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(`.mode-band .where-tools button.where-tool[data-tool="${view}"]`);
 /** One of Sources' chips, by its label (SourcesMode.tsx § `SourcesViews`). */
 const chip = (label: string): HTMLButtonElement | undefined =>
   [...host.querySelectorAll<HTMLButtonElement>('.mode-band [role="radiogroup"][aria-label="Sources view"] button.summ-view-btn')].find(
@@ -828,7 +834,10 @@ describe("asking a question in Sources › Investigate", () => {
         setter?.call(box, "Not sent yet");
         box.dispatchEvent(new Event("input", { bubbles: true }));
       });
-      await act(async () => chip("Investigate")?.click());
+      /* A tool since plan 261025h: back to Where it sits, whose tools row has it. */
+      await act(async () => chip("Where it sits")?.click());
+      await until(() => tool("investigate") !== null, "Where it sits' tools");
+      await act(async () => tool("investigate")?.click());
       await until(() => lensBox() !== null, "Investigate");
       await act(async () => releaseSummaries());
       await until(() => angles().length === 1, "Your questions after the held summary list arrives");
@@ -887,10 +896,13 @@ describe("asking a question in Sources › Investigate", () => {
       await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());
       await until(() => param("thread") === null && dialog() === null, "the dialog to close");
       await act(async () => chip("Bibliography")?.click());
-      await until(() => param("sources") === null || param("sources") === "bibliography", "Bibliography");
+      await until(() => param("sources") === "bibliography", "Bibliography");
       await settle(4);
       expect(param("thread"), "not opened outside Investigate").toBeNull();
-      await act(async () => chip("Investigate")?.click());
+      /* Investigate is a tool inside Where it sits since plan 261025h. */
+      await act(async () => chip("Where it sits")?.click());
+      await until(() => tool("investigate") !== null, "Where it sits' tools");
+      await act(async () => tool("investigate")?.click());
       await until(() => param("thread") === OLDER.id && dialog() !== null, "the conversation again");
     });
 
@@ -967,29 +979,126 @@ describe("asking a question in Sources › Investigate", () => {
   });
 });
 
-/* Plan 261024o § Stages, 2: *Where this piece sits* is the owner's, behind the
-   experimental switch. With it off, Investigate never asks for the dossier;
-   with it on, it asks, draws the press, and still buys nothing on arrival. */
-describe("Where this piece sits, at the top of Investigate", () => {
+/* Plan 261025h: *Where it sits* is Sources' default for the owner, and the
+   literature search's dossier is in it for every owner, out of the
+   experimental switch (decision 5, GPT Sol's F7). Opening it reads, offers the
+   press, and buys nothing; a finding's chat stores the finding's own origin,
+   and its way back lands on *Where it sits*, on the finding (decision 9). */
+describe("Where it sits", () => {
   const situateReads = () => trace.filter((r) => r.url === `/api/situate/${SLUG}`);
-  const dossier = () => host.querySelector<HTMLElement>(".mode-band .investigate-situate");
+  const dossier = () => host.querySelector<HTMLElement>(".mode-band .where-situate");
+  const FINDING_ID = "si-0123456789ab";
+  const FINDING = {
+    id: FINDING_ID,
+    kind: "challenged",
+    blockId: LAST_BLOCK,
+    quote: CLAIM_QUOTE,
+    note: "A 2020 study found the memories do not survive.",
+    strength: "strong",
+    sources: [{ origin: "web", url: "https://example.org/moths", title: "Moths forget", quote: "the memories did not survive" }],
+  };
+  const DOSSIER = {
+    situate: {
+      version: "situate/1",
+      generator: "a-model",
+      slug: SLUG,
+      sourceHash: "hash",
+      profileHash: null,
+      generatedAt: "2026-10-24T10:00:00.000Z",
+      elapsedMs: 1,
+      kind: "empirical",
+      year: 2008,
+      angle: "since",
+      outcome: "read",
+      overview: "It is still argued over.",
+      findings: [FINDING],
+      questions: [],
+      searched: { queries: [], pages: 0, citers: 0, cited: 0 },
+      counts: {
+        written: 1, kept: 1, malformed: 0, unknownBlock: 0, unquoted: 0, unknownSource: 0, sourceUnquoted: 0,
+        noSource: 0, citationRule: 0, perBlock: 0, overCap: 0, duplicate: 0, queriesRefused: 0,
+      },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  };
+  const findingRow = () => host.querySelector<HTMLElement>(`.mode-band .where-situate [data-finding="${FINDING_ID}"]`);
 
-  it("is neither asked for nor drawn with the experimental switch off", async () => {
+  it("is the owner's bare Sources address, and with the switch off offers Search the literature and buys nothing", async () => {
     who.set(OWNER);
-    await open("?mode=sources&sources=investigate");
-    await until(() => investigateRows("").length > 0, "Investigate's questions");
-    await settle(4);
-    expect(dossier()).toBeNull();
-    expect(situateReads()).toEqual([]);
-  });
-
-  it("with it on, reads the dossier, offers the press, and starts nothing on arrival", async () => {
-    experimentalSince = "2026-10-01T00:00:00.000Z";
-    who.set(OWNER);
-    await open("?mode=sources&sources=investigate");
+    await open("?mode=sources");
     await until(() => dossier()?.querySelector("button") != null, "the dossier's press");
+    expect(experimentalSince, "the switch is off").toBeNull();
     expect(situateReads().length).toBeGreaterThan(0);
     expect(dossier()?.textContent).toContain(SITUATE_RUN);
+    expect(dossier()?.textContent).not.toMatch(/experimental/i);
+    expect(chip("Where it sits")?.getAttribute("aria-checked")).toBe("true");
     expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"), "no job on arrival").toEqual([]);
+    expect(chatPosts()).toEqual([]);
+  });
+
+  it("goes to a tool and back, and Back and Forward keep one chip checked, buying nothing", async () => {
+    who.set(OWNER);
+    await open("?mode=sources");
+    await until(() => tool("reception") !== null, "Where it sits' tools");
+    const checked = () =>
+      [...host.querySelectorAll('.mode-band [role="radiogroup"][aria-label="Sources view"] [aria-checked="true"]')].map(
+        (b) => (b.getAttribute("aria-label") ?? "").split(",")[0],
+      );
+    await act(async () => tool("reception")?.click());
+    await until(() => param("sources") === "reception", "Reception");
+    expect(checked()).toEqual(["Where it sits"]);
+    await act(async () => chip("Bibliography")?.click());
+    await until(() => param("sources") === "bibliography", "Bibliography");
+    expect(checked()).toEqual(["Bibliography"]);
+    await act(async () => history.back());
+    await until(() => param("sources") === "reception", "Back to Reception");
+    expect(checked()).toEqual(["Where it sits"]);
+    await act(async () => history.back());
+    await until(() => param("sources") === null && dossier() !== null, "Back to Where it sits");
+    expect(checked()).toEqual(["Where it sits"]);
+    await act(async () => history.forward());
+    await until(() => param("sources") === "reception", "Forward to Reception");
+    /* The tool's way back is a plain move too. */
+    const back = host.querySelector<HTMLButtonElement>(".mode-band .where-back");
+    await act(async () => back?.click());
+    await until(() => param("sources") === null, "← Where it sits");
+    expect(posts().filter((r) => r.url === "/api/jobs"), "no job: Bibliography was already made").toEqual([]);
+  });
+
+  it("asks about a finding with the finding's own origin", async () => {
+    storedSituate = DOSSIER;
+    who.set(OWNER);
+    await open("?mode=sources");
+    await until(() => findingRow() !== null, "the finding");
+    const ask = findingRow()?.querySelector<HTMLButtonElement>("button.situate-ask");
+    await act(async () => ask?.click());
+    /* `AskInChatButton` reveals, then sends on the second press. */
+    if (chatPosts().length === 0) await act(async () => findingRow()?.querySelector<HTMLButtonElement>("button.situate-ask")?.click());
+    await until(() => chatPosts().length === 1, "the finding's chat");
+    const sent = chatPosts()[0]?.body as { origin: ThreadOrigin };
+    expect(sent.origin).toEqual({ mode: "situate", itemId: FINDING_ID, quote: CLAIM_QUOTE });
+  });
+
+  it("the way back from a finding's chat opens Where it sits on that finding", async () => {
+    storedSituate = DOSSIER;
+    const chat: ChatThread = {
+      ...structuredClone(STORED),
+      id: "spya-fndcht",
+      title: "Finding: memories",
+      origin: { mode: "situate", itemId: FINDING_ID, quote: CLAIM_QUOTE },
+    };
+    server = [structuredClone(STORED), chat];
+    who.set(OWNER);
+    await open(`?mode=chat&thread=${chat.id}`);
+    const back = () => host.querySelector<HTMLButtonElement>(".mode-band .chat-origin-back");
+    await until(() => back() !== null, "Chat's way back");
+    expect(back()?.textContent).toContain("Where it sits");
+    await act(async () => back()?.click());
+    await until(() => param("mode") === "sources" && findingRow() !== null, "Where it sits, with the finding");
+    expect(param("sources"), "the default, left off").toBeNull();
+    expect(param("thread"), "the chat does not cover the row").toBeNull();
+    expect(chatPosts()).toEqual([]);
   });
 });

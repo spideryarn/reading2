@@ -1,0 +1,230 @@
+{
+ "meta": {
+  "count": 556
+ },
+ "results": [
+  {
+   "id": "https://openalex.org/W2079944053",
+   "doi": "https://doi.org/10.1007/s11097-010-9174-y",
+   "display_name": "Minds: extended or scaffolded?",
+   "publication_year": 2010,
+   "cited_by_count": 621,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Kim Sterelny"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1007/s11097-010-9174-y",
+    "doi": "https://doi.org/10.1007/s11097-010-9174-y",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1007/s11097-010-9174-y",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S187602988",
+     "display_name": "Phenomenology and the Cognitive Sciences",
+     "issn_l": "1568-7759",
+     "issn": [
+      "1568-7759",
+      "1572-8676"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "anvur-class-a",
+      "anvur-scientific",
+      "cwts-core",
+      "erih-plus",
+      "jufo-3",
+      "ki-jl-1",
+      "norway-2",
+      "poland-100",
+      "russia-white-list-1",
+      "vabb-shw"
+     ],
+     "host_organization": "https://openalex.org/P4310319965",
+     "host_organization_name": "Springer Nature",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310319965"
+     ],
+     "host_organization_lineage_names": [
+      "Springer Nature"
+     ],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Phenomenology and the Cognitive Sciences",
+    "raw_type": "journal-article"
+   },
+   "type": "article"
+  },
+  {
+   "id": "https://openalex.org/W1989248721",
+   "doi": "https://doi.org/10.1007/s11245-008-9043-2",
+   "display_name": "Making Sense of Sense-Making: Reflections on Enactive and Extended Mind Theories",
+   "publication_year": 2008,
+   "cited_by_count": 501,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Evan T. Thompson"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Mog Stapleton"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1007/s11245-008-9043-2",
+    "doi": "https://doi.org/10.1007/s11245-008-9043-2",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1007/s11245-008-9043-2",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S40710572",
+     "display_name": "Topoi",
+     "issn_l": "0167-7411",
+     "issn": [
+      "0167-7411",
+      "1572-8749"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "anvur-class-a",
+      "anvur-scientific",
+      "cwts-core",
+      "erih-plus",
+      "jufo-1",
+      "norway-1",
+      "poland-140",
+      "russia-white-list-1",
+      "vabb-shw"
+     ],
+     "host_organization": "https://openalex.org/P4310319900",
+     "host_organization_name": "Springer Science+Business Media",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310319900",
+      "https://openalex.org/P4310319965"
+     ],
+     "host_organization_lineage_names": [
+      "Springer Science+Business Media",
+      "Springer Nature"
+     ],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Topoi",
+    "raw_type": "journal-article"
+   },
+   "type": "article"
+  },
+  {
+   "id": "https://openalex.org/W1556997081",
+   "doi": "https://doi.org/10.1093/acprof:oso/9780195379457.001.0001",
+   "display_name": "Cognitive Systems and the Extended Mind",
+   "publication_year": 2009,
+   "cited_by_count": 413,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Robert D. Rupert"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1093/acprof:oso/9780195379457.001.0001",
+    "doi": "https://doi.org/10.1093/acprof:oso/9780195379457.001.0001",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1093/acprof:oso/9780195379457.001.0001",
+    "pdf_url": null,
+    "source": null,
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": null,
+    "raw_type": "edited-book"
+   },
+   "type": "book"
+  },
+  {
+   "id": "https://openalex.org/W2114814877",
+   "doi": "https://doi.org/10.1016/j.cogsys.2013.03.008",
+   "display_name": "The socially extended mind",
+   "publication_year": 2013,
+   "cited_by_count": 378,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Shaun Gallagher"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1016/j.cogsys.2013.03.008",
+    "doi": "https://doi.org/10.1016/j.cogsys.2013.03.008",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.1016/j.cogsys.2013.03.008",
+    "pdf_url": "https://www.sciencedirect.com/science/article/pii/S1389041713000272",
+    "source": {
+     "id": "https://openalex.org/S96254641",
+     "display_name": "Cognitive Systems Research",
+     "issn_l": "1389-0417",
+     "issn": [
+      "1389-0417",
+      "2214-4366"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "anvur-class-a",
+      "anvur-scientific",
+      "cwts-core",
+      "dongbi-c",
+      "doyens",
+      "jufo-1",
+      "ki-jl-1",
+      "norway-1",
+      "poland-70",
+      "russia-white-list-1",
+      "vabb-shw"
+     ],
+     "host_organization": "https://openalex.org/P4310320990",
+     "host_organization_name": "Elsevier BV",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310320990"
+     ],
+     "host_organization_lineage_names": [
+      "Elsevier BV"
+     ],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Cognitive Systems Research",
+    "raw_type": "journal-article"
+   },
+   "type": "article"
+  }
+ ]
+}

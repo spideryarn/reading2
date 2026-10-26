@@ -59,8 +59,10 @@ the panel draws around them is a disclosure.
 
 ## What the reader sees
 
-Two of Sources' three sub-modes on its segmented control
-(`?sources=reception` or `?sources=claims`; Bibliography is the default):
+Two of Sources' sub-modes (`?sources=reception` or `?sources=claims`). Since 2026-10-25 they are
+not chips for the owner but two of the tools *Where it sits* links to, *Pages about it* and *Check a
+claim*, each with *Where it sits › its name* in its head ([sources.md § The band](sources.md#the-band),
+[261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)); a visitor still has them as chips:
 
 - **Reception**: what others have written about the piece itself, including work that cites it and
   says something about it. Since 2026-10-20 it opens as an outline
@@ -118,7 +120,7 @@ Since 2026-10-20, top to bottom:
   of an older search's claim rows is left out.
 - **Every page**, open by default. It holds every stored row, so nothing is behind a press
   ([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)),
-  and its count is the chip's.
+  and its count is the chip's (for the owner, the number beside *Pages about it* on *Where it sits*' tools row).
 - **Cited by**, collapsed, with its count (below).
 
 **A row is two lines until its toggle opens it.**
@@ -160,12 +162,14 @@ in its paragraph is dropped and counted. Each listed claim keeps *Check this cla
 a current list the owner can tick claims and check them on the web
 ([§ Checking the claims you pick](#checking-the-claims-you-pick)).
 
-**The press rule.** Pressing the Claims chip, the command bar's *Sources › Claims*, or the
-Sources button when it lands on Claims makes the list when there is none. A link, Back, a reload or
-a last-view restore that lands on Claims only reads, and shows *List its claims*. Sources'
-sub-modes arm different targets (`activationForSources`, `src/web/activation.ts`), and
-each hook spends only its own while its own sub-mode is showing, so a Claims press can never buy
-the Reception search, nor a Reception press the list.
+**The press rule.** Since 2026-10-25 nothing that moves the reader makes the list: Claims shows
+*List its claims* until that is pressed, however it was reached — the tools row's link, the command
+bar's *Sources › Claims*, a link, Back, a reload or a last-view restore. Until then a press on the
+Claims chip, its command-bar row or the Sources button landing on Claims made it; the chip went
+with [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md) (decision 6), and a link that spends is what the band refuses to be
+([sources.md § What a press buys](sources.md#what-a-press-buys)). The same holds for Reception's
+search, whose first run is *Search the web*. Each hook still spends only its own target while its
+own sub-mode is showing, so no press can buy the other's work.
 
 **Its states**: none (*List its claims* for the owner; a sentence for a visitor), running, an empty
 list (a sentence: a real answer), a failed run (its sentence and *Retry*), and **stale** — the
@@ -474,10 +478,29 @@ honestly finds nothing.
   Greg's answer to [q-hbg65m](../user-feedback/questions/q-hbg65m.md)). An article with an author
   and a distinctive title is searched for at OpenAlex by the words of its title, and a record is
   taken only when its whole title agrees, **and** two of its authors are ours or one is and its year
-  is within one of ours, **and** no other record passes too (`titleMatchOf`). That is stricter than
+  is within one of ours, **and** no other work passes too (`titleMatchOf`). That is stricter than
   a DOI's check, because a search carries no evidence of its own. The match's OpenAlex id goes
   straight to the list, with no DOI asked (OpenAlex's DOI for a work is its own metadata, and may
-  not be the one the work is known by), and the list is cached under `openalex:w<digits>`. The
+  not be the one the work is known by), and the list is cached under `openalex:w<digits>`.
+  **Twin records are one work**, since 2026-10-25
+  ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+  decision 2): OpenAlex holds *The Extended Mind* twice (5,514 and 673 citers), and refusing every
+  second passing record gave a landmark no list at all. Records with the same whole title, each
+  carrying two of the piece's authors (all of them for a sole author) and two of one another's, and
+  years within one, are joined: the citers are asked with OpenAlex's union filter, `cites:W1|W2`,
+  so the count (5,849) and the list are OpenAlex's own rather than a sum, the list is cached under
+  every record's id (`openalex:w393180982|w4239232206`), and `target.alsoHeldAs` names the others.
+  Any other second passing record is still `no-match`: the most cited is not evidence.
+- **A topic view for a much-cited piece**, since 2026-10-25 (decision 10). For a work with more
+  than a thousand citers (`TOPIC_MIN_CITERS`, a heuristic from four pieces) whose OpenAlex record
+  has a keyword, the answer says `topic: { keyword }`, and `GET /api/citers/:slug?about=topic`
+  answers the citers whose title or abstract carry that keyword, in the same shape, with
+  `filteredBy`. That list is fetched only when asked for (GPT Sol's review of the stage, S1-F5),
+  cached in a row of its own (`<key>#topic`), and once cached the plain answer's `topic` carries
+  its `count` too. It is
+  offered beside *Most cited*, never applied in its place: keyword matching misses synonyms and
+  papers with no abstract ([261025a](../investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md)
+  § Failures 5). The keyword is OpenAlex's own, and nothing of the article is sent for it. The
   search itself is made on every open and never stored: a cache keyed on titles and authors would
   be neither anonymous nor safe to share. The panel names and links the matched record, so a wrong
   match can be seen to be one; a search that matched nothing has its own sentence (`no-match`),

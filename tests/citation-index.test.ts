@@ -30,6 +30,7 @@ import {
   openAlexWorkUrl,
   titleMatchOf,
   titleQueryOf,
+  TOPIC_MIN_CITERS,
   parseOpenAlexCiters,
   parseOpenAlexWork,
 } from "../src/citation-index.js";
@@ -827,9 +828,16 @@ describe("titleMatchOf", () => {
     expect(titleMatchOf(two, searchOf(work))?.kind).toBe("match");
   });
 
-  it("matches nothing when two different works pass: the most cited is not evidence", () => {
-    const again = { ...VASWANI, id: "https://openalex.org/W1" };
-    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, again))).toEqual({ kind: "none" });
+  it("matches nothing when two different works pass: two records are one work only as twins (261025h)", () => {
+    /* Twins — the same whole title, the same authors, years within one — are
+       one work; anything else that passes twice is two works, and the most
+       cited is still not evidence of which. */
+    const later = { ...VASWANI, id: "https://openalex.org/W1", publication_year: 2027 };
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, later))).toEqual({ kind: "none" });
+    const fewerAuthors = { ...VASWANI, id: "https://openalex.org/W1", authorships: authorships(["Ashish Vaswani", "Somebody Else"]) };
+    expect(titleMatchOf({ ...ATTENTION_ARTICLE, publishedYear: 2025 }, searchOf(VASWANI, fewerAuthors))).toEqual({ kind: "none" });
+    const undated = { ...VASWANI, id: "https://openalex.org/W1", publication_year: undefined };
+    expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, undated))).toEqual({ kind: "none" });
     /* The same work twice in one answer is one work. */
     expect(titleMatchOf(ATTENTION_ARTICLE, searchOf(VASWANI, VASWANI))?.kind).toBe("match");
   });
@@ -915,6 +923,204 @@ describe("citersOf, with no DOI", () => {
     });
     expect(await citersOf(ATTENTION_ARTICLE, h.deps)).toMatchObject({ kind: "found", via: "title" });
     expect(h.api.asked).toEqual([SEARCH_URL]);
+  });
+});
+
+/* ---------------------------------------------- twins, and the topic view -- */
+
+/* The Extended Mind (Clark & Chalmers 1998) as the trial's local article
+   clark-chalmers-1998-spya-uwb4tn has it: a PDF, no DOI, no year
+   (docs/investigations/261025a § Failures 2 and 5). The three OpenAlex answers
+   are real, asked 2026-10-25 and trimmed to their first records: the title
+   search, which holds the paper twice (W393180982, Analysis, 5,514 citers;
+   W4239232206, Wiley's DOI, 673), and the union's citers, unfiltered and by the
+   work's top keyword. */
+const EM_SEARCH = fixture("extended-mind-search.json");
+const EM_CITERS = fixture("extended-mind-citers.json");
+const EM_TOPIC = fixture("extended-mind-topic.json");
+const EXTENDED_MIND = {
+  title: "The extended mind",
+  byline: "ANDY CLARK; DAVID CHALMERS",
+  authors: [
+    { name: "ANDY CLARK", affiliations: [] },
+    { name: "DAVID CHALMERS", affiliations: [] },
+  ],
+  url: "https://www.alice.id.tue.nl/references/clark-chalmers-1998.pdf",
+};
+const EM_SEARCH_URL = openAlexTitleSearchUrl(titleQueryOf(EXTENDED_MIND.title)!);
+const EM_UNION = "W393180982|W4239232206";
+const EM_CITERS_URL = openAlexCitersUrl(EM_UNION, 100);
+const EM_TOPIC_URL = openAlexCitersUrl(EM_UNION, 100, "extended mind");
+const EM_KEY = "openalex:w393180982|w4239232206" as CitersKey;
+
+describe("twin records: one work held twice by OpenAlex (261025h, decision 2)", () => {
+  it("takes The Extended Mind's two records as one work, and says which", () => {
+    expect(titleMatchOf(EXTENDED_MIND, EM_SEARCH)).toEqual({
+      kind: "match",
+      target: {
+        openalexId: "W393180982",
+        alsoHeldAs: ["W4239232206"],
+        title: "The Extended Mind",
+        authors: ["Andy Clark", "David J. Chalmers"],
+        keyword: "extended mind",
+      },
+    });
+  });
+
+  it("asks for the union's citers in one request, so the count is OpenAlex's own, and keys the list by both", async () => {
+    const h = harness({ [EM_SEARCH_URL]: EM_SEARCH, [EM_CITERS_URL]: EM_CITERS, [EM_TOPIC_URL]: EM_TOPIC });
+    const got = await citersOf(EXTENDED_MIND, h.deps);
+    expect(got).toMatchObject({
+      kind: "found",
+      via: "title",
+      target: { openalexId: "W393180982", title: "The Extended Mind", alsoHeldAs: ["W4239232206"] },
+      count: 5849,
+      capped: true,
+    });
+    expect(new URL(EM_CITERS_URL).searchParams.get("filter")).toBe("cites:W393180982|W4239232206");
+    expect(h.api.asked.slice(0, 2)).toEqual([EM_SEARCH_URL, EM_CITERS_URL]);
+    expect(h.store.writes[0]).toBe(`${EM_KEY}:found`);
+  });
+
+  it("is still none when one of the two is a different work: another year, or fewer of the authors", () => {
+    const body = EM_SEARCH as { results: Record<string, unknown>[] };
+    const [first, second, ...rest] = body.results;
+    const later = { ...second, publication_year: 2001 };
+    expect(titleMatchOf(EXTENDED_MIND, { results: [first, later, ...rest] })).toEqual({ kind: "none" });
+    /* With the year known, a record carrying one of the two authors passes on
+       its own, and so is a second work rather than nothing; but not a twin. */
+    const oneAuthor = { ...second, authorships: authorships(["Andy Clark"]) };
+    const dated = { ...EXTENDED_MIND, publishedYear: 1998 };
+    expect(titleMatchOf(dated, { results: [oneAuthor] })?.kind).toBe("match");
+    expect(titleMatchOf(dated, { results: [first, oneAuthor, ...rest] })).toEqual({ kind: "none" });
+  });
+
+  it("reads a surname-first byline as the people in it (Sol's S1-F7)", () => {
+    const title = "A Distinctive Paper About Coupled Oscillators";
+    const record = (names: string[]) => ({
+      id: "https://openalex.org/W1",
+      display_name: title,
+      publication_year: 2020,
+      authorships: authorships(names),
+    });
+    const ours = record(["Jane Smith", "John Jones"]);
+    for (const byline of ["Smith, Jane; Jones, John", "Smith, Jane, Jones, John", "Smith, Jane and Jones, John", "Jane Smith, John Jones"]) {
+      expect(titleMatchOf({ title, byline }, searchOf(ours))?.kind, byline).toBe("match");
+    }
+    /* Structured authors win over the byline whenever there are any. */
+    const structured = { title, byline: "Somebody Else", authors: [{ name: "Jane Smith", affiliations: [] }, { name: "John Jones", affiliations: [] }] };
+    expect(titleMatchOf(structured, searchOf(ours))?.kind).toBe("match");
+    /* And the semicolon form still keeps people apart. */
+    expect(titleMatchOf({ title, byline: "Smith, Jane Alice; Jones, John Bob" }, searchOf(record(["John Smith", "Bob Jones"])))).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("matches authors one to one, never across a byline's separators (Sol's S1-F1)", () => {
+    /* Each OpenAlex name borrows words from two different people in the byline. */
+    const article = { title: "A Distinctive Paper About Coupled Oscillators", byline: "Jane Alice Smith, John Bob Jones" };
+    const record = (id: string, year: number) => ({
+      id: `https://openalex.org/${id}`,
+      display_name: article.title,
+      publication_year: year,
+      authorships: authorships(["John Smith", "Bob Jones"]),
+    });
+    expect(titleMatchOf(article, searchOf(record("W1", 2020), record("W2", 2021)))).toEqual({ kind: "none" });
+    expect(titleMatchOf({ ...article, publishedYear: 2020 }, searchOf(record("W1", 2020), record("W2", 2021)))).toEqual({ kind: "none" });
+    /* The same records with the article's own two people do pass, and join. */
+    const ours = (id: string, year: number) => ({ ...record(id, year), authorships: authorships(["Jane Smith", "John Jones"]) });
+    expect(titleMatchOf(article, searchOf(ours("W1", 2020), ours("W2", 2021)))).toMatchObject({
+      kind: "match",
+      target: { openalexId: "W1", alsoHeldAs: ["W2"] },
+    });
+  });
+
+  it("joins a sole author's twins on that one author", () => {
+    const sole = { title: ATTENTION, byline: "Ashish Vaswani", publishedYear: 2017 };
+    const a = { ...VASWANI, authorships: authorships(["Ashish Vaswani"]), publication_year: 2017 };
+    const b = { ...a, id: "https://openalex.org/W1", publication_year: 2018 };
+    expect(titleMatchOf(sole, searchOf(a, b))).toMatchObject({
+      kind: "match",
+      target: { openalexId: "W2626778328", alsoHeldAs: ["W1"] },
+    });
+  });
+});
+
+describe("the topic view: the citers that mention the work's own keyword (261025h, decision 10)", () => {
+  it("says a list of more than a thousand citers has a topic, by OpenAlex's keyword, and fetches nothing more for it", async () => {
+    expect(TOPIC_MIN_CITERS).toBe(1000);
+    const h = harness({ [EM_SEARCH_URL]: EM_SEARCH, [EM_CITERS_URL]: EM_CITERS, [EM_TOPIC_URL]: EM_TOPIC });
+    const got = await citersOf(EXTENDED_MIND, h.deps);
+    expect(got).toMatchObject({ kind: "found", count: 5849, topic: { keyword: "extended mind" } });
+    /* No count until the reader has asked for the topic's list once (Sol's S1-F5). */
+    expect(got.kind === "found" ? [got.topic?.count, got.filteredBy] : null).toEqual([undefined, undefined]);
+    expect(h.api.asked).toEqual([EM_SEARCH_URL, EM_CITERS_URL]);
+    expect(h.store.writes).toEqual([`${EM_KEY}:found`]);
+    /* The keyword goes as a phrase search, a parameter of its own, never inside `filter`. */
+    const url = new URL(EM_TOPIC_URL);
+    expect(url.searchParams.get("search.title_and_abstract")).toBe('"extended mind"');
+    expect(url.searchParams.get("filter")).toBe("cites:W393180982|W4239232206");
+  });
+
+  it("fetches and caches the topic's list only on ?about=topic, and then the plain list carries its count", async () => {
+    const h = harness({ [EM_SEARCH_URL]: EM_SEARCH, [EM_CITERS_URL]: EM_CITERS, [EM_TOPIC_URL]: EM_TOPIC });
+    await citersOf(EXTENDED_MIND, h.deps);
+    const topic = await citersOf(EXTENDED_MIND, h.deps, { about: "topic" });
+    expect(topic).toMatchObject({
+      kind: "found",
+      filteredBy: "extended mind",
+      count: 556,
+      topic: { keyword: "extended mind", count: 556 },
+      target: { openalexId: "W393180982", alsoHeldAs: ["W4239232206"] },
+    });
+    expect(topic.kind === "found" ? topic.citers[0]?.title : null).toBe("Minds: extended or scaffolded?");
+    expect(h.api.asked).toEqual([EM_SEARCH_URL, EM_CITERS_URL, EM_SEARCH_URL, EM_TOPIC_URL]);
+    /* Cached apart from the unfiltered list. */
+    expect(h.store.writes).toEqual([`${EM_KEY}:found`, `${EM_KEY}#topic:found`]);
+    /* The next plain open: the title search alone, and the topic's count off its row. */
+    const again = await citersOf(EXTENDED_MIND, h.deps);
+    expect(again).toMatchObject({ topic: { keyword: "extended mind", count: 556 } });
+    expect(h.api.asked).toHaveLength(5);
+  });
+
+  it("offers no topic at a thousand citers or fewer, and ?about=topic is then the unfiltered list", async () => {
+    const small = { ...(EM_CITERS as object), meta: { count: TOPIC_MIN_CITERS } };
+    const h = harness({ [EM_SEARCH_URL]: EM_SEARCH, [EM_CITERS_URL]: small });
+    const got = await citersOf(EXTENDED_MIND, h.deps, { about: "topic" });
+    expect(got).toMatchObject({ kind: "found", count: TOPIC_MIN_CITERS });
+    expect(got.kind === "found" ? [got.topic, got.filteredBy] : null).toEqual([undefined, undefined]);
+    expect(h.api.asked).toEqual([EM_SEARCH_URL, EM_CITERS_URL]);
+  });
+
+  it("answers ?about=topic with the unfiltered list, still offering the topic, when its list cannot be read", async () => {
+    const h = harness({ [EM_SEARCH_URL]: EM_SEARCH, [EM_CITERS_URL]: EM_CITERS, [EM_TOPIC_URL]: failure(500) });
+    const got = await citersOf(EXTENDED_MIND, h.deps, { about: "topic" });
+    expect(got).toMatchObject({ kind: "found", count: 5849, topic: { keyword: "extended mind" } });
+    expect(got.kind === "found" ? got.filteredBy : "not found").toBeUndefined();
+  });
+
+  it("logs where the topic's list came from, not where the plain list did (Sol's S1-F6)", async () => {
+    const h = harness({ [EM_SEARCH_URL]: EM_SEARCH, [EM_CITERS_URL]: EM_CITERS, [EM_TOPIC_URL]: EM_TOPIC });
+    await citersOf(EXTENDED_MIND, h.deps);
+    const recorded = recordingLog();
+    await citersOf(EXTENDED_MIND, { ...h.deps, log: recorded.logger }, { about: "topic" });
+    expect(recorded.entries).toContainEqual(expect.objectContaining({ id: `${EM_KEY}#topic`, from: "openalex", about: "topic" }));
+    const cached = recordingLog();
+    await citersOf(EXTENDED_MIND, { ...h.deps, log: cached.logger }, { about: "topic" });
+    expect(cached.entries).toContainEqual(expect.objectContaining({ id: `${EM_KEY}#topic`, from: "cache" }));
+  });
+
+  it("takes the keyword with the highest score, as OpenAlex's own words, and a work with none has no topic", () => {
+    const work = parseOpenAlexWork({
+      id: "https://openalex.org/W1",
+      title: "A work",
+      keywords: [
+        { display_name: "second", score: 0.4 },
+        { display_name: "first \"choice\"", score: 0.9 },
+      ],
+    });
+    expect(work?.keyword).toBe("first choice");
+    expect(parseOpenAlexWork({ id: "https://openalex.org/W1", title: "A work" })?.keyword).toBeUndefined();
   });
 });
 
