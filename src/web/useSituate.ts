@@ -10,14 +10,15 @@
  * with the reader's profile (ranking and the questions): `stale`, `outdated`
  * and `profileChanged`.
  *
- * **Owner only, and only behind the experimental switch.** `SourcesBand`
- * mounts it only when both hold (SourcesMode.tsx § `InvestigateBand`), so a
- * visitor, or an owner with the switch off, never asks.
+ * **Owner only.** `SourcesBand` mounts it in *Where it sits* for every owner
+ * (and in Investigate for the dossier's suggested questions); a visitor never
+ * asks. The dossier left the experimental switch in plan 261025h.
  *
- * **Nothing here spends on arrival.** There is no `useAutoRun`: Investigate's
- * chip arms nothing (activation.ts § `activationForSources`), and this is the
- * dearest press in Sources, so the only way in is the section's own button,
- * *Search the literature*, which calls `ensure`.
+ * **Nothing here spends on arrival.** There is no `useAutoRun`, and no Sources
+ * activation targets `situate`: *Where it sits* arms Bibliography alone and
+ * Investigate arms nothing (activation.ts § `activationForSources`). This is
+ * the dearest press in Sources, so the only way in is the section's own
+ * button, *Search the literature*, which calls `ensure`.
  *
  * The read half is exported alone (`useSituateRead`) for the margin's notes
  * (plan § Marginalia), which must read and never start: the same split as

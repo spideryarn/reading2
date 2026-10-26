@@ -451,9 +451,8 @@ const BODIES: Record<string, unknown> = {
     profileChanged: false,
   },
   arc: { arc: { ...STAMP, entries: [] }, stale: false },
-  /* Sources > Investigate's *Where this piece sits* (plan 261024o): the
-     owner's, behind the experimental switch, which `/api/reader` below has on.
-     One finding, whose note is what the band draws. */
+  /* Sources > Where it sits' dossier (plan 261025h): the owner's for every
+     owner. One finding, whose note is what the band draws. */
   situate: {
     situate: {
       ...STAMP,

@@ -55,10 +55,10 @@ one would otherwise be missed; it would not be, so it is not
   ([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
-- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Bibliography works and comments
+- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Sources' Claims rows, Bibliography works and comments
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
-  quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
+  quote and remaining-passage count for FAQ, the source quote and bearing for Sources' Claims, the byline and
   reference entry for a citation (not the model's reason, since 261003j) and, where there is one,
   the checked note on what the work says from its abstract, the Sources band's own `CiteBlurb`
   (since 2026-10-18, [261018i](../plans/261018i-marginalia-notes-that-save-a-click.md)), or, for a comment, the

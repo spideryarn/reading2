@@ -1801,8 +1801,8 @@ export function Reader({
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
-  /* A Situate finding in Investigate's dossier (plan 261024o), asked for by a
-     margin *literature* line's *Open in Sources*. */
+  /* A Situate finding in Where it sits' dossier (plan 261025h), asked for by
+     a margin *literature* line's *Open in Sources* or a chat's way back. */
   const [findingFocus, setFindingFocus] = useState<ItemFocus | null>(null);
   const findingFocusTaken = useCallback((taken: ItemFocus) => setFindingFocus(focusTaken(taken)), []);
   /**
@@ -1875,10 +1875,11 @@ export function Reader({
    * **Open Bibliography on one work** — the focus and the move in one place,
    * so neither can be written without the other (GPT Sol's F7 on plan
    * 261009l). The move is one pushed entry naming the mode and the sub-mode
-   * (Bibliography is the absent default), so a reader on Not cited, Links, Reception or
-   * Claims lands on the list the focus is for. Called by a chat's way back to a
-   * cited work, by Links' *In Bibliography*, by Claims' *Cited in this
-   * paragraph* (that plan's Stage 2), and by a citation card's *Open in Sources*.
+   * (Bibliography is named explicitly), so a reader on Where it sits, Not
+   * cited, Links, Reception or Claims lands on the list the focus is for.
+   * Called by a chat's way back to a cited work, by Links' *In Bibliography*,
+   * by Claims' *Cited in this paragraph* (that plan's Stage 2), and by a
+   * citation card's *Open in Sources*.
    *
    * If Bibliography is already the visible list and no conversation is open,
    * only restore the band and focus the row. A same-value pushed write creates

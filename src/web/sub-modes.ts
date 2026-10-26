@@ -277,16 +277,18 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
      the literature search, with the four tools under them. Plan 261025h,
      acting on Greg's answer to q-vg2b69. Its label is its own first alias in
      the command bar (`canonical`), so *where it sits* is not repeated here
-     (tests/mode-catalog.test.ts § never another row's label). Nor is *search
-     the literature*, the dossier's button: a phrase starting *search* is the
-     bar's find-in-article command (tests/command-match-arguments.test.ts). */
+     (tests/mode-catalog.test.ts § never another row's label). *Search the
+     literature* is also the dossier's button. It is the declared exception
+     to the generic find-in-article interpretation of a phrase starting
+     *search*: the specific named destination wins without a second,
+     contradictory row (command-match.ts § `VERBS`). */
   where: {
     label: "Where it sits",
     description:
       "What others say about this piece, and what it builds on: the papers that came after it, the works it leans on most, and a search of the literature",
     experimental: false,
     aliases: [
-      "situate", "the literature", "where this piece sits", "literature search", "what came after",
+      "situate", "the literature", "where this piece sits", "literature search", "search the literature", "what came after",
       "papers citing it",
     ],
   },

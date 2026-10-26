@@ -4,7 +4,7 @@
  * on Back (`liftedLegacyHref`), and from a remembered last view
  * (`restoredHref`). One canonicaliser behind all three, so a stored
  * `?mode=debate&debate=claims` cannot parse through `RETIRED_MODES` as Sources
- * and land on its default Bibliography (GPT Sol's F1 on plan 261009l). The
+ * and land on its then-default Bibliography (GPT Sol's F1 on plan 261009l). The
  * chat list's old `?chatfrom=debate|citations|peer-review` filters land on the
  * combined word (F5). The mode was called Peer review until 2026-10-09, when
  * it became Sources (plan 261009w § Old links still land).

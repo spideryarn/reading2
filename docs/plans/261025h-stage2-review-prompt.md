@@ -6,10 +6,10 @@ for me to decide.
 
 ## The candidate
 
-Stages 1 and 2 are committed together as HEAD (`git show HEAD --stat`). Stage 1 is already reviewed
+Stages 1 and 2 are committed together as d4712dc12 (`git show d4712dc12 --stat`; dev has since been merged in on top). Stage 1 is already reviewed
 (docs/plans/261025h-stage1-review*-sol.md) — out of scope except where Stage 2 consumes it
 (`editions`/`sameAuthors` in useRelatedWork.ts, NotCitedPanel's groups). In scope: everything else in
-`git show HEAD`, chiefly src/web/params.ts (`SOURCES_VIEWS`, `SOURCES_CHIPS`, `chipOf`,
+`git show d4712dc12`, chiefly src/web/params.ts (`SOURCES_VIEWS`, `SOURCES_CHIPS`, `chipOf`,
 `visitorSourcesView`, the parser default), src/web/router.ts (`liftLegacySources`),
 src/web/sub-modes.ts, src/web/activation.ts, src/web/WhereItSitsPanel.tsx (new),
 src/web/modes/sources/SourcesMode.tsx, src/web/InvestigatePanel.tsx, SituateDossier.tsx,

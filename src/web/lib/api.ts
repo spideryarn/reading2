@@ -1158,7 +1158,7 @@ const CACHEABLE = [
   /* With the route, as `/api/faq/` is: the claims list, which Claims
      draws from — docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "/api/sources-claims/",
-  /* With the route, as `/api/faq/` is: Investigate's dossier, the owner's own
+  /* With the route, as `/api/faq/` is: Where it sits' dossier, the owner's own
      and the dearest press in Sources — docs/plans/261024o. */
   "/api/situate/",
   "/api/bibliography/",

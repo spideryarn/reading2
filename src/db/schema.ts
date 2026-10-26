@@ -4684,13 +4684,14 @@ export const chatThreads = spideryarn.table(
      *   (src/thread-origin.ts). The contract migration rewrites those rows and
      *   narrows the CHECKs below.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
-     *   entry, a cited work). Null for a claim, which has none. Never
-     *   dereferenced, and no foreign key: the entry may be regenerated away.
+     *   entry, a cited work, a literature-search finding). Null for a claim,
+     *   which has none. Never dereferenced, and no foreign key: the entry may
+     *   be regenerated away.
      * - `origin_block_id`: the block the item sits in. Points at the identity,
      *   like `anchor_block_id`, so it survives a re-extraction.
      * - `origin_quote`: the item's own words when the chat started: a claim's
-     *   words, or a glossary entry's or a cited work's name. Article prose or
-     *   a model's: never logged.
+     *   words, or a glossary entry's, cited work's or finding's name. Article
+     *   prose or a model's: never logged.
      * - `origin_lens`: the angle the reader typed to look at the debate from
      *   (`LensOrigin`; plan 261005k, A). The reader's words: never logged. A
      *   `reception` origin has this and a `sources-claims` origin a block and a

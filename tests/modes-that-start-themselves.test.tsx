@@ -160,6 +160,7 @@ const { useReception } = await import("../src/web/useReception.js");
 const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
 const { useCiters } = await import("../src/web/useCiters.js");
 const { useBibliography, useBibliographyRead } = await import("../src/web/useBibliography.js");
+const { useSituate } = await import("../src/web/useSituate.js");
 const { useFaq } = await import("../src/web/useFaq.js");
 const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
@@ -253,20 +254,36 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * stays green.
  */
 function SourcesBand({ slug, view }: { slug: string; view: SourcesView }): ReactElement {
-  const bibliography = useBibliography(slug, useBibliographyRead(slug), view === "bibliography");
+  const bibliography = useBibliography(
+    slug,
+    useBibliographyRead(slug),
+    view === "bibliography" || view === "where",
+  );
   const reception = useReception(slug, view === "reception");
   /* Claims' own list and press (plan 261008i stage 2). */
   const claims = useSourcesClaims(slug, view === "claims");
   /* The owner's band makes a second read, the papers that cite the piece
      (plan 261004h). It is here so the Reception cases below can show it asks
      on arrival and can start nothing. */
-  useCiters(slug, view === "reception");
-  const shown = view === "bibliography" ? bibliography : view === "reception" ? reception : claims;
+  useCiters(slug, view === "reception" || view === "where");
+  const shown =
+    view === "bibliography" || view === "where"
+      ? bibliography
+      : view === "reception"
+        ? reception
+        : claims;
   return createElement(
     "div",
     { "data-band": "sources" },
     shown.automatic ? "auto" : shown.starting ? "starting" : shown.status,
+    view === "where" ? createElement(WhereRead, { slug }) : null,
   );
+}
+
+/** The dossier is mounted only by Where it sits (and Investigate in production). */
+function WhereRead({ slug }: { slug: string }): ReactElement {
+  const situate = useSituate(slug);
+  return createElement("span", { "data-situate-status": situate.status });
 }
 
 /**
@@ -445,7 +462,7 @@ const SETTLED_EMPTY_IDEAS_READ = {
  * which reach the panel through that setter and through nothing else.
  */
 let arrive: (next: BandMode) => void = () => {};
-/** Move between Sources' three views without unmounting its controller, as Back does. */
+/** Move among Sources' views without unmounting its controller, as Back does. */
 let arriveView: (view: SourcesView) => void = () => {};
 
 /**
@@ -458,7 +475,7 @@ const diagramKind = (): string => diagramInSearch(window.location.search);
 
 function Reading({ slug, start }: { slug: string; start: BandMode }): ReactElement {
   const [mode, setMode] = useState<BandMode>(start);
-  const [sources, setSources] = useState<SourcesView>("bibliography");
+  const [sources, setSources] = useState<SourcesView>("where");
   arrive = setMode;
   arriveView = setSources;
   return createElement(
@@ -706,14 +723,16 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["timeline"] }]);
   });
 
-  /* Bibliography, Sources' default since 2026-10-09: a press on the
-     button with nothing named lists the citations, and nothing else. */
-  it("lists the citations when the Sources press lands on Bibliography, and starts no search", async () => {
+  /* Where it sits, Sources' default since plan 261025h: a press on the
+     button with nothing named lists the citations, reads the dossier, and
+     starts no literature search. */
+  it("lists the citations when the Sources press lands on Where it sits, and starts no search", async () => {
     await open("plain");
     await press("Sources");
     await settle();
 
     expect(artefactGets("bibliography").length).toBeGreaterThan(0);
+    expect(artefactGets("situate").length).toBeGreaterThan(0);
     expect(posts).toEqual([{ slug: "constitution", steps: ["bibliography"] }]);
   });
 
@@ -1007,6 +1026,30 @@ describe("arriving without pressing", () => {
     await settle();
 
     expect(artefactGets("ideas").length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
+  });
+
+  it("reads bare Sources at Where it sits without starting Bibliography or the dossier", async () => {
+    await open("sources");
+
+    expect(artefactGets("bibliography").length).toBeGreaterThan(0);
+    expect(artefactGets("situate").length).toBeGreaterThan(0);
+    expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
+    expect(posts).toEqual([]);
+  });
+
+  it("spends nothing when Back or Forward moves among Sources' tools", async () => {
+    await open("sources");
+    await act(async () => arriveView("reception"));
+    await settle();
+    await act(async () => arriveView("claims"));
+    await settle();
+    await act(async () => arriveView("where"));
+    await settle();
+
+    expect(artefactGets("reception").length).toBeGreaterThan(0);
+    expect(artefactGets("sources-claims").length).toBeGreaterThan(0);
+    expect(artefactGets("situate").length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
   });
 

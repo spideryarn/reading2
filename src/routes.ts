@@ -12682,7 +12682,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* Sources › Investigate's dossier: where the piece sits in the literature —
+  /* Sources › Where it sits' dossier: where the piece sits in the literature —
      plan 261024o, src/situate.ts. **Owner only**: every store read is
      owner-scoped, so somebody else's article is a 404, and there is no public
      twin (S9). GET only: asking again is POST /api/jobs { slug, steps:

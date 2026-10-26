@@ -608,7 +608,14 @@ describe("Sources' seven sub-modes", () => {
   it("finds Where it sits by the words a reader would use", () => {
     reading();
     openBar();
-    for (const words of ["where it sits", "situate", "the literature", "where this piece sits", "literature search"]) {
+    for (const words of [
+      "where it sits",
+      "situate",
+      "the literature",
+      "where this piece sits",
+      "literature search",
+      "search the literature",
+    ]) {
       type(words);
       expect(fullName(rows()[0] as HTMLElement), words).toBe("Sources › Where it sits");
     }
