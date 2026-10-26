@@ -76,6 +76,30 @@
   ]
  },
  {
+  "id": "mode:skim",
+  "label": "Skim",
+  "description": "A route through the piece's quotes, a little deeper each time round",
+  "aliases": [
+   "spiral",
+   "route",
+   "trajectory",
+   "skim read",
+   "speed read",
+   "quick read",
+   "preview",
+   "scan"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "mode:diagram",
   "label": "Diagram",
   "description": "The article's shape as a picture: a model reads the argument and draws it",
@@ -95,30 +119,6 @@
   "generates": true,
   "contexts": [
    "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "mode:skim",
-  "label": "Skim",
-  "description": "A route through the piece's quotes, a little deeper each time round",
-  "aliases": [
-   "spiral",
-   "route",
-   "trajectory",
-   "skim read",
-   "speed read",
-   "quick read",
-   "preview",
-   "scan"
-  ],
-  "kind": "mode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"

@@ -679,7 +679,7 @@ interface Props {
  *
  *  - `exit` — Plain, alone: the way out of a mode.
  *  - `shape` — the article's shape, restated, and the way through it at
- *    increasing depth (Structure, Summary, Diagram, Skim). Skim joined on
+ *    increasing depth (Structure, Summary, Skim, Diagram). Skim joined on
  *    2026-10-08 (below).
  *  - `guides` — ways through the piece, each drawn from it along one line: the
  *    quotes, questions it answers, its terms, its ideas, its dates (Quotes,
@@ -708,8 +708,9 @@ interface Props {
  * Skim moved from `guides` to `shape` on 2026-10-08, Greg: *"move the skim
  * mode icon into the same group after structure and summary"* (spya-wm5gu2,
  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md).
- * The More button stands in the same run, at its end straight after Skim since
- * 2026-10-18 (`MORE_AFTER`).
+ * The More button stands in the same run straight after Skim since 2026-10-18
+ * (`MORE_AFTER`). Diagram follows it when offered since 2026-10-26, so the
+ * button keeps the same place when the experimental switch is turned on.
  */
 type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
@@ -845,7 +846,37 @@ const MODES_UI = [
      thread is Summary's Thread view now, one button fewer on the bar — Greg:
      *"I would like to have fewer modes"* (spya-thpsnd,
      docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
-  /* **In the shape run, just after Summary, since 2026-09-29**, because it is
+  /* **First of the guides run, just before Quotes, since 2026-09-29** —
+     Greg: *"Move Trajectory one further left, before Quotes"* (Skim was called
+     Trajectory until 2026-10-01, plan 261001r)
+     (SPIDERYARN-READING2-4E). It is a walk through the article's own Quotes,
+     so it sits beside them; on 2026-09-28 it went straight after them (the
+     sentence quoted on the Quotes row below), and before that after FAQ, where
+     the plan first put it and Greg had not yet placed it by hand.
+
+     `Route`, used nowhere else — a path with stops on it, which is the mode.
+     Not `ListOrdered`, which was the Tweets mode's numbered thread.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c.
+
+     **In the shape run, straight after Summary, since 2026-10-08** — Greg: *"move the
+     skim mode icon into the same group after structure and summary"*
+     (spya-wm5gu2). More was drawn straight after it until
+     2026-10-11, after Summary until 2026-10-18 (spya-hdde62, plan 261011x),
+     and straight after it again since (`MORE_AFTER`, spya-c0va9e).
+     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
+  {
+    mode: "skim",
+    group: "shape",
+  },
+  /* **In the shape run, after Skim and so after More, since 2026-10-26** —
+     Greg: *"move the three dots when we're in experimental features mode to be
+     in roughly the same position they are in the main mode"* (spya-d0pyzt,
+     docs/plans/261026d-more-button-keeps-its-place-with-experimental-on-diagram-after-more.md).
+     Before Skim, this experimental row pushed More one button right with the
+     switch on, and off a phone's edge, where More jumped to the front of the
+     frame (`bandsInOrder`). After Skim, More has the same neighbours either way.
+
+     **Just after Summary from 2026-09-29**, because it is
      the same move Summary makes — the article restated — with a picture
      instead of prose. It had sat between Referee and Chat, and Greg's reorder
      that day (SPIDERYARN-READING2-4E) put Citations, Referee and Debate
@@ -874,29 +905,6 @@ const MODES_UI = [
      hidden ones. */
   {
     mode: "diagram",
-    group: "shape",
-  },
-  /* **First of the guides run, just before Quotes, since 2026-09-29** —
-     Greg: *"Move Trajectory one further left, before Quotes"* (Skim was called
-     Trajectory until 2026-10-01, plan 261001r)
-     (SPIDERYARN-READING2-4E). It is a walk through the article's own Quotes,
-     so it sits beside them; on 2026-09-28 it went straight after them (the
-     sentence quoted on the Quotes row below), and before that after FAQ, where
-     the plan first put it and Greg had not yet placed it by hand.
-
-     `Route`, used nowhere else — a path with stops on it, which is the mode.
-     Not `ListOrdered`, which was the Tweets mode's numbered thread.
-     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c.
-
-     **In the shape run, at its end, since 2026-10-08** — Greg: *"move the
-     skim mode icon into the same group after structure and summary"*
-     (spya-wm5gu2). Its row did not move, so it still leads into the Quotes it
-     walks, which are now under More. More was drawn straight after it until
-     2026-10-11, and since then it has stood before Diagram and Skim, after
-     Summary (spya-hdde62, plan 261011x).
-     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
-  {
-    mode: "skim",
     group: "shape",
   },
   /* **After Skim, since 2026-09-29**; straight after Summary, with
@@ -1217,18 +1225,23 @@ function drawnCount(bar: DockBar): number {
 }
 
 /**
- * **The row More stands straight after: Skim**, the last of the shape run.
+ * **The row More stands straight after: Skim**, the last of the shape run
+ * with the experimental switch off. Diagram, the run's one experimental row,
+ * stands after More rather than before Skim since 2026-10-26, so More has the
+ * same neighbours with the switch on or off (spya-d0pyzt, plan 261026d).
  * Greg, 2026-10-17 (spya-c0va9e): *"Move the three dots mode one to the right
  * in the bottom bar after Skim but still in the same group"*. It is still
- * inside that run, so no line stands between Skim and More; the shape run's
- * line stands straight after More, before the next run.
+ * inside that run, so no line stands between Skim and More. With Diagram
+ * offered, the shape run continues after More and its line stands after
+ * Diagram; otherwise the line stands after More.
  * docs/plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md.
  * History: after Skim from 2026-10-08 (spya-mcs4gb, plan 261008d), after
  * Summary from 2026-10-11 (spya-hdde62, plan 261011x), and after Skim again
  * since 2026-10-18.
- * **Wherever that place can be seen** — on a phone with Diagram drawn it is
- * off the edge (plan 261009c measured x 354–398), and More leads the frame
- * instead (`bandsInOrder`).
+ * **Wherever that place can be seen** — on a phone with Diagram drawn before
+ * Skim it was off the edge (plan 261009c measured x 354–398), and More led the
+ * frame instead (`bandsInOrder`). With Diagram after More that no longer
+ * happens on today's bar; the guard stays for a bar that grows.
  */
 const MORE_AFTER: Mode = "skim";
 
@@ -3407,7 +3420,7 @@ function DockModeLinks({
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map((m) => link(m))}</div>}
         {/* More in the same place as on the reading view — straight after
-            Summary, or first where that is off a phone's edge
+            Skim, or first where that is off a phone's edge
             (`bandsInOrder`) — and its items are these same links
             (`modeLinkHref`). Comments after Marginalia, as there. */}
         <div className="dock-frame" style={frameStyle(bands.length + moreCount(bar))}>

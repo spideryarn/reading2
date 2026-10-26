@@ -199,8 +199,11 @@ export const MORE_HOME_ATTR = "data-more-home";
  * Measured in WebKit, 2026-10-09: every phone width sits on the last rung with
  * the row at its 44px floor, so the buttons have the same x at 390, 375 and
  * 360. With Diagram drawn, More's old place after Skim was x 354–398 — off the
- * edge of all three, and since 2026-10-18 that is its place again (spya-c0va9e),
- * so with Diagram drawn on a phone More leads. No label rung fits 360, so this is not a rung: it changes no width,
+ * edge of all three. When More returned after Skim on 2026-10-18
+ * (spya-c0va9e), Diagram therefore made More lead on a phone. Since 2026-10-26
+ * Diagram stands after More (spya-d0pyzt, plan 261026d), so its place is x 310–354 with the
+ * switch on or off and this no longer fires on today's bar; it stays for a bar
+ * that grows. No label rung fits 360, so this is not a rung: it changes no width,
  * only where More stands, and the ladder's measurement is untouched by it.
  *
  * **The answer must not depend on which order is drawn**, or moving More would
