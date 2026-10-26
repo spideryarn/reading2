@@ -16,6 +16,7 @@
  */
 import { readFileSync } from "node:fs";
 import pg from "pg";
+import { sslDecisionFor } from "../../src/db/ssl.js";
 import { loadPdfjs } from "../../src/pdf.js";
 
 interface Piece {
@@ -268,7 +269,8 @@ async function shown(): Promise<void> {
 }
 
 async function reception(): Promise<void> {
-  const c = new pg.Client({ connectionString: "postgresql://postgres:postgres@127.0.0.1:54362/postgres" });
+  const url = "postgresql://postgres:postgres@127.0.0.1:54362/postgres";
+  const c = new pg.Client({ connectionString: url, ssl: sslDecisionFor(url).ssl });
   await c.connect();
   await c.query("begin read only");
   const r = await c.query(`
