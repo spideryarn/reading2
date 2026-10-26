@@ -1,0 +1,820 @@
+diff --git a/src/citation-fulltext.ts b/src/citation-fulltext.ts
+new file mode 100644
+index 000000000..35f8be65d
+--- /dev/null
++++ b/src/citation-fulltext.ts
+@@ -0,0 +1,250 @@
++/**
++ * **Papers that may cite a piece OpenAlex cannot list citers for** — the works
++ * whose full text, in OpenAlex's index, contains the piece's exact title.
++ * *After it*'s and Reception's *Possible citations*, under the `no-doi` and
++ * `no-match` sentences. docs/plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md;
++ * the measurements are docs/investigations/261026a-cited-by-with-no-doi-full-text-and-web-search-recall-and-cost.md.
++ *
++ * ```
++ * an article from a public address, with a distinctive title
++ * (and six words or more when it has no year):
++ *   with a year Y:
++ *     1. works?filter=fulltext.search:"<words>",publication_year:<Y-10>-<Y-2>   the count only
++ *     2. works?filter=fulltext.search:"<words>",publication_year:>Y-2            one page of 25
++ *     a phrase found at 3+ works before, and more than 5% of the rate since, ► common-phrase
++ *   with none: only 2, with no year filter
++ *   OpenAlex's count 0 ► none; else ► found
++ * otherwise ───────────────────────────────────────────────► nothing asked (null)
++ * ```
++ *
++ * **Free, so asked when Sources opens** (Greg's cost rule, 2026-10-25), and
++ * only when the panel asks with `?with=possible`. Nothing is cached: the title
++ * search beside it is made on every open too (plan 261011q), and a cache keyed
++ * on a title says who reads what.
++ *
++ * **A sign, not a citation.** Measured on twelve no-DOI pieces, 33 of the 35
++ * readable top-five hits whose list the gate lets through cite the piece. The
++ * panel says *possible* and never adds them to a count.
++ *
++ * **What is sent** is what the title search already sends, the title's words,
++ * lower-cased with the punctuation gone but an apostrophe inside a word kept
++ * (`fulltextPhraseOf`), so nothing in a title can close the quotes or add a
++ * filter; plus a year range. Never the authors,
++ * never the text, and never for an uploaded file (`importedFromAPublicAddress`):
++ * an upload's title may be the reader's own unpublished work.
++ *
++ * ## What may be logged from this file
++ *
++ * The outcome, the counts and the time. Never the title, the phrase or an
++ * address, which carries the phrase.
++ */
++
++import { registryTitleIsDistinctive } from "./citation-registry.js";
++import { tokens } from "./citation-lookup.js";
++import { importedFromAPublicAddress } from "./citation-blurbs.js";
++import {
++  type ArticleIdentity,
++  type CitersDeps,
++  articleYear,
++  openAlexInTurn,
++  parseOpenAlexCiters,
++} from "./citation-index.js";
++import { log as rootLog, type Log } from "./log.js";
++import { CONTACT_EMAIL } from "./site-text.js";
++import type { Meta, PossibleCiters } from "./types.js";
++
++/** What the list needs to know of the article: its identity, and whether it was an upload. */
++export type PossibleIdentity = ArticleIdentity & Pick<Meta, "filename">;
++
++/** How many works one page lists. The rest are linked at OpenAlex, never fetched. */
++export const POSSIBLE_PER_PAGE = 25;
++/** With no year there is no gate, so the title itself has to carry the weight. */
++export const MIN_WORDS_WITHOUT_YEAR = 6;
++/**
++ * **The gate's two windows, inclusive, for a piece of year Y.** *Before* is
++ * Y-10 to Y-2, nine years in which no work can cite it; *since* is Y-1 to now,
++ * the year before kept because preprints, editions and OpenAlex's dates put a
++ * real citer there. The list is asked for over *since* alone.
++ */
++const BEFORE_FROM = 10;
++const BEFORE_TO = 2;
++const BEFORE_YEARS = BEFORE_FROM - BEFORE_TO + 1;
++/** At least this many works before the piece, and… */
++export const PHRASE_MIN_BEFORE = 3;
++/** …a per-year rate strictly above this share of the per-year rate since, make the title a phrase. */
++export const PHRASE_RATE_SHARE = 0.05;
++/** A piece this many years old or less is listed newest first: its citers have not been cited yet. */
++const RECENT_YEARS = 2;
++/** Leading words a record of the piece may carry that its title does not (*A Verbalizable…*). */
++const OWN_RECORD_ARTICLES: ReadonlySet<string> = new Set(["a", "an", "the"]);
++
++const FIELDS = "id,doi,display_name,publication_year,cited_by_count,authorships,primary_location,type";
++
++/** What would be asked, or null when nothing should be. */
++export interface FulltextQuestion {
++  phrase: string;
++  year: number | undefined;
++}
++
++/** The longest phrase sent, in characters, cut at a word: `titleQueryOf`'s bound. */
++const MAX_PHRASE = 300;
++
++/**
++ * **The title as the phrase OpenAlex's full-text search is sent**: NFKC,
++ * lower-cased, letter-and-digit runs joined by single spaces — `tokens`'
++ * split, but **keeping an apostrophe inside a word**. `titleQueryOf` drops it
++ * (*don't* → *dont*), which `search.title` forgives and the full-text index
++ * does not: *Do Things that Don't Scale* matches 31 works with it and none
++ * without. An apostrophe cannot end the quoted phrase, add a filter or name an
++ * operator, so it is the one mark let through. Null when there are no words.
++ */
++export function fulltextPhraseOf(title: string): string | null {
++  const words = title
++    .normalize("NFKC")
++    .toLowerCase()
++    .replace(/[‘’`]/g, "'")
++    .split(/[^\p{L}\p{N}']+/u)
++    .map((word) => word.replace(/^'+|'+$/g, ""))
++    .filter((word) => /[\p{L}\p{N}]/u.test(word));
++  let phrase = "";
++  for (const word of words) {
++    const next = phrase === "" ? word : `${phrase} ${word}`;
++    if (next.length > MAX_PHRASE) break;
++    phrase = next;
++  }
++  return phrase === "" ? null : phrase;
++}
++
++/**
++ * **Whether to ask at all, and with what words.** Null for an upload, a title
++ * too plain to be the piece's own (`registryTitleIsDistinctive`: *Simulators*),
++ * or, with no year to gate it by, one under six words. A year after `now` is
++ * no year: its windows would be empty or in the future.
++ */
++export function fulltextQuestionOf(article: PossibleIdentity, now: number): FulltextQuestion | null {
++  if (!importedFromAPublicAddress(article)) return null;
++  if (!registryTitleIsDistinctive(article.title)) return null;
++  const phrase = fulltextPhraseOf(article.title);
++  if (phrase === null) return null;
++  const stated = articleYear(article);
++  const year = stated !== undefined && stated <= now ? stated : undefined;
++  if (year === undefined && tokens(article.title).length < MIN_WORDS_WITHOUT_YEAR) return null;
++  return { phrase, year };
++}
++
++/**
++ * **The works whose full text has the phrase**, one page or only the count,
++ * within a year range. A `filter=` built from the phrase's words alone: they
++ * have no quotation mark, comma or pipe in them to end the phrase or add a
++ * filter, and lower case keeps OpenAlex from reading `AND`, `OR` or `NOT`.
++ */
++export function openAlexFulltextUrl(
++  phrase: string,
++  years: { from: number; to: number } | { after: number } | null,
++  page: { perPage: number; order: "newest" | "most-cited" } | "count",
++): string {
++  const range = years === null ? "" : "from" in years ? `,publication_year:${years.from}-${years.to}` : `,publication_year:>${years.after}`;
++  const params = new URLSearchParams({ filter: `fulltext.search:"${phrase}"${range}` });
++  if (page === "count") {
++    params.set("per_page", "1");
++    params.set("select", "id");
++  } else {
++    params.set("per_page", String(page.perPage));
++    params.set("sort", page.order === "newest" ? "publication_date:desc" : "cited_by_count:desc,publication_date:desc");
++    params.set("select", FIELDS);
++  }
++  params.set("mailto", CONTACT_EMAIL);
++  return `https://api.openalex.org/works?${params.toString()}`;
++}
++
++/**
++ * **Is the title a phrase rather than the piece's?** A work dated before the
++ * piece cannot cite it, so the rate at which the words turn up before is the
++ * rate at which they turn up by accident. `before` is the count over the
++ * *before* window (nine years), `since` over Y-1 to `now` inclusive. A phrase
++ * when `before` is at least three **and** `before / 9` is strictly more than
++ * 5% of `since / (now - Y + 2)` — so *since* being zero with three or more
++ * before is a phrase too (*Fashionable Problems*, 23 against none). `year` is
++ * at most `now` (`fulltextQuestionOf`), so the divisor is at least two.
++ */
++export function isCommonPhrase(before: number, since: number, year: number, now: number): boolean {
++  if (before < PHRASE_MIN_BEFORE) return false;
++  const sinceYears = Math.max(1, now - year + 2);
++  return before / BEFORE_YEARS > PHRASE_RATE_SHARE * (since / sinceYears);
++}
++
++/**
++ * **A record of the piece itself**, not a citer: the same words as its title,
++ * or those words after a leading *A*, *An* or *The* that one of them carries
++ * and the other does not (OpenAlex holds the reported piece as *A Verbalizable
++ * Representations…*). Nothing wider: *Response to <the title>*, *Comment on …*
++ * and *Revisiting …* are citers (Sol's plan review, F5).
++ */
++export function isThePiecesOwnRecord(workTitle: string, pieceTitle: string): boolean {
++  const bare = (words: string[]) => (words.length > 1 && OWN_RECORD_ARTICLES.has(words[0]!) ? words.slice(1) : words);
++  const work = bare(tokens(workTitle));
++  const piece = bare(tokens(pieceTitle));
++  return piece.length > 0 && work.length === piece.length && work.every((word, i) => word === piece[i]);
++}
++
++/** Newest first for a recent piece or one with no year; most cited first otherwise. */
++export function orderFor(year: number | undefined, now: number): "newest" | "most-cited" {
++  return year === undefined || now - year <= RECENT_YEARS ? "newest" : "most-cited";
++}
++
++/** What `possibleCitersOf` needs: the citers' own seams, and a clock for the year. */
++export interface PossibleDeps extends CitersDeps {
++  now?: () => Date;
++}
++
++/**
++ * **The possible citations, or null when nothing should be asked.** Never
++ * throws: anything OpenAlex or the limiter does is `unavailable`.
++ */
++export async function possibleCitersOf(article: PossibleIdentity, deps: PossibleDeps = {}): Promise<PossibleCiters | null> {
++  const now = (deps.now ?? (() => new Date()))().getUTCFullYear();
++  const question = fulltextQuestionOf(article, now);
++  if (question === null) return null;
++  const log: Log = deps.log ?? rootLog("store").child({ lookup: "citation-fulltext" });
++  const started = Date.now();
++  const done = (result: PossibleCiters, fields: Record<string, number | string> = {}): PossibleCiters => {
++    log.info({ outcome: result.kind, ms: Date.now() - started, ...fields }, "citation fulltext lookup");
++    return result;
++  };
++  const { phrase, year } = question;
++  try {
++    let before: number | null = null;
++    if (year !== undefined) {
++      const counted = await openAlexInTurn(
++        "fulltext",
++        openAlexFulltextUrl(phrase, { from: year - BEFORE_FROM, to: year - BEFORE_TO }, "count"),
++        deps,
++        "fulltext-count",
++      );
++      before = counted.kind === "json" ? (parseOpenAlexCiters(counted.json)?.count ?? null) : null;
++      if (before === null) return done({ kind: "unavailable" });
++    }
++    const order = orderFor(year, now);
++    const listed = await openAlexInTurn(
++      "fulltext",
++      openAlexFulltextUrl(phrase, year === undefined ? null : { after: year - BEFORE_TO }, { perPage: POSSIBLE_PER_PAGE, order }),
++      deps,
++      "fulltext-list",
++    );
++    const page = listed.kind === "json" ? parseOpenAlexCiters(listed.json) : null;
++    if (page === null) return done({ kind: "unavailable" });
++    if (before !== null && year !== undefined && isCommonPhrase(before, page.count, year, now)) {
++      return done({ kind: "common-phrase" }, { before, since: page.count });
++    }
++    const citers = page.citers.filter((c) => !isThePiecesOwnRecord(c.title, article.title));
++    if (page.count === 0 || citers.length === 0) return done({ kind: "none" }, { since: page.count });
++    return done(
++      { kind: "found", total: page.count, dropped: page.dropped + (page.citers.length - citers.length), order, phrase, citers },
++      { since: page.count, listed: citers.length, ...(before !== null ? { before } : {}) },
++    );
++  } catch {
++    /* A fetch seam's message can carry its address, which carries the phrase. */
++    log.error({ outcome: "internal-error", ms: Date.now() - started }, "citation fulltext lookup failed");
++    return { kind: "unavailable" };
++  }
++}
+diff --git a/src/citation-index.ts b/src/citation-index.ts
+index 7c7b6f5ce..2d1252665 100644
+--- a/src/citation-index.ts
++++ b/src/citation-index.ts
+@@ -475,7 +475,7 @@ function isThisArticle(article: ArticleIdentity, target: CitedTarget): target is
+ }
+ 
+ /** The article's year: `publishedYear`, or the year of `publishedAt` — or undefined. */
+-function articleYear(article: ArticleIdentity): number | undefined {
++export function articleYear(article: ArticleIdentity): number | undefined {
+   return article.publishedYear ?? plausibleYear(/^\d{4}/.exec(article.publishedAt ?? "")?.[0]);
+ }
+ 
+@@ -704,10 +704,13 @@ async function resolveDeps(deps: CitersDeps): Promise<Resolved> {
+ /** One request, in its turn: the JSON, or the one-word reason there is none. */
+ type Got = { kind: "json"; json: unknown } | { kind: "missing" | "too-large" | "unavailable" };
+ 
+-/** `id` is what the log names: the cache key, or `title` for a search, whose address is never logged. */
++/**
++ * `id` is what the log names: the cache key, or `title` for a search, or
++ * `fulltext` for src/citation-fulltext.ts's — whose addresses are never logged.
++ */
+ async function get(
+-  id: CitersKey | "title",
+-  what: "work" | "citers" | "search" | "situate-citers",
++  id: CitersKey | "title" | "fulltext",
++  what: "work" | "citers" | "search" | "situate-citers" | "fulltext-count" | "fulltext-list",
+   url: string,
+   d: Resolved,
+ ): Promise<Got> {
+@@ -825,14 +828,16 @@ export async function confirmedWorkOf(
+ /**
+  * **One OpenAlex request in its polite turn** — the shared limiter, the
+  * cooling after a 429, the bounded log — for a caller asking its own question.
+- * `key` is what the log names; the address is never logged.
++ * `key` is what the log names; the address is never logged. `what` says which
++ * question it was: Situate's citers unless told otherwise.
+  */
+ export async function openAlexInTurn(
+-  key: CitersKey,
++  key: CitersKey | "fulltext",
+   url: string,
+   deps: CitersDeps = {},
++  what: "situate-citers" | "fulltext-count" | "fulltext-list" = "situate-citers",
+ ): Promise<{ kind: "json"; json: unknown } | { kind: "missing" | "too-large" | "unavailable" }> {
+-  return get(key, "situate-citers", url, await resolveDeps(deps));
++  return get(key, what, url, await resolveDeps(deps));
+ }
+ 
+ /** How the list was reached. The panel says so when it was by title. */
+diff --git a/src/routes.ts b/src/routes.ts
+index 186c07c1d..cae2419a0 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -282,6 +282,7 @@ import { isWebUrl, savedSource } from "./urls.js";
+    fetched by us once and cached for everybody. src/link-previews.ts. */
+ import { linkPreview } from "./link-previews.js";
+ /* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
++import { possibleCitersOf } from "./citation-fulltext.js";
+ import { citersOf } from "./citation-index.js";
+ import type { CitersResult } from "./types.js";
+ /* Papers close to the article that its Bibliography does not list, for Sources'
+@@ -13054,6 +13055,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+    *
+    * **The identity is the imported one, not the shelf's**: a reader's rename
+    * would fail the title check on a correct DOI (F2).
++   *
++   * **`?with=possible` adds *Possible citations*** to a `no-doi` or `no-match`
++   * answer: the works whose full text, in OpenAlex's index, contains the
++   * piece's exact title, for an article from a public address — up to two more
++   * free requests, made only when the panel asks (src/citation-fulltext.ts,
++   * plan 261026f). Without it the answer is what it was.
+    */
+   {
+     kind: "pattern",
+@@ -13067,8 +13074,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+          same shape, when the list has a topic (plan 261025h, decision 10). */
+       const about = query.get("about");
+       if (about !== null && about !== "topic") throw httpError(400, "about must be topic");
++      const withParam = query.get("with");
++      if (withParam !== null && withParam !== "possible") throw httpError(400, "with must be possible");
+       const identity = await loadArticleIdentity(slugPart(captures, 1));
+       const citers: CitersResult = await citersOf(identity, {}, about === "topic" ? { about } : {});
++      if (withParam === "possible" && (citers.kind === "no-doi" || citers.kind === "no-match")) {
++        const possible = await possibleCitersOf(identity);
++        if (possible !== null) {
++          send(res, 200, { ...citers, possible } satisfies CitersResult);
++          return;
++        }
++      }
+       send(res, 200, citers);
+     },
+   },
+diff --git a/src/store/contracts.ts b/src/store/contracts.ts
+index b99695545..d0ad47eda 100644
+--- a/src/store/contracts.ts
++++ b/src/store/contracts.ts
+@@ -438,7 +438,9 @@ export interface ArticleReader {
+    * Owner-scoped like every read here: somebody else's slug is the same 404 as
+    * one that does not exist.
+    */
+-  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">>;
++  loadArticleIdentity(
++    slug: string,
++  ): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear" | "filename">>;
+ 
+   /**
+    * Every work the piece cites, plus whether the list still describes the
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index 9f06fcc8e..c304610f4 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -4494,7 +4494,9 @@ const rawPgArticleReader: ArticleReader = {
+    * columns, with `titleFor` deliberately not applied (the contract says why).
+    * The heading query runs only for a revision with no stored title.
+    */
+-  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">> {
++  async loadArticleIdentity(
++    slug: string,
++  ): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear" | "filename">> {
+     requireSlug(slug);
+     const found = await currentRevision(slug, "article");
+     if (!found) throw notFound(slug);
+@@ -4513,6 +4515,9 @@ const rawPgArticleReader: ArticleReader = {
+          through, as `metaFrom` passes them. */
+       ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
+       ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
++      /* An upload's title is never sent to OpenAlex's full-text search
++         (src/citation-fulltext.ts § fulltextQuestionOf, plan 261026f). */
++      ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
+     };
+   },
+ 
+diff --git a/src/types.ts b/src/types.ts
+index 05e061408..e09411090 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -8225,6 +8225,37 @@ export interface Citer {
+   citedByCount: number;
+ }
+ 
++/**
++ * **Papers that may cite a piece OpenAlex cannot list citers for** —
++ * `possible` on a `no-doi` or `no-match` answer, only when asked
++ * (`?with=possible`) and only for an article from a public address
++ * (src/citation-fulltext.ts, plan 261026f). Works whose full text, in
++ * OpenAlex's index, contains the piece's exact title: a sign each cites it, not
++ * a citation count, and never added to one.
++ *
++ * - `found` — `total` is OpenAlex's count of every such work; `citers` the
++ *   first page of them, the piece's own records and works from more than a
++ *   year before it taken out (`dropped` says how many); `order` how the page
++ *   was sorted; `phrase` the exact words sent, which the panel's link to the
++ *   rest at OpenAlex repeats.
++ * - `common-phrase` — the title turns up in works from before the piece
++ *   existed often enough to be a phrase, not a citation of it.
++ * - `none` — no such work.
++ * - `unavailable` — OpenAlex could not be read.
++ */
++export type PossibleCiters =
++  | {
++      kind: "found";
++      total: number;
++      dropped: number;
++      order: "newest" | "most-cited";
++      phrase: string;
++      citers: Citer[];
++    }
++  | { kind: "common-phrase" }
++  | { kind: "none" }
++  | { kind: "unavailable" };
++
+ /**
+  * `GET /api/citers/:slug` — **who cites this article, or why there is no
+  * list.** No model made any of it, and it is not part of the stored Debate.
+@@ -8267,8 +8298,8 @@ export interface Citer {
+  *   Plan 261025h, decision 10.
+  */
+ export type CitersResult =
+-  | { kind: "no-doi" }
+-  | { kind: "no-match" }
++  | { kind: "no-doi"; possible?: PossibleCiters }
++  | { kind: "no-match"; possible?: PossibleCiters }
+   | { kind: "not-indexed" }
+   | { kind: "unconfirmed" }
+   | { kind: "unavailable" }
+diff --git a/src/web/PrivacyPage.tsx b/src/web/PrivacyPage.tsx
+index 675c3499e..d877d05bb 100644
+--- a/src/web/PrivacyPage.tsx
++++ b/src/web/PrivacyPage.tsx
+@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
+  * can honestly promise: there is no changelog, no diff view and nobody to email
+  * about a wording change during a beta. Bump it when you change the words.
+  */
+-const LAST_UPDATED = "25 October 2026";
++const LAST_UPDATED = "26 October 2026";
+ 
+ /**
+  * A heading and its paragraphs. Eight of them; nothing else on the page.
+@@ -436,7 +436,9 @@ export function PrivacyPage() {
+             something of the reader's. These are sent the identifier of a
+             published work, or since 2026-10-11, for an article with no DOI,
+             the words of its title to OpenAlex (Cited by's title search,
+-            docs/plans/261011q-…), or, on the owner's press in Sources' Not
++            docs/plans/261011q-…, and, for an article from a public address,
++            its full-text search for Possible citations, docs/plans/261026f-…,
++            src/citation-fulltext.ts), or, on the owner's press in Sources' Not
+             cited, the title and the opening of the text (src/related-work.ts,
+             docs/plans/261011ac-…, its review's F1), and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
+             is the whole list of hosts, and the request is built in
+@@ -477,7 +479,8 @@ export function PrivacyPage() {
+           , when you open Sources on an article of yours, for the list of papers that cite it. Our
+           server sends each one the identifier of a published work — for your article, its DOI —
+           and our own contact address. When your article has no DOI, OpenAlex is sent the words of
+-          its title instead, to find it by. And when you press Search OpenAlex for related work, in
++          its title instead, to find it by; and, for an article you added from a public web address,
++          to find papers whose text contains its title. And when you press Search OpenAlex for related work, in
+           Sources’ Not cited, OpenAlex is sent your article’s title and the opening of its text (its
+           abstract, on a paper), to find papers close to it. When the list of works your article
+           cites is made, each is looked up to write a short note on it from its abstract: Crossref
+diff --git a/tests/citation-fulltext.test.ts b/tests/citation-fulltext.test.ts
+new file mode 100644
+index 000000000..b6933e7f2
+--- /dev/null
++++ b/tests/citation-fulltext.test.ts
+@@ -0,0 +1,313 @@
++/**
++ * **Possible citations, from OpenAlex's full text** — src/citation-fulltext.ts,
++ * with no network and no database: a scripted `fetchJson` and an in-memory
++ * limiter. Plan 261026f; the numbers in the cases are the investigation's
++ * (docs/investigations/261026a-cited-by-with-no-doi-full-text-and-web-search-recall-and-cost.md).
++ *
++ * What is worth holding is mostly what must not happen: an upload's title
++ * sent out, a phrase taken for a piece, the piece's own record listed as its
++ * citer, a title able to add a filter, and the phrase reaching a log line.
++ */
++import { describe, expect, it, vi } from "vitest";
++
++import type { LimiterService, ServiceLimiter, SlotLease, StartTaken } from "../src/bibliographic.js";
++import type { CitationIndexStore } from "../src/citation-index.js";
++import {
++  MIN_WORDS_WITHOUT_YEAR,
++  POSSIBLE_PER_PAGE,
++  type PossibleIdentity,
++  fulltextQuestionOf,
++  isCommonPhrase,
++  isThePiecesOwnRecord,
++  openAlexFulltextUrl,
++  orderFor,
++  possibleCitersOf,
++} from "../src/citation-fulltext.js";
++import { FetchFailure } from "../src/fetch.js";
++import type { Log } from "../src/log.js";
++
++/* ------------------------------------------------------------ the doubles -- */
++
++class MemoryLimiter implements ServiceLimiter {
++  turns: LimiterService[] = [];
++  async coolingDown() {
++    return false;
++  }
++  async takeSlot(service: LimiterService, leaseMs: number): Promise<SlotLease> {
++    return { service, slot: 1, until: new Date(Date.now() + leaseMs) };
++  }
++  async freeSlot() {}
++  async takeStart(service: LimiterService): Promise<StartTaken> {
++    this.turns.push(service);
++    return { kind: "start", waitMs: 0 };
++  }
++  async coolDown() {}
++}
++
++/** Never read: the full-text list has no cache. Present so no test opens a database. */
++const NO_STORE: CitationIndexStore = {
++  read: async () => {
++    throw new Error("the full-text list must not read the citers cache");
++  },
++  write: async () => {
++    throw new Error("the full-text list must not write the citers cache");
++  },
++};
++
++function recordingLog(): { lines: string[]; logger: Log } {
++  const lines: string[] = [];
++  const write = (fields: object | string, msg?: string) => lines.push(JSON.stringify([fields, msg]));
++  const logger = { info: write, warn: write, error: write, debug: write, child: () => logger } as unknown as Log;
++  return { lines, logger };
++}
++
++function harness(answer: (url: string) => unknown) {
++  const asked: string[] = [];
++  const fetchJson = vi.fn(async (url: string) => {
++    asked.push(url);
++    const got = answer(url);
++    if (got instanceof FetchFailure) throw got;
++    return got;
++  });
++  const log = recordingLog();
++  const deps = {
++    store: NO_STORE,
++    limiter: new MemoryLimiter(),
++    fetchJson,
++    sleep: async () => {},
++    log: log.logger,
++    now: () => new Date("2026-10-26T12:00:00Z"),
++  };
++  return { asked, deps, log };
++}
++
++/** One OpenAlex works page: `count` in all, these records on it. */
++function page(count: number, works: { id: string; title: string; year?: number; cited?: number }[] = []) {
++  return {
++    meta: { count },
++    results: works.map((w) => ({
++      id: `https://openalex.org/${w.id}`,
++      display_name: w.title,
++      publication_year: w.year ?? 2026,
++      cited_by_count: w.cited ?? 0,
++      authorships: [{ author: { display_name: "A. Researcher" } }],
++      type: "preprint",
++    })),
++  };
++}
++
++const failure = (status: number) => new FetchFailure("server-error", "https://api.openalex.org/", `HTTP ${status}`, { status });
++
++/* ------------------------------------------------------------ the pieces -- */
++
++/** The reported piece: no year, and a byline that is the word *Authors*. */
++const WORKSPACE: PossibleIdentity = {
++  title: "Verbalizable Representations Form a Global Workspace in Language Models",
++  byline: "Authors",
++  url: "https://transformer-circuits.pub/2026/workspace/index.html",
++};
++const WENG: PossibleIdentity = {
++  title: "LLM Powered Autonomous Agents",
++  byline: "Lilian Weng",
++  url: "https://lilianweng.github.io/posts/2023-06-23-agent/",
++  publishedAt: "2023-06-23",
++};
++const DEVIANCE: PossibleIdentity = { title: "Normalization of deviance", url: "https://danluu.com/wat/", publishedYear: 2015 };
++
++/* ----------------------------------------------------------- the question -- */
++
++const NOW = 2026;
++
++/** `WENG` without the fields named: `exactOptionalPropertyTypes` will not take an `undefined`. */
++function without(identity: PossibleIdentity, ...keys: (keyof PossibleIdentity)[]): PossibleIdentity {
++  const copy: Record<string, unknown> = { ...identity };
++  for (const key of keys) delete copy[key];
++  return copy as unknown as PossibleIdentity;
++}
++
++describe("whether to ask, and with what words", () => {
++  it("never sends an uploaded file's title, nor one with no public address", () => {
++    expect(fulltextQuestionOf({ ...WENG, filename: "draft.pdf" }, NOW)).toBeNull();
++    expect(fulltextQuestionOf(without(WENG, "url"), NOW)).toBeNull();
++    expect(fulltextQuestionOf({ ...WENG, url: "file:///Users/me/draft.html" }, NOW)).toBeNull();
++  });
++
++  it("does not ask for a title too plain to be the piece's own", () => {
++    expect(fulltextQuestionOf({ title: "Simulators", url: "https://generative.ink/posts/simulators/", publishedYear: 2022 }, NOW)).toBeNull();
++  });
++
++  it(`asks with no year only for a title of ${MIN_WORDS_WITHOUT_YEAR} words or more`, () => {
++    expect(fulltextQuestionOf(WORKSPACE, NOW)).toEqual({
++      phrase: "verbalizable representations form a global workspace in language models",
++      year: undefined,
++    });
++    expect(fulltextQuestionOf(without(WENG, "publishedAt"), NOW)).toBeNull();
++    expect(fulltextQuestionOf(WENG, NOW)).toEqual({ phrase: "llm powered autonomous agents", year: 2023 });
++  });
++
++  it("takes a year after this one as no year, so its windows are never empty or ahead of now", () => {
++    expect(fulltextQuestionOf({ ...WORKSPACE, publishedYear: 2027 }, NOW)?.year).toBeUndefined();
++    expect(fulltextQuestionOf({ ...WORKSPACE, publishedYear: 2100 }, NOW)?.year).toBeUndefined();
++    expect(fulltextQuestionOf({ ...WENG, publishedAt: "2100-01-01" }, NOW)).toBeNull(); // four words, and now no year
++    expect(fulltextQuestionOf({ ...WORKSPACE, publishedYear: 2026 }, NOW)?.year).toBe(2026);
++  });
++
++  it("keeps an apostrophe inside a word, which the full-text index needs (Don't: 31 works, dont: none)", () => {
++    const graham: PossibleIdentity = { title: "Do Things that Don’t Scale", url: "https://paulgraham.com/ds.html", publishedYear: 2013 };
++    expect(fulltextQuestionOf(graham, NOW)?.phrase).toBe("do things that don't scale");
++    expect(fulltextQuestionOf({ ...graham, title: "'Quoted' Things That Don't Scale Well" }, NOW)?.phrase).toBe(
++      "quoted things that don't scale well",
++    );
++  });
++
++  it("sends a hostile title as lower-case words that cannot close the phrase or add a filter (Sol's F4)", () => {
++    const hostile: PossibleIdentity = {
++      title: 'Agents" OR fulltext.search:"x",publication_year:1900|cites:W1 AND Reasoning: Engines',
++      url: "https://example.org/post",
++      publishedYear: 2024,
++    };
++    const question = fulltextQuestionOf(hostile, NOW);
++    expect(question?.phrase).toBe("agents or fulltext search x publication year 1900 cites w1 and reasoning engines");
++    const url = new URL(openAlexFulltextUrl(question!.phrase, { after: 2022 }, { perPage: 25, order: "newest" }));
++    expect(url.searchParams.get("filter")).toBe(
++      'fulltext.search:"agents or fulltext search x publication year 1900 cites w1 and reasoning engines",publication_year:>2022',
++    );
++    expect(url.searchParams.getAll("filter")).toHaveLength(1);
++  });
++});
++
++/* --------------------------------------------------------------- the gate -- */
++
++describe("a phrase, not a piece", () => {
++  it("is decided by the works from before the piece existed (the investigation's counts)", () => {
++    expect(isCommonPhrase(176, 1031, 2015, 2026)).toBe(true); // Normalization of deviance
++    expect(isCommonPhrase(374_250, 327_679, 2022, 2026)).toBe(true); // Simulators, were it asked
++    expect(isCommonPhrase(3, 3, 2023, 2026)).toBe(true); // How to Do Great Work
++    expect(isCommonPhrase(4, 1462, 2015, 2026)).toBe(false); // Understanding LSTM Networks
++    expect(isCommonPhrase(0, 278, 2023, 2026)).toBe(false); // LLM Powered Autonomous Agents
++  });
++
++  it("does not let one or two early works hide a small list, and three is the floor (Sol's F3)", () => {
++    expect(isCommonPhrase(0, 0, 2022, 2026)).toBe(false);
++    expect(isCommonPhrase(1, 3, 2022, 2026)).toBe(false); // More Is Different for AI
++    expect(isCommonPhrase(2, 0, 2022, 2026)).toBe(false);
++    expect(isCommonPhrase(3, 0, 2022, 2026)).toBe(true); // nothing since: a phrase, not a piece
++  });
++
++  it("is strictly above 5% of the rate since, not at it", () => {
++    /* 9 before is one a year; 2023 to 2026 with the year before is five years. */
++    expect(isCommonPhrase(9, 100, 2023, 2026)).toBe(false); // exactly 5%
++    expect(isCommonPhrase(9, 99, 2023, 2026)).toBe(true);
++  });
++
++  it("counts the current year as two years since (the year before, and this one)", () => {
++    expect(isCommonPhrase(9, 40, 2026, 2026)).toBe(false); // 1 a year against 20 a year: exactly 5%
++    expect(isCommonPhrase(9, 39, 2026, 2026)).toBe(true);
++  });
++});
++
++describe("the piece's own record", () => {
++  it("is its title, or its title after a leading A, An or The", () => {
++    expect(isThePiecesOwnRecord("A Verbalizable Representations Form a Global Workspace in Language Models", WORKSPACE.title)).toBe(true);
++    expect(isThePiecesOwnRecord("LLM powered autonomous agents.", WENG.title)).toBe(true);
++    expect(isThePiecesOwnRecord("The Extended Mind", "Extended mind")).toBe(true);
++  });
++
++  it("is not a reply, a comment or a revisit whose title contains it (Sol's F5)", () => {
++    const piece = "Heuristics That Almost Always Work";
++    expect(isThePiecesOwnRecord(`Response to ${piece}`, piece)).toBe(false);
++    expect(isThePiecesOwnRecord(`Comment on ${piece}`, piece)).toBe(false);
++    expect(isThePiecesOwnRecord(`Revisiting ${piece}`, piece)).toBe(false);
++    expect(isThePiecesOwnRecord(`Response to (Scott Alexander): ${piece}`, piece)).toBe(false);
++    expect(isThePiecesOwnRecord("Dialogue with Socrates: LLM-Powered Autonomous Agents in Healthcare", WENG.title)).toBe(false);
++  });
++});
++
++describe("the order", () => {
++  it("is newest first for a recent piece or one with no year, most cited first otherwise", () => {
++    expect(orderFor(undefined, 2026)).toBe("newest");
++    expect(orderFor(2025, 2026)).toBe("newest");
++    expect(orderFor(2023, 2026)).toBe("most-cited");
++  });
++});
++
++/* ---------------------------------------------------------- the requests -- */
++
++describe("possibleCitersOf", () => {
++  it("asks nothing at all for an upload", async () => {
++    const h = harness(() => page(0));
++    expect(await possibleCitersOf({ ...WENG, filename: "mine.pdf" }, h.deps)).toBeNull();
++    expect(h.asked).toEqual([]);
++  });
++
++  it("with no year, asks one page newest first and lists everything but the piece's own record", async () => {
++    const h = harness(() =>
++      page(134, [
++        { id: "W1", title: "A Verbalizable Representations Form a Global Workspace in Language Models" },
++        { id: "W2", title: "Reader--Writer Coupling in Transformer MLPs" },
++        { id: "W3", title: "Interpreting Model Reasoning through Behavioral Counterfactuals" },
++      ]),
++    );
++    const got = await possibleCitersOf(WORKSPACE, h.deps);
++    expect(h.asked).toHaveLength(1);
++    const url = new URL(h.asked[0]!);
++    expect(url.searchParams.get("filter")).toBe('fulltext.search:"verbalizable representations form a global workspace in language models"');
++    expect(url.searchParams.get("sort")).toBe("publication_date:desc");
++    expect(url.searchParams.get("per_page")).toBe(String(POSSIBLE_PER_PAGE));
++    expect(got).toMatchObject({ kind: "found", total: 134, dropped: 1, order: "newest" });
++    expect(got?.kind === "found" ? got.citers.map((c) => c.openalexId) : []).toEqual(["W2", "W3"]);
++  });
++
++  it("with a year, counts the works before it first, and lists from the year before it", async () => {
++    const h = harness((url) =>
++      new URL(url).searchParams.get("per_page") === "1" ? page(0) : page(278, [{ id: "W9", title: "ChatDev", year: 2024, cited: 446 }]),
++    );
++    const got = await possibleCitersOf(WENG, h.deps);
++    expect(h.asked).toHaveLength(2);
++    expect(new URL(h.asked[0]!).searchParams.get("filter")).toBe('fulltext.search:"llm powered autonomous agents",publication_year:2013-2021');
++    expect(new URL(h.asked[1]!).searchParams.get("filter")).toBe('fulltext.search:"llm powered autonomous agents",publication_year:>2021');
++    expect(new URL(h.asked[1]!).searchParams.get("sort")).toBe("cited_by_count:desc,publication_date:desc");
++    expect(got).toMatchObject({ kind: "found", total: 278, order: "most-cited" });
++  });
++
++  it("says common-phrase, and lists nothing, when the gate fires", async () => {
++    const h = harness((url) =>
++      new URL(url).searchParams.get("per_page") === "1" ? page(176) : page(1031, [{ id: "W5", title: "Challenger launch decision" }]),
++    );
++    expect(await possibleCitersOf(DEVIANCE, h.deps)).toEqual({ kind: "common-phrase" });
++  });
++
++  it("says none when OpenAlex has no such work, or only the piece's own record", async () => {
++    expect(await possibleCitersOf(WORKSPACE, harness(() => page(0)).deps)).toEqual({ kind: "none" });
++    const own = harness(() => page(1, [{ id: "W1", title: WORKSPACE.title }]));
++    expect(await possibleCitersOf(WORKSPACE, own.deps)).toEqual({ kind: "none" });
++  });
++
++  it("is unavailable when either request fails, and never logs the phrase", async () => {
++    const first = harness(() => failure(503));
++    expect(await possibleCitersOf(WENG, first.deps)).toEqual({ kind: "unavailable" });
++    expect(first.asked).toHaveLength(1);
++
++    const second = harness((url) => (new URL(url).searchParams.get("per_page") === "1" ? page(0) : failure(500)));
++    expect(await possibleCitersOf(WENG, second.deps)).toEqual({ kind: "unavailable" });
++
++    const thrown = harness(() => {
++      throw new Error("boom at https://api.openalex.org/works?filter=fulltext.search:%22llm%20powered%20autonomous%20agents%22");
++    });
++    expect(await possibleCitersOf(WENG, thrown.deps)).toEqual({ kind: "unavailable" });
++
++    for (const h of [first, second, thrown]) {
++      const logged = h.log.lines.join("\n").toLowerCase();
++      expect(logged).not.toContain("autonomous");
++      expect(logged).not.toContain("fulltext.search");
++    }
++  });
++
++  it("logs the outcome and counts, never the words", async () => {
++    const h = harness((url) => (new URL(url).searchParams.get("per_page") === "1" ? page(0) : page(278, [{ id: "W9", title: "ChatDev" }])));
++    await possibleCitersOf(WENG, h.deps);
++    const logged = h.log.lines.join("\n");
++    expect(logged).toContain('"outcome":"found"');
++    expect(logged.toLowerCase()).not.toContain("autonomous");
++  });
++});
+diff --git a/tests/privacy-page.test.ts b/tests/privacy-page.test.ts
+index fbc498573..8c400404d 100644
+--- a/tests/privacy-page.test.ts
++++ b/tests/privacy-page.test.ts
+@@ -208,7 +208,7 @@ describe("the privacy page", () => {
+   });
+ 
+   it("dates the privacy notice to the latest disclosure change", () => {
+-    expect(PAGE).toContain('const LAST_UPDATED = "25 October 2026"');
++    expect(PAGE).toContain('const LAST_UPDATED = "26 October 2026"');
+   });
+ 
+   it("says what Search the literature sends, and to whom", () => {
+@@ -356,6 +356,11 @@ describe("the privacy page", () => {
+     expect(prose).toContain("Never the rest of the article’s text, and nothing about who you are");
+     /* Plan 261011q: with no DOI, Cited by searches OpenAlex by title. */
+     expect(prose).toContain("When your article has no DOI, OpenAlex is sent the words of its title instead");
++    /* Plan 261026f: and, for an article from a public address, its full-text
++       search for Possible citations, which an upload never makes. */
++    expect(prose).toContain(
++      "for an article you added from a public web address, to find papers whose text contains its title",
++    );
+     /* Plan 261011ac, F1: Not cited's search sends the title and the opening,
+        and only on the owner's press. */
+     expect(prose).toContain(
