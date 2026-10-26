@@ -115,6 +115,11 @@ what Sonnet already made stays. [admin.md § Author gifts](admin.md#author-gifts
   A developer's explicit per-task environment override still wins, so a deliberate model comparison
   stays pinned. [`TASK_TIER` and `resolveModel` in `src/models.ts`](../../src/models.ts) are the
   exhaustive list and that exception.
+- ***Search the literature* moves two of its three calls.** Its plan and its read go to Opus; its
+  triage, which picks the sources the read is shown, stays on Haiku (`PINNED_MODEL`), because Haiku
+  shortlisting for an Opus writer is what the eval measured. About $0.52 an article against $0.30,
+  and 60–90 seconds to write against 20–40:
+  [sources.md § Where this piece sits](sources.md#where-this-piece-sits).
 - **Simple (Summary's plain-words levels) is already on Opus for every article**, so the switch
   does not change it. Sonnet borrowed a paper's name for one thing to name another where Opus did
   not, at about $0.05 a press more: `ALWAYS_HIGH_POWER` in `src/models.ts`,

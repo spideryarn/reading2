@@ -340,17 +340,40 @@ until then a dossier at the top of Investigate, behind the experimental switch. 
 as the heart of the new default, accepting its measured cost before the eval reports
 ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 5). One press, *Search the literature*, and the rest is automatic: a model plans
 a dozen or so web searches from the piece, they run, OpenAlex lists the later papers that cite it,
-and one read of all of it beside the whole article writes findings anchored to the passages they
-concern, every quote checked in code against the article and against the source it came from. The
-intent is Greg's direction for Sources, one place for "where does this piece sit" rather than
-another chip, and the deeper dive on any one finding is its *Ask in chat*.
+a cheap model picks the sources worth writing from, and one read of those beside the whole article
+writes findings anchored to the passages they concern, every quote checked in code against the
+article and against the source it came from. The intent is Greg's direction for Sources, one place
+for "where does this piece sit" rather than another chip, and the deeper dive on any one finding is
+its *Ask in chat*.
+
+**Three calls, and which model makes each** (since 2026-10-26, from the eval
+[261025h-situate-eval](../investigations/261025h-situate-eval-haiku-sonnet-opus.md), plan
+[261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md) stage 3):
+
+| Call | Task | Standard power | [High-powered AI](high-powered-ai.md) |
+|---|---|---|---|
+| Plan the searches | `situate-plan` | Sonnet | Opus |
+| Pick the sources worth writing from, out of all ~90 | `situate-triage` | Haiku | Haiku |
+| Write the findings from those alone | `situate` | Sonnet | Opus |
+
+About **$0.30** an article at standard power and about **$0.52** under high-powered AI, the
+searches ($0.12) included; Opus also takes 60–90 seconds to write, against Sonnet's 20–40. The
+triage is Haiku at both powers because that is what was measured: as the shortlister it kept
+today's quality under Sonnet and came close to a full Opus read under Opus, for about a cent; as the
+writer Haiku lost half the findings. The check runs against **all** the evidence, not the
+shortlist, so the shortlist narrows what the writer is shown and cannot loosen or tighten what it
+must quote. A triage that names no source it was shown fails the run with its own sentence
+(`jb-situate-shortlist`), rather than storing an empty dossier. The dossier records each call's
+model (`phases`), and is outdated when any of them would differ today; one written before the triage
+has none and stays current, because its prompt and checks are today's (`isOutdated` in
+[`src/situate.ts`](../../src/situate.ts) says why).
 
 - **Before it has run**: the heading, one sentence of what it does, the button, and a line saying
   what leaves — the piece to the AI through OpenRouter, the searches it writes to Exa through
   OpenRouter, the DOI or title to OpenAlex, and the reader's profile or purpose only to the final AI read
   ([privacy.md § Search the literature](privacy.md#search-the-literature)).
-  It is the dearest press in Sources ($0.26–0.48 in the six-article trial, mean $0.33; four an hour
-  and twelve a day per reader, and 100 a day across everyone: `SITUATE_RATE_POLICY`), so arriving
+  It is the dearest press in Sources (about $0.30, or $0.52 under high-powered AI, above; four an
+  hour and twelve a day per reader, and 100 a day across everyone: `SITUATE_RATE_POLICY`), so arriving
   never starts it: the chip arms only Bibliography, and the hook has no automatic run.
 - **Done**: a head line (*A review from 2023: what has happened since*), the model's overview, and
   the findings grouped by kind in the order a reader most needs them — Challenged, Citation?, Since,

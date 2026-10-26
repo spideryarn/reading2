@@ -864,7 +864,16 @@ DOI, or the words of its title, as Reception's *Cited by* asks it. The final Cla
 again through OpenRouter, receives the whole fenced article, the search results, public abstracts
 from OpenAlex and the checked abstract words already stored for cited works. The reader's profile
 block — *About you* and/or *Why you are reading this piece* — is shown only to that final read, for
-ranking and questions, and never becomes a search (the plan's review, S4).
+ranking and questions, and never becomes a search (the plan's review, S4). Under
+[high-powered AI](high-powered-ai.md) the planner and the final read are Claude Opus instead.
+
+**Since 2026-10-26 a third call sits between the searches and the read**: Claude Haiku, through
+OpenRouter, is shown the same fenced article and the same evidence, and picks which sources the
+final read is shown ([plan 261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)
+stage 3). It is never shown the profile. **The page's words did not change for it, on purpose**:
+the same data goes the same way to the same provider (an Anthropic model, reached through
+OpenRouter, and the page names neither the model nor the number of calls), and nothing new is sent
+anywhere. So `LAST_UPDATED` did not move.
 
 So the press says what leaves before it is pressed (`SITUATE_DISCLOSURE`,
 [`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts)), and the page says *"When you

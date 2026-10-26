@@ -527,6 +527,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-situate-plan": "retry",
   "jb-situate-searches": "retry",
   "jb-situate-claims": "retry",
+  /* The triage named no source it was shown (plan 261025h stage 3): another
+     go may well name some. */
+  "jb-situate-shortlist": "retry",
   "jb-situate-busy": "retry",
   "jb-situate-limited": "blocked",
   "jb-situate-resting": "blocked",
@@ -1750,6 +1753,19 @@ export const SITUATE_CLAIMS_NOT_FOUND: ReaderFacingFailure = {
   message:
     "None of the searches about this piece's claims found anything, so it was not read against " +
     "the literature this time. Another try plans different searches. [jb-situate-claims]",
+};
+
+/**
+ * **The triage picked none of the sources the searches found** (plan 261025h
+ * stage 3): said as a failure, because a read shown nothing would come back
+ * empty and look like a literature with nothing to say about the piece.
+ */
+export const SITUATE_SHORTLIST_EMPTY: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The searches found pages, but choosing which of them bear on this piece did not work this " +
+    "time, so nothing was written. Try again: another go searches and chooses afresh. " +
+    "[jb-situate-shortlist]",
 };
 
 /** The allowance (`SITUATE_RATE_POLICY`): one at a time for each reader. */

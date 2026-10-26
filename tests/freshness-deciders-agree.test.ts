@@ -89,7 +89,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
 import { figuresFingerprint } from "../src/illustrated-figures.js";
 import { mintId } from "../src/ids.js";
-import { CAPABLE_MODEL, HIGH_POWER_MODEL, sameGenerator } from "../src/models.js";
+import { CAPABLE_MODEL, HIGH_POWER_MODEL, sameGenerator, SITUATE_TRIAGE_MODEL } from "../src/models.js";
+import { TRIAGE_PROMPT_VERSION } from "../src/situate.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEP_ORDER, STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
 import { hashProfile } from "../src/profile.js";
@@ -998,6 +999,34 @@ describe("debate, with its model overridden by the environment", () => {
       vi.unstubAllEnvs();
     }
     expect(await ask("reception")).toEqual({ queue: true, page: true });
+  });
+});
+
+/**
+ * **Situate's three calls, of which the stamp names one** (plan 261025h stage
+ * 3). The triage is pinned to its own model, which no stamp field carries, so
+ * both deciders read the dossier's `phases` (src/situate.ts §
+ * `phasesOutdated`). A dossier with none — every one written before the
+ * triage — is current to both, which the seeded fixture already is.
+ */
+describe("situate, with its triage's model recorded as another", () => {
+  it("both call a dossier whose triage another model ran stale, and today's current", async () => {
+    const { artefact } = currentOf("situate");
+    if (!artefact) throw new Error("situate was seeded without an artefact");
+    const phases = (triageModel: string) => ({
+      plan: CAPABLE_MODEL,
+      triage: { model: triageModel, version: TRIAGE_PROMPT_VERSION, candidates: 1, shortlisted: 1, of: 1 },
+      write: CAPABLE_MODEL,
+    });
+    try {
+      await writeArtefact("situate", { ...artefact, phases: phases(SITUATE_TRIAGE_MODEL) });
+      expect(await ask("situate")).toEqual({ queue: true, page: true });
+      await writeArtefact("situate", { ...artefact, phases: phases("anthropic/claude-haiku-4.5") });
+      expect(await ask("situate")).toEqual({ queue: false, page: false });
+    } finally {
+      await restore("situate");
+    }
+    expect(await ask("situate")).toEqual({ queue: true, page: true });
   });
 });
 
