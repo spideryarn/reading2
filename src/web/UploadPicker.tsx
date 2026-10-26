@@ -46,17 +46,19 @@
  * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 3.
  */
 import { useRef, useState } from "react";
-import { FileText, Upload, X } from "lucide-react";
+import { FileText, Info, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type ChosenFile, formatBytes, UPLOAD_ACCEPT, uploadLimits, uploadProblem } from "../uploads.js";
 import { QuotaNotice } from "./QuotaNotice.js";
+import { TipNote, Tooltip } from "./Tooltip.js";
+import { usePressToggle } from "./usePressToggle.js";
 import { addUploadHref, navigate } from "./router.js";
 import { batchUpload } from "./batchUpload.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 
 /**
- * The id tying the caps caption to the PDF button that `aria-describedby`
+ * The id tying the caps' screen-reader copy to the PDF button that `aria-describedby`
  * points at.
  *
  * A module constant rather than a literal in two places: the whole mechanism is
@@ -77,7 +79,7 @@ export const ONE_FILE_HERE =
 
 /** The three pieces this component draws and the caller places. */
 export interface UploadSlots {
-  /** The control that opens the file dialog. Belongs on the URL row, beside Add. */
+  /** The File control and its limits (i), kept together. Belongs on the URL row, beside Add. */
   pdfButton: React.ReactNode;
   /**
    * The chosen file, the progress bar, the refusals.
@@ -234,26 +236,6 @@ export function UploadPicker({
   }
 
   /**
-   * Whether the caps are on screen — and therefore whether the PDF button may
-   * point at them.
-   *
-   * One expression rather than the same condition written in two places, so the
-   * `aria-describedby` below cannot outlive the element it names. A dangling
-   * reference is ignored by browsers rather than announced wrongly, but a
-   * screen reader that says *"PDF, up to 50 MB and 250 pages"* about a control
-   * whose caption has been replaced by a transfer's progress row is worse than
-   * one that says nothing.
-   *
-   * **`transfer`, not `busy`**: this asks *is there a transfer record*, not *is
-   * one running*. A `failed`, `cancelled` or finished transfer stays in the
-   * snapshot until it is forgotten, and its row keeps this slot — so the caps
-   * stay down while it does. That is the one-slot layout working as intended,
-   * and it is stated here because the predicate does not say it. GPT Sol,
-   * 2026-09-04.
-   */
-  const limitsShown = !chosen && !transfer;
-
-  /**
    * Hand it to the engine, and go to the page that owns the ingest.
    *
    * **The navigation happens with zero bytes sent**, which is the point of the
@@ -284,14 +266,20 @@ export function UploadPicker({
     return Array.from(event.dataTransfer.types).includes("Files");
   }
 
-  /* The control that opens the file dialog, drawn here and placed by the
-     caller. Outline rather than the filled default: pasting a URL is the common
-     way in and Add is the one filled button on this row, so a second filled
-     control beside it would make the section read as two equal choices. Same
-     `h-9` as Add and as the URL input beside it —
-     docs/project/design-css-overview.md § Controls: one height. */
+  /* The control that opens the file dialog and the (i) that explains its
+     limits, drawn here and placed by the caller. The inline-flex is
+     load-bearing in UploadInstead's wrapping row: File and its explanation
+     must move to the next line together, not split across two lines. Its 4px
+     inner gap still leaves room for `.tap-target`'s 40px coarse-pointer box;
+     the caller's 8px gap separates this pair from Add.
+
+     Outline rather than the filled default: pasting a URL is the common way in
+     and Add is the one filled button on this row, so a second filled control
+     beside it would make the section read as two equal choices. Same `h-9` as
+     Add and as the URL input beside it — docs/project/design-css-overview.md
+     § Controls: one height. */
   const pdfButton = (
-    <>
+    <span className="tw:inline-flex tw:shrink-0 tw:items-center tw:gap-1">
       {/* The input is the mechanism and the button is the control. A bare file
           input cannot be styled to match anything else on this page, and
           wrapping it in a label styled as a button loses the focus ring the
@@ -315,6 +303,9 @@ export function UploadPicker({
       <Button
         type="button"
         variant="outline"
+        /* AddArticle's intent tracker must distinguish choosing a file from
+           merely opening the neighbouring limits card. */
+        data-upload-file-button="true"
         /* The words the dashed box used to say. They were the only thing
            advertising that dropping works at all, so they move to the title of
            the control that replaced it rather than disappearing. */
@@ -323,16 +314,19 @@ export function UploadPicker({
             ? "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box."
             : "Choose a PDF, web page, Word, Markdown or text file — or drop one anywhere on this box. Two or more at once are added with only their title and abstract read."
         }
-        /* **The caps, for somebody who cannot see the caption.** The line under
-           this row states them; this is what makes a screen reader read it out
-           as part of the control rather than as a stray paragraph after it.
-           Only while that line is actually on screen — see `limitsShown`. */
-        aria-describedby={limitsShown ? LIMITS_ID : undefined}
+        /* **The caps, read out as part of the control.** The (i) beside it
+           shows them to everybody else; its card exists only while open, so
+           this points at an `sr-only` copy that is always there. */
+        aria-describedby={LIMITS_ID}
         onClick={() => input.current?.click()}
       >
         <Upload size={14} /> File
       </Button>
-    </>
+      <span id={LIMITS_ID} className="tw:sr-only">
+        {uploadLimits()}
+      </span>
+      <LimitsInfo />
+    </span>
   );
 
   /**
@@ -356,39 +350,6 @@ export function UploadPicker({
         message={problem ?? failureOf(transfer)}
         className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-danger"
       />
-
-      {/* **What we will take, before anybody has chosen anything.**
-          `uploadLimits()` (src/uploads.ts) names the size cap and the page cap
-          from the constants that enforce them, so this cannot promise a limit
-          that is not the real one.
-
-          It exists because of Sentry `SPIDERYARN-READING2-V`, *"couldn't upload
-          PDF"*: a 142-page paper against what was then a 100-page cap. The cap
-          has moved and the refusal now names both numbers
-          (docs/postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md),
-          but a **page** cap is not a thing anybody can check before uploading —
-          a file manager shows you a size and not a page count — so the only way
-          to discover it was to send a book and be turned away at the end of it.
-
-          **In the slot the chosen-file row will occupy**, not above it: the two
-          are mutually exclusive, so stating the limits costs no height once a
-          reader has acted on them, which is what makes it affordable in a box
-          Greg had just asked to be made shorter (AddArticle.tsx). Muted and
-          12px, because it is a caption on a control and not an instruction.
-
-          Not repeated on `/add/upload/<id>`: by then the file is chosen and the
-          refusals, which name the numbers themselves, are what is useful.
-
-          **It stays up under a refusal**, including the size refusal, which
-          names the same 50 MB one line above it. A caption on a control is not
-          an event and should not vanish when one happens — and the reader who
-          has just been told *that doesn't look like a PDF* is the one about to
-          choose again. The repetition is the price and it is small. */}
-      {limitsShown && (
-        <p id={LIMITS_ID} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-          {uploadLimits()}
-        </p>
-      )}
 
       {/* One row, whichever of the two it is describing. A chosen file and a
           transfer cannot both exist — committing clears the first — so this is
@@ -560,4 +521,49 @@ export function UploadPicker({
 function failureOf(transfer: Transfer | null): string | null {
   if (transfer?.phase.kind !== "failed") return null;
   return transfer.phase.at === "granting" ? transfer.phase.reason : null;
+}
+
+/**
+ * **What we will take, behind an (i) beside the File button.**
+ * `uploadLimits()` (src/uploads.ts) names the size cap and the page cap from
+ * the constants that enforce them, so this cannot promise a limit that is not
+ * the real one.
+ *
+ * It exists because of Sentry `SPIDERYARN-READING2-V`, *"couldn't upload
+ * PDF"*: a 142-page paper against what was then a 100-page cap. A **page** cap
+ * is not a thing anybody can check before uploading — a file manager shows a
+ * size and not a page count — so the only way to discover it was to send a
+ * book and be turned away at the end of it
+ * (docs/postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md).
+ *
+ * It was a visible caption under the row from 2026-09-04 until Greg,
+ * 2026-10-25 (spya-kx8z6d): *"Move this to an (i) tooltip."* A note the reader
+ * does not need in order to act goes in a card (docs/project/tooltips.md
+ * § When something needs one), and the refusals name both numbers for the
+ * reader who does pass one. A press toggles the card, as the Glossary's *Why
+ * a new list?* does, because a touch screen never hovers; hover and focus open
+ * it too. Plan 261026b.
+ */
+function LimitsInfo() {
+  // usePressToggle.ts says why a press that closes has to be remembered.
+  const { open, onOpenChange, trigger } = usePressToggle();
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      open={open}
+      onOpenChange={onOpenChange}
+      content={<TipNote>{uploadLimits()}</TipNote>}
+    >
+      <button
+        type="button"
+        className={`tap-target tw:inline-flex tw:size-9 tw:shrink-0 tw:items-center tw:justify-center tw:self-center tw:rounded-md tw:text-muted-foreground tw:hover:text-foreground tw:focus-visible:text-foreground tw:focus-visible:outline-2 tw:focus-visible:outline-highlight-text${open ? " tw:text-foreground" : ""}`}
+        aria-label="What you can add"
+        aria-expanded={open}
+        {...trigger}
+      >
+        <Info size={14} aria-hidden="true" />
+      </button>
+    </Tooltip>
+  );
 }

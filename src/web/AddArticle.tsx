@@ -331,21 +331,31 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                     className="voice-reader tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-background tw:py-2 tw:pr-3 tw:pl-9 tw:text-[13px] tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
                   />
                 </div>
-                {/* One box, so the two actions wrap together rather than the
-                    row breaking between them, and `ml-auto` keeps them on the
-                    right of the line they land on. */}
+                {/* One box, so the File-and-(i) pair and Add wrap together
+                    rather than the row breaking between them, and `ml-auto`
+                    keeps them on the right of the line they land on. */}
                 <div className="tw:ml-auto tw:flex tw:gap-2">
-                  {/* The PDF control, drawn by UploadPicker so that the file,
-                      the transfer and the refusals all stay in the one component
-                      that runs them. It is only placed here. */}
+                  {/* The File control and its limits (i), drawn by UploadPicker
+                      so that the file, the transfer and the refusals all stay in
+                      the one component that runs them. They are only placed
+                      here. */}
                   <span
-                    /* The picker owns the input and the button; this only
-                       notices that the reader reached for them. `onClickCapture`
-                       rather than `onClick`, so it runs whether or not the inner
-                       button stops the event, and a `change` handler as well
-                       because opening the dialog and cancelling it is not a
-                       choice — only a file is. */
-                    onClickCapture={() => setLastTouched("file")}
+                    /* The picker owns the input and its controls; this only
+                       notices that the reader reached for the File button.
+                       The neighbouring (i) is deliberately excluded: reading
+                       the limits must not change whether Add sends an already
+                       chosen file or a URL typed afterwards. `onClickCapture`
+                       rather than `onClick`, so it runs whether or not the File
+                       button stops the event. A `change` handler also catches a
+                       file chosen through the native dialog. */
+                    onClickCapture={(event) => {
+                      if (
+                        event.target instanceof Element &&
+                        event.target.closest("[data-upload-file-button]")
+                      ) {
+                        setLastTouched("file");
+                      }
+                    }}
                     onChangeCapture={() => setLastTouched("file")}
                     className="tw:contents"
                   >

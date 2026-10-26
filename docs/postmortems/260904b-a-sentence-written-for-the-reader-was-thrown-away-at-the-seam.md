@@ -196,9 +196,10 @@ naming both numbers.
 **What V did add, and it is not in the list above.** He wrote *upload*, not *extract*. The refusal
 he could have acted on was a page cap he had no way of knowing existed: a file manager shows you a
 size and never a page count, so the cap was discoverable only by uploading a book and being turned
-away at the end of it. The add box now says *PDF, up to 50 MB and 250 pages* before a file is
-chosen — `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), built from the two constants
-that enforce it, guarded by
+away at the end of it. The add box now makes *PDF, up to 50 MB and 250 pages* available before a
+file is chosen — since 2026-10-25 in the (i) beside File, rather than the visible caption it
+originally used — through `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), built from
+the two constants that enforce it, guarded by
 [`tests/upload-caps-are-stated-before-the-file-is-chosen.test.tsx`](../../tests/upload-caps-are-stated-before-the-file-is-chosen.test.tsx).
 `MAX_PAGES` moved out of [`src/pdf-read.ts`](../../src/pdf-read.ts) to make that sayable at all: that
 module pulls in pdf.js and p-queue, and the browser cannot import it — which is also why
