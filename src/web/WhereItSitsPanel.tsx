@@ -375,8 +375,10 @@ function WhereTool({
  * **A Bibliography title that is only its authors and year** — *Putnam
  * (1975)*, which the bibliography step writes when the article names a work
  * by its citation alone — so the row does not say *Putnam (1975) Putnam
- * 1975*. True when every word of the title is a word of the by-line (the
- * authors and the year), ignoring *et al.*, *and* and punctuation.
+ * 1975*. True when the title contains both an author word and the work's year,
+ * and every word is a word of that by-line, ignoring *et al.*, *and* and
+ * punctuation. Requiring the year is what keeps a real one-word title that
+ * happens to be an author's surname (*Putnam*) from disappearing.
  */
 export function titleIsOnlyByline(title: string, authors: string | undefined, year: string | undefined): boolean {
   const words = (text: string) =>
@@ -385,9 +387,15 @@ export function titleIsOnlyByline(title: string, authors: string | undefined, ye
       .split(/[^\p{L}\p{N}]+/u)
       .filter((w) => w !== "" && w !== "et" && w !== "al" && w !== "and");
   const titleWords = words(title);
-  if (titleWords.length === 0) return true;
-  const bylineWords = new Set(words(`${authors ?? ""} ${year ?? ""}`));
-  return bylineWords.size > 0 && titleWords.every((w) => bylineWords.has(w));
+  const authorWords = words(authors ?? "");
+  const yearWords = words(year ?? "");
+  if (titleWords.length < 2 || authorWords.length === 0 || yearWords.length === 0) return false;
+  const bylineWords = new Set([...authorWords, ...yearWords]);
+  return (
+    titleWords.some((word) => authorWords.includes(word)) &&
+    yearWords.every((word) => titleWords.includes(word)) &&
+    titleWords.every((word) => bylineWords.has(word))
+  );
 }
 
 /**

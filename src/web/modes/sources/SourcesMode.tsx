@@ -274,7 +274,10 @@ export function SourcesBand({
           onView={(next) => void setView(next)}
           toolCounts={whereToolCounts(counts, {
             reception: reception.reception !== null,
-            claims: claimList.status === "ready" || (reception.reception?.claims.rows.length ?? 0) > 0,
+            /* Claims falls back to the claims section of an older Reception
+               search when it has no list of its own. A read empty section is
+               still a stored result, and therefore earns an honest 0. */
+            claims: claimList.status === "ready" || reception.reception !== null,
           })}
           findingFocus={findingFocus}
           onFindingFocusTaken={onFindingFocusTaken}

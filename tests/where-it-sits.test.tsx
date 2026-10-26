@@ -314,6 +314,15 @@ describe("What it builds on", () => {
     expect(titleIsOnlyByline("Deep learning in 2016", "LeCun", "2016")).toBe(false);
   });
 
+  it("does not mistake a real one-word title for an author-year label", () => {
+    const titledPutnam = { id: "w10", title: "Putnam", authors: "Putnam", year: "1975", relevance: 0.8 } as CitedWork;
+    draw({ before: { status: "ready", works: [titledPutnam], listing: false } });
+    const row = host.querySelector<HTMLButtonElement>(".where-before .where-work");
+    expect(titleIsOnlyByline("Putnam", "Putnam", "1975")).toBe(false);
+    expect(row?.querySelector(".where-work-title")?.textContent).toBe("Putnam");
+    expect(row?.querySelector(".where-work-by")?.textContent).toBe("Putnam 1975");
+  });
+
   it("says why there are no rows", () => {
     draw({ before: { status: "none", works: null, listing: false } });
     expect(host.querySelector(".where-before")?.textContent).toContain(WHERE_BEFORE_NONE);

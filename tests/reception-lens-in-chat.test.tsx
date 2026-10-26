@@ -369,6 +369,9 @@ function answerTurn(body: { threadId: string; question: string; origin?: ThreadO
 let experimentalSince: string | null = null;
 /** The stored literature search, or `null` for none yet (§ Where it sits). */
 let storedSituate: unknown = null;
+/** Reception and Claims' stored answers; mutable for the tools-row empty-result case. */
+let storedReception: Reception | null = RECEPTION;
+let storedClaimList: SourcesClaimList | null = CLAIM_LIST;
 
 const RELATED = {
   kind: "found",
@@ -387,8 +390,10 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url === "/api/reader") return json({ experimentalSince });
   /* Nobody has searched the literature for this one (`200 null`, the none-yet answer). */
   if (url === `/api/situate/${SLUG}`) return json(storedSituate);
-  if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
-  if (url === `/api/sources-claims/${SLUG}`) return json({ claimList: CLAIM_LIST, stale: false, outdated: false });
+  if (url === `/api/reception/${SLUG}`)
+    return json(storedReception === null ? null : { reception: storedReception, stale: false, outdated: false });
+  if (url === `/api/sources-claims/${SLUG}`)
+    return json(storedClaimList === null ? null : { claimList: storedClaimList, stale: false, outdated: false });
   /* Not cited's stored answer: one paper. The GET reads our table; only a POST asks OpenAlex. */
   if (url === `/api/related-work/${SLUG}` && method === "GET") return json(RELATED);
   if (url === `/api/bibliography/${SLUG}`) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
@@ -434,6 +439,8 @@ beforeEach(() => {
   summaryGate = null;
   experimentalSince = null;
   storedSituate = null;
+  storedReception = RECEPTION;
+  storedClaimList = CLAIM_LIST;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -1064,6 +1071,17 @@ describe("Where it sits", () => {
     expect(count("claims")).not.toBeNull();
     expect(count("investigate")).toBeNull();
     expect(trace.filter((r) => r.url === `/api/related-work/${SLUG}` && r.method !== "GET"), "no search").toEqual([]);
+  });
+
+  it("numbers an empty legacy Claims result once Reception has been read", async () => {
+    storedReception = structuredClone(RECEPTION);
+    storedReception.claims.rows = [];
+    storedClaimList = null;
+    who.set(OWNER);
+    await open("?mode=sources");
+    const count = (view: string) => tool(view)?.querySelector(".rcp-view-count")?.textContent ?? null;
+    await until(() => count("reception") !== null, "Reception's stored answer");
+    expect(count("claims"), "the read, empty legacy Claims result").toBe("0");
   });
 
   it("goes to a tool and back, and Back and Forward keep one chip checked, buying nothing", async () => {
