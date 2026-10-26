@@ -1,10 +1,11 @@
 ---
 id: q-ugekcv
 report: none
-status: open
+status: answered
 asked: 2026-10-25
 title: Should Sketch's labels be in the AI font, if that cuts more labels short in existing pictures?
-refs: docs/plans/261025k-fonts-and-css-code-quality.md § 3 · src/sketch-scene.ts § SKETCH_LABEL_VOICE
+refs: docs/plans/261025k-fonts-and-css-code-quality.md § 3 · src/sketch-scene.ts § SKETCH_LABEL_VOICE · docs/plans/261026c-sketch-labels-in-the-ai-font.md · qi-9vwt72y8
+acted: spya-k94hya
 ---
 The words inside the shapes of a Sketch picture are written by the model, but they are drawn in the app's own font (Geist), not the AI font (iA Writer Quattro) your rule asks for. Quattro is about 13% wider on average, so the same box holds fewer letters. Should we switch the labels to Quattro anyway?
 
@@ -23,3 +24,9 @@ Now the font and the width come from one setting, so they cannot be changed sepa
 Why the server has to know the width. The pipeline checks, when the model draws a picture, how many labels do not fit, and asks the model to fix them. That check runs on the server, so it has to use the same number the browser draws with. It cannot be measured in the browser.
 
 The numbers come from a read-only pass over production's stored sketches on 25 October, running the real fit check at both widths.
+
+## Greg's answer, 2026-10-25 (in the Feedback dialog, reply `spya-k94hya`)
+
+> Stick with the rules. If it's AI generated, then it should use the AI font.
+
+Settled: option B. Sketch's labels are now drawn in the AI font (iA Writer Quattro), and wrapped at its width on the server and in the browser alike. The stored sketches were not redrawn (option C was not chosen), so pictures drawn before the switch show more labels cut short until a reader redraws them; new pictures adapt, because the prompt now tells the model how many characters a box holds at the new width. (The question said the model is told which labels do not fit; it is not, it is called once and the count is only logged. The prompt figure is what makes new pictures adapt.) Plan 261026c.

@@ -18,10 +18,12 @@ import path from "node:path";
 import { GlobalFonts, createCanvas } from "@napi-rs/canvas";
 import { describe, expect, it } from "vitest";
 import { sceneSvg } from "../evals/sketch/svg.js";
+import { SKETCH_SYSTEM } from "../src/sketch.js";
 import {
   CHAR_W,
   CHAR_W_BY_VOICE,
   CHAR_W_MARGIN,
+  charsThatFit,
   FONT_STACK_BY_VOICE,
   SKETCH_LABEL_VOICE,
   type SketchLabelVoice,
@@ -124,9 +126,19 @@ describe("Sketch's label width is the face it is drawn in", () => {
     expect(() => measureFile("not-a-font.woff2", "missing-sketch-label-face", null)).toThrow(/register/i);
   });
 
+  it("draws the model's labels in the AI voice Greg chose", () => {
+    expect(SKETCH_LABEL_VOICE).toBe("ai");
+  });
+
   it("CHAR_W is the drawn voice's entry, and ui is the 0.53 that has always wrapped the labels", () => {
     expect(CHAR_W).toBe(CHAR_W_BY_VOICE[SKETCH_LABEL_VOICE]);
     expect(CHAR_W_BY_VOICE.ui).toBe(0.53);
+  });
+
+  it("tells the model the line length the drawn voice's width gives, not a number written by hand", () => {
+    const told = SKETCH_SYSTEM.match(/a box 200 wide holds about (\d+) characters/)?.[1];
+    expect(told, "the prompt no longer states a box's line length").toBeDefined();
+    expect(Number(told)).toBe(charsThatFit(200, "sm"));
   });
 
   it("writes the drawn voice's literal stack into a standalone exported SVG", () => {

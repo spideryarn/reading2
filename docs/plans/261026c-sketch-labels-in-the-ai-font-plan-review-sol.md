@@ -1,0 +1,7 @@
+Flipping the constant alone is not sufficient.
+
+1. **P2 — [src/sketch.ts:257](/var/tmp/spideryarn-worktrees/sketch-labels-ai-font/src/sketch.ts:257):** The prompt still says a 200-unit `sm` box holds about 31 characters, which reflects the Geist-era width. With `CHAR_W = 0.60`, `charsThatFit(200, "sm")` returns 26. New sketches will therefore be laid out using stale guidance. **Fix:** interpolate `charsThatFit(200, "sm")` into the prompt, add a regression test tying the prompt figure to the shared measurement, and bump `SKETCH_VERSION` because `SYSTEM` changes.
+
+2. **P3 — [docs/plans/261026c-sketch-labels-in-the-ai-font.md:20](/var/tmp/spideryarn-worktrees/sketch-labels-ai-font/docs/plans/261026c-sketch-labels-in-the-ai-font.md:20), [src/sketch.ts:744](/var/tmp/spideryarn-worktrees/sketch-labels-ai-font/src/sketch.ts:744):** The plan says `nodeFits` tells the model which labels overflow during revision, but production makes one model call; scoring happens afterward, and `overflowing` only reaches logs/eval summaries. **Fix:** describe the corrected prompt figure as up-front guidance, not feedback, unless a retry call is deliberately added.
+
+No other independent Geist/0.53 assumption was found. The CSS cascade follows `voiceClass`, Quattro’s 500→400 and 600→700 matching is covered correctly, and the source fingerprint does not include `CHAR_W`, so the flip itself will not redraw stored sketches. The two targeted test files passed, 34 tests total.

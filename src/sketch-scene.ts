@@ -64,8 +64,14 @@ import type { BlockId } from "./types.js";
  * `sketch/5`, 2026-10-03: the prompt gained the shared paperwork section,
  * `paperwork("summary")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
  * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+ *
+ * `sketch/6`, 2026-10-26: the labels are drawn in the AI face, and the prompt's
+ * "a box 200 wide holds about N characters" is `charsThatFit(200, "sm")` at its
+ * width (26) rather than a written 31, which was stale even for Geist (29).
+ * Nothing is redrawn by the bump: Sketch runs only when a reader asks
+ * (docs/plans/261026c-sketch-labels-in-the-ai-font.md).
  */
-export const SKETCH_VERSION = "sketch/5";
+export const SKETCH_VERSION = "sketch/6";
 
 /**
  * The canvas the model draws on, in its own units.
@@ -111,9 +117,10 @@ const REGION_STYLES: readonly SketchRegionStyle[] = ["band", "dashed", "bracket"
  * way you cannot see), so the width of a character and the face the labels are
  * drawn in are **one decision**: `SKETCH_LABEL_VOICE`. The painted `<svg>` takes
  * its face from it (`voiceClass` in SketchView.tsx), the offline exporter its
- * font stack, and everything that measures — the painter, and the server's
- * `nodeFits` that tells the model what overflows — its `CHAR_W`. It cannot be
- * measured in the browser at paint time, because the server has to agree.
+ * font stack, and everything that measures — the painter, the server's
+ * `nodeFits` that scores what overflows, and the line length the prompt states
+ * (`charsThatFit`, src/sketch.ts) — its `CHAR_W`. It cannot be measured in the
+ * browser at paint time, because the server has to agree.
  */
 export const SIZE_PX: Record<SketchSize, number> = { xs: 10, sm: 12, md: 15, lg: 20 };
 
@@ -126,11 +133,11 @@ export type SketchLabelVoice = "ui" | "ai";
 
 /**
  * **Whose face the labels are drawn in.** The words are the model's, so the
- * rule says `"ai"`; it stays `"ui"` (Geist) because the wider face cuts more
- * labels short in pictures already stored. That is Greg's call, asked as
- * docs/user-feedback/questions/q-ugekcv.md; the switch is this one word.
+ * AI's (iA Writer Quattro). Greg chose that knowing the wider face cuts more
+ * labels short in pictures stored before the switch, which were not redrawn:
+ * docs/user-feedback/questions/q-ugekcv.md.
  */
-export const SKETCH_LABEL_VOICE: SketchLabelVoice = "ui";
+export const SKETCH_LABEL_VOICE: SketchLabelVoice = "ai";
 
 /**
  * Each face's measured average character width (em) times this, which is the
