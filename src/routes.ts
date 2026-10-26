@@ -567,6 +567,7 @@ import {
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
   SITUATE_FINDING_ID,
+  SITUATE_OVERVIEW_ID,
   currentOriginMode,
   sameAnchor,
   sameOrigin,
@@ -5614,19 +5615,21 @@ function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Reco
 }
 
 /**
- * **A literature-search finding's origin** (plan 261025h, qi-mmtsxdhg): the
- * finding's id, shaped as src/situate.ts § `findingId` mints it
- * (`SITUATE_FINDING_ID`), and a snapshot of its passage. Shape only: the id is
- * not looked up, so a finding a newer search dropped never refuses its own
- * chat. No part of the passage reaches a thrown message.
+ * **A literature-search item's origin**: a finding's id, shaped as
+ * src/situate.ts § `findingId` mints it (`SITUATE_FINDING_ID`), or an
+ * overview's dossier-time id (`SITUATE_OVERVIEW_ID`), plus its snapshot.
+ * Shape only: the id is not looked up, so an item a newer search dropped
+ * never refuses its own chat. No part of the snapshot reaches a thrown
+ * message. Plans 261025h (qi-mmtsxdhg) and 261026g.
  */
 function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
   const { itemId, quote, blockId, lens } = body;
   if (blockId !== undefined || lens !== undefined) {
     throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
   }
-  if (typeof itemId !== "string" || !SITUATE_FINDING_ID.test(itemId)) {
-    throw httpError(400, "origin.itemId must be a finding id");
+  /* A finding's id, or its dossier's overview's (plan 261026g § Stage 2). */
+  if (typeof itemId !== "string" || !(SITUATE_FINDING_ID.test(itemId) || SITUATE_OVERVIEW_ID.test(itemId))) {
+    throw httpError(400, "origin.itemId must be a finding id or an overview id");
   }
   if (typeof quote !== "string" || quote.trim() === "") {
     throw httpError(400, "origin.quote must be a non-empty string");

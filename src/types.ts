@@ -4719,17 +4719,16 @@ export type QuizOrigin = {
 };
 
 /**
- * **One finding of the literature search's dossier** — Sources › Where it
- * sits, a finding's *Ask in chat* (plan 261025h, decision 9; queue item
- * qi-mmtsxdhg). Until then a finding's chat stored a lens, its question's
- * words, so a *Search again* that reworded a note lost the chat's mark.
+ * **One item in the literature search's dossier** — a finding (plan 261025h,
+ * decision 9) or, since plan 261026g, the overview. Until findings had this
+ * origin, their chats stored a lens, so a *Search again* that reworded a note
+ * lost the chat's mark.
  *
- * `GlossaryOrigin`'s rules: **the finding's id is the identity**
- * (`sameOrigin`), minted by src/situate.ts § `findingId` from its kind, block
- * and first source, so it survives a rewording; `quote` is a snapshot of the
- * finding's passage (the article's words), cut by `originName`, for the
- * chat's title, the list's tooltip and the way back. The id's shape is
- * `SITUATE_FINDING_ID`.
+ * `GlossaryOrigin`'s rules: **the item id is the identity** (`sameOrigin`). A
+ * finding's is minted by src/situate.ts § `findingId`; an overview's is
+ * `situateOverviewId(generatedAt)`. `quote` is a cut snapshot for the title,
+ * list and way back: the article's words for a finding, the model's for the
+ * overview.
  */
 export type SituateOrigin = { mode: "situate"; itemId: string; quote: string };
 
@@ -4742,7 +4741,25 @@ export type SituateOrigin = { mode: "situate"; itemId: string; quote: string };
 export const SITUATE_FINDING_ID = /^si-[0-9a-f]{12}$/;
 
 /**
- * The most the name snapshot of a glossary, citations, ideas, cite-check, Quiz or finding origin may be.
+ * **The id of a dossier's overview, as a chat origin** — `so-` and the digits
+ * of the dossier's `generatedAt` (`situateOverviewId`), so each search's
+ * overview has its own chat and a *Search again* starts a new one rather than
+ * reopening a chat about words the dossier no longer says. Stored as a
+ * `situate` origin, so the chat is listed under *Where it sits* and its way
+ * back opens it (plan 261026g § Stage 2, GPT Sol's F3 on that plan: a
+ * `reception` lens would have been filed under Investigate). The route takes
+ * either shape (routes.ts § `parseSituateOrigin`).
+ */
+export const SITUATE_OVERVIEW_ID = /^so-\d{14,17}$/;
+export function situateOverviewId(generatedAt: string): string {
+  return `so-${generatedAt.replace(/\D/g, "").slice(0, 17)}`;
+}
+export function isSituateOverviewId(itemId: string): boolean {
+  return SITUATE_OVERVIEW_ID.test(itemId);
+}
+
+/**
+ * The most the name snapshot of a glossary, citations, ideas, cite-check, Quiz or situate origin may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
@@ -4845,7 +4862,7 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
     case "glossary":
     case "bibliography":
     case "ideas":
-    /* A finding: its id, never its words (plan 261025h, qi-mmtsxdhg). */
+    /* A dossier item: its id, never its snapshot (plans 261025h and 261026g). */
     case "situate":
       return b.mode === a.mode && a.itemId === b.itemId;
     /* The mark, which names its batch and question (`QuizOrigin`). */

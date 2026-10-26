@@ -11,7 +11,7 @@
  * into the client, and Chat's list needs to know whether a stored title is
  * exactly this cut (src/web/chat-list-row.ts). src/chat.ts re-exports it.
  */
-import type { ThreadOrigin } from "./types.js";
+import { isSituateOverviewId, type ThreadOrigin } from "./types.js";
 
 /**
  * The name of a conversation started from an item in a mode: the item's own
@@ -40,9 +40,9 @@ export function titleFromOrigin(origin: ThreadOrigin): string {
       return titleFrom(`Does it say that? ${origin.quote}`);
     case "quiz":
       return titleFrom(`Quiz: ${origin.quote}`);
-    /* The finding's passage, the article's words (plan 261025h). */
+    /* A finding's passage, or the overview's model-written snapshot. */
     case "situate":
-      return titleFrom(`Finding: ${origin.quote}`);
+      return titleFrom(isSituateOverviewId(origin.itemId) ? `Where it sits: ${origin.quote}` : `Finding: ${origin.quote}`);
     default: {
       const never: never = origin;
       return never;

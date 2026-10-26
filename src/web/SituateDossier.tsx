@@ -32,11 +32,21 @@
  * found again by the finding's id, so a re-run that rewords the note keeps
  * its mark, and its way back opens *Where it sits* on the finding. A chat
  * started before then stored a lens and is still found by it
- * (`findingLensOrigin`), as long as the note reads the same.
+ * (`findingLensOrigin`), as long as the note reads the same. The overview's
+ * chat uses the same origin mode with `situateOverviewId(generatedAt)`, so a
+ * new dossier gets a new conversation and its way back lands on the summary.
  */
 import { ChevronRight, ExternalLink, Globe } from "lucide-react";
-import { type ReactNode, useId, useRef, useState } from "react";
-import type { BlockId, SituateFinding, SituateSource, ThreadSummary } from "../types.js";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  type BlockId,
+  type Situate,
+  type SituateFinding,
+  type SituateFindingKind,
+  type SituateSource,
+  situateOverviewId,
+  type ThreadSummary,
+} from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { BlockRef } from "./BlockRef.js";
@@ -48,10 +58,14 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { dayOf } from "./relative-time.js";
 import {
   ASK_FINDING_IN_CHAT,
+  ASK_OVERVIEW_IN_CHAT,
   OPEN_FINDING_CHAT,
+  OPEN_OVERVIEW_CHAT,
+  type PassageCluster,
   SITUATE_ABSENCE,
   SITUATE_AGAIN,
   SITUATE_CITERS_SKIPPED,
+  SITUATE_COUNTS_LABEL,
   SITUATE_DISCLOSURE,
   SITUATE_FINDING_TIP,
   SITUATE_GROUP_LABEL,
@@ -67,7 +81,8 @@ import {
   findingLensOrigin,
   findingOrigin,
   groupFindings,
-  groupHeading,
+  overviewOrigin,
+  passageClusters,
   searchedLine,
   situateHeadLine,
   sourceHost,
@@ -83,6 +98,8 @@ export interface SituateChats {
   summaries: readonly ThreadSummary[];
   /** Start this finding's chat with its question, or reopen the one it has. */
   onFinding(finding: SituateFinding): void;
+  /** Start the overview's chat, or reopen the one it has (Reader.tsx § `askOverview`). */
+  onOverview(situate: Situate): void;
   onOpen(threadId: string): void;
 }
 
@@ -102,22 +119,75 @@ export function SituateDossier({
   chats: SituateChats;
   onJump(id: BlockId): void;
   /**
-   * **One finding to bring into view, once** — a margin *literature* line's
-   * *Open in Sources* (plan 261024o § Marginalia). Its `id` is the finding's
-   * stable id, which each row carries as `data-finding`; a finding this
-   * dossier no longer has is handed back unserved (item-focus.ts).
+   * **One dossier item to bring into view, once** — a margin *literature*
+   * line's *Open in Sources*, or a finding/overview chat's way back. Its `id`
+   * is the finding's stable id or the overview id; each target carries it as
+   * `data-finding`. An item this dossier no longer has is handed back
+   * unserved (item-focus.ts).
    */
   focus?: ItemFocus | null;
   onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }) {
   const made = owner.status === "ready" ? owner.situate : null;
   const surface = useRef<HTMLElement>(null);
-  const focusKnown = focus !== null && (made?.findings.some((f) => f.id === focus.id) ?? false);
+  const groups = useMemo(() => (made === null ? [] : groupFindings(made.findings)), [made]);
+  const groupId = useId();
+  /* **Which groups are open**: the first in the reader's order, and the rest
+     shut until pressed (plan 261026g § Stage 2) — component state, not the
+     address, as *After it*'s view is. Keyed to the dossier it was opened on,
+     so a new search starts from its own first group. */
+  const [opened, setOpened] = useState<{ at: string; kinds: ReadonlySet<SituateFindingKind> } | null>(null);
+  /* Memoised so `setKindOpen`, and therefore the focus-opening effect below,
+     does not acquire a new dependency merely because the default set was
+     reconstructed during an unrelated render. */
+  const initiallyOpen = useMemo<ReadonlySet<SituateFindingKind>>(
+    () => new Set(groups[0] ? [groups[0].kind] : []),
+    [groups],
+  );
+  const openKinds: ReadonlySet<SituateFindingKind> =
+    made !== null && opened?.at === made.generatedAt
+      ? opened.kinds
+      : initiallyOpen;
+  const setKindOpen = useCallback(
+    (kind: SituateFindingKind, open: boolean) => {
+      if (made === null || openKinds.has(kind) === open) return;
+      const kinds = new Set(openKinds);
+      if (open) kinds.add(kind);
+      else kinds.delete(kind);
+      setOpened({ at: made.generatedAt, kinds });
+    },
+    [made, openKinds],
+  );
+  /* **The count strip**: open the group and bring its heading to the top of
+     the band. The band's own scroller only, never `scrollIntoView`, which
+     can move the article and the page as well (GPT Sol's F5 on the plan). */
+  const showGroup = (kind: SituateFindingKind) => {
+    setKindOpen(kind, true);
+    requestAnimationFrame(() => {
+      const group = surface.current?.querySelector<HTMLElement>(`details[data-situate-kind="${kind}"]`);
+      const scroller = group?.closest<HTMLElement>(".where-scroll");
+      if (!group || !scroller) return;
+      /* A little room above, so the heading is not flush under the chips. */
+      scroller.scrollTop += group.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 8;
+    });
+  };
+  const overviewId = made === null ? null : situateOverviewId(made.generatedAt);
+  const focusIsOverview = focus !== null && focus.id === overviewId;
+  const focusFinding = focus === null ? undefined : made?.findings.find((f) => f.id === focus.id);
+  const focusKnown = focusIsOverview || focusFinding !== undefined;
+  /* A finding focus (the margin's *Open in Sources*, a chat's way back) opens
+     its group first; an overview focus can land immediately on the summary. */
+  const focusKind = focusFinding?.kind;
+  useEffect(() => {
+    if (focusKind !== undefined) setKindOpen(focusKind, true);
+  }, [focusKind, setKindOpen]);
   useLandOnItem({
     focus,
-    ready: owner.status !== "loading",
+    /* An answer, not a failed read: a focus is not spent on an error, so a
+       retry still lands it (GPT Sol's F5 on the plan). */
+    ready: owner.status === "ready" || owner.status === "none",
     known: focusKnown,
-    drawn: focusKnown,
+    drawn: focusIsOverview || (focusKind !== undefined && openKinds.has(focusKind)),
     scope: surface,
     attribute: "data-finding",
     onTaken: onFocusTaken,
@@ -190,38 +260,90 @@ export function SituateDossier({
           {/* No banner for an outdated dossier (older prompt, same article):
               Greg, 2026-09-29, *"it's not worth bugging the user about it"*
               (plan 260929c). Search again is at the foot. */}
-          <p className="situate-headline">
-            <span>{situateHeadLine(made)}</span>
-            <WrittenForYou
-              written={made.profileHash !== null}
-              changed={owner.profileChanged}
-              slug={owner.slug}
-              regenerate={{
-                run: () => void owner.regenerate(),
-                busy: working || owner.rewriting,
-                refresh: () => owner.refresh(),
-              }}
-            />
-          </p>
-          {made.outcome === "nothing-found" ? (
-            <p className="rcp-empty situate-nothing">{SITUATE_NOTHING_FOUND}</p>
-          ) : (
-            <>
-              {made.overview.trim() !== "" && <p className="situate-overview voice-ai">{made.overview}</p>}
-              {groupFindings(made.findings).map((group) => (
-                <div key={group.kind} className="situate-group" data-situate-kind={group.kind}>
-                  <h4 className="rcp-group-head situate-group-head" data-tip={SITUATE_FINDING_TIP[group.kind]}>
-                    {groupHeading(group)}
-                  </h4>
-                  <ul className="situate-findings">
-                    {group.findings.map((finding) => (
-                      <Finding key={finding.id} finding={finding} chats={chats} onJump={onJump} />
+          {/* **The summary in a box** (plan 261026g § Stage 2): what the
+              planner made of the piece, the overview, its chat, and the
+              count strip — the shape of the result on one screen, before any
+              finding. */}
+          <div className="situate-summary" data-finding={overviewId ?? undefined}>
+            <p className="situate-headline">
+              <span>{situateHeadLine(made)}</span>
+              <WrittenForYou
+                written={made.profileHash !== null}
+                changed={owner.profileChanged}
+                slug={owner.slug}
+                regenerate={{
+                  run: () => void owner.regenerate(),
+                  busy: working || owner.rewriting,
+                  refresh: () => owner.refresh(),
+                }}
+              />
+            </p>
+            {made.outcome === "nothing-found" ? (
+              <p className="rcp-empty situate-nothing">{SITUATE_NOTHING_FOUND}</p>
+            ) : (
+              <>
+                {made.overview.trim() !== "" && (
+                  <div className="situate-note-row situate-overview-row">
+                    <p className="situate-overview voice-ai">{made.overview}</p>
+                    <OverviewChat situate={made} chats={chats} />
+                  </div>
+                )}
+                {groups.length > 0 && (
+                  <nav className="situate-counts" aria-label={SITUATE_COUNTS_LABEL}>
+                    {groups.map((group) => (
+                      <button
+                        key={group.kind}
+                        type="button"
+                        className="situate-count"
+                        data-situate-kind={group.kind}
+                        data-tip={SITUATE_FINDING_TIP[group.kind]}
+                        aria-controls={`${groupId}-${group.kind}`}
+                        aria-expanded={openKinds.has(group.kind)}
+                        onClick={() => showGroup(group.kind)}
+                      >
+                        {group.label}
+                        <span className="rcp-section-count">{group.findings.length}</span>
+                      </button>
                     ))}
-                  </ul>
-                </div>
-              ))}
-            </>
-          )}
+                  </nav>
+                )}
+              </>
+            )}
+          </div>
+          {made.outcome !== "nothing-found" &&
+            groups.map((group) => {
+              const isOpen = openKinds.has(group.kind);
+              return (
+                <details
+                  key={group.kind}
+                  id={`${groupId}-${group.kind}`}
+                  className="rcp-section situate-group"
+                  data-situate-kind={group.kind}
+                  open={isOpen}
+                  onToggle={(e) => setKindOpen(group.kind, e.currentTarget.open)}
+                >
+                  <summary className="rcp-section-head situate-group-head">
+                    <span className="rcp-section-label">
+                      <span className="rcp-section-name">{group.label}</span>
+                      <span className="rcp-section-count">{group.findings.length}</span>
+                    </span>
+                    <span className="rcp-section-gist">{SITUATE_FINDING_TIP[group.kind]}</span>
+                  </summary>
+                  {isOpen && (
+                    <ul className="situate-findings">
+                      {passageClusters(group.findings).map((cluster) => (
+                        <Passage
+                          key={cluster.findings[0]?.id ?? `${cluster.blockId} ${cluster.quote}`}
+                          cluster={cluster}
+                          chats={chats}
+                          onJump={onJump}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </details>
+              );
+            })}
           <Searched situate={made} />
           {!staleShowing && (
             <div className="situate-again">
@@ -236,43 +358,80 @@ export function SituateDossier({
 }
 
 /**
- * **One finding**: the article's passage, a jump to it, and its chat; the
- * model's note; the sources it rests on.
+ * **One passage, as a card**: the article's words, which are themselves the
+ * way to the passage as well as its id (plan 261026g § Stage 2: a reader
+ * did not know the quote led anywhere), then each finding about it — the
+ * model's note, its chat, the sources it rests on. Usually one finding; two
+ * when the search found two things about the same words (`passageClusters`).
  */
-function Finding({
-  finding,
+function Passage({
+  cluster,
   chats,
   onJump,
 }: {
-  finding: SituateFinding;
+  cluster: PassageCluster;
   chats: SituateChats;
   onJump(id: BlockId): void;
 }) {
+  return (
+    <li className="situate-finding situate-passage">
+      <p className="situate-finding-head">
+        <button
+          type="button"
+          className="rcp-group-quote situate-quote"
+          data-tip={SITUATE_QUOTE_JUMP}
+          onClick={() => onJump(cluster.blockId)}
+        >
+          “<Excerpt blockId={cluster.blockId} words={cluster.quote} />”
+        </button>
+        <BlockRef id={cluster.blockId} onJump={onJump} />
+      </p>
+      {cluster.findings.map((finding) => (
+        <Finding key={finding.id} finding={finding} chats={chats} />
+      ))}
+    </li>
+  );
+}
+
+/** What pressing a finding's quote does. */
+export const SITUATE_QUOTE_JUMP = "Go to this passage in the article";
+
+/** **One finding about a passage**: the model's note and its chat, then its sources. */
+function Finding({ finding, chats }: { finding: SituateFinding; chats: SituateChats }) {
   const chat = findingChat(chats.summaries, finding);
   return (
-    <li className="situate-finding" data-finding={finding.id}>
-      <p className="situate-finding-head">
-        <span className="rcp-group-quote situate-quote">
-          “<Excerpt blockId={finding.blockId} words={finding.quote} />”
-        </span>
-        <BlockRef id={finding.blockId} onJump={onJump} />
+    <div className="situate-finding-body" data-finding={finding.id}>
+      <div className="situate-note-row">
+        {/* The model's words in the model's face (docs/project/fonts.md). */}
+        <p className="situate-note voice-ai">
+          {finding.note}
+          {finding.strength === "suggestive" && <span className="situate-strength"> · suggestive</span>}
+        </p>
         {chat ? (
           <OriginChatMark chat={chat} label={OPEN_FINDING_CHAT} className="situate-chat" onOpen={chats.onOpen} />
         ) : (
           <AskInChatButton label={ASK_FINDING_IN_CHAT} className="situate-ask" onAsk={() => chats.onFinding(finding)} />
         )}
-      </p>
-      {/* The model's words in the model's face (docs/project/fonts.md). */}
-      <p className="situate-note voice-ai">
-        {finding.note}
-        {finding.strength === "suggestive" && <span className="situate-strength"> · suggestive</span>}
-      </p>
+      </div>
       <ul className="situate-sources">
         {finding.sources.map((source) => (
           <SourceRow key={source.url} source={source} />
         ))}
       </ul>
-    </li>
+    </div>
+  );
+}
+
+/**
+ * **The overview's chat** (spya-mfuz6g): its own origin (`overviewOrigin`),
+ * so its mark is found by the dossier's overview id, as a finding's is by its.
+ */
+function OverviewChat({ situate, chats }: { situate: Situate; chats: SituateChats }) {
+  const chat = threadForOrigin(chats.summaries, overviewOrigin(situate));
+  return chat ? (
+    <OriginChatMark chat={chat} label={OPEN_OVERVIEW_CHAT} className="situate-chat" onOpen={chats.onOpen} />
+  ) : (
+    <AskInChatButton label={ASK_OVERVIEW_IN_CHAT} className="situate-ask" onAsk={() => chats.onOverview(situate)} />
   );
 }
 

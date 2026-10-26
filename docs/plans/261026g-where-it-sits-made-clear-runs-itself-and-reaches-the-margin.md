@@ -181,3 +181,64 @@ waits for its Stage 3 adoption.
 - **A chat tool that reads the dossier** — chats about it carry their words instead.
 - **The persona left-field ideas** (a trust line, a spine map of ticks, guess-before-reveal) —
   261025h's experiments already have guess-first; the others are listed in the note.
+
+## Review
+
+GPT Sol reviewed this plan read-only ([261026g-plan-review-sol.md](261026g-plan-review-sol.md)):
+revise, no P0. Taken, by finding:
+
+- **F1 (P1), one press, one token.** Not two arms: a composite target, `sources-where`
+  (auto-run-targets.ts), owned by `WhereBand` alone through `useWhereAutoRun` (src/web/useWhereAutoRun.ts),
+  which waits for both reads and then asks for what is missing in **one** job — the search with
+  Bibliography before it (`precededBy`), or Bibliography alone. A stored dossier, stale or outdated,
+  is never re-run. `useSituate` keeps no automatic run, since Investigate mounts it.
+- **F2 (P1), the navigation contract.** Every non-press path still arms nothing: the token is minted
+  only by a control. Tests: a Sources press posts `["bibliography", "situate"]` once; an arrival at
+  `?sources=where` posts nothing; the chip, command-bar and every-mode suites pin `sources-where`.
+  **Declined, with a reason: making the tool crumb static.** Sol asked that a tool's *Where it sits*
+  crumb stop being a button, so that the chip, which arms, is the only way back. The crumb is
+  261025h's chosen way back and means *back*; it arms nothing, and the difference matters only to a
+  reader who reached a tool by a link and has never pressed *Where it sits* — who then sees the
+  search's button there. Left as it is.
+- **F3 (P1), the overview's origin.** A `reception` lens would have been filed under Investigate
+  with Investigate's way back. Now a `situate` origin whose item is the overview (`so-` and the
+  dossier's `generatedAt` digits, `SITUATE_OVERVIEW_ID`): listed as *Started from the overview in
+  Sources › Where it sits*, titled *Where it sits: …*, way back to *Where it sits*, one chat per
+  search. The database CHECK constrains the shape, not the id's format, so no migration; the route
+  takes either id shape.
+- **F4 (P2), the cap.** The question carries the overview whole (chat questions take 4,000
+  characters); only the origin's snapshot is cut, by `originName`.
+- **F5 (P2), folds and focus.** The focused finding's group opens before it lands (`drawn` only
+  once it is open); a failed read no longer spends a focus (`ready` is an answer, not an error);
+  the count strip scrolls the band's own scroller, never `scrollIntoView`; each finding keeps its
+  own `data-finding` under a shared quote. Tested: a focus into a shut group, a focus through a
+  failed read, a new search's first group.
+- **F6 (P2), 261025h's experiments.** They stay behind the switch, after *Go further*, plain moves,
+  and `SourceRow` stays exported for them. Its Stage 5 tip is merged before the second shots.
+- **F7 (P2), cost copy.** Each tool's line says what it opens and that the spending is the button
+  inside (`SOURCES_TOOL_WHAT`).
+
+## The second look
+
+A Sonnet agent shot the built layout on the same articles. Fixed from it: the group meaning lines
+were in the model's face (they are ours) and clamped, which clipped one on a phone; *Go further*'s
+lines started at ragged offsets (now under each button); the Challenged chip's outline read as
+*selected*; the count strip left the group heading flush under the chips. Seen and left: a source's
+*What it says* sometimes wraps to its own line, and a suggestive finding's *· suggestive* tail —
+both older than this plan.
+
+Then the first-time reader and the designer looked again at the new shots. Both: *mostly yes, much
+better* — the count strip and the open first group answer *what do I look at first*, and *Go
+further*'s lines were the first time the tools made sense. Fixed from it: a chip whose group is open
+now looks chosen (the sort chips' raised fill), the quote carries a dotted underline so it reads as
+the way to its passage before a pointer finds it, and the before-search line on what leaves is
+quieter. Left, for Greg to steer by playing with it:
+
+- **The kinds' names.** Both found *Citation?* beside *Not cited?* confusing, and the first-timer
+  read *Challenged* as a verdict on the paper. They are also the margin's stamps, so a rename is a
+  rename in both places.
+- **The overview is long** (eight to ten lines; half a phone screen). A clamp with *more*, or the
+  read prompt asked for two sentences instead of three.
+- ***Search again* reads as another tool**; it could sit in the *What was searched* line.
+- **Folding *Pages about it* and *Close to it, not cited* into the dossier** and running them on
+  open — the bigger step, above.

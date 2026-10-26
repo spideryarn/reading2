@@ -105,6 +105,7 @@ function chats(summaries: ThreadSummary[]): SourcesInvestigateChats {
     onCheck: (origin) => checked.push(origin),
     onAskWork: (w) => worked.push(w.id),
     onFinding: () => {},
+    onOverview: () => {},
     onOpen: (id) => opened.push(id),
   };
 }

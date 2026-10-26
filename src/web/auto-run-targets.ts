@@ -88,5 +88,17 @@ type StepAutoRunTarget = StepTarget<
 /** The two that are streams, with no job row and no place in `STEP_ORDER`. */
 type StreamAutoRunTarget = "promises" | "candidates";
 
+/**
+ * **Sources › Where it sits: two steps behind one press.** A press that lands
+ * there asks for the works the piece cites (Bibliography, for *Before it*)
+ * and the search of the literature (`situate`), each only if it is missing —
+ * one token, one owner (`WhereBand`), one automatic try, as GPT Sol asked
+ * rather than two arms for one press (F1 on plan
+ * docs/plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md,
+ * § Stage 4). Greg, 2026-10-26 (spya-mfuz6g): *"when I open that submode, I
+ * want it to automatically start running"*.
+ */
+type CompositeAutoRunTarget = "sources-where";
+
 /** Every target that may receive one automatic attempt in this tab session. */
-export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget;
+export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget | CompositeAutoRunTarget;

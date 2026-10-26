@@ -27,6 +27,7 @@ import { SITUATE_RUN } from "../src/web/situate-dossier.js";
 import type { UseSituate } from "../src/web/useSituate.js";
 import {
   SOURCES_TOOL_LABEL,
+  SOURCES_TOOL_WHAT,
   SOURCES_TOOLS,
   ToolBack,
   WHERE_BEFORE_NONE,
@@ -137,7 +138,7 @@ function draw({
         experiments,
         before,
         articleYear: year,
-        chats: { summaries: [], onFinding: () => {}, onOpen: () => {} },
+        chats: { summaries: [], onFinding: () => {}, onOverview: () => {}, onOpen: () => {} },
         onJump: () => {},
         onOpenWork: (id) => openedWorks.push(id),
         onView: (v) => moved.push(v),
@@ -269,6 +270,23 @@ describe("Before it", () => {
     expect(moved).toEqual(["bibliography"]);
   });
 
+  it("links each work out to its own address when it has one, and never to a built search or a non-web one (plan 261026g § Stage 5)", () => {
+    draw({
+      before: {
+        status: "ready",
+        listing: false,
+        works: [
+          { ...work("w1", "Has a DOI", 0.9), url: "https://doi.org/10.1/x", linkFrom: "doi" } as CitedWork,
+          { ...work("w2", "Only a search", 0.8), url: "https://scholar.google.com/scholar?q=x", linkFrom: "search" } as CitedWork,
+          { ...work("w3", "Hostile", 0.7), url: "javascript:alert(1)", linkFrom: "article" } as CitedWork,
+        ],
+      },
+    });
+    const outs = [...host.querySelectorAll<HTMLAnchorElement>(".where-before a.where-work-out")];
+    expect(outs.map((a) => a.getAttribute("href"))).toEqual(["https://doi.org/10.1/x"]);
+    expect(outs[0]?.getAttribute("rel")).toContain("noreferrer");
+  });
+
   it("says why there are no rows", () => {
     draw({ before: { status: "none", works: null, listing: false } });
     expect(host.querySelector(".where-before")?.textContent).toContain(WHERE_BEFORE_NONE);
@@ -290,7 +308,14 @@ describe("the tools row", () => {
     draw();
     const tools = [...host.querySelectorAll<HTMLButtonElement>(".where-tool")];
     expect(tools.map((t) => t.getAttribute("data-tool"))).toEqual([...SOURCES_TOOLS]);
-    expect(tools.map((t) => t.firstChild?.textContent)).toEqual(SOURCES_TOOLS.map((t) => SOURCES_TOOL_LABEL[t]));
+    expect(tools.map((t) => [...t.childNodes].find((n) => n.nodeType === Node.TEXT_NODE)?.textContent)).toEqual(
+      SOURCES_TOOLS.map((t) => SOURCES_TOOL_LABEL[t]),
+    );
+    /* Each says what it opens and where the spending is (plan 261026g § Stage 3). */
+    for (const tool of tools) {
+      const what = document.getElementById(tool.getAttribute("aria-describedby") ?? "");
+      expect(what?.textContent).toBe(SOURCES_TOOL_WHAT[tool.getAttribute("data-tool") as (typeof SOURCES_TOOLS)[number]]);
+    }
     /* A count only where there is something to count. */
     expect(tools[0]?.querySelector(".rcp-view-count")?.textContent).toBe("3");
     expect(tools[1]?.querySelector(".rcp-view-count")).toBeNull();
