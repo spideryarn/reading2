@@ -4,7 +4,7 @@ report: spya-kx8z6d
 status: open
 asked: 2026-10-26
 title: Should the line saying the article's text goes to a model provider move into the (i) too?
-refs: docs/plans/261026b-upload-limits-behind-an-info-button.md · docs/user-feedback/261025_2107-upload-limits-behind-an-info-button.md · docs/plans/260831an-referee-mode-for-peer-reviewers.md · spya-kx8z6d
+refs: docs/plans/261026b-upload-limits-behind-an-info-button.md · docs/user-feedback/261025_2107-upload-limits-behind-an-info-button.md · docs/plans/260831an-referee-mode-for-peer-reviewers.md · spya-kx8z6d · SPIDERYARN-READING2-P6
 ---
 You asked for the small print under the add box to move into an (i). I moved the file limits (50 MB, 250 pages, every 50 pages counts as one article) into an (i) beside the File button. I left the sentence "The article's text is sent to a third-party model provider for processing." visible, because we decided on 31 Aug that it should be. Should that sentence go into the (i) as well?
 
