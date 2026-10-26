@@ -16,17 +16,41 @@
  *     store the row and its list together, then answer
  * no DOI, and a distinctive title and an author (plan 261011q):
  *   0. works?search.title=<words>    every time; a failure ► unavailable
- *      exactly one record passes `titleMatchOf`, else ► no-match (nothing stored)
- *   then as above from step 2, the row keyed openalex:w<digits>, with no DOI asked
+ *      exactly one work passes `titleMatchOf` — one record, or twins — else ► no-match
+ *   then as above from step 2, the row keyed openalex:w<digits>[|w<digits>…], with no DOI asked
  * otherwise ───────────────────────────────────────► no-doi          (nothing asked)
+ * a list of more than TOPIC_MIN_CITERS whose work has a keyword says `topic: { keyword }`;
+ * and only on ?about=topic:
+ *   3. works?filter=cites:<ids>&search.title_and_abstract="<keyword>"
+ *      its own row, keyed <key>#topic; a failure ► the plain list
  * ```
  *
  * **A title search is held to more than a DOI is.** A DOI is itself evidence,
  * so its record needs only the whole title and one author. A search has none,
  * so `titleMatchOf` wants the whole title, a second fact (two of the authors,
- * or one and the year within one), and no other record passing as well. The
+ * or one and the year within one), and no other work passing as well. The
  * year is never a veto alone: OpenAlex gives *Attention Is All You Need*
  * (2017) as 2025.
+ *
+ * **Twins are one work** (plan 261025h, decision 2; GPT Sol's F9). OpenAlex
+ * holds *The Extended Mind* twice, W393180982 and W4239232206, and a rule that
+ * refused every second passing record gave a landmark no citers at all. Records
+ * that each pass, share the whole title, each carry two of the piece's authors
+ * (all of them when it has fewer than two) and two of one another's, and whose
+ * years are within one, are joined: the target names the first and lists the
+ * others in `alsoHeldAs`, and the citers are asked with OpenAlex's union
+ * filter, `cites:W1|W2`, so the count and the rows are OpenAlex's own for the
+ * union rather than a sum we made. Any other second passing record is still
+ * `no-match`: the most cited is not evidence of which is right.
+ *
+ * **The topic view** (decision 10; F15). For a landmark, the most-cited citers
+ * cite it in passing (investigation 261025a § 5). When a work has more than
+ * `TOPIC_MIN_CITERS` citers and OpenAlex gives it a keyword, the list offers a
+ * second view, the citers whose title or abstract has that keyword, which the
+ * reader chooses. That list is asked for only when chosen (`about: "topic"`;
+ * GPT Sol's S1-F5), kept as a row of its own, and its count shown on the plain
+ * list once it is known. The keyword is OpenAlex's own, never a model's, and
+ * nothing of the article is sent for it.
  *
  * **The DOI is checked before it is trusted, on every way out.** A mistyped DOI
  * resolves perfectly to somebody else's paper, and an article's DOI is not
@@ -102,6 +126,20 @@ export const CITERS_PER_PAGE = 100;
 /** The page asked for when the first was too large to read. */
 export const CITERS_PER_PAGE_SMALL = 25;
 
+/**
+ * **More citers than this, and the list offers its topic view.** A heuristic
+ * from four pieces (investigation 261025a § 5), not a validated boundary: the
+ * keyword gave two landmarks their debate and cost a 196-citer paper its two
+ * best citers. Above it the second view is offered, never applied (decision 10).
+ */
+export const TOPIC_MIN_CITERS = 1000;
+
+/** At most this many OpenAlex records are joined as one work. More is not twins; it is a muddle. */
+export const MAX_TWINS = 4;
+
+/** The longest keyword kept, in characters. OpenAlex's run to three or four words. */
+const MAX_KEYWORD = 100;
+
 const MAX_AUTHORS = 20;
 const MAX_NAME = 200;
 const MAX_VENUE = 300;
@@ -119,10 +157,22 @@ export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi" 
 
 /**
  * **What a list is cached under**: a DOI's `WorkId`, or OpenAlex's own id for a
- * work found by title, lower-cased (`openalex:w2626778328`), which is the shape
+ * work found by title, lower-cased (`openalex:w2626778328`) — every joined
+ * record's, ascending and `|`-separated, for twins
+ * (`openalex:w393180982|w4239232206`), so the key says which records were
+ * joined — and either with `#topic` for the topic view's list. The shapes
  * `citation_index_lookups_work_id` accepts.
  */
-export type CitersKey = WorkId | `openalex:w${string}`;
+export type BaseCitersKey = WorkId | `openalex:w${string}`;
+export type CitersKey = BaseCitersKey | `${BaseCitersKey}#topic`;
+
+/** The key a title search's work is cached under: every record's id, lower-cased, ascending. */
+function titleKeyOf(target: Pick<CitedTarget, "openalexId" | "alsoHeldAs">): BaseCitersKey {
+  const ids = [target.openalexId, ...(target.alsoHeldAs ?? [])]
+    .map((id) => id.toLowerCase())
+    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+  return `openalex:${ids.join("|")}` as BaseCitersKey;
+}
 
 /** The prefix of every DOI arXiv mints, as `parseWorkId` writes it: lower case. */
 const ARXIV_DOI = "doi:10.48550/arxiv.";
@@ -155,10 +205,22 @@ export function citersIdOf(article: ArticleIdentity): WorkId | null {
 /** The work a DOI resolves to at OpenAlex, in OpenAlex's own words. */
 export interface CitedTarget {
   openalexId: string;
+  /**
+   * The other records of the same work, joined as twins (`titleMatchOf`), `W…`
+   * each. Absent for one record, and always for a DOI's: a DOI names one.
+   */
+  alsoHeldAs?: string[];
   /** Null when OpenAlex holds the work with no title, which nothing can be confirmed against. */
   title: string | null;
   /** Display names, at most 20. */
   authors: string[];
+  /** OpenAlex's top keyword for the work, plain and bounded. Absent when it gives none. */
+  keyword?: string;
+}
+
+/** Every record whose citers the list is, for `cites:`: the target, then its twins, `|` meaning or. */
+export function citedIds(target: Pick<CitedTarget, "openalexId" | "alsoHeldAs">): string {
+  return [target.openalexId, ...(target.alsoHeldAs ?? [])].join("|");
 }
 
 /** A parsed page of citers: OpenAlex's count, how many records came, how many we could not show. */
@@ -198,7 +260,7 @@ export interface CitersDeps {
 
 /* --------------------------------------------------------- the addresses -- */
 
-const WORK_FIELDS = "id,doi,title,publication_year,cited_by_count,authorships";
+const WORK_FIELDS = "id,doi,title,publication_year,cited_by_count,authorships,keywords";
 const CITER_FIELDS = "id,doi,display_name,publication_year,cited_by_count,authorships,primary_location,type";
 
 /** OpenAlex's record for a DOI. `mailto` is how it asks to be told who is calling, as Crossref does. */
@@ -206,10 +268,16 @@ export function openAlexWorkUrl(doi: string): string {
   return `https://api.openalex.org/works/doi:${doiPath(doi)}?select=${WORK_FIELDS}&mailto=${encodeURIComponent(CONTACT_EMAIL)}`;
 }
 
-/** The works that cite one OpenAlex id, most cited first, one page. */
-export function openAlexCitersUrl(openalexId: string, perPage: number): string {
+/**
+ * The works that cite these OpenAlex ids (`citedIds`: one, or twins joined by
+ * `|`, which OpenAlex reads as or), most cited first, one page — and, given a
+ * keyword, only those whose title or abstract has it as a phrase. The keyword
+ * is a parameter of its own, so nothing in it can add a filter.
+ */
+export function openAlexCitersUrl(openalexIds: string, perPage: number, keyword?: string): string {
   return (
-    `https://api.openalex.org/works?filter=cites:${encodeURIComponent(openalexId)}` +
+    `https://api.openalex.org/works?filter=cites:${encodeURIComponent(openalexIds)}` +
+    (keyword !== undefined ? `&search.title_and_abstract=${encodeURIComponent(`"${keyword}"`)}` : "") +
     `&sort=cited_by_count:desc&per-page=${perPage}&select=${CITER_FIELDS}&mailto=${encodeURIComponent(CONTACT_EMAIL)}`
   );
 }
@@ -218,7 +286,7 @@ export function openAlexCitersUrl(openalexId: string, perPage: number): string {
 export const TITLE_SEARCH_RESULTS = 10;
 /** The longest query sent, in characters, cut at a word. */
 const MAX_TITLE_QUERY = 300;
-const SEARCH_FIELDS = "id,display_name,publication_year,authorships";
+const SEARCH_FIELDS = "id,display_name,publication_year,authorships,keywords";
 
 /**
  * **The words of a title, and nothing else**, as one lower-cased line for
@@ -278,12 +346,35 @@ function count(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
+/**
+ * **OpenAlex's top keyword for a work**: the `keywords` entry with the highest
+ * score (the first of equals), plain, bounded and without quotation marks,
+ * since it is sent back as a phrase — or undefined when none has a word in it.
+ */
+export function topKeywordOf(value: unknown): string | undefined {
+  let best: { keyword: string; score: number } | undefined;
+  for (const raw of list(value)) {
+    const entry = record(raw);
+    const keyword = plainRegistryText(entry?.display_name, MAX_KEYWORD)?.replace(/["“”]/g, "").replace(/\s+/g, " ").trim();
+    const score = typeof entry?.score === "number" && Number.isFinite(entry.score) ? entry.score : 0;
+    if (!keyword || tokens(keyword).length === 0) continue;
+    if (best === undefined || score > best.score) best = { keyword, score };
+  }
+  return best?.keyword;
+}
+
 /** `works/doi:<doi>` as the work it names — or null when the answer has no usable id. */
 export function parseOpenAlexWork(json: unknown): CitedTarget | null {
   const work = record(json);
   const openalexId = workIdOf(work?.id);
   if (work === null || openalexId === null) return null;
-  return { openalexId, title: plainRegistryText(work.title), authors: authorsOf(work.authorships).names };
+  const keyword = topKeywordOf(work.keywords);
+  return {
+    openalexId,
+    title: plainRegistryText(work.title),
+    authors: authorsOf(work.authorships).names,
+    ...(keyword !== undefined ? { keyword } : {}),
+  };
 }
 
 /**
@@ -426,65 +517,159 @@ function distinctNames(names: readonly string[]): string[] {
  */
 function twoStructuredAuthorsAgree(article: ArticleIdentity, targetNames: readonly string[]): boolean {
   const ours = distinctNames((article.authors ?? []).map((author) => author.name));
-  const theirs = distinctNames(targetNames);
-  if (ours.length < 2 || theirs.length < 2) return false;
-  const matches: { ours: number; theirs: number }[] = [];
-  for (let theirsAt = 0; theirsAt < theirs.length; theirsAt++) {
-    for (let oursAt = 0; oursAt < ours.length; oursAt++) {
-      const ourName = ours[oursAt];
-      const theirName = theirs[theirsAt];
-      if (ourName !== undefined && theirName !== undefined && registryAuthorIsOurs(
-        { authors: [{ name: ourName, affiliations: [] }] },
-        openAlexAuthors([theirName]),
-      )) matches.push({ ours: oursAt, theirs: theirsAt });
-    }
-  }
-  return matches.some((one) => matches.some((two) => one.ours !== two.ours && one.theirs !== two.theirs));
+  return matchedAuthors(ours, distinctNames(targetNames)) >= 2;
 }
 
 /**
- * **How many different people among OpenAlex's names are ours**, each tested
- * on its own. Duplicate spellings of one person (including an initial beside
- * the full given name) count once: two strings are not two corroborating facts.
+ * **A byline's people, each as one name** (Sol's S1-F1 and S1-F7). With a
+ * semicolon, the semicolons (and *and*, *&*) separate people and a comma
+ * stays inside a name: `Smith, Jane; Jones, John` is Jane Smith and John
+ * Jones. Without one, commas separate too — unless every piece is one or two
+ * words, there is an even number of them, and every other one, from the
+ * first, is a single word: then they pair as surname and given name
+ * (`Smith, Jane, Jones, John`). A two-person byline of single names would be
+ * read that way too; it is rare, and structured authors win when present.
  */
-function agreeingAuthors(article: ArticleIdentity, names: readonly string[]): number {
-  const seen: string[] = [];
-  for (const name of names) {
-    if (tokens(name).length === 0 || seen.some((prior) => sameNamedPerson(prior, name))) continue;
-    if (registryAuthorIsOurs(article, openAlexAuthors([name]))) seen.push(name);
+export function bylineAuthors(byline: string): string[] {
+  const words = (part: string) => tokens(part).length;
+  const surnameFirst = (name: string) => {
+    const [family, ...given] = name.split(",").map((part) => part.trim());
+    return given.length === 1 && given[0] !== "" && family !== "" ? `${given[0]} ${family}` : name;
+  };
+  if (byline.includes(";")) {
+    return byline.split(/\s*;\s*|\s+(?:and|&)\s+/i).map((part) => part.trim()).filter((part) => words(part) > 0).map(surnameFirst);
   }
-  return seen.length;
+  const parts = byline.split(/\s*,\s*|\s+(?:and|&)\s+/i).map((part) => part.trim()).filter((part) => words(part) > 0);
+  const paired = parts.length >= 2 && parts.length % 2 === 0 &&
+    parts.every((part, at) => (at % 2 === 0 ? words(part) === 1 : words(part) <= 2));
+  if (!paired) return parts;
+  const people: string[] = [];
+  for (let at = 0; at < parts.length; at += 2) people.push(`${parts[at + 1]} ${parts[at]}`);
+  return people;
+}
+
+/**
+ * **The article's authors as separate people**: its structured names, else its
+ * byline read by `bylineAuthors` — never the byline as one bag of words, in
+ * which `Jane Alice Smith, John Bob Jones` holds a John Smith (Sol's S1-F1).
+ * Spelling and initial variants of one person count once.
+ */
+function articleAuthorNames(article: Pick<ArticleIdentity, "authors" | "byline">): string[] {
+  const structured = (article.authors ?? []).map((author) => author.name);
+  return distinctNames(structured.length > 0 ? structured : bylineAuthors(article.byline ?? ""));
+}
+
+/**
+ * **How many of our authors can be paired with theirs, one to one** — the
+ * largest matching, each pair agreeing by `registryAuthorIsOurs` on that one
+ * article author's name alone. One OpenAlex name never stands for two of ours,
+ * nor two of theirs for one of ours. Both lists are already distinct people.
+ */
+function matchedAuthors(ours: readonly string[], theirs: readonly string[]): number {
+  const agrees = ours.map((ourName) =>
+    theirs.map((theirName) => registryAuthorIsOurs({ authors: [{ name: ourName, affiliations: [] }] }, openAlexAuthors([theirName]))));
+  const ownerOf: (number | undefined)[] = theirs.map(() => undefined);
+  /* Augmenting paths: lists are at most twenty names, so this is cheap. */
+  const assign = (ourAt: number, seen: boolean[]): boolean => {
+    for (let theirAt = 0; theirAt < theirs.length; theirAt++) {
+      if (!agrees[ourAt]?.[theirAt] || seen[theirAt]) continue;
+      seen[theirAt] = true;
+      const owner = ownerOf[theirAt];
+      if (owner === undefined || assign(owner, seen)) {
+        ownerOf[theirAt] = ourAt;
+        return true;
+      }
+    }
+    return false;
+  };
+  let matched = 0;
+  for (let ourAt = 0; ourAt < ours.length; ourAt++) {
+    if (assign(ourAt, theirs.map(() => false))) matched++;
+  }
+  return matched;
+}
+
+/** **How many different people among OpenAlex's names are ours**, matched one to one (`matchedAuthors`). */
+function agreeingAuthors(article: ArticleIdentity, names: readonly string[]): number {
+  return matchedAuthors(articleAuthorNames(article), distinctNames(names));
 }
 
 /** What a title search found: the one work that passes, or none. */
 export type TitleMatch = { kind: "match"; target: CitedTarget & { title: string } } | { kind: "none" };
 
+/** A record that passed, with what the twin rule reads. */
+type Passing = CitedTarget & { title: string; year: number | undefined; agreeing: number };
+
+/** How many of the piece's authors a twin must carry: two, or all of them when it has fewer. */
+function twinAuthorsNeeded(article: ArticleIdentity): number {
+  return Math.min(2, Math.max(1, articleAuthorNames(article).length));
+}
+
+/** How many different people two records' author lists share. */
+function sharedAuthors(one: readonly string[], two: readonly string[]): number {
+  return distinctNames(one).filter((name) => two.some((other) => sameNamedPerson(name, other))).length;
+}
+
 /**
- * **The one record in a title search that is this article** — see the header.
+ * **Whether these passing records are one work held more than once** (plan
+ * 261025h, decision 2): the same whole title, each carrying `need` of the
+ * piece's authors and `need` of each other's, and years within one. Every
+ * pair is tested, so a third record cannot ride in on the first two.
+ */
+function areTwins(records: readonly Passing[], need: number): boolean {
+  if (records.length < 2 || records.length > MAX_TWINS) return false;
+  return records.every((one, at) =>
+    one.agreeing >= need &&
+    records.slice(at + 1).every((two) =>
+      registryIsThisArticle(one.title, two.title) &&
+      sharedAuthors(one.authors, two.authors) >= need &&
+      one.year !== undefined && two.year !== undefined && Math.abs(one.year - two.year) <= 1,
+    ));
+}
+
+/**
+ * **The one work in a title search that is this article** — see the header.
  * Null when the answer is not a search's. Each record passes only with the
  * whole title, and two of its authors among ours or one and the year within
- * one; two different passing works are `none`, because nothing here can tell
- * which is right.
+ * one. One passing record is the match; several are one match only when they
+ * are twins (`areTwins`), the first in OpenAlex's order named and the others
+ * in `alsoHeldAs`. Anything else is `none`: nothing here can tell which of
+ * two different works is right, and the most cited is not evidence.
  */
 export function titleMatchOf(article: ArticleIdentity, json: unknown): TitleMatch | null {
   const body = record(json);
   if (body === null || !Array.isArray(body.results)) return null;
   const year = articleYear(article);
-  const passing = new Map<string, CitedTarget & { title: string }>();
+  const passing = new Map<string, Passing>();
   for (const raw of body.results) {
     const work = record(raw);
     const openalexId = workIdOf(work?.id);
     const title = plainRegistryText(work?.display_name);
-    if (work === null || openalexId === null || title === null) continue;
+    if (work === null || openalexId === null || title === null || passing.has(openalexId)) continue;
     if (!registryIsThisArticle(article.title, title)) continue;
     const authors = authorsOf(work.authorships).names;
     const agreeing = agreeingAuthors(article, authors);
     const theirYear = plausibleYear(work.publication_year);
     const yearAgrees = year !== undefined && theirYear !== undefined && Math.abs(year - theirYear) <= 1;
-    if (agreeing >= 2 || (agreeing === 1 && yearAgrees)) passing.set(openalexId, { openalexId, title, authors });
+    if (agreeing < 2 && !(agreeing === 1 && yearAgrees)) continue;
+    const keyword = topKeywordOf(work.keywords);
+    passing.set(openalexId, { openalexId, title, authors, year: theirYear, agreeing, ...(keyword !== undefined ? { keyword } : {}) });
   }
-  const [only, ...more] = passing.values();
-  return only !== undefined && more.length === 0 ? { kind: "match", target: only } : { kind: "none" };
+  const records = [...passing.values()];
+  const [first, ...others] = records;
+  if (first === undefined) return { kind: "none" };
+  if (others.length > 0 && !areTwins(records, twinAuthorsNeeded(article))) return { kind: "none" };
+  const keyword = records.find((r) => r.keyword !== undefined)?.keyword;
+  return {
+    kind: "match",
+    target: {
+      openalexId: first.openalexId,
+      ...(others.length > 0 ? { alsoHeldAs: others.map((r) => r.openalexId) } : {}),
+      title: first.title,
+      authors: first.authors,
+      ...(keyword !== undefined ? { keyword } : {}),
+    },
+  };
 }
 
 /** Whether a title search may be made at all: a title that can be told apart, and an author to check. */
@@ -571,13 +756,17 @@ async function askWork(id: WorkId, article: ArticleIdentity, d: Resolved): Promi
   return isThisArticle(article, target) ? { kind: "confirmed", target } : { kind: "unconfirmed" };
 }
 
-/** Step 2: the works that cite a confirmed target, one page. */
-async function askCiters(key: CitersKey, target: Confirmed, d: Resolved): Promise<Asked> {
-  let second = await get(key, "citers", openAlexCitersUrl(target.openalexId, CITERS_PER_PAGE), d);
+/**
+ * Step 2: the works that cite a confirmed target — every record of it, in one
+ * union request — one page. Step 3 is the same with the topic's keyword.
+ */
+async function askCiters(key: CitersKey, target: Confirmed, d: Resolved, keyword?: string): Promise<Asked> {
+  const ids = citedIds(target);
+  let second = await get(key, "citers", openAlexCitersUrl(ids, CITERS_PER_PAGE, keyword), d);
   /* The same request would be too large every time, so a retry of it is no
      use. A shorter page may fit, and is listed as what it is. */
   if (second.kind === "too-large") {
-    second = await get(key, "citers", openAlexCitersUrl(target.openalexId, CITERS_PER_PAGE_SMALL), d);
+    second = await get(key, "citers", openAlexCitersUrl(ids, CITERS_PER_PAGE_SMALL, keyword), d);
     if (second.kind === "too-large") return { kind: "too-large" };
   }
   /* A 404 here would be OpenAlex denying a work it has just described. */
@@ -592,14 +781,14 @@ async function searchByTitle(
   query: string,
   article: ArticleIdentity,
   d: Resolved,
-): Promise<{ kind: "match"; key: CitersKey; target: Confirmed } | { kind: "no-match" | "unavailable" }> {
+): Promise<{ kind: "match"; key: BaseCitersKey; target: Confirmed } | { kind: "no-match" | "unavailable" }> {
   const got = await get("title", "search", openAlexTitleSearchUrl(query), d);
   /* A search has no 404 of its own: a missing answer is a broken one. */
   if (got.kind !== "json") return { kind: "unavailable" };
   const match = titleMatchOf(article, got.json);
   if (match === null) return { kind: "unavailable" };
   if (match.kind === "none") return { kind: "no-match" };
-  return { kind: "match", key: `openalex:${match.target.openalexId.toLowerCase()}` as CitersKey, target: match.target };
+  return { kind: "match", key: titleKeyOf(match.target), target: match.target };
 }
 
 /* ------------------------------------------- for Situate (src/situate-citers.ts) -- */
@@ -607,10 +796,11 @@ async function searchByTitle(
 /**
  * **The OpenAlex work confirmed to be this article**, by exactly the path
  * `citersOf` takes — the DOI's checked record (including its bounded arXiv
- * exception), or the one title-search match — and **nothing cached**. For Situate's own
- * question of the citers (plan 261024o, GPT Sol's S6): it wants their abstracts,
- * which neither `Citer` nor this module's cache holds, so it asks its own page
- * rather than widening either.
+ * exception), or the one title-search work, twins and all — and **nothing
+ * cached**. For Situate's own question of the citers (plan 261024o, GPT Sol's
+ * S6): it wants their abstracts, which neither `Citer` nor this module's cache
+ * holds, so it asks its own page rather than widening either, with `citedIds`
+ * so that a work held twice is asked about once, as one.
  */
 export async function confirmedWorkOf(
   article: ArticleIdentity,
@@ -647,15 +837,17 @@ export async function openAlexInTurn(
 
 /** How the list was reached. The panel says so when it was by title. */
 type Via = Extract<CitersResult, { kind: "found" }>["via"];
+type Found = Extract<CitersResult, { kind: "found" }>;
 
 /** A remembered answer, as this article may see it. */
 function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: string, via: Via): CitersResult {
   if (stored.kind === "not-indexed") return { kind: "not-indexed" };
   if (!isThisArticle(article, stored.target)) return { kind: "unconfirmed" };
+  const { openalexId, title, alsoHeldAs } = stored.target;
   return {
     kind: "found",
     via,
-    target: { openalexId: stored.target.openalexId, title: stored.target.title },
+    target: { openalexId, title, ...(alsoHeldAs !== undefined && alsoHeldAs.length > 0 ? { alsoHeldAs } : {}) },
     count: stored.count,
     returned: stored.returned,
     dropped: stored.dropped,
@@ -668,14 +860,113 @@ function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: s
 /** Where the list is, and how it was reached: by the DOI, or by a title search that has already confirmed its work. */
 type Route =
   | { via: "doi"; key: WorkId }
-  | { via: "title"; key: CitersKey; target: Confirmed };
+  | { via: "title"; key: BaseCitersKey; target: Confirmed };
+
+/** A list's answer, where it came from, and the confirmed work behind it when it is a list. */
+interface Listed {
+  result: CitersResult;
+  from: "cache" | "openalex" | "stale";
+  target: Confirmed | null;
+}
+
+/** Steps 1–2: the cached list when fresh, else OpenAlex's, else an older list of this article's. */
+async function theList(route: Route, article: ArticleIdentity, d: Resolved): Promise<Listed> {
+  const of = (stored: FetchedCiters, fetchedAt: string, from: Listed["from"]): Listed => {
+    const result = answerFor(article, stored, fetchedAt, route.via);
+    return { result, from, target: result.kind === "found" && stored.kind === "found" ? stored.target : null };
+  };
+  const stored = await d.store.read(route.key, CITERS_FRESH_MS);
+  if (stored?.fresh) return of(stored, stored.fetchedAt, "cache");
+
+  let asked: Asked;
+  if (route.via === "title") {
+    asked = await askCiters(route.key, route.target, d);
+  } else {
+    const work = await askWork(route.key, article, d);
+    asked = work.kind === "confirmed" ? await askCiters(route.key, work.target, d) : work;
+  }
+  if (asked.kind === "found" || asked.kind === "not-indexed") {
+    const fetchedAt = await d.store.write(route.key, asked);
+    return of(asked, fetchedAt, "openalex");
+  }
+  /* OpenAlex could not be read, and an older list exists: serve it, with its
+     own date, if it is still this article's. Not after `unconfirmed` — that
+     is OpenAlex answering, and saying something else. */
+  if (asked.kind !== "unconfirmed" && stored?.kind === "found") {
+    const stale = of(stored, stored.fetchedAt, "stale");
+    if (stale.result.kind === "found") return stale;
+  }
+  return { result: { kind: asked.kind }, from: "openalex", target: null };
+}
+
+/** The topic view's list, and where it came from — its own provenance, never the plain list's (Sol's S1-F6). */
+interface TopicListed {
+  result: Found;
+  from: Listed["from"];
+}
 
 /**
- * **The papers that cite this article** — see the header for the whole path.
+ * **The topic view's row, as it stands**, never asking OpenAlex: what labels
+ * the plain list with a count once the reader has asked for the view. Null
+ * when there is none, or it was filtered by another keyword. A database
+ * failure is null too: the plain list does not depend on it.
+ */
+async function storedTopic(key: BaseCitersKey, keyword: string, d: Resolved): Promise<StoredCiters | null> {
+  try {
+    const stored = await d.store.read(`${key}#topic`, CITERS_FRESH_MS);
+    return stored?.kind === "found" && stored.target.keyword === keyword ? stored : null;
+  } catch {
+    d.log.warn({ id: `${key}#topic`, outcome: "internal-error" }, "citation index topic");
+    return null;
+  }
+}
+
+/**
+ * Step 3, **only on `about: "topic"`** (Sol's S1-F5): the citers that mention
+ * the work's keyword, in their own row beside the list's (`<key>#topic`),
+ * fresh for as long, else asked of OpenAlex, else an older row of the same
+ * keyword. Null when there is none to show: the plain list is answered.
+ */
+async function theTopicList(
+  key: BaseCitersKey,
+  target: Confirmed,
+  keyword: string,
+  article: ArticleIdentity,
+  via: Via,
+  d: Resolved,
+): Promise<TopicListed | null> {
+  const topicKey: CitersKey = `${key}#topic`;
+  const of = (stored: FetchedCiters, fetchedAt: string, from: Listed["from"]): TopicListed | null => {
+    const result = answerFor(article, stored, fetchedAt, via);
+    return result.kind === "found" ? { result, from } : null;
+  };
+  try {
+    const same = await storedTopic(key, keyword, d);
+    if (same?.fresh) return of(same, same.fetchedAt, "cache");
+    const asked = await askCiters(topicKey, target, d, keyword);
+    if (asked.kind === "found") return of(asked, await d.store.write(topicKey, asked), "openalex");
+    return same !== null ? of(same, same.fetchedAt, "stale") : null;
+  } catch {
+    /* The plain list is answered. Nothing of the error is logged: a fetch
+       seam's message can carry its address, which carries the keyword. */
+    d.log.warn({ id: topicKey, outcome: "internal-error" }, "citation index topic");
+    return null;
+  }
+}
+
+/** What a caller may ask of `citersOf` beyond the article. */
+export interface CitersOptions {
+  /** `topic`: the topic view's list, filtered by the work's keyword, when there is one. */
+  about?: "topic";
+}
+
+/**
+ * **The papers that cite this article** — see the header for the whole path —
+ * or, with `about: "topic"`, those of them that mention the work's keyword.
  * Never throws for anything OpenAlex or the database does: both are
  * `unavailable`.
  */
-export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}): Promise<CitersResult> {
+export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}, opts: CitersOptions = {}): Promise<CitersResult> {
   const id = citersIdOf(article);
   const query = id === null ? searchableTitle(article) : null;
   if (id === null && query === null) return { kind: "no-doi" };
@@ -695,8 +986,17 @@ export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}):
         outcome: result.kind,
         from,
         ms: Date.now() - started,
+        ...(opts.about !== undefined ? { about: opts.about } : {}),
         ...(result.kind === "found"
-          ? { via: result.via, count: result.count, returned: result.returned, dropped: result.dropped, capped: result.capped }
+          ? {
+              via: result.via,
+              count: result.count,
+              returned: result.returned,
+              dropped: result.dropped,
+              capped: result.capped,
+              records: 1 + (result.target.alsoHeldAs?.length ?? 0),
+              ...(result.topic?.count !== undefined ? { topicCount: result.topic.count } : {}),
+            }
           : {}),
       },
       "citation index lookup",
@@ -716,28 +1016,25 @@ export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}):
       route = { via: "title", key: searched.key, target: searched.target };
     }
 
-    const stored = await d.store.read(route.key, CITERS_FRESH_MS);
-    if (stored?.fresh) return done(route.key, answerFor(article, stored, stored.fetchedAt, route.via), "cache");
-
-    let asked: Asked;
-    if (route.via === "title") {
-      asked = await askCiters(route.key, route.target, d);
-    } else {
-      const work = await askWork(route.key, article, d);
-      asked = work.kind === "confirmed" ? await askCiters(route.key, work.target, d) : work;
+    const listed = await theList(route, article, d);
+    const list = listed.result;
+    const keyword = listed.target?.keyword;
+    if (list.kind !== "found" || listed.target === null || keyword === undefined || list.count <= TOPIC_MIN_CITERS) {
+      return done(route.key, list, listed.from);
     }
-    if (asked.kind === "found" || asked.kind === "not-indexed") {
-      const fetchedAt = await d.store.write(route.key, asked);
-      return done(route.key, answerFor(article, asked, fetchedAt, route.via), "openalex");
+    /* Decision 10: offered beside the list, never applied in its place, and
+       its list fetched only when the reader asks for it (Sol's S1-F5). */
+    if (opts.about === "topic") {
+      const topic = await theTopicList(route.key, listed.target, keyword, article, route.via, d);
+      if (topic !== null) {
+        const label = { keyword, count: topic.result.count };
+        return done(`${route.key}#topic`, { ...topic.result, topic: label, filteredBy: keyword }, topic.from);
+      }
+      return done(route.key, { ...list, topic: { keyword } }, listed.from);
     }
-    /* OpenAlex could not be read, and an older list exists: serve it, with its
-       own date, if it is still this article's. Not after `unconfirmed` — that
-       is OpenAlex answering, and saying something else. */
-    if (asked.kind !== "unconfirmed" && stored?.kind === "found") {
-      const stale = answerFor(article, stored, stored.fetchedAt, route.via);
-      if (stale.kind === "found") return done(route.key, stale, "stale");
-    }
-    return done(route.key, { kind: asked.kind }, "openalex");
+    const known = await storedTopic(route.key, keyword, d);
+    const label = known?.kind === "found" ? { keyword, count: known.count } : { keyword };
+    return done(route.key, { ...list, topic: label }, listed.from);
   } catch {
     /* Error messages from a fetch seam can contain its whole URL, and database
        errors can include the title/authors being written. This module's log

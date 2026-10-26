@@ -139,6 +139,15 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?sources=not-cited")).toBe(true);
   });
 
+  /* Plan 261025h: Where it sits is the bare address, so a remembered Sources
+     view with no `sources=` restores to it, and Bibliography is remembered by
+     name; an old Citations view restores to Bibliography explicitly. */
+  it("restores Where it sits from a bare Sources view, and Bibliography by name", () => {
+    expect(restoredHref("/read/x", "", "?mode=sources")).toBe("/read/x?mode=sources");
+    expect(restoredHref("/read/x", "", "?mode=sources&sources=bibliography")).toBe("/read/x?mode=sources&sources=bibliography");
+    expect(restoredHref("/read/x", "", "?mode=citations")).toBe("/read/x?mode=sources&sources=bibliography");
+  });
+
   it("keeps Sources' Links view without arming or generating anything", () => {
     expect(rememberableSearch("?mode=sources&sources=links")).toBe("?mode=sources&sources=links");
     expect(restoredHref("/read/x", "", "?mode=sources&sources=links")).toBe("/read/x?mode=sources&sources=links");

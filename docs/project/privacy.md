@@ -739,7 +739,11 @@ indexes"*:
   **They were missing from the page until this change**, which is the page falling behind the
   code for three days.
 - **OpenAlex**, since 2026-10-04: which papers cite the article, when its owner has Sources'
-  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)).
+  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)), and since 2026-10-25
+  when its owner opens Sources at all, because *Where it sits*, the owner's default, draws the
+  same list as *After it* ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+  GPT Sol's F7). The page says *"when you open Sources on an article of yours"*. Who is sent what
+  did not change, only when.
 
 Each is sent the identifier and our contact address (in the `User-Agent`, and as `mailto` where the
 service asks for it). Never the article's body, never anything about the reader. For a private
@@ -848,8 +852,10 @@ names the uploaded-file exception; `LAST_UPDATED` moved to 25 October 2026.
 
 **Added 2026-10-24**, with [sources.md § Where this piece sits](sources.md#where-this-piece-sits)
 ([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md),
-[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, at the top
-of Sources › Investigate and behind the experimental switch, searches **the article itself**: a
+[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, in
+Sources › *Where it sits* for every owner since 2026-10-25 (at the top of Investigate, behind the
+experimental switch, until then: [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)),
+searches **the article itself**: a
 model (Claude Sonnet, through OpenRouter) is shown the fenced title, headings, opening and the works
 Bibliography says it leans on, and writes a dozen or so short searches. Each search goes through
 OpenRouter to Exa (the quick-tier model running it sees the search too); Exa receives the query, not
@@ -862,12 +868,14 @@ ranking and questions, and never becomes a search (the plan's review, S4).
 
 So the press says what leaves before it is pressed (`SITUATE_DISCLOSURE`,
 [`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts)), and the page says *"When you
-press Search the literature, in Sources’ Investigate (an experimental feature), your article is
-searched for in the wider literature"*, then names the planner, Exa, OpenAlex and final read, in the
+press Search the literature, in Sources’ Where it sits, your article is searched for in the wider
+literature"* (it said *in Sources’ Investigate (an experimental feature)* until 2026-10-25), then
+names the planner, Exa, OpenAlex and final read, in the
 indexes paragraph beside the cited-work search, whose *"never the article’s text"* stays true of
 that search alone. The dossier is stored on the article's
 revision (`article_revisions.situate`), goes with the article, and is never shown to a visitor.
-`LAST_UPDATED` moved to 24 October 2026, and `tests/privacy-page.test.ts` holds the sentence.
+`LAST_UPDATED` moved to 24 October 2026, and to 25 October with the move out of the switch;
+`tests/privacy-page.test.ts` holds the sentence.
 
 ## A claim typed into Sources › Claims
 

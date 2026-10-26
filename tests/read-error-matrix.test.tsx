@@ -451,9 +451,8 @@ const BODIES: Record<string, unknown> = {
     profileChanged: false,
   },
   arc: { arc: { ...STAMP, entries: [] }, stale: false },
-  /* Sources > Investigate's *Where this piece sits* (plan 261024o): the
-     owner's, behind the experimental switch, which `/api/reader` below has on.
-     One finding, whose note is what the band draws. */
+  /* Sources > Where it sits' dossier (plan 261025h): the owner's for every
+     owner. One finding, whose note is what the band draws. */
   situate: {
     situate: {
       ...STAMP,
@@ -719,7 +718,8 @@ const ROWS: readonly Row[] = [
   /* Claims' own read, on Claims (plan 261008i stage 2). */
   { hook: "useSourcesClaims.ts", kind: "sources-claims", search: "?mode=sources&sources=claims", where: ".mode-band.rcp" },
   { hook: "useGlossary.ts", kind: "glossary", search: "?mode=glossary", where: ".mode-band.gloss" },
-  { hook: "useBibliography.ts", kind: "bibliography", search: "?mode=sources", where: ".mode-band.bibliography" },
+  /* Named: the bare Sources address is Where it sits since plan 261025h. */
+  { hook: "useBibliography.ts", kind: "bibliography", search: "?mode=sources&sources=bibliography", where: ".mode-band.bibliography" },
   {
     hook: "useQuiz.ts",
     kind: "quiz",
@@ -732,9 +732,10 @@ const ROWS: readonly Row[] = [
   },
   { hook: "useIllustrated.ts", kind: "illustrated", search: "?mode=diagram&diagram=illustrated", where: ".mode-band.diag" },
   { hook: "useSketch.ts", kind: "sketch", search: "?mode=diagram", where: ".mode-band.diag" },
-  /* Where this piece sits, at the top of Investigate (plan 261024o): the
-     owner's, with the experimental switch on (`/api/reader` above). */
-  { hook: "useSituate.ts", kind: "situate", search: "?mode=sources&sources=investigate", where: ".mode-band.investigate" },
+  /* The literature search, in Where it sits, the bare Sources address, for
+     every owner since plan 261025h (at the top of Investigate, behind the
+     switch, before). */
+  { hook: "useSituate.ts", kind: "situate", search: "?mode=sources", where: ".mode-band.where" },
 ];
 
 /**

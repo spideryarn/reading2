@@ -78,7 +78,7 @@ npx tsx scripts/spikes/261025h-situate-eval.ts unmask                   # judges
 | **PH** | **Haiku** | all, from the Haiku plan's own searches | Sonnet |
 
 GPT Sol's review of the plan
-(F11, F16, F17, in `docs/plans/261025h-plan-review-sol.md` on the coordinator's branch) changed the
+(F11, F16, F17, in `docs/plans/261025h-sources-plan-review-sol.md` on the coordinator's branch) changed the
 first design: it added E/F, G and PH, and it moved the judging from kept counts to scoring each
 finding. D was meant to run only if C proved useful. It was run beside G because the budget allowed
 both.

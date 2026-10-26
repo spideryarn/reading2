@@ -4684,13 +4684,14 @@ export const chatThreads = spideryarn.table(
      *   (src/thread-origin.ts). The contract migration rewrites those rows and
      *   narrows the CHECKs below.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
-     *   entry, a cited work). Null for a claim, which has none. Never
-     *   dereferenced, and no foreign key: the entry may be regenerated away.
+     *   entry, a cited work, a literature-search finding). Null for a claim,
+     *   which has none. Never dereferenced, and no foreign key: the entry may
+     *   be regenerated away.
      * - `origin_block_id`: the block the item sits in. Points at the identity,
      *   like `anchor_block_id`, so it survives a re-extraction.
      * - `origin_quote`: the item's own words when the chat started: a claim's
-     *   words, or a glossary entry's or a cited work's name. Article prose or
-     *   a model's: never logged.
+     *   words, or a glossary entry's, cited work's or finding's name. Article
+     *   prose or a model's: never logged.
      * - `origin_lens`: the angle the reader typed to look at the debate from
      *   (`LensOrigin`; plan 261005k, A). The reader's words: never logged. A
      *   `reception` origin has this and a `sources-claims` origin a block and a
@@ -4753,7 +4754,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate')`,
     ),
     /* No mode, no origin: the original four shape columns mean nothing
        without it. The two Quiz columns have their own null-safe check below. */
@@ -4781,13 +4782,13 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_sources_claims",
       sql`${t.originMode} is distinct from 'sources-claims' or (${t.originItemId} is null and ${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null)`,
     ),
-    /* A glossary entry, a cited work or an idea is an id and a snapshot of
-       its name, with no block and no lens (plan 261006d, D2; the idea is plan
-       261009k). Spelled null-safe: a row with no mode, or another mode, passes
+    /* A glossary entry, a cited work, an idea or a literature-search finding
+       is an id and a snapshot of its name, with no block and no lens (plan
+       261006d, D2; the idea is plan 261009k, the finding plan 261025h). Spelled null-safe: a row with no mode, or another mode, passes
        without the last arm being read. */
     check(
       "chat_threads_origin_item",
-      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas','situate') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
     ),
     /* A citation's *Does it say that?*: the cited work's id, the citing block,
        and the work's title as a snapshot; no lens (plan 261024m). The item
@@ -9165,7 +9166,11 @@ export const citationIndexLookups = spideryarn.table(
      * `doi:<lower-cased doi>` — a `WorkId` from src/bibliographic.ts, DOI form
      * only — or, since 2026-10-11, `openalex:w<digits>`: OpenAlex's own id for a
      * work matched by title and authors because the article had no DOI
-     * (`CitersKey` in src/citation-index.ts, plan 261011q).
+     * (`CitersKey` in src/citation-index.ts, plan 261011q). Since 2026-10-25
+     * (plan 261025h) a work OpenAlex holds as up to four twin records is keyed
+     * by all of them, ascending, `openalex:w393180982|w4239232206`, so the key
+     * says which were joined; and either form may end `#topic`, the row of the
+     * citers that mention the work's keyword.
      */
     workId: text("work_id").primaryKey(),
     state: text("state").$type<"found" | "not-indexed">().notNull(),
@@ -9178,6 +9183,12 @@ export const citationIndexLookups = spideryarn.table(
     targetTitle: text("target_title"),
     /** Display names, as OpenAlex gave them, at most 20. */
     targetAuthors: text("target_authors").array(),
+    /**
+     * OpenAlex's top keyword for the work, when it gives one: what labels the
+     * topic view, and, on a `#topic` row, what its list was filtered by. Only
+     * on a found row. Plan 261025h, decision 10.
+     */
+    targetKeyword: text("target_keyword"),
     /** When OpenAlex answered. The row's event time: there is no `created_at`. */
     fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -9185,8 +9196,8 @@ export const citationIndexLookups = spideryarn.table(
     check(
       "citation_index_lookups_work_id",
       sql`length(${t.workId}) <= 600 and ${t.workId} = lower(${t.workId})
-          and (${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'
-               or ${t.workId} ~ '^openalex:w[0-9]{1,15}$')`,
+          and (${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+(#topic)?$'
+               or ${t.workId} ~ '^openalex:w[0-9]{1,15}([|]w[0-9]{1,15}){0,3}(#topic)?$')`,
     ),
     check("citation_index_lookups_state", sql`${t.state} in ('found', 'not-indexed')`),
     check(
@@ -9201,8 +9212,9 @@ export const citationIndexLookups = spideryarn.table(
               and ${t.targetTitle} is not null and length(${t.targetTitle}) between 1 and 10000
               and ${t.targetAuthors} is not null and cardinality(${t.targetAuthors}) <= 20
               and array_position(${t.targetAuthors}, null) is null
+              and (${t.targetKeyword} is null or length(${t.targetKeyword}) between 1 and 200)
             else num_nonnulls(${t.openalexId}, ${t.citedByCount}, ${t.returned}, ${t.dropped},
-                              ${t.capped}, ${t.targetTitle}, ${t.targetAuthors}) = 0
+                              ${t.capped}, ${t.targetTitle}, ${t.targetAuthors}, ${t.targetKeyword}) = 0
           end`,
     ),
   ],

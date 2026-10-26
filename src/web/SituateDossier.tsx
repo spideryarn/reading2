@@ -1,12 +1,14 @@
 /**
- * **Sources › Investigate's *Where this piece sits*** — the dossier the
- * `situate` step writes (src/situate.ts), drawn at the top of Investigate for
- * the owner with the experimental switch on. Plan
+ * **The literature search in Sources › *Where it sits*** — the dossier the
+ * `situate` step writes (src/situate.ts), drawn for every owner since plan
+ * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md
+ * (decision 5) moved it out of the experimental switch and out of the top of
+ * Investigate. Plan
  * docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md
- * § The dossier, at the top of Investigate.
+ * § The dossier made it.
  *
  * ```
- *  WHERE THIS PIECE SITS                                     EXPERIMENTAL
+ *  SEARCH OF THE LITERATURE
  *  A review from 2023: what has happened since
  *  The report became a reference point … (overview, the model's face)
  *  CHALLENGED · 2
@@ -25,15 +27,16 @@
  * the step after it re-found them in the block (block-ids.md), drawn with
  * `Excerpt` as Claims draws its quotes.
  *
- * **Ask in chat sends a lens question** (`findingLens`, sent by Investigate's
- * own `onQuestion`, so Chat asks it through `askInSources`): the chat is an
- * Investigate chat, listed under *Your questions*, and found again here by
- * `threadForOrigin`, which draws its mark in the button's place (plan § The
- * dossier, Sol S8).
+ * **Ask in chat stores the finding's own origin** (`findingOrigin`,
+ * `{ mode: "situate", itemId }`, since plan 261025h, decision 9): the chat is
+ * found again by the finding's id, so a re-run that rewords the note keeps
+ * its mark, and its way back opens *Where it sits* on the finding. A chat
+ * started before then stored a lens and is still found by it
+ * (`findingLensOrigin`), as long as the note reads the same.
  */
 import { ChevronRight, ExternalLink, Globe } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
-import type { BlockId, LensOrigin, SituateFinding, SituateSource, ThreadSummary } from "../types.js";
+import type { BlockId, SituateFinding, SituateSource, ThreadSummary } from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { BlockRef } from "./BlockRef.js";
@@ -61,7 +64,8 @@ import {
   SITUATE_STALE,
   SITUATE_WHAT,
   SITUATE_WORKING,
-  findingLens,
+  findingLensOrigin,
+  findingOrigin,
   groupFindings,
   groupHeading,
   searchedLine,
@@ -74,16 +78,17 @@ import { threadForOrigin } from "./useChatAnchors.js";
 import type { UseSituate } from "./useSituate.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 
-/** What a finding's chat needs from Investigate: the summaries, its sender, and the way back. */
+/** What a finding's chat needs: the summaries, its sender, and the way back (Reader.tsx § `askFinding`). */
 export interface SituateChats {
   summaries: readonly ThreadSummary[];
-  onQuestion(question: string): void;
+  /** Start this finding's chat with its question, or reopen the one it has. */
+  onFinding(finding: SituateFinding): void;
   onOpen(threadId: string): void;
 }
 
-/** The origin a finding's chat stores: the lens Investigate's own questions store. */
-export function findingOrigin(finding: Pick<SituateFinding, "quote" | "note">): LensOrigin {
-  return { mode: "reception", lens: findingLens(finding) };
+/** A finding's chat: by its id, else (a chat started before plan 261025h) by the lens it stored then. */
+export function findingChat(summaries: readonly ThreadSummary[], finding: SituateFinding): ThreadSummary | undefined {
+  return threadForOrigin(summaries, findingOrigin(finding)) ?? threadForOrigin(summaries, findingLensOrigin(finding));
 }
 
 export function SituateDossier({
@@ -120,7 +125,7 @@ export function SituateDossier({
   /* **The stale banner's ×, for this page view only.** The kept dismissals
      (useStaleNotices.ts) are keyed by a closed list of modes that the database
      checks (src/stale-notice.ts), and `situate` is not on it yet; until it is,
-     the × hides the banner until the reader leaves Investigate. */
+     the × hides the banner until the reader leaves *Where it sits*. */
   const [staleHidden, setStaleHidden] = useState<string | null>(null);
   const staleShowing = made !== null && owner.stale && staleHidden !== made.generatedAt;
 
@@ -148,14 +153,9 @@ export function SituateDossier({
     );
 
   return (
-    <section
-      ref={surface}
-      className="investigate-section investigate-situate"
-      aria-labelledby="investigate-situate-head"
-    >
-      <h3 id="investigate-situate-head" className="rcp-group-head investigate-head situate-head">
-        <span>{SITUATE_HEAD}</span>
-        <span className="situate-experimental">Experimental</span>
+    <section ref={surface} className="where-section where-situate" aria-labelledby="where-situate-head">
+      <h3 id="where-situate-head" className="rcp-group-head where-head">
+        {SITUATE_HEAD}
       </h3>
 
       {owner.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
@@ -248,8 +248,7 @@ function Finding({
   chats: SituateChats;
   onJump(id: BlockId): void;
 }) {
-  const lens = findingLens(finding);
-  const chat = threadForOrigin(chats.summaries, findingOrigin(finding));
+  const chat = findingChat(chats.summaries, finding);
   return (
     <li className="situate-finding" data-finding={finding.id}>
       <p className="situate-finding-head">
@@ -260,7 +259,7 @@ function Finding({
         {chat ? (
           <OriginChatMark chat={chat} label={OPEN_FINDING_CHAT} className="situate-chat" onOpen={chats.onOpen} />
         ) : (
-          <AskInChatButton label={ASK_FINDING_IN_CHAT} className="situate-ask" onAsk={() => chats.onQuestion(lens)} />
+          <AskInChatButton label={ASK_FINDING_IN_CHAT} className="situate-ask" onAsk={() => chats.onFinding(finding)} />
         )}
       </p>
       {/* The model's words in the model's face (docs/project/fonts.md). */}
@@ -376,7 +375,9 @@ function Searched({ situate }: { situate: NonNullable<UseSituate["situate"]> }) 
 /**
  * **Suggested for this piece** — the model's questions, above Investigate's
  * fixed five, each a press that hands itself to Chat as they do. `row` is
- * Investigate's own row, so the two lists look and behave alike.
+ * Investigate's own row, so the two lists look and behave alike. They stay in
+ * Investigate, the place for questions, when the dossier moved to *Where it
+ * sits* (plan 261025h).
  */
 export function SituateQuestions({
   questions,

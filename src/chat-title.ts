@@ -40,6 +40,9 @@ export function titleFromOrigin(origin: ThreadOrigin): string {
       return titleFrom(`Does it say that? ${origin.quote}`);
     case "quiz":
       return titleFrom(`Quiz: ${origin.quote}`);
+    /* The finding's passage, the article's words (plan 261025h). */
+    case "situate":
+      return titleFrom(`Finding: ${origin.quote}`);
     default: {
       const never: never = origin;
       return never;

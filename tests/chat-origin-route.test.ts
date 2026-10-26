@@ -382,12 +382,14 @@ describe("a lens origin on the way in", () => {
 /**
  * **The item shapes: a glossary entry, a cited work and an idea**
  * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1 and D3;
- * the idea is plan 261009k's stage 3).
+ * the idea is plan 261009k's stage 3; a literature-search finding, `situate`,
+ * plan 261025h, whose id is `si-` and twelve hex digits rather than a block-shaped one).
  * An id and a snapshot of the name. The id is never dereferenced, so a made-up
  * one is accepted; only the shape is checked.
  */
-describe.each(["glossary", "bibliography", "ideas"] as const)("a %s origin on the way in", (mode) => {
-  const ITEM = "spya-ttm222";
+describe.each(["glossary", "bibliography", "ideas", "situate"] as const)("a %s origin on the way in", (mode) => {
+  const ITEM = mode === "situate" ? "si-0123456789ab" : "spya-ttm222";
+  const OTHER_ITEM = mode === "situate" ? "si-ba9876543210" : "spya-ttm333";
   const item = (over: Record<string, unknown> = {}) => ({ mode, itemId: ITEM, quote: "qualia", ...over });
 
   it("stores the id and the name on the thread it creates, and reads them back equal", async () => {
@@ -428,6 +430,8 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s origin on th
   it.each([
     ["no item id", { mode, quote: "qualia" }],
     ["a malformed item id", { mode, itemId: "not-an-id", quote: "qualia" }],
+    /* Each shape's own id: a finding's is not a block-shaped one, nor the reverse. */
+    ["the other kind of item id", { mode, itemId: mode === "situate" ? "spya-ttm222" : "si-0123456789ab", quote: "qualia" }],
     ["no name", { mode, itemId: ITEM }],
     ["an empty name", { mode, itemId: ITEM, quote: "  " }],
     ["a name that is not a string", { mode, itemId: ITEM, quote: 7 }],
@@ -450,7 +454,9 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s origin on th
   it("refuses another item, the other item mode, and a claim, with a 409", async () => {
     await ask({ threadId: THREAD, question: "what more?", origin: item() });
     const otherMode = mode === "glossary" ? "bibliography" : "glossary";
-    for (const other of [item({ itemId: "spya-ttm333" }), item({ mode: otherMode }), claim(), lens()]) {
+    /* Another mode's item, well formed for that mode, so the answer is the 409 and not the 400. */
+    const otherModeItem = mode === "situate" ? { mode: otherMode, itemId: "spya-ttm222", quote: "qualia" } : item({ mode: otherMode });
+    for (const other of [item({ itemId: OTHER_ITEM }), otherModeItem, claim(), lens()]) {
       expect((await ask({ threadId: THREAD, question: "and now?", origin: other })).status).toBe(409);
     }
     expect((await stored())?.origin).toEqual(item());
@@ -759,7 +765,7 @@ describe("the origin's columns", () => {
 
   /* Plan 261006d, D2: a glossary entry or a cited work is an id and a name,
      with no block and no lens. `summary` is still reserved and has no shape. */
-  describe.each(["glossary", "citations", "bibliography", "ideas"])("a %s origin", (mode) => {
+  describe.each(["glossary", "citations", "bibliography", "ideas", "situate"])("a %s origin", (mode) => {
     const good = { originMode: mode, originItemId: "spya-ttm222", originQuote: "qualia" };
 
     it("accepts an id and a name", async () => {

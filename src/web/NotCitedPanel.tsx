@@ -26,6 +26,12 @@
  * related work* says, under it, what it sends. The button is held from the
  * press until the answer is read.
  *
+ * **The piece's own editions and its authors' other work are two groups under
+ * the list, never hidden** (plan 261025h, decision 3): *Other editions of this
+ * piece* when the server found a version of its title or identifier, *By the
+ * same authors* when it found only the authors. Neither is in the list's count
+ * nor on the chip, which counts the ordinary rows (src/web/sources-counts.ts).
+ *
  * **OpenAlex's strings are a stranger's text** (docs/project/security-map.md):
  * drawn as text, never as markup, and in the app's face, as Reception's *Cited
  * by* rows are (docs/project/fonts.md § third-party text is left UI). Every
@@ -41,6 +47,8 @@ import {
   RELATED_WORK_ABOUT,
   RELATED_WORK_BIBLIOGRAPHY_CAPPED,
   RELATED_WORK_BIBLIOGRAPHY_STALE,
+  RELATED_WORK_EDITIONS,
+  RELATED_WORK_EDITIONS_NOTE,
   RELATED_WORK_INTRO,
   RELATED_WORK_LOADING,
   RELATED_WORK_NO_BIBLIOGRAPHY,
@@ -48,6 +56,8 @@ import {
   RELATED_WORK_NOT_SEARCHED,
   RELATED_WORK_QUERY_CHANGED,
   RELATED_WORK_RATE_LIMITED,
+  RELATED_WORK_SAME_AUTHORS,
+  RELATED_WORK_SAME_AUTHORS_NOTE,
   RELATED_WORK_SEARCH,
   RELATED_WORK_SEARCH_AGAIN,
   RELATED_WORK_SEARCHING,
@@ -170,8 +180,38 @@ function Found({ found, related }: { found: Extract<RelatedWorkResult, { kind: "
           </ul>
         </>
       )}
+      <Group works={found.editions} title={RELATED_WORK_EDITIONS} note={RELATED_WORK_EDITIONS_NOTE} kind="editions" />
+      <Group works={found.sameAuthors} title={RELATED_WORK_SAME_AUTHORS} note={RELATED_WORK_SAME_AUTHORS_NOTE} kind="same-authors" />
       <SearchPress related={related} label={RELATED_WORK_SEARCH_AGAIN} />
     </>
+  );
+}
+
+/** One of the two groups under the list, with its heading and what it claims — or nothing when it is empty. */
+function Group({
+  works,
+  title,
+  note,
+  kind,
+}: {
+  works: readonly RelatedWork[] | undefined;
+  title: string;
+  note: string;
+  kind: "editions" | "same-authors";
+}) {
+  if (works === undefined || works.length === 0) return null;
+  return (
+    <section className="rcp-related-group" data-group={kind} aria-label={title}>
+      <h3 className="rcp-related-group-title">
+        {title} <span className="rcp-meta">{works.length}</span>
+      </h3>
+      <p className="rcp-citers-note">{note}</p>
+      <ul className="rcp-citers-list">
+        {works.map((work) => (
+          <RelatedRow key={work.openalexId} work={work} />
+        ))}
+      </ul>
+    </section>
   );
 }
 

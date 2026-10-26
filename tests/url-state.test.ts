@@ -297,8 +297,10 @@ describe("Sources' sub-mode, and Reception's order", () => {
    * Debate's `?debate=` on 2026-10-09 (plan 261009l); an old one is lifted
    * before anything parses it (tests/sources-old-addresses.test.ts).
    */
-  it("reads the six sub-modes, and anything else as Bibliography", () => {
-    expect([...SOURCES_VIEWS]).toEqual(["bibliography", "not-cited", "links", "reception", "claims", "investigate"]);
+  /* Where it sits is the default since plan 261025h (decision 7). */
+  it("reads the seven sub-modes, and anything else as Where it sits", () => {
+    expect([...SOURCES_VIEWS]).toEqual(["where", "bibliography", "not-cited", "links", "reception", "claims", "investigate"]);
+    expect(sourcesParam.parse("where")).toBe("where");
     expect(sourcesParam.parse("investigate")).toBe("investigate");
     expect(sourcesParam.parse("not-cited")).toBe("not-cited");
     expect(sourcesParam.parse("links")).toBe("links");
@@ -308,14 +310,15 @@ describe("Sources' sub-mode, and Reception's order", () => {
     for (const junk of ["Claims", "claim", "", "cited", "1", "citations", "debate", "Investigate", "chat"]) {
       expect(sourcesParam.parse(junk), `?sources=${junk}`).toBeNull();
     }
-    expect(sourcesParam.defaultValue).toBe("bibliography");
+    expect(sourcesParam.defaultValue).toBe("where");
   });
 
   /* Not cited and Investigate are the owner's (plan 261011ac, F6; plan 261020n §
      Visitors): a visitor's band has no chip for either and draws Bibliography
      for a shared `?sources=not-cited` or `?sources=investigate`. */
-  it("gives a visitor every sub-mode but Not cited and Investigate, and reads those as Bibliography", () => {
+  it("gives a visitor every sub-mode but Where it sits, Not cited and Investigate, and reads those as Bibliography", () => {
     expect([...VISITOR_SOURCES_VIEWS]).toEqual(["bibliography", "links", "reception", "claims"]);
+    expect(visitorSourcesView("where")).toBe("bibliography");
     expect(visitorSourcesView("not-cited")).toBe("bibliography");
     expect(visitorSourcesView("investigate")).toBe("bibliography");
     for (const view of VISITOR_SOURCES_VIEWS) expect(visitorSourcesView(view)).toBe(view);
