@@ -38,12 +38,21 @@ import {
   QUICK_MODEL_OPENROUTER,
   resolveModel,
   sameGenerator,
+  SITUATE_TRIAGE_MODEL,
   TASK_TIER,
   type Task,
 } from "../src/models.js";
 import { sameStamp } from "../src/store/artifacts.js";
 
 const ALL_TASKS = Object.keys(TASK_TIER) as Task[];
+
+/**
+ * **Capable-tier rows the switch deliberately does not move**, each with the
+ * model it stays on at both powers. `situate-triage` is on the Messages wire,
+ * so its row says capable, but `PINNED_MODEL` holds it on Haiku: Haiku
+ * shortlisting for an Opus writer is what plan 261025h's eval measured.
+ */
+const PINNED_CAPABLE: Partial<Record<Task, string>> = { "situate-triage": SITUATE_TRIAGE_MODEL };
 
 afterEach(() => {
   delete process.env.SPIDERYARN_CHAT_MODEL;
@@ -55,8 +64,9 @@ describe("which model the tier resolver returns at each power", () => {
     /* Not vacuous: the table is nearly all capable. */
     expect(capable.length).toBeGreaterThan(20);
     for (const task of capable) {
-      expect(modelFor(task, "high"), task).toBe(HIGH_POWER_MODEL_OPENROUTER);
-      expect(modelFor(task, "standard"), task).toBe(CAPABLE_MODEL_OPENROUTER);
+      const pinned = PINNED_CAPABLE[task];
+      expect(modelFor(task, "high"), task).toBe(pinned ?? HIGH_POWER_MODEL_OPENROUTER);
+      expect(modelFor(task, "standard"), task).toBe(pinned ?? CAPABLE_MODEL_OPENROUTER);
     }
   });
 
@@ -216,7 +226,7 @@ describe("effort parity on the messages wire", () => {
   it("puts every pipeline task's high-power model on the wire", () => {
     for (const task of PIPELINE_TASKS) {
       expect((messagesWireBody(task, ADAPTIVE, "high") as { model: string }).model, task).toBe(
-        HIGH_POWER_MODEL_OPENROUTER,
+        PINNED_CAPABLE[task] ?? HIGH_POWER_MODEL_OPENROUTER,
       );
     }
   });

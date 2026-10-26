@@ -167,6 +167,7 @@ import { openRouterJson } from "./ai-call.js";
 import {
   generateSituate,
   inputFingerprint as situateFingerprint,
+  phasesOutdated as situatePhasesOutdated,
   PROMPT_VERSION as SITUATE_PROMPT_VERSION,
   SITUATE_RATE_POLICY,
   SituateRefused,
@@ -256,6 +257,7 @@ import {
   CITATION_BLURBS_NO_BIBLIOGRAPHY,
   SITUATE_BUSY,
   SITUATE_CLAIMS_NOT_FOUND,
+  SITUATE_SHORTLIST_EMPTY,
   SITUATE_LIMITED,
   SITUATE_RESTING,
   SITUATE_SEARCHES_FAILED,
@@ -6316,6 +6318,7 @@ const SITUATE_REFUSALS: Record<SituateRefused["why"], ReaderFacingFailure> = {
   "no-claim-queries": SITUATE_TOO_FEW_SEARCHES,
   "searches-failed": SITUATE_SEARCHES_FAILED,
   "claims-not-found": SITUATE_CLAIMS_NOT_FOUND,
+  "shortlist-empty": SITUATE_SHORTLIST_EMPTY,
 };
 
 /** And for each way the allowance refuses. */
@@ -6327,9 +6330,9 @@ const SITUATE_ALLOWANCE_REFUSALS: Record<Exclude<AllowanceTaken["kind"], "allowe
 
 /**
  * **The `situate` step** — where the piece sits in the literature: a planned
- * set of web searches, the later works that cite it, and one read of all of it
- * beside the whole article, every claim checked in code (src/situate.ts, plan
- * 261024o). A factory so a test can hand it a fake allowance, fake searches and
+ * set of web searches, the later works that cite it, a Haiku triage of all of
+ * it, and one read of the shortlist beside the whole article, every claim
+ * checked in code (src/situate.ts, plans 261024o and 261025h). A factory so a test can hand it a fake allowance, fake searches and
  * fake citers and still run the step the pipeline runs.
  *
  * **The allowance is taken here, inside the step, before any paid call** (GPT
@@ -6372,6 +6375,14 @@ export function situateStep(deps?: () => Promise<SituateStepDeps>): PipelineStep
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;
+      /* **The one stamp names one model, and the dossier has three calls.**
+         `model` below is the capable model the plan and the read run on; the
+         triage is pinned to another (plan 261025h stage 3), which no stamp
+         field can carry. So a stored dossier whose calls `phasesOutdated`
+         calls old is not done, whatever the stamp says — the metadata page's
+         `isCurrent` arm asks the same (src/store/pg.ts). */
+      const stored = await store.read(ctx.slug, "situate", "situate");
+      if (stored && situatePhasesOutdated(stored)) return null;
       return {
         /* The real, nullable meta, as `generateSituate` hashes it. */
         inputHash: situateFingerprint(article.blocks, article.tree, article.meta),
@@ -6443,8 +6454,12 @@ export function situateStep(deps?: () => Promise<SituateStepDeps>): PipelineStep
           findings: situate.findings.length,
           questions: situate.questions.length,
           ...situate.counts,
+          triageModel: situate.phases?.triage?.model ?? null,
+          triageCandidates: situate.phases?.triage?.candidates ?? null,
+          shortlisted: situate.phases?.triage?.shortlisted ?? null,
           planMs: run.planMs,
           searchMs: run.searchMs,
+          triageMs: run.triageMs,
           readMs: run.readMs,
           ms: situate.elapsedMs,
           inputTokens: run.inputTokens,

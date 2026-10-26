@@ -203,8 +203,9 @@ run's searches, not from the reader.
   triage, given 4,000 tokens, used 3,947 reasoning and wrote 53 tokens of answer. Haiku 5.5's
   thinking is adaptive and on by default, and production's `situate` body sends no `thinking` or
   `effort`. So a Haiku arm needs either much more room or a lower effort. The triage was re-run with
-  12,000 tokens of room and worked. This prompt also crosses Haiku's 100k-token price step ($0.50 /
-  $2.50 above it, [261009a](261009a-haiku-5-5-and-an-opus-digest-for-cheaper-models.md)): the
+  12,000 tokens of thinking headroom (15,000 total) and worked. This prompt also crosses Haiku's
+  100k-token price step ($0.50 / $2.50 above it,
+  [261009a](261009a-haiku-5-5-and-an-opus-digest-for-cheaper-models.md)): the
   failed read cost $0.10, ten times Haiku's price on the other articles.
 - **The OpenRouter key hit its monthly limit** at $8.96 of this eval's spend. Arm D on *Mythology*
   then got `403 Key limit exceeded (monthly limit)` twice. D has five articles, not six.

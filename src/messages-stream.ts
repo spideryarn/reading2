@@ -478,6 +478,8 @@ export type MessagesBody = Omit<Anthropic.MessageStreamParams, "model"> & {
  * ledger look complete. GPT Sol asked for it closed before the schema hardened.
  */
 export interface MeteredCall {
+  /** The exact model id put on this call's wire body. */
+  readonly model: string;
   /** Progress, exactly as `stream.on("text", …)` gave it. */
   onText: (listener: (delta: string) => void) => void;
   /**
@@ -611,6 +613,7 @@ export function streamMessage(
   if (options.signal?.aborted) {
     let rejection: Promise<Anthropic.Message> | null = null;
     return {
+      model: modelFor(task, options.power),
       onText: () => {},
       onStart: () => {},
       finalMessage: () => {
@@ -829,6 +832,7 @@ export function streamMessage(
   };
 
   return {
+    model,
     onText: (listener) => {
       textListeners.push(listener);
     },

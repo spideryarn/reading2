@@ -46,7 +46,7 @@ fixes. **Visitors keep the band they have today** (this iteration; Sol's F3).
 | Free | Bibliography (made on import; *Where it sits* arms it if missing, as the Bibliography chip does), Links, *After it* (OpenAlex citers), *Before it* (Bibliography's most relied-on works) | On opening Sources, no press |
 | Free, but sends the article's opening | Not cited | Still on its own press: the reason is [privacy](../project/privacy.md#crossref-datacite-and-openalex-are-sent-a-doi) (a referee's confidential upload), not cost |
 | A few cents | Claims' list; Reception's search ($0.05–0.07) | Each on its own button inside its tool, no longer on a chip press |
-| $0.26–0.48 (mean $0.33, the trial) | *Search the literature* (the dossier) | Only on its press; allowance four an hour, twelve a day per reader, 100 a day across everyone (`SITUATE_RATE_POLICY`). Never on open, never on import |
+| About $0.30 at standard power, about $0.52 under high-powered AI (Stage 3, from the eval; $0.26–0.48, mean $0.33, in the trial before it) | *Search the literature* (the dossier): Sonnet plans, Haiku shortlists, Sonnet writes; Opus plans and writes under high-powered AI | Only on its press; allowance four an hour, twelve a day per reader, 100 a day across everyone (`SITUATE_RATE_POLICY`). Never on open, never on import |
 | Per item | A finding's *Ask in chat*, a claim's check, a cited work's chat | Only when the reader asks about that item |
 
 Greg's "cheap paid work may run when Sources opens": nothing paid needs to. If the eval brings the
@@ -174,6 +174,19 @@ Two findings changed Stage 1: the *Since* date check catches only 1–2 errors a
 are undated web pages), and the unsourced-name check was noisy on real output, so it is recorded
 as a count and cuts nothing. The OpenRouter key used locally hit its monthly limit at the end of
 the run (production's key is a different one).
+
+**Built (2026-10-26)**, with no paid call (the local key was still over its limit), so the first
+real triage will be production's. `src/situate.ts` § `generateSituate` makes three calls: the plan,
+then `situate-triage` (Haiku 5.5 pinned in `PINNED_MODEL` at both powers; the eval's prompt as
+`situate-triage/1`; adaptive thinking at effort `medium` with 12,000 tokens of thinking headroom,
+15,000 total), then the read,
+shown only the shortlist under the sources' own ids. `checkFindings` still checks against all the
+evidence. The dossier records each call's model in `phases`; `isOutdated` compares all three, and
+the step's stamp and the metadata page's `isCurrent` arm both ask `phasesOutdated`, the part a
+one-model stamp cannot carry. **A `situate/2` dossier from before the triage has no `phases` and
+stays current**: its read prompt and checks are today's, and re-running it would buy an economy, not
+a fix. `PROMPT_VERSION` did not move, because the read's prompt did not. A triage naming no source
+it was shown fails the run with `jb-situate-shortlist` rather than storing an empty dossier.
 
 ### Stage 4 — experiments, behind the switch
 

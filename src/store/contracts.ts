@@ -3467,8 +3467,9 @@ export type RateBucket =
      a cheap one here must not starve them, or they it. */
   | "citation-web-note"
   /* Sources' *Search the literature* — the `situate` step's planned web
-     searches and its one read over everything they found, about $0.40–0.50 a
-     run, taken inside the step so every way of starting it passes it
+     searches, Haiku triage and capable-model read of the shortlist, about
+     $0.30 at standard power or $0.52 at high power, taken inside the step so
+     every way of starting it passes it
      (src/situate.ts § `SITUATE_RATE_POLICY`, plan 261024o, GPT Sol's S5). */
   | "situate"
   /* A citation's *Does it say that?* started by resting on its card, not by

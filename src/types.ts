@@ -8601,11 +8601,54 @@ export interface SituateCounts {
   namesUnsourcedWork?: number;
 }
 
+/**
+ * **What the triage did**: the Haiku call that picks, from every source the
+ * run gathered, the ones the writer is shown (src/situate.ts § the triage,
+ * plan 261025h stage 3).
+ */
+export interface SituateTriage {
+  /** The exact model id sent on the triage call's wire body. */
+  model: string;
+  /** `situate-triage/N` — src/situate.ts § `TRIAGE_PROMPT_VERSION`. */
+  version: string;
+  /** Candidate findings it named, after the cap. */
+  candidates: number;
+  /** The sources the writer was shown … */
+  shortlisted: number;
+  /** … out of this many gathered. */
+  of: number;
+}
+
+/**
+ * **Which model ran each of the dossier's calls** (plan 261025h stage 3). The
+ * plan and the read follow the article's power; the triage is Haiku at both.
+ * `isOutdated` compares each with what a run today would send.
+ */
+export interface SituatePhases {
+  /** The exact model id sent on the planner call's wire body. */
+  plan: string;
+  /** Null when no read was made (`nothing-found`), so nothing was triaged. */
+  triage: SituateTriage | null;
+  /** The exact model id sent on the writer call's wire body; null when no read was made. */
+  write: string | null;
+}
+
 /** The artefact. The `situate` column on `article_revisions`. */
 export interface Situate {
   /** `situate/N` — src/situate.ts § `PROMPT_VERSION`. */
   version: string;
+  /**
+   * The capable model at the power the run had — the writer's, which is also
+   * the planner's. The one stamp the queue and the metadata page compare
+   * (`sameStamp`, by generation); `phases` says the rest.
+   */
   generator: string;
+  /**
+   * Each call's model. **Absent on a dossier written before 2026-10-26**, when
+   * one capable model planned and read the whole evidence with no triage;
+   * src/situate.ts § `isOutdated` says why such a dossier is still current.
+   */
+  phases?: SituatePhases;
   slug: string;
   /** The article as the read was sent it (src/situate.ts § `inputFingerprint`). */
   sourceHash: string;

@@ -1477,10 +1477,11 @@ export type ChatJob = Exclude<
   | "relations"
   /* Generation, on the Messages wire like `faq`. src/sources-claims.ts. */
   | "sources-claims"
-  /* Situate's plan and its read, on the Messages wire like `sources-claims`.
-     Its searches (`situate-search`) stay IN: they are chat completions.
-     src/situate.ts. */
+  /* Situate's plan, its triage and its read, on the Messages wire like
+     `sources-claims`. Its searches (`situate-search`) stay IN: they are chat
+     completions. src/situate.ts. */
   | "situate-plan"
+  | "situate-triage"
   | "situate"
   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
   | "skim"

@@ -284,10 +284,14 @@ describe("streamMessage — the recording lifecycle", () => {
        `modelFor()` what it *would* return — never what was sent. */
     const t = stubTransport(cannedStream());
     try {
+      const exposed: string[] = [];
       for (const task of ["structure", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const) {
-        await streamMessage(task, { max_tokens: 16, messages: A_BODY.messages }, { power: "standard" }).finalMessage();
+        const call = streamMessage(task, { max_tokens: 16, messages: A_BODY.messages }, { power: "standard" });
+        exposed.push(call.model);
+        await call.finalMessage();
       }
       const sent = t.seenRequests.map((r) => r.body.model);
+      expect(exposed).toEqual(sent);
       expect(sent).toEqual(sent.map((_, i) => modelFor(
         (["structure", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!, "standard",
       )));

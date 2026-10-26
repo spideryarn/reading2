@@ -99,6 +99,7 @@ import {
   inputFingerprint as situateFingerprint,
   isOutdated as situateIsOutdated,
   isStale as situateIsStale,
+  phasesOutdated as situatePhasesOutdated,
   PROMPT_VERSION as SITUATE_PROMPT_VERSION,
 } from "../situate.js";
 import {
@@ -3722,6 +3723,9 @@ const rawPgArticleReader: ArticleReader = {
         case "situate": {
           const situate = revision.situate as Situate | null;
           if (!situate || !Array.isArray(situate.findings) || !tree || blocks.length === 0) return false;
+          /* Each call's model, the triage's among them, as the step's own
+             `stamp` asks it first (src/pipeline.ts § `situateStep`). */
+          if (situatePhasesOutdated(situate)) return false;
           return sameStamp(
             {
               inputHash: situate.sourceHash,

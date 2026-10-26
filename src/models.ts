@@ -556,6 +556,16 @@ export const MATTER_MODEL = "anthropic/claude-haiku-5.5";
 export const CITATION_BLURBS_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What shortlists the evidence for *Search the literature*'s read** — the
+ * `situate-triage` task (src/situate.ts, plan 261025h stage 3), held here by
+ * `PINNED_MODEL`, so it is Haiku at both powers. Chosen by measurement:
+ * docs/investigations/261025h-situate-eval-haiku-sonnet-opus.md, arms C and D.
+ * Its own constant for the reason the Haiku jobs above have theirs. On the
+ * Messages wire, which the Anthropic provider pin serves.
+ */
+export const SITUATE_TRIAGE_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes the one-line gist of a conversation** after each answer, so a
  * later conversation about the same article can see what an earlier one
  * covered (src/chat-gist.ts, plan
@@ -799,8 +809,12 @@ export type Task =
      from the fenced title, headings, opening and the works it leans on — not
      the whole article, and never the reader's profile. `situate` reads the
      whole article (fenced as untrusted, so not an `ArticleStage`: its bytes
-     match no other stage's) beside everything the searches found. */
+     match no other stage's) beside everything the searches found.
+     `situate-triage` comes between them (plan 261025h stage 3): Haiku, pinned
+     whatever the article's power, reads the same fenced article and evidence
+     and names the sources worth writing from; `situate` then reads only those. */
   | "situate-plan"
+  | "situate-triage"
   | "situate"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
@@ -1311,6 +1325,10 @@ export const TASK_TIER: Record<Task, Tier> = {
      and a date. Sonnet is the provisional reader (plan 261024o, S14). */
   "situate-plan": "capable",
   situate: "capable",
+  /* On no tier in fact: `PINNED_MODEL` holds it on Haiku 5.5 at both powers,
+     so this row never picks its model. "capable" because it is on the
+     Messages wire, where a quick task is refused at load. */
+  "situate-triage": "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1613,6 +1631,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "sources-claims": "messages",
   /* A strict schema back on the Messages wire, as `sources-claims`. */
   "situate-plan": "messages",
+  "situate-triage": "messages",
   situate: "messages",
   crossrefs: "messages",
   simple: "messages",
@@ -1786,6 +1805,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   "sources-claims": null,
   /* The Messages-wire stages hand `CAPABLE_MODEL` straight through. */
   "situate-plan": null,
+  "situate-triage": null,
   situate: null,
   crossrefs: null,
   simple: null,
@@ -1910,6 +1930,14 @@ export type ResolvedModel = {
  */
 const PINNED_MODEL: Partial<Record<Task, string>> = {
   "simple-check": "openai/gpt-5.6-luna",
+  /* **Situate's triage, on Haiku whatever the article's power** (plan 261025h
+     stage 3). Not a model held back but a cheap one chosen for this job, by
+     measurement (docs/investigations/261025h-situate-eval-haiku-sonnet-opus.md):
+     Haiku shortlisting the ~90 sources for the capable writer was no worse
+     than today at standard power (arm C) and close to a full Opus read at high
+     power (arm D), for about a cent. High power keeps Haiku here because arm D
+     is what was measured. `SITUATE_TRIAGE_MODEL` above. */
+  "situate-triage": SITUATE_TRIAGE_MODEL,
 };
 
 export function resolveModel(task: Task, power: ModelPower): ResolvedModel {

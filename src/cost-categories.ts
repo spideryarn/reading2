@@ -239,10 +239,11 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* `search_web` inside a conversation turn — src/web-search-subagent.ts.
      Request scope, the reader's own question. */
   "web-search-subagent": "interactive request work",
-  /* Situate's plan, its searches and its read, all inside the `situate` step
-     (src/situate.ts, plan 261024o). */
+  /* Situate's plan, its searches, its triage and its read, all inside the
+     `situate` step (src/situate.ts, plans 261024o and 261025h). */
   "situate-plan": "step-driven",
   "situate-search": "step-driven",
+  "situate-triage": "step-driven",
   situate: "step-driven",
   /* *Dig deeper*'s answer, on the high-power model — src/explain.ts with a
      `dig`. Request scope, reader-triggered. */

@@ -26,7 +26,8 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, rateLimitEvents } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
-import { emptyCounts, PROMPT_VERSION, SITUATE_RATE_POLICY } from "../src/situate.js";
+import { CAPABLE_MODEL, SITUATE_TRIAGE_MODEL } from "../src/models.js";
+import { emptyCounts, PROMPT_VERSION, SITUATE_RATE_POLICY, TRIAGE_PROMPT_VERSION } from "../src/situate.js";
 import { loadSituate } from "../src/store/index.js";
 import { pgFetchAllowanceStore } from "../src/store/pg-rate-limit.js";
 import { NONE_YET_AS_NULL_HEADER, type Situate, type SituateResponse } from "../src/types.js";
@@ -148,6 +149,25 @@ describe("the dossier is the owner's alone (S9)", () => {
     expect(body.stale).toBe(true);
     expect(body.outdated).toBe(true);
     expect(body.profileChanged).toBe(false);
+  });
+
+  it("keeps each call's model through the column, and reads a changed triage model as outdated (plan 261025h stage 3)", async () => {
+    const phases = {
+      plan: CAPABLE_MODEL,
+      triage: { model: SITUATE_TRIAGE_MODEL, version: TRIAGE_PROMPT_VERSION, candidates: 3, shortlisted: 5, of: 80 },
+      write: CAPABLE_MODEL,
+    };
+    await setSituate({ ...STORED, generator: CAPABLE_MODEL, phases });
+    const current = JSON.parse((await get(`/api/situate/${SLUG}`)).body) as SituateResponse;
+    expect(current.situate.phases).toEqual(phases);
+    expect(current.outdated).toBe(false);
+
+    await setSituate({ ...STORED, generator: CAPABLE_MODEL, phases: { ...phases, triage: { ...phases.triage, model: "anthropic/claude-haiku-4.5" } } });
+    expect((JSON.parse((await get(`/api/situate/${SLUG}`)).body) as SituateResponse).outdated).toBe(true);
+
+    /* Before the triage: no `phases`, still current. */
+    await setSituate({ ...STORED, generator: CAPABLE_MODEL });
+    expect((JSON.parse((await get(`/api/situate/${SLUG}`)).body) as SituateResponse).outdated).toBe(false);
   });
 
   it("is no such article to anybody else", async () => {
