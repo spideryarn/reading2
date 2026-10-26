@@ -12,6 +12,7 @@
  *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims (tools)
  *  │ NotCitedPanel, OpenAlex's search on the owner's press  ← Not cited (a tool)
  *  │ InvestigatePanel, questions handed to Chat                     ← Investigate (a tool)
+ *  │ SourcesExperimentPanel, the dossier met first   ← Guess first, Evidence first (switch on)
  * ```
  *
  * A tool's head is the chip row with *Where it sits* lit (params.ts §
@@ -75,6 +76,7 @@ import {
   receptionThreadParam,
   SOURCES_CHIPS,
   chipOf,
+  type SourcesExperiment,
   type SourcesView,
   sourcesParam,
   VISITOR_SOURCES_VIEWS,
@@ -102,8 +104,10 @@ import { LinksPanel } from "../../LinksPanel.js";
 import { useRelatedWork } from "../../useRelatedWork.js";
 import { NotCitedPanel } from "../../NotCitedPanel.js";
 import { InvestigatePanel, type SourcesInvestigateChats } from "../../InvestigatePanel.js";
-import { useSituate } from "../../useSituate.js";
-import { type SourcesTool, ToolBack, type WhereBefore, WhereItSitsPanel } from "../../WhereItSitsPanel.js";
+import { useSituate, useSituateRead } from "../../useSituate.js";
+import { ToolBack, type WhereBefore, type WhereChild, WhereItSitsPanel } from "../../WhereItSitsPanel.js";
+import { SourcesExperimentPanel } from "../../SourcesExperiments.js";
+import { useExperimental } from "../../useExperimental.js";
 
 /** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
 function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
@@ -181,6 +185,9 @@ export function SourcesBand({
 }) {
   useRenderCount("SourcesBand");
   const [view, setView] = useQueryState("sources", sourcesParam);
+  /* The switch decides only whether the tools row offers the two experiments;
+     an experiment's address draws it either way (plan 261025h, Stage 4). */
+  const experimental = useExperimental();
   /* *Where it sits* arms the citations as Bibliography does, because *Before
      it* is drawn from them (plan 261025h, decision 8, GPT Sol's F4). */
   const bibliography = useBibliography(slug, bibliographyRead, view === "bibliography" || view === "where");
@@ -218,8 +225,8 @@ export function SourcesBand({
     thread: receptionAndClaimsControls.thread,
   });
   const chips = <SourcesViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
-  /* A tool's head says which tool it is and the way back (plan 261025h). */
-  const toolHead = (tool: SourcesTool) => (
+  /* A tool's head says which tool it is and the way back (plan 261025h); an experiment's too. */
+  const toolHead = (tool: WhereChild) => (
     <>
       {chips}
       <ToolBack tool={tool} onBack={() => void setView("where")} />
@@ -252,6 +259,18 @@ export function SourcesBand({
           toolCounts={{ reception: counts.reception, claims: counts.claims.n, "not-cited": counts.notCited ?? 0 }}
           findingFocus={findingFocus}
           onFindingFocusTaken={onFindingFocusTaken}
+          experiments={experimental.on}
+        />
+      );
+    case "guess-first":
+    case "evidence-first":
+      return (
+        <ExperimentBand
+          slug={slug}
+          experiment={view}
+          head={toolHead(view)}
+          onJump={onJump}
+          onView={(next) => void setView(next)}
         />
       );
     case "bibliography":
@@ -333,6 +352,20 @@ function WhereBand({
 }: Omit<ComponentProps<typeof WhereItSitsPanel>, "situate"> & { slug: string; before: WhereBefore }) {
   const situate = useSituate(slug);
   return <WhereItSitsPanel situate={situate} {...props} />;
+}
+
+/**
+ * **One of the two experiments, with the dossier's read alone mounted**
+ * (plan 261025h, Stage 4): `useSituateRead` has no press and no job watch, so
+ * nothing here can start the search. A component of its own so the read lives
+ * only while the experiment is on screen.
+ */
+function ExperimentBand({
+  slug,
+  ...props
+}: Omit<ComponentProps<typeof SourcesExperimentPanel>, "read"> & { slug: string; experiment: SourcesExperiment }) {
+  const read = useSituateRead(slug);
+  return <SourcesExperimentPanel read={read} {...props} />;
 }
 
 /**
@@ -424,13 +457,15 @@ export function VisitorSourcesBand({
   });
   const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
   switch (view) {
-    /* `where`, `not-cited` and `investigate` never reach here (`visitorSourcesView`); named so
+    /* `where`, `not-cited`, `investigate` and the experiments never reach here (`visitorSourcesView`); named so
        the switch is exhaustive and a new sub-mode has to say what a visitor
        gets. */
     case "where":
     case "bibliography":
     case "not-cited":
     case "investigate":
+    case "guess-first":
+    case "evidence-first":
       return (
         <BibliographyPanel
           access={{ kind: "visitor", bibliography }}
@@ -614,6 +649,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
     case "claims":
       return { n: counts.claims.n, noun: plural(counts.claims.n, counts.claims.unit) };
     case "investigate":
+    case "guess-first":
+    case "evidence-first":
       return null;
     default: {
       const unhandled: never = view;
@@ -647,6 +684,9 @@ const VIEW_HOW: Record<SourcesView, string> = {
   /* Checked against InvestigatePanel.tsx: the fixed questions are ours, the claims
      are Claims' stored list, the works Bibliography's `relevance`, and every
      row and the box go through Reader's `handToChat` with `send`. */
+  /* Never a chip: an experiment lights Where it sits (params.ts § `chipOf`). Here for the `Record`. */
+  "guess-first": "Uses the stored search of the literature, and starts nothing; nothing you do is kept.",
+  "evidence-first": "Uses the stored search of the literature, and starts nothing; nothing you choose is kept.",
   investigate:
     "Nothing runs until you press a question. Then Chat opens and asks it with a web search. The suggested questions are fixed; the claims and works are taken from Claims and Bibliography once they exist.",
 };

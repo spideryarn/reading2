@@ -179,3 +179,50 @@ it("refuses malformed citer rows before they can crash the Debate band", async (
   await show("valid-row", true);
   expect(host.textContent).toBe("found");
 });
+
+/* ---- *About "keyword"*, plan 261025h, decision 10 (GPT Sol's S1-F5) ---- */
+
+let askTopic: () => void = () => {};
+let shownTopic: CitersResult | null | undefined;
+
+function TopicProbe({ slug }: { slug: string }) {
+  const citers = useCiters(slug, true);
+  askTopic = citers.askTopic;
+  shownTopic = citers.topic;
+  const topic = citers.result?.kind === "found" ? citers.result.topic : undefined;
+  return createElement("p", null, topic === undefined ? "no topic" : `${topic.keyword}:${topic.count ?? "?"}`);
+}
+
+async function showTopic(slug: string): Promise<void> {
+  await act(async () => {
+    root.render(createElement(StrictMode, null, createElement(TopicProbe, { slug })));
+  });
+  for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
+}
+
+const LANDMARK = {
+  kind: "found", via: "doi", target: TARGET, count: 5849, returned: 0, dropped: 0, capped: true, citers: [],
+  fetchedAt: "2026-10-25T00:00:00Z", topic: { keyword: "extended mind" },
+} as CitersResult;
+
+it("asks the plain list on open and the keyword view only when asked, once", async () => {
+  answer = LANDMARK;
+  await showTopic("landmark");
+  expect(gets).toEqual(["/api/citers/landmark"]);
+  expect(host.textContent).toBe("extended mind:?");
+  expect(shownTopic).toBeUndefined();
+  answer = { ...LANDMARK, count: 1234, topic: { keyword: "extended mind", count: 1234 }, filteredBy: "extended mind" } as CitersResult;
+  await act(async () => askTopic());
+  for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
+  expect(gets).toEqual(["/api/citers/landmark", "/api/citers/landmark?about=topic"]);
+  expect(shownTopic?.kind === "found" && shownTopic.filteredBy).toBe("extended mind");
+  /* A second press keeps the answer. */
+  await act(async () => askTopic());
+  expect(gets).toHaveLength(2);
+});
+
+it("drops a malformed topic label rather than the list", async () => {
+  answer = { ...LANDMARK, topic: { keyword: 7 }, filteredBy: 3 } as unknown as CitersResult;
+  await showTopic("odd-topic");
+  expect(host.textContent).toBe("no topic");
+});

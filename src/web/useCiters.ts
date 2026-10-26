@@ -1,6 +1,9 @@
 /**
- * **Which papers cite this article**, for Reception's *Cited by* — one `GET
- * /api/citers/:slug`, and nothing else.
+ * **Which papers cite this article**, for Reception's *Cited by* and *Where
+ * it sits*' *After it* — one `GET /api/citers/:slug`, and, only when the
+ * reader presses *After it*'s *About "keyword"*, one `GET
+ * /api/citers/:slug?about=topic` (plan 261025h, decision 10; `askTopic`).
+ * Nothing else.
  *
  * **It can never start the paid search.** There is no job here, no `useAutoRun`
  * and no POST: the list comes from OpenAlex, costs no money (only a share of
@@ -11,8 +14,8 @@
  * app to make by accident (src/web/useReception.ts).
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
- * **Asked once per article, the first time it is wanted** — when Reception is
- * on screen — and kept while the band stays mounted, so going to Claims and
+ * **Asked once per article, the first time it is wanted** — when Reception or
+ * *Where it sits* is on screen — and kept while the band stays mounted, so going to Claims and
  * back asks nothing. `retry` is the *Try again* beside the one outcome worth
  * trying again.
  *
@@ -32,7 +35,28 @@ export interface UseCiters {
   result: CitersResult | null;
   /** Ask again, after `unavailable`. */
   retry(): void;
+  /**
+   * ***About "keyword"*'s answer** (`GET /api/citers/:slug?about=topic`, plan
+   * 261025h, decision 10): `undefined` until the reader has pressed the toggle,
+   * `null` while it is being fetched, then the answer — `filteredBy` set when
+   * it is the filtered list, absent when the server fell back to the plain one.
+   */
+  topic: CitersResult | null | undefined;
+  /**
+   * **The toggle's press**: ask for the topic view the first time, and keep the
+   * answer for the rest of the band's life, as the plain list is kept. Never
+   * called on open (GPT Sol's S1-F5).
+   */
+  askTopic(): void;
+  /** Ask for the topic view again, after it failed. */
+  retryTopic(): void;
 }
+
+/**
+ * **The plain list alone**, for Reception's *Cited by*, which has no keyword
+ * view: the toggle is *After it*'s (WhereItSitsPanel.tsx § `AfterIt`).
+ */
+export type CitersRead = Pick<UseCiters, "result" | "retry">;
 
 const UNAVAILABLE: CitersResult = { kind: "unavailable" };
 
@@ -58,6 +82,15 @@ function isTarget(value: unknown): boolean {
     typeof target.title === "string";
 }
 
+/** OpenAlex's keyword for the work, and how many citers match it once known; `null` for anything else. */
+function asTopic(value: unknown): { keyword: string; count?: number } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const topic = value as Record<string, unknown>;
+  if (typeof topic.keyword !== "string" || topic.keyword.trim() === "") return null;
+  const count = typeof topic.count === "number" && Number.isFinite(topic.count) && topic.count >= 0 ? topic.count : undefined;
+  return { keyword: topic.keyword, ...(count !== undefined ? { count } : {}) };
+}
+
 /**
  * **Is this one of the route's answers?** The panel switches exhaustively on
  * `kind` and maps over `citers`, so a 200 carrying anything else (an older
@@ -78,17 +111,31 @@ function asCitersResult(value: unknown): CitersResult | null {
     case "unavailable":
     case "too-large":
       return { kind: body.kind };
-    case "found":
-      return (body.via === "doi" || body.via === "title") &&
-        isTarget(body.target) &&
-        typeof body.count === "number" &&
-        typeof body.returned === "number" &&
-        typeof body.dropped === "number" &&
-        typeof body.capped === "boolean" &&
-        typeof body.fetchedAt === "string" &&
-        Array.isArray(body.citers) && body.citers.every(isCiter)
-        ? (value as CitersResult)
-        : null;
+    case "found": {
+      if (
+        !(
+          (body.via === "doi" || body.via === "title") &&
+          isTarget(body.target) &&
+          typeof body.count === "number" &&
+          typeof body.returned === "number" &&
+          typeof body.dropped === "number" &&
+          typeof body.capped === "boolean" &&
+          typeof body.fetchedAt === "string" &&
+          Array.isArray(body.citers) && body.citers.every(isCiter)
+        )
+      ) {
+        return null;
+      }
+      /* The topic label and the filter are drawn as words on a button and in a
+         sentence: a malformed one is dropped, never the list with it. */
+      const { topic, filteredBy, ...rest } = body;
+      const label = asTopic(topic);
+      return {
+        ...(rest as Omit<Extract<CitersResult, { kind: "found" }>, "topic" | "filteredBy">),
+        ...(label !== null ? { topic: label } : {}),
+        ...(typeof filteredBy === "string" && filteredBy.trim() !== "" ? { filteredBy } : {}),
+      };
+    }
     default:
       return null;
   }
@@ -105,17 +152,36 @@ export function useCiters(slug: string, wanted: boolean): UseCiters {
 
   const load = useCallback(
     async (current: () => boolean) => {
-      let result: CitersResult;
-      try {
-        const body = await readJson<unknown>(await apiFetch(`/api/citers/${encodeURIComponent(slug)}`));
-        result = asCitersResult(body) ?? UNAVAILABLE;
-      } catch {
-        result = UNAVAILABLE;
-      }
+      const result = await ask(`/api/citers/${encodeURIComponent(slug)}`);
       if (current()) setAnswer({ slug, result });
     },
     [slug],
   );
+
+  /* ***About "keyword"***: a second read of its own, asked only by the
+     toggle's press (`askTopic`), with its own ordering so an article change
+     drops a reply still in the air. */
+  const [topicAnswer, setTopicAnswer] = useState<{ slug: string; result: CitersResult | null } | null>(null);
+  const loadTopic = useCallback(
+    async (current: () => boolean) => {
+      const result = await ask(`/api/citers/${encodeURIComponent(slug)}?about=topic`);
+      if (current()) setTopicAnswer({ slug, result });
+    },
+    [slug],
+  );
+  const { reload: reloadTopic } = useOrderedRead(loadTopic);
+  const topicAsked = useRef<string | null>(null);
+  const askTopic = useCallback(() => {
+    if (topicAsked.current === slug) return;
+    topicAsked.current = slug;
+    setTopicAnswer({ slug, result: null });
+    void reloadTopic();
+  }, [slug, reloadTopic]);
+  const retryTopic = useCallback(() => {
+    topicAsked.current = slug;
+    setTopicAnswer({ slug, result: null });
+    void reloadTopic();
+  }, [slug, reloadTopic]);
 
   /* An ordinary `reload` joins a read already in flight, and only the newest
      reply may commit — src/web/useOrderedRead.ts, shared with the artefact
@@ -143,5 +209,20 @@ export function useCiters(slug: string, wanted: boolean): UseCiters {
     void reload();
   }, [reload]);
 
-  return { result: answer?.slug === slug ? answer.result : null, retry };
+  return {
+    result: answer?.slug === slug ? answer.result : null,
+    retry,
+    topic: topicAnswer?.slug === slug ? topicAnswer.result : undefined,
+    askTopic,
+    retryTopic,
+  };
+}
+
+/** One GET of the route, every failure of the request `unavailable`. */
+async function ask(url: string): Promise<CitersResult> {
+  try {
+    return asCitersResult(await readJson<unknown>(await apiFetch(url))) ?? UNAVAILABLE;
+  } catch {
+    return UNAVAILABLE;
+  }
 }

@@ -11,7 +11,7 @@ One setting, off by default, with **three controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Some reading modes and four Diagram pictures are behind it** —
+**Some reading modes, four Diagram pictures and two Sources experiments are behind it** —
 [What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
@@ -23,7 +23,7 @@ neither gets made properly.
 - [§ The three controls](#the-three-controls) — the /profile checkbox, the bar button, the command-bar row, and how each failure state is drawn
 - [§ Putting a feature behind it](#putting-a-feature-behind-it) — adding a gate, and what must happen mid-flight
 - [§ What is behind it today](#what-is-behind-it-today) — the list, and a reader says a mode has vanished; plus the history of what left the switch and when
-- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, and Learn's Explore until 2026-10-11
+- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, Sources' two experiments, and Learn's Explore until 2026-10-11
 - [§ See also](#see-also)
 
 ## The four rules
@@ -486,7 +486,7 @@ not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
 ## Gated below mode level
 
-Four of Diagram's pictures. Learn's Explore was gated here from 2026-10-05 until it came out on
+Four of Diagram's pictures, and Sources' two experiments ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
 2026-10-11 ([§ What is behind it today](#what-is-behind-it-today) has the history); the flag it
 used, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), is
 still read for Learn by `visibleLearnViews` there and by `subModeRows`
@@ -521,6 +521,18 @@ to 2026-10-25, at the top of Sources › Investigate. It left the switch for eve
 of Sources' new default, *Where it sits*
 ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
 decision 5); [sources.md § Where this piece sits](sources.md#where-this-piece-sits).
+
+**Sources' two experiments, since 2026-10-26**: *Guess first* and *Evidence first*, two ways of
+meeting the literature search's findings before the model's verdict on them, as links under
+*Experiments* after *Where it sits*' tools
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), Stage 4;
+[sources.md § The experiments](sources.md#the-experiments)). Free, reading the stored dossier,
+keeping nothing the reader does. The flag is `experimental: true` on their rows in
+[`sub-modes.ts`](../../src/web/sub-modes.ts), and the tools row draws them from the switch
+(`SourcesBand` passes `experiments`). Unlike Diagram's pictures they have no command-bar row even
+with the switch on: the tools row is their only door. Hidden is still not unreachable: a pasted
+`?sources=guess-first` draws the experiment with the switch off, and its crumb leads back to
+*Where it sits*.
 
 ## See also
 

@@ -269,7 +269,7 @@ function Finding({
       </p>
       <ul className="situate-sources">
         {finding.sources.map((source) => (
-          <Source key={source.url} source={source} />
+          <SourceRow key={source.url} source={source} />
         ))}
       </ul>
     </li>
@@ -280,8 +280,9 @@ function Finding({
  * **One source**: its title as the link out, and *What it says* — the quote
  * the step found in that source's own text — one press away. Rendered closed
  * with `hidden`, so `aria-controls` always names an element that exists.
+ * Also the experiments' row once revealed (SourcesExperiments.tsx).
  */
-function Source({ source }: { source: SituateSource }) {
+export function SourceRow({ source }: { source: SituateSource }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const title = source.title.trim() || sourceHost(source.url);

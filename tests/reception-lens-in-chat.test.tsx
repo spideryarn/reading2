@@ -1101,4 +1101,71 @@ describe("Where it sits", () => {
     expect(param("thread"), "the chat does not cover the row").toBeNull();
     expect(chatPosts()).toEqual([]);
   });
+
+  /* Plan 261025h, Stage 4: Guess first and Evidence first, reached from the
+     tools row with the switch on, reading the stored dossier and posting
+     nothing; with the switch off, the row does not offer them, and a pasted
+     address still draws the experiment (hidden, not unreachable). */
+  describe("the experiments", () => {
+    const experimentBand = () => host.querySelector<HTMLElement>(".mode-band.sources.experiment");
+    /* Every POST but the shelf's record that the article was opened, which any visit makes. */
+    const sent = () => posts().filter((r) => !/^\/api\/library\/[^/]+\/open$/.test(r.url));
+    const checked = () =>
+      [...host.querySelectorAll('.mode-band [role="radiogroup"][aria-label="Sources view"] [aria-checked="true"]')].map(
+        (b) => (b.getAttribute("aria-label") ?? "").split(",")[0],
+      );
+
+    it("with the switch on, opens Guess first from the tools row, lights Where it sits, reveals, and posts nothing", async () => {
+      experimentalSince = "2026-01-01T00:00:00.000Z";
+      storedSituate = DOSSIER;
+      who.set(OWNER);
+      await open("?mode=sources");
+      await until(() => tool("guess-first") !== null, "the experiments' links");
+      await act(async () => tool("guess-first")?.click());
+      await until(() => param("sources") === "guess-first" && experimentBand() !== null, "Guess first");
+      expect(checked()).toEqual(["Where it sits"]);
+      expect(experimentBand()?.textContent).toContain("Guess first");
+      expect(experimentBand()?.textContent).not.toContain(FINDING.note);
+      const reveal = [...(experimentBand()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) =>
+        b.textContent?.includes("Reveal"),
+      );
+      await act(async () => reveal?.click());
+      expect(experimentBand()?.textContent).toContain(FINDING.note);
+      expect(sent(), "nothing posted").toEqual([]);
+      /* The crumb goes back. */
+      await act(async () => host.querySelector<HTMLButtonElement>(".mode-band .where-back")?.click());
+      await until(() => param("sources") === null && dossier() !== null, "back to Where it sits");
+    });
+
+    it("with the switch off, has no experiments on the tools row, and a pasted address still draws the experiment", async () => {
+      storedSituate = DOSSIER;
+      who.set(OWNER);
+      await open("?mode=sources");
+      await until(() => tool("reception") !== null, "Where it sits' tools");
+      expect(tool("guess-first")).toBeNull();
+      expect(tool("evidence-first")).toBeNull();
+      await open("?mode=sources&sources=evidence-first");
+      await until(() => experimentBand() !== null, "Evidence first, with the switch off");
+      await settle();
+      expect(experimentalSince, "the switch is off").toBeNull();
+      expect(experimentBand()?.textContent).toContain("Evidence first");
+      expect(experimentBand()?.textContent).not.toContain(FINDING.note);
+      expect(checked()).toEqual(["Where it sits"]);
+      expect(host.querySelector(".mode-band .where-back"), "the crumb back").not.toBeNull();
+      expect(sent()).toEqual([]);
+    });
+
+    it("with no dossier, says so, points at Search the literature, and starts nothing", async () => {
+      experimentalSince = "2026-01-01T00:00:00.000Z";
+      who.set(OWNER);
+      await open("?mode=sources&sources=evidence-first");
+      await until(() => experimentBand()?.textContent?.includes("nobody has run one") === true, "the no-dossier line");
+      const go = [...(experimentBand()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) =>
+        b.textContent?.startsWith("Go to"),
+      );
+      await act(async () => go?.click());
+      await until(() => param("sources") === null && dossier() !== null, "Where it sits");
+      expect(sent(), "no job, nothing sent").toEqual([]);
+    });
+  });
 });
