@@ -562,11 +562,11 @@ function OnePlan({
         </p>
       )}
 
-      <h3 className="tw:font-prose tw:text-base tw:text-foreground">{plan.name}</h3>
+      <h3 className="tw:font-sans tw:text-base tw:text-foreground">{plan.name}</h3>
 
       <p className="tw:mt-4 tw:flex tw:flex-wrap tw:items-baseline tw:gap-2">
         <span
-          className={`tw:font-prose tw:leading-none tw:font-medium tw:text-foreground ${
+          className={`tw:font-sans tw:leading-none tw:font-medium tw:text-foreground ${
             plan.alt ? "tw:text-[2.1rem]" : "tw:text-xl"
           }`}
         >

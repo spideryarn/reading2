@@ -1,9 +1,9 @@
 {
   "source": "assets/brand/source/reader.png",
-  "sha256": "aa45d260a0ef1a95303d1aab65360bb586259d51382f9345996580797416b402",
-  "annotation": "Hand traced on the unchanged 1254px master: two upper rear limbs, up to the visible diagonal occlusion by the body loop. Coordinates belong to the source, never to the served PNG or CSS. Everything outside these regions is stationary. The distal outline is deliberately in transparent space; the inner diagonal follows the visible body seam.",
+  "sha256": "9902588192568689966279d6642a942ae792083cc54db1b3e33362f03a090635",
+  "annotation": "Hand-labelled on the selected C 1254px source, using its visible wool contours and the diagonal seam where the body occludes each upper rear limb. Source-space coordinates were drawn from the artwork independently of CSS. Everything outside these regions is stationary. Distal polygon boundaries include transparent space; proximal diagonals follow the visible body seam.",
   "upperFreeLimbs": [
-    [[240,60],[475,60],[475,280],[511,352],[440,442],[280,365],[240,220]],
-    [[780,60],[1000,60],[1000,340],[830,442],[747,352],[780,280]]
+    [[270,60],[445,60],[445,265],[514,370],[470,425],[320,345],[270,240]],
+    [[740,60],[1010,60],[1010,350],[800,430],[764,374],[830,310],[840,240],[740,240]]
   ]
 }

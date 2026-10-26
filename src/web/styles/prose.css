@@ -11,8 +11,8 @@
 /* ------------------------------------------------------------------ text --
    The article column. 17px/1.6 come from the original app's typography
    research; the measure is `--reading-measure`, about 60 real characters a line
-   (styles/tokens.css, typography.md § The measure). `--font-reading` supplies the Geist base; the
-   author voice in styles/voices.css supplies the visible Source Serif face.
+   (styles/tokens.css, typography.md § The measure). `--font-ui` supplies the Geist base; the
+   author voice in voices.css supplies the visible Source Serif face.
    The gutter's `right:` rule (gutter.css) depends on the active
    face because `ch` is measured where the length is used. The measure is applied to
    .prose rather than by using .reading-column, because that class centres
@@ -204,9 +204,11 @@ td.text.kind-heading:has(> .fold-toggle) {
 
    **It sits on the prose's measure**, so its first letter lines up with the
    article's: the container takes `.prose`'s face and size, so `ch` means what
-   it means there, and only its children switch to the interface face. */
+   it means there, and only its children switch to the interface face. (It
+   said `--font-reading` here, meaning the prose's face, which had been Geist
+   since the prose moved to `--font-author` on 2026-10-02 — 261025k § 4.) */
 .matter-stub {
-  font-family: var(--font-reading);
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
   max-width: clamp(45ch, 90vw, var(--reading-measure));
@@ -439,7 +441,7 @@ td.text mark.cite.passage-flash-still { background-color: var(--flash-wash-stron
    themes, as it does on the still rule above. */
 ::highlight(quote-flash) { background-color: var(--flash-wash-strong); }
 
-/* `.block-id` was here, positioning six characters of Courier in an 83px
+/* `.block-id` was here, positioning six monospace characters in an 83px
    gutter. The gutter is icons now and the id has moved into their `title`, so
    the rule has gone rather than been kept "in case" — a class nothing renders
    is a rule the next reader has to prove is dead. BlockGutter.tsx. */
@@ -450,7 +452,8 @@ tr.row-active .block-ref { opacity: 0.95; }
    Every block id still drawn as characters: both ends of a gist's range and a
    cited id in model prose. **Not the gutter beside a paragraph** — that was
    another until 2026-08-31 and is now
-   an icon whose `title` carries the id (§ the gutter). Courier at Greg's asking, and small and faint on
+   an icon whose `title` carries the id (§ the gutter). The one monospace (Courier, at Greg's
+   asking, until 2026-10-25), and small and faint on
    purpose — an id is machine text sitting next to prose, and it should read as
    a footnote to the thing it labels rather than as part of it.
 
@@ -458,7 +461,7 @@ tr.row-active .block-ref { opacity: 0.95; }
    and like nothing at all when you are not. Hence: no underline at rest, no
    colour of its own, and both on hover. */
 .block-ref {
-  font-family: var(--font-id);
+  font-family: var(--font-mono);
   font-size: max(var(--text-min), 0.58rem);
   line-height: 1;
   letter-spacing: 0.02em;
@@ -498,7 +501,7 @@ tr.row-active .block-ref { opacity: 0.95; }
    id and not the pair. */
 .block-range { line-height: 1; }
 .block-range-dash {
-  font-family: var(--font-id);
+  font-family: var(--font-mono);
   font-size: max(var(--text-min), 0.58rem);
   color: var(--ink-faint);
   opacity: 0.5;
@@ -542,7 +545,7 @@ tr.row-active .block-ref { opacity: 0.95; }
      four needed to come and two did not, and that is the reading of it rather
      than an exemption. GPT Sol pressed on this, 2026-09-04. */
   margin-inline: auto;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: var(--reading-size);
   line-height: var(--reading-line-height);
   font-weight: var(--reading-weight);
@@ -897,7 +900,7 @@ td.text.kind-callout .prose::before {
      reads more like a printed pull-quote, and it was tried and rejected:
      styles/tokens.css records that this app deliberately has no serif, so one
      decorative glyph is not the place to reintroduce one. */
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   /* Big and very faint, which is the shape Greg picked. Both numbers matter
      together — at this size a mark any darker stops being a mark in the gutter
      and starts being a second thing to read. */

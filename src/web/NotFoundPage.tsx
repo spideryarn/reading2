@@ -69,7 +69,7 @@ export function NotFoundPage({ signedIn }: {
   useDocumentTitle(pageTitle({ kind: "not-found" }));
   return (
     <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
-      <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
+      <h1 className="tw:m-0 tw:mb-3 tw:font-sans tw:text-2xl tw:text-foreground">
         {NOT_FOUND_HEADING}
       </h1>
       <p className="tw:m-0 tw:mb-4 tw:text-sm tw:text-ink-faint">{NOT_FOUND}</p>

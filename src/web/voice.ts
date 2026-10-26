@@ -3,7 +3,7 @@
  *
  * Every piece of text on screen has a voice — the article's author, a model,
  * the reader, or the app itself — and each has its own face
- * (docs/project/fonts.md; the faces are `src/web/styles/voices.css`). Most
+ * (docs/project/fonts.md; the faces are `src/web/voices.css`). Most
  * elements always hold the same voice, and voices.css names their classes
  * directly. Some do not: a Structure title is the author's heading or the
  * model's, a shelf blurb is a model's gist or the author's excerpt. Those
@@ -25,10 +25,10 @@ export type Voice = "author" | "ai" | "reader" | "ui";
  * there so a computed "ours" does not inherit a voice from around it.
  *
  * **Never on an element voices.css already names** (`.tip-gist`, `.prose`…):
- * those lists' rules carry the specificity of their most specific entry, which
- * beats the one-class generic rules, so the named voice would win. Put the
- * class on a `<span>` inside instead — fonts.md § How to put an element in
- * its voice.
+ * every rule there is `:where(…)`, so whichever rule comes later in the file
+ * would win, and that is an accident of order rather than whose words they
+ * are. Put the class on a `<span>` inside instead — fonts.md § How to put an
+ * element in its voice.
  */
 export function voiceClass(voice: Voice): string {
   switch (voice) {

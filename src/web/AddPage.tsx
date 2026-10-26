@@ -1662,7 +1662,7 @@ export function AddPage({
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-6">
-        <h1 className="tw:font-prose tw:text-2xl tw:text-foreground">Adding an article</h1>
+        <h1 className="tw:font-sans tw:text-2xl tw:text-foreground">Adding an article</h1>
         {/* The URL as text rather than as a link. It is not somewhere we are
             sending the reader, it is what they asked us to read — and a live
             link to an unvisited address on a page they may have arrived at from

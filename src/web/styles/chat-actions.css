@@ -115,7 +115,7 @@
 .tooltip.tip-cite { max-width: min(26rem, calc(100vw - 1.75rem)); }
 .tip-cite-head {
   /* The section's title — words, so the UI face; it used to be the block id,
-     in `--font-id`, which the id's own link already shows. */
+     in the monospace, which the id's own link already shows. */
   font-family: var(--font-ui);
   font-size: max(var(--text-min), 0.83rem);
   font-weight: 600;
@@ -126,7 +126,7 @@
   margin: 0;
   /* The reading face, because this IS the article — set in the UI font it would
      read as a description of the paragraph rather than as the paragraph. */
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.94rem;
   line-height: 1.45;
   color: var(--ink);

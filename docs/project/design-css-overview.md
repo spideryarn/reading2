@@ -21,8 +21,9 @@ Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 | 1 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the entry point.** The `@layer` statement, the Tailwind imports, the token bridge, the source-scanning rule |
 | 2 | `tailwindcss/theme.css` + `utilities.css` | Tailwind v4, prefixed `tw`, in layers `theme` and `utilities`. **Preflight is deliberately not imported** |
 | 3 | [`src/web/styles.css`](../../src/web/styles.css) | **nothing but `@import`s.** Imported by *file 1* so everything below it lands in `@layer app`, and it is the authoritative statement of the order the hand-written CSS loads in. A **new sheet takes two edits**: the `@import`, at the position you want it in the cascade, and the same name at the same position in `MANIFEST` in [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts), which is the independent witness to that order |
-| 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) at the tail, with only `changelog.css`, `voices.css`, `logo-animations.css` and the document-wide `reading-comfort.css` after it. Read `styles.css` for the rest of the order rather than guessing it from the file names |
-| 3b | [`src/web/button-tone.css`](../../src/web/button-tone.css) | **the one hand-written sheet above the utilities**: green to send, red to back out (`.tone-positive`, `.tone-negative`). Imported by *file 1* as `layer(tone)`, the last layer, so it beats a `tw:` colour on a shadcn `Button` as well as any family's paint, whatever the selectors weigh — which is why it sits beside `tailwind.css` and not in `styles/`. Nothing else goes in that layer (plan [261020z](../plans/261020z-green-to-send-red-to-back-out-across-the-app.md)) |
+| 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) at the tail, with only `changelog.css`, `logo-animations.css`, the document-wide `reading-comfort.css` and `view-as.css` after it. Read `styles.css` for the rest of the order rather than guessing it from the file names |
+| 3b | [`src/web/voices.css`](../../src/web/voices.css) | **the per-voice faces**: the author's, the model's, the reader's ([fonts.md](fonts.md)). Imported by *file 1* as `layer(voices)`, after `app` and before the utilities, so a voice beats every rule under `styles/` whatever the selectors weigh, and a `tw:font-*` still beats a voice. Every rule is `:where(…)`, so inside the file the order decides. It sits beside `tailwind.css` and not in `styles/` because everything there is `app` |
+| 3c | [`src/web/button-tone.css`](../../src/web/button-tone.css) | **the one hand-written sheet above the utilities**: green to send, red to back out (`.tone-positive`, `.tone-negative`). Imported by *file 1* as `layer(tone)`, the last layer, so it beats a `tw:` colour on a shadcn `Button` as well as any family's paint, whatever the selectors weigh — which is why it sits beside `tailwind.css` and not in `styles/`. Nothing else goes in that layer (plan [261020z](../plans/261020z-green-to-send-red-to-back-out-across-the-app.md)) |
 | 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the font stacks (the `--font-*` tokens), imported in turn by *file 3* |
 | 5 | [`styles/colourscales.css`](../../styles/colourscales.css) | the three palettes that are **not** the brand — categorical, sequential, diverging — imported by *file 4*. See [colour-scales.md](colour-scales.md) |
 
@@ -232,7 +233,9 @@ polar interpolation drags a mix round to 11.7° and the result is quietly pink i
   0–1 scores on a list row, [`SharePie`](../../src/web/SharePie.tsx) for a share of a whole. Their
   headers say what keeps a picture honest: a fixed scale, the exact quantity drawn (an edge too
   thin to see is the card's words to tell, not a stretched slice), and the figure in words for a
-  screen reader. `SharePie` is a button, because its card holds the only explanation and must be
+  screen reader. One deliberate exception: the masthead's read-so-far mark hands `SharePie` a coarse
+  band's whole quarter, because the band is the quantity it claims and its words say so
+  (`ReadSoFarMark.tsx`, plan 261025j). `SharePie` is a button, because its card holds the only explanation and must be
   reachable by touch and keyboard; `ScoreBars` stays out of the tab order, because its accessible
   name already carries every score. This is a preference for glanceable
   quantities, not a ban on numbers: words stay for a warning, a failure, or anything that is not a
@@ -319,7 +322,7 @@ will eventually have to decide whether they are a system or an accident:
   axis, the six text roles (`--type-*`) a band's recurring lines take their size from, the vertical rhythm every gap in the article column is a multiple of, and the two kinds of
   content that cannot reflow: a wide code block, and a figure drawn in black ink for a white page.
 - **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in iA
-  Writer Quattro, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
+  Writer Quattro, the reader's in Shantell Sans, the chrome in Geist; the rule for deciding whose words an element
   shows, and how to put a new one in its voice.
 - **[controls.md](controls.md)** — **controls that do the same job look the same in every mode**:
   the shared piece for each kind and checks of the pieces and listed callers; then why a button in this

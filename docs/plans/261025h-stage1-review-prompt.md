@@ -8,7 +8,7 @@ Base: HEAD. Scoped diff: `git diff HEAD -- src/citation-index.ts src/store/pg-ci
 Untracked, also in scope: drizzle/20261025185019_citation_index_twins_and_topic.sql, drizzle/meta/20261025185019_snapshot.json, tests/fixtures/openalex/extended-mind-*.json, tests/fixtures/openalex/related-extended-mind.json.
 (src/db/schema.ts, src/types.ts and drizzle/meta/_journal.json also carry the other agent's chat-origin change, migration 20261025183854 — out of scope.)
 
-The plan: docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md (decisions 2, 3, 4, 6, 10; § Stage 1; the eval result paragraph under Stage 3). Its plan review: docs/plans/261025h-plan-review-sol.md (F8, F9, F10, F15 are this stage's). The trial: docs/investigations/261025a-….md. The contracts: docs/project/security-map.md (model output and article metadata are untrusted), docs/project/bibliography.md, docs/project/sql.md, docs/project/logging.md.
+The plan: docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md (decisions 2, 3, 4, 6, 10; § Stage 1; the eval result paragraph under Stage 3). Its plan review: docs/plans/261025h-sources-plan-review-sol.md (F8, F9, F10, F15 are this stage's). The trial: docs/investigations/261025a-….md. The contracts: docs/project/security-map.md (model output and article metadata are untrusted), docs/project/bibliography.md, docs/project/sql.md, docs/project/logging.md.
 
 ## What I want
 

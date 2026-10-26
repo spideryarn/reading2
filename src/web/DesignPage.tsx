@@ -419,21 +419,17 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
 
 /** The type stacks, and what each is allowed to be used for. */
 const FACES: { token: string; used: string }[] = [
-  { token: "--font-reading", used: "the default reading stack before a voice-specific override" },
   /* The table's column headers wore this until 2026-09-05, when that row lost
      its height and its labels became `.sr-only` spans. The gist columns those
      headers named went on 2026-09-29; one `.sr-only` header is left, for a
      screen reader and the sticky offsets (TableView.tsx § A head with no
      height), and it sets no type at all. */
-  { token: "--font-ui", used: "chrome: controls, masthead facts" },
-  { token: "--font-mono", used: "counts and anything that wants to line up" },
-  { token: "--font-id", used: "block ids, and only block ids" },
-  { token: "--font-brand", used: "the wordmark, and only the wordmark" },
-  /* The per-voice faces, read only by styles/voices.css, for everyone since
+  { token: "--font-ui", used: "the app's own words: controls, headings, every fixed sentence, and the wordmark" },
+  { token: "--font-mono", used: "code, block ids, and anything that wants to line up" },
+  /* The per-voice faces, read only by voices.css, for everyone since
      2026-10-02. docs/project/fonts.md. */
   { token: "--font-author", used: "the article, and verbatim quotes of it" },
   { token: "--font-ai", used: "model-generated prose" },
-  { token: "--font-ai-code", used: "code inside a model's answer" },
   { token: "--font-reader", used: "anything the reader typed" },
 ];
 
@@ -448,9 +444,9 @@ const FACES: { token: string; used: string }[] = [
  */
 const ROLE_VOICES: { voice: Voice; head: string }[] = [
   { voice: "ui", head: "Geist — ours" },
-  { voice: "ai", head: "mono — the model's" },
+  { voice: "ai", head: "Quattro — the model's" },
   { voice: "author", head: "serif — the author's" },
-  { voice: "reader", head: "Arial — the reader's" },
+  { voice: "reader", head: "Shantell — the reader's" },
 ];
 const TEXT_ROLES: {
   token: string;
@@ -789,7 +785,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
             <p
               key={w}
               style={{
-                fontFamily: "var(--font-reading)",
+                fontFamily: "var(--font-ui)",
                 fontSize: "1.0625rem",
                 fontWeight: w,
                 margin: "0 0 0.3rem",
@@ -1753,8 +1749,8 @@ function ControlsAcrossModes() {
  * drift from them.
  *
  * **The two copies of the wordmark were set in different faces** until
- * 2026-09-08, which is why this section draws both. `--font-brand` now
- * resolves to Geist (styles/tokens.css), and since 2026-10-02 `.logo-letter`
+ * 2026-09-08, which is why this section draws both. Both are `--font-ui`,
+ * Geist, now (styles/tokens.css § `.logo-letter`), and since 2026-10-02 `.logo-letter`
  * gives both wrappers the same weight, tracking and white. What remains between
  * the two gallery copies is the wrapper itself, because each real host hides it
  * by a different mechanism.

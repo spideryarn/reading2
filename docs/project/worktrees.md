@@ -661,6 +661,16 @@ place this check does not fail closed: `ss` is Linux-only, so on the Mac that un
 permanent and universal, and an alarm nobody can ever clear is what teaches people to delete the
 alarm.
 
+**And a second, since 2026-10-25: a Docker container mounted from this directory.** Any container,
+running or stopped, of any project, with a bind source or a `com.supabase.cli.workdir` label inside
+the tree blocks — because `supabase start` run here makes the shared stack depend on this
+directory, and once it is gone Kong cannot restart and local auth stays down
+([supabase-local.md](supabase-local.md#the-ways-this-goes-wrong-quietly) has the trap and the
+repair). Unlike the port check, **an unknown blocks**: Docker runs on both machines, so "the daemon
+would not answer" is clearable by starting it, and a stopped daemon is exactly when containers sit
+waiting to restart. Only a machine with no `docker` command at all passes, with a note. The sweep
+asks Docker once for every tree; the removal asks again, fresh.
+
 Anything it does not recognise is a blocker rather than a shrug. What it does not check is printed
 when it passes rather than left to be discovered: file modes under `data/`, a commit reachable only
 through this worktree's HEAD reflog (which needs a branch-moving operation
@@ -1290,6 +1300,10 @@ moment that flipped. Either spelling lands on `dev` today.
   `git status --porcelain=v1 --untracked-files=all` **and** `--ignored`.
   [`npm run worktree:check`](#before-you-remove-one) is the one that does — nothing stops the native
   cleanup, so run it first.
+- **Never `supabase start` in a worktree.** The shared stack bind-mounts the directory it was started
+  from, so removing that worktree later leaves Kong unable to restart: local auth was down 13 days
+  this way. `npm run db:start` refuses here, and `worktree:check` blocks removal of a tree a
+  container is mounted from — [supabase-local.md](supabase-local.md#the-ways-this-goes-wrong-quietly).
 - **Age of the last commit is the wrong clock** for deciding a worktree is abandoned: one created ten
   minutes ago from a month-old commit passes that test immediately, and so does one that merged the
   trunk by fast-forward, which writes no commit at all. The sweep read three activity signals to get

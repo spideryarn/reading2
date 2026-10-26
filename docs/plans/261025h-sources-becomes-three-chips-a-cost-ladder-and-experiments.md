@@ -216,7 +216,7 @@ The question file answered with Greg's words; the report's note updated; the que
 ## Review
 
 GPT Sol reviewed the first draft (d386e7340):
-[261025h-plan-review-sol.md](261025h-plan-review-sol.md). 13 P1s, five P2s, no P0. All taken, as
+[261025h-sources-plan-review-sol.md](261025h-sources-plan-review-sol.md). 13 P1s, five P2s, no P0. All taken, as
 above, by finding: F1 decision 7; F2 `chipOf`; F3 visitors unchanged; F4 decision 8; F5 decision 6
 (the chip retired, not the search); F6 decision 9; F7 the promotion checklist in decision 5; F8
 the reserved, validated query; F9 union ids; F10 the strict *Other editions* and the neutral *By the

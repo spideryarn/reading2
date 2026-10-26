@@ -33,7 +33,7 @@ where the data lives today is [database.md](database.md).
 
 ```bash
 npm run setup          # all four of the steps below, in order, on a fresh checkout
-npm run db:start       # supabase start — first run pulls ~2 GB of images
+npm run db:start       # supabase start, from the primary only — first run pulls ~2 GB of images
 npm run db:status      # the URLs and keys again
 npm run db:stop        # containers down; the data is kept and restored on next start
 npm run db:reset       # wipes the database and replays NOTHING — read below first
@@ -44,6 +44,14 @@ npm run db:seed-dev    # experimental features on, and a few articles on that ac
 npm run db:admin-password   # the email and password to sign in with, on this machine
 npm run db:reown       # move every row from one owner to another — dry run without --apply
 ```
+
+**Start the stack from the primary checkout, never from a worktree.** `supabase start` bind-mounts
+files from the checkout it runs in (the auth email templates into Kong, the edge function into
+edge-runtime). Started from a worktree that is later removed, those two containers cannot start
+again. Kong exits 127 and sign-in fails with `ECONNREFUSED` on 54361, while the database on 54362
+stays healthy. Found on 2026-10-25 after 13 days down, with the stack still mounting the deleted
+`mcp-remote-on` worktree. From inside a worktree, stop and start it with
+`supabase stop --workdir <primary> && supabase start --workdir <primary>`. A stop keeps the data.
 
 **`npm run setup` is the one to reach for on a fresh checkout** — a box, a rebuild, a new clone. It
 runs `db:start`, `db:migrate`, `db:seed-owner` and `db:seed-dev` in that order and stops at the first
@@ -471,6 +479,24 @@ not RLS. That is the safe default and it should stay until something specific ne
 - **`supabase stop` keeps your data; it is not a reset.** So a schema you applied by hand in Studio
   survives a stop/start and does *not* survive a `db:reset`, which is the opposite of what people
   expect from a container. Anything that matters belongs in a migration file.
+- **Started from a worktree, the shared stack dies with that worktree — days later.**
+  `supabase start` bind-mounts files from the directory it runs in (Studio's `supabase/snippets`,
+  the edge runtime's secrets, Kong's `content_path` email templates) and labels every container
+  `com.supabase.cli.workdir=<that directory>`. Remove the worktree and nothing breaks until a
+  container restarts; then Docker refuses to start it, because its bind source has gone. Local auth
+  was down for 13 days this way in October 2026: Kong, the gateway on port 54361, could not restart
+  from a deleted worktree's email templates, and it read as flaky auth tests. **Two guards since
+  2026-10-25** ([261025i](../plans/261025i-guard-the-shared-local-supabase-against-being-mounted-from-a-worktree.md)):
+  [`npm run db:start`](../../scripts/db-start.ts) refuses in a linked worktree, refuses a forwarded
+  `--workdir`, and refuses when the existing stack is labelled with a different workdir; and
+  [`worktree:check`](worktrees.md#before-you-remove-one) — so `worktree:remove`, the sweep and
+  `ExitWorktree` too — blocks on any container, running or stopped, mounted from the tree. A raw
+  `supabase start` typed in a worktree is still possible; the removal check is what catches it.
+  To see where the stack is mounted from:
+  `docker inspect supabase_kong_spideryarn2 --format '{{index .Config.Labels "com.supabase.cli.workdir"}}'`.
+  To move it back to the primary, at a quiet moment since every session shares it:
+  `npm run db:stop && npm run db:start` from the primary. A plain stop keeps the data; never add
+  `--no-backup`.
 - **A stale socket looks like a running daemon.** `~/.orbstack/run/docker.sock` exists whether or not
   OrbStack is running. `ls` proves nothing; `docker info` is the check.
 - **`docker ps | grep supabase` finds somebody else's stack.** This machine runs more than one

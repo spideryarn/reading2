@@ -91,6 +91,12 @@ forbids (`chrome://`, the Web Store) puts `!` on the button and says why in its 
 | [`scripts/publish-extension.ts`](../../scripts/publish-extension.ts) | `npm run extension:publish`: upload and submit, through the store's API |
 | [`src/web/AddFromExtension.tsx`](../../src/web/AddFromExtension.tsx), [`src/web/extension-handoff.ts`](../../src/web/extension-handoff.ts) | the page that receives |
 
+The extension icon artwork belongs to [main-icon.md](main-icon.md). Run `npm run brand:update`
+when its master changes: the same generator refreshes the public family and committed
+`extension/icons/`. `npm run brand:check` checks both. Then `npm run extension:build` copies the
+icons into both packages. This does not upload or publish them; store updates still follow the
+versioning/publication process below.
+
 **Two flavours from one source.** *Production* talks to `https://www.spideryarn.com` and carries no
 `key` (the store assigns the id). *Dev* talks to one local dev server
 (`npm run extension:build -- --dev-origin=http://localhost:5275` when yours is not on 5273) and

@@ -1220,13 +1220,16 @@
    reader's two UPPER free ends. The diagonal cuts stop before the visible
    body occludes each upper limb; the body, book and six remaining limbs stay
    on the still image. Their pivots sit in the opaque upper stems, near
-   (35%, 27.8%) and (65%, 27.8%). They belong to the alpha-cropped public PNG,
+   (34.37%, 26.87%) and (65.63%, 26.87%). They belong to the alpha-cropped public PNG,
    not the uncropped reader master. A new silhouette or crop needs them
    measured again. tests/semaphore-geometry.test.ts checks against separately
    hand-labelled source anatomy with a source hash guard, rather than deriving
    the intended limb from these polygons.
 
-   **Each copy reaches 0.5% further down than its hole.** Where two clipped
+   The 2026-10-25 small-mark fill change enlarges the same source crop from
+   95% to 99% about the canvas centre; cuts and pivots follow that transform.
+
+   **Each copy reaches about 0.52% further down than its hole.** Where two clipped
    edges meet exactly, each is antialiased against the other and the page
    shows through the seam: the first version drew a thin dark line across both
    legs at rest, visible at 2× and on the 2.2× loader (browser check,
@@ -1250,8 +1253,8 @@
   .spya-semaphore .logo-image {
     clip-path: polygon(evenodd,
       0 0, 100% 0, 100% 100%, 0 100%, 0 0,
-      15% 0, 38% 0, 38% 24%, 32% 31.5%, 28% 31.5%, 15% 20%, 15% 0, 0 0,
-      62% 0, 85% 0, 85% 20%, 72% 31.5%, 68% 31.5%, 62% 24%, 62% 0, 0 0);
+      13.5263% 0, 37.4947% 0, 37.4947% 22.9053%, 31.2421% 30.7211%, 27.0737% 30.7211%, 13.5263% 18.7368%, 13.5263% 0, 0 0,
+      62.5053% 0, 86.4737% 0, 86.4737% 18.7368%, 72.9263% 30.7211%, 68.7579% 30.7211%, 62.5053% 22.9053%, 62.5053% 0, 0 0);
   }
   .spya-semaphore .logo-mark::before,
   .spya-semaphore .logo-mark::after {
@@ -1263,15 +1266,15 @@
     transform: rotate(0deg);
   }
   .spya-semaphore .logo-mark::before {
-    clip-path: polygon(15% 0, 38% 0, 38% 24.5%, 32% 32%, 28% 32%, 15% 20%);
+    clip-path: polygon(13.5263% 0, 37.4947% 0, 37.4947% 23.4263%, 31.2421% 31.2421%, 27.0737% 31.2421%, 13.5263% 18.7368%);
     transform: rotate(0deg);
-    transform-origin: 35% 27.8%;
+    transform-origin: 34.3684% 26.8653%;
     animation: spya-flag-left 1.8s ease-in-out infinite;
   }
   .spya-semaphore .logo-mark::after {
-    clip-path: polygon(62% 0, 85% 0, 85% 20%, 72% 32%, 68% 32%, 62% 24.5%);
+    clip-path: polygon(62.5053% 0, 86.4737% 0, 86.4737% 18.7368%, 72.9263% 31.2421%, 68.7579% 31.2421%, 62.5053% 23.4263%);
     transform: rotate(0deg);
-    transform-origin: 65% 27.8%;
+    transform-origin: 65.6316% 26.8653%;
     animation: spya-flag-right 1.8s ease-in-out infinite;
   }
 }

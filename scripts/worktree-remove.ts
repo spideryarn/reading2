@@ -82,7 +82,7 @@ import path from "node:path";
 import { TRUNK_BRANCH } from "./deploy-checks.js";
 import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 import { GIT_LOCATION_ENV } from "../tools/fleet/readiness-git.js";
-import { blockers, fetchTrunkSha, gather as checkGather, primaryRoot } from "./worktree-check.js";
+import { blockers, type DockerInventory, fetchTrunkSha, gather as checkGather, primaryRoot } from "./worktree-check.js";
 import {
   ancestry,
   classifyPidNamespace,
@@ -315,6 +315,12 @@ export function liveness(
 
 export interface RemoveOptions {
   dryRun?: boolean;
+  /**
+   * Read Docker at the removal's own check point. Production leaves this unset,
+   * so every removal gets a fresh inventory; repository-fixture tests inject a
+   * fixed answer instead of depending on the machine's daemon and load.
+   */
+  docker?: () => DockerInventory;
   /** The asking process, injected so ancestry can be arranged in a test. */
   pid?: number;
   /**
@@ -731,7 +737,7 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
   /* --- would deleting this directory lose anything? -------------------- */
   let found: ReturnType<typeof blockers>;
   try {
-    found = blockers(checkGather(entry.path, trunk.sha));
+    found = blockers(checkGather(entry.path, trunk.sha, opts.docker?.()));
   } catch (err) {
     return refuse(steps, `refused: worktree:check could not judge this tree: ${(err as Error).message}`);
   }

@@ -20,7 +20,7 @@ drizzle/20261025183854_chat_thread_origin_situate.sql), PrivacyPage.tsx, the hel
 
 The plan: docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md (decisions
 5, 7, 8, 9; § Stage 2; the promotion checklist in decision 5). Your plan review:
-docs/plans/261025h-plan-review-sol.md (F1–F7 and F6 are this stage's). The keyword toggle (decision
+docs/plans/261025h-sources-plan-review-sol.md (F1–F7 and F6 are this stage's). The keyword toggle (decision
 10) is deliberately not in yet. Contracts: docs/project/sources.md, docs/project/url-state.md,
 docs/project/mode.md, docs/project/privacy.md, docs/project/security-map.md.
 

@@ -70,7 +70,8 @@ describe("shareWords", () => {
     [0.374, "about a quarter of it"],
     [0.375, "about half of it"],
     [0.625, "about three quarters of it"],
-    [0.875, "most or all of it"],
+    [0.799, "about three quarters of it"],
+    [0.8, "most or all of it"],
     [1, "most or all of it"],
   ])("%s → %s", (share, words) => {
     expect(shareWords(share)).toBe(words);

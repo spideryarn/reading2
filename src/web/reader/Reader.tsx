@@ -57,8 +57,8 @@ import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { OnScreenLinksStyle } from "../OnScreenLinksStyle.js";
 import { blocksOnScreenNow } from "../on-screen.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
-import type { ReadSoFar } from "../read-filter.js";
-import { countsTowardReadingTime } from "../../block-policy.js";
+import { readBandFor, readSoFarWords, type ReadSoFar } from "../read-filter.js";
+import { foldedOnArrival } from "../matter-view.js";
 import { addressWithout, carriedSearch, navigate, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
@@ -2602,10 +2602,24 @@ export function Reader({
    * reading-time levels, whether they can be believed yet, and the body's words
    * to measure a share in. Undefined when reading time is off, which the quiz
    * must not mistake for "read nothing".
+   *
+   * The words leave out what is folded shut on arrival (front and back matter,
+   * the title's echo), so the quiz's share and the masthead's read-so-far pie
+   * are the same share — read-filter.ts § `readSoFarWords`, plan 261025j.
    */
+  const { title: foldTitle, authors: foldAuthors, byline: foldByline } = article.meta;
   const bodyWords = useMemo(
-    () => new Map(article.blocks.filter(countsTowardReadingTime).map((b) => [b.id, b.words] as const)),
-    [article.blocks],
+    () =>
+      readSoFarWords(
+        article.blocks,
+        foldedOnArrival({
+          blocks: article.blocks,
+          matter: article.matter,
+          meta: { title: foldTitle, authors: foldAuthors, byline: foldByline },
+          titleOverridden: article.titleOverridden,
+        }),
+      ),
+    [article.blocks, article.matter, foldTitle, foldAuthors, foldByline, article.titleOverridden],
   );
   const readingLevels = owner?.readingTime.levels;
   const readingStatus = owner?.readingTime.status ?? "off";
@@ -2616,6 +2630,8 @@ export function Reader({
         : undefined,
     [readingLevels, readingStatus, bodyWords],
   );
+  /* The masthead's pie: a band, or nothing until the opening read has answered. */
+  const readSoFarBand = useMemo(() => readBandFor(readSoFar), [readSoFar]);
 
   /**
    * **Each block's position in the article** — Sources' Claims sub-mode puts
@@ -4714,7 +4730,7 @@ export function Reader({
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} />
+      <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} readBand={readSoFarBand} />
       {/* The statement, where a visitor's eye already is on arrival. The
           *persistent* half of it is the chip in the bar below, which is sticky;
           this is the sentence and the ask, which belong with the title. Not

@@ -205,7 +205,8 @@ three things it names and silent about the fourth.
 
 **Settled on 2026-09-08.** It was raised to Greg as an observation rather than fixed, on the grounds
 that changing the reading view's face is a visible design change nobody asked for; his answer was to
-change the *other* one. `--font-brand` now resolves to `--font-sans`, so both copies are Geist and
+change the *other* one. The corner copy's token became Geist, so both copies are Geist (and since
+2026-10-25 the wordmark has no token of its own: it is `--font-ui`), and
 what still separated them was `.logo-text`'s weight and orange — gone too since 2026-10-02 (§ One
 look at rest). Two things follow for this file:
 

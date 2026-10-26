@@ -15,21 +15,31 @@
    was gated by an attribute on `<html>`, set only while the Experimental switch was
    on; the switch path is gone
    (docs/plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
-   Every rule still starts `:root ` because that
-   prefix is part of its specificity: without it several rules would only tie
-   with the ones they override, and the import order would be what decides.
+
+   WHERE THIS FILE SITS IN THE CASCADE. Not under styles/: tailwind.css
+   imports it as `layer(voices)`, a layer of its own declared after `app` and
+   before `utilities`. A later layer beats every rule in `app` whatever its
+   specificity, so no component sheet can take an element out of its voice by
+   accident — and a `tw:font-*` utility, being later still, wins over a voice.
+   None of the elements below carries one; where a parent does (Tweets' post),
+   the class is on a child span.
+
+   Every rule is `:where(…)`, so every rule weighs nothing and SOURCE ORDER
+   inside this file decides between them: author, model, code, reader,
+   placeholders, `.voice-ui`. Do not reach for specificity to win a tie here;
+   move the rule. And a `voice-*` class never goes on an element a list below
+   names (docs/project/fonts.md § How to put an element in its voice): which
+   of the two wins would then be decided by where its list sits in this file,
+   not by whose words they are.
 
    The whole decision is in this one file on purpose: three lists of selectors,
    and one rule putting placeholders in reader inputs back in the app's face.
    Most already existed; narrow wrappers split mixed-provenance text so nearby
    UI copy can stay Geist. The two exceptions live in their own sheets because
    they undo an inheritance rather than set a voice: "Whole paragraph" in a
-   quote (`.passage-whole`), in annotations.css and dock.css.
-   `:root .x` outranks the plain `.x` it overrides, and this file
-   is imported late (after every sheet but the logo animations). It sits in
-   `@layer app` like its neighbours, so a `tw:font-*` utility on an element
-   still wins — none of the elements below carries one, and where a parent
-   does (Tweets' post) the class is on a child span.
+   quote (`.passage-whole`), in annotations.css and dock.css. They set a face
+   on the descendant itself, which beats a voice it would only inherit, from
+   any layer.
 
    Geist is not named here. The chrome keeps it, and that makes it the fourth
    voice: once the three below move off it, Geist means "the app".
@@ -40,7 +50,7 @@
    it renders. */
 
 /* ---- the author: the article, and verbatim quotes of it ------------------ */
-:root :is(
+:where(
     .prose,
     /* The author's headings too: shell.css sets `h1` a face of its own, so
        inheriting from `.prose` is not enough. */
@@ -100,7 +110,7 @@
 }
 
 /* ---- the model: prose an AI generated ------------------------------------ */
-:root :is(
+:where(
     /* summaries and gists */
     .struct-gist,
     .outln-gist,
@@ -170,7 +180,7 @@
     .rcp-key-why,
     /* the headline only when it is the model's reading of the page */
     .rcp-title-ai,
-    /* Tweets: the post, inside a <p> whose `tw:font-prose` would win */
+    /* Tweets: the post, inside a <p> whose `tw:font-sans` would win */
     .tweets-text,
     /* Marginalia: the part's question, the idea and its statement, the arc */
     .marg-question,
@@ -184,8 +194,9 @@
     .marg-reception-applies,
     .marg-open-answer,
     /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
-       labels, which are wrapped in TypeScript at Geist's width (CHAR_W in
-       src/sketch-scene.ts) and would spill out of their shapes. */
+       labels: their face and the width they are wrapped at are one constant,
+       SKETCH_LABEL_VOICE in src/sketch-scene.ts, which puts voiceClass on the
+       <svg> (still "ui"; q-ugekcv). */
     .sk-card-title,
     .sk-card-sub,
     .sk-card-detail,
@@ -227,9 +238,6 @@
     .dock-question-state.done:not(.own),
     /* the chat list's last line, when the model said it */
     .chat-thread-last.model,
-    /* code inside a model's answer keeps its box but takes the model's face */
-    .chat-turn.model :is(.fmt-code, .fmt-pre code),
-    .cnd-answer :is(.fmt-code, .fmt-pre code),
     /* Candidates: only the affiliation, not our "said to be at" */
     .cnd-affil-name,
     /* Feedback's Earlier tab, for an admin: the line a report's note says
@@ -244,19 +252,21 @@
     font-family: var(--font-ai);
 }
 
-/* The same code, on one width. It stays in the list above, so that rule's
-   specificity is unchanged; this one ties with it and comes later. Quattro
-   gives letters four widths, which knocks the columns of code out of line, so
-   code takes iA Writer Mono: the same letters, every one as wide (261021f). */
-:root :is(
+/* Code is code, whoever wrote it: the one monospace, as it is everywhere
+   else. Every rule here weighs nothing, so this one wins over the model's
+   rule above by coming after it. Quattro gives letters four widths,
+   which knocks columns of code out of line. It was iA Writer Mono from
+   2026-10-21 until the faces were cut back on 2026-10-25 (Greg: "that should
+   be three fonts consistent across the site") — docs/project/fonts.md. */
+:where(
     .chat-turn.model :is(.fmt-code, .fmt-pre code),
     .cnd-answer :is(.fmt-code, .fmt-pre code)
 ) {
-    font-family: var(--font-ai-code);
+    font-family: var(--font-mono);
 }
 
 /* ---- the reader: what they typed ----------------------------------------- */
-:root :is(
+:where(
     /* whatever computed its voice and found the reader's: a renamed title
        (src/web/voice.ts § voiceClass) */
     .voice-reader,
@@ -320,7 +330,7 @@
 /* ---- placeholders in the reader's inputs are ours ------------------------
    "Add a comment…" is app copy, not something the reader typed, so it keeps
    the app's face until they type over it. */
-:root :is(
+:where(
     .voice-reader,
     .chat-input,
     .chat-edit-box,
@@ -346,6 +356,6 @@
    `voiceClass("ui")` (src/web/voice.ts): a computed voice that came out as the
    app's own, e.g. the apparatus's "Notes" in a Structure row, so it does not
    inherit a voice from around it. */
-:root :is(.voice-ui) {
+:where(.voice-ui) {
     font-family: var(--font-ui);
 }

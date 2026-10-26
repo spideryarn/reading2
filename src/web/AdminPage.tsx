@@ -106,7 +106,7 @@ export function Shell({
     <main className="tw:mx-auto tw:max-w-6xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:pb-10 tw:font-sans">
       <header className="tw:mb-8">
         {back && <BackLink href={back.href} label={back.label} />}
-        <h1 className="tw:mt-2 tw:font-prose tw:text-3xl tw:text-foreground">{title}</h1>
+        <h1 className="tw:mt-2 tw:font-sans tw:text-3xl tw:text-foreground">{title}</h1>
       </header>
       {children}
     </main>
