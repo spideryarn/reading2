@@ -48,6 +48,7 @@
 import { useRef, useState } from "react";
 import { FileText, Info, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
 import { type ChosenFile, formatBytes, UPLOAD_ACCEPT, uploadLimits, uploadProblem } from "../uploads.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
@@ -79,7 +80,7 @@ export const ONE_FILE_HERE =
 
 /** The three pieces this component draws and the caller places. */
 export interface UploadSlots {
-  /** The File control and its limits (i), kept together. Belongs on the URL row, beside Add. */
+  /** The File control and its limits/provider (i), kept together. Belongs on the URL row, beside Add. */
   pdfButton: React.ReactNode;
   /**
    * The chosen file, the progress bar, the refusals.
@@ -543,6 +544,14 @@ function failureOf(transfer: Transfer | null): string | null {
  * reader who does pass one. A press toggles the card, as the Glossary's *Why
  * a new list?* does, because a touch screen never hovers; hover and focus open
  * it too. Plan 261026b.
+ *
+ * **It also says where the text goes**, `ADDING_SENDS_TEXT_AWAY`, which was the
+ * add box's visible line under both controls until Greg, 2026-10-26 (reply
+ * `spya-dqhrvy` to q-p6fvep): *"B I think it's pretty obvious that we're
+ * sending stuff to AI. I mean, the whole thing is AI powered, and it's all in
+ * the privacy policy."* True of a pasted URL as much as a file, so this card is
+ * the add box's one place for it, and *Upload a file instead* gets it too.
+ * Plan 261026h.
  */
 function LimitsInfo() {
   // usePressToggle.ts says why a press that closes has to be remembered.
@@ -553,12 +562,19 @@ function LimitsInfo() {
       keepSide
       open={open}
       onOpenChange={onOpenChange}
-      content={<TipNote>{uploadLimits()}</TipNote>}
+      content={
+        <>
+          <TipNote>{uploadLimits()}</TipNote>
+          <span className="tw:mt-1.5 tw:block">
+            <TipNote>{ADDING_SENDS_TEXT_AWAY}</TipNote>
+          </span>
+        </>
+      }
     >
       <button
         type="button"
         className={`tap-target tw:inline-flex tw:size-9 tw:shrink-0 tw:items-center tw:justify-center tw:self-center tw:rounded-md tw:text-muted-foreground tw:hover:text-foreground tw:focus-visible:text-foreground tw:focus-visible:outline-2 tw:focus-visible:outline-highlight-text${open ? " tw:text-foreground" : ""}`}
-        aria-label="What you can add"
+        aria-label="What you can add and where its text goes"
         aria-expanded={open}
         {...trigger}
       >

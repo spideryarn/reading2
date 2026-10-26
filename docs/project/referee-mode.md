@@ -1311,10 +1311,15 @@ prohibited use permissible.
 So there are three sentences, in three places, and the **tense is the whole point**:
 
 - **Present tense, at the point of adding an article, before ingestion runs** —
-  `ADDING_SENDS_TEXT_AWAY` ([`src/messages.ts`](../../src/messages.ts)), shown under both the URL
-  box and the upload picker in [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx). One
-  sentence, no gate, no checkbox. It is true of everything this app does and belongs there whatever
-  happens to Referee mode.
+  `ADDING_SENDS_TEXT_AWAY` ([`src/messages.ts`](../../src/messages.ts)). One sentence, no gate, no
+  checkbox. It is true of everything this app does and belongs there whatever happens to Referee
+  mode. **Since 2026-10-26 it is in the add box's (i) beside File**, with the upload limits
+  (`LimitsInfo`, [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx)), not a visible line
+  under both controls, so a reader who never opens the (i) is not shown it before adding. Greg,
+  reply `spya-dqhrvy` to [q-p6fvep](../user-feedback/questions/q-p6fvep.md): *"B I think it's
+  pretty obvious that we're sending stuff to AI. I mean, the whole thing is AI powered, and it's
+  all in the privacy policy."* —
+  [261026h](../plans/261026h-the-provider-sentence-into-the-add-box-info.md).
 - **Past tense, on the direct-add pages, because they never got to ask** — `DIRECT_ADD_SENT_TEXT_AWAY`
   (`src/messages.ts`), shown by [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx). `/add/<url>` and
   `/add/upload/<id>` exist so that a bookmarklet or a share sheet can hand us an article in a single

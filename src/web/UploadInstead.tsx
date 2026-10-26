@@ -10,11 +10,11 @@
  * docs/plans/261015a-a-site-that-refuses-the-app-a-better-way-round-and-the-bigger-options-for-greg.md.
  *
  * **The shelf's own picker, whole.** `UploadPicker` hands back its File button
- * with the limits (i), its status row (refusals and the progress bar) and a
- * commit, and owns the drop target; committing hands the file to `uploadEngine`
- * and navigates to `/add/upload/<id>` exactly as the shelf's Add does. Nothing
- * here uploads anything of its own. The caller decides when to draw it, from
- * `failureSuggestsUpload` in src/messages.ts.
+ * with the limits/provider (i), its status row (refusals and the progress bar)
+ * and a commit, and owns the drop target; committing hands the file to
+ * `uploadEngine` and navigates to `/add/upload/<id>` exactly as the shelf's Add
+ * does. Nothing here uploads anything of its own. The caller decides when to
+ * draw it, from `failureSuggestsUpload` in src/messages.ts.
  *
  * **Above the bookmarklet, the Chrome extension**, where it gets round the
  * failure (`extension`, from `failureSuggestsExtension`): one press, nothing to

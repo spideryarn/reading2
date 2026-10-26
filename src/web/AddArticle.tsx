@@ -39,7 +39,6 @@ import {
   KEEP_A_TAB_OPEN,
 } from "../job-state.js";
 import {
-  ADDING_SENDS_TEXT_AWAY,
   IMPORT_LINK_COPY_FAILED,
   IMPORT_LINK_COPY_TIP,
 } from "../messages.js";
@@ -335,10 +334,10 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                     rather than the row breaking between them, and `ml-auto`
                     keeps them on the right of the line they land on. */}
                 <div className="tw:ml-auto tw:flex tw:gap-2">
-                  {/* The File control and its limits (i), drawn by UploadPicker
-                      so that the file, the transfer and the refusals all stay in
-                      the one component that runs them. They are only placed
-                      here. */}
+                  {/* The File control and its limits/provider (i), drawn by
+                      UploadPicker so that the file, the transfer and the
+                      refusals all stay in the one component that runs them.
+                      They are only placed here. */}
                   <span
                     /* The picker owns the input and its controls; this only
                        notices that the reader reached for the File button.
@@ -406,28 +405,16 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                 rather than under everything below. */}
             {slots.uploadStatus}
 
-          {/* **What happens to the text, said once, at the point of deciding.**
-              One sentence, no gate and no checkbox: the reader is told, and then
-              they decide. It sits under both controls because it is true of both —
-              a pasted URL and an uploaded PDF go the same way — and because it is
-              about what happens *after* Add, not about the box above it.
-
-              It matters most to somebody who has been sent a manuscript to
-              peer-review, and Referee mode says the past-tense half of it
-              (`REFEREE_TEXT_ALREADY_SENT`, src/web/App.tsx § RefereeBand). This is
-              the half that arrives while the choice is still open, which is the
-              only reason that one can be honest.
-              docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
-
-              **It must not be gated on typing.** Compacting this box on 2026-09-03
-              nearly did exactly that — show it once a URL is in the field — and it
-              would have been a real regression, because dropping a PDF *is* the
-              commit gesture (UploadPicker.tsx) and a reader can send a manuscript
-              without ever having typed a character. Visible at rest while either
-              way in is available, or the promise is not made. */}
-          <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-            {ADDING_SENDS_TEXT_AWAY}
-          </p>
+          {/* **Where the text goes is said in the (i) beside File**, with the
+              upload limits (`LimitsInfo`, UploadPicker.tsx), and no longer as a
+              visible line here. From 2026-08-31 it was a line under both
+              controls, kept visible as the promise made before adding that
+              Referee mode's past-tense notice follows
+              (docs/plans/260831an-referee-mode-for-peer-reviewers.md
+              § Confidentiality). Greg, 2026-10-26 (reply `spya-dqhrvy` to
+              q-p6fvep): *"B I think it's pretty obvious that we're sending stuff
+              to AI. I mean, the whole thing is AI powered, and it's all in the
+              privacy policy."* Plan 261026h. */}
 
           {/* **The reason, and something to press.** A quota refusal gets a link to
               `/pricing` beside it — the sentence has been naming somewhere to
