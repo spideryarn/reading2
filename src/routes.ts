@@ -11521,7 +11521,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          client filters and reads, and naming it here is what makes a
          disagreement about it a compile error instead of a silent no-op.
          docs/postmortems/260903e-offline-shelf-filter-never-ran.md. */
-      const shelf: LibraryResponse = { articles: await listArticles({ archived }) };
+      /* Progress belongs only on the owner's browser shelf. View-as is an
+         administrator, and `reading=0` is the deliberately smaller response
+         used by MCP; both skip the private query as well as the field. */
+      const readBands = viewingAs() === null && query.get("reading") !== "0";
+      const shelf: LibraryResponse = { articles: await listArticles({ archived, readBands }) };
       send(res, 200, shelf);
     },
   },

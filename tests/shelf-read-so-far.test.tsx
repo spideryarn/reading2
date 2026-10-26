@@ -111,6 +111,12 @@ describe("the card", () => {
     paint(createElement(ShelfCard, { entry: entry(), shelf, note: "" }));
     expect(pies()).toEqual([]);
   });
+
+  it("draws the pie once when another fact happens to have the minutes' words", () => {
+    paint(createElement(ShelfCard, { entry: entry({ byline: "~11 min", readBand: "finished" }), shelf, note: "" }));
+    expect(pies()).toEqual(["Read so far: finished"]);
+    expect(host.querySelector("button.read-so-far")?.closest("[data-shelf-fact]")?.textContent).toContain("~11 min");
+  });
 });
 
 describe("the table", () => {
@@ -140,5 +146,12 @@ describe("a kept shelf", () => {
   it("leaves a body that is not a shelf alone", () => {
     expect(withoutReadBands(null)).toBeNull();
     expect(withoutReadBands({ other: 1 })).toEqual({ other: 1 });
+  });
+
+  it("strips bands from a legacy body when it is read back", () => {
+    const legacy = { articles: [entry({ readBand: "finished" }), entry({ slug: "b", readBand: "half" })] };
+    const drawn = shelfFromCachedBody(legacy);
+    expect(drawn?.map((e) => e.slug)).toEqual(["a-piece", "b"]);
+    expect(JSON.stringify(drawn)).not.toContain("readBand");
   });
 });

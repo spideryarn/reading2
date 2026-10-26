@@ -904,7 +904,7 @@ async function attempt(
     noteServedCopy(saved.savedAt);
 
     const body = input.split("?")[0] === "/api/library"
-      ? await onlyWhatWeHave(saved.body, owner)
+      ? await onlyWhatWeHave(withoutReadBands(saved.body), owner)
       : saved.body;
 
     /* A real `Response`, so every caller downstream — `readJson`, the hooks,

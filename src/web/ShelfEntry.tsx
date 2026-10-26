@@ -294,8 +294,10 @@ export function ShelfCard({
           <span key={`${i}:${f}`} data-shelf-fact="" className="tw:min-w-0 tw:max-w-full tw:break-words">
             {f}
             {/* How much of it you have read, right after how long it takes,
-                as on the masthead: the same mark and words (plan 261025l). */}
-            {f === minutes && !minimal && <ReadSoFarMark band={entry.readBand} />}
+                as on the masthead: the same mark and words (plan 261025l).
+                By position, not by text: the minutes and the blocks are always
+                the last two facts, and a byline may itself say "~N min". */}
+            {!minimal && i === facts.length - 2 && <ReadSoFarMark band={entry.readBand} />}
             {i < facts.length - 1 && <span className="tw:ml-2 tw:opacity-50">·</span>}
           </span>
         ))}

@@ -174,7 +174,14 @@ export function shelfFromCachedBody(body: unknown): LibraryEntry[] | null {
   /* A saved response from before tags existed is valid, but from this boundary
      onward a LibraryEntry has today's shape. Normalize once instead of making
      every shelf consumer remember the historical optionality. */
-  return articles.map((entry) => ({ ...entry, tags: entry.tags ?? [] })) as LibraryEntry[];
+  return articles.map((entry) => {
+    /* The write strips `readBand` (§ `withoutReadBands`), so no kept body
+       should have one; stripping on the way out too means a body saved by
+       anything else still cannot replay yesterday's progress. */
+    const saved = entry as Record<string, unknown> & { tags?: LibraryEntry["tags"] };
+    const { readBand: _band, ...rest } = saved;
+    return { ...rest, tags: saved.tags ?? [] };
+  }) as LibraryEntry[];
 }
 
 /**
@@ -184,7 +191,8 @@ export function shelfFromCachedBody(body: unknown): LibraryEntry[] | null {
  * all there is offline. A day-old pie saying "about half" over an article
  * finished since is the pie lying, so a kept shelf draws none and the live
  * answer draws them. The one place a `/api/library` body is written to the
- * cache calls this (api.ts § the copy), so no kept body ever has one.
+ * cache calls this (api.ts § the copy), and the reads strip it again
+ * (api.ts § stale-first, `shelfFromCachedBody`) whatever wrote the body.
  */
 export function withoutReadBands(body: unknown): unknown {
   if (!isRecord(body) || !Array.isArray(body.articles)) return body;

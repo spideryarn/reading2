@@ -88,6 +88,7 @@ const {
 } = await import("../src/db/schema.js");
 const { currentOwnerId } = await import("../src/owner.js");
 const { pgArticleReader } = await import("../src/store/pg.js");
+const { runViewingAs } = await import("../src/view-as-scope.js");
 const { deriveLibraryScalars } = await import("../src/library-scalars.js");
 import type { Block, Glossary, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -595,6 +596,21 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
       warnings: 1,
       blockReads: 1,
     });
+  });
+
+  it("does not ask the progress tables for a reduced or administrator view-as shelf", async () => {
+    const reduced = await statementsDuring(() =>
+      pgArticleReader.listArticles({ archived: false, readBands: false }),
+    );
+    expect(mentions(reduced.sent, 'from "spideryarn"."read_so_far_words"')).toEqual([]);
+
+    const owner = currentOwnerId();
+    const viewed = await statementsDuring(() =>
+      runViewingAs({ actorId: owner, subjectId: owner, sessionId: "test-shelf-read-bands" }, () =>
+        pgArticleReader.listArticles({ archived: false }),
+      ),
+    );
+    expect(mentions(viewed.sent, 'from "spideryarn"."read_so_far_words"')).toEqual([]);
   });
 
   it("sends exactly three statements when the scalars are all there", async () => {

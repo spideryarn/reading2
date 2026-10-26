@@ -1191,7 +1191,9 @@ it is restated for the shelf. The masthead's side, and why finished starts at 80
 [261025l](../plans/261025l-shelf-cards-show-the-how-much-read-pie.md).
 
 **Worked out on the server, in one statement for the page.** `LibraryEntry.readBand`, sent only by
-the owner's `listArticles` (the public shelf is another query and another DTO), absent for no pie.
+the owner's browser shelf (the public shelf is another query and another DTO), absent for no pie.
+The public health check, MCP's smaller library response and an administrator viewing as the reader
+all skip the progress statement as well as the field (`ListOptions.readBands`).
 The share's denominator, which blocks count once folded front and back matter is left out, needs
 every block's text to work out, so it is **cached per article** in `read_so_far_words` and the
 shelf reads the cache beside the seconds
@@ -1211,7 +1213,8 @@ shelf reads the cache beside the seconds
   `scripts/read-so-far-backfill.ts`, or from the next minute of reading.
 - **A kept shelf never draws one.** The copy painted before the server answers, and the only copy
   offline, has the band stripped when it is saved (`withoutReadBands` in
-  [`cached-shelf.ts`](../../src/web/lib/cached-shelf.ts)): a pie from yesterday's answer would lie.
+  [`cached-shelf.ts`](../../src/web/lib/cached-shelf.ts)); the read boundary strips one from legacy
+  copies saved before that rule existed. A pie from yesterday's answer would lie.
 
 The shelf's pie therefore lags the masthead's by up to a minute of reading, the flush's interval,
 plus a shelf load.

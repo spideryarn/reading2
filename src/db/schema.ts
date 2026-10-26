@@ -6030,7 +6030,7 @@ export const readingTime = spideryarn.table(
  * docs/plans/261025l-shelf-cards-show-the-how-much-read-pie.md.
  *
  * - **`basis` says whether it is still true**: a hash of every input and rule
- *   it came from (src/store/pg-read-so-far.ts § `readSoFarBasis`). The shelf
+ *   it came from (src/store/read-so-far-basis.ts § `readSoFarBasis`). The shelf
  *   uses a row only while its basis equals the current one, so a stale row is
  *   a missing pie, never a wrong one.
  * - **Derived, not the reader's activity**: no seconds and no band, only which

@@ -2660,6 +2660,12 @@ export interface LibraryTermsResponse {
 export interface ListOptions {
   /** True lists what has been archived, and only that. */
   archived?: boolean;
+  /**
+   * False leaves private reading progress out entirely, including its query.
+   * The health check, MCP and administrator view-as use this; only the
+   * owner-facing browser shelf paths ask for the bands. Plan 261025l.
+   */
+  readBands?: boolean;
 }
 
 /**

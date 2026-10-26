@@ -185,7 +185,7 @@ import {
 import { attachWebNotes } from "../citation-web-note-shown.js";
 import { optionalSources } from "../registry-keys.js";
 import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../matter-current.js";
-import { shelfReadBands } from "./read-so-far-basis.js";
+import { shelfReadBands, type ShelfReadBand } from "./read-so-far-basis.js";
 import { isMatterDocument } from "../matter-shape.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
@@ -3160,9 +3160,14 @@ const rawPgArticleReader: ArticleReader = {
     const ids = rows.map((row) => row.article.id);
     /* **And how much of each the owner has read**, as the masthead's pie says
        it (plan 261025l): one statement for the page, reading cached
-       denominators and never writing them — this read is also the health
-       check's. Concurrent with the counts, as neither needs the other. */
-    const [counts, readBands] = await Promise.all([commentCounts(db, ids), shelfReadBands(ids, db)]);
+       denominators and never writing them. Health, MCP and administrator
+       view-as explicitly skip it. Concurrent with the counts, as neither
+       needs the other. */
+    const readBandsPromise =
+      opts.readBands === false
+        ? Promise.resolve(new Map<string, ShelfReadBand>())
+        : shelfReadBands(ids, db);
+    const [counts, readBands] = await Promise.all([commentCounts(db, ids), readBandsPromise]);
 
     /* The five numbers per row, off the columns — and one query and one log
        line for however many rows turn out not to have them.

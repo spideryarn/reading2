@@ -24,6 +24,7 @@ import { currentOwnerId } from "../owner.js";
 import { shareOfWords } from "../reading-so-far.js";
 import { SANITIZER_VERSION } from "../sanitize-policy.js";
 import type { BlockId, LibraryEntry } from "../types.js";
+import { viewingAs } from "../view-as-scope.js";
 import { type ReadBand, readBand } from "../web/read-filter.js";
 
 /**
@@ -34,7 +35,8 @@ import { type ReadBand, readBand } from "../web/read-filter.js";
  * `readSoFarWords` (web/read-filter.ts). Every cached row then reads as stale
  * and its card shows no pie until the next flush writes it again, rather than
  * a band the masthead would no longer agree with.
- * tests/read-so-far-basis.test.ts pins the two fold files beside this value.
+ * tests/read-so-far-basis.test.ts pins these focused rule modules beside this
+ * value, including the helpers that supply the title and author inputs.
  */
 export const READ_SO_FAR_RECIPE = "rsf/1";
 
@@ -88,7 +90,11 @@ export async function shelfReadBands(
   articleIds: readonly string[],
   db: Pick<ReturnType<typeof getDb>, "select"> = getDb(),
 ): Promise<Map<string, ShelfReadBand>> {
-  if (!articleIds.length) return new Map();
+  /* An administrator may inspect the reader's shelf through view-as, but that
+     is not the owner seeing their own private reading. Refuse before building
+     a statement, so the admin response neither carries a band nor reads the
+     private tables used to derive it. */
+  if (!articleIds.length || viewingAs() !== null) return new Map();
   const rows = await db
     .select({
       articleId: readSoFarWords.articleId,

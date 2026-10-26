@@ -198,6 +198,8 @@ experimental features off" pins it through the real `App`.
 - **Each shelf card**, since 2026-10-25: the same pie, worked out on the server from the totals and
   a cached denominator that the flush keeps current — Greg's *"1A"* to
   [q-y78eth](../user-feedback/questions/q-y78eth.md).
+  It is only on the owner's browser shelf, not the public shelf, MCP, administrator view-as or a
+  kept browser copy.
   [library.md § How much of it you have read](library.md#how-much-of-it-you-have-read).
 
 ## Not built

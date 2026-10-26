@@ -20,6 +20,7 @@ import type { BlockId, LibraryEntry } from "../src/types.js";
 import { foldedOnArrival } from "../src/web/matter-view.js";
 import { readBand, readSoFarWords as countedWords, shareRead } from "../src/web/read-filter.js";
 import { type ReadLevel, readLevel } from "../src/web/reading-time.js";
+import { runViewingAs } from "../src/view-as-scope.js";
 import { asTestOwner, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -107,6 +108,17 @@ describe("the shelf's band", () => {
     await readTheFirst(0.5);
     expect(await refresh()).toBe("written");
     expect(await refresh()).toBe("fresh");
+  });
+
+  it("does not show a reader's band to an administrator viewing as them", async () => {
+    await readTheFirst(1);
+    await refresh();
+    expect((await shelfEntry())?.readBand).toBeDefined();
+    const viewed = await runViewingAs(
+      { actorId: TEST_OWNER, subjectId: TEST_OWNER, sessionId: "test-read-so-far-view-as" },
+      () => shelfEntry(),
+    );
+    expect(viewed?.readBand).toBeUndefined();
   });
 });
 
