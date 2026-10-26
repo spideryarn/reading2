@@ -162,9 +162,11 @@ const READS = [
 ] as const;
 
 describe("the read hooks start no job", () => {
-  it("the actual owner Marginalia feed performs only its five artefact GETs, and starts no job for the four lists it only reads", async () => {
+  it("the actual owner Marginalia feed performs only its six artefact GETs, and starts no job for the five lists it only reads", async () => {
     /* The relation words are stored, so the one thing the feed may make has
-       nothing to make; the other four lists are absent and stay unasked for. */
+       nothing to make; the other five lists are absent and stay unasked for.
+       The dossier joined them on 2026-10-26, out of the experimental switch
+       (spya-pkpqch). */
     present = new Set(["relations"]);
     await act(async () => {
       root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", shown: true, onFeed: vi.fn() }));
@@ -180,6 +182,7 @@ describe("the read hooks start no job", () => {
          shown with none stored (tests/marginalia-relations-on-open.test.tsx);
          here there is one. */
       "/api/relations/read-hooks",
+      "/api/situate/read-hooks",
       "/api/timeline/read-hooks",
     ]);
     expect(jobRequests()).toEqual([]);

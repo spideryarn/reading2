@@ -2806,7 +2806,8 @@ export function Reader({
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
       relations: isOwner ? ownerFeed.relations : null,
       notes: isOwner ? ownerFeed.notes : null,
-      /* The owner's only, with the switch on: the feed reads it only then (plan 261024o). */
+      /* The owner's only: the feed reads it whatever the experimental switch says
+         since 2026-10-26 (spya-pkpqch, plan 261026g). */
       literature: isOwner ? ownerFeed.literature : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,

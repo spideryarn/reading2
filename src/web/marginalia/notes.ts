@@ -93,8 +93,8 @@ export type MarginaliaNote =
   /** Pages on the web that answer a claim made in this block. */
   | { kind: "reception"; items: MarginClaim[] }
   /** What a search of the literature found about this block (Situate, plan
-      261024o), strongest first (`strongestFirst`). Owner only, behind the
-      experimental switch — the caller's rule. */
+      261024o), strongest first (`strongestFirst`). Owner only — the
+      caller's rule. */
   | { kind: "literature"; items: LiteratureItem[] }
   /** Works first cited in this block. Owner only — the caller's rule. */
   | { kind: "citation"; items: CitedWork[] }
@@ -134,7 +134,7 @@ export type MarginSources = {
   relations?: Readonly<Record<BlockId, Relation>> | null;
   /** The notes the same call wrote — the owner's only, as the words are. */
   notes?: readonly MarginNote[] | null;
-  /** Situate's findings — the owner's only, with the experimental switch on (plan 261024o). */
+  /** Situate's findings — the owner's only (plan 261024o). */
   literature?: MarginLiterature | null;
 };
 
