@@ -333,6 +333,23 @@ export const ARTICLE_TABLE_COVERAGE = {
         "is meaningless outside the card it is drawn on.",
     },
   },
+  /* The shelf pie's cached denominator — plan 261025l. */
+  read_so_far_words: {
+    rollback: {
+      exported: false,
+      why:
+        "A cache of which blocks count toward how much of the article has been read, " +
+        "and their words, worked out from the blocks, the matter and the title, all " +
+        "exported. It is written again by the next minute of reading, and it says " +
+        "nothing the blocks do not.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The same cache. The reading time it is used with is exported " +
+        "(augmentations/reading-time.json); this is only a step towards the shelf's pie.",
+    },
+  },
   /* An uploaded paper's guessed web address, and the claim that found it —
      docs/plans/260929g-canonical-link-for-an-uploaded-paper.md. */
   upload_source_guesses: {

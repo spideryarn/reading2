@@ -1,7 +1,7 @@
 ---
 reports: spya-e5477u
 ending: shipped
-comment: Shipped: a small pie after the read time says started, about half, most or finished. Asked you whether the shelf should show it too.
+comment: Shipped: a small pie after the read time says started, about half, most or finished. You said yes to the shelf too, and each card on your shelf now shows it.
 ---
 # How much of the article you have read, at the top
 
@@ -34,6 +34,10 @@ consulted while planning and GPT Sol reviews of the plan and the code.
   front and back matter folded on arrival doesn't count, read or not, and the quiz's share now
   leaves it out too, so the two agree. The chats' rough phrase moved onto the same cut points.
 
-**Not built, and asked:** the same pie on each shelf card,
-[q-y78eth](questions/q-y78eth.md), with A (yes) recommended. Greg did not ask for this. It is a
-suggestion, not a deferred half.
+**Then the shelf, on Greg's answer** to [q-y78eth](questions/q-y78eth.md) (A, yes):
+[plan 261025l](../plans/261025l-shelf-cards-show-the-how-much-read-pie.md), again with Opus
+consulted and GPT Sol reviews of the plan and the code. Every card and table row on the owner's own
+shelf shows the same pie after "~N min", from the masthead's own rules; one extra query per shelf
+load, from a cache written when reading time is saved. Never a visitor, the public shelf,
+view-as, MCP or the kept offline shelf. On `dev`, not deployed; after the deploy,
+`npx tsx scripts/read-so-far-backfill.ts --prod --write` fills in the articles read before it.

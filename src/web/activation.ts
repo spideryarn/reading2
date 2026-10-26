@@ -265,7 +265,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   sources: {
     kind: "delegated",
     target: (ctx) => activationForSources(ctx.sources),
-    why: "the sub-mode a press lands on is whatever `?sources=` says: Bibliography arms the citations, Reception the search, Claims the claims list, Not cited and Links nothing",
+    why: "the sub-mode a press lands on is whatever `?sources=` says: Where it sits and Bibliography arm the citations, and the rest nothing (plan 261025h)",
   },
   faq: { kind: "fixed", target: "faq" },
   /* The target is the route even when the job it starts writes the Quotes
@@ -586,8 +586,8 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 
 /**
  * **What a press that lands on one of Sources' sub-modes arms**: the
- * `bibliography` list for Bibliography, nothing for Not cited or Links, the `reception`
- * search for Reception, and the `sources-claims` list for Claims.
+ * `bibliography` list for *Where it sits* and for Bibliography, and nothing
+ * for any other.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows
@@ -596,19 +596,32 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
  * `SourcesViews`). Bibliography's arm was Citations' fixed row until
  * 2026-10-09 (plan 261009l).
  *
- * **Two targets, never one** (2026-10-08). Until `debate/7` both sub-modes
- * armed the one `debate` run, which searched for both; the press now searches
- * for Reception only, so a Claims press arming it would buy Reception for a
+ * **Where it sits arms Bibliography** (plan 261025h, decision 8, GPT Sol's
+ * F4), because its *Before it* list is drawn from Bibliography's works, and an
+ * article can arrive without one (Rebuild, Start again, a re-add): the mode
+ * contract says opening an unmade artefact's sub-mode starts it
+ * (docs/project/mode.md § The client). Its other lists are free reads with no
+ * job, and its literature search is the panel's own button.
+ *
+ * **Reception and Claims arm nothing since 2026-10-25** (plan 261025h,
+ * decisions 6 and 8, GPT Sol's F5). They stopped being chips and became tools
+ * inside *Where it sits*, reached by plain links that must not buy, and each
+ * panel has its own button for its first run: Reception's *Search the web*
+ * and Claims' *List its claims*. Their
+ * command-bar rows open the tool, as the links do; Reception's Metadata and
+ * command-bar *Run again* stay (rerun-commands.ts). Until then both
+ * sub-modes armed their own work on a press: two targets, never one, because
+ * a Claims press arming the `reception` search would buy Reception for a
  * reader who asked for claims (GPT Sol's F1 on plan
- * docs/plans/261008i-debate-claims-picked-by-the-reader.md). Claims' own work
- * is the list of the article's claims, one call and no search (that plan's
- * § 2), and each hook spends only its own target and only while its sub-mode
- * is showing (useReception.ts, useSourcesClaims.ts), so neither press can buy the
- * other's work.
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md), and each hook
+ * still spends only its own target and only while its sub-mode is showing
+ * (useReception.ts, useSourcesClaims.ts).
  */
 export function activationForSources(view: SourcesView): AutoRunTarget | null {
   switch (view) {
-    /* Citations' fixed target until 2026-10-09: the list of works cited. */
+    /* Citations' fixed target until 2026-10-09: the list of works cited.
+       *Where it sits* draws *Before it* from it (plan 261025h, F4). */
+    case "where":
     case "bibliography":
       return "bibliography";
     /* Not cited's search sends the piece's words to OpenAlex, so it is the
@@ -623,10 +636,10 @@ export function activationForSources(view: SourcesView): AutoRunTarget | null {
        261020n § Spend). */
     case "investigate":
       return null;
+    /* Tools since plan 261025h: each panel's own button starts its work. */
     case "reception":
-      return "reception";
     case "claims":
-      return "sources-claims";
+      return null;
     default: {
       const unhandled: never = view;
       throw new Error(`unhandled Sources view: ${String(unhandled)}`);
@@ -733,8 +746,8 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
  *    `SummaryControls`, and `bandTarget` below);
  *  - Sources: `activationForSources` of the sub-mode **the row
- *    names** — `bibliography` for Bibliography, `debate` for Reception,
- *    `debate-claims` for Claims.
+ *    names** — `bibliography` for *Where it sits* and Bibliography, nothing
+ *    for the rest (plan 261025h).
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is
  * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
@@ -753,8 +766,8 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     /* Nothing to generate in either view: the tree is in the page's payload. */
     case "structure":
       return null;
-    /* **Bibliography's row arms the citations, Reception's the `debate`
-       search, Claims' the claims list** — the mode row's own answer
+    /* **Where it sits' row and Bibliography's arm the citations, and no
+       other row arms anything** — the mode row's own answer
        (`activationForSources`). The band's own chips arm through here too
        (SourcesMode.tsx § `SourcesViews`). */
     case "sources":

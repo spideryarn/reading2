@@ -30,11 +30,14 @@ describe("focusesLeft", () => {
     expect(focusesLeft({ mode: "ideas", sources: "bibliography" }, { mode: "plain", sources: "bibliography" })).toEqual(["idea"]);
   });
 
-  /* A margin literature line's *Open in Sources* (plan 261024o). */
-  it("forgets a Situate finding's focus on leaving Investigate", () => {
-    expect(focusesLeft({ mode: "sources", sources: "investigate" }, { mode: "sources", sources: "claims" })).toEqual(["finding"]);
-    expect(focusesLeft({ mode: "sources", sources: "investigate" }, { mode: "plain", sources: "investigate" })).toEqual(["finding"]);
-    expect(focusesLeft({ mode: "plain", sources: "bibliography" }, { mode: "sources", sources: "investigate" })).toEqual([]);
+  /* A margin literature line's *Open in Sources* (plan 261024o), and a
+     finding's chat's way back: in Where it sits since plan 261025h. */
+  it("forgets a Situate finding's focus on leaving Where it sits", () => {
+    expect(focusesLeft({ mode: "sources", sources: "where" }, { mode: "sources", sources: "claims" })).toEqual(["finding"]);
+    expect(focusesLeft({ mode: "sources", sources: "where" }, { mode: "plain", sources: "where" })).toEqual(["finding"]);
+    expect(focusesLeft({ mode: "plain", sources: "bibliography" }, { mode: "sources", sources: "where" })).toEqual([]);
+    /* Investigate holds no dossier any more. */
+    expect(focusesLeft({ mode: "sources", sources: "investigate" }, { mode: "plain", sources: "investigate" })).toEqual([]);
   });
 
   it("keeps a focus while the reader stays on its list, and arriving forgets nothing", () => {

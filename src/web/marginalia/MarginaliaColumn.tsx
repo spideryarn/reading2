@@ -136,7 +136,7 @@ export function MarginNotesSlot({
   onOpenAsked?: ((id: string) => void) | undefined;
   /** Follow a generated note to the exact checked words in its other passage. */
   onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
-  /** Open Sources › Investigate on one Situate finding (plan 261024o). Owner only. */
+  /** Open Sources › Where it sits on one Situate finding (plan 261024o; Investigate until plan 261025h). Owner only. */
   onOpenFinding?: ((findingId: string) => void) | undefined;
 }) {
   return (
@@ -689,7 +689,7 @@ function ReceptionNote({ items }: { items: readonly MarginClaim[] }) {
  * other mode's items: the stamp of the strongest finding (notes.ts §
  * `strongestFirst`) and its note's opening, or a count. Opened, each finding's
  * note in the model's face, its sources as links out, and a quiet *From the
- * web*. *Open in Sources* lands on the finding in Investigate's dossier.
+ * web*. *Open in Sources* lands on the finding in Where it sits' dossier.
  *
  * **Every word here is text, never markup**: the note is the model's, a
  * source's title a stranger page's (SituateDossier.tsx says the same).

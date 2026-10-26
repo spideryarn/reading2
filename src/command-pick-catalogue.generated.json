@@ -596,6 +596,33 @@
   ]
  },
  {
+  "id": "submode:sources:where",
+  "label": "Where it sits",
+  "description": "What others say about this piece, and what it builds on: the papers that came after it, the works it leans on most, and a search of the literature",
+  "aliases": [
+   "Sources",
+   "Where it sits Sources",
+   "Sources Where it sits",
+   "Where it sits mode",
+   "situate",
+   "the literature",
+   "where this piece sits",
+   "literature search",
+   "search the literature",
+   "what came after",
+   "papers citing it"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:sources:bibliography",
   "label": "Bibliography",
   "description": "What this piece cites: the works in its bibliography, each with a link",
@@ -695,7 +722,7 @@
    "replies"
   ],
   "kind": "submode",
-  "generates": true,
+  "generates": false,
   "contexts": [
    "owner-article",
    "owner-article-experimental-off",
@@ -716,7 +743,7 @@
    "debate claims"
   ],
   "kind": "submode",
-  "generates": true,
+  "generates": false,
   "contexts": [
    "owner-article",
    "owner-article-experimental-off",

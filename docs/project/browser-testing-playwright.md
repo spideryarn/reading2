@@ -329,13 +329,20 @@ thing here the article?* — painted, not geometric, because in that bug every b
 npm run dev                                    # read the port off Vite's own line
 SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts
 SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts --break
+SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts --site          # the signed-out bar
+SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts --site --break
 ```
 
-**Run the second one too.** Nothing on this box can make this check fail on its own — that is the
-whole point of it — so `--break` switches the defect back on and it must print FAIL and exit 1.
+`--site` checks the signed-out pages' `.site-nav` instead of the reading view: signed out, it fails
+unless every link in the bar starts below the inset, at rest and scrolled. It exists because six of
+those pages had no inset at all until 2026-10-26
+([261026a](../plans/261026a-signed-out-nav-below-the-clock-on-an-iphone.md)).
+
+**Run the matching `--break` command too.** Nothing on this box can make this check fail on its own —
+that is the whole point of it — so `--break` switches the defect back on and it must print FAIL and exit 1.
 [silent-success.md](../reusable/silent-success.md).
 
-Run it when you touch [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css)
+Run it (with `--site` for [`styles/site.css`](../../src/web/styles/site.css)) when you touch [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css)
 § a narrow window, § a band with no room, § a small device, or
 any rule naming a `--safe-*` token. Exit code 1 on a leak. `--top`, `--bottom`, `--width`,
 `--height`, `--modes`, `--scroll` and `--shots` are all flags; the defaults are an installed iPhone,

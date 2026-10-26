@@ -101,6 +101,17 @@ describe("threadSource", () => {
     });
   });
 
+  /* Plan 261025h, decision 9: a finding's chat is the finding's, placed in Where it sits. */
+  it("names a literature-search finding under Sources' icon, placed in Where it sits, in the author's words", () => {
+    expect(threadSource(t("chat", { origin: { mode: "situate", itemId: "si-0123456789ab", quote: "Ignition is a step" } }))).toEqual({
+      from: "sources",
+      mode: "sources",
+      label: "Started from a finding in Sources › Where it sits",
+      place: "Where it sits",
+      quote: "Ignition is a step",
+    });
+  });
+
   /* Report spya-twsm7t: the list says *Investigate*, not only Sources' icon. */
   it("names a question from Investigate as the reader's, under Sources' icon, placed in Investigate", () => {
     expect(threadSource(t("chat", { origin: { mode: "reception", lens: "Is it borne out?" } }))).toEqual({
@@ -245,6 +256,16 @@ describe("originBack", () => {
       modeLabel: "Ideas",
       quote: "An idea",
       text: "Back to “An idea” in Ideas",
+    });
+  });
+
+  it("goes back to a finding in Where it sits", () => {
+    expect(originBack({ mode: "situate", itemId: "si-0123456789ab", quote: "Ignition is a step" })).toEqual({
+      mode: "sources",
+      view: "where",
+      modeLabel: "Where it sits",
+      quote: "Ignition is a step",
+      text: "Back to “Ignition is a step” in Where it sits",
     });
   });
 

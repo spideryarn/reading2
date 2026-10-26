@@ -321,7 +321,7 @@ function SourcesOuter({ show }: { show: boolean }) {
         publishedAt: undefined,
         articleTitle: "A piece",
         claimChats: { summaries: [], onCheck: noop, onOpen: noop },
-        investigateChats: { summaries: [], loaded: true, occupied: false, onQuestion: noop, onCheck: noop, onAskWork: noop, onOpen: noop },
+        investigateChats: { summaries: [], loaded: true, occupied: false, onQuestion: noop, onCheck: noop, onAskWork: noop, onFinding: noop, onOpen: noop },
         citeFocus: null,
         onCiteFocusTaken: noop,
         claimFocus: null,
@@ -799,6 +799,8 @@ const ROWS: Row[] = [
     hook: "useBibliography.ts",
     step: "bibliography",
     path: "/api/bibliography/",
+    /* Named: the bare address is Where it sits since plan 261025h. */
+    search: "?sources=bibliography",
     body: (which, { stale }) => ({
       bibliography: {
         ...stamp(which, false),
@@ -903,17 +905,16 @@ const ROWS: Row[] = [
     waiting: "The new route hasn't loaded yet.",
     readAgain: "Try again",
   },
-  /* Sources > Investigate's *Where this piece sits* (plan 261024o): the
-     owner's, behind the experimental switch. Its forced verb is *Search
-     again*, on the stale banner or at the dossier's foot; its clock,
-     `generatedAt`, is its identity. */
+  /* Sources > *Where it sits*' literature search (plan 261024o; there, and
+     out of the experimental switch, since plan 261025h). Its forced verb is
+     *Search again*, on the stale banner or at the dossier's foot; its clock,
+     `generatedAt`, is its identity. `?sources=where` names it explicitly. */
   {
-    name: "Where this piece sits",
+    name: "Where it sits",
     hook: "useSituate.ts",
     step: "situate",
     path: "/api/situate/",
-    search: "?sources=investigate",
-    experimental: true,
+    search: "?sources=where",
     body: (which, { stale }) => ({
       situate: {
         ...stamp(which, false),

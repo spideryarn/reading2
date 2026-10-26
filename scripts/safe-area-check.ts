@@ -32,11 +32,13 @@
  *   SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts
  *
  * Flags: `--modes a,b`, `--width`, `--height`, `--top`, `--bottom`, `--slug`,
- * `--scroll`, `--shots <dir>`. The defaults are an installed iPhone: 390 × 844,
+ * `--scroll`, `--shots <dir>`; `--site` checks the signed-out pages' bar
+ * instead, on `--paths /,/features,…`. The defaults are an installed iPhone: 390 × 844,
  * a 59px notch and a 34px home indicator.
  *
  * docs/project/browser-testing-playwright.md § The insets are zero here.
  */
+import type { Page } from "playwright-core";
 import { chromePath, signIn } from "./browser-sign-in.js";
 
 const flag = (name: string): string | undefined => {
@@ -58,6 +60,15 @@ const bottom = flag("bottom") ?? "34px";
 const scroll = Number(flag("scroll") ?? 1200);
 const shots = flag("shots");
 const modes = (flag("modes") ?? "glossary,summary,search,chat,ideas,outline,quotes,timeline,referee,diagram,learn").split(",");
+
+/* **`--site`: the signed-out pages instead of the reading view.** Their bar is
+   `.site-nav`, sticky at `top: 0`, and from the redesign until 2026-10-26 only
+   DocumentPage's copy of it added the inset — `spya-tfsjvq`,
+   docs/plans/261026a-signed-out-nav-below-the-clock-on-an-iphone.md. Never
+   signed in, so `/` is the landing page rather than the shelf. `--break` then
+   takes the bar's padding away. */
+const site = process.argv.includes("--site");
+const sitePaths = (flag("paths") ?? "/,/features,/pricing,/login,/read/public,/features/public-readable-sharing,/privacy").split(",");
 
 const { chromium } = await import("playwright-core");
 const browser = await chromium.launch({ headless: true, executablePath: chromePath(), args: ["--no-sandbox"] });
@@ -85,7 +96,11 @@ try {
      So it carries the defect: `.reader::before` is § shell's backstop over the
      status-bar strip, and switching it off is exactly the state Greg reported.
      `npx tsx scripts/safe-area-check.ts --break` must print FAIL and exit 1. */
-  const broken = process.argv.includes("--break") ? ".reader::before{display:none}" : "";
+  const broken = !process.argv.includes("--break")
+    ? ""
+    : site
+      ? ".site-nav{padding-top:0}"
+      : ".reader::before{display:none}";
   await context.addInitScript({
     content: `document.addEventListener("DOMContentLoaded", () => {
       const s = document.createElement("style");
@@ -94,6 +109,14 @@ try {
     });`,
   });
 
+  const failed = site ? await checkSite(page) : await checkReader(page);
+  process.exitCode = failed ? 1 : 0;
+} finally {
+  await browser.close();
+}
+
+/** Every band mode, signed in, on the article `--slug`. Returns how many failed. */
+async function checkReader(page: Page): Promise<number> {
   await signIn(page, base);
 
   let failed = 0;
@@ -157,7 +180,92 @@ try {
       ? `\nFAIL — ${failed} of ${modes.length} mode(s) leave the article visible behind the panel at --safe-top: ${top}, --safe-bottom: ${bottom}`
       : `\nok — no mode leaves the article visible behind the panel at --safe-top: ${top}, --safe-bottom: ${bottom} (${width} × ${height})`,
   );
-  process.exitCode = failed ? 1 : 0;
-} finally {
-  await browser.close();
+  return failed;
+}
+
+function siteGeometryProblems(
+  label: string,
+  seen: { inset: number; insetValid: boolean; token: string; tops: number[] },
+): string[] {
+  const problems: string[] = [];
+  if (!seen.insetValid) problems.push(`${label}: --safe-top is not a CSS length (${JSON.stringify(seen.token)})`);
+  if (!seen.tops.length) problems.push(`${label}: no links in the bar`);
+  const under = seen.tops.filter((top) => top < seen.inset);
+  if (under.length) {
+    const ys = under.map((y) => Math.round(y * 100) / 100);
+    problems.push(`${label}: links start at y ${ys.join(", ")}, above ${seen.inset}`);
+  }
+  return problems;
+}
+
+/**
+ * Each signed-out page, at rest and scrolled: every visible link and button in
+ * the bar must start below the inset. Returns how many pages failed.
+ *
+ * **Geometry, not paint, and on purpose.** The reading view's question is
+ * what is painted behind the clock; here the bar is sticky at `top: 0`, so its
+ * own row covers that strip with or without the padding, and a painted probe
+ * passed on the broken build as well as the fixed one (tried, 2026-10-26). A
+ * check that cannot fail is not evidence. Where the links start can.
+ */
+async function checkSite(page: Page): Promise<number> {
+  let failed = 0;
+  for (const path of sitePaths) {
+    await page.goto(`${base}${path}`, { waitUntil: "domcontentloaded" });
+    const found = await page
+      .waitForSelector(".site-nav", { timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!found) {
+      failed += 1;
+      console.log(`  ??  ${path.padEnd(13)} no .site-nav appeared — the check proved nothing here`);
+      continue;
+    }
+    await page.waitForTimeout(800);
+    const problems: string[] = [];
+    for (const to of [0, scroll || 600]) {
+      await page.evaluate((y) => window.scrollTo(0, y), to);
+      await page.waitForTimeout(500);
+      const seen = await page.evaluate(() => {
+        const nav = document.querySelector(".site-nav")!;
+        /* Read the token through a real property, rather than `parseFloat` on
+           the command-line spelling. A caller may say `--top 3rem` or use a
+           `calc(…)`; the custom property's computed value keeps that spelling,
+           while padding resolves it to the pixels getBoundingClientRect uses. */
+        const probe = document.createElement("div");
+        probe.style.cssText =
+          "position:fixed;visibility:hidden;pointer-events:none;padding-top:var(--safe-top)";
+        document.body.appendChild(probe);
+        const token = getComputedStyle(document.documentElement).getPropertyValue("--safe-top").trim();
+        const inset = parseFloat(getComputedStyle(probe).paddingTop);
+        probe.remove();
+        const tops = [...nav.querySelectorAll("a, button")]
+          .map((el) => el.getBoundingClientRect())
+          .filter((r) => r.width > 0 && r.height > 0)
+          .map((r) => r.top);
+        return {
+          inset,
+          insetValid: CSS.supports("padding-top", token) && Number.isFinite(inset),
+          token,
+          tops,
+          scrolled: Math.round(window.scrollY),
+        };
+      });
+      const label = seen.scrolled ? `scrolled ${seen.scrolled}` : "at rest";
+      problems.push(...siteGeometryProblems(label, seen));
+    }
+    if (shots) await page.screenshot({ path: `${shots}/safe-site${path === "/" ? "-home" : path.replace(/\//g, "-")}.png` });
+    if (problems.length) {
+      failed += 1;
+      console.log(`  FAIL ${path.padEnd(13)} ${problems.join("; ")}`);
+    } else {
+      console.log(`  ok  ${path}`);
+    }
+  }
+  console.log(
+    failed
+      ? `\nFAIL — ${failed} of ${sitePaths.length} signed-out page(s) put the bar under the clock at --safe-top: ${top}`
+      : `\nok — every signed-out bar starts below the clock at --safe-top: ${top} (${width} × ${height})`,
+  );
+  return failed;
 }

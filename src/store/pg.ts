@@ -185,6 +185,7 @@ import {
 import { attachWebNotes } from "../citation-web-note-shown.js";
 import { optionalSources } from "../registry-keys.js";
 import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../matter-current.js";
+import { shelfReadBands, type ShelfReadBand } from "./read-so-far-basis.js";
 import { isMatterDocument } from "../matter-shape.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
@@ -2479,9 +2480,10 @@ export function listArticlesQuery(
       /**
        * **The reader's own tags, in the same statement** (plan 261003d). A
        * correlated `array(...)` rather than a second query, because
-       * tests/store-shelf-reads.test.ts holds the shelf at two statements
-       * whatever its size, and a third for tags was the first thing the full
-       * suite caught. Sorted again in TypeScript (`compareTags`), so the order
+       * tests/store-shelf-reads.test.ts holds the shelf at a fixed number of
+       * statements whatever its size (two then, three since the read-so-far
+       * bands of plan 261025l), and a third for tags was the first thing the
+       * full suite caught. Sorted again in TypeScript (`compareTags`), so the order
        * does not depend on the database's collation.
        */
       tags: sql<string[]>`array(
@@ -3155,7 +3157,17 @@ const rawPgArticleReader: ArticleReader = {
     /* One grouped query for the whole page, and it used to be one per article
        — which was not a count at all: it selected every comment row's id and
        took `rs.length`. */
-    const counts = await commentCounts(db, rows.map((row) => row.article.id));
+    const ids = rows.map((row) => row.article.id);
+    /* **And how much of each the owner has read**, as the masthead's pie says
+       it (plan 261025l): one statement for the page, reading cached
+       denominators and never writing them. Health, MCP and administrator
+       view-as explicitly skip it. Concurrent with the counts, as neither
+       needs the other. */
+    const readBandsPromise =
+      opts.readBands === false
+        ? Promise.resolve(new Map<string, ShelfReadBand>())
+        : shelfReadBands(ids, db);
+    const [counts, readBands] = await Promise.all([commentCounts(db, ids), readBandsPromise]);
 
     /* The five numbers per row, off the columns — and one query and one log
        line for however many rows turn out not to have them.
@@ -3238,6 +3250,7 @@ const rawPgArticleReader: ArticleReader = {
           sourceReusable: row.revision.hasRawSource && row.fetchDone,
           processing: minimal ? "minimal" : "full",
           tags: [...row.tags].sort(compareTags),
+          readBand: readBands.get(row.article.id),
         }),
       );
     }

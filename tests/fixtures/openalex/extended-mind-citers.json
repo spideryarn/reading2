@@ -1,0 +1,270 @@
+{
+ "meta": {
+  "count": 5849
+ },
+ "results": [
+  {
+   "id": "https://openalex.org/W2153791616",
+   "doi": "https://doi.org/10.1017/s0140525x12000477",
+   "display_name": "Whatever next? Predictive brains, situated agents, and the future of cognitive science",
+   "publication_year": 2013,
+   "cited_by_count": 5910,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Andy Clark"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1017/s0140525x12000477",
+    "doi": "https://doi.org/10.1017/s0140525x12000477",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.1017/s0140525x12000477",
+    "pdf_url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/33542C736E17E3D1D44E8D03BE5F4CD9/S0140525X12000477a.pdf/div-class-title-whatever-next-predictive-brains-situated-agents-and-the-future-of-cognitive-science-div.pdf",
+    "source": {
+     "id": "https://openalex.org/S59628311",
+     "display_name": "Behavioral and Brain Sciences",
+     "issn_l": "0140-525X",
+     "issn": [
+      "0140-525X",
+      "1469-1825"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "anvur-class-a",
+      "anvur-scientific",
+      "cwts-core",
+      "dongbi-b",
+      "doyens",
+      "erih-plus",
+      "jufo-2",
+      "ki-jl-2",
+      "medline",
+      "norway-2",
+      "poland-200",
+      "russia-white-list-1",
+      "vabb-shw"
+     ],
+     "host_organization": "https://openalex.org/P4310311721",
+     "host_organization_name": "Cambridge University Press",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310311721",
+      "https://openalex.org/P4310311702"
+     ],
+     "host_organization_lineage_names": [
+      "Cambridge University Press",
+      "University of Cambridge"
+     ],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Behavioral and Brain Sciences",
+    "raw_type": "journal-article"
+   },
+   "type": "article"
+  },
+  {
+   "id": "https://openalex.org/W4232897512",
+   "doi": "https://doi.org/10.1093/acprof:oso/9780195333213.001.0001",
+   "display_name": "Supersizing the Mind",
+   "publication_year": 2008,
+   "cited_by_count": 2201,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Andy Clark"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1093/acprof:oso/9780195333213.001.0001",
+    "doi": "https://doi.org/10.1093/acprof:oso/9780195333213.001.0001",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1093/acprof:oso/9780195333213.001.0001",
+    "pdf_url": null,
+    "source": null,
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": null,
+    "raw_type": "edited-book"
+   },
+   "type": "book"
+  },
+  {
+   "id": "https://openalex.org/W2096578021",
+   "doi": "https://doi.org/10.1017/s0140525x12000660",
+   "display_name": "Toward a second-person neuroscience",
+   "publication_year": 2013,
+   "cited_by_count": 1506,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Leonhard Schilbach"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Bert Timmermans"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Vasudevi Reddy"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Alan Paul Costall"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Gary Bente"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Tobias Schlicht"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Kai Thorsten Vogeley"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1017/s0140525x12000660",
+    "doi": "https://doi.org/10.1017/s0140525x12000660",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.1017/s0140525x12000660",
+    "pdf_url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/871218E54FD437AF78D0CCE054C67462/S0140525X12000660a.pdf/div-class-title-toward-a-second-person-neuroscience-a-href-en01-ref-type-fn-span-class-sup-1-span-a-div.pdf",
+    "source": {
+     "id": "https://openalex.org/S59628311",
+     "display_name": "Behavioral and Brain Sciences",
+     "issn_l": "0140-525X",
+     "issn": [
+      "0140-525X",
+      "1469-1825"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "anvur-class-a",
+      "anvur-scientific",
+      "cwts-core",
+      "dongbi-b",
+      "doyens",
+      "erih-plus",
+      "jufo-2",
+      "ki-jl-2",
+      "medline",
+      "norway-2",
+      "poland-200",
+      "russia-white-list-1",
+      "vabb-shw"
+     ],
+     "host_organization": "https://openalex.org/P4310311721",
+     "host_organization_name": "Cambridge University Press",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310311721",
+      "https://openalex.org/P4310311702"
+     ],
+     "host_organization_lineage_names": [
+      "Cambridge University Press",
+      "University of Cambridge"
+     ],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Behavioral and Brain Sciences",
+    "raw_type": "journal-article"
+   },
+   "type": "article"
+  },
+  {
+   "id": "https://openalex.org/W4243906228",
+   "doi": "https://doi.org/10.1016/j.tics.2016.07.002",
+   "display_name": "Cognitive Offloading",
+   "publication_year": 2016,
+   "cited_by_count": 1450,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Evan F. Risko"
+     }
+    },
+    {
+     "author": {
+      "display_name": "Sam J. Gilbert"
+     }
+    }
+   ],
+   "primary_location": {
+    "id": "doi:10.1016/j.tics.2016.07.002",
+    "doi": "https://doi.org/10.1016/j.tics.2016.07.002",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1016/j.tics.2016.07.002",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S192051125",
+     "display_name": "Trends in Cognitive Sciences",
+     "issn_l": "1364-6613",
+     "issn": [
+      "1364-6613",
+      "1879-307X"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "anvur-class-a",
+      "anvur-scientific",
+      "cwts-core",
+      "dongbi-a",
+      "doyens",
+      "jufo-3",
+      "ki-jl-2",
+      "medline",
+      "norway-2",
+      "poland-200",
+      "russia-white-list-1",
+      "vabb-shw"
+     ],
+     "host_organization": "https://openalex.org/P4310320990",
+     "host_organization_name": "Elsevier BV",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310320990"
+     ],
+     "host_organization_lineage_names": [
+      "Elsevier BV"
+     ],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Trends in Cognitive Sciences",
+    "raw_type": "journal-article"
+   },
+   "type": "review"
+  }
+ ]
+}

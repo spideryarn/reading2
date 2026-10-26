@@ -8,7 +8,8 @@
  * its own page — the 40 most-cited citing works, with `abstract_inverted_index`
  * — and **reuses everything else**: the identity confirmation (the DOI's record
  * must carry the article's title and an author, or for an arXiv paper at its own
- * arXiv address two of its authors; or one title-search match),
+ * arXiv address two of its authors; or one title-search work, which may be
+ * twin records asked about together, `cites:W1|W2`: plan 261025h, decision 2),
  * the shared polite limiter, and the citers' text parser. Nothing is cached:
  * Situate runs on a press, a few times a day at most.
  *
@@ -24,6 +25,7 @@ import { plainRegistryText, record, list } from "./bibliographic.js";
 import {
   type ArticleIdentity,
   type CitersDeps,
+  citedIds,
   confirmedWorkOf,
   openAlexInTurn,
   parseOpenAlexCiters,
@@ -36,10 +38,10 @@ import { MAX_CITERS } from "./situate.js";
 
 const FIELDS = "id,doi,display_name,publication_year,cited_by_count,abstract_inverted_index";
 
-/** The works citing one OpenAlex id, most cited first, `MAX_CITERS` of them, with abstracts. */
-export function situateCitersUrl(openalexId: string): string {
+/** The works citing these OpenAlex ids (`citedIds`), most cited first, `MAX_CITERS` of them, with abstracts. */
+export function situateCitersUrl(openalexIds: string): string {
   return (
-    `https://api.openalex.org/works?filter=cites:${encodeURIComponent(openalexId)}` +
+    `https://api.openalex.org/works?filter=cites:${encodeURIComponent(openalexIds)}` +
     `&sort=cited_by_count:desc&per-page=${MAX_CITERS}&select=${FIELDS}&mailto=${encodeURIComponent(CONTACT_EMAIL)}`
   );
 }
@@ -104,7 +106,7 @@ export async function situateCiters(
         return never;
       }
     }
-    const got = await openAlexInTurn(confirmed.key, situateCitersUrl(confirmed.target.openalexId), deps);
+    const got = await openAlexInTurn(confirmed.key, situateCitersUrl(citedIds(confirmed.target)), deps);
     if (got.kind !== "json") return { kind: "unavailable" };
     const citers = parseSituateCiters(got.json);
     return citers === null ? { kind: "unavailable" } : { kind: "found", citers };

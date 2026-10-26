@@ -2,15 +2,22 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-One mode in the band, with six sub-modes:
+One mode in the band, with seven sub-modes. Since 2026-10-25 the owner sees three of them as chips,
+and the other four as tools inside the first
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)):
 
-- **Bibliography**: the works the piece cites (the Citations mode until 2026-10-09).
-- **Not cited**: papers close to it that its bibliography does not list (the owner's, since
-  2026-10-11).
+- **Where it sits**: what came after the piece, what it leans on, and the literature search (the
+  owner's default, since 2026-10-25). Its four tools:
+  - **Reception**: what others have written about the piece (one of Debate's two).
+  - **Claims**: the claims it rests on, for the reader to check against the web (Debate's other).
+  - **Not cited**: papers close to it that its bibliography does not list (the owner's, since
+    2026-10-11).
+  - **Investigate**: questions for Chat about all of that (the owner's, since 2026-10-20).
+- **Bibliography**: the works the piece cites (the Citations mode until 2026-10-09; a visitor's
+  default).
 - **Links**: every web address its own text links to (since 2026-10-11).
-- **Reception**: what others have written about the piece (one of Debate's two).
-- **Claims**: the claims it rests on, for the reader to check against the web (Debate's other).
-- **Investigate**: questions for Chat about all of that (the owner's, since 2026-10-20).
+
+A visitor's chips are unchanged: Bibliography, Links, Reception and Claims ([§ Visitors](#visitors)).
 
 It has been out of the experimental
 switch, in every reader's bar, since the day it was made.
@@ -36,13 +43,14 @@ for Reception and Claims. This page owns the merge.
 
 ## In this doc
 
-- [§ The band](#the-band) — one chip row, five panels, one surface
+- [§ The band](#the-band) — three chips for the owner, four tools inside the first, one surface
+- [§ Where it sits](#where-it-sits) — the default: After it, Before it, the literature search, and the tools row
 - [§ Not cited](#not-cited) — OpenAlex's search on the owner's press, less the bibliography, and why every row says "not among the works Spideryarn found"
 - [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
 - [§ Investigate](#investigate) — suggested questions and your own, each a chat with a web search; why a launcher and why the name
-  - [§ Where this piece sits](#where-this-piece-sits) — the experimental dossier at its top: one press, a planned search, findings anchored to passages
+- [§ Where this piece sits](#where-this-piece-sits) — the literature search's dossier: one press, a planned search, findings anchored to passages
 - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
-- [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
+- [§ What a press buys](#what-a-press-buys) — what each press arms (only Bibliography, now), each tool's own button, and what is made on import
 - [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one), and no Not cited or Investigate
 - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
@@ -52,13 +60,33 @@ for Reception and Claims. This page owns the merge.
 ## The band
 
 ```
- ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 │ Investigate ┐   (i)
- │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (the default)
- │ NotCitedPanel                                       ← Not cited (the owner's only)
+ ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                                   (i)
+ │ WhereItSitsPanel                          ← Where it sits (the owner's default)
+ │   Tools: Pages about it 3 · Check a claim 8 · Close to it, not cited 18 · Ask your own question
+ │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (a visitor's default)
  │ LinksPanel                                          ← Links
- │ ReceptionAndClaimsPanel, as the Debate mode drew it         ← Reception, Claims
- │ InvestigatePanel                                    ← Investigate (the owner's only)
+ │
+ │ ┌ Where it sits │ Bibliography │ Links ┐  Where it sits › Pages about it        (a tool's head)
+ │ ReceptionAndClaimsPanel, as the Debate mode drew it  ← Reception, Claims
+ │ NotCitedPanel                                        ← Not cited
+ │ InvestigatePanel                                     ← Investigate
 ```
+
+**Three chips, four tools, seven addresses** (since 2026-10-25, [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 7).
+Greg asked for fewer sub-modes where they could be unified:
+
+> be proactive if you think things can be unified into one submode. Great, let's do that.
+>
+> — Greg, 2026-10-25 (answer to q-vg2b69)
+
+Reception, Claims, Not cited and Investigate stayed the panels they were, at the addresses they
+had, and left the chip row: *Where it sits* ends with a row of plain links to them, and each of
+them carries *Where it sits › its own name* after the chip row, the first words the way back (`ToolBack`). Folding them into
+one page was passed over for now (the plan's § The simpler option). **`SOURCES_VIEWS` is the list of
+addresses and `SOURCES_CHIPS` the owner's chips** ([`params.ts`](../../src/web/params.ts)), and one
+exhaustive `chipOf` says which chip each address lights — the four tools light *Where it sits* —
+so exactly one radio is checked for every legal `?sources=` (GPT Sol's F2;
+`tests/sources-chips.test.tsx`).
 
 **A wrapper, not a rewrite.** `SourcesBand` reads the sub-mode and hands one chip row to
 whichever panel it names, as that panel's `head`, so there is exactly one `ModeSurface` on screen,
@@ -67,16 +95,65 @@ panel adds (its counts and who made it). The chip row is the band's header in ev
 switching does not move it; it replaced Debate's globe-and-title head and the Reception | Claims row
 under it.
 
-**Each chip's number is its own list's**, worked out by the pure selectors in
+**Each chip's and tool's number is its own list's**, worked out by the pure selectors in
 [`sources-counts.ts`](../../src/web/sources-counts.ts) that the panels draw their lists
 with, so a number and the list under it cannot disagree (GPT Sol's F4): every work cited for
-Bibliography (no number while there is no list), Not cited's rows (none until a stored search
-has been read), Links' distinct addresses, Reception's rows through its thread, Claims' listed
-claims or, once checked, the sources the checks found.
+Bibliography (no number while there is no list), Links' distinct addresses, and on *Where it sits*'
+tools row Reception's rows through its thread, Claims' listed claims or, once checked, the sources
+the checks found, and Not cited's rows (none until a stored search has been read). *Where it sits*
+itself has no number: it is several lists.
 
 **The description is the frame Greg gave**, *"What this piece cites, and what others say about
-it"*, and each chip's card leads with one half of it (sub-modes.ts § `SOURCES_SUB_MODES`).
-There is no description line in the band ([mode.md § The client](mode.md#the-client)).
+it"*, and each chip's card leads with one half of it (sub-modes.ts § `SOURCES_SUB_MODES`); *Where
+it sits*' leads with both. There is no description line in the band
+([mode.md § The client](mode.md#the-client)).
+
+## Where it sits
+
+The owner's default since 2026-10-25, acting on Greg's answer about cost:
+
+> if there's something we can do for free, great, let's do that proactively. If there's something
+> that's going to cost money, only do that when we open the sources mode. If it's going to cost a
+> lot of money, like per citation or something, then maybe we only do that when the user requests
+> something for that citation rather than proactively.
+>
+> — Greg, 2026-10-25 (answer to q-vg2b69)
+
+Top to bottom:
+
+- **A head line** from the piece's year (`meta.publishedAt`, else the dossier's): *A piece from 1998:
+  what has been said since*, or for a piece two years old or less *…: where it sits now*; with no
+  year, a neutral line. Once the dossier exists its own head line (the planner's kind and year)
+  takes this one's place, so there are never two.
+- **The literature search** ([§ Where this piece sits](#where-this-piece-sits)): the dossier when one
+  is stored, else *Search the literature* with its line on what leaves. Lists first until you ask;
+  after that, the dossier first (decision 1).
+- **After it**: OpenAlex's papers that cite the piece, most cited first, five then *Show all* — the
+  same read and the same sentence for every outcome as Reception's *Cited by* (`useCiters`,
+  `CitersAnswer`), never a copy of them.
+- **Before it**: the five works Bibliography rates the piece as leaning on most (`relevance`, the
+  ranking Investigate's *About the works it cites* uses), each a press that opens its row in
+  Bibliography, then the way to the whole list. A work with no rating is left out; a list with none
+  rated, or no list yet, says so.
+- **After it and Before it are ordered by the piece's age** when its year is known: older than two
+  years, After it first (it has had time to be answered); otherwise Before it first. With no year,
+  side by side (`whereOrder`).
+- **The tools row**: *Pages about it* (Reception), *Check a claim* (Claims), *Close to it, not cited*
+  (Not cited), *Ask your own question* (Investigate), each with its number where it has one. Plain
+  links: a press moves `?sources=` and arms nothing ([§ What a press buys](#what-a-press-buys)).
+
+**Nothing paid runs on opening it.** *After it* is a free OpenAlex read, now asked whenever Sources
+opens on it ([privacy.md](privacy.md#crossref-datacite-and-openalex-are-sent-a-doi)), *Before it* is
+Bibliography, which a press here arms if it is missing, and the dossier is read, never started. The
+plan's cost ladder has the rest. **Owner only**: a visitor reads the bare address as Bibliography,
+because the citers have no public projection yet (GPT Sol's F3).
+
+**After it starts unfiltered** (decision 10, GPT Sol's F15). *About "keyword"*, a labelled second
+view for a much-cited piece, is not built yet: it waits on the final shape of the citers route's
+keyword view.
+
+The panel is [`src/web/WhereItSitsPanel.tsx`](../../src/web/WhereItSitsPanel.tsx); its tests are
+`tests/where-it-sits.test.tsx`.
 
 ## Not cited
 
@@ -111,6 +188,19 @@ Telling a reviewer the piece omits work it cites is the worst error this view ca
 says "not cited"**: the framing says once that none is among the works Spideryarn found in the
 bibliography, and that whether any belongs is the reader's call. A stale or capped Bibliography
 puts a warning above the list; no Bibliography at all is its own sentence, with no button.
+
+**The piece's own editions, and its authors' other work, are two groups under the list, never
+hidden** (plan [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+decision 3): four of *The Extended Mind*'s nineteen rows were the piece in another form. A row
+carrying the piece's authors (two of them, or a sole author's one, by surname and initial) goes
+under *Other editions of this piece* only when its title says so — an explicit marker (*reprint*,
+*translation*, *traducción*, *edition*, *version*…) beside the piece's own title — and otherwise
+under *By the same authors*, a label that claims nothing more. A subtitle, a bracketed aside or a
+DOI that begins with the piece's proves no lineage (GPT Sol's review of the stage, S1-F3), so the
+trial's Czech *The extended mind [Rozren mysel]* and Spanish *La mente extendida* are both *By the
+same authors*. An anthology that lists no
+authors stays an ordinary row. The groups are not in the list's count or on the tool's number,
+which count only the ordinary rows. `notInBibliography` in `src/related-work.ts` sorts them.
 
 **The owner's only**, as *Cited by* is: the route is owner-only, and a visitor pressing would spend
 our OpenAlex allowance. The chip arms nothing (`activationForSources` returns `null`); its read is
@@ -176,12 +266,15 @@ from `meta.source`; a visitor gets the neutral sentence, because their meta does
 >
 > — Greg, 2026-10-19 (addendum spya-x4xpw4), in [261020n](../plans/261020n-sources-reception-layout-and-a-sources-chat-sub-mode.md)
 
-Since 2026-10-20, for the owner: the sixth chip, `?sources=investigate`. It is **a place to start
-chats from**, not a chat drawn in the band. Top to bottom:
+Since 2026-10-20, for the owner, at `?sources=investigate`: a chip until 2026-10-25, and since then
+*Ask your own question* on *Where it sits*' tools row. It is **a place to start chats from**, not a
+chat drawn in the band. Top to bottom:
 
 - **A question box.** It replaced Reception's *Look at the debate from an angle*.
 - **Your questions**: every chat started from the box or a suggested question, newest first, each
   with its gist. This was Reception's *Your angles*. It has been first since 2026-10-21.
+- **Suggested for this piece**: the literature search's own questions, once it has run
+  ([§ Where this piece sits](#where-this-piece-sits)), which stayed here when its dossier moved.
 - **Five suggested questions**, the same for every article: how it has been received, whether its
   main claims are borne out, who disagrees most and why, whether the studies it leans on have held
   up, and what has been published since.
@@ -224,14 +317,14 @@ own nickname `ask` in the command bar (`tests/command-match-mode-aliases.test.ts
 collides with Chat's `question`. *Investigate* says what Greg asked for: lots of searching.
 
 **What each press costs**: one ordinary chat turn with web search, through Chat's route and its
-limits. There is no new spend mechanism. The chip arms nothing (`activationForSources` returns
+limits. There is no new spend mechanism. Arriving arms nothing (`activationForSources` returns
 `null`), and arriving by a link, Back or a restore sends nothing.
 
 **The stored origin word is still `reception`**, which is the angle box's word. Every lens chat,
 including those made from the old angle box, opens its way back here. No reader sees the word, and
 renaming it is a migration left for later (the plan's § Deferred).
 
-**Not for visitors.** Their chip row leaves Investigate out, and a shared `?sources=investigate`
+**Not for visitors.** Their chip row has no Investigate, and a shared `?sources=investigate`
 draws Bibliography (params.ts § `visitorSourcesView`), as Not cited does.
 
 What the lens is, and what to know before changing it, is still
@@ -240,10 +333,12 @@ The panel is [`src/web/InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx
 Tests: `tests/reception-lens.test.tsx` covers the panel, and `tests/reception-lens-in-chat.test.tsx`
 covers the whole journey with its one POST per press.
 
-### Where this piece sits
+## Where this piece sits
 
-**Since 2026-10-24, experimental**: a dossier at the top of Investigate, for the owner with the
-experimental switch on. One press, *Search the literature*, and the rest is automatic: a model plans
+**The literature search**, in *Where it sits* for every owner since 2026-10-25; from 2026-10-24
+until then a dossier at the top of Investigate, behind the experimental switch. It left the switch
+as the heart of the new default, accepting its measured cost before the eval reports
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 5). One press, *Search the literature*, and the rest is automatic: a model plans
 a dozen or so web searches from the piece, they run, OpenAlex lists the later papers that cite it,
 and one read of all of it beside the whole article writes findings anchored to the passages they
 concern, every quote checked in code against the article and against the source it came from. The
@@ -254,14 +349,21 @@ another chip, and the deeper dive on any one finding is its *Ask in chat*.
   what leaves — the piece to the AI through OpenRouter, the searches it writes to Exa through
   OpenRouter, the DOI or title to OpenAlex, and the reader's profile or purpose only to the final AI read
   ([privacy.md § Search the literature](privacy.md#search-the-literature)).
-  It is the dearest press in Sources, so arriving never starts it: the chip arms nothing, and the
-  hook has no automatic run.
+  It is the dearest press in Sources ($0.26–0.48 in the six-article trial, mean $0.33; four an hour
+  and twelve a day per reader, and 100 a day across everyone: `SITUATE_RATE_POLICY`), so arriving
+  never starts it: the chip arms only Bibliography, and the hook has no automatic run.
 - **Done**: a head line (*A review from 2023: what has happened since*), the model's overview, and
   the findings grouped by kind in the order a reader most needs them — Challenged, Citation?, Since,
   Not cited?, Reception, Supported — each with its passage as a jump, the model's note, its sources
-  as links with *What it says* one press away, and *Ask in chat*. That sends a lens question, so
-  the chat is an Investigate chat listed under *Your questions*, and the finding then shows its
-  mark. The model's five questions sit above the fixed ones as *Suggested for this piece*.
+  as links with *What it says* one press away, and *Ask in chat*. The model's five questions are
+  Investigate's *Suggested for this piece*.
+- **A finding's chat has its own origin** since 2026-10-25, `{ mode: "situate", itemId }`, the
+  finding's stable id with its passage as a snapshot (decision 9; queue item `qi-mmtsxdhg`). Its
+  mark is found by the id, so a *Search again* that rewords the note keeps it; Chat's list says
+  *Started from a finding in Sources › Where it sits*; and its way back opens *Where it sits* on the
+  finding. Until then it sent a lens question, listed under Investigate's *Your questions* and found
+  by its words; such a chat is still found by them (`findingLensOrigin`) and still listed there.
+  The question it asks is unchanged ([chat-from-a-mode.md](chat-from-a-mode.md#which-modes-have-it)).
 - **Found nothing** says so in those words, never as "all clear"; *What was searched*, folded at the
   foot, lists each query and what came of it, and says that nothing found is not nothing there.
 - **Stale** gets the banner with *Search again*; its × lasts the page view only, because
@@ -269,23 +371,26 @@ another chip, and the deeper dive on any one finding is its *Ask in chat*.
   **Outdated** gets no banner, like every other Sources artefact. **Written for an older
   profile** gets the usual `WrittenForYou` badge.
 
-Owner only, by construction: `InvestigateBand` in `SourcesMode.tsx` mounts `useSituate` only with
-the switch on, and a visitor's band has no Investigate. A margin kind for the same findings is the
-plan's next stage. The plan, with its research and review, is
+Owner only, by construction: `WhereBand` and `InvestigateBand` in `SourcesMode.tsx` mount
+`useSituate`, for every owner whatever the switch says, and a visitor's band has neither. The
+margin's *literature* notes draw the same findings (still behind the switch: [marginalia.md](marginalia.md)), and their *Open in Sources* lands on the finding
+in *Where it sits* (`openFindingInSources`). The plan, with its research and review, is
 [261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md);
-the tests are `tests/situate-dossier.test.tsx`, and the switch on and off in
+the tests are `tests/situate-dossier.test.tsx`, and an owner with the switch off in
 `tests/reception-lens-in-chat.test.tsx`.
 
 **Tried on six articles beside Reception, Cited by and Not cited** (2026-10-25):
 [261025a](../investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md).
-What Sources might become as a result, folded to three chips, is proposed for Greg in
+What Sources might become as a result, folded to three chips, was proposed for Greg in
 [261025c](../plans/261025c-sources-proposals-what-it-shows-first-and-fewer-sub-modes.md)
-(question q-vg2b69); nothing of it is built.
+(question q-vg2b69), and his answer is being built as [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md).
 
 ## The address, and old links
 
-`?mode=sources`, and `?sources=` names Bibliography, Not cited, Links, Reception, Claims or
-Investigate; Bibliography is the default and is left off. Each sub-mode keeps its own parameters,
+`?mode=sources`, and `?sources=` names Where it sits, Bibliography, Not cited, Links, Reception,
+Claims or Investigate. **Where it sits is the default since 2026-10-25** and is left off, so a bare
+`?mode=sources` opens it for the owner; Bibliography was the default until then, and is still what a
+visitor's band draws for a bare address (`visitorSourcesView`). Each sub-mode keeps its own parameters,
 unchanged: `?citeby=` and `?citebar=` for
 Bibliography, `?receptionby=`, `?bears=` and `?receptionthread=` for Reception and Claims.
 
@@ -298,14 +403,17 @@ F1):
 
 | Old address | Lands on |
 |---|---|
-| `?mode=citations` | Bibliography |
+| `?mode=citations` | Bibliography, written `sources=bibliography` since 2026-10-25, when a bare Sources address stopped meaning it |
 | `?mode=debate` | Reception |
 | `?mode=debate&debate=claims`, or the older `?debateby=claim` | Claims |
-| `?mode=peer-review`, with `?peer-review=X` if any | the same, as `?mode=sources&sources=X` |
+| `?mode=peer-review`, with `?peer-review=X` if any | the same, as `?mode=sources&sources=X`; a bare one gets today's default, Where it sits, as a bare `?mode=sources` does (on purpose: it meant "the mode's default") |
+| `?mode=sources` with no `sources=`, a bookmark from before 2026-10-25 | Where it sits for the owner (it was Bibliography); Bibliography for a visitor |
 | `?peer-review=X` on any address | `?sources=X` |
 | `?chatfrom=citations`, `?chatfrom=debate`, `?chatfrom=peer-review` | `?chatfrom=sources` |
 
-The newest explicit word wins: `?sources=` over `?peer-review=` over Debate's `?debate=`.
+The newest explicit word wins: `?sources=` over `?peer-review=` over Debate's `?debate=`. A
+remembered last view stores `sources` verbatim, so one saved on Bibliography before 2026-10-25,
+which stored nothing, restores to Where it sits; one saved on any other sub-mode restores to it.
 `RETIRED_MODES` in [`src/modes.ts`](../../src/modes.ts) maps all three old words to `sources` for
 everything that reads only the mode: the tab title, `/help/mode-citations`, `/help/mode-debate` and
 `/help/mode-peer-review`, a feedback report. `peer-review` is in last-view's `NEVER_REMEMBERED`
@@ -313,7 +421,10 @@ beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered
 *tests/sources-old-addresses.test.ts*, *tests/last-view.test.ts* and
 *tests/reception-navigation.test.tsx*.
 
-**In the command bar the old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
+**In the command bar** all seven are rows, *Where it sits* first: the four tools keep their own
+rows and aliases, and *Where it sits* is also *situate*, *the literature*, *where this piece
+sits*, *literature search*, *what came after* and *papers citing it*
+(`SOURCES_SUB_MODES`); not *search the literature*, which as a phrase starting *search* is the bar's find-in-article command. **The old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
 *citations* and the bibliography words (*references*, *works cited*) find Bibliography; *uncited*,
 *related work*, *missing citations* and the like find Not cited; *links*,
 *hyperlinks*, *external links*, *outbound links*, *web links* and *urls* find Links; *debate* and
@@ -327,21 +438,32 @@ rule 5). Sources has come first since 2026-10-10 and ranks before Referee for *p
 
 ## What a press buys
 
-**Each sub-mode buys its own work and only on a press of its own**: a press on the Sources
-button, a chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
-`activationForSources`): the `bibliography` list for Bibliography, nothing for Not cited or Links,
-the `reception` web search for Reception, the `sources-claims` list for Claims, and nothing for
-Investigate, whose every press is a chat ([§ Investigate](#investigate)). Not cited's
-search is its panel's own button and nothing else ([§ Not cited](#not-cited)). Every read stays
-mounted in all six sub-modes, so
-the chips can count, and each auto-run is gated on its own sub-mode, so a press armed for one that
-lands on another is retired unspent. A link, Back, popstate or a last-view restore never buys
-anything.
+**Only Bibliography is ever armed by a press that moves you**: a press on the Sources button, a
+chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
+`activationForSources`), and since 2026-10-25 that is the `bibliography` list for *Where it sits*
+and for Bibliography, and nothing for any other. *Where it sits* arms it because *Before it* is
+drawn from it and an article can arrive without one (Rebuild, Start again, a re-add): the mode
+contract's "opening an unmade sub-mode starts it" ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 8, GPT Sol's F4).
 
-**On import, only Bibliography is made** (`AUTO_MODE_STEPS`, `DELEGATED_MODE_STEPS`): it is the
-default view, and Claims' line of cited works reads it. Reception's search is the dearest press in
-the app and often finds nothing, and Claims' list serves a view many readers will not open, so each
-waits for its chip.
+**Each tool's work is its own panel's button.** Until 2026-10-25 a press on Reception's chip armed
+its web search and a press on Claims' armed their list. The chips went, and the tools row's links
+arm nothing, because a link that spends is the bug this file keeps guarding against. So each
+starts from inside: Reception's *Search the web*, under *Nobody has asked the web about this one
+yet*, and Claims' *List its claims* (both checked in `ReceptionAndClaimsPanel.tsx` before the arm
+went); Not cited's *Search OpenAlex for related work* ([§ Not cited](#not-cited)); Investigate's
+every press is a chat ([§ Investigate](#investigate)); and the literature search is *Search the
+literature* ([§ Where this piece sits](#where-this-piece-sits)). Their command-bar rows open the
+tool, as the links do. Reception's search is retired as a chip, not as a search (decision 6, GPT
+Sol's F5): its stored rows, its stale banner's *Search again*, and Metadata's and the command bar's
+*Run again* all stay.
+
+Every read stays mounted in every sub-mode, so the chips and tools can count, and each auto-run is
+gated on its own sub-mode, so a press armed for one that lands on another is retired unspent. A
+link, Back, popstate or a last-view restore never buys anything.
+
+**On import, only Bibliography is made** (`AUTO_MODE_STEPS`, `DELEGATED_MODE_STEPS`): *Where it
+sits* and Claims' line of cited works read it. Reception's search often finds nothing, and Claims'
+list serves a view many readers will not open, so each waits for its button.
 
 **Notes from abstracts follow the list, not a press** (since 2026-10-18): whenever a Bibliography is
 published — on import, a re-make, *Find them again* — a `citation-blurbs` job is queued behind it
@@ -373,10 +495,13 @@ the policy about blocks would change what every public article shows, and was le
 [261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md) as wider than
 the report.
 
-**Not cited and Investigate are not there at all.** The visitor's chip row leaves both out. A
-shared `?sources=not-cited` or `?sources=investigate` draws Bibliography (params.ts §
-`visitorSourcesView`), so a visitor never asks `/api/related-work` and never mounts an Investigate
-sender (*tests/public-network-trace.test.tsx*).
+**Where it sits, Not cited and Investigate are not there at all**, and plan 261025h left a
+visitor's band as it was (GPT Sol's F3): their chips are Bibliography, Links, Reception and Claims.
+A bare Sources address (the owner's *Where it sits*), a shared `?sources=where`,
+`?sources=not-cited` or `?sources=investigate` draws Bibliography (params.ts §
+`visitorSourcesView`), so a visitor never asks `/api/citers`, `/api/situate` or `/api/related-work`
+and never mounts an Investigate sender (*tests/public-network-trace.test.tsx*). A visitor's *Where
+it sits* would need a public projection of the citers; it is left for later.
 
 ## Cited in this paragraph
 
@@ -403,19 +528,21 @@ line, from the same two lists in the public payload.
 
 ## Chats started from it
 
-A chat started from a cited work, a claim or an angle keeps its stored origin as data: `bibliography`
-for a cited work, `sources-claims` for a claim, and `reception` for an angle. The old spellings were
-`citations` for a work and `debate` for both other shapes; old rows are read under the current names.
-Chat's list shows all three under Sources' icon and one `sources` filter; the row names the
-sub-mode in words (*Bibliography*, *Investigate* or *Claims*), the tooltip gives the fuller origin,
-and the way back
+A chat started from a cited work, a claim, an angle or a literature-search finding keeps its stored
+origin as data: `bibliography` for a cited work, `sources-claims` for a claim, `reception` for an
+angle, and `situate` for a finding (since 2026-10-25). The old spellings were `citations` for a work
+and `debate` for a claim or an angle; old rows are read under the current names.
+Chat's list shows all four under Sources' icon and one `sources` filter; the row names the
+sub-mode in words (*Bibliography*, *Investigate*, *Claims* or *Where it sits*), the tooltip gives
+the fuller origin, and the way back
 opens that sub-mode: a work on Bibliography with its row in view, a question (an angle, before 2026-10-20) on Investigate, a claim on
-Claims with its row in view ([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,
-Reader.tsx § `openOrigin`, GPT Sol's F5).
+Claims with its row in view, a finding on *Where it sits* with its row in view
+([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,
+Reader.tsx § `openOrigin`, GPT Sol's F5 on 261009l and F6 on 261025h).
 
 **A focus belongs to one visit to its list**: Bibliography's focused work is forgotten on leaving
-Bibliography, and Claims' focused claim on leaving Claims, even when the mode stays Sources
-(item-focus.ts § `focusesLeft`, GPT Sol's F7). One Reader-owned `openBibliographyWork` sets the
+Bibliography, Claims' focused claim on leaving Claims, and a finding on leaving *Where it sits*,
+even when the mode stays Sources (item-focus.ts § `focusesLeft`, GPT Sol's F7). One Reader-owned `openBibliographyWork` sets the
 focus and moves to Bibliography together. Its callers: a chat's way back, Claims' *Cited in this
 paragraph*, and, since 2026-10-10, *Open in Sources* on a citation's card in the prose
 ([bibliography.md § Marked in the prose](bibliography.md#marked-in-the-prose-in-every-mode)).
@@ -451,14 +578,17 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
 
 - [`src/web/modes/sources/SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx)
   — the owner's band, the visitor's, and the chip row (`SourcesViews`).
+- [`src/web/WhereItSitsPanel.tsx`](../../src/web/WhereItSitsPanel.tsx) — *Where it sits*, its
+  tools row, and a tool's *Where it sits ›* crumb (`ToolBack`).
 - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
 - [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx),
   [`src/web/NotCitedPanel.tsx`](../../src/web/NotCitedPanel.tsx),
   [`src/web/LinksPanel.tsx`](../../src/web/LinksPanel.tsx),
   [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) and
-  [`src/web/InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) — the five panels; each takes the chip row
-  as `head`, and ReceptionAndClaimsPanel draws C1's cited works under claims.
+  [`src/web/InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) — the other five panels; each takes the chip row
+  as `head`, ReceptionAndClaimsPanel draws C1's cited works under claims, and its `CitersAnswer`
+  is *Cited by*'s and *After it*'s.
 - [`src/web/useRelatedWork.ts`](../../src/web/useRelatedWork.ts) — Not cited's read and press;
   [`src/related-work.ts`](../../src/related-work.ts) — the query, the search and the exclusion,
   behind `GET` and `POST /api/related-work/:slug`.
@@ -469,7 +599,7 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   [`src/web/useSituate.ts`](../../src/web/useSituate.ts) — *Where this piece sits*, its words and
   order, and its read and press; [`src/situate.ts`](../../src/situate.ts) — the step behind
   `GET /api/situate/:slug` and the `situate` job.
-- [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)
+- [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`, `SOURCES_CHIPS`, `chipOf`; [`src/web/router.ts`](../../src/web/router.ts)
   § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §
   `activationForSources`.
 - The help page, `src/web/help/pages/modes/sources.md`, written for a reader.

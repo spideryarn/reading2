@@ -114,7 +114,7 @@ export const REMEMBERED = [
   "gate", // glossary threshold
   "rank", // quotes order
   "bar", // quotes threshold
-  "sources", // bibliography, not-cited, links, reception or claims — a restore draws what exists; only a press makes anything
+  "sources", // where (the default, so absent), bibliography, not-cited, links, reception, claims or investigate — a restore draws what exists; only a press makes anything
   "receptionby", // reception's order — `debateby` until 2026-10-09, now in NEVER_REMEMBERED
   "bears", // claims' relevance threshold
   "receptionthread", // which of reception's threads narrows its list — `debatethread` until 2026-10-09

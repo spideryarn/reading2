@@ -162,7 +162,13 @@ function trimEntry(api: Api, e: LibraryEntry, archived: boolean) {
 }
 
 async function shelf(api: Api, archived: boolean): Promise<LibraryEntry[]> {
-  const answer = await api.call<{ articles: LibraryEntry[] }>("GET", `/api/library${archived ? "?archived=1" : ""}`);
+  /* MCP needs the article catalogue, not the reader's private progress. The
+     query flag makes the route skip `read_so_far_words`, rather than fetching
+     a field only for `trimEntry` to discard it. */
+  const query = new URLSearchParams();
+  if (archived) query.set("archived", "1");
+  query.set("reading", "0");
+  const answer = await api.call<{ articles: LibraryEntry[] }>("GET", `/api/library?${query}`);
   return answer.articles;
 }
 

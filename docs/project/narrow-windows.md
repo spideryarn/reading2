@@ -373,7 +373,11 @@ Three things to know before touching any of it:
   (`--zz-control`) alongside it, or you are testing your method rather than the rule.
 - **`cover` is not standalone-only.** In an ordinary Safari or Chrome tab it also opens up the notch
   in landscape and the home indicator in portrait, and Safari's bottom inset *changes* as its
-  toolbar minimises. Only the top inset is reliably zero in a tab.
+  toolbar minimises. Only the top inset is reliably zero in a tab — as far as anyone has measured.
+  Greg's 2026-10-25 report `spya-tfsjvq` says the landing page's bar sat under the clock "in a web
+  browser"; the fix (every signed-out bar adds `--safe-top`) is certain for the installed app and
+  unproven for a tab until the phone says what the inset is there:
+  [261026a](../plans/261026a-signed-out-nav-below-the-clock-on-an-iphone.md).
 - **Two things cannot do this arithmetic in CSS** and read the numbers through
   [`src/web/safe-area.ts`](../../src/web/safe-area.ts): `fitView`, which divides the window's width
   in pixels and must not spend width the notch has taken, and `stickyOffset`, which predicts where

@@ -78,6 +78,24 @@ describe("the public revision read", () => {
     }
   });
 
+  /* How much of an article its owner has read is theirs: never on the public
+     shelf, never in a visitor's read (plan 261025l; privacy.md § Reading
+     time). Neither the seconds nor the shelf pie's cached denominator. */
+  it("never asks for the owner's reading time or the shelf pie's cache in any public read", () => {
+    for (const [name, sql] of [
+      ["article", articleQuery.sql],
+      ["head", headQuery.sql],
+      ["asset", assetQuery.sql],
+      ["blocks", blocks],
+      ["comments", commentsQuery.sql],
+      ["searches", searchesQuery.sql],
+      ["listing", publicListing.sql],
+    ] as const) {
+      expect(sql, name).not.toContain("reading_time");
+      expect(sql, name).not.toContain("read_so_far_words");
+    }
+  });
+
   /**
    * **The predicate, in the statement.** `publicSlug` being right is one thing;
    * the query using it is another, and this is the only place they meet.

@@ -126,11 +126,13 @@ function paint(
   act(() => {
     root.render(
       createElement(ReceptionAndClaimsPanel, {
-        /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
+        /* Sources' chip row with Claims on it, the visitor's: since plan 261025h the
+           owner's Claims is a tool whose number is on Where it sits' tools row,
+           drawn by the same selector (sources-counts.ts). */
         head: sourcesHead({
           view: "claims",
           onView: () => {},
-          ownerSlug: NO_RECEPTION.slug,
+          ownerSlug: null,
           reception: NO_RECEPTION.reception,
           claimList: { kind: "owner", status: claimList.status, claimList: claimList.claimList, checks: owned.checks },
         }),
@@ -286,7 +288,7 @@ describe("what the checks found", () => {
     const titles = [...(claimItem(A.id)?.querySelectorAll(".rcp-item a.rcp-title") ?? [])].map((a) => a.textContent);
     expect(titles).toEqual(["Page at https://a.example/one", "Page at https://a.example/two", "Page at https://a.example/three"]);
     /* The segment counts the rows on screen, a page once per claim. */
-    expect(segments()[4]).toBe("Claims3");
+    expect(segments()[3]).toBe("Claims3");
   });
 
   it("says found nothing only for an explicit empty answer, and something else when a claim was not answered", () => {
