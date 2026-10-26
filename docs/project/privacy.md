@@ -773,6 +773,20 @@ title instead"*, and its earlier *"never the article's text"* became *"never the
 article's text"*, since a title is text. `LAST_UPDATED` moved to 11 October 2026, and
 `tests/privacy-page.test.ts` holds both clauses.
 
+**Since 2026-10-26, the same words may go to OpenAlex's full-text search**, when that title search
+(or the lack of a DOI) leaves no list: *Possible citations*, the works that matched a full-text
+search for the title ([261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md),
+[`src/citation-fulltext.ts`](../../src/citation-fulltext.ts)). The same lower-cased words and a
+year range, up to two requests, when its owner opens Sources and the panel asks
+(`GET /api/citers/:slug?with=possible`), and **only for an article added from a public web
+address** (`importedFromAPublicAddress`): an uploaded file's title may be the reader's own
+unpublished work, and is never sent to this search, which would match it against other people's
+text. Nothing is stored. The page adds *"and, for an article you added from a public web address,
+to find papers that matched a full-text search for its title"*; `LAST_UPDATED` moved to 26 October
+2026. GPT Sol's plan review, F6, is why the page moved with the route rather than with the panel: a
+route that can be called is a disclosure whether or not today's client calls it. The title search
+before it is unchanged, and still runs for an upload with a byline.
+
 **Also since 2026-10-11, Sources' Not cited sends the opening of the text, on the owner's press.**
 *Search OpenAlex for related work*
 ([sources.md § Not cited](sources.md#not-cited),

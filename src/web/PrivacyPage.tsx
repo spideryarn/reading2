@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "25 October 2026";
+const LAST_UPDATED = "26 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -436,7 +436,9 @@ export function PrivacyPage() {
             something of the reader's. These are sent the identifier of a
             published work, or since 2026-10-11, for an article with no DOI,
             the words of its title to OpenAlex (Cited by's title search,
-            docs/plans/261011q-…), or, on the owner's press in Sources' Not
+            docs/plans/261011q-…, and, for an article from a public address,
+            its full-text search for Possible citations, docs/plans/261026f-…,
+            src/citation-fulltext.ts), or, on the owner's press in Sources' Not
             cited, the title and the opening of the text (src/related-work.ts,
             docs/plans/261011ac-…, its review's F1), and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
             is the whole list of hosts, and the request is built in
@@ -477,10 +479,12 @@ export function PrivacyPage() {
           , when you open Sources on an article of yours, for the list of papers that cite it. Our
           server sends each one the identifier of a published work — for your article, its DOI —
           and our own contact address. When your article has no DOI, OpenAlex is sent the words of
-          its title instead, to find it by. And when you press Search OpenAlex for related work, in
-          Sources’ Not cited, OpenAlex is sent your article’s title and the opening of its text (its
-          abstract, on a paper), to find papers close to it. When the list of works your article
-          cites is made, each is looked up to write a short note on it from its abstract: Crossref
+          its title instead, to find it by; and, for an article you added from a public web address,
+          to find papers that matched a full-text search for its title. And when you press Search
+          OpenAlex for related work, in Sources’ Not cited, OpenAlex is sent your article’s title and
+          the opening of its text (its abstract, on a paper), to find papers close to it. When the
+          list of works your article cites is made, each is looked up to write a short note on it
+          from its abstract: Crossref
           and DataCite are sent its DOI or arXiv identifier, and OpenAlex its DOI. For an article
           you added from a public web address, a cited work with no DOI may be looked up at Crossref
           by its title and its first author’s surname instead; for a file you uploaded, the works it

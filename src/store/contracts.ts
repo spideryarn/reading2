@@ -438,7 +438,9 @@ export interface ArticleReader {
    * Owner-scoped like every read here: somebody else's slug is the same 404 as
    * one that does not exist.
    */
-  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">>;
+  loadArticleIdentity(
+    slug: string,
+  ): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear" | "filename">>;
 
   /**
    * Every work the piece cites, plus whether the list still describes the

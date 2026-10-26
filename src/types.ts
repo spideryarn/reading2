@@ -8226,6 +8226,37 @@ export interface Citer {
 }
 
 /**
+ * **Papers that may cite a piece OpenAlex cannot list citers for** —
+ * `possible` on a `no-doi` or `no-match` answer, only when asked
+ * (`?with=possible`) and only for an article from a public address
+ * (src/citation-fulltext.ts, plan 261026f). Works that matched OpenAlex's
+ * full-text search for the piece's title: a sign each cites it, not a citation
+ * count, and never added to one.
+ *
+ * - `found` — `total` is OpenAlex's count of every such work; `citers` the
+ *   first page of them, the piece's own records and works from more than a
+ *   year before it taken out (`dropped` says how many); `order` how the page
+ *   was sorted; `phrase` the exact words sent, which the panel's link to the
+ *   rest at OpenAlex repeats.
+ * - `common-phrase` — the title turns up in works from before the piece
+ *   existed often enough to be a phrase, not a citation of it.
+ * - `none` — no such work.
+ * - `unavailable` — OpenAlex could not be read.
+ */
+export type PossibleCiters =
+  | {
+      kind: "found";
+      total: number;
+      dropped: number;
+      order: "newest" | "most-cited";
+      phrase: string;
+      citers: Citer[];
+    }
+  | { kind: "common-phrase" }
+  | { kind: "none" }
+  | { kind: "unavailable" };
+
+/**
  * `GET /api/citers/:slug` — **who cites this article, or why there is no
  * list.** No model made any of it, and it is not part of the stored Debate.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
@@ -8267,8 +8298,8 @@ export interface Citer {
  *   Plan 261025h, decision 10.
  */
 export type CitersResult =
-  | { kind: "no-doi" }
-  | { kind: "no-match" }
+  | { kind: "no-doi"; possible?: PossibleCiters }
+  | { kind: "no-match"; possible?: PossibleCiters }
   | { kind: "not-indexed" }
   | { kind: "unconfirmed" }
   | { kind: "unavailable" }

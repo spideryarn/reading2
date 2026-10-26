@@ -282,6 +282,7 @@ import { isWebUrl, savedSource } from "./urls.js";
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
 /* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
+import { possibleCitersOf } from "./citation-fulltext.js";
 import { citersOf } from "./citation-index.js";
 import type { CitersResult } from "./types.js";
 /* Papers close to the article that its Bibliography does not list, for Sources'
@@ -13054,6 +13055,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    *
    * **The identity is the imported one, not the shelf's**: a reader's rename
    * would fail the title check on a correct DOI (F2).
+   *
+   * **`?with=possible` adds *Possible citations*** to a `no-doi` or `no-match`
+   * answer: the works that matched OpenAlex's full-text search for the piece's
+   * title, for an article from a public address — up to two more
+   * free requests, made only when the panel asks (src/citation-fulltext.ts,
+   * plan 261026f). Without it the answer is what it was.
    */
   {
     kind: "pattern",
@@ -13067,8 +13074,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          same shape, when the list has a topic (plan 261025h, decision 10). */
       const about = query.get("about");
       if (about !== null && about !== "topic") throw httpError(400, "about must be topic");
+      const withParams = query.getAll("with");
+      if (withParams.some((value) => value !== "possible")) throw httpError(400, "with must be possible");
+      const withPossible = withParams.length > 0;
       const identity = await loadArticleIdentity(slugPart(captures, 1));
       const citers: CitersResult = await citersOf(identity, {}, about === "topic" ? { about } : {});
+      if (withPossible && (citers.kind === "no-doi" || citers.kind === "no-match")) {
+        const possible = await possibleCitersOf(identity);
+        if (possible !== null) {
+          send(res, 200, { ...citers, possible } satisfies CitersResult);
+          return;
+        }
+      }
       send(res, 200, citers);
     },
   },
