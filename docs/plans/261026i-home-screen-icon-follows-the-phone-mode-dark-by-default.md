@@ -89,3 +89,11 @@ never changes by itself — iOS keeps the picture it took.
   the spec (wording and test fixed, and a `try` around `matchMedia`), the listener's effect at
   share-sheet time marked unverified, the cache claim softened, robots and the extension tile
   rightly left alone, the brand test's lists all updated.
+- **Code, GPT Sol** ([findings](261026i-home-screen-icon-code-review-sol.md)): one fix, made by
+  Sol — the brand proofs drew the (now charcoal) touch icon on both sides and called it ivory;
+  each side now shows its own tile. No defect in the script, its test, or the other consumers.
+
+## Result
+
+Landed on `dev`. Full `npm test` on 2026-10-26: one red, this work's own note comment over the
+240-character limit, fixed; typecheck and `brand:check` green. Not checked on a phone.

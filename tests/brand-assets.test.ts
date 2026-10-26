@@ -412,11 +412,19 @@ describe("brand assets", () => {
       expect(sample.getAttribute("srcset")).toBe("../../public/favicon-16x16.png 1x, ../../public/favicon-32x32.png 2x");
     }
     expect(doc.querySelectorAll("section.light img, section.dark img")).toHaveLength(16);
+    expect(doc.querySelector("section.light img:last-of-type")?.getAttribute("src"))
+      .toBe("../../public/apple-touch-icon-light.png");
+    expect(doc.querySelector("section.dark img:last-of-type")?.getAttribute("src"))
+      .toBe("../../public/apple-touch-icon.png");
     for (const image of doc.querySelectorAll("img")) {
       const relative = image.getAttribute("src");
       expect(relative).toMatch(/^\.\.\/\.\.\/public\/[\w-]+\.png$/);
       await expect(stat(path.join(ROOT, "assets/brand", relative ?? ""))).resolves.toBeDefined();
     }
+    const proof = await pixels(path.join(previewDir, "preview.png"));
+    const rgbaAt = (x: number, y: number) => [...proof.data.slice((y * proof.width + x) * 4, (y * proof.width + x + 1) * 4)];
+    expect(rgbaAt(110, 478)).toEqual([255, 249, 238, 255]);
+    expect(rgbaAt(510, 478)).toEqual([36, 35, 33, 255]);
   });
 
   it("does not create absent public/proof destinations in check mode", async () => {
