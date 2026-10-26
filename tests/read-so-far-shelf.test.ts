@@ -225,7 +225,7 @@ describe("the guarded write", () => {
     await getDb().execute(sql`delete from spideryarn.read_so_far_words where article_id = ${article.articleId}`);
     /* Another owner: the slug is not theirs, so there is nothing to refresh. */
     const { runAsOwner } = await import("../src/owner.js");
-    const stranger = "00000000-0000-4000-8000-0000000000aa" as Parameters<typeof runAsOwner>[0];
+    const stranger = "00000000-0000-4000-8000-00000000a5f1" as Parameters<typeof runAsOwner>[0];
     expect(await runAsOwner(stranger, () => pgReadingTimeStore.refreshShelfWords(SLUG))).toBe("fresh");
     expect(await getDb().select().from(readSoFarWords).where(eq(readSoFarWords.articleId, article.articleId))).toEqual([]);
   });
