@@ -1,7 +1,7 @@
 ---
 reports: spya-w95xmq
 ending: shipped
-comment: Sources is now three chips. Where it sits opens on free lists; "Search the literature" runs only on a press (~$0.30, Haiku shortlist then Sonnet) and has left the experimental switch. Two experiments sit behind it.
+comment: Sources is now three chips. Where it sits opens on free lists; "Search the literature" (~$0.30, Haiku shortlist then Sonnet) starts when you press to open it, and has left the experimental switch. Two experiments behind it.
 ---
 
 # Sources: situate the piece in the literature
@@ -112,7 +112,9 @@ Built in [plan 261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladd
 - **The cost ladder.** Opening Sources starts nothing paid. Where it sits shows two free lists:
   *Papers that cite it* (OpenAlex, with an optional *About "keyword"* view for a much-cited piece)
   and *What it builds on* (Bibliography's works it leans on most). *Search the literature*, about
-  $0.30, runs only on a press, and has left the experimental switch. Per-finding work (*Ask in
+  $0.30, has left the experimental switch. It ran only on its own button until plan 261026g, from
+  Greg's report `spya-mfuz6g` the next morning, made the press that opens *Where it sits* start it
+  (never a link, reload or Back). Per-finding work (*Ask in
   chat*) stays on a press for that finding.
 - **The eval** ([261025h](../investigations/261025h-situate-eval-haiku-sonnet-opus.md), $8.96):
   Haiku is poor at writing the notes but good at choosing the evidence. So the search now plans on
