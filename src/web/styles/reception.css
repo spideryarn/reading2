@@ -485,6 +485,31 @@
   .where-tool,
   .where-back { min-height: max(40px, 2.5rem); }
 }
+/* The experiments' links after the tools, with the switch on (plan 261025h,
+   Stage 4): the tools row's own look, one group so it wraps as a unit. */
+.where-experiments { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem; }
+/* *After it*'s Most cited | About "keyword": the shared order chips. */
+.where-after .gloss-sort-group { margin: 0.1rem 0 0.25rem; }
+
+/* **Guess first and Evidence first** (SourcesExperiments.tsx, plan 261025h,
+   Stage 4). The rows are the dossier's (`.situate-finding`, `.situate-note`,
+   `.rcp-quote`); what is here is the prompt, the labels and the reveal. */
+.experiment-kept,
+.experiment-stale { margin: 0.2rem 0.7rem 0; }
+.experiment-prompt { margin: 0.2rem 0 0.35rem; }
+.experiment-no-dossier { display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; padding: 0.3rem 0.7rem; }
+.experiment-no-dossier > p,
+.experiment-none { margin: 0; padding: 0.3rem 0.7rem; }
+.experiment-side {
+  margin: 0.15rem 0 0;
+  color: var(--ink-faint);
+  font-size: max(var(--text-min), 0.78rem);
+}
+.experiment-source-quotes .rcp-quote { margin: 0.1rem 0 0; }
+.experiment-reveal { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.3rem; }
+.experiment-reading { margin-top: 0.25rem; }
+.experiment-kind { margin: 0; font-size: max(var(--text-min), 0.82rem); }
+.experiment-evidence-row .gloss-sort-group { margin-top: 0.3rem; }
 
 /* **The literature search's dossier** (SituateDossier.tsx, plan 261024o), in
    *Where it sits* since plan 261025h. Group heads and the source quote reuse

@@ -43,10 +43,13 @@ let host: HTMLDivElement;
 let root: Root;
 const moved: SourcesView[] = [];
 const openedWorks: string[] = [];
+/** Each press of *About "keyword"* that asked for the keyword view (`askTopic`). */
+let topicAsks = 0;
 
 beforeEach(() => {
   moved.length = 0;
   openedWorks.length = 0;
+  topicAsks = 0;
   resetActivations();
   host = document.createElement("div");
   document.body.append(host);
@@ -106,14 +109,32 @@ const FOUND: CitersResult = {
 function draw({
   year = null,
   citers = FOUND,
+  topic = undefined,
+  experiments = false,
   before = { status: "ready", works: [work("w1", "Leaned on", 0.9), work("w2", "Less so", 0.2), work("w3", "Unrated")], listing: false },
-}: { year?: number | null; citers?: CitersResult | null; before?: WhereBefore } = {}): void {
+}: {
+  year?: number | null;
+  citers?: CitersResult | null;
+  /** The keyword view's answer as `useCiters` holds it: `undefined` until asked, `null` while asking. */
+  topic?: CitersResult | null | undefined;
+  experiments?: boolean;
+  before?: WhereBefore;
+} = {}): void {
   act(() =>
     root.render(
       createElement(WhereItSitsPanel, {
         head: sourcesHead({ view: "where", onView: (v) => moved.push(v), ownerSlug: "a-piece" }),
         situate: noDossier(),
-        citers: { result: citers, retry: () => {} },
+        citers: {
+          result: citers,
+          retry: () => {},
+          topic,
+          askTopic: () => {
+            topicAsks += 1;
+          },
+          retryTopic: () => {},
+        },
+        experiments,
         before,
         articleYear: year,
         chats: { summaries: [], onFinding: () => {}, onOpen: () => {} },
@@ -170,6 +191,72 @@ describe("After it", () => {
   });
 });
 
+/* Plan 261025h, decision 10 (GPT Sol's F15): a labelled second view beside
+   Most cited, the reader's choice; the keyword list is asked on that press
+   only (S1-F5). */
+describe("After it's keyword view, About “keyword”", () => {
+  const found = FOUND as Extract<CitersResult, { kind: "found" }>;
+  const LANDMARK: CitersResult = { ...found, count: 5849, topic: { keyword: "extended mind" } };
+  const ABOUT: CitersResult = {
+    ...found,
+    count: 1234,
+    returned: 1,
+    capped: true,
+    citers: [{ openalexId: "W990", title: "About the extended mind", authors: ["B. Author"], authorCount: 1, citedByCount: 50 }],
+    topic: { keyword: "extended mind", count: 1234 },
+    filteredBy: "extended mind",
+  };
+  const about = () => button("About “extended mind”");
+  const most = () => button("Most cited");
+
+  it("is not there for a list with no keyword", () => {
+    draw();
+    expect(about()).toBeUndefined();
+    expect(most()).toBeUndefined();
+  });
+
+  it("starts on Most cited, labelled by the keyword with no count, and asks nothing on open", () => {
+    draw({ citers: LANDMARK });
+    expect(most()?.getAttribute("aria-pressed")).toBe("true");
+    expect(about()?.getAttribute("aria-pressed")).toBe("false");
+    expect(about()?.textContent).toBe("About “extended mind”");
+    expect(about()?.querySelector(".rcp-view-count")).toBeNull();
+    expect(topicAsks).toBe(0);
+    expect(host.querySelectorAll(".where-after .rcp-citer")).toHaveLength(5);
+  });
+
+  it("carries the count once OpenAlex's keyword list has been fetched", () => {
+    draw({ citers: { ...found, count: 5849, topic: { keyword: "extended mind", count: 1234 } } });
+    expect(about()?.querySelector(".rcp-view-count")?.textContent).toBe("1,234");
+    expect(about()?.getAttribute("aria-label")).toBe("About “extended mind”, 1234 papers");
+    expect(topicAsks).toBe(0);
+  });
+
+  it("asks for the keyword view on the press, and draws it with a sentence that says what it is", () => {
+    draw({ citers: LANDMARK });
+    act(() => about()?.click());
+    expect(topicAsks).toBe(1);
+    expect(about()?.getAttribute("aria-pressed")).toBe("true");
+    expect(host.querySelector(".where-after")?.textContent).toContain("Asking OpenAlex");
+    draw({ citers: LANDMARK, topic: ABOUT });
+    const after = host.querySelector(".where-after")?.textContent ?? "";
+    expect(after).toContain("About the extended mind");
+    expect(after).toContain("1234 papers that cite this piece mention “extended mind” in their title or abstract");
+    expect(about()?.querySelector(".rcp-view-count")?.textContent).toBe("1,234");
+    /* Back to every citer, without asking again. */
+    act(() => most()?.click());
+    expect(host.querySelectorAll(".where-after .rcp-citer")).toHaveLength(5);
+    expect(topicAsks).toBe(1);
+  });
+
+  it("says so when the server fell back to the plain list", () => {
+    draw({ citers: LANDMARK, topic: LANDMARK });
+    act(() => about()?.click());
+    expect(host.querySelector(".where-after")?.textContent).toContain("could not be listed just now");
+    expect(host.querySelectorAll(".where-after .rcp-citer")).toHaveLength(5);
+  });
+});
+
 describe("Before it", () => {
   it("lists the works rated as leaned on, most first, leaves an unrated one out, and opens a row in Bibliography", () => {
     draw();
@@ -209,6 +296,22 @@ describe("the tools row", () => {
     expect(tools[1]?.querySelector(".rcp-view-count")).toBeNull();
     for (const tool of tools) act(() => tool.click());
     expect(moved).toEqual([...SOURCES_TOOLS]);
+    for (const target of ["reception", "sources-claims", "bibliography"] as const) {
+      expect(pendingActivation("a-piece", target), target).toBeNull();
+    }
+  });
+
+  /* Plan 261025h, Stage 4: the two experiments, behind the switch, after the tools. */
+  it("adds the two experiments only with the switch on, each a plain move to its own address", () => {
+    draw();
+    expect(host.querySelector('[data-tool="guess-first"]')).toBeNull();
+    expect(host.querySelector('[data-tool="evidence-first"]')).toBeNull();
+    expect(text()).not.toContain("Experiments");
+    draw({ experiments: true });
+    const experiments = [...host.querySelectorAll<HTMLButtonElement>(".where-experiments .where-tool")];
+    expect(experiments.map((b) => b.textContent)).toEqual(["Guess first", "Evidence first"]);
+    for (const b of experiments) act(() => b.click());
+    expect(moved).toEqual(["guess-first", "evidence-first"]);
     for (const target of ["reception", "sources-claims", "bibliography"] as const) {
       expect(pendingActivation("a-piece", target), target).toBeNull();
     }

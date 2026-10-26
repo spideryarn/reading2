@@ -2,7 +2,8 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-One mode in the band, with seven sub-modes. Since 2026-10-25 the owner sees three of them as chips,
+One mode in the band, with nine sub-mode addresses: seven established views and two experiments.
+Since 2026-10-25 the owner sees three of the established views as chips,
 and the other four as tools inside the first
 ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)):
 
@@ -13,6 +14,9 @@ and the other four as tools inside the first
   - **Not cited**: papers close to it that its bibliography does not list (the owner's, since
     2026-10-11).
   - **Investigate**: questions for Chat about all of that (the owner's, since 2026-10-20).
+
+  And, behind the experimental switch, two experiments after the tools (since 2026-10-26,
+  [§ The experiments](#the-experiments)): **Guess first** and **Evidence first**.
 - **Bibliography**: the works the piece cites (the Citations mode until 2026-10-09; a visitor's
   default).
 - **Links**: every web address its own text links to (since 2026-10-11).
@@ -44,7 +48,8 @@ for Reception and Claims. This page owns the merge.
 ## In this doc
 
 - [§ The band](#the-band) — three chips for the owner, four tools inside the first, one surface
-- [§ Where it sits](#where-it-sits) — the default: After it, Before it, the literature search, and the tools row
+- [§ Where it sits](#where-it-sits) — the default: After it (and its *About "keyword"* view), Before it, the literature search, and the tools row
+- [§ The experiments](#the-experiments) — Guess first and Evidence first, behind the switch: the dossier met before its verdicts
 - [§ Not cited](#not-cited) — OpenAlex's search on the owner's press, less the bibliography, and why every row says "not among the works Spideryarn found"
 - [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
 - [§ Investigate](#investigate) — suggested questions and your own, each a chat with a web search; why a launcher and why the name
@@ -72,7 +77,7 @@ for Reception and Claims. This page owns the merge.
  │ InvestigatePanel                                     ← Investigate
 ```
 
-**Three chips, four tools, seven addresses** (since 2026-10-25, [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 7).
+**Three chips, four tools, seven addresses** (nine with the two experiments, [§ The experiments](#the-experiments)) (since 2026-10-25, [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 7).
 Greg asked for fewer sub-modes where they could be unified:
 
 > be proactive if you think things can be unified into one submode. Great, let's do that.
@@ -148,12 +153,81 @@ Bibliography, which a press here arms if it is missing, and the dossier is read,
 plan's cost ladder has the rest. **Owner only**: a visitor reads the bare address as Bibliography,
 because the citers have no public projection yet (GPT Sol's F3).
 
-**After it starts unfiltered** (decision 10, GPT Sol's F15). *About "keyword"*, a labelled second
-view for a much-cited piece, is not built yet: it waits on the final shape of the citers route's
-keyword view.
+**After it starts unfiltered** (decision 10, GPT Sol's F15): every citer, most cited first. For a
+much-cited piece — more than `TOPIC_MIN_CITERS` (1,000) citers, and a top keyword from OpenAlex —
+a second view sits beside *Most cited*: ***About "extended mind"***, the citers whose title or
+abstract mentions OpenAlex's own keyword for the work (src/citation-index.ts § The topic view). It
+is the reader's switch, never an automatic filter:
+
+- **Nothing is fetched for it on open.** The plain answer carries `topic: { keyword }`; the press
+  asks `GET /api/citers/:slug?about=topic` (`useCiters` § `askTopic`), once per band, and keeps the
+  answer (GPT Sol's S1-F5 on the stage).
+- **The label is the keyword, with a count only when OpenAlex's keyword list has been fetched
+  before** (`topic.count`, which the server adds once its `#topic` row is cached, or this press's
+  own answer).
+- **The keyword list says what it is a list of**: its first sentence is *1,234 papers that cite
+  this piece mention "extended mind" in their title or abstract* (`citersLines`, given
+  `filteredBy`), never the piece's whole count. When the server could not read the keyword list it
+  answers the plain one with no `filteredBy`, and the band says so above it.
+- **Which view is on is the panel's state, not the address** — a deliberate exception to
+  [url-state.md](url-state.md)'s rule that how you look at an article is in the URL. An address
+  carrying it would have to either fetch the keyword list on arrival, which the rule above forbids,
+  or name a view it is not showing. It is *Show all*'s kind of choice, a fold within one list, and
+  that is component state too; leaving *Where it sits* puts the list back to *Most cited*.
+- The two buttons are the order chips (`OrderGroup`, `.gloss-sort-btn`;
+  [controls.md](controls.md)), because they choose how one list is drawn.
 
 The panel is [`src/web/WhereItSitsPanel.tsx`](../../src/web/WhereItSitsPanel.tsx); its tests are
 `tests/where-it-sits.test.tsx`.
+
+## The experiments
+
+Since 2026-10-26, behind the [experimental switch](experimental-features.md): two ways of meeting
+the literature search's findings *before* reading the model's verdict on them, so the reader does
+the central step and the model is the second opinion
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), Stage 4,
+GPT Sol's F12 and F13). They are left-field ideas for Greg to play with, kept small, not finished
+features.
+
+- **Guess first** (`?sources=guess-first`): every finding's passage, in the dossier's stored order
+  and never grouped (grouping would give the kinds away), with its kind, note and sources left out
+  of the page, under *What do you think critics, supporters and later work said about each of
+  these passages?* A pause to predict in your head — nothing is typed. One *Reveal what the search
+  found* shows them all; *Hide it again* takes them away.
+- **Evidence first** (`?sources=evidence-first`): each finding as the article's passage beside the
+  checked quote of each source it rests on, the kind and note hidden. The reader may press
+  *Supports*, *Challenges* or *Updates*, then that finding's *Reveal the search's reading* shows the
+  kind, what it means and the note, and locks the choice. **No answer is marked**: the search has
+  six kinds (Challenged, Citation?, Since, Not cited?, Reception, Supported), which do not map onto
+  three words, and a tick would claim more than the model knows. *Hostile referee*, which this
+  replaced, was dropped as Referee's ground (F13); *Lineage* was dropped as a redraw of the two
+  lists that overclaims influence (F18).
+
+**Offered only on *Where it sits*' tools row**, after the tools under *Experiments*, and only with
+the switch on: no chip (each lights *Where it sits*, `chipOf`), no command-bar row (`subModesOf`
+leaves them out), and each carries the *Where it sits ›* crumb back.
+
+**Free, and they start nothing.** Each reads the stored dossier through `useSituateRead`, the read
+half with no press to call; neither arms anything (`activationForSources` returns `null`). With no
+dossier stored, each says so and offers *Go to Search the literature*, a plain move to *Where it
+sits* that starts nothing either. A dossier that found nothing says that.
+
+**Nothing the reader does leaves the component** (F12): the choice and every *Reveal* are
+`useState`, never the address, storage or a request, and are forgotten on leaving. Each band says
+so in a line under its head. *tests/sources-experiments.test.tsx* holds the fetch double and the
+browser's storage to nothing through a whole session of presses.
+
+**Hidden from the controls, not unreachable**, as the switch's rule says
+([experimental-features.md](experimental-features.md#the-four-rules)) and Structure's Hover does:
+with the switch off the tools row does not offer them, but a pasted address still draws the
+experiment, and its *Where it sits ›* crumb leads back.
+
+**Whose words** ([fonts.md](fonts.md)): the passage is the article's, in the author's face; a
+source's quote is a stranger's page's characters, left in the UI face as the dossier draws it; the
+note is the model's, in the model's face.
+
+The panel is [`src/web/SourcesExperiments.tsx`](../../src/web/SourcesExperiments.tsx); the band in
+the whole app, switch on and off, is *tests/reception-lens-in-chat.test.tsx* § the experiments.
 
 ## Not cited
 
@@ -373,7 +447,7 @@ another chip, and the deeper dive on any one finding is its *Ask in chat*.
 
 Owner only, by construction: `WhereBand` and `InvestigateBand` in `SourcesMode.tsx` mount
 `useSituate`, for every owner whatever the switch says, and a visitor's band has neither. The
-margin's *literature* notes draw the same findings (still behind the switch: [marginalia.md](marginalia.md)), and their *Open in Sources* lands on the finding
+margin's *literature* notes draw the same findings (for every owner since 2026-10-26: [marginalia.md](marginalia.md)), and their *Open in Sources* lands on the finding
 in *Where it sits* (`openFindingInSources`). The plan, with its research and review, is
 [261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md);
 the tests are `tests/situate-dossier.test.tsx`, and an owner with the switch off in
@@ -388,7 +462,8 @@ What Sources might become as a result, folded to three chips, was proposed for G
 ## The address, and old links
 
 `?mode=sources`, and `?sources=` names Where it sits, Bibliography, Not cited, Links, Reception,
-Claims or Investigate. **Where it sits is the default since 2026-10-25** and is left off, so a bare
+Claims or Investigate, or one of the two experiments, `guess-first` and `evidence-first`
+([§ The experiments](#the-experiments)). **Where it sits is the default since 2026-10-25** and is left off, so a bare
 `?mode=sources` opens it for the owner; Bibliography was the default until then, and is still what a
 visitor's band draws for a bare address (`visitorSourcesView`). Each sub-mode keeps its own parameters,
 unchanged: `?citeby=` and `?citebar=` for
@@ -421,7 +496,7 @@ beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered
 *tests/sources-old-addresses.test.ts*, *tests/last-view.test.ts* and
 *tests/reception-navigation.test.tsx*.
 
-**In the command bar** all seven are rows, *Where it sits* first: the four tools keep their own
+**In the command bar** all seven are rows (the two experiments are not), *Where it sits* first: the four tools keep their own
 rows and aliases, and *Where it sits* is also *situate*, *the literature*, *where this piece
 sits*, *literature search*, *what came after* and *papers citing it*
 (`SOURCES_SUB_MODES`); not *search the literature*, which as a phrase starting *search* is the bar's find-in-article command. **The old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
@@ -452,7 +527,8 @@ starts from inside: Reception's *Search the web*, under *Nobody has asked the we
 yet*, and Claims' *List its claims* (both checked in `ReceptionAndClaimsPanel.tsx` before the arm
 went); Not cited's *Search OpenAlex for related work* ([§ Not cited](#not-cited)); Investigate's
 every press is a chat ([§ Investigate](#investigate)); and the literature search is *Search the
-literature* ([§ Where this piece sits](#where-this-piece-sits)). Their command-bar rows open the
+literature* ([§ Where this piece sits](#where-this-piece-sits)). The two experiments arm nothing
+and have no button that spends ([§ The experiments](#the-experiments)). Their command-bar rows open the
 tool, as the links do. Reception's search is retired as a chip, not as a search (decision 6, GPT
 Sol's F5): its stored rows, its stale banner's *Search again*, and Metadata's and the command bar's
 *Run again* all stay.
@@ -495,10 +571,11 @@ the policy about blocks would change what every public article shows, and was le
 [261011d](../plans/261011d-sources-links-sub-mode-the-articles-own-hyperlinks.md) as wider than
 the report.
 
-**Where it sits, Not cited and Investigate are not there at all**, and plan 261025h left a
+**Where it sits, Not cited, Investigate and the two experiments are not there at all**, and plan 261025h left a
 visitor's band as it was (GPT Sol's F3): their chips are Bibliography, Links, Reception and Claims.
 A bare Sources address (the owner's *Where it sits*), a shared `?sources=where`,
-`?sources=not-cited` or `?sources=investigate` draws Bibliography (params.ts §
+`?sources=not-cited`, `?sources=investigate`, `?sources=guess-first` or `?sources=evidence-first`
+draws Bibliography (params.ts §
 `visitorSourcesView`), so a visitor never asks `/api/citers`, `/api/situate` or `/api/related-work`
 and never mounts an Investigate sender (*tests/public-network-trace.test.tsx*). A visitor's *Where
 it sits* would need a public projection of the citers; it is left for later.
@@ -580,6 +657,8 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   — the owner's band, the visitor's, and the chip row (`SourcesViews`).
 - [`src/web/WhereItSitsPanel.tsx`](../../src/web/WhereItSitsPanel.tsx) — *Where it sits*, its
   tools row, and a tool's *Where it sits ›* crumb (`ToolBack`).
+- [`src/web/SourcesExperiments.tsx`](../../src/web/SourcesExperiments.tsx) — Guess first and
+  Evidence first.
 - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
 - [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx),
@@ -599,7 +678,8 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   [`src/web/useSituate.ts`](../../src/web/useSituate.ts) — *Where this piece sits*, its words and
   order, and its read and press; [`src/situate.ts`](../../src/situate.ts) — the step behind
   `GET /api/situate/:slug` and the `situate` job.
-- [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`, `SOURCES_CHIPS`, `chipOf`; [`src/web/router.ts`](../../src/web/router.ts)
+- [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`, `SOURCES_CHIPS`, `chipOf`,
+  `SOURCES_EXPERIMENTS`; [`src/web/router.ts`](../../src/web/router.ts)
   § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §
   `activationForSources`.
 - The help page, `src/web/help/pages/modes/sources.md`, written for a reader.

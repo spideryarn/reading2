@@ -640,6 +640,11 @@ export function activationForSources(view: SourcesView): AutoRunTarget | null {
     case "reception":
     case "claims":
       return null;
+    /* The two experiments read the stored dossier and start nothing; with none
+       stored they point at *Search the literature* (plan 261025h, Stage 4). */
+    case "guess-first":
+    case "evidence-first":
+      return null;
     default: {
       const unhandled: never = view;
       throw new Error(`unhandled Sources view: ${String(unhandled)}`);

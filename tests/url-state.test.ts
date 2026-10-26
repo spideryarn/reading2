@@ -298,8 +298,12 @@ describe("Sources' sub-mode, and Reception's order", () => {
    * before anything parses it (tests/sources-old-addresses.test.ts).
    */
   /* Where it sits is the default since plan 261025h (decision 7). */
-  it("reads the seven sub-modes, and anything else as Where it sits", () => {
-    expect([...SOURCES_VIEWS]).toEqual(["where", "bibliography", "not-cited", "links", "reception", "claims", "investigate"]);
+  it("reads the nine sub-modes, and anything else as Where it sits", () => {
+    expect([...SOURCES_VIEWS]).toEqual([
+      "where", "bibliography", "not-cited", "links", "reception", "claims", "investigate", "guess-first", "evidence-first",
+    ]);
+    expect(sourcesParam.parse("guess-first")).toBe("guess-first");
+    expect(sourcesParam.parse("evidence-first")).toBe("evidence-first");
     expect(sourcesParam.parse("where")).toBe("where");
     expect(sourcesParam.parse("investigate")).toBe("investigate");
     expect(sourcesParam.parse("not-cited")).toBe("not-cited");
@@ -321,6 +325,9 @@ describe("Sources' sub-mode, and Reception's order", () => {
     expect(visitorSourcesView("where")).toBe("bibliography");
     expect(visitorSourcesView("not-cited")).toBe("bibliography");
     expect(visitorSourcesView("investigate")).toBe("bibliography");
+    /* The two experiments read the owner's dossier (plan 261025h, Stage 4). */
+    expect(visitorSourcesView("guess-first")).toBe("bibliography");
+    expect(visitorSourcesView("evidence-first")).toBe("bibliography");
     for (const view of VISITOR_SOURCES_VIEWS) expect(visitorSourcesView(view)).toBe(view);
   });
 

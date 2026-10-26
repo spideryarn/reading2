@@ -66,12 +66,14 @@ const checked = () => radios().filter((r) => r.getAttribute("aria-checked") === 
 const lit = () => radios().filter((r) => r.classList.contains("on"));
 
 describe("the addresses and the chips", () => {
-  it("has seven addresses and three owner chips, Where it sits first", () => {
-    expect([...SOURCES_VIEWS]).toEqual(["where", "bibliography", "not-cited", "links", "reception", "claims", "investigate"]);
+  it("has nine addresses and three owner chips, Where it sits first", () => {
+    expect([...SOURCES_VIEWS]).toEqual([
+      "where", "bibliography", "not-cited", "links", "reception", "claims", "investigate", "guess-first", "evidence-first",
+    ]);
     expect([...SOURCES_CHIPS]).toEqual(["where", "bibliography", "links"]);
   });
 
-  it("lights Where it sits for each of the four tools, and each chip for itself", () => {
+  it("lights Where it sits for each of the four tools and the two experiments, and each chip for itself", () => {
     const expected: Record<SourcesView, SourcesView> = {
       where: "where",
       bibliography: "bibliography",
@@ -80,6 +82,8 @@ describe("the addresses and the chips", () => {
       claims: "where",
       "not-cited": "where",
       investigate: "where",
+      "guess-first": "where",
+      "evidence-first": "where",
     };
     for (const view of SOURCES_VIEWS) expect(chipOf(view), view).toBe(expected[view]);
   });
@@ -93,8 +97,10 @@ describe("the addresses and the chips", () => {
     expect(subModeParams({ mode: "sources", view: "bibliography" })).toEqual({ mode: "sources", sources: "bibliography" });
   });
 
-  it("gives a visitor Bibliography for the bare address, and the four chips they had", () => {
+  it("gives a visitor Bibliography for the bare address and the experiments, and the four chips they had", () => {
     expect(visitorSourcesView("where")).toBe("bibliography");
+    expect(visitorSourcesView("guess-first")).toBe("bibliography");
+    expect(visitorSourcesView("evidence-first")).toBe("bibliography");
     expect([...VISITOR_SOURCES_VIEWS]).toEqual(["bibliography", "links", "reception", "claims"]);
   });
 });
@@ -137,6 +143,9 @@ describe("what a press arms (decisions 6 and 8)", () => {
       reception: null,
       claims: null,
       investigate: null,
+      /* The experiments read the stored dossier and start nothing (plan 261025h, Stage 4). */
+      "guess-first": null,
+      "evidence-first": null,
     };
     for (const view of SOURCES_VIEWS) {
       expect(activationForSources(view), view).toBe(arms[view]);

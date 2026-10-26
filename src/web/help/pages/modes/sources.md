@@ -53,11 +53,28 @@ for that.
 - **After it** lists the papers that cite the piece, most cited first, from OpenAlex, a free public
   index of published work. It is the same list as Cited by in Pages about it. No AI is involved, and
   we have not read what those papers say about the piece.
+- For a much-cited piece, a second button sits beside **Most cited**: **About** and a keyword in
+  quotes, such as *About “extended mind”*. The keyword is OpenAlex’s own for the piece. Pressing it
+  lists only the citing papers whose title or abstract mentions that keyword, which often cite the
+  piece for more than a passing nod. It is asked from OpenAlex when you press it, not before, and
+  once it has been asked the button shows how many there are. Leaving Where it sits puts the list
+  back to Most cited.
 - **Before it** lists the works the piece leans on most, as Bibliography rated them. Press one to
   open its row in Bibliography.
 - For an older piece, After it comes first; for a recent one, Before it; with no year, side by side.
 - **Tools** at the foot open the other four views. Opening one starts nothing; inside, **Where it
   sits**, at the top beside the view's name, brings you back.
+- With [experimental features](/help/experimental-features) turned on, **Experiments** after the
+  tools offers two ways to meet the search of the literature before reading its verdicts. Both use
+  the search already made for this piece, cost nothing and start nothing; with no search yet, they
+  say so and take you to **Search the literature**. Nothing you choose in them is saved or sent.
+  - **Guess first** shows the passages the search found something about, without saying what. Take
+    a moment to predict what critics, supporters and later work said about each, then press
+    **Reveal what the search found**.
+  - **Evidence first** shows each passage beside what a source says. Decide whether the source
+    supports it, challenges it or updates it, then press **Reveal the search’s reading** to see how
+    the search read it. Your answer is not marked: the search’s own labels do not map onto those
+    three words.
 
 **Bibliography**
 

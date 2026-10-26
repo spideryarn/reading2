@@ -34,7 +34,6 @@ import type { BlockId, CitedWork, Faq, Ideas, MarginNote, TimelineEvent } from "
 import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
 import { useSituateRead } from "../useSituate.js";
-import { useExperimental } from "../useExperimental.js";
 import { SITUATE_FINDING_LABEL, sourceHost } from "../situate-dossier.js";
 import { dayOf } from "../relative-time.js";
 import { isWebUrl } from "../../urls.js";
@@ -1172,7 +1171,7 @@ export type MarginFeed = {
   relations: RelationsByBlock;
   /** The notes the relations call wrote (plan 261011o). */
   notes: MarginNotesList;
-  /** Situate's findings, with the experimental switch on (plan 261024o). */
+  /** Situate's findings (plan 261024o): the owner's, whatever the experimental switch says since spya-pkpqch. */
   literature: MarginLiterature | null;
 };
 
@@ -1187,14 +1186,15 @@ export const NO_OWNER_FEED: MarginFeed = {
 };
 
 /**
- * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
- * Marginalia's own relation words and notes, which are made here. A component of
- * its own so the reads happen only while Marginalia is open — the read halves
- * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full hooks, which
- * arm the automatic run and could spend (Debate is the dearest step in the
- * app). A stale list (the article moved under it) is not drawn: its blocks may
- * not be these. Owner only: a visitor's lists are in their payload. Citations
- * and comments are not read here — the Reader holds both in every mode.
+ * **The owner's ideas, FAQ, Timeline, Debate and literature findings, read and
+ * never made** — and Marginalia's own relation words and notes, which are made
+ * here. A component of its own so the reads happen only while Marginalia is
+ * open — the read halves (`useIdeasRead`, `useFaqRead`, `useTimelineRead`,
+ * `useReceptionRead`, `useSituateRead`), never the full hooks, which arm the
+ * automatic run and could spend (Debate is the dearest step in the app). A
+ * stale list (the article moved under it) is not drawn: its blocks may not be
+ * these. Owner only: a visitor's lists are in their payload. Citations and
+ * comments are not read here — the Reader holds both in every mode.
  */
 export function OwnerMarginFeed({
   slug,
@@ -1237,16 +1237,16 @@ export function OwnerMarginFeed({
     timelineRead.status === "ready" && !timelineRead.stale ? (timelineRead.timeline?.events ?? null) : null;
   const claims =
     receptionRead.status === "ready" && !receptionRead.stale ? (receptionRead.reception?.claims.rows ?? null) : null;
-  /* **Situate's findings, only with the experimental switch on** (plan
-     261024o): its read is a component of its own, mounted only then, so with
-     the switch off nothing asks `/api/situate`. */
-  const { on: experimental } = useExperimental();
+  /* **Situate's findings, for every owner** (plan 261024o): behind the
+     experimental switch until 2026-10-26, when Greg asked for what Where it
+     sits found to be beside the passage as he reads (spya-pkpqch). The read
+     is a component of its own, so it can hand back none when unmounted. */
   const [literature, setLiterature] = useState<MarginLiterature | null>(null);
   useEffect(() => {
     onFeed({ ideas, faq, timeline, claims, relations, notes, literature });
   }, [ideas, faq, timeline, claims, relations, notes, literature, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
-  return experimental ? <SituateMarginFeed slug={slug} onLiterature={setLiterature} /> : null;
+  return <SituateMarginFeed slug={slug} onLiterature={setLiterature} />;
 }
 
 /**

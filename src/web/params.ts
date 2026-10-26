@@ -1454,7 +1454,7 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' seven sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' nine sub-mode addresses the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
@@ -1504,9 +1504,39 @@ export function learnInSearch(search: string): LearnView {
  * the panel's own button, because it sends the piece's words to OpenAlex. Investigate
  * arms nothing: each of its rows is one press that sends one chat question.
  * Back, a pasted link and a last-view restore arrive here and buy nothing.
+ *
+ * **`guess-first` and `evidence-first` are the two experiments** (plan
+ * 261025h, Stage 4; `SOURCES_EXPERIMENTS`): reached from *Where it sits*'
+ * tools row with the experimental switch on, free, reading the stored dossier
+ * and arming nothing.
  */
-export const SOURCES_VIEWS = ["where", "bibliography", "not-cited", "links", "reception", "claims", "investigate"] as const;
+export const SOURCES_VIEWS = [
+  "where",
+  "bibliography",
+  "not-cited",
+  "links",
+  "reception",
+  "claims",
+  "investigate",
+  "guess-first",
+  "evidence-first",
+] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
+/**
+ * **Sources' two experiments** (plan 261025h, Stage 4, GPT Sol's F12 and
+ * F13): *Guess first* and *Evidence first*, each a way of meeting the
+ * literature search's findings before reading the model's verdict. Behind the
+ * experimental switch, and offered only on *Where it sits*' tools row: no
+ * chip, and no command-bar row (sub-modes.ts § `subModesOf`). Hidden from the
+ * controls, not unreachable: a pasted address draws the experiment whatever
+ * the switch says, and its crumb leads back to *Where it sits*
+ * (docs/project/experimental-features.md § The four rules).
+ */
+export const SOURCES_EXPERIMENTS = ["guess-first", "evidence-first"] as const satisfies readonly SourcesView[];
+export type SourcesExperiment = (typeof SOURCES_EXPERIMENTS)[number];
+export function isSourcesExperiment(view: SourcesView): view is SourcesExperiment {
+  return (SOURCES_EXPERIMENTS as readonly SourcesView[]).includes(view);
+}
 /**
  * **The owner's chip row** (plan 261025h, decision 7 and GPT Sol's F2): three
  * chips, *Where it sits* first because it is the default. The other four
@@ -1528,6 +1558,9 @@ export function chipOf(view: SourcesView): SourcesChip {
     case "claims":
     case "not-cited":
     case "investigate":
+    /* The experiments are reached from *Where it sits* and carry its crumb back. */
+    case "guess-first":
+    case "evidence-first":
       return "where";
     case "bibliography":
       return "bibliography";
@@ -1546,10 +1579,11 @@ export function chipOf(view: SourcesView): SourcesChip {
  * cited's route is owner-only, and a visitor's search would spend our OpenAlex
  * allowance (plan 261011ac § Who sees it); Investigate's every row hands a
  * question to Chat, and a visitor has no chat (plan 261020n § Visitors). A
- * visitor's chip row is these four, unchanged by plan 261025h.
+ * visitor's chip row is these four, unchanged by plan 261025h. The two
+ * experiments read the owner's dossier, which has no public projection either.
  */
 export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter(
-  (v) => v !== "where" && v !== "not-cited" && v !== "investigate",
+  (v) => v !== "where" && v !== "not-cited" && v !== "investigate" && !isSourcesExperiment(v),
 );
 /**
  * **What a visitor's band draws for `?sources=`**: the view it names, or
