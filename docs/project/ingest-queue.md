@@ -438,8 +438,10 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
 - **Both caps are stated before the file is chosen**, with what a long PDF costs — *… up to 50 MB.
   PDFs up to 250 pages; every 50 pages counts as one article.* — from
   `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), which builds the sentence out of
-  `MAX_UPLOAD_BYTES`, `MAX_PAGES` and `PAGES_PER_SLOT`, so it cannot promise a limit that is not the one enforced. It
-  sits in the slot the chosen-file row takes, so it costs no height once a reader has acted on it.
+  `MAX_UPLOAD_BYTES`, `MAX_PAGES` and `PAGES_PER_SLOT`, so it cannot promise a limit that is not the
+  one enforced. It is in the card of an (i) beside the File button, opened by hover, focus or a tap,
+  and read out with the button by a screen reader (`LimitsInfo`, `UploadPicker.tsx`; plan
+  [261026b](../plans/261026b-upload-limits-behind-an-info-button.md)).
   The **page** cap is the reason this exists: a file manager shows you a size and never a page
   count, so until 2026-09-04 the only way to discover it was to upload a book and be refused at the
   end — Sentry `SPIDERYARN-READING2-V`, *"couldn't upload PDF"*, and

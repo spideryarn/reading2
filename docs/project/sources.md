@@ -447,7 +447,7 @@ another chip, and the deeper dive on any one finding is its *Ask in chat*.
 
 Owner only, by construction: `WhereBand` and `InvestigateBand` in `SourcesMode.tsx` mount
 `useSituate`, for every owner whatever the switch says, and a visitor's band has neither. The
-margin's *literature* notes draw the same findings (still behind the switch: [marginalia.md](marginalia.md)), and their *Open in Sources* lands on the finding
+margin's *literature* notes draw the same findings (for every owner since 2026-10-26: [marginalia.md](marginalia.md)), and their *Open in Sources* lands on the finding
 in *Where it sits* (`openFindingInSources`). The plan, with its research and review, is
 [261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md);
 the tests are `tests/situate-dossier.test.tsx`, and an owner with the switch off in

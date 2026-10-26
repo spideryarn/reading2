@@ -139,14 +139,17 @@ readers never are.
 
 **Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
 FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands straight
-after Skim, at the end of the Structure–Summary–Skim run, since 2026-10-18 (Greg: *"after Skim but
-still in the same group"*, [261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md);
-it stood after Summary from 2026-10-11, [261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md),
-after Skim from 2026-10-08, and alone after the other modes until
+after Skim since 2026-10-18 (Greg: *"after Skim but still in the same group"*,
+[261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md)).
+With Experimental off it ends the Structure–Summary–Skim run; with Experimental on, Diagram follows
+it, so the switch does not move More. Diagram preceded Skim until 2026-10-26, which made the switch
+move More one place right. More itself stood after Summary from 2026-10-11,
+[261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md), after Skim from
+2026-10-08 to 2026-10-11 and again since 2026-10-18, and alone after the other modes until
 2026-10-08, when Greg asked for it *"as part of that group, rather than out on their own"*, which
 puts a menu button inside the modes' radiogroup —
 [261008d § D2](../plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md)
-says why that was taken). Its menu opens upwards. Comments shares Marginalia's frame, after it. A mode there is as reachable as it
+says why that was taken. Its menu opens upwards. Comments shares Marginalia's frame, after it. A mode there is as reachable as it
 was — an owner's command bar lists it, its address works, and a visitor can pick it from More — and
 while it is the open mode it is drawn in the bar again, checked, so a second press still closes it.
 This is a second, separate reason a mode

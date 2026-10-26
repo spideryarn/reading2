@@ -4,15 +4,18 @@
  * `qi-t22r9mt4`). Measured in WebKit on 2026-10-09: every phone width is on the
  * last rung with the row at its 44px floor, and with Diagram drawn — Diagram
  * open, or Experimental on — More's place after Skim was x 354–398, past a
- * 390, 375 or 360 window. No label rung fits 360, so More moves to the front of
- * the bands' frame when, and only when, its own place is out of view.
+ * 390, 375 or 360 window (Diagram stood before Skim until 2026-10-26). No
+ * label rung fits 360, so More moves to the front of the bands' frame when,
+ * and only when, its own place is out of view.
  * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md.
  *
  * From 2026-10-11 to 2026-10-18 More's place was after Summary (spya-hdde62,
  * plan 261011x), two buttons earlier, which every measured phone showed. Since
  * 2026-10-18 it is after Skim again (spya-c0va9e, plan 261018f), so with
- * Diagram drawn on a phone More's place is past the edge once more and More
- * leads — the guard this file holds is live again, not a fallback.
+ * Diagram drawn on a phone More's place was past the edge once more and More
+ * led. Since 2026-10-26 Diagram stands after More (spya-d0pyzt, plan 261026d),
+ * so More's place no longer depends on Diagram and stays on a phone's screen:
+ * the guard is a fallback again, exercised here with wide fake buttons.
  *
  * jsdom has no layout, so the fake below lays the bar out **by DOM order**,
  * each button `W` wide from the bar's left edge. That is what makes the test
@@ -152,16 +155,19 @@ function resize(nextWidth: number): void {
 }
 
 /* The fake row: Spideryarn, Commands, Plain, then the bands' frame. More's
-   home, after Skim, ends at 7 x 70 = 490 with Diagram not drawn, and at
-   8 x 70 = 560 with it drawn (the switch on, or Diagram open): past a 360, 390
-   or 430 bar either way, inside a 500 bar only without Diagram, and inside a
-   600 one with or without. */
+   home, after Skim, ends at 7 x 70 = 490 whether Diagram is drawn or not, since
+   Diagram stands after More (plan 261026d): past a 360, 390 or 430 bar, inside
+   a 500 one. Until 2026-10-26 Diagram stood before Skim and moved it to 560. */
 
 describe("More stays on the bar where its own place is off the edge", () => {
   it("leads the bands' frame when its place after Skim is past the bar's edge", () => {
     width = 360;
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(bands().slice(0, 5)).toEqual(["More", L.structure, L.summary, L.diagram, L.skim]);
+    expect(bands().slice(0, 5)).toEqual(["More", L.structure, L.summary, L.skim, L.diagram]);
+    /* Preserve the old guard case in which an experimental mode is retained
+       because it is open after the switch has been turned off. */
+    reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
+    expect(bands().slice(0, 5)).toEqual(["More", L.structure, L.summary, L.skim, L.diagram]);
   });
 
   it("stays after Skim where its place is in view — Greg's placement holds wherever it can be seen", () => {
@@ -170,19 +176,20 @@ describe("More stays on the bar where its own place is off the edge", () => {
     expect(bands().slice(0, 4)).toEqual([L.structure, L.summary, L.skim, "More"]);
     width = 1440;
     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
-    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
+    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.skim, "More", L.diagram]);
   });
 
-  /* The reverse of 2026-10-11 to 2026-10-18, when Diagram drawn no longer
-     pushed More's place out: after Skim it does again (spya-c0va9e). */
-  it("Diagram drawn, open or by the switch, pushes More's place out again, so More leads", () => {
+  /* The bug in spya-d0pyzt: with Diagram before Skim, the switch on (or
+     Diagram open) pushed More's place out and sent More to the front. */
+  it("Diagram drawn, open or by the switch, leaves More's place where it was", () => {
     width = 500;
+    const home = [L.structure, L.summary, L.skim, "More"];
     reading({ experimental: EXPERIMENTAL_OFF });
-    expect(bands()[0], "no Diagram: 490 is inside a 500 bar").toBe(L.structure);
+    expect(bands().slice(0, 4), "no Diagram").toEqual(home);
     reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
-    expect(bands().slice(0, 4), "Diagram open: 560 is not").toEqual(["More", L.structure, L.summary, L.diagram]);
+    expect(bands().slice(0, 5), "Diagram open").toEqual([...home, L.diagram]);
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(bands()[0], "the switch on").toBe("More");
+    expect(bands().slice(0, 5), "the switch on").toEqual([...home, L.diagram]);
   });
 
   it("the links arm (the metadata page) moves More the same way", () => {
@@ -199,7 +206,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
     /* A re-render with a changed signature re-measures; a resize would do the
        same through the ResizeObserver jsdom does not have. */
     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
-    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
+    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.skim, "More", L.diagram]);
   });
 
   it("repositions on resize even when the rung and content stay the same, in both arms", () => {
@@ -209,7 +216,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
       expect(bands()[0]).toBe("More");
       resize(600);
       expect(host.querySelector(".dock")?.classList.contains("dock-fit-4")).toBe(true);
-      expect(bands()[4]).toBe("More");
+      expect(bands()[3]).toBe("More");
       resize(390);
       expect(bands()[0]).toBe("More");
     }
@@ -226,13 +233,13 @@ describe("More stays on the bar where its own place is off the edge", () => {
   });
 
   it("keeps More ahead of the protected right padding", () => {
-    width = 570;
+    width = 500;
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(bands()[4]).toBe("More");
+    expect(bands()[3]).toBe("More");
     const dock = host.querySelector<HTMLElement>(".dock");
     expect(dock).not.toBeNull();
     if (dock) dock.style.paddingRight = "20px";
-    resize(570);
+    resize(500);
     expect(bands()[0]).toBe("More");
   });
 
@@ -242,7 +249,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
     resize(0);
     expect(bands()[0]).toBe("More");
     resize(600);
-    expect(bands()[4]).toBe("More");
+    expect(bands()[3]).toBe("More");
   });
 
   /* One keyed array (`bandsInOrder`), so a re-order moves nodes rather than
@@ -255,7 +262,7 @@ describe("More stays on the bar where its own place is off the edge", () => {
     act(() => more?.focus());
     width = 1440;
     reading({ experimental: EXPERIMENTAL_ON, mode: "summary" });
-    expect(bands()[4]).toBe("More");
+    expect(bands()[3]).toBe("More");
     expect(host.querySelector(`[aria-label="${L.skim}"]`)).toBe(skim);
     expect(host.querySelector(".dock-more-trigger")).toBe(more);
     expect(document.activeElement).toBe(more);
@@ -281,54 +288,40 @@ describe("More stays on the bar where its own place is off the edge", () => {
 /* **What a phone actually draws**: every button at the 44px floor except
    Plain, which keeps its word (90px), as measured in WebKit on 2026-10-09
    (plan 261009c): 178px of Spideryarn, Commands and Plain, so More's place
-   after Skim is x 354-398 with Diagram drawn (past 360, 375 and 390) and
-   310-354 without it (inside all three). From 2026-10-11 to 2026-10-18, after
-   Summary, it was 44px nearer and never left; since 2026-10-18 (spya-c0va9e,
-   plan 261018f) the Diagram state sends it to the front again, which is why
-   this block exists. */
-describe("on a phone's 44px floor, More leads only when Diagram is drawn", () => {
-  it("reproduces plan 261009c's measured More positions before testing the cutoff", () => {
+   after Skim is x 310-354, inside 360, 375 and 390. With Diagram before Skim it
+   was 354-398 whenever Diagram was drawn, past all three, and More jumped to
+   the front (spya-d0pyzt); since 2026-10-26 Diagram stands after More
+   (plan 261026d), so the switch no longer moves it. */
+describe("on a phone's 44px floor, More keeps its place with Diagram drawn or not", () => {
+  it("More's place is x 310-354 with the switch off and on", () => {
     W = 44;
     PLAIN_W = 90;
     width = 500;
-    reading({ experimental: EXPERIMENTAL_OFF });
-    expect(host.querySelector(".dock-more-trigger")?.getBoundingClientRect()).toMatchObject({
-      left: 310,
-      right: 354,
-    });
-    reading({ experimental: EXPERIMENTAL_ON });
-    expect(host.querySelector(".dock-more-trigger")?.getBoundingClientRect()).toMatchObject({
-      left: 354,
-      right: 398,
-    });
-  });
-
-  it("with Experimental on, or Diagram open, at 360, 375 and 390, in both arms, More leads", () => {
-    W = 44;
-    PLAIN_W = 90;
-    for (const w of [360, 375, 390]) {
-      width = w;
-      reading({ experimental: EXPERIMENTAL_ON });
-      expect(bands().slice(0, 4), `${w}, switch on`).toEqual(["More", L.structure, L.summary, L.diagram]);
-      reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
-      expect(bands().slice(0, 4), `${w}, Diagram open`).toEqual(["More", L.structure, L.summary, L.diagram]);
-      loose({ experimental: EXPERIMENTAL_ON });
-      expect(bands().slice(0, 4), `${w}, links arm`).toEqual(["More", L.structure, L.summary, L.diagram]);
+    for (const experimental of [EXPERIMENTAL_OFF, EXPERIMENTAL_ON]) {
+      reading({ experimental });
+      expect(host.querySelector(".dock-more-trigger")?.getBoundingClientRect()).toMatchObject({
+        left: 310,
+        right: 354,
+      });
     }
   });
 
-  it("without Diagram More stays after Skim at 360, 375 and 390, in both arms, and with it at 400", () => {
+  it("at 360, 375 and 390, in both arms, with the switch on or off or Diagram open, More stays after Skim", () => {
     W = 44;
     PLAIN_W = 90;
+    const home = [L.structure, L.summary, L.skim, "More"];
     for (const w of [360, 375, 390]) {
       width = w;
       reading({ experimental: EXPERIMENTAL_OFF });
-      expect(bands().slice(0, 4), `${w}, reading view`).toEqual([L.structure, L.summary, L.skim, "More"]);
+      expect(bands().slice(0, 4), `${w}, switch off`).toEqual(home);
+      reading({ experimental: EXPERIMENTAL_ON });
+      expect(bands().slice(0, 5), `${w}, switch on`).toEqual([...home, L.diagram]);
+      reading({ experimental: EXPERIMENTAL_OFF, mode: "diagram" });
+      expect(bands().slice(0, 5), `${w}, Diagram open`).toEqual([...home, L.diagram]);
       loose({ experimental: EXPERIMENTAL_OFF });
-      expect(bands().slice(0, 4), `${w}, links arm`).toEqual([L.structure, L.summary, L.skim, "More"]);
+      expect(bands().slice(0, 4), `${w}, links arm, switch off`).toEqual(home);
+      loose({ experimental: EXPERIMENTAL_ON });
+      expect(bands().slice(0, 5), `${w}, links arm, switch on`).toEqual([...home, L.diagram]);
     }
-    width = 400;
-    reading({ experimental: EXPERIMENTAL_ON });
-    expect(bands().slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
   });
 });

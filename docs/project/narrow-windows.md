@@ -169,12 +169,12 @@ Three things worth carrying to whatever is built next:
   the one width band where the bar had started overflowing again had no floor under it.
 - **But More is never past the edge.** A scrolling row hides whatever is beyond the fold, and the
   one button that must not be there is More, which holds five modes. On a phone the row is at its
-  44px floor, so its buttons stand at the same x at 390, 375 and 360, and with Diagram drawn More's
-  place after Skim was x 354–398 (WebKit, 2026-10-09). No label rung fits 360. More stood after
-  Summary from 2026-10-11, two buttons earlier, and is after Skim again since 2026-10-18 at Greg's
-  request ([261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md)),
-  so with Diagram drawn on a phone this guard is what puts it in view. It is measured, not keyed to a state. When that place is
-  past the bar's edge, More moves to the front of the bands' frame, in the DOM as well as on screen.
+  44px floor, so its buttons stand at the same x at 390, 375 and 360. More stands after Skim at
+  x 310–354 (WebKit, 2026-10-09); Diagram follows it when offered, so turning Experimental on does
+  not move it. Before Diagram moved there on 2026-10-26, it pushed More's home to x 354–398 and the
+  guard put More at the front. The guard remains measured rather than keyed to a state: whenever
+  that home is past the bar's edge, More moves to the front of the bands' frame, in the DOM as well
+  as on screen.
   The test is where More's *home* ends, never where it is drawn, or moving it would send it straight
   back: `moreOffTheEdge` in [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), `bandsInOrder` in
   `Dock.tsx`, [261009c](../plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
@@ -373,7 +373,11 @@ Three things to know before touching any of it:
   (`--zz-control`) alongside it, or you are testing your method rather than the rule.
 - **`cover` is not standalone-only.** In an ordinary Safari or Chrome tab it also opens up the notch
   in landscape and the home indicator in portrait, and Safari's bottom inset *changes* as its
-  toolbar minimises. Only the top inset is reliably zero in a tab.
+  toolbar minimises. Only the top inset is reliably zero in a tab — as far as anyone has measured.
+  Greg's 2026-10-25 report `spya-tfsjvq` says the landing page's bar sat under the clock "in a web
+  browser"; the fix (every signed-out bar adds `--safe-top`) is certain for the installed app and
+  unproven for a tab until the phone says what the inset is there:
+  [261026a](../plans/261026a-signed-out-nav-below-the-clock-on-an-iphone.md).
 - **Two things cannot do this arithmetic in CSS** and read the numbers through
   [`src/web/safe-area.ts`](../../src/web/safe-area.ts): `fitView`, which divides the window's width
   in pixels and must not spend width the notch has taken, and `stickyOffset`, which predicts where

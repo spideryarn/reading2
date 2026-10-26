@@ -87,7 +87,8 @@ specificity in `app` would lose to every component rule that sets a face, the op
 
 **Now.** `wrap`, `charsThatFit` and `layoutNodeText` in `src/sketch-scene.ts` assume Geist at
 `CHAR_W = 0.53` em a character. The same functions decide `nodeFits`, which the pipeline counts as
-`overflowing` and tells the model about when it revises a sketch (`src/sketch.ts`). So the measure
+`overflowing` (`src/sketch.ts`; logged and scored, not sent back to the model, which is called
+once — corrected 2026-10-26, [261026c](261026c-sketch-labels-in-the-ai-font.md)). So the measure
 has to be the same number on the server and in the browser, and cannot be read from the browser at
 paint time. That is why the labels stay in Geist although they are the model's words.
 
@@ -117,7 +118,8 @@ with Geist's margin (0.60):
 - node labels cut to fit go from 49 of 4,636 to 174;
 - sketches with at least one cut label go from 27 to 68.
 
-New sketches would adapt, since the model is told which labels overflow. Old ones would not until
+New sketches would adapt, since the prompt states the line length at the drawn width (made true
+by [261026c](261026c-sketch-labels-in-the-ai-font.md); it said a hand-written 31). Old ones would not until
 they are redrawn. Asked as [q-ugekcv](../user-feedback/questions/q-ugekcv.md); the switch is then
 a one-word change.
 
@@ -164,8 +166,10 @@ different value without breaking fonts.md's rule, so it only misleads.
 - **1** `019479ab4` and **3** `c8c25e588`, plus Sol's code-review fixes in `eae5ae98e`
   ([-code-review-1-sol.md](261025k-fonts-and-css-code-quality-code-review-1-sol.md)). Three P1s:
   the email test did not pin the middle rows, napi canvas falls back silently when a face fails to
-  register, and the import of `web/voice.ts` broke the client-imports allowlist. Whether Sketch's
-  labels take the AI face is with Greg as q-ugekcv.
+  register, and the import of `web/voice.ts` broke the client-imports allowlist. Greg answered
+  q-ugekcv on 2026-10-25 (option B, no redraw): *"Stick with the rules. If it's AI generated, then
+  it should use the AI font."* The flip to `"ai"` is
+  [261026c](261026c-sketch-labels-in-the-ai-font.md).
 - **2** `85036122b`. The computed-style capture (130,421 records over the sampled pages) is
   identical before and after, once class names are normalised.
 - **4** `5ac90bfa4`. Tailwind keeps `--font-sans` as `var(--font-ui)`, because `tw:font-sans` is

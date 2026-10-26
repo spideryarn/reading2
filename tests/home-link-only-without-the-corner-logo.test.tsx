@@ -167,7 +167,7 @@ describe("the five document pages: the corner logo signed in, the site bar signe
     /* Source/markup contract: jsdom cannot resolve env() or lay out a notch.
        Also check that the inset rule actually selects this rendered bar. */
     const css = readerCssNoComments();
-    const insetRule = css.match(/([^{}]+)\{\s*padding-top:\s*var\(--safe-top\);\s*\}/g)
+    const insetRule = css.match(/([^{}]+)\{[^{}]*padding-top:\s*var\(--safe-top\);[^{}]*\}/g)
       ?.find((rule) => nav.matches(rule.slice(0, rule.indexOf("{")).trim()));
     expect(insetRule, "the rendered bar does not reserve the safe top inset").toBeDefined();
     expect(scope.classList.contains("tw:contents")).toBe(true);

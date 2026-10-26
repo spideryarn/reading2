@@ -497,7 +497,8 @@ function reply(url: string, method: string): Response {
      Debate since 261006h, each of which the fall-through's `{}` is now a
      reported fault for rather than an `undefined` quietly published — and
      Tweets, Relations, Skim, Sketch and Illustrated since 261007n, and
-     Situate since 261024o (the margin reads it with the switch on). */
+     Situate since 261024o (the owner's margin reads it whatever the switch
+     says since 261026g). */
   if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|reception|sources-claims|tweets|relations|skim|sketch|illustrated|situate)\//.test(url)) {
     return new Response(null, { status: 404 });
   }

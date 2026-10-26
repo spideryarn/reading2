@@ -64,7 +64,9 @@ const RUNS = [
   /* Tweets stood in the shape run, beside Summary, from 2026-09-29 to
      2026-10-03; it is Summary's Thread view now, and one button fewer
      (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
-  ["structure", "summary", "diagram", "skim"],
+  /* Diagram after Skim since 2026-10-26, so it stands after More and More
+     keeps its place with the switch on (spya-d0pyzt, plan 261026d). */
+  ["structure", "summary", "skim", "diagram"],
   ["quotes", "glossary", "faq", "ideas", "timeline"],
   /* Citations, Referee, Debate until 2026-10-09, when Citations and Debate
      became Sources, in Debate's place (plan 261009l); Sources first since

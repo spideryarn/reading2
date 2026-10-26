@@ -225,7 +225,7 @@ async function writeReadme(opts: Options, rows: string[], notes: string[]): Prom
     "`<slug>.raw.json` (what the model sent, before any checking),",
     "`<slug>.json` (the scene after `readSketch`) and `<slug>.png`.",
     "",
-    opts.systemFile ? `Prompt variant: \`${opts.systemFile}\`` : "Prompt: the shipping `SYSTEM` in `src/sketch.ts`.",
+    opts.systemFile ? `Prompt variant: \`${opts.systemFile}\`` : "Prompt: the shipping `SKETCH_SYSTEM` in `src/sketch.ts`.",
     "",
     "`flow` is Kendall's tau between a node's height on the canvas and where its",
     "block sits in the article: 1 means the picture runs strictly top-to-bottom",

@@ -11548,7 +11548,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          client filters and reads, and naming it here is what makes a
          disagreement about it a compile error instead of a silent no-op.
          docs/postmortems/260903e-offline-shelf-filter-never-ran.md. */
-      const shelf: LibraryResponse = { articles: await listArticles({ archived }) };
+      /* Progress belongs only on the owner's browser shelf. View-as is an
+         administrator, and `reading=0` is the deliberately smaller response
+         used by MCP; both skip the private query as well as the field. */
+      const readBands = viewingAs() === null && query.get("reading") !== "0";
+      const shelf: LibraryResponse = { articles: await listArticles({ archived, readBands }) };
       send(res, 200, shelf);
     },
   },
@@ -13269,6 +13273,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const slug = slugPart(captures, 1);
       const batch = readingTimeBatch(await readBody(req, MAX_READING_TIME_BODY_BYTES));
       await readingTimeStore.add(slug, batch);
+      /* The shelf's pie reads a cached denominator, kept true here, the one
+         place the owner's reading moves (plan 261025l). Not the shelf's GET,
+         which the unauthenticated health check also calls. A failure costs
+         one card its pie, so it is logged and the seconds still count. */
+      try {
+        await readingTimeStore.refreshShelfWords(slug);
+      } catch (err) {
+        log("store").warn({ ...errorFields(err), slug }, `could not refresh the shelf's read-so-far words for ${slug}`);
+      }
       res.statusCode = 204;
       res.end();
     },

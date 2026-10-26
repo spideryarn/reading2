@@ -6024,6 +6024,35 @@ export const readingTime = spideryarn.table(
 );
 
 /**
+ * **The words a share of the article is measured in, cached for the shelf** —
+ * `readSoFarWords(blocks, foldedOnArrival(article))`, the reading view's
+ * denominator, worked out by the owner's `loadArticle` so the shelf's pie and
+ * the masthead's agree without the shelf reading every block's text.
+ * docs/plans/261025l-shelf-cards-show-the-how-much-read-pie.md.
+ *
+ * - **`basis` says whether it is still true**: a hash of every input and rule
+ *   it came from (src/store/read-so-far-basis.ts § `readSoFarBasis`). The shelf
+ *   uses a row only while its basis equals the current one, so a stale row is
+ *   a missing pie, never a wrong one.
+ * - **Derived, not the reader's activity**: no seconds and no band, only which
+ *   blocks count and their words. Left out of both exports; moves with the
+ *   article in a transfer, where the cleared rename makes it stale by itself.
+ */
+export const readSoFarWords = spideryarn.table(
+  "read_so_far_words",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    basis: text("basis").notNull(),
+    /** Block id to words, exactly `readSoFarWords`' map. */
+    words: jsonb("words").$type<Record<string, number>>().notNull(),
+    computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("read_so_far_words_object", sql`jsonb_typeof(${t.words}) = 'object'`)],
+);
+
+/**
  * **The glossary entries the owner has hidden from their own view of one
  * article** — docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md § 2.
  * Greg, 2026-10-02: *"Let's go with Hide for now"* — hide for me, not delete

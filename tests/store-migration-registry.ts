@@ -3172,6 +3172,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds three articles and drives the reading-time GET and POST through the
      route, reading rows back out of `reading_time`. No model is called. */
   "tests/reading-time-route.test.ts": "private-postgres",
+  /* Seeds one article, writes reading time, and checks the shelf pie's cached
+     words against the masthead's own computation, and when they go stale. No
+     model is called. */
+  "tests/read-so-far-shelf.test.ts": "private-postgres",
   /* Seeds three articles, writes a two-entry glossary on each, and drives the
      glossary hide PUT and DELETE and the owner's GET through the route,
      reading rows back out of `glossary_hidden_entries`. No model is called. */
@@ -4268,6 +4272,17 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "`OUTSIDER` is a request owner for the one case that asks whether a claim is visible to " +
         "somebody who did not make it. The claims themselves are written under " +
         "`currentOwnerId()`.",
+    },
+  },
+  "tests/read-so-far-shelf.test.ts": {
+    "00000000-0000-4000-8000-00000000a5f1": {
+      kind: "no-row-needed",
+      why:
+        "the stranger only runs `refreshShelfWords` for a slug they do not own, which must answer " +
+        "`fresh` and write nothing: its first read is scoped by `ownedSlug`, and its insert is an " +
+        "`INSERT … SELECT` whose `WHERE` carries `owner_id = currentOwnerId()`. No row matches, " +
+        "so the id never lands in a column. It becomes wrong if the test ever ingests an article " +
+        "as the stranger.",
     },
   },
   "tests/store-uploads-parity.test.ts": {

@@ -1569,6 +1569,13 @@
       "when": 1792954219392,
       "tag": "20261025185019_citation_index_twins_and_topic",
       "breakpoints": true
+    },
+    {
+      "idx": 224,
+      "version": "7",
+      "when": 1792978308375,
+      "tag": "20261026013148_read_so_far_words",
+      "breakpoints": true
     }
   ]
 }

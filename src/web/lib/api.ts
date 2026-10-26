@@ -93,6 +93,7 @@ import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
 import { heldReader, heldToken, onSession, sessionObserved, sessionRevision, tokenOwnerOf } from "./session.js";
 import { supabase } from "./supabase.js";
 import { noteRequest } from "./writes.js";
+import { withoutReadBands } from "./cached-shelf.js";
 import {
   endViewAsTab,
   VIEW_AS_ENDED_CODE,
@@ -903,7 +904,7 @@ async function attempt(
     noteServedCopy(saved.savedAt);
 
     const body = input.split("?")[0] === "/api/library"
-      ? await onlyWhatWeHave(saved.body, owner)
+      ? await onlyWhatWeHave(withoutReadBands(saved.body), owner)
       : saved.body;
 
     /* A real `Response`, so every caller downstream — `readJson`, the hooks,
@@ -1030,7 +1031,10 @@ function saving(
             ) return;
           }
         }
-        await writeCached(input, body, ticket, slugOf(input));
+        /* The shelf's pies are as of this answer, so a kept copy has none
+           (cached-shelf.ts § `withoutReadBands`, plan 261025l). */
+        const kept = input.split("?")[0] === "/api/library" ? withoutReadBands(body) : body;
+        await writeCached(input, kept, ticket, slugOf(input));
       })
       .catch(() => {
         /* A body that dies after its headers arrived. Nothing to save, and the

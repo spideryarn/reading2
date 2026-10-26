@@ -49,6 +49,7 @@ import { paperwork } from "./paperwork.js";
 import {
   accept,
   CANVAS_W,
+  charsThatFit,
   readSketch,
   SKETCH_VERSION,
   stripInferredOpens,
@@ -67,7 +68,7 @@ import { budgetFor } from "./token-budget.js";
 import type { Meta, Tree, TreeNode } from "./types.js";
 
 /**
- * Bumped whenever SYSTEM or `renderPrompt` changes what the model is asked —
+ * Bumped whenever SKETCH_SYSTEM or `renderPrompt` changes what the model is asked —
  * and it is **`SKETCH_VERSION` itself**, not a second copy of the same string.
  *
  * `readSketch` stamps `SKETCH_VERSION` (src/sketch-scene.ts) onto every sketch
@@ -176,7 +177,7 @@ export interface SketchRun {
 
 /* ------------------------------------------------------------------ prompt */
 
-const SYSTEM = `You are drawing ONE picture of how this article is put together, for a
+export const SKETCH_SYSTEM = `You are drawing ONE picture of how this article is put together, for a
 reader who has not read it yet.
 
 WHAT THE PICTURE IS FOR
@@ -254,7 +255,7 @@ downwards. Nothing may be drawn outside it. Leave about 24 units of margin.
 
 Units are not pixels: the picture is scaled to whatever room the reader has. So
 what matters is the RELATIVE sizes, and one absolute thing: text at size "sm" is
-12 units tall, so a box 200 wide holds about 31 characters on a line.
+12 units tall, so a box 200 wide holds about ${charsThatFit(200, "sm")} characters on a line.
 
 THE FIVE THINGS YOU CAN DRAW
 
@@ -628,7 +629,7 @@ export async function generateSketch(opts: {
   signal?: AbortSignal;
   cacheArticle?: boolean;
   profile?: string | null;
-  /** Overrides SYSTEM, for the prompt harness only. Never set in the app. */
+  /** Overrides SKETCH_SYSTEM, for the prompt harness only. Never set in the app. */
   systemOverride?: string;
   /** Frozen pre-schema eval arm only; production never omits the schema. */
   outputSchema?: "omit-for-eval";
@@ -674,7 +675,7 @@ export async function generateSketch(opts: {
           text: articleWithIds(meta, evidence),
           ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
         },
-        { type: "text" as const, text: opts.systemOverride ?? SYSTEM },
+        { type: "text" as const, text: opts.systemOverride ?? SKETCH_SYSTEM },
       ],
       messages: [{ role: "user" as const, content: renderPrompt({ tree, profile }) }],
     };

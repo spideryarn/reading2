@@ -104,9 +104,14 @@ describe("the reading view's frames", () => {
     expect(host.querySelectorAll(`[${MORE_HOME_ATTR}]`)).toHaveLength(1);
   });
 
-  it("with the switch on, More still stands after Skim, after Summary and Diagram", () => {
+  /* spya-d0pyzt: Diagram stood before Skim, so the switch moved More one
+     button right (and off a phone's edge). Since 2026-10-26 it stands after. */
+  it("with the switch on, More stands where it does with the switch off, and Diagram after it", () => {
+    reading({ experimental: EXPERIMENTAL_OFF });
+    const off = frames()[1]?.indexOf("More");
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(frames()[1]?.slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
+    expect(frames()[1]?.slice(0, 5)).toEqual([L.structure, L.summary, L.skim, "More", L.diagram]);
+    expect(frames()[1]?.indexOf("More")).toBe(off);
   });
 
   it("a gathered mode drawn while open stands after the shape run, as a run of its own", () => {
@@ -116,7 +121,7 @@ describe("the reading view's frames", () => {
     expect(glossary.classList.contains("dock-group-start")).toBe(true);
   });
 
-  it("every gathered mode, open, stands straight after Skim and More, switch on or off", () => {
+  it("every gathered mode, open, stands after Skim and More (and Diagram, switch on)", () => {
     for (const [experimental, modes] of [
       [EXPERIMENTAL_OFF, ["quotes", "glossary", "ideas"]],
       [EXPERIMENTAL_ON, ["quotes", "glossary", "faq", "ideas", "timeline"]],
@@ -125,7 +130,9 @@ describe("the reading view's frames", () => {
         reading({ experimental, mode });
         const bands = frames()[1] ?? [];
         expect(bands[bands.indexOf("More") - 1], `${mode}, switch ${experimental.on}`).toBe(L.skim);
-        expect(bands[bands.indexOf("More") + 1], `${mode}, switch ${experimental.on}`).toBe(L[mode]);
+        const after = experimental.on ? [L.diagram, L[mode]] : [L[mode]];
+        const at = bands.indexOf("More") + 1;
+        expect(bands.slice(at, at + after.length), `${mode}, switch ${experimental.on}`).toEqual(after);
       }
     }
   });

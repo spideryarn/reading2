@@ -67,8 +67,8 @@ describe("splitForMore: what the bar draws and what the menu holds", () => {
       "plain",
       "structure",
       "summary",
-      "diagram",
       "skim",
+      "diagram",
       "sources",
       "referee",
       "search",
@@ -306,7 +306,7 @@ describe("the More button on the reading view", () => {
       (host.querySelector(".dock-modes-radios") as HTMLElement).style.getPropertyValue("--dock-radio-count"),
     ).toBe("9");
     const frame = (moreTrigger(host) as HTMLElement).closest(".dock-frame") as HTMLElement;
-    /* Structure, Summary, More, Skim, Sources, Search, Chat, Learn. */
+    /* Structure, Summary, Skim, More, Sources, Search, Chat, Learn. */
     expect(frame.style.getPropertyValue("--dock-frame-count")).toBe("8");
   });
 });

@@ -44,9 +44,11 @@ was:
 
 Fixing the crash makes the refusal *legible*. It does not stop the reader wasting the upload. So:
 
-**Before choosing a file, the box now says: `PDF, up to 50 MB and 250 pages.`** One muted 12px line,
-in the slot the chosen-file row later occupies so it costs no height once acted on, wired to the
-button with `aria-describedby`, confirmed in a browser at 390px and 1280px.
+**Before choosing a file, the box now says: `PDF, up to 50 MB and 250 pages.`** The original fix was
+one muted 12px line in the chosen-file row's later slot, confirmed in a browser at 390px and
+1280px. Since 2026-10-25 it is in the house tooltip on the (i) beside File instead, opened by hover,
+focus or tap; the File button keeps an `aria-describedby` copy for a screen reader
+([261026b](../plans/261026b-upload-limits-behind-an-info-button.md)).
 
 To get there, `MAX_PAGES` moved from `pdf-read.ts` to `uploads.ts`, beside `MAX_UPLOAD_BYTES` —
 `uploads.ts` is dependency-free and shared by browser and server by design, while `pdf-read.ts`

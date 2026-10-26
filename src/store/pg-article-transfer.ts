@@ -144,6 +144,8 @@ export const ARTICLE_TABLES = {
   upload_source_guesses: "moves",
   /** Sources › Not cited's last search: OpenAlex's papers close to the article's own words, nothing of the reader's. */
   related_work_searches: "moves",
+  /** The shelf pie's cached denominator: which blocks count, not the reader's seconds. The cleared rename makes it stale (plan 261025l). */
+  read_so_far_words: "moves",
 
   /* ---- reader-state: the old owner's, deleted (src/admin-articles.ts § READER_STATE) ---- */
   /** Before `referee_criteria`: `comments_criterion` references it and does not cascade. */

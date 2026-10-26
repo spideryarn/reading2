@@ -14,9 +14,11 @@
  * the button's name say the band in words, and the band is what is drawn. A
  * percentage is what Greg asked not to see.
  *
- * Owner only, and only once the reading time has answered: `Reader` passes a
- * band or nothing (§ `readBandFor`). "none" draws nothing, because an empty
- * circle reads as a radio button.
+ * Owner only. In the reading view, only once the reading time has answered:
+ * `Reader` passes a band or nothing (§ `readBandFor`). On the shelf, the
+ * owner-only live response passes the same band; public, cached, MCP and
+ * administrator view-as shelves pass nothing (plan 261025l). "none" draws
+ * nothing, because an empty circle reads as a radio button.
  * docs/plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md.
  */
 import type { ReactElement } from "react";

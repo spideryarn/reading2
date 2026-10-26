@@ -551,6 +551,14 @@ const SHARED_WITH_READER = [
   "src/quote-match.ts",
   "src/read-address.ts",
   "src/referee-criteria.ts",
+  /* All three arrived 2026-10-26 with the shelf's how-much-read pie (plan
+     261025l, spya-e5477u). They cost the reader nothing new: the shelf and the
+     reader are eager and drew them first; what is new is only that a lazy route
+     reaches them too. Small leaves: a mark, an SVG pie, and the filter that says
+     which words have been read. */
+  "src/web/ReadSoFarMark.tsx",
+  "src/web/SharePie.tsx",
+  "src/web/read-filter.ts",
   "src/title-text.ts",
   "src/types.ts",
   "src/uploads.ts",

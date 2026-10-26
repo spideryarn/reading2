@@ -165,8 +165,8 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   the dots zig-zag down the list as the route jumps about. The dot is at the stop's position in
   words (`positionOf` in [`skim-route.ts`](../../src/web/skim-route.ts)); the current
   row's dot is in the accent. A screen reader hears "about 70% of the way through".
-- **Further left in the bar**: Quotes, then Skim, straight after Summary (`MODES_UI` in
-  [`Dock.tsx`](../../src/web/Dock.tsx)).
+- **In the shape run**: Skim stands straight after Summary and before More; Diagram follows More
+  when offered (`MODES_UI` and `MORE_AFTER` in [`Dock.tsx`](../../src/web/Dock.tsx)).
 - **Plan it again** rebuilds the route only (`skim` is forced by name). **Since 2026-09-29 it
   is offered only in the stale and profile-changed banners**; the standing button in the foot went,
   and a current route is re-planned from Metadata's *AI processing*, which has a Skim
