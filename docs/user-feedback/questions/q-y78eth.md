@@ -32,5 +32,7 @@ What would decide it: whether you would use it on the shelf. If you mostly open 
 > q-y78eth yes
 
 Settled: A. Every card on your own shelf shows the same how-much-read pie as the top of the article,
-from the same rules. Only you see it, never a visitor and never the public shelf. Being built in
-session `fbe5477u-shelf-pie`.
+from the same rules. Only you see it, never a visitor and never the public shelf. Built in session
+`fbe5477u-shelf-pie` (plan 261025l): on dev, not yet deployed. After the deploy, a one-off backfill
+fills in the pies for articles read before it; until then an article gets its pie the next time you
+read in it.
