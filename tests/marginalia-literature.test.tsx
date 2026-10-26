@@ -11,7 +11,7 @@
  * - **a finding is placed only while its quoted words are in its block**;
  * - **opened**, its sources are links that send no referrer and can't reach
  *   back (`noreferrer noopener`), *From the web* says where it came from, and
- *   *Open in Sources* names the finding, so Investigate can land on it;
+ *   *Open in Sources* names the finding, so Where it sits can land on it;
  * - **owner only, behind the switch**: with the switch off the owner's feed
  *   asks `/api/situate` nothing and hands the margin no findings, and a stale
  *   dossier is not drawn.

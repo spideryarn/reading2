@@ -1,23 +1,25 @@
 // @vitest-environment jsdom
 /**
- * **Sources › Investigate's *Where this piece sits*** — the dossier the
- * `situate` step writes, drawn at the top of Investigate for the owner with the
- * experimental switch on. Plan
+ * **The literature search in Sources › *Where it sits*** — the dossier the
+ * `situate` step writes, drawn in *Where it sits* for every owner since plan
+ * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md
+ * (at the top of Investigate, behind the experimental switch, before). Plan
  * docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md
- * § The dossier, at the top of Investigate; § Stages, 2.
+ * § The dossier; § Stages, 2.
  *
  * - The words and the order, without React (situate-dossier.ts): the head
  *   line, the groups in the reader's order with counts, a finding's chat
- *   question, the fold's summary.
- * - The section (SituateDossier.tsx through InvestigatePanel): absent without a
- *   `situate` (a visitor, or the switch off), the press before it has run, the
- *   working state, the findings, the honest nothing-found, the fold, Search
- *   again, the stale banner, and model text never drawn as HTML.
+ *   question and origin, the fold's summary.
+ * - The section (SituateDossier.tsx through WhereItSitsPanel): the press
+ *   before it has run, the working state, the findings, a finding's chat by
+ *   its id, the honest nothing-found, the fold, Search again, the stale
+ *   banner, and model text never drawn as HTML. Investigate keeps only the
+ *   search's questions.
  * - The hook (useSituate.ts): reads, and spends only on a press — unforced for
  *   the first, `force: ["situate"]` for Search again.
  *
- * Mounting from SourcesBand with the switch on and off is
- * tests/reception-lens-in-chat.test.tsx § Where this piece sits.
+ * Mounting from SourcesBand with the switch off is
+ * tests/reception-lens-in-chat.test.tsx § Where it sits.
  */
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -80,12 +82,14 @@ const {
   ASK_FINDING_IN_CHAT,
   OPEN_FINDING_CHAT,
   findingLens,
+  findingOrigin,
   groupFindings,
   groupHeading,
   searchedLine,
   situateHeadLine,
 } = dossier;
 const { InvestigatePanel, SOURCES_INVESTIGATE_SUGGESTED_HEAD } = await import("../src/web/InvestigatePanel.js");
+const { WhereItSitsPanel } = await import("../src/web/WhereItSitsPanel.js");
 const { useSituate } = await import("../src/web/useSituate.js");
 const { dayOf } = await import("../src/web/relative-time.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
@@ -207,6 +211,8 @@ describe("the words and the order", () => {
 let host: HTMLDivElement;
 let root: Root;
 const questions: string[] = [];
+/** The findings a press on *Ask in chat* handed to the sender. */
+const askedFindings: string[] = [];
 const opened: string[] = [];
 const jumped: string[] = [];
 const pressed: string[] = [];
@@ -238,26 +244,51 @@ function owner(over: Partial<UseSituate> = {}): UseSituate {
   };
 }
 
-function panel(situateOwner: UseSituate | null, summaries: ThreadSummary[] = []): ReactElement {
+/** *Where it sits*, with the dossier, and with its two free lists empty and quiet. */
+function panel(
+  situateOwner: UseSituate,
+  summaries: ThreadSummary[] = [],
+  focus: { findingFocus: { id: string; n: number }; onFindingFocusTaken(f: { id: string }): void } | null = null,
+): ReactElement {
+  return createElement(WhereItSitsPanel, {
+    head: sourcesHead({ view: "where", onView: () => {}, ownerSlug: "a-piece" }),
+    situate: situateOwner,
+    citers: { result: { kind: "no-doi" }, retry: () => {} },
+    before: { status: "none", works: null, listing: false },
+    articleYear: null,
+    chats: {
+      summaries,
+      onFinding: (f: SituateFinding) => askedFindings.push(f.id),
+      onOpen: (id: string) => opened.push(id),
+    },
+    onJump: (id: BlockId) => jumped.push(id),
+    onOpenWork: () => {},
+    onView: () => {},
+    ...(focus ?? {}),
+  });
+}
+
+/** Investigate, which keeps the search's questions and no longer draws its dossier. */
+function investigate(pieceQuestions: readonly string[]): ReactElement {
   return createElement(InvestigatePanel, {
     head: sourcesHead({ view: "investigate", onView: () => {}, ownerSlug: "a-piece" }),
     chats: {
-      summaries,
+      summaries: [],
       loaded: false,
       occupied: false,
       onQuestion: (q: string) => questions.push(q),
       onCheck: () => {},
       onAskWork: () => {},
+      onFinding: () => {},
       onOpen: (id: string) => opened.push(id),
     },
     claims: null,
     works: null,
-    situate: situateOwner,
-    onJump: (id: BlockId) => jumped.push(id),
+    pieceQuestions,
   });
 }
 
-function paint(situateOwner: UseSituate | null, summaries: ThreadSummary[] = []): void {
+function paint(situateOwner: UseSituate, summaries: ThreadSummary[] = []): void {
   act(() => {
     root.render(panel(situateOwner, summaries));
   });
@@ -270,6 +301,7 @@ beforeEach(() => {
   otherSituateReply = null;
   jobEngine.reset();
   questions.length = 0;
+  askedFindings.length = 0;
   opened.length = 0;
   jumped.length = 0;
   pressed.length = 0;
@@ -283,41 +315,16 @@ afterEach(async () => {
   host.remove();
 });
 
-const section = () => host.querySelector<HTMLElement>(".investigate-situate");
+const section = () => host.querySelector<HTMLElement>(".where-situate");
 const text = () => (section()?.textContent ?? "").replace(/\s+/g, " ");
 const buttonCalled = (words: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").trim() === words);
 const groupHeads = () => [...host.querySelectorAll<HTMLElement>(".situate-group-head")].map((h) => h.textContent);
 
-describe("a finding asked for from the margin (plan 261024o § Marginalia)", () => {
-  function paintFocused(
-    id: string,
-    taken: string[],
-    arrival: Pick<Parameters<typeof InvestigatePanel>[0]["chats"], "summaries" | "loaded" | "occupied"> = {
-      summaries: [],
-      loaded: false,
-      occupied: false,
-    },
-  ): void {
+describe("a finding asked for from the margin or its chat's way back (plan 261024o § Marginalia; 261025h)", () => {
+  function paintFocused(id: string, taken: string[], summaries: ThreadSummary[] = []): void {
     act(() => {
-      root.render(
-        createElement(InvestigatePanel, {
-          head: sourcesHead({ view: "investigate", onView: () => {}, ownerSlug: "a-piece" }),
-          chats: {
-            ...arrival,
-            onQuestion: () => {},
-            onCheck: () => {},
-            onAskWork: () => {},
-            onOpen: (threadId: string) => opened.push(threadId),
-          },
-          claims: null,
-          works: null,
-          situate: owner(),
-          onJump: () => {},
-          findingFocus: { id, n: 1 },
-          onFindingFocusTaken: (f) => taken.push(f.id),
-        }),
-      );
+      root.render(panel(owner(), summaries, { findingFocus: { id, n: 1 }, onFindingFocusTaken: (f) => taken.push(f.id) }));
     });
   }
 
@@ -337,7 +344,7 @@ describe("a finding asked for from the margin (plan 261024o § Marginalia)", () 
     expect(taken).toEqual(["replaced-by-a-newer-search"]);
   });
 
-  it("does not reopen the newest Investigate chat over the finding it is landing on", () => {
+  it("opens no conversation over the finding it is landing on", () => {
     const taken: string[] = [];
     const chat: ThreadSummary = {
       id: "newest",
@@ -348,20 +355,27 @@ describe("a finding asked for from the margin (plan 261024o § Marginalia)", () 
       turns: 1,
       origin: { mode: "reception", lens: "What bears on this?" },
     };
-    paintFocused("c2", taken, { summaries: [chat], loaded: true, occupied: false });
+    paintFocused("c2", taken, [chat]);
     expect(taken).toEqual(["c2"]);
     expect(opened).toEqual([]);
   });
 });
 
 describe("the section", () => {
-  it("is not drawn without a dossier owner: a visitor, or the switch off", () => {
-    paint(null);
+  it("is not in Investigate any more, which keeps only the search's questions (plan 261025h)", () => {
+    act(() => root.render(investigate(situate().questions)));
     expect(section()).toBeNull();
     expect(host.textContent).not.toContain(SITUATE_HEAD);
-    expect(host.textContent).not.toContain(SITUATE_QUESTIONS_HEAD);
+    expect(host.textContent).not.toContain(SITUATE_RUN);
+    expect(host.textContent).toContain(SITUATE_QUESTIONS_HEAD);
     /* Investigate itself is all there. */
     expect(host.textContent).toContain(SOURCES_INVESTIGATE_SUGGESTED_HEAD);
+  });
+
+  it("carries no Experimental badge: it is out of the switch (plan 261025h, decision 5)", () => {
+    paint(owner({ status: "none", situate: null }));
+    expect(section()?.textContent).not.toMatch(/experimental/i);
+    expect(host.querySelector(".situate-experimental")).toBeNull();
   });
 
   it("before it has run: the heading, what it does, the button and what it sends; a press starts it once", () => {
@@ -376,10 +390,10 @@ describe("the section", () => {
     expect(host.textContent).not.toContain(SITUATE_QUESTIONS_HEAD);
   });
 
-  it("sits above the rest of Investigate", () => {
+  it("sits above After it and Before it once it has run (plan 261025h, decision 1)", () => {
     paint(owner());
-    const suggested = [...host.querySelectorAll("h3")].find((h) => h.textContent === SOURCES_INVESTIGATE_SUGGESTED_HEAD);
-    expect(section()?.compareDocumentPosition(suggested as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const after = host.querySelector(".where-after");
+    expect(section()?.compareDocumentPosition(after as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("says it is working while the job starts", () => {
@@ -449,14 +463,35 @@ describe("the section", () => {
     expect(source?.textContent).toContain("<img src=x onerror=alert(1)> is still only quoted text");
   });
 
-  it("asks about a finding in chat as a lens question, and shows its chat's mark once it has one", () => {
+  it("asks about a finding in chat through its sender, and shows its chat's mark, found by the finding's id", () => {
     paint(owner());
     const ask = () => section()?.querySelector<HTMLButtonElement>(`.situate-finding button[aria-label="${ASK_FINDING_IN_CHAT}"]`);
     act(() => ask()?.click());
-    expect(questions).toEqual([findingLens(FINDINGS[1] as SituateFinding)]);
+    expect(askedFindings).toEqual(["c1"]);
 
     const chat: ThreadSummary = {
       id: "t1",
+      title: "A chat",
+      createdAt: "2026-10-24T10:00:00.000Z",
+      updatedAt: "2026-10-24T10:00:00.000Z",
+      kind: "chat",
+      turns: 1,
+      origin: findingOrigin(FINDINGS[1] as SituateFinding),
+    };
+    /* A Search again that rewords the note keeps the same id, and the mark
+       with it (queue item qi-mmtsxdhg): it was found by the note's words. */
+    const reworded = FINDINGS.map((f) => (f.id === "c1" ? { ...f, note: "Reworded by a newer search." } : f));
+    paint(owner({ situate: situate({ findings: reworded }) }), [chat]);
+    const first = section()?.querySelector(".situate-finding") as HTMLElement;
+    expect(first.querySelector(`button[aria-label="${ASK_FINDING_IN_CHAT}"]`)).toBeNull();
+    const mark = first.querySelector<HTMLButtonElement>(`button[aria-label="${OPEN_FINDING_CHAT}"]`);
+    act(() => mark?.click());
+    expect(opened).toEqual(["t1"]);
+  });
+
+  it("still finds a finding's chat started before it had an origin of its own, by the lens it stored", () => {
+    const chat: ThreadSummary = {
+      id: "old",
       title: "A chat",
       createdAt: "2026-10-24T10:00:00.000Z",
       updatedAt: "2026-10-24T10:00:00.000Z",
@@ -466,14 +501,11 @@ describe("the section", () => {
     };
     paint(owner(), [chat]);
     const first = section()?.querySelector(".situate-finding") as HTMLElement;
-    expect(first.querySelector(`button[aria-label="${ASK_FINDING_IN_CHAT}"]`)).toBeNull();
-    const mark = first.querySelector<HTMLButtonElement>(`button[aria-label="${OPEN_FINDING_CHAT}"]`);
-    act(() => mark?.click());
-    expect(opened).toEqual(["t1"]);
+    expect(first.querySelector(`button[aria-label="${OPEN_FINDING_CHAT}"]`)).not.toBeNull();
   });
 
   it("puts the model's questions above Investigate's own, each a press", () => {
-    paint(owner());
+    act(() => root.render(investigate(situate().questions)));
     const heads = [...host.querySelectorAll("h3")].map((h) => h.textContent);
     expect(heads.indexOf(SITUATE_QUESTIONS_HEAD)).toBeGreaterThan(-1);
     expect(heads.indexOf(SITUATE_QUESTIONS_HEAD)).toBeLessThan(heads.indexOf(SOURCES_INVESTIGATE_SUGGESTED_HEAD));
@@ -487,6 +519,7 @@ describe("the section", () => {
     paint(owner({ situate: situate({ outcome: "nothing-found", overview: "", findings: [], questions: [] }) }));
     expect(text()).toContain(SITUATE_NOTHING_FOUND);
     expect(groupHeads()).toEqual([]);
+    act(() => root.render(investigate([])));
     expect(host.textContent).not.toContain(SITUATE_QUESTIONS_HEAD);
   });
 

@@ -71,7 +71,7 @@ beforeAll(async () => {
       res.end(JSON.stringify({ error: "Sign in again." }));
       return;
     }
-    if (req.url === "/api/library") {
+    if (req.url === "/api/library?reading=0") {
       res.end(JSON.stringify({ articles: [{ slug: "on-tools", title: "On Tools", addedAt: "2026-10-01", words: 9 }] }));
       return;
     }

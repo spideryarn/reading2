@@ -797,7 +797,7 @@ const workButton = (id: string): HTMLButtonElement | null =>
 describe("Ask in chat on a cited work", () => {
   it("starts a fresh chat that records the work, and the row shows the way back", async () => {
     who.set(OWNER);
-    await open(`?mode=sources&thread=${STORED.id}`);
+    await open(`?mode=sources&sources=bibliography&thread=${STORED.id}`);
     await until(() => workButton(WORK) !== null && workButton(BARE_WORK) !== null, "both rows' Ask in chat");
     const button = workButton(WORK) as HTMLButtonElement;
     expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010s, D3)").toBe("");
@@ -865,7 +865,7 @@ describe("Ask in chat on a cited work", () => {
 
   it("quotes a work with no authors or year by its title alone", async () => {
     who.set(OWNER);
-    await open("?mode=sources");
+    await open("?mode=sources&sources=bibliography");
     await until(() => workButton(BARE_WORK) !== null, "the row's Ask in chat");
     await act(async () => workButton(BARE_WORK)?.click());
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
@@ -882,14 +882,14 @@ describe("Ask in chat on a cited work", () => {
       startedFrom("spya-srvz22", { mode: "bibliography", itemId: WORK, quote: "Consciousness explained (1st ed.)" }, "An older answer."),
       startedFrom("spya-srvy22", { mode: "glossary", itemId: BARE_WORK, quote: "a term" }, "Not the work's."),
     );
-    await open("?mode=sources");
+    await open("?mode=sources&sources=bibliography");
     await until(() => marks().length === 1, "the mark");
     expect(workRow(WORK)?.contains(marks()[0] as HTMLButtonElement)).toBe(true);
     expect(workRow(BARE_WORK)?.querySelector(".origin-chat")).toBeNull();
   });
 
   it("draws neither the button nor the mark for a visitor", async () => {
-    await open("?mode=sources");
+    await open("?mode=sources&sources=bibliography");
     await until(() => workRow(WORK) !== null, "the visitor's rows");
     expect(host.querySelector(".cite-ask-chat")).toBeNull();
     expect(host.querySelector(".origin-chat")).toBeNull();
@@ -904,7 +904,7 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s entry's chat
   const origin = { mode, itemId, quote };
   /* Bibliography is Sources' Bibliography since 2026-10-09 (plan 261009l). */
   const word = (m: "chat" | typeof mode) => (m === "bibliography" ? "sources" : m);
-  const search = `?mode=${word(mode)}${{ glossary: `&term=${QUOTED}`, bibliography: "", ideas: `&idea=${IDEA}` }[mode]}`;
+  const search = `?mode=${word(mode)}${{ glossary: `&term=${QUOTED}`, bibliography: "&sources=bibliography", ideas: `&idea=${IDEA}` }[mode]}`;
   const button = () => ({ glossary: entryButton, bibliography: () => workButton(WORK), ideas: ideaButton })[mode]();
 
   async function visit(next: "chat" | "glossary" | "bibliography" | "ideas"): Promise<void> {
@@ -1012,7 +1012,7 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
 
   it.each([
     ["glossary", "?mode=glossary", `.prose mark.term`, ".prose-card-term-ask"],
-    ["bibliography", "?mode=sources", `.prose mark.cite`, ".prose-card-cite-ask"],
+    ["bibliography", "?mode=sources&sources=bibliography", `.prose mark.cite`, ".prose-card-cite-ask"],
   ] as const)("reopens the %s item's chat and sends nothing", async (mode, search, mark, ask) => {
     who.set(OWNER);
     const itemId = mode === "glossary" ? QUOTED : WORK;
@@ -1035,7 +1035,7 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
   it("Does it say that? starts a fresh chat anchored on the citing paragraph", async () => {
     who.set(OWNER);
     server.push(startedFrom("spya-srvx34", { mode: "bibliography", itemId: WORK, quote: WORK_TITLE }, "Earlier."));
-    await open("?mode=sources");
+    await open("?mode=sources&sources=bibliography");
     const button = await card(".prose mark.cite", ".prose-card-cite-check");
     await act(async () => button.click());
     await until(() => chatPosts().length === 1, "the question sent");
@@ -1065,7 +1065,7 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
         "It does, in chapter 2.",
       ),
     );
-    await open("?mode=sources");
+    await open("?mode=sources&sources=bibliography");
     const button = await card(".prose mark.cite", ".prose-card-cite-check");
     await act(async () => button.click());
     await until(() => param("thread") === "spya-srvx35" && dialog() !== null, "the earlier check");
@@ -1082,7 +1082,7 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
     server.push(existing);
     frozenSummaries = server.filter((thread) => thread.id !== existing.id);
     conflictCiteCheckId = existing.id;
-    await open("?mode=sources");
+    await open("?mode=sources&sources=bibliography");
     const button = await card(".prose mark.cite", ".prose-card-cite-check");
     await act(async () => button.click());
     await until(() => param("thread") === existing.id, "the existing check's id after the 409");
@@ -1095,7 +1095,7 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
      began can say the work has a chat. */
   it("reopens a chat begun moments ago, before the summaries have heard of it", async () => {
     who.set(OWNER);
-    await open("?mode=sources");
+    await open("?mode=sources&sources=bibliography");
     await until(() => workButton(WORK) !== null, "the row's Ask in chat");
     frozenSummaries = structuredClone(server);
     nextAnswer = "The first answer.";
@@ -1343,7 +1343,7 @@ describe("the way back from a chat to its item", () => {
     });
     await settle();
 
-    history.pushState(null, "", `/read/${SLUG}?mode=sources`);
+    history.pushState(null, "", `/read/${SLUG}?mode=sources&sources=bibliography`);
     await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
     await until(() => workRow(WORK) !== null, "a later ordinary visit to Citations");
     expect(scrolled, "the abandoned focus is not replayed on the later visit").toEqual([]);

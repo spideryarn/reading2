@@ -16,12 +16,14 @@
  * stored answer is read. The search and the exclusion themselves are
  * tests/related-work.test.ts.
  */
-import { act, createElement, StrictMode } from "react";
+import { act, createElement, Fragment, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   RELATED_WORK_BIBLIOGRAPHY_CAPPED,
   RELATED_WORK_BIBLIOGRAPHY_STALE,
+  RELATED_WORK_EDITIONS,
+  RELATED_WORK_SAME_AUTHORS,
   RELATED_WORK_INTRO,
   RELATED_WORK_NO_BIBLIOGRAPHY,
   RELATED_WORK_NO_QUERY,
@@ -36,6 +38,7 @@ import {
   RELATED_WORK_UNAVAILABLE,
 } from "../src/messages.js";
 import type { RelatedWork, RelatedWorkResult } from "../src/types.js";
+import { listedClaims, sourcesCounts } from "../src/web/sources-counts.js";
 import { sourcesHead } from "./helpers/sources-head.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -111,10 +114,26 @@ function found(over: Partial<Extract<RelatedWorkResult, { kind: "found" }>> = {}
 let host: HTMLDivElement;
 let root: Root;
 
+/**
+ * Not cited is a tool inside *Where it sits* since plan 261025h, so its number
+ * is on that tools row (WhereItSitsPanel.tsx § `toolCounts`), drawn from the
+ * same selector: `sourcesCounts(…).notCited`, rendered here as `output`.
+ */
 function Harness({ wanted, bibliographyBasis }: { wanted: boolean; bibliographyBasis: object | null }) {
   const related = useRelatedWork(SLUG, wanted, bibliographyBasis);
   const head = sourcesHead({ view: "not-cited", onView: () => {}, ownerSlug: SLUG, notCited: related.result });
-  return wanted ? createElement(NotCitedPanel, { related, head }) : head;
+  const n = sourcesCounts({
+    works: null,
+    notCited: related.result,
+    links: [],
+    reception: null,
+    listed: listedClaims({ kind: "visitor", claimList: null }),
+    checked: 0,
+    relevance: null,
+    thread: null,
+  }).notCited;
+  const count = createElement("output", { className: "not-cited-count" }, n === null ? "" : String(n));
+  return createElement(Fragment, null, wanted ? createElement(NotCitedPanel, { related, head }) : head, count);
 }
 
 async function settle(): Promise<void> {
@@ -131,8 +150,8 @@ async function show(wanted = true, bibliographyBasis: object | null = null): Pro
 const text = () => host.textContent?.replace(/\s+/g, " ") ?? "";
 const button = (label: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === label);
-const chip = () =>
-  [...host.querySelectorAll<HTMLButtonElement>("button[role=radio]")].find((b) => b.textContent?.startsWith("Not cited"));
+/** The tool's number, as *Where it sits*' tools row draws it; empty for none. */
+const count = () => host.querySelector("output.not-cited-count")?.textContent;
 const posts = () => asked.filter((a) => a.startsWith("POST"));
 
 async function press(label: string): Promise<void> {
@@ -157,11 +176,10 @@ afterEach(() => {
 });
 
 describe("when Not cited asks", () => {
-  it("asks nothing until its chip is shown, and the chip has no number", async () => {
+  it("asks nothing until it is shown, and has no number", async () => {
     await show(false);
     expect(asked).toEqual([]);
-    expect(chip()?.textContent).toBe("Not cited");
-    expect(chip()?.getAttribute("aria-label")).toBe("Not cited");
+    expect(count()).toBe("");
   });
 
   it("reads the stored answer once, and never POSTs on opening", async () => {
@@ -185,12 +203,12 @@ describe("when Not cited asks", () => {
     expect(text()).not.toContain(NO_DOI.title);
   });
 
-  it("counts the rows on the chip once the stored answer is read, and keeps it on another chip", async () => {
+  it("counts the rows once the stored answer is read, and keeps the number on another view", async () => {
     onGet = found();
     await show();
-    expect(chip()?.getAttribute("aria-label")).toBe("Not cited, 2 papers");
+    expect(count()).toBe("2");
     await show(false);
-    expect(chip()?.textContent).toBe("Not cited2");
+    expect(count()).toBe("2");
   });
 });
 
@@ -258,6 +276,8 @@ describe("a found list", () => {
     expect(text()).toContain("2 papers found by OpenAlex's search on this piece's title and opening");
     expect(text()).toContain(RELATED_WORK_INTRO);
     expect(text().split(RELATED_WORK_INTRO)).toHaveLength(2);
+    /* No group with nothing in it (261025h). */
+    expect(host.querySelector("[data-group]")).toBeNull();
     expect(text()).toContain("3 more it found are in the bibliography, and are left out.");
     expect(text()).toContain("Only work published in 2017 or before.");
     for (const row of host.querySelectorAll("li.rcp-related-row")) {
@@ -282,6 +302,33 @@ describe("a found list", () => {
     expect(second?.querySelector("a.rcp-citer-title")?.getAttribute("href")).toBe("https://openalex.org/W1234567");
     expect(second?.querySelector(".rcp-meta")).toBeNull();
     expect(second?.querySelector(".rcp-related-abstract")).toBeNull();
+  });
+
+  it("draws the piece's editions and its authors' other work as two groups under the list (261025h)", async () => {
+    const rozren: RelatedWork = {
+      openalexId: "W2200866227",
+      title: "The extended mind [Rozren mysel]",
+      authors: ["David J. Chalmers", "Andrew G. Clark"],
+      authorCount: 2,
+      year: 2012,
+    };
+    const mente: RelatedWork = {
+      openalexId: "W2026019621",
+      doi: "10.5209/rev_ciyc.2011.v16.1",
+      title: "La mente extendida",
+      authors: ["Andy Clark", "David J. Chalmers"],
+      authorCount: 2,
+      year: 2011,
+    };
+    onGet = found({ editions: [rozren], sameAuthors: [mente] });
+    await show();
+    const editions = host.querySelector('[data-group="editions"]');
+    const same = host.querySelector('[data-group="same-authors"]');
+    expect(editions?.textContent).toContain(RELATED_WORK_EDITIONS);
+    expect(editions?.textContent).toContain(rozren.title);
+    expect(same?.textContent).toContain(RELATED_WORK_SAME_AUTHORS);
+    expect(same?.textContent).toContain(mente.title);
+    expect(host.querySelectorAll("li.rcp-related-row")).toHaveLength(4);
   });
 
   it("names the authors beyond the ones it holds", () => {

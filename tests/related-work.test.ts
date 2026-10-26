@@ -246,6 +246,103 @@ describe("notInBibliography", () => {
   });
 });
 
+/* The trial's Not cited for The Extended Mind (clark-chalmers-1998-spya-uwb4tn,
+   investigation 261025a § Failures 3): OpenAlex's 19 rows as the trial kept
+   them, with the piece's own translation, a reprint and the anthology among them. */
+const EXTENDED_MIND_ROWS = fixture("related-extended-mind.json");
+const EXTENDED_MIND: RelatedWorkArticle = {
+  title: "The extended mind",
+  byline: "ANDY CLARK; DAVID CHALMERS",
+  authors: [
+    { name: "ANDY CLARK", affiliations: [] },
+    { name: "DAVID CHALMERS", affiliations: [] },
+  ],
+  url: "https://www.alice.id.tue.nl/references/clark-chalmers-1998.pdf",
+};
+
+describe("the piece's own editions and its authors' other work, grouped and never hidden (261025h, decision 3)", () => {
+  const split = () => notInBibliography(relatedWorksOf(EXTENDED_MIND_ROWS) ?? [], [], EXTENDED_MIND);
+
+  it("puts the bracketed reprint and the Spanish translation under By the same authors: neither says it is an edition (Sol's S1-F3)", () => {
+    const { works, editions, sameAuthors, excluded } = split();
+    expect(editions).toEqual([]);
+    expect(sameAuthors.map((w) => w.title)).toEqual(["La mente extendida", "The extended mind [Rozren mysel]"]);
+    expect(excluded).toBe(0);
+    /* Nothing is hidden: every row is in one of the three. */
+    expect(works.length + editions.length + sameAuthors.length).toBe(19);
+  });
+
+  it("leaves as ordinary rows the anthology that lists no authors, a translator's edition, and one author's own later paper", () => {
+    const titles = split().works.map((w) => w.title);
+    expect(titles).toContain("The Extended Mind");
+    expect(titles).toContain("Andy Clark y David Chalmers. La mente extendida / The extended mind.");
+    expect(titles).toContain("Intrinsic content, active memory and the extended mind");
+  });
+
+  it("is an edition only with an explicit marker beside the piece's title; a subtitle or a bracket alone is not (Sol's S1-F3)", () => {
+    const by = { authors: ["Andy Clark", "David J. Chalmers"] };
+    const edition = (title: string) =>
+      notInBibliography([work({ ...by, title })], [], EXTENDED_MIND).editions.map((w) => w.title);
+    /* The same title, case and punctuation aside, with its authors, is the piece itself, and goes. */
+    expect(notInBibliography([work({ ...by, title: "THE EXTENDED MIND!" })], [], EXTENDED_MIND)).toMatchObject({ works: [], editions: [], sameAuthors: [] });
+    expect(edition("The extended mind (reprint)")).toEqual(["The extended mind (reprint)"]);
+    expect(edition("Reprinted: The extended mind")).toEqual(["Reprinted: The extended mind"]);
+    expect(edition("The extended mind, revised edition")).toEqual(["The extended mind, revised edition"]);
+    expect(edition("The extended mind [traducción]")).toEqual(["The extended mind [traducción]"]);
+    expect(edition("The Extended Mind: Übersetzung")).toEqual(["The Extended Mind: Übersetzung"]);
+    /* A subtitle, or a bracket, says nothing about lineage on its own. */
+    expect(edition("The Extended Mind: A New Theory")).toEqual([]);
+    expect(edition("The Extended Mind: An Essay")).toEqual([]);
+    expect(edition("The extended mind [Rozren mysel]")).toEqual([]);
+    /* A marker beside some other title is not this piece's edition. */
+    expect(edition("La mente extendida (traducción)")).toEqual([]);
+    expect(edition("The extended mind revisited")).toEqual([]);
+    expect(edition("Extended")).toEqual([]);
+    const subtitled = notInBibliography([work({ ...by, title: "The Extended Mind: A New Theory" })], [], EXTENDED_MIND);
+    expect(subtitled.sameAuthors).toHaveLength(1);
+  });
+
+  it("does not take a DOI that merely begins with the piece's for an edition (Sol's S1-F3)", () => {
+    const article = { ...EXTENDED_MIND, doi: "10.1093/analys/58.1.7" };
+    const out = notInBibliography(
+      [work({ title: "Translated title", doi: "10.1093/analys/58.1.7.es", authors: ["Andy Clark", "David Chalmers"] })],
+      [],
+      article,
+    );
+    expect([out.editions.length, out.sameAuthors.length]).toEqual([0, 1]);
+  });
+
+  it("needs the piece's authors for either group: two of them, or the one a sole author has", () => {
+    const one = notInBibliography([work({ title: "The extended mind (reprint)", authors: ["Andy Clark"] })], [], EXTENDED_MIND);
+    expect([one.editions.length, one.sameAuthors.length, one.works.length]).toEqual([0, 0, 1]);
+    const sole = { title: "Heuristics That Almost Always Work", byline: "Scott Alexander" };
+    const other = notInBibliography([work({ title: "Meditations on Moloch", authors: ["Scott Alexander"] })], [], sole);
+    expect(other.sameAuthors.map((w) => w.title)).toEqual(["Meditations on Moloch"]);
+    expect(notInBibliography([work({ title: "Anything", authors: ["Anyone"] })], [], { title: "No authors" }).works).toHaveLength(1);
+  });
+
+  it("counts a same-author work the Bibliography cites as cited, not as a group", () => {
+    const cited = notInBibliography(
+      [work({ title: "La mente extendida", authors: ["Andy Clark", "David J. Chalmers"] })],
+      [row({ title: "La mente extendida" })],
+      EXTENDED_MIND,
+    );
+    expect([cited.excluded, cited.sameAuthors.length]).toEqual([1, 0]);
+  });
+
+  it("answers the groups on GET, beside the ordinary rows", () => {
+    const answer = relatedWorkAnswer({
+      articleId: "a1",
+      article: EXTENDED_MIND,
+      opening: ["Where does the mind stop and the rest of the world begin?"],
+      bibliography: { citations: [], stale: false, capped: false },
+      stored: { fingerprint: "x", yearLimit: null, works: relatedWorksOf(EXTENDED_MIND_ROWS) ?? [], searchedAt: "2026-10-25T11:20:56.597Z" },
+    });
+    expect(answer).toMatchObject({ kind: "found", editions: [], sameAuthors: [{ openalexId: "W2026019621" }, { openalexId: "W2200866227" }] });
+    expect(answer.kind === "found" ? answer.works : []).toHaveLength(17);
+  });
+});
+
 /* ------------------------------------------------------------ the parsing -- */
 
 describe("parseOpenAlexRelated", () => {

@@ -1,6 +1,8 @@
 /**
  * **Sources › Investigate** — the owner's questions for Chat about the piece and what
- * others say about it. Plan
+ * others say about it. A tool reached from *Where it sits* since plan 261025h
+ * (no longer a chip), which also moved the literature search's dossier out
+ * of its top. Plan
  * docs/plans/261020n-sources-reception-layout-and-a-sources-chat-sub-mode.md
  * § Stage 2.
  *
@@ -12,10 +14,11 @@
  * > — Greg, 2026-10-19 (spya-x4xpw4)
  *
  * ```
- *  ┌ … │ Reception │ Claims │ Investigate ┐                                  (i)
+ *  ┌ Where it sits │ Bibliography │ Links ┐  Where it sits › Ask your own question  (i)
  *  │ [ Ask about this piece and what others say…   ] [💬 Ask in chat]
  *  │ YOUR QUESTIONS                    ← every chat started here, newest first
  *  │  💬 “replication attempts”                                       2
+ *  │ SUGGESTED FOR THIS PIECE          ← the literature search's, once it has run
  *  │ SUGGESTED
  *  │  💬 How has this piece been received, and by whom?
  *  │ ABOUT ITS CLAIMS                  ← only when Claims' list has been made
@@ -50,8 +53,8 @@
  * list, when the owner has made it (this panel never buys it), the first
  * `INVESTIGATE_CLAIMS_SHOWN` in article order; the works are Bibliography's
  * `INVESTIGATE_WORKS_SHOWN` it leans on most (`relevance`). Both lists are read by
- * the band already. A model writing the questions is deferred (plan §
- * Deferred).
+ * the band already. The only questions a model writes are *Suggested for
+ * this piece*, the literature search's (`pieceQuestions`).
  *
  * **Owner only.** A visitor has no chat, so their chip row has no Investigate and a
  * shared `?sources=investigate` draws Bibliography (params.ts § `visitorSourcesView`).
@@ -63,7 +66,7 @@
  */
 import { MessagesSquare } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { BlockId, CitedWork, ClaimOrigin, ListedClaim, ThreadSummary } from "../types.js";
+import type { CitedWork, ClaimOrigin, ListedClaim, SituateFinding, ThreadSummary } from "../types.js";
 import { MAX_LENS_CHARS } from "../types.js";
 import { MODE_LABEL } from "../title-text.js";
 import { shortTitle, workShortName } from "./cited-in-paragraph.js";
@@ -73,9 +76,7 @@ import { OPEN_WORK_CHAT, OriginChatMark, originChatTip } from "./OriginChat.js";
 import { SOURCES_CLAIMS_OPEN_CLAIM_CHAT } from "./ReceptionAndClaimsPanel.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { itemOrigin } from "./chat-handoff.js";
-import { SituateDossier, SituateQuestions } from "./SituateDossier.js";
-import type { UseSituate } from "./useSituate.js";
-import type { ItemFocus } from "./item-focus.js";
+import { SituateQuestions } from "./SituateDossier.js";
 
 /**
  * **What Investigate's rows are handed**: the reading view's thread summaries, the
@@ -105,6 +106,12 @@ export interface SourcesInvestigateChats {
   onCheck(origin: ClaimOrigin): void;
   /** Bibliography's sender: start this work's chat, or reopen it (Reader.tsx § `askWork`). */
   onAskWork(work: CitedWork): void;
+  /**
+   * A literature-search finding's sender, for *Where it sits*' dossier: start
+   * its chat, or reopen it (Reader.tsx § `askFinding`, plan 261025h). Carried
+   * in this bundle because it is built from the same summaries and senders.
+   */
+  onFinding(finding: SituateFinding): void;
   /** Open a conversation already started, beside Sources. */
   onOpen(threadId: string): void;
 }
@@ -153,14 +160,19 @@ export function investigateClaims(claims: readonly ListedClaim[] | null): readon
  * **The works Investigate offers**: the few the piece leans on most, by the model's
  * `relevance`, ties in the bibliography's order. A work with no score is left
  * out rather than ranked, because "leans on most" is the score's claim.
+ * *Where it sits*' *Before it* is the same ranking, with its own length
+ * (WhereItSitsPanel.tsx, plan 261025h).
  */
-export function investigateWorks(works: readonly CitedWork[] | null): readonly CitedWork[] {
+export function investigateWorks(
+  works: readonly CitedWork[] | null,
+  shown: number = INVESTIGATE_WORKS_SHOWN,
+): readonly CitedWork[] {
   if (works === null) return [];
   return works
     .map((work, at) => ({ work, at }))
     .filter((w): w is { work: CitedWork & { relevance: number }; at: number } => typeof w.work.relevance === "number")
     .sort((a, b) => b.work.relevance - a.work.relevance || a.at - b.at)
-    .slice(0, INVESTIGATE_WORKS_SHOWN)
+    .slice(0, shown)
     .map((w) => w.work);
 }
 
@@ -169,10 +181,7 @@ export function InvestigatePanel({
   chats,
   claims,
   works,
-  situate = null,
-  onJump,
-  findingFocus = null,
-  onFindingFocusTaken,
+  pieceQuestions = [],
 }: {
   /** Sources' chip row (SourcesMode.tsx § `SourcesViews`), drawn as this band's header. */
   head: ReactNode;
@@ -182,24 +191,16 @@ export function InvestigatePanel({
   /** Bibliography's works, else `null`. */
   works: readonly CitedWork[] | null;
   /**
-   * *Where this piece sits* (SituateDossier.tsx, plan 261024o): the owner's
-   * dossier with the experimental switch on, else `null`, and then neither the
-   * section nor *Suggested for this piece* is drawn (SourcesMode.tsx §
-   * `InvestigateBand`).
+   * *Suggested for this piece*: the questions the literature search wrote
+   * (SituateDossier.tsx § `SituateQuestions`, plan 261024o), drawn above the
+   * fixed five once it has run. Its dossier is *Where it sits*' since plan
+   * 261025h; its questions stayed here, with the others.
    */
-  situate?: UseSituate | null;
-  /** A finding's jump to its passage. Needed only with `situate`. */
-  onJump?: (id: BlockId) => void;
-  /** One finding to bring into view, once — a margin line's *Open in Sources* (SituateDossier § `focus`). */
-  findingFocus?: ItemFocus | null;
-  onFindingFocusTaken?: ((focus: ItemFocus) => void) | undefined;
+  pieceQuestions?: readonly string[];
 }) {
   const shownClaims = investigateClaims(claims);
   const shownWorks = investigateWorks(works);
-  /* A margin press has already said what this visit is for. Do not put the
-     newest conversation over the finding it asked us to show. */
-  useReopenNewest(chats, findingFocus !== null);
-  const pieceQuestions = situate?.status === "ready" ? (situate.situate?.questions ?? []) : [];
+  useReopenNewest(chats);
   return (
     <ModeSurface
       label={MODE_LABEL.sources}
@@ -208,27 +209,13 @@ export function InvestigatePanel({
       about={
         <>
           <p>{SOURCES_INVESTIGATE_ABOUT}</p>
-          {situate && <p>{SOURCES_INVESTIGATE_SITUATE_ABOUT}</p>}
+          {pieceQuestions.length > 0 && <p>{SOURCES_INVESTIGATE_SITUATE_ABOUT}</p>}
         </>
       }
       head={head}
     >
       <QuestionBox onQuestion={chats.onQuestion} />
       <div className="tl-scroll investigate-scroll">
-        {/* **Where this piece sits** first (plan 261024o): the owner's
-            dossier, behind the experimental switch. Inside the scroll rather
-            than above the box, so a long dossier scrolls instead of pushing
-            the box and the rest off the band. */}
-        {situate && (
-          <SituateDossier
-            owner={situate}
-            chats={{ summaries: chats.summaries, onQuestion: chats.onQuestion, onOpen: chats.onOpen }}
-            onJump={onJump ?? noJump}
-            focus={findingFocus}
-            onFocusTaken={onFindingFocusTaken}
-          />
-        )}
-
         {/* The reader's own conversations before ours (plan 261021b). */}
         <YourQuestions chats={chats} />
 
@@ -348,20 +335,18 @@ export function InvestigatePanel({
  *   unsent passage chat, whose words are kept in `chat-draft.ts`; a note; or an
  *   annotation in progress. Any of these decides the visit at once, before
  *   the summaries arrive (GPT Sol's F1 and F2 on the plan; built-code review).
- * - **Nor over a finding focus**: *Open in Sources* from the margin has
- *   already chosen the visit's destination. Its row lands and flashes; the
- *   automatic conversation would cover or compete with that answer.
  * - It opens a stored conversation and sends nothing.
+ *
+ * A margin finding's *Open in Sources* used to land here too, and this held
+ * back for it; it lands on *Where it sits* since plan 261025h, where nothing
+ * reopens a conversation.
  */
-function useReopenNewest(chats: SourcesInvestigateChats, landingOnFinding: boolean): void {
-  /* Initialising from the render closes the first-mount gap. Testing the prop
-     again in the effect also covers a focus that arrives after the panel
-     mounted while summaries were loading. */
-  const decided = useRef(landingOnFinding);
+function useReopenNewest(chats: SourcesInvestigateChats): void {
+  const decided = useRef(false);
   const { loaded, occupied, summaries, onOpen } = chats;
   useEffect(() => {
     if (decided.current) return;
-    if (occupied || landingOnFinding) {
+    if (occupied) {
       decided.current = true;
       return;
     }
@@ -369,18 +354,16 @@ function useReopenNewest(chats: SourcesInvestigateChats, landingOnFinding: boole
     decided.current = true;
     const newest = lensThreads(summaries)[0];
     if (newest) onOpen(newest.id);
-  }, [loaded, occupied, summaries, onOpen, landingOnFinding]);
+  }, [loaded, occupied, summaries, onOpen]);
 }
 
 /** The (i)'s paragraph: where the questions come from, and what a press costs. */
 export const SOURCES_INVESTIGATE_ABOUT =
   "Each press opens Chat and asks one question with a web search, the same as Ask in chat anywhere else. The questions about claims come from Claims' list once you have made it, and the works are the ones Bibliography says the piece leans on most. No AI writes these questions.";
 
-/** The (i)'s second paragraph, with the dossier on screen: who wrote it, and from what. */
+/** The (i)'s second paragraph, with *Suggested for this piece* on screen: who wrote those questions. */
 export const SOURCES_INVESTIGATE_SITUATE_ABOUT =
-  "Where this piece sits is experimental. An AI plans web searches from the piece, reads what they find and the later papers that cite it, and notes the passages later work bears on; every quote is checked against its source by the app, not the AI. The questions under Suggested for this piece are written by the same AI.";
-
-function noJump(): void {}
+  "The questions under Suggested for this piece were written by the AI that searched the literature from Where it sits, from the piece and what its searches found.";
 
 /**
  * **A question that sends on a press**: Chat's two bubbles and the words.

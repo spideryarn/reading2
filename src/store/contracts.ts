@@ -1976,6 +1976,13 @@ export interface ReadingTimeStore {
    * caller validates the shape before this is reached.
    */
   add(slug: string, seconds: Record<string, number>): Promise<void>;
+  /**
+   * **Bring the shelf's cached share denominator up to date**, loading the
+   * article only when its basis changed: `fresh` (nothing to do, or no such
+   * article), `written`, or `raced` (an input changed during the load, so
+   * nothing was written). Plan 261025l; src/store/read-so-far-basis.ts.
+   */
+  refreshShelfWords(slug: string): Promise<"fresh" | "written" | "raced">;
 }
 
 /**

@@ -1814,8 +1814,22 @@ function CitedBy({ citers, scholar }: { citers: UseCiters; scholar: string | nul
   );
 }
 
-/** One outcome of the lookup, as its sentence or its list. The `never` makes a new outcome a type error here. */
-function CitersAnswer({ result, onRetry }: { result: CitersResult; onRetry(): void }) {
+/**
+ * One outcome of the lookup, as its sentence or its list. The `never` makes a new outcome a type error here.
+ *
+ * **Shared with *Where it sits*' *After it*** (WhereItSitsPanel.tsx, plan
+ * 261025h), so the two say the same honest sentence for every outcome rather
+ * than two copies drifting; `shown` is how many rows come before *Show all*.
+ */
+export function CitersAnswer({
+  result,
+  onRetry,
+  shown = CITERS_SHOWN,
+}: {
+  result: CitersResult;
+  onRetry(): void;
+  shown?: number;
+}) {
   switch (result.kind) {
     case "no-doi":
       return <p className="rcp-citers-note">{CITERS_NO_DOI}</p>;
@@ -1837,7 +1851,7 @@ function CitersAnswer({ result, onRetry }: { result: CitersResult; onRetry(): vo
         </div>
       );
     case "found":
-      return <CitersList found={result} />;
+      return <CitersList found={result} shown={shown} />;
     default: {
       const unreachable: never = result;
       return unreachable;
@@ -1845,10 +1859,10 @@ function CitersAnswer({ result, onRetry }: { result: CitersResult; onRetry(): vo
   }
 }
 
-function CitersList({ found }: { found: Extract<CitersResult, { kind: "found" }> }) {
+function CitersList({ found, shown: first }: { found: Extract<CitersResult, { kind: "found" }>; shown: number }) {
   const [all, setAll] = useState(false);
   const listed = found.citers.length;
-  const shown = all ? found.citers : found.citers.slice(0, CITERS_SHOWN);
+  const shown = all ? found.citers : found.citers.slice(0, first);
   /* Built from the shape-checked `W` id, never a string from the answer (src/citer-link.ts). */
   const matched = found.via === "title" ? citerUrl({ openalexId: found.target.openalexId }) : null;
   return (
@@ -1875,7 +1889,7 @@ function CitersList({ found }: { found: Extract<CitersResult, { kind: "found" }>
           ))}
         </ul>
       )}
-      {!all && listed > CITERS_SHOWN && (
+      {!all && listed > first && (
         <button type="button" className="rcp-more rcp-citers-all" onClick={() => setAll(true)}>
           Show all {listed}
         </button>

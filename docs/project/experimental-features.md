@@ -516,14 +516,11 @@ system was deliberately not built — [diagram.md § Who sees which chip](diagra
 has the rest of the reasoning, including why this changes *discoverability, not authority*: entering
 Diagram buys nothing, and a shared visitor is pinned to the free picture whatever their switch says.
 
-**Sources › Investigate's *Where this piece sits*, since 2026-10-24** — a section, not a chip: the
-dossier at the top of Investigate and its *Suggested for this piece*. Behind the switch because it
-is the dearest press in Sources and Greg called it an experiment
-([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md)).
-With the switch off the owner's band does not mount its hook at all (`InvestigateBand`,
-[`SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx)), so nothing is read and no job is
-watched; a dossier already made stays stored, and comes back when the switch does.
-[sources.md § Where this piece sits](sources.md#where-this-piece-sits).
+*Where this piece sits*, the literature search's dossier, was behind the switch from 2026-10-24
+to 2026-10-25, at the top of Sources › Investigate. It left the switch for every owner as the heart
+of Sources' new default, *Where it sits*
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+decision 5); [sources.md § Where this piece sits](sources.md#where-this-piece-sits).
 
 ## See also
 

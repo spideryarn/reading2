@@ -14,6 +14,11 @@
  *   `bibliographic_records`' single-flight machinery in v1.
  * - **Freshness is judged by the database's `now()`**, like the registry cache,
  *   so a server whose clock drifts cannot serve a stale row as fresh.
+ * - **Twins are in the key, not a column** (plan 261025h, decision 2): a work
+ *   OpenAlex holds as several records is keyed by all of them
+ *   (`openalex:w1|w2`), `openalex_id` is the one the target names, and
+ *   `alsoHeldAs` is read back as the key's others (`idsInKey`, below). One fact, one
+ *   place: a column beside the key could disagree with it.
  *
  * ## What may be logged from this file
  *
@@ -28,6 +33,17 @@ import type { Citer } from "../types.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 
+/**
+ * The OpenAlex records a title search's key names, as `W…` ids — none for a
+ * DOI's key. Here rather than beside `CitersKey`: a value imported from
+ * src/citation-index.ts would close an import cycle, since it loads this file.
+ */
+function idsInKey(key: CitersKey): string[] {
+  const base = key.replace(/#topic$/, "");
+  if (!base.startsWith("openalex:")) return [];
+  return base.slice("openalex:".length).split("|").map((id) => id.toUpperCase());
+}
+
 function rowsOf<T>(result: unknown): T[] {
   return (result as { rows?: T[] }).rows ?? [];
 }
@@ -41,6 +57,7 @@ interface LookupRow {
   capped: boolean | null;
   target_title: string | null;
   target_authors: string[] | null;
+  target_keyword: string | null;
   fetched_at: Date | string;
   fresh: boolean;
 }
@@ -79,7 +96,7 @@ const rawPgCitationIndexStore: CitationIndexStore = {
     return getDb().transaction(async (tx): Promise<StoredCiters | null> => {
       const found = await tx.execute(sql`
         select state, openalex_id, cited_by_count, returned, dropped, capped, target_title, target_authors,
-               fetched_at, fetched_at > now() - make_interval(secs => ${freshMs / 1000}) as fresh
+               target_keyword, fetched_at, fetched_at > now() - make_interval(secs => ${freshMs / 1000}) as fresh
           from spideryarn.citation_index_lookups
          where work_id = ${id}
            for share`);
@@ -100,9 +117,17 @@ const rawPgCitationIndexStore: CitationIndexStore = {
           from spideryarn.citation_index_citers
          where work_id = ${id}
          order by position`);
+      const primary = row.openalex_id;
+      const alsoHeldAs = idsInKey(id).filter((other) => other !== primary);
       return {
         kind: "found",
-        target: { openalexId: row.openalex_id, title: row.target_title, authors: row.target_authors },
+        target: {
+          openalexId: primary,
+          ...(alsoHeldAs.length > 0 ? { alsoHeldAs } : {}),
+          title: row.target_title,
+          authors: row.target_authors,
+          ...(row.target_keyword !== null ? { keyword: row.target_keyword } : {}),
+        },
         count: Number(row.cited_by_count),
         returned: Number(row.returned),
         dropped: Number(row.dropped),
@@ -120,15 +145,17 @@ const rawPgCitationIndexStore: CitationIndexStore = {
          a list of parameters (src/store/pg-bibliographic.ts § write). */
       const written = await tx.execute(sql`
         insert into spideryarn.citation_index_lookups
-          (work_id, state, openalex_id, cited_by_count, returned, dropped, capped, target_title, target_authors, fetched_at)
+          (work_id, state, openalex_id, cited_by_count, returned, dropped, capped, target_title, target_authors,
+           target_keyword, fetched_at)
         values (${id}, ${answer.kind}, ${found?.target.openalexId ?? null}, ${found?.count ?? null}::integer,
                 ${found?.returned ?? null}::integer, ${found?.dropped ?? null}::integer, ${found?.capped ?? null}::boolean,
-                ${found?.target.title ?? null}, ${sql.param(found?.target.authors ?? null)}::text[], now())
+                ${found?.target.title ?? null}, ${sql.param(found?.target.authors ?? null)}::text[],
+                ${found?.target.keyword ?? null}, now())
         on conflict (work_id) do update set
           state = excluded.state, openalex_id = excluded.openalex_id, cited_by_count = excluded.cited_by_count,
           returned = excluded.returned, dropped = excluded.dropped, capped = excluded.capped,
           target_title = excluded.target_title, target_authors = excluded.target_authors,
-          fetched_at = excluded.fetched_at
+          target_keyword = excluded.target_keyword, fetched_at = excluded.fetched_at
         returning fetched_at`);
       await tx.execute(sql`delete from spideryarn.citation_index_citers where work_id = ${id}`);
       for (const [position, citer] of (found?.citers ?? []).entries()) {

@@ -530,6 +530,18 @@ route reads the totals only for the article's owner, and the line is never store
 **Section names, per-part detail or a percentage would be a new disclosure**: rewrite the bullet
 first. Plan [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md).
 
+**Since 2026-10-25 the owner's own browser shelf shows the masthead's coarse pie on each card**,
+worked out on our server from the totals at each shelf load, in memory, and sent only to the owner in
+that view
+([library.md § How much of it you have read](library.md#how-much-of-it-you-have-read)). That is the
+"owner-only, in memory" case above, so the bullet did not change. **One thing is stored for it, and it
+is not from the totals**: `read_so_far_words`, which blocks of the article count and their words,
+derived from the article itself. No seconds and no band are stored, it goes with the article, and it
+is left out of both exports. The public shelf and article reads, administrator view-as, MCP and the
+public health check do not read that cache. The browser's kept copy of the shelf has the band
+stripped both when saved and when a legacy copy is read. Plan
+[261025l](../plans/261025l-shelf-cards-show-the-how-much-read-pie.md).
+
 ## Article open times
 
 **Added 2026-10-20**, with plan
@@ -739,7 +751,11 @@ indexes"*:
   **They were missing from the page until this change**, which is the page falling behind the
   code for three days.
 - **OpenAlex**, since 2026-10-04: which papers cite the article, when its owner has Sources'
-  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)).
+  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)), and since 2026-10-25
+  when its owner opens Sources at all, because *Where it sits*, the owner's default, draws the
+  same list as *After it* ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+  GPT Sol's F7). The page says *"when you open Sources on an article of yours"*. Who is sent what
+  did not change, only when.
 
 Each is sent the identifier and our contact address (in the `User-Agent`, and as `mailto` where the
 service asks for it). Never the article's body, never anything about the reader. For a private
@@ -848,8 +864,10 @@ names the uploaded-file exception; `LAST_UPDATED` moved to 25 October 2026.
 
 **Added 2026-10-24**, with [sources.md § Where this piece sits](sources.md#where-this-piece-sits)
 ([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md),
-[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, at the top
-of Sources › Investigate and behind the experimental switch, searches **the article itself**: a
+[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, in
+Sources › *Where it sits* for every owner since 2026-10-25 (at the top of Investigate, behind the
+experimental switch, until then: [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)),
+searches **the article itself**: a
 model (Claude Sonnet, through OpenRouter) is shown the fenced title, headings, opening and the works
 Bibliography says it leans on, and writes a dozen or so short searches. Each search goes through
 OpenRouter to Exa (the quick-tier model running it sees the search too); Exa receives the query, not
@@ -862,12 +880,14 @@ ranking and questions, and never becomes a search (the plan's review, S4).
 
 So the press says what leaves before it is pressed (`SITUATE_DISCLOSURE`,
 [`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts)), and the page says *"When you
-press Search the literature, in Sources’ Investigate (an experimental feature), your article is
-searched for in the wider literature"*, then names the planner, Exa, OpenAlex and final read, in the
+press Search the literature, in Sources’ Where it sits, your article is searched for in the wider
+literature"* (it said *in Sources’ Investigate (an experimental feature)* until 2026-10-25), then
+names the planner, Exa, OpenAlex and final read, in the
 indexes paragraph beside the cited-work search, whose *"never the article’s text"* stays true of
 that search alone. The dossier is stored on the article's
 revision (`article_revisions.situate`), goes with the article, and is never shown to a visitor.
-`LAST_UPDATED` moved to 24 October 2026, and `tests/privacy-page.test.ts` holds the sentence.
+`LAST_UPDATED` moved to 24 October 2026, and to 25 October with the move out of the switch;
+`tests/privacy-page.test.ts` holds the sentence.
 
 ## A claim typed into Sources › Claims
 

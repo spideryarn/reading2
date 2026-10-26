@@ -33,13 +33,24 @@ export const READING_SO_FAR_HEADING = "READING SO FAR";
 
 /** The share of the body read, 0 to 1, by the shared per-block rule and chat's broader denominator. */
 export function readingShare(seconds: Readonly<Record<string, number>>, blocks: readonly Block[]): number {
-  const levels = new Map<BlockId, ReadLevel>();
   const words = new Map<BlockId, number>();
-  for (const b of blocks) {
-    if (!countsTowardReadingTime(b)) continue;
-    words.set(b.id, b.words);
-    levels.set(b.id, readLevel(seconds[b.id] ?? 0, b.words));
-  }
+  for (const b of blocks) if (countsTowardReadingTime(b)) words.set(b.id, b.words);
+  return shareOfWords(seconds, words);
+}
+
+/**
+ * **The share read, from the totals on the server, over the caller's words** —
+ * each block's level by `readLevel`, as `useReadingTime` grades it in the
+ * browser, then `shareRead`. The chats pass every body block; the shelf passes
+ * the reading view's own `readSoFarWords`, cached (src/store/read-so-far-basis.ts),
+ * so its pie is the masthead's. Plan 261025l.
+ */
+export function shareOfWords(
+  seconds: Readonly<Record<string, number>>,
+  words: ReadonlyMap<BlockId, number>,
+): number {
+  const levels = new Map<BlockId, ReadLevel>();
+  for (const [id, n] of words) levels.set(id, readLevel(seconds[id] ?? 0, n));
   return shareRead(levels, words);
 }
 

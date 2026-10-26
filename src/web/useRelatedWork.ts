@@ -85,6 +85,9 @@ export function asRelatedWorkResult(value: unknown): RelatedWorkResult | null {
     case "found":
       return Array.isArray(body.works) &&
         body.works.every(isRelatedWork) &&
+        /* The two groups under the list, each absent when empty (plan 261025h, decision 3). */
+        (body.editions === undefined || (Array.isArray(body.editions) && body.editions.every(isRelatedWork))) &&
+        (body.sameAuthors === undefined || (Array.isArray(body.sameAuthors) && body.sameAuthors.every(isRelatedWork))) &&
         typeof body.excluded === "number" &&
         typeof body.bibliographyStale === "boolean" &&
         typeof body.bibliographyCapped === "boolean" &&

@@ -635,7 +635,10 @@ const VERBS: readonly Verb[] = [
   { kind: "find", verb: "do they talk about" },
   { kind: "find", verb: "does it mention" },
   { kind: "find", verb: "search for" },
-  { kind: "find", verb: "search" },
+  /* Sources › Where it sits' promised alias (plan 261025h). A named command
+     must not also grow an argument row — the collision matrix below this
+     table's tests holds that rule for every label and alias. */
+  { kind: "find", verb: "search", except: ["the literature"] },
   { kind: "find", verb: "find" },
   /* *find mentions of dopamine* is a search for dopamine: without these the
      shorter `find` took it and looked for `mentions of dopamine`, which no

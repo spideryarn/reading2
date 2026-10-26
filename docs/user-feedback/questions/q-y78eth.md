@@ -1,10 +1,11 @@
 ---
 id: q-y78eth
 report: spya-e5477u
-status: open
+status: answered
 asked: 2026-10-25
 title: Should the shelf show the same how-much-read pie on each article?
 refs: docs/plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md · docs/user-feedback/261025_1448-how-much-of-the-article-you-have-read-at-the-top.md · docs/project/library.md
+acted: spya-a5unyd
 ---
 The top of each article now has a small pie saying roughly how much of it you have read: started, about half, most, or finished. Should each article on your shelf show the same pie?
 
@@ -23,3 +24,15 @@ That is built and on dev, not yet deployed. Right after the "~12 min" read time 
 You did not ask about the shelf, so I have not built it. Doing so means the shelf works out the same figure for every article on it, on the server: one more query on each shelf load. The pie and its rules would be the same as at the top of the article.
 
 What would decide it: whether you would use it on the shelf. If you mostly open an article first and look there, B is fine.
+
+## Greg's answer, 2026-10-25 (in the Feedback dialog, reply `spya-a5unyd`, and in the Overseer's chat)
+
+> 1A
+
+> q-y78eth yes
+
+Settled: A. Every card on your own shelf shows the same how-much-read pie as the top of the article,
+from the same rules. Only you see it, never a visitor and never the public shelf. Built in session
+`fbe5477u-shelf-pie` (plan 261025l): on dev, not yet deployed. After the deploy, a one-off backfill
+fills in the pies for articles read before it; until then an article gets its pie the next time you
+read in it.

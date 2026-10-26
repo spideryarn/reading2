@@ -676,6 +676,18 @@ describe("the offline shelf offers only what it can open", () => {
     expect(await res.json()).toEqual({ articles: [{ slug: "kept" }], archived: false });
   });
 
+  it("strips read bands from a legacy shelf before replaying it offline", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    readCache.mockResolvedValue({
+      body: { articles: [{ slug: "kept", readBand: "finished" }, { slug: "evicted", readBand: "half" }] },
+      savedAt: 1000,
+    });
+    slugsHeld.mockResolvedValue(new Set(["kept"]));
+
+    const res = await apiFetch("/api/library");
+    expect(await res.json()).toEqual({ articles: [{ slug: "kept" }] });
+  });
+
   it("passes an unexpected legacy shape through unchanged", async () => {
     /* A bare array is what an older deployment might have saved, and what the
        filter used to be written against. It is tolerated, not expected — so it
