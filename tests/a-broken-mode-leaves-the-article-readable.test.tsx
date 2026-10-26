@@ -1299,15 +1299,19 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   });
 });
 
-/* Sources' Reception since 2026-10-09: each case opens the article with
+/* Sources' Reception since 2026-10-09: each case opened the article with
    `?sources=reception` already in the address (a sub-mode parameter
-   outlives its mode), so the press on Sources lands on Reception and
-   arms the search, as a press on Debate did (plan 261009l). */
+   outlives its mode), so the press on Sources landed on Reception and
+   armed the search, as a press on Debate did (plan 261009l). Since plan
+   261025h no press arms Reception's search (it is its panel's own button),
+   so the money rule is held on the one press Sources still arms: the
+   citations, on `?sources=bibliography`, with none stored. The same band
+   throws either way (`throwReception` is the SourcesBand's probe). */
 describe("a Debate press that met a broken band cannot be spent later", () => {
   /** The positive control for every zero below: a press that works buys one search. */
   it("gives exactly one job for an ordinary press on a working Debate", async () => {
     receptionOn();
-    await open("?sources=reception");
+    await open("?sources=bibliography");
     trace.length = 0;
 
     await press(MODE_LABEL.sources);
@@ -1319,14 +1323,14 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
 
   it("gives no job at all when the press throws and the reader comes back", async () => {
     receptionOn();
-    await open("?sources=reception");
+    await open("?sources=bibliography");
     trace.length = 0;
 
     probe.throwReception = true;
     await press(MODE_LABEL.sources);
     containedInsideReception();
     expect(
-      activation.pendingActivation(SLUG, "reception"),
+      activation.pendingActivation(SLUG, "bibliography"),
       "the press outlived the failed render",
     ).toBeNull();
     expect(jobPosts(), "the failed render bought something").toEqual([]);
@@ -1338,13 +1342,13 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
     await settle();
 
     expect(modeInUrl(), "Back did not return to Debate").toBe("sources");
-    expect(trace.some((r) => r.url === `/api/reception/${SLUG}`), "the GET settled").toBe(true);
+    expect(trace.some((r) => r.url === `/api/bibliography/${SLUG}`), "the GET settled").toBe(true);
     expect(jobPosts(), "Back spent the retired press").toEqual([]);
   });
 
   it("gives no job when the press made at the fallback throws too", async () => {
     receptionOn();
-    await open("?sources=reception");
+    await open("?sources=bibliography");
     trace.length = 0;
 
     probe.throwReception = true;
@@ -1375,7 +1379,7 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
 
   it("gives exactly one job when the press made at the fallback succeeds", async () => {
     receptionOn();
-    await open("?sources=reception");
+    await open("?sources=bibliography");
 
     probe.throwReception = true;
     await press(MODE_LABEL.sources);

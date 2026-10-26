@@ -4,7 +4,7 @@
  * on Back (`liftedLegacyHref`), and from a remembered last view
  * (`restoredHref`). One canonicaliser behind all three, so a stored
  * `?mode=debate&debate=claims` cannot parse through `RETIRED_MODES` as Sources
- * and land on its default Bibliography (GPT Sol's F1 on plan 261009l). The
+ * and land on its then-default Bibliography (GPT Sol's F1 on plan 261009l). The
  * chat list's old `?chatfrom=debate|citations|peer-review` filters land on the
  * combined word (F5). The mode was called Peer review until 2026-10-09, when
  * it became Sources (plan 261009w § Old links still land).
@@ -32,8 +32,13 @@ function settled(search: string, hash = ""): { q: URLSearchParams; hash: string;
   };
 }
 
-/** What each old address must become: the sub-mode it opens on. */
-const LIFTS: readonly [string, "bibliography" | "reception" | "claims"][] = [
+/**
+ * What each old address must become: the sub-mode it opens on. Since plan
+ * 261025h (decision 7, GPT Sol's F1) the bare address is Where it sits, so an
+ * old Citations link is lifted to an explicit `sources=bibliography`, and a
+ * bare `?mode=peer-review`, which meant "the mode's default", gets today's.
+ */
+const LIFTS: readonly [string, "where" | "bibliography" | "reception" | "claims"][] = [
   ["?mode=citations", "bibliography"],
   ["?mode=citations&citeby=year&citebar=3", "bibliography"],
   ["?mode=debate", "reception"],
@@ -41,7 +46,7 @@ const LIFTS: readonly [string, "bibliography" | "reception" | "claims"][] = [
   ["?mode=debate&debate=claims", "claims"],
   ["?mode=debate&debateby=claim", "claims"],
   ["?mode=debate&debate=reception&debateby=claim", "reception"],
-  ["?mode=peer-review", "bibliography"],
+  ["?mode=peer-review", "where"],
   ["?mode=peer-review&peer-review=claims", "claims"],
   ["?mode=peer-review&peer-review=reception", "reception"],
   ["?mode=peer-review&peer-review=bibliography", "bibliography"],
@@ -52,9 +57,9 @@ const LIFTS: readonly [string, "bibliography" | "reception" | "claims"][] = [
   ["?mode=peer-review&peer-review=claims&sources=reception", "reception"],
 ];
 
-/** The sub-mode an address names: `bibliography`, the default, when it names none. */
+/** The sub-mode an address names: `where`, the default, when it names none. */
 function viewOf(q: URLSearchParams): string {
-  return q.get("sources") ?? "bibliography";
+  return q.get("sources") ?? "where";
 }
 
 function expectNoOldWords(q: URLSearchParams): void {
@@ -89,6 +94,11 @@ describe("an old Citations, Debate or Peer review address, on boot", () => {
     const peer = settled("?mode=peer-review&peer-review=claims&bears=partly&at=spya-k3m9qt").q;
     expect(peer.get("bears")).toBe("partly");
     expect(peer.get("at")).toBe("spya-k3m9qt");
+  });
+
+  it("writes Bibliography out for an old Citations link, which no longer means the default", () => {
+    expect(settled("?mode=citations").q.get("sources")).toBe("bibliography");
+    expect(settled("?mode=citations&sources=links").q.getAll("sources")).toEqual(["links"]);
   });
 
   it("leaves a Sources address alone", () => {

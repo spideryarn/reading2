@@ -61,7 +61,7 @@ export function SignInPage() {
           {/* [tissue] The switch inside says which half you are in, so the
               heading names both rather than following it. GPT Sol, plan review
               F5: one seam fewer. */}
-          <h1 className="tw:font-prose tw:text-2xl tw:text-foreground">
+          <h1 className="tw:font-sans tw:text-2xl tw:text-foreground">
             Sign in or create an account
           </h1>
           <p className="tw:mb-6 tw:mt-2 tw:text-sm">

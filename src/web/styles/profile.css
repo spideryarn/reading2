@@ -41,7 +41,7 @@
   border-radius: 5px;
   background: var(--surface-raised);
   color: var(--ink);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.94rem;
   line-height: 1.5;
   resize: vertical;
@@ -246,7 +246,7 @@
   min-width: 0;
   margin: 0;
   color: var(--ink-faint);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.9rem;
   font-style: italic;
   line-height: 1.4;
@@ -666,11 +666,9 @@
 }
 .prof-panel-text {
   margin: 0.2rem 0 0;
-  /* The reader's own prose, in the reading face — it is a paragraph they wrote,
-     not a value the interface is reporting. `--font-reading` rather than
-     Tailwind's `--font-prose` alias, because that alias is for `tw:` utility
-     classes and this file spells it the other way everywhere else. */
-  font-family: var(--font-reading);
+  /* The base face only: when this is the reader's own paragraph, voices.css
+     sets it in --font-reader; the `.quiet` placeholder is ours and stays here. */
+  font-family: var(--font-ui);
   font-size: 0.88rem;
   line-height: 1.45;
   color: var(--ink);

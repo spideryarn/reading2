@@ -58,7 +58,8 @@ export interface ThreadSource {
 export type SourcedThread = Pick<ChatThread, "kind"> & Partial<Pick<ChatThread, "origin" | "anchor">>;
 
 /**
- * **Sources' three origins**, each under the mode's icon and its
+ * **Sources' origins** (a claim, a lens, a cited work, a citation's check and
+ * a finding), each under the mode's icon and its
  * `sources` filter, and each row and tooltip naming the sub-mode it came from
  * (GPT Sol's F5 on plan 261009l). A stored origin keeps its old mode word as
  * data — `debate` for a claim or an angle (a cited work's `citations` is read
@@ -75,6 +76,13 @@ export const SOURCE_SOURCES_CLAIM = `Started from a claim in ${SOURCES_IN} ${SOU
  * older angle chat says this too, and is listed there.
  */
 export const SOURCE_RECEPTION_LENS = `Started from a question in ${SOURCES_IN} ${SOURCES_SUB_MODES.investigate.label}`;
+
+/**
+ * And for one started from a finding of the literature search, in Sources ›
+ * Where it sits (plan 261025h, decision 9). A finding's chat stored a lens
+ * before then, and such a chat still says `SOURCE_RECEPTION_LENS`.
+ */
+export const SOURCE_SITUATE_FINDING = `Started from a finding in ${SOURCES_IN} ${SOURCES_SUB_MODES.where.label}`;
 
 /** And for one started from a Glossary entry's *Ask in chat* (plan 261006d, D6). */
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
@@ -166,6 +174,9 @@ export function originPlace(origin: ThreadOrigin): OriginPlace {
       return { mode: "sources", view: "investigate" };
     case "sources-claims":
       return { mode: "sources", view: "claims" };
+    /* A finding lives in the dossier, which is in Where it sits (plan 261025h). */
+    case "situate":
+      return { mode: "sources", view: "where" };
     /* A mark in Quiz. Learn's place and filter word, but a `chat`-kind
        thread, so the row opens in Chat (`threadSource` gives it no `learn`). */
     case "quiz":
@@ -205,6 +216,9 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
          and this is a chat, opened in Chat like any other. */
       case "quiz":
         return { ...at, label: SOURCE_QUIZ_MARK, quote: origin.quote };
+      /* The finding's passage: the article's words, so no voice. */
+      case "situate":
+        return { ...at, label: SOURCE_SITUATE_FINDING, quote: origin.quote };
       default:
         return origin satisfies never;
     }

@@ -223,7 +223,7 @@ export function ProfilePage() {
       {/* No back arrow above this since 2026-10-05: the corner logo beside it
           goes to the library too (BackLink.tsx § `HomeLink`). The 3.5rem above
           is what keeps the heading clear of that logo, which is 2.75rem tall. */}
-      <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
+      <h1 className="tw:m-0 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
       {/* Three things now, and the sentence names all three: what the model is
           told, what your account may do, and what you have switched on. It used
           to name only the first, which was the whole page until Settings landed;

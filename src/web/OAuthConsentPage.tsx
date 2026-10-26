@@ -148,7 +148,7 @@ export function OAuthConsentPage({
 
   return (
     <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
-      <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
+      <h1 className="tw:m-0 tw:mb-3 tw:font-sans tw:text-2xl tw:text-foreground">
         An app wants to use Spideryarn as you
       </h1>
       {state.kind === "failed" && (

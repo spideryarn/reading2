@@ -64,7 +64,7 @@ export function OpenSourcePage() {
   return (
     /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx. */
     <DocumentPage here="opensource" className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pb-24 tw:font-sans">
-      <h1 className="tw:m-0 tw:flex tw:items-center tw:gap-2.5 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+      <h1 className="tw:m-0 tw:flex tw:items-center tw:gap-2.5 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground">
         <GitHubMark size={22} className="tw:shrink-0 tw:text-ink-faint" />
         Open source
       </h1>

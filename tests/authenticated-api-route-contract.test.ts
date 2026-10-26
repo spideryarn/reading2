@@ -725,7 +725,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/sources-claims/w1"],
   },
   {
-    /* Sources › Investigate's dossier, owner only (plan 261024o). */
+    /* Sources › Where it sits' dossier, owner only (plan 261025h). */
     match: { kind: "regex", source: "^\\/api\\/situate\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/situate/w1"],

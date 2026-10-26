@@ -369,7 +369,7 @@ export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
           makes between prose and chrome, and the same choice `ShelfCard` makes
           for the same field. */}
       {entry.gist && (
-        <p className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
+        <p className="tw:mt-3 tw:mb-0 tw:font-sans tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
           {entry.gist}
         </p>
       )}

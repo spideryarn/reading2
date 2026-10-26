@@ -75,7 +75,7 @@ function Section({
 }) {
   return (
     <section id={id} className="tw:mt-8 tw:scroll-mt-20">
-      <h2 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-lg tw:leading-snug tw:text-foreground">
+      <h2 className="tw:m-0 tw:mb-2 tw:font-sans tw:text-lg tw:leading-snug tw:text-foreground">
         {title}
       </h2>
       <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
@@ -142,7 +142,7 @@ export function PrivacyPage() {
       floor
       className="tw:mx-auto tw:flex tw:max-w-2xl tw:flex-col tw:px-6 tw:font-sans"
     >
-      <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+      <h1 className="tw:m-0 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground">
         Privacy
       </h1>
       <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint">
@@ -474,7 +474,7 @@ export function PrivacyPage() {
           >
             OpenAlex
           </a>
-          , when you open Sources' Reception on an article of yours, for the list of papers that cite it. Our
+          , when you open Sources on an article of yours, for the list of papers that cite it. Our
           server sends each one the identifier of a published work — for your article, its DOI —
           and our own contact address. When your article has no DOI, OpenAlex is sent the words of
           its title instead, to find it by. And when you press Search OpenAlex for related work, in
@@ -502,13 +502,17 @@ export function PrivacyPage() {
           when it has one, its DOI or arXiv identifier, and never the article’s text. In an article
           from a file you uploaded, a cited work with no identifier is not searched.
           {/* Plan 261024o (src/situate.ts, src/situate-citers.ts): the owner's
-              press on Search the literature, behind the experimental switch.
+              press on Search the literature, in Sources › Where it sits and
+              out of the experimental switch since plan 261025h.
+              The citers are asked on opening Sources since the same plan,
+              because Where it sits is the owner's default and its After it
+              is that list (SourcesMode.tsx § `useCiters`).
               The searches are planned by a model from the fenced title,
               headings and opening, never the profile, and each is one forced
               Exa search through OpenRouter; the citing works are OpenAlex's,
               found by the DOI or the title as Cited by finds them.
               docs/project/privacy.md § Search the literature. */}{" "}
-          When you press Search the literature, in Sources’ Investigate (an experimental feature),
+          When you press Search the literature, in Sources’ Where it sits,
           your article is searched for in the wider literature. Its title, headings, opening and
           details of works it cites go through OpenRouter to an AI that writes a dozen or so short
           searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is

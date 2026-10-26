@@ -1,13 +1,16 @@
 /**
- * **The dossier's words and order, without React** — what Sources ›
- * Investigate's *Where this piece sits* says about a stored `Situate`
+ * **The dossier's words and order, without React** — what the literature
+ * search in Sources › *Where it sits* says about a stored `Situate`
  * (src/types.ts), kept here so the tests can hold each rule without mounting
  * the panel. The section itself is SituateDossier.tsx. Plan
  * docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md
- * § The dossier, at the top of Investigate.
+ * § The dossier (at the top of Investigate until plan 261025h moved it to
+ * *Where it sits* and out of the experimental switch).
  */
 import {
+  type LensOrigin,
   MAX_LENS_CHARS,
+  originName,
   SITUATE_FINDING_KINDS,
   type Situate,
   type SituateAngle,
@@ -16,11 +19,16 @@ import {
   type SituateKind,
   type SituateQueryGroup,
   type SituateQueryOutcome,
+  type SituateOrigin,
   type SituateSearched,
 } from "../types.js";
 
-/** The section's heading. */
-export const SITUATE_HEAD = "Where this piece sits";
+/**
+ * The section's heading. *Where this piece sits* until plan 261025h, when the
+ * dossier moved into the sub-mode named *Where it sits* and the heading would
+ * have said the chip's name twice.
+ */
+export const SITUATE_HEAD = "Search of the literature";
 /** Before it has run: what a press does, in one sentence. */
 export const SITUATE_WHAT =
   "Searches the web and the papers that cite this piece, then marks the passages that later work challenges, supports or has moved on from.";
@@ -135,12 +143,15 @@ const LENS_CLOSE = " How strong is that, and what else bears on it?";
 const LENS_QUOTE_MAX = 160;
 
 /**
- * **What *Ask in chat* on a finding asks**, which is also the lens its chat
- * stores (`{ mode: "reception", lens }`), so it is listed under *Your
- * questions* and found again by `threadForOrigin`. The passage, the note and a
+ * **What *Ask in chat* on a finding asks**: the passage, the note and a
  * question, the note cut to fit `MAX_LENS_CHARS` so the question at the end
- * survives. Already trimmed and within the cap, so Reader.tsx § `lensInChat`,
- * which trims and cuts, stores exactly these characters and the mark finds it.
+ * survives. Sent through `askInSources` (Reader.tsx § `askFinding`).
+ *
+ * It was also the origin its chat stored, a `reception` lens, until plan
+ * 261025h gave a finding its own origin (`findingOrigin`): a re-run that
+ * reworded the note lost the chat's mark, because the mark was found by these
+ * words (queue item qi-mmtsxdhg). A chat stored that way is still found by
+ * them (`findingLensOrigin`).
  */
 export function findingLens(finding: Pick<SituateFinding, "quote" | "note">): string {
   const quote = clip(finding.quote, LENS_QUOTE_MAX);
@@ -197,4 +208,25 @@ export function sourceHost(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * **The origin a finding's chat stores**: the finding's stable id, and its
+ * passage as a snapshot (plan 261025h, decision 9; queue item qi-mmtsxdhg).
+ * Matched by the id alone (`sameOrigin`), so a *Search again* that rewords the
+ * note keeps the mark, and the way back opens *Where it sits* on that finding
+ * (Reader.tsx § `openOrigin`). The passage is the article's words, cut by
+ * `originName`, which is what Chat's list and the way back name it by.
+ */
+export function findingOrigin(finding: Pick<SituateFinding, "id" | "quote">): SituateOrigin {
+  return { mode: "situate", itemId: finding.id, quote: originName(finding.quote) };
+}
+
+/**
+ * **The origin a finding's chat stored before plan 261025h**: the lens its
+ * question was, so a chat started then still shows as the finding's mark, as
+ * long as the note has not been reworded since. Read only, never written.
+ */
+export function findingLensOrigin(finding: Pick<SituateFinding, "quote" | "note">): LensOrigin {
+  return { mode: "reception", lens: findingLens(finding) };
 }

@@ -1,0 +1,8 @@
+-- A literature-search finding becomes a thread origin: plan 261025h, decision 9 (queue item qi-mmtsxdhg)
+-- (docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md).
+-- Additive: the origin-mode CHECK and the item-shape CHECK each widened to admit 'situate' (an id and a
+-- snapshot, like a glossary entry). No row is rewritten; every row the old CHECKs admitted, the new ones admit.
+ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_mode";--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" DROP CONSTRAINT "chat_threads_origin_item";--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_mode" CHECK ("spideryarn"."chat_threads"."origin_mode" is null or "spideryarn"."chat_threads"."origin_mode" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate'));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_item" CHECK ("spideryarn"."chat_threads"."origin_mode" is null or "spideryarn"."chat_threads"."origin_mode" not in ('glossary','citations','bibliography','ideas','situate') or ("spideryarn"."chat_threads"."origin_item_id" is not null and "spideryarn"."chat_threads"."origin_quote" is not null and "spideryarn"."chat_threads"."origin_block_id" is null and "spideryarn"."chat_threads"."origin_lens" is null));

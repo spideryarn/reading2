@@ -225,7 +225,7 @@ export function AddFromExtension({
   return (
     <main data-add-from-extension className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-6">
-        <h1 className="tw:font-prose tw:text-2xl tw:text-foreground">Adding the page</h1>
+        <h1 className="tw:font-sans tw:text-2xl tw:text-foreground">Adding the page</h1>
       </header>
       <p className="tw:m-0 tw:text-foreground" role="status">
         {!ready ? "Waiting for the upload already in progress to finish…" : sentence(state, failed)}

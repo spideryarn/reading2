@@ -46,7 +46,7 @@ Each article keeps its own list of conversations; **‹ Chats**, at the top left
 takes you back to it. That list holds every
 conversation you have had about the article, not only the ones started in Chat. A row from somewhere
 else has a small icon in front of it, and the place it came from under its title, such as
-**Investigate**, **Claims**, **Glossary** or **Quiz**: point at the icon, or tap it, to see more, for example
+**Investigate**, **Claims**, **Where it sits**, **Glossary** or **Quiz**: point at the icon, or tap it, to see more, for example
 which claim or which question. A chat about a passage has the icon only. Pressing a Recall or Explore row takes you to Learn, where that
 conversation lives; it cannot be renamed or deleted from Chat. A **Quiz** row is an ordinary chat
 about one mark, and opens here. When the list has conversations from

@@ -226,7 +226,7 @@ function StillBeingAdded({
       <HomeLogo />
       <FeedbackTrigger variant="corner" />
       <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
-        <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
+        <h1 className="tw:m-0 tw:mb-3 tw:font-sans tw:text-2xl tw:text-foreground">
           {STILL_BEING_ADDED_HEADING}
         </h1>
         {/* Only while it is true. A failed or stopped import says why on its

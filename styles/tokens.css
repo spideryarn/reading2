@@ -260,34 +260,24 @@
     --control-h-lg: 2.75rem;
 
     /* ---- type -------------------------------------------------------- */
-    /* GEIST IS THE BASE FACE AND THE CHROME. It is self-hosted from
-       @fontsource-variable/geist (imported in src/web/tailwind.css), with the
-       system stack behind it so nothing shifts if the woff2 is slow or blocked.
+    /* GEIST IS THE APP'S OWN FACE: the chrome, every fixed sentence we wrote, and the wordmark.
+       One token, --font-ui, since 2026-10-25; before that it had five names (--font-sans,
+       --font-reading, --font-brand, and Tailwind's --font-prose and --font-serif), all this
+       stack — docs/plans/261025k-fonts-and-css-code-quality.md § 4. It is self-hosted from
+       @fontsource-variable/geist (imported in src/web/tailwind.css), with the system stack
+       behind it so nothing shifts if the woff2 is slow or blocked.
 
-       This is the original app's stack, and following it was Greg's call, 2026-08-25: "Follow how
-       we were doing fonts in the previous version." What the previous version ACTUALLY did is not
-       what our docs said it did. `docs/project/original-version/typography.md` reports a research
-       doc recommending Georgia at 17px for its x-height, and that recommendation was carried in
-       here as though it were shipped code. It never was: `app/globals.css` in that repo sets
-       `body { font-family: Arial, Helvetica, sans-serif }`, Geist Sans sits behind Tailwind's
-       --font-sans, and a grep of the whole repo finds Georgia nowhere. Their reading surface was
-       sans, headings and body in the same face, hierarchy carried by size and weight alone
-       (simple-document-viewer.tsx: h1 3xl/bold, h2 2xl/semibold, h3 xl/semibold, p base/normal).
-       So the two things that did ship — the 65ch measure and heading-space-above > below — are
-       kept below and in styles.css, and the serif that never shipped is gone.
-
-       That decision still supplies the fallback. Since 2026-10-02, visible
-       author, model and reader words override it through styles/voices.css;
-       docs/project/fonts.md owns that rule. `--font-reading` stays separate
-       from `--font-ui` so the base reading stack remains one decision. */
-    --font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
-    --font-reading: var(--font-sans);   /* the base reading stack before a voice override */
-    --font-ui: var(--font-sans);        /* chrome: controls, masthead facts, column headers */
-    --font-brand: var(--font-sans);     /* the wordmark, and only the wordmark */
+       Geist was the original app's face, and following it was Greg's call, 2026-08-25: "Follow
+       how we were doing fonts in the previous version." (The Georgia that our docs once said it
+       used never shipped there; docs/project/typography.md has that story.)
+       Since 2026-10-02 the words that are not ours — the author's, a model's, the reader's —
+       are set in the three voice faces below by src/web/voices.css, so what is left in Geist
+       is by definition the app speaking. docs/project/fonts.md owns that rule. */
+    --font-ui: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
     --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace; /* code and block ids */
 
     /* One face per voice — the author's, the model's, the reader's — applied to
-       visible words by src/web/styles/voices.css, for every reader since 2026-10-02.
+       visible words by src/web/voices.css, for every reader since 2026-10-02.
        Geometry-only boxes that resolve the prose's `ch` measure also read
        `--font-author`; their visible children set their own face. Greg, 2026-10-01:
        originally Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
@@ -362,7 +352,7 @@
 .reading-column {
     max-width: clamp(45ch, 90vw, var(--reading-measure));
     margin-inline: auto;
-    font-family: var(--font-reading);
+    font-family: var(--font-author);
     font-size: var(--reading-size);
     line-height: var(--reading-line-height);
     font-weight: var(--reading-weight);
@@ -384,12 +374,12 @@
    30px on the shelf; the 731px query on `.logo-text`, the fit ladder on `.dock-btn-label`. The
    animations scale with the size (logo-animations.css § `--logo-px`).
 
-   --font-brand was Trebuchet MS until 2026-09-08 and is Geist now. It is still a separate token,
-   for the reason --font-reading is: the wordmark having its own face is a decision somebody may
-   want back, and this is the one line that gives it back. 600 is drawn, not synthesised: Geist is
-   variable across 100-900. */
+   **The face is the UI's, --font-ui.** The wordmark was Trebuchet MS until 2026-09-08, and kept a
+   token of its own (--font-brand) until Greg settled it on 2026-10-25: *"maybe we have one also
+   for the Spideryarn logo ... It would make more sense if that was consistent (e.g. with the UI
+   font)"* (4c4b39d13). 600 is drawn, not synthesised: Geist is variable across 100-900. */
 .logo-letter {
-    font-family: var(--font-brand);
+    font-family: var(--font-ui);
     font-weight: 600;
     letter-spacing: 0.02em;
     color: var(--wordmark-ink);

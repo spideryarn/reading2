@@ -6127,6 +6127,17 @@ export const RELATED_WORK_RATE_LIMITED =
 /** A found search with nothing left once the bibliography and the piece itself are taken out. */
 export const RELATED_WORK_NONE =
   "No other papers remain to show after taking out this piece and the works Spideryarn found in its bibliography.";
+/**
+ * The two groups below the list, never hidden (plan 261025h, decision 3). The
+ * first has evidence it is the piece in another form; the second only shares
+ * its authors, so its label claims nothing more.
+ */
+export const RELATED_WORK_EDITIONS = "Other editions of this piece";
+export const RELATED_WORK_EDITIONS_NOTE =
+  "These share the piece's authors and a version of its title or identifier: most likely the piece itself, reprinted or translated.";
+export const RELATED_WORK_SAME_AUTHORS = "By the same authors";
+export const RELATED_WORK_SAME_AUTHORS_NOTE =
+  "These share the piece's authors. Some may be the piece in another language or collection; nothing here says which.";
 /** Above the list, when the bibliography is stale or capped (F4). */
 export const RELATED_WORK_BIBLIOGRAPHY_STALE =
   "The bibliography was listed from an older version of this piece, so this list may include works it does cite.";

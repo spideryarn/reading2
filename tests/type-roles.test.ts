@@ -40,7 +40,7 @@
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { readerSheets, stripComments } from "./helpers/stylesheets.js";
+import { cssForJsdom, readerSheets, stripComments } from "./helpers/stylesheets.js";
 
 const ROLES = {
   item: "max(var(--text-min), 0.92rem)",
@@ -362,12 +362,13 @@ const SHEETS = readerSheets();
 
 /* The ordinary, active cascade for the representative elements below. The
    exact-selector walk remains the check for declarations hidden in media or
-   supports blocks that jsdom does not activate. */
+   supports blocks that jsdom does not activate. jsdom has no cascade layers
+   either, so `cssForJsdom` stands the `voices` layer in (its comment says how). */
 for (const s of SHEETS) {
   if (sourceBlocks(s.css) === 0) continue;
   const style = window.document.createElement("style");
   style.dataset.sheet = s.path;
-  style.textContent = s.css;
+  style.textContent = cssForJsdom(s);
   window.document.head.appendChild(style);
 }
 

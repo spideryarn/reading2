@@ -250,14 +250,20 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * **Sources' six sub-modes**: Bibliography (the Citations mode until
+ * **Sources' seven sub-modes**: *Where it sits* (since 2026-10-25, plan
+ * 261025h, the owner's default), Bibliography (the Citations mode until
  * 2026-10-09), Not cited and Links (since 2026-10-11), then Reception and Claims (the Debate
- * mode's two, since 2026-10-03), and Investigate last (since 2026-10-20, plan 261020n). The band's chip row, SourcesMode.tsx §
- * `SourcesViews`; Bibliography first because it is the default. Greg,
+ * mode's two, since 2026-10-03), and Investigate last (since 2026-10-20, plan 261020n).
+ * The command bar lists all seven, in this order (`subModesOf`); the owner's
+ * chip row draws three of them, *Where it sits*, Bibliography and Links
+ * (params.ts § `SOURCES_CHIPS`), and the other four are tools reached from
+ * *Where it sits*, which keep their rows and aliases here. Greg,
  * 2026-10-09 (spya-vcvxu5): *"Let's call the sub-mode for citations listed in
  * this article (i.e. the former Citations mode) "Bibliography", and this
  * should be the first submode"*, and the original frame, *"what this
- * article cites and what other people say about it"*.
+ * article cites and what other people say about it"*; Bibliography stayed
+ * first until plan 261025h put *Where it sits* before it, and is still a
+ * visitor's first.
  *
  * **The retired mode words are the rows' own aliases**, so typing `citations`
  * selects Bibliography and `debate` selects Reception, the views the old links
@@ -267,6 +273,25 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
  */
 export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
+  /* The two free lists — what came after the piece, what it leans on — and
+     the literature search, with the four tools under them. Plan 261025h,
+     acting on Greg's answer to q-vg2b69. Its label is its own first alias in
+     the command bar (`canonical`), so *where it sits* is not repeated here
+     (tests/mode-catalog.test.ts § never another row's label). *Search the
+     literature* is also the dossier's button. It is the declared exception
+     to the generic find-in-article interpretation of a phrase starting
+     *search*: the specific named destination wins without a second,
+     contradictory row (command-match.ts § `VERBS`). */
+  where: {
+    label: "Where it sits",
+    description:
+      "What others say about this piece, and what it builds on: the papers that came after it, the works it leans on most, and a search of the literature",
+    experimental: false,
+    aliases: [
+      "situate", "the literature", "where this piece sits", "literature search", "search the literature", "what came after",
+      "papers citing it",
+    ],
+  },
   bibliography: {
     label: "Bibliography",
     description: "What this piece cites: the works in its bibliography, each with a link",
@@ -439,7 +464,7 @@ export function subModeParams(sub: SubMode): SubModeParams {
     case "structure":
       return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
     case "sources":
-      return { mode: "sources", sources: sub.view === "bibliography" ? null : sub.view };
+      return { mode: "sources", sources: sub.view === "where" ? null : sub.view };
     default: {
       const never: never = sub;
       return never;

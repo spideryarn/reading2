@@ -1,6 +1,6 @@
 {
-  "id": "eca8f0c0-bb5f-4149-9f95-b45f25b45068",
-  "prevId": "4afc650f-053a-44ad-b42f-3207c067529a",
+  "id": "ea58ad6a-33d7-429b-aa70-feb039f916fb",
+  "prevId": "bcce9394-150b-4c0b-a468-78a6fc89b37e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4131,7 +4131,7 @@
         },
         "chat_threads_origin_mode": {
           "name": "chat_threads_origin_mode",
-          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check')"
+          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate')"
         },
         "chat_threads_origin_none": {
           "name": "chat_threads_origin_none",
@@ -4151,7 +4151,7 @@
         },
         "chat_threads_origin_item": {
           "name": "chat_threads_origin_item",
-          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" not in ('glossary','citations','bibliography','ideas') or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is not null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_lens\" is null)"
+          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" not in ('glossary','citations','bibliography','ideas','situate') or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is not null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_lens\" is null)"
         },
         "chat_threads_origin_cite_check": {
           "name": "chat_threads_origin_cite_check",
@@ -4655,6 +4655,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "target_keyword": {
+          "name": "target_keyword",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "fetched_at": {
           "name": "fetched_at",
           "type": "timestamp with time zone",
@@ -4671,7 +4677,7 @@
       "checkConstraints": {
         "citation_index_lookups_work_id": {
           "name": "citation_index_lookups_work_id",
-          "value": "length(\"spideryarn\".\"citation_index_lookups\".\"work_id\") <= 600 and \"spideryarn\".\"citation_index_lookups\".\"work_id\" = lower(\"spideryarn\".\"citation_index_lookups\".\"work_id\")\n          and (\"spideryarn\".\"citation_index_lookups\".\"work_id\" ~ '^doi:10[.][0-9]{4,9}/[^[:space:]\"''<>?#]+$'\n               or \"spideryarn\".\"citation_index_lookups\".\"work_id\" ~ '^openalex:w[0-9]{1,15}$')"
+          "value": "length(\"spideryarn\".\"citation_index_lookups\".\"work_id\") <= 600 and \"spideryarn\".\"citation_index_lookups\".\"work_id\" = lower(\"spideryarn\".\"citation_index_lookups\".\"work_id\")\n          and (\"spideryarn\".\"citation_index_lookups\".\"work_id\" ~ '^doi:10[.][0-9]{4,9}/[^[:space:]\"''<>?#]+(#topic)?$'\n               or \"spideryarn\".\"citation_index_lookups\".\"work_id\" ~ '^openalex:w[0-9]{1,15}([|]w[0-9]{1,15}){0,3}(#topic)?$')"
         },
         "citation_index_lookups_state": {
           "name": "citation_index_lookups_state",
@@ -4679,7 +4685,7 @@
         },
         "citation_index_lookups_shape": {
           "name": "citation_index_lookups_shape",
-          "value": "case\n            when \"spideryarn\".\"citation_index_lookups\".\"state\" = 'found' then\n              \"spideryarn\".\"citation_index_lookups\".\"openalex_id\" is not null and \"spideryarn\".\"citation_index_lookups\".\"openalex_id\" ~ '^W[0-9]{1,15}$'\n              and \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\" is not null and \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\" >= 0\n              and \"spideryarn\".\"citation_index_lookups\".\"returned\" is not null and \"spideryarn\".\"citation_index_lookups\".\"returned\" >= 0\n              and \"spideryarn\".\"citation_index_lookups\".\"dropped\" is not null and \"spideryarn\".\"citation_index_lookups\".\"dropped\" between 0 and \"spideryarn\".\"citation_index_lookups\".\"returned\"\n              and \"spideryarn\".\"citation_index_lookups\".\"capped\" is not null\n              and \"spideryarn\".\"citation_index_lookups\".\"target_title\" is not null and length(\"spideryarn\".\"citation_index_lookups\".\"target_title\") between 1 and 10000\n              and \"spideryarn\".\"citation_index_lookups\".\"target_authors\" is not null and cardinality(\"spideryarn\".\"citation_index_lookups\".\"target_authors\") <= 20\n              and array_position(\"spideryarn\".\"citation_index_lookups\".\"target_authors\", null) is null\n            else num_nonnulls(\"spideryarn\".\"citation_index_lookups\".\"openalex_id\", \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\", \"spideryarn\".\"citation_index_lookups\".\"returned\", \"spideryarn\".\"citation_index_lookups\".\"dropped\",\n                              \"spideryarn\".\"citation_index_lookups\".\"capped\", \"spideryarn\".\"citation_index_lookups\".\"target_title\", \"spideryarn\".\"citation_index_lookups\".\"target_authors\") = 0\n          end"
+          "value": "case\n            when \"spideryarn\".\"citation_index_lookups\".\"state\" = 'found' then\n              \"spideryarn\".\"citation_index_lookups\".\"openalex_id\" is not null and \"spideryarn\".\"citation_index_lookups\".\"openalex_id\" ~ '^W[0-9]{1,15}$'\n              and \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\" is not null and \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\" >= 0\n              and \"spideryarn\".\"citation_index_lookups\".\"returned\" is not null and \"spideryarn\".\"citation_index_lookups\".\"returned\" >= 0\n              and \"spideryarn\".\"citation_index_lookups\".\"dropped\" is not null and \"spideryarn\".\"citation_index_lookups\".\"dropped\" between 0 and \"spideryarn\".\"citation_index_lookups\".\"returned\"\n              and \"spideryarn\".\"citation_index_lookups\".\"capped\" is not null\n              and \"spideryarn\".\"citation_index_lookups\".\"target_title\" is not null and length(\"spideryarn\".\"citation_index_lookups\".\"target_title\") between 1 and 10000\n              and \"spideryarn\".\"citation_index_lookups\".\"target_authors\" is not null and cardinality(\"spideryarn\".\"citation_index_lookups\".\"target_authors\") <= 20\n              and array_position(\"spideryarn\".\"citation_index_lookups\".\"target_authors\", null) is null\n              and (\"spideryarn\".\"citation_index_lookups\".\"target_keyword\" is null or length(\"spideryarn\".\"citation_index_lookups\".\"target_keyword\") between 1 and 200)\n            else num_nonnulls(\"spideryarn\".\"citation_index_lookups\".\"openalex_id\", \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\", \"spideryarn\".\"citation_index_lookups\".\"returned\", \"spideryarn\".\"citation_index_lookups\".\"dropped\",\n                              \"spideryarn\".\"citation_index_lookups\".\"capped\", \"spideryarn\".\"citation_index_lookups\".\"target_title\", \"spideryarn\".\"citation_index_lookups\".\"target_authors\", \"spideryarn\".\"citation_index_lookups\".\"target_keyword\") = 0\n          end"
         }
       },
       "isRLSEnabled": false
@@ -7904,64 +7910,6 @@
         "raw_sources_kind": {
           "name": "raw_sources_kind",
           "value": "\"spideryarn\".\"raw_sources\".\"kind\" in ('pdf','html')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "spideryarn.read_so_far_words": {
-      "name": "read_so_far_words",
-      "schema": "spideryarn",
-      "columns": {
-        "article_id": {
-          "name": "article_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "basis": {
-          "name": "basis",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "words": {
-          "name": "words",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "computed_at": {
-          "name": "computed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "read_so_far_words_article_id_articles_id_fk": {
-          "name": "read_so_far_words_article_id_articles_id_fk",
-          "tableFrom": "read_so_far_words",
-          "tableTo": "articles",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "read_so_far_words_object": {
-          "name": "read_so_far_words_object",
-          "value": "jsonb_typeof(\"spideryarn\".\"read_so_far_words\".\"words\") = 'object'"
         }
       },
       "isRLSEnabled": false

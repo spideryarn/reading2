@@ -292,7 +292,7 @@
    are legitimate: this section exists to display them. */
 .design-rhythm > * { margin: 0; }
 .design-rhythm p {
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: var(--reading-size);
   line-height: var(--reading-line-height);
   padding-block: var(--block-pad);
@@ -301,7 +301,7 @@
    demonstration heading is set as article prose rather than as page chrome. */
 .design-panel.design-rhythm h3 {
   margin: 0;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 1.0625rem;
   font-weight: 600;
   text-transform: none;

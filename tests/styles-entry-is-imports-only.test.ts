@@ -218,12 +218,6 @@ const MANIFEST = [
      value of writing this list by hand is that a position is a claim somebody
      made, and two sheets cannot both be last. */
   "changelog.css",
-  /* Late, but not for the cascade's sake: every rule is `:root` plus at least
-     one class, which outranks the one-class rules it overrides wherever it
-     sits. Late so that a tie with a stronger rule elsewhere goes its way too.
-     Shares no element with the sheet below. The per-voice faces, for everyone
-     since 2026-10-02 — docs/project/fonts.md. */
-  "voices.css",
   /* **Late, and the position is the point.** The wordmark's hover animations
      have to beat `.logo`, `.logo-home` and `.dock-home`, which are set in
      dock.css and dock-fit.css far above — so loading this late is what lets a
@@ -332,23 +326,29 @@ describe("the stylesheet entry point is an import manifest", () => {
 });
 
 /**
- * **tailwind.css's own local imports: exactly two, each in its own layer.**
+ * **tailwind.css's own local imports: exactly three, each in its own layer.**
  *
- * `styles.css` into `app`, and `button-tone.css` into `tone`, the one layer
- * declared after `utilities` (plan 261020z). A rule in `tone` beats every `tw:`
- * utility on whatever it matches, so a third sheet slipped in there, or `tone`
- * moved before `utilities`, would change the whole app's cascade from one line.
+ * `styles.css` into `app`; `voices.css` into `voices`, after `app` and before
+ * `utilities`, so a voice beats every component rule and a `tw:font-*` still
+ * beats a voice (plan 261025k § 2); and `button-tone.css` into `tone`, the one
+ * layer declared after `utilities` (plan 261020z). A rule in `tone` beats every
+ * `tw:` utility on whatever it matches, and a rule in `voices` every app rule,
+ * so a fourth sheet slipped into either, or a layer moved, would change the
+ * whole app's cascade from one line.
  */
 describe("tailwind.css layers the reading view under the utilities, and the tone over them", () => {
   const tailwind = readFileSync("src/web/tailwind.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
   it("declares the layers in the order the cascade needs", () => {
-    expect(tailwind.match(/^@layer [^{;]+;/gm)).toEqual(["@layer theme, base, app, utilities, tone;"]);
+    expect(tailwind.match(/^@layer [^{;]+;/gm)).toEqual([
+      "@layer theme, base, app, voices, utilities, tone;",
+    ]);
   });
 
-  it("imports exactly styles.css into app and button-tone.css into tone", () => {
+  it("imports exactly styles.css into app, voices.css into voices and button-tone.css into tone", () => {
     expect(tailwind.match(/^@import "\.[^"]*"[^;]*;/gm)).toEqual([
       '@import "./styles.css" layer(app);',
+      '@import "./voices.css" layer(voices);',
       '@import "./button-tone.css" layer(tone);',
     ]);
   });

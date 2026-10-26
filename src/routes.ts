@@ -566,6 +566,7 @@ import {
   originName,
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
+  SITUATE_FINDING_ID,
   currentOriginMode,
   sameAnchor,
   sameOrigin,
@@ -5578,6 +5579,8 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
       return parseCiteCheckOrigin(origin as Record<string, unknown>);
     case "quiz":
       return parseQuizOrigin(origin as Record<string, unknown>);
+    case "situate":
+      return parseSituateOrigin(origin as Record<string, unknown>);
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
     default:
       return built satisfies never;
@@ -5608,6 +5611,30 @@ function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Reco
     throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
   }
   return { mode, itemId, quote };
+}
+
+/**
+ * **A literature-search finding's origin** (plan 261025h, qi-mmtsxdhg): the
+ * finding's id, shaped as src/situate.ts § `findingId` mints it
+ * (`SITUATE_FINDING_ID`), and a snapshot of its passage. Shape only: the id is
+ * not looked up, so a finding a newer search dropped never refuses its own
+ * chat. No part of the passage reaches a thrown message.
+ */
+function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
+  const { itemId, quote, blockId, lens } = body;
+  if (blockId !== undefined || lens !== undefined) {
+    throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
+  }
+  if (typeof itemId !== "string" || !SITUATE_FINDING_ID.test(itemId)) {
+    throw httpError(400, "origin.itemId must be a finding id");
+  }
+  if (typeof quote !== "string" || quote.trim() === "") {
+    throw httpError(400, "origin.quote must be a non-empty string");
+  }
+  if (quote.length > MAX_ORIGIN_NAME_CHARS) {
+    throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
+  }
+  return { mode: "situate", itemId, quote };
 }
 
 /**
@@ -12659,7 +12686,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* Sources › Investigate's dossier: where the piece sits in the literature —
+  /* Sources › Where it sits' dossier: where the piece sits in the literature —
      plan 261024o, src/situate.ts. **Owner only**: every store read is
      owner-scoped, so somebody else's article is a 404, and there is no public
      twin (S9). GET only: asking again is POST /api/jobs { slug, steps:
@@ -13035,9 +13062,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     /* No model is called, so there is no spend to attribute; the capture is
        named anyway because the path names an article. */
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { res, query } }, captures) => {
+      /* `?about=topic`: the citers that mention the work's own keyword, in the
+         same shape, when the list has a topic (plan 261025h, decision 10). */
+      const about = query.get("about");
+      if (about !== null && about !== "topic") throw httpError(400, "about must be topic");
       const identity = await loadArticleIdentity(slugPart(captures, 1));
-      const citers: CitersResult = await citersOf(identity);
+      const citers: CitersResult = await citersOf(identity, {}, about === "topic" ? { about } : {});
       send(res, 200, citers);
     },
   },

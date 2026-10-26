@@ -31,7 +31,7 @@ export function AddStopped() {
   return (
     <main data-add-stopped className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-6">
-        <h1 className="tw:font-prose tw:text-2xl tw:text-foreground">This page has stopped</h1>
+        <h1 className="tw:font-sans tw:text-2xl tw:text-foreground">This page has stopped</h1>
       </header>
       <p className="tw:m-0 tw:text-foreground">
         The account signed in here changed while this page was open, so it has stopped. To add an

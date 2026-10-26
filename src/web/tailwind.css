@@ -6,8 +6,9 @@
  *
  * 1. The `@layer` statement must come FIRST, before the @imports. A layer
  *    statement is one of the few things allowed to precede @import, and it is
- *    what fixes the order: app styles beat preflight, utilities beat app styles,
- *    and the one `tone` sheet (button-tone.css, below) beats the utilities.
+ *    what fixes the order: app styles beat preflight, the per-voice faces
+ *    (voices.css, below) beat app styles, utilities beat both, and the one
+ *    `tone` sheet (button-tone.css, below) beats the utilities.
  *
  * 2. `prefix(tw)` is not taste. Tailwind's scanner is a plain TEXT scanner: it
  *    pulls bare words out of source files and generates a utility for any that
@@ -36,7 +37,7 @@
  * silently does nothing. Its own nested @import of tokens.css inherits the
  * layer, so tokens.css needs no change.
  */
-@layer theme, base, app, utilities, tone;
+@layer theme, base, app, voices, utilities, tone;
 
 /* The reading face, self-hosted. Three files, not one: Fontsource splits its
    @font-face rules by `unicode-range`, so a latin-only page downloads only the
@@ -57,7 +58,7 @@
 @import "@fontsource-variable/geist/wght.css";
 @import "@fontsource-variable/geist/wght-italic.css";
 @import "@fontsource-variable/geist-mono/wght.css";
-/* The author's and the model's faces, read only by styles/voices.css, for every
+/* The author's and the model's faces, read only by voices.css, for every
    reader since 2026-10-02. An @font-face downloads nothing until a rule uses
    its family. `opsz.css` rather than `wght.css`: the same weight axis plus optical
    size, so a serif at 14px in a quote card is drawn for 14px. iA Writer Quattro
@@ -124,6 +125,15 @@
 @custom-variant hover-none (@media (hover: none));
 
 @import "./styles.css" layer(app);
+
+/* **The per-voice faces**: whose words these are — the author's, the model's,
+   the reader's (docs/project/fonts.md). In a layer of their own, after `app`,
+   so a voice beats every component rule whatever its specificity and none of
+   them has to be written heavy to win; before `utilities`, so a `tw:font-*`
+   on an element still beats its voice. Beside this file rather than in
+   styles/ for the same reason button-tone.css is: everything under styles/ is
+   `app`. Nothing but the voices belongs in `voices`. Its header says more. */
+@import "./voices.css" layer(voices);
 
 /* **The one sheet above the utilities**: green to send, red to back out
    (`.tone-positive`, `.tone-negative`). It has to beat a `tw:` colour on a
@@ -268,21 +278,6 @@
 
   --font-sans: var(--font-ui);
   --font-mono: var(--font-mono);
-  /* NOT `--font-serif`, which is what this was until the reading face became
-     Geist (styles/tokens.css § type). The utility still worked afterwards —
-     --font-serif pointed at --font-reading, so `tw:font-serif` rendered the
-     right sans — but a class named `serif` producing a sans is the kind of lie
-     that survives for years because nothing ever breaks. `tw:font-prose` says
-     what it means: the face the article is set in, whatever that face is. */
-  --font-prose: var(--font-reading);
-  /* TRANSITIONAL, delete me. Several agents share this working tree, and one of
-     them has ~550 uncommitted lines of Metadata.tsx in flight; at HEAD that file
-     still asks for `tw:font-serif` in three places. Dropping the name outright
-     would leave those three elements asking for a utility that does not exist —
-     which today is invisible, because everything resolves to the same sans
-     anyway, and would stop being invisible the moment a second face returns.
-     Remove this line once `git grep tw:font-serif` comes back empty. */
-  --font-serif: var(--font-reading);
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);

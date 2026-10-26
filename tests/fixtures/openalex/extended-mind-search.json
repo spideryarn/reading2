@@ -1,0 +1,531 @@
+{
+ "meta": {
+  "count": 868
+ },
+ "results": [
+  {
+   "id": "https://openalex.org/W393180982",
+   "display_name": "The Extended Mind",
+   "publication_year": 1998,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Andy Clark"
+     }
+    },
+    {
+     "author": {
+      "display_name": "David J. Chalmers"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.8169999718666077
+    },
+    {
+     "id": "https://openalex.org/keywords/philosophy-of-mind",
+     "display_name": "philosophy of mind",
+     "score": 0.7300000190734863
+    },
+    {
+     "id": "https://openalex.org/keywords/cognitive-science",
+     "display_name": "cognitive science",
+     "score": 0.4350000023841858
+    },
+    {
+     "id": "https://openalex.org/keywords/mind-body-relationship",
+     "display_name": "mind-body problem",
+     "score": 0.5249999761581421
+    },
+    {
+     "id": "https://openalex.org/keywords/embodied-cognition",
+     "display_name": "embodied cognition",
+     "score": 0.49399998784065247
+    },
+    {
+     "id": "https://openalex.org/keywords/externalism",
+     "display_name": "externalism",
+     "score": 0.34299999475479126
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W4239232206",
+   "display_name": "The Extended Mind",
+   "publication_year": 1998,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Andy Clark"
+     }
+    },
+    {
+     "author": {
+      "display_name": "David J. Chalmers"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.8169999718666077
+    },
+    {
+     "id": "https://openalex.org/keywords/philosophy-of-mind",
+     "display_name": "philosophy of mind",
+     "score": 0.7300000190734863
+    },
+    {
+     "id": "https://openalex.org/keywords/cognitive-science",
+     "display_name": "cognitive science",
+     "score": 0.4350000023841858
+    },
+    {
+     "id": "https://openalex.org/keywords/mind-body-relationship",
+     "display_name": "mind-body problem",
+     "score": 0.5249999761581421
+    },
+    {
+     "id": "https://openalex.org/keywords/embodied-cognition",
+     "display_name": "embodied cognition",
+     "score": 0.49399998784065247
+    },
+    {
+     "id": "https://openalex.org/keywords/externalism",
+     "display_name": "externalism",
+     "score": 0.34299999475479126
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W4210318093",
+   "display_name": "The Extended Mind",
+   "publication_year": 2010,
+   "authorships": [],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.9810000061988831
+    },
+    {
+     "id": "https://openalex.org/keywords/andy-clark",
+     "display_name": "Andy Clark",
+     "score": 0.9190000295639038
+    },
+    {
+     "id": "https://openalex.org/keywords/david-chalmers",
+     "display_name": "David Chalmers",
+     "score": 0.9990000128746033
+    },
+    {
+     "id": "https://openalex.org/keywords/mind-body-relationship",
+     "display_name": "mind-body problem",
+     "score": 0.6430000066757202
+    },
+    {
+     "id": "https://openalex.org/keywords/environmental-cognition",
+     "display_name": "environmental cognition",
+     "score": 0.5870000123977661
+    },
+    {
+     "id": "https://openalex.org/keywords/embodied-cognition",
+     "display_name": "embodied cognition",
+     "score": 0.7490000128746033
+    },
+    {
+     "id": "https://openalex.org/keywords/philosophy-of-mind",
+     "display_name": "philosophy of mind",
+     "score": 0.6370000243186951
+    },
+    {
+     "id": "https://openalex.org/keywords/cognitive-activity",
+     "display_name": "cognitive activity",
+     "score": 0.4059999883174896
+    },
+    {
+     "id": "https://openalex.org/keywords/cognitive-practices",
+     "display_name": "cognitive practices",
+     "score": 0.6740000247955322
+    },
+    {
+     "id": "https://openalex.org/keywords/memento",
+     "display_name": "Memento",
+     "score": 0.6480000019073486
+    },
+    {
+     "id": "https://openalex.org/keywords/amnesia",
+     "display_name": "amnesia",
+     "score": 0.6079999804496765
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W2114814877",
+   "display_name": "The socially extended mind",
+   "publication_year": 2013,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Shaun Gallagher"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.968999981880188
+    },
+    {
+     "id": "https://openalex.org/keywords/social-cognition",
+     "display_name": "social cognition",
+     "score": 0.7239999771118164
+    },
+    {
+     "id": "https://openalex.org/keywords/enactive-cognition",
+     "display_name": "enactive cognition",
+     "score": 0.8790000081062317
+    },
+    {
+     "id": "https://openalex.org/keywords/social-affordances",
+     "display_name": "social affordances",
+     "score": 0.9739999771118164
+    },
+    {
+     "id": "https://openalex.org/keywords/institutional-framework",
+     "display_name": "institutional framework",
+     "score": 0.7689999938011169
+    },
+    {
+     "id": "https://openalex.org/keywords/critical-social-theory",
+     "display_name": "critical social theory",
+     "score": 0.8539999723434448
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W1556997081",
+   "display_name": "Cognitive Systems and the Extended Mind",
+   "publication_year": 2009,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Robert D. Rupert"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.75
+    },
+    {
+     "id": "https://openalex.org/keywords/situated-cognition",
+     "display_name": "situated cognition",
+     "score": 0.8349999785423279
+    },
+    {
+     "id": "https://openalex.org/keywords/embodied-cognition",
+     "display_name": "embodied cognition",
+     "score": 0.906000018119812
+    },
+    {
+     "id": "https://openalex.org/keywords/embedded-cognition",
+     "display_name": "embedded cognition",
+     "score": 0.9509999752044678
+    },
+    {
+     "id": "https://openalex.org/keywords/mental-representation",
+     "display_name": "mental representation",
+     "score": 0.4410000145435333
+    },
+    {
+     "id": "https://openalex.org/keywords/computation",
+     "display_name": "computation",
+     "score": 0.5370000004768372
+    },
+    {
+     "id": "https://openalex.org/keywords/brain-body-environment-interaction",
+     "display_name": "brain-body-environment interaction",
+     "score": 0.7459999918937683
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W2189186956",
+   "display_name": "Emotions and the extended mind",
+   "publication_year": 2014,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Jan Slaby"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/emotions",
+     "display_name": "emotions",
+     "score": 0.9760000109672546
+    },
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.9610000252723694
+    },
+    {
+     "id": "https://openalex.org/keywords/embodied-cognition",
+     "display_name": "embodied cognition",
+     "score": 0.6990000009536743
+    },
+    {
+     "id": "https://openalex.org/keywords/philosophy-of-mind",
+     "display_name": "philosophy of mind",
+     "score": 0.7160000205039978
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W1602599099",
+   "display_name": "The Extended Mind",
+   "publication_year": 2007,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Robert K. Logan"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/origin-of-language",
+     "display_name": "origin of language",
+     "score": 0.9190000295639038
+    },
+    {
+     "id": "https://openalex.org/keywords/language-evolution",
+     "display_name": "language evolution",
+     "score": 0.6809999942779541
+    },
+    {
+     "id": "https://openalex.org/keywords/human-mind",
+     "display_name": "human mind",
+     "score": 0.6470000147819519
+    },
+    {
+     "id": "https://openalex.org/keywords/emergence-theory",
+     "display_name": "emergence theory",
+     "score": 0.8090000152587891
+    },
+    {
+     "id": "https://openalex.org/keywords/language-acquisition",
+     "display_name": "language acquisition",
+     "score": 0.7229999899864197
+    },
+    {
+     "id": "https://openalex.org/keywords/hominid-evolution",
+     "display_name": "hominid evolution",
+     "score": 0.671999990940094
+    },
+    {
+     "id": "https://openalex.org/keywords/toolmaking",
+     "display_name": "tool manufacturing",
+     "score": 0.6809999942779541
+    },
+    {
+     "id": "https://openalex.org/keywords/social-intelligence",
+     "display_name": "social intelligence",
+     "score": 0.8489999771118164
+    },
+    {
+     "id": "https://openalex.org/keywords/altruism",
+     "display_name": "altruism",
+     "score": 0.7929999828338623
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W2086684289",
+   "display_name": "Affordances and the musically extended mind",
+   "publication_year": 2014,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Joel W. Krueger"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/musical-affordances",
+     "display_name": "musical affordances",
+     "score": 0.9559999704360962
+    },
+    {
+     "id": "https://openalex.org/keywords/musicking",
+     "display_name": "musicking",
+     "score": 0.6570000052452087
+    },
+    {
+     "id": "https://openalex.org/keywords/emotional-experience",
+     "display_name": "emotional experience",
+     "score": 0.7049999833106995
+    },
+    {
+     "id": "https://openalex.org/keywords/entrainment",
+     "display_name": "entrainment",
+     "score": 0.6690000295639038
+    },
+    {
+     "id": "https://openalex.org/keywords/emotion-regulation",
+     "display_name": "emotion regulation",
+     "score": 0.6159999966621399
+    },
+    {
+     "id": "https://openalex.org/keywords/embodied-cognition",
+     "display_name": "embodied cognition",
+     "score": 0.6000000238418579
+    },
+    {
+     "id": "https://openalex.org/keywords/music-and-emotion",
+     "display_name": "music and emotion",
+     "score": 0.6919999718666077
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W2072729203",
+   "display_name": "Reasons, Robots and the Extended Mind",
+   "publication_year": 2001,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Andy Clark"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/human-rationality",
+     "display_name": "human rationality",
+     "score": 0.8759999871253967
+    },
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.7260000109672546
+    },
+    {
+     "id": "https://openalex.org/keywords/embodied-cognition",
+     "display_name": "embodied cognition",
+     "score": 0.8629999756813049
+    },
+    {
+     "id": "https://openalex.org/keywords/embedded-cognition",
+     "display_name": "embedded cognition",
+     "score": 0.7099999785423279
+    },
+    {
+     "id": "https://openalex.org/keywords/situated-cognition",
+     "display_name": "situated cognition",
+     "score": 0.8820000290870667
+    },
+    {
+     "id": "https://openalex.org/keywords/distributed-cognition",
+     "display_name": "distributed cognition",
+     "score": 0.9769999980926514
+    },
+    {
+     "id": "https://openalex.org/keywords/artificial-life",
+     "display_name": "artificial life",
+     "score": 0.6949999928474426
+    },
+    {
+     "id": "https://openalex.org/keywords/robotics",
+     "display_name": "robotics",
+     "score": 0.5109999775886536
+    },
+    {
+     "id": "https://openalex.org/keywords/adaptive-behavior",
+     "display_name": "adaptive behavior",
+     "score": 0.7770000100135803
+    },
+    {
+     "id": "https://openalex.org/keywords/fast-and-frugal-heuristics",
+     "display_name": "fast and frugal heuristics",
+     "score": 0.8659999966621399
+    },
+    {
+     "id": "https://openalex.org/keywords/human-technology-symbiosis",
+     "display_name": "human-technology symbiosis",
+     "score": 0.7860000133514404
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W12876012",
+   "display_name": "Memento’s Revenge: The Extended Mind, Extended",
+   "publication_year": 2010,
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Andy Clark"
+     }
+    }
+   ],
+   "keywords": [
+    {
+     "id": "https://openalex.org/keywords/memento",
+     "display_name": "Memento",
+     "score": 0.7350000143051147
+    },
+    {
+     "id": "https://openalex.org/keywords/extended-mind",
+     "display_name": "extended mind",
+     "score": 0.6959999799728394
+    },
+    {
+     "id": "https://openalex.org/keywords/clark-and-chalmers",
+     "display_name": "Clark and Chalmers",
+     "score": 0.9089999794960022
+    },
+    {
+     "id": "https://openalex.org/keywords/mental-states",
+     "display_name": "mental states",
+     "score": 0.5339999794960022
+    },
+    {
+     "id": "https://openalex.org/keywords/externalism",
+     "display_name": "externalism",
+     "score": 0.49000000953674316
+    },
+    {
+     "id": "https://openalex.org/keywords/natural-kinds",
+     "display_name": "natural kinds",
+     "score": 0.8880000114440918
+    },
+    {
+     "id": "https://openalex.org/keywords/perception",
+     "display_name": "perception",
+     "score": 0.7059999704360962
+    },
+    {
+     "id": "https://openalex.org/keywords/self-reflection",
+     "display_name": "self-reflection",
+     "score": 0.9900000095367432
+    },
+    {
+     "id": "https://openalex.org/keywords/film-analysis",
+     "display_name": "film analysis",
+     "score": 0.3580000102519989
+    }
+   ]
+  }
+ ]
+}

@@ -416,6 +416,17 @@ describe("the message an idea sends", () => {
     const long = "n".repeat(MAX_ORIGIN_NAME_CHARS + 40);
     expect(itemOrigin("ideas", "spya-idd222", long)?.quote).toHaveLength(MAX_ORIGIN_NAME_CHARS);
   });
+
+  /* Plan 261025h, decision 9: a finding's id, and its passage as the name. */
+  it("builds a finding's origin the same way", () => {
+    expect(itemOrigin("situate", "si-0123456789ab", " Ignition is a step ")).toEqual({
+      mode: "situate",
+      itemId: "si-0123456789ab",
+      quote: "Ignition is a step",
+    });
+    const long = "p".repeat(MAX_ORIGIN_NAME_CHARS + 40);
+    expect(itemOrigin("situate", "si-0123456789ab", long)?.quote).toHaveLength(MAX_ORIGIN_NAME_CHARS);
+  });
 });
 
 /** The sentence around each place a work is cited (plan 261011ab). */

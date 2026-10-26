@@ -40,7 +40,7 @@ view and every page outside it (the shelf, Metadata, /profile, /add, the public 
 | `--font-author` | the article, and verbatim quotes of it | Source Serif 4, variable | a screen serif; variable, so dark mode's 450 weight still works |
 | `--font-ai` | prose a model generated | iA Writer Quattro, static 400/700 upright and italic | still looks typed, so it reads as machine-made, but reads as prose; not Courier, which Greg found "really ugly", nor strict monospace, which a reader found hard going |
 | `--font-reader` | anything the reader typed | Shantell Sans, variable weight, upright and italic | a hint of a hand, so the reader's words are plainly theirs |
-| `--font-ui` | the chrome, every fixed sentence we wrote, and the wordmark (`--font-brand`) | Geist | the fourth voice, by being left alone |
+| `--font-ui` | the chrome, every fixed sentence we wrote, and the wordmark | Geist | the fourth voice, by being left alone |
 | `--font-mono` | code, whoever wrote it, and block ids | Geist Mono | Geist's monospace, so machine text reads as the app's |
 
 The tokens are in [`styles/tokens.css`](../../styles/tokens.css). All five faces (Source Serif 4,
@@ -141,8 +141,9 @@ decision for Greg**, not a detail of the change that needs it.
 ## How to put an element in its voice
 
 The three voice lists and the placeholder reset are in one file,
-[`src/web/styles/voices.css`](../../src/web/styles/voices.css), every rule `:root :is(…)` — the
-`:root` is specificity, not a switch. A narrow UI reset that undoes an inherited voice lives beside
+[`src/web/voices.css`](../../src/web/voices.css), imported into a cascade layer of its own,
+`voices`, after `app` and before the utilities. Every rule is `:where(…)`, which weighs nothing:
+the layer is what beats the component sheets, and inside the file the order decides. A narrow UI reset that undoes an inherited voice lives beside
 the rule it corrects: `.passage-whole` in `annotations.css` and `dock.css`.
 
 **Two ways in, by whether the voice depends on the data:**
@@ -155,8 +156,9 @@ the rule it corrects: `.passage-whole` in `annotations.css` and `dock.css`.
   [`src/web/voice.ts`](../../src/web/voice.ts), which give `voice-author`, `voice-ai`,
   `voice-reader` or `voice-ui`. A Structure title, a shelf blurb and an article's title go this way,
   and so does any element on a page that has only Tailwind classes. **Never put one on an element a
-  list already names**: a list's rule carries its most specific entry's specificity, so `.tip-gist`
-  would beat `.voice-author` on the same element. Use a `<span>` inside.
+  list already names**: which one wins is then decided by which rule comes later in the file, not
+  by whose words they are — `.tip-gist` would beat `.voice-author` on the same element, and
+  `.voice-reader` would beat `.tip-gist`. Use a `<span>` inside.
 
 Then:
 
@@ -165,7 +167,7 @@ Then:
    that do not set their own `font-family`. `.tooltip`, `.prose-card-text`, `.mode-band`,
    `.marg-note`, `.chat-pointed` and others reset to `--font-ui`, so an AI ancestor does not carry
    through them.
-3. **A `tw:font-*` utility on the same element wins** (Tailwind's layer comes after ours). Wrap the
+3. **A `tw:font-*` utility on the same element wins** (Tailwind's layer comes after `voices`). Wrap the
    words in a classed `<span>` rather than fighting it; that is how Tweets' posts are voiced.
 4. **Model text drawn in SVG is measured in TypeScript**, so its face and its width per character
    are one decision. Sketch's is `SKETCH_LABEL_VOICE` in `src/sketch-scene.ts`: it sets the

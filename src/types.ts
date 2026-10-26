@@ -4629,7 +4629,8 @@ export type ThreadOrigin =
   | BibliographyOrigin
   | IdeasOrigin
   | CiteCheckOrigin
-  | QuizOrigin;
+  | QuizOrigin
+  | SituateOrigin;
 
 /** One of Sources › Claims' claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
@@ -4718,7 +4719,30 @@ export type QuizOrigin = {
 };
 
 /**
- * The most the name snapshot of a glossary, citations, ideas, cite-check or Quiz origin may be.
+ * **One finding of the literature search's dossier** — Sources › Where it
+ * sits, a finding's *Ask in chat* (plan 261025h, decision 9; queue item
+ * qi-mmtsxdhg). Until then a finding's chat stored a lens, its question's
+ * words, so a *Search again* that reworded a note lost the chat's mark.
+ *
+ * `GlossaryOrigin`'s rules: **the finding's id is the identity**
+ * (`sameOrigin`), minted by src/situate.ts § `findingId` from its kind, block
+ * and first source, so it survives a rewording; `quote` is a snapshot of the
+ * finding's passage (the article's words), cut by `originName`, for the
+ * chat's title, the list's tooltip and the way back. The id's shape is
+ * `SITUATE_FINDING_ID`.
+ */
+export type SituateOrigin = { mode: "situate"; itemId: string; quote: string };
+
+/**
+ * **What a finding's id looks like** — `si-` and twelve hex digits, as
+ * src/situate.ts § `findingId` mints it. The route refuses any other
+ * (routes.ts § `parseSituateOrigin`); tests/situate-finding-origin.test.ts
+ * holds the two together.
+ */
+export const SITUATE_FINDING_ID = /^si-[0-9a-f]{12}$/;
+
+/**
+ * The most the name snapshot of a glossary, citations, ideas, cite-check, Quiz or finding origin may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
@@ -4756,7 +4780,7 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas", "cite-check", "quiz"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas", "cite-check", "quiz", "situate"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * **An origin mode's old word, and the mode it is now.** A chat started from a
@@ -4821,6 +4845,8 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
     case "glossary":
     case "bibliography":
     case "ideas":
+    /* A finding: its id, never its words (plan 261025h, qi-mmtsxdhg). */
+    case "situate":
       return b.mode === a.mode && a.itemId === b.itemId;
     /* The mark, which names its batch and question (`QuizOrigin`). */
     case "quiz":
@@ -8207,8 +8233,9 @@ export interface Citer {
  * - `no-doi` — the article has no usable DOI, its own address is not an arXiv page
  *   (`citersIdOf`, src/citation-index.ts), and it has no author or no title
  *   distinctive enough to search by, so nothing was asked.
- * - `no-match` — no DOI, so OpenAlex was searched by title, and no one record
- *   passed `titleMatchOf`. Not a claim that OpenAlex has no record of it.
+ * - `no-match` — no DOI, so OpenAlex was searched by title, and no one work
+ *   passed `titleMatchOf` (two passing records are one work only when they are
+ *   twins: plan 261025h, decision 2). Not a claim that OpenAlex has no record of it.
  * - `not-indexed` — OpenAlex has no record of the DOI.
  * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
  *   article: its title and one author must both agree. Not a claim that the
@@ -8223,7 +8250,21 @@ export interface Citer {
  *   panel can say which of the two reasons a short list has. `via` says how the
  *   work was reached, by its DOI or by a title search (plan 261011q), and
  *   `target` is OpenAlex's record of it, which the panel shows after a title
- *   search so that a wrong match can be seen to be one.
+ *   search so that a wrong match can be seen to be one. `target.alsoHeldAs` is
+ *   the other OpenAlex records joined to it as one work (twins: the same whole
+ *   title, the same authors, years within one), and then `count` and the list
+ *   are OpenAlex's own for all of them together (`cites:W1|W2`), not a sum.
+ *
+ *   `topic` says a second view is available, *About "extended mind"*, which
+ *   the reader chooses: OpenAlex's own top keyword for the work, present only
+ *   when the work has more than `TOPIC_MIN_CITERS` citers. `topic.count`, how
+ *   many citers mention it in their title or abstract, is there only once that
+ *   list has been fetched: it is fetched and cached only on
+ *   `GET /api/citers/:slug?about=topic` (GPT Sol's S1-F5), which answers the
+ *   view in this same shape, with `filteredBy` set to the keyword and `count`
+ *   and the list being the filtered ones. Where there is no topic, or its list
+ *   cannot be read, that answers the unfiltered list, with no `filteredBy`.
+ *   Plan 261025h, decision 10.
  */
 export type CitersResult =
   | { kind: "no-doi" }
@@ -8235,8 +8276,12 @@ export type CitersResult =
   | {
       kind: "found";
       via: "doi" | "title";
-      /** OpenAlex's id (`W…`, shape-checked) and its own title for the work: a stranger's string. */
-      target: { openalexId: string; title: string };
+      /**
+       * OpenAlex's id (`W…`, shape-checked) and its own title for the work: a
+       * stranger's string. `alsoHeldAs`: the other records of the same work
+       * whose citers are in the count, `W…` each; absent when there is one.
+       */
+      target: { openalexId: string; title: string; alsoHeldAs?: string[] };
       count: number;
       returned: number;
       dropped: number;
@@ -8244,6 +8289,10 @@ export type CitersResult =
       citers: Citer[];
       /** When OpenAlex answered, ISO. A cached list keeps the day it was fetched. */
       fetchedAt: string;
+      /** OpenAlex's top keyword for the work (its words, never a model's); how many citers match it, once known. */
+      topic?: { keyword: string; count?: number };
+      /** Set only on `?about=topic`'s answer: the keyword this list is filtered by. */
+      filteredBy?: string;
     };
 
 /**
@@ -8303,6 +8352,15 @@ export interface RelatedWork {
  *   searched with, so *Search again* would ask a different question.
  *   `searchedAt` is when OpenAlex answered, ISO. An empty `works` is its own
  *   sentence: nothing close that it does not cite.
+ *
+ *   **Two groups beside `works`, never hidden** (plan 261025h, decision 3):
+ *   `editions` — *Other editions of this piece*, a work whose title is a version
+ *   of the piece's (case, punctuation, a subtitle, a bracketed or reprint
+ *   marker) or whose identifier extends the piece's, and which shares the
+ *   piece's authors; `sameAuthors` — *By the same authors*, a work sharing the
+ *   authors without that evidence (a translation under another title). Neither
+ *   is in `works`, nor in `excluded`, nor in the chip's number. Both are always
+ *   sent; they are optional only so an older answer still reads.
  */
 export type RelatedWorkResult =
   | { kind: "no-bibliography" }
@@ -8313,6 +8371,8 @@ export type RelatedWorkResult =
   | {
       kind: "found";
       works: RelatedWork[];
+      editions?: RelatedWork[];
+      sameAuthors?: RelatedWork[];
       excluded: number;
       bibliographyStale: boolean;
       bibliographyCapped: boolean;
@@ -8528,6 +8588,17 @@ export interface SituateCounts {
   duplicate: number;
   /** Queries the planner wrote that the code refused (URL-only, too short, a repeat…). */
   queriesRefused: number;
+  /**
+   * A `since` finding left with no source dated after the piece (situate/2).
+   * Optional, as the next is: a `situate/1` artefact has neither.
+   */
+  notSince?: number;
+  /**
+   * A diagnostic, not a drop: findings whose note names, by author and year or
+   * a quoted title, a work none of its sources is. The finding is kept as
+   * written (situate/2; the check is too noisy to act on).
+   */
+  namesUnsourcedWork?: number;
 }
 
 /** The artefact. The `situate` column on `article_revisions`. */

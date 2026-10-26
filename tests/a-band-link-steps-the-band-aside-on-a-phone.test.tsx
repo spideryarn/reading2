@@ -736,7 +736,7 @@ describe("the citation card's actions from a stepped-aside Sources band", () => 
       }
       return Promise.resolve(reply(url, init?.method ?? "GET"));
     });
-    await open(width, "?mode=sources");
+    await open(width, "?mode=sources&sources=bibliography");
     expect(reader().classList.contains("band-covers")).toBe(true);
     const link = host.querySelector<HTMLAnchorElement>(
       `.cite-item a.block-ref[data-block-link="${FIRST}"]`,
@@ -768,7 +768,7 @@ describe("the citation card's actions from a stepped-aside Sources band", () => 
       if (url === `/api/bibliography/${SLUG}`) return Promise.resolve(bibliographyReply());
       return Promise.resolve(reply(url, init?.method ?? "GET"));
     });
-    await open(PHONE, "?mode=sources");
+    await open(PHONE, "?mode=sources&sources=bibliography");
     const link = host.querySelector<HTMLAnchorElement>(`.cite-item a.block-ref[data-block-link="${FIRST}"]`);
     expect(link, "the citation row must provide its passage jump").not.toBeNull();
     await act(async () => link?.click());
@@ -796,7 +796,8 @@ describe("the citation card's actions from a stepped-aside Sources band", () => 
     });
 
     expect(param("mode")).toBe("sources");
-    expect(param("sources")).toBeNull();
+    /* Named since plan 261025h: the bare address is Where it sits. */
+    expect(param("sources")).toBe("bibliography");
     expect(
       reader().classList.contains("band-away"),
       "Open in Sources left Bibliography hidden",

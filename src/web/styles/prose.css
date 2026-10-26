@@ -11,8 +11,8 @@
 /* ------------------------------------------------------------------ text --
    The article column. 17px/1.6 come from the original app's typography
    research; the measure is `--reading-measure`, about 60 real characters a line
-   (styles/tokens.css, typography.md § The measure). `--font-reading` supplies the Geist base; the
-   author voice in styles/voices.css supplies the visible Source Serif face.
+   (styles/tokens.css, typography.md § The measure). `--font-ui` supplies the Geist base; the
+   author voice in voices.css supplies the visible Source Serif face.
    The gutter's `right:` rule (gutter.css) depends on the active
    face because `ch` is measured where the length is used. The measure is applied to
    .prose rather than by using .reading-column, because that class centres
@@ -204,9 +204,11 @@ td.text.kind-heading:has(> .fold-toggle) {
 
    **It sits on the prose's measure**, so its first letter lines up with the
    article's: the container takes `.prose`'s face and size, so `ch` means what
-   it means there, and only its children switch to the interface face. */
+   it means there, and only its children switch to the interface face. (It
+   said `--font-reading` here, meaning the prose's face, which had been Geist
+   since the prose moved to `--font-author` on 2026-10-02 — 261025k § 4.) */
 .matter-stub {
-  font-family: var(--font-reading);
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
   max-width: clamp(45ch, 90vw, var(--reading-measure));
@@ -543,7 +545,7 @@ tr.row-active .block-ref { opacity: 0.95; }
      four needed to come and two did not, and that is the reading of it rather
      than an exemption. GPT Sol pressed on this, 2026-09-04. */
   margin-inline: auto;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: var(--reading-size);
   line-height: var(--reading-line-height);
   font-weight: var(--reading-weight);
@@ -898,7 +900,7 @@ td.text.kind-callout .prose::before {
      reads more like a printed pull-quote, and it was tried and rejected:
      styles/tokens.css records that this app deliberately has no serif, so one
      decorative glyph is not the place to reintroduce one. */
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   /* Big and very faint, which is the shape Greg picked. Both numbers matter
      together — at this size a mark any darker stops being a mark in the gutter
      and starts being a second thing to read. */

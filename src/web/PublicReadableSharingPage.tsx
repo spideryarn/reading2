@@ -99,7 +99,7 @@ import { SiteNav } from "./SiteBits.js";
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="tw:mt-8">
-      <h2 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-lg tw:leading-snug tw:text-foreground">
+      <h2 className="tw:m-0 tw:mb-2 tw:font-sans tw:text-lg tw:leading-snug tw:text-foreground">
         {title}
       </h2>
       <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
@@ -141,7 +141,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
           Shared articles
         </Link>
 
-        <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+        <h1 className="tw:m-0 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground">
           Public-readable sharing
         </h1>
         <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">

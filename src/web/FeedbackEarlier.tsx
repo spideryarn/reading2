@@ -1861,7 +1861,7 @@ function ThreadView({
  * sight it is hidden rather than unmounted, so an open thread's reply box
  * keeps its microphone's words through a look at another filter or the Write
  * tab. The question's words are a model's and are drawn as text
- * (styles/voices.css gives them the model's face); the reply is the admin's own.
+ * (voices.css gives them the model's face); the reply is the admin's own.
  */
 export function EarlierThreads({
   questions,
