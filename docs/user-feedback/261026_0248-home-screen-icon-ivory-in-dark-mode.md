@@ -1,7 +1,7 @@
 ---
 reports: spya-shpsvx
-ending: awaiting
-comment: It is the home-screen icon. iOS gives a website's home-screen icon no dark version, so one background has to serve both modes: dark for everyone, or keep ivory? Question q-q5da5a.
+ending: shipped
+comment: The home-screen icon now follows your phone's mode when added: charcoal in dark, cream in light, charcoal when unsure. After the next deploy, remove the icon and re-add it from Safari's Share menu to see it.
 ---
 # The home-screen icon is ivory in dark mode
 
@@ -11,12 +11,16 @@ Report `spya-shpsvx` (#710, SPIDERYARN-READING2-P9), a problem from Greg on `/` 
 
 > I'm in dark mode on my iPhone, and for some reason the new Spideryarn icon still has a white background.
 
-**Awaiting Greg.** The white is almost certainly the home-screen tile, `apple-touch-icon.png`,
-the only icon we ship opaque (ivory, by design); the favicons and the in-page mark are transparent,
-checked on the files. That is inferred, not confirmed on his phone, and the question asks him to
-say if he meant somewhere else. iOS documents no dark variant for a web clip, so the background is
-a product choice: question `q-q5da5a`, offering dark for everyone (recommended), the mode at the
-moment the clip is added, or ivory as now. Sol reviewed the research and the question
+**Shipped** on `dev` (out with the next deploy), after Greg answered `q-q5da5a`
+(`spya-e50wvz`): *"Maybe we can try and offer a switch between light and dark mode, but if in
+doubt, default to dark mode for the icon"*. The touch icon is charcoal by default and an inline
+script swaps in a cream one when the phone is in light mode; the Android icons and the email logo,
+which cannot follow a mode, are charcoal —
+[261026i](../plans/261026i-home-screen-icon-follows-the-phone-mode-dark-by-default.md). Not checked
+on a real phone: Greg's remove-and-re-add is the test, in both modes. The white he saw was
+inferred to be the home-screen tile from the files and he did not say otherwise.
+
+The first pass (below) asked rather than built; Sol reviewed it
 ([its findings](../plans/261026e-home-screen-icon-dark-mode-review-sol.md)).
 
 - **The research and its sources** are in
@@ -24,9 +28,8 @@ moment the clip is added, or ivory as now. Sol reviewed the research and the que
 - **No cached old paths to clear.** No icon file has been renamed or deleted under `public/`, and
   production serves them with `max-age=0, must-revalidate` and an etag. What caches is iOS's
   snapshot of an installed clip, which changes only when the clip is removed and re-added.
-- **Built: nothing yet.** The same tile is the Android icon and the logo in the (dark) emails
-  (`src/email-frame.ts`), so a choice of dark changes those too unless split. The backgrounds are
-  the `background` column of `BRAND_OUTPUTS` in
-  [generate-brand-assets.ts](../../scripts/generate-brand-assets.ts), then `npm run brand:update`
-  and `brand:check`, and a `?v=` on the `apple-touch-icon` link in `index.html` for Safari's own
-  caches.
+- **Built, second pass**: the `background` column of `BRAND_OUTPUTS` in
+  [generate-brand-assets.ts](../../scripts/generate-brand-assets.ts) (touch and Android tiles
+  charcoal, a new cream `apple-touch-icon-light.png`), `touch-icon-boot` and a `?v=2` in
+  `index.html`, `tests/touch-icon.test.ts`. The emails name the same file, so their logo turned
+  charcoal with no change of their own.

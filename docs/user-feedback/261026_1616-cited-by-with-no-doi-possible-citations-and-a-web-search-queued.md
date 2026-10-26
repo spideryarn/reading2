@@ -1,7 +1,7 @@
 ---
 reports: spya-vx23nt
 ending: shipped
-comment: When a piece has no DOI, Sources now lists Possible citations instead of only saying it cannot: research papers whose text matched a search for the title, free, from OpenAlex, behind Experimental features for now (about four in five checked really cite the piece). The web search you described, with a model reading each page, is designed and waits for the box's AI key to reset on 1 November.
+comment: With no DOI, Sources now lists Possible citations: free, papers whose text matched the title (Experimental features; ~4 in 5 really cite it). Your web search with a model judging each page is designed, waiting on the AI key's 1 Nov reset.
 ---
 # Cited by with no DOI: Possible citations now, the web search queued
 

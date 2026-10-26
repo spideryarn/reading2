@@ -134,9 +134,10 @@ describe("the visitor's chip row, unchanged", () => {
 });
 
 describe("what a press arms (decisions 6 and 8)", () => {
-  it("arms the citations for Where it sits and Bibliography, and nothing for any other", () => {
+  it("arms the citations for Bibliography, Where it sits' two for it, and nothing for any other", () => {
     const arms: Record<SourcesView, string | null> = {
-      where: "bibliography",
+      /* The works cited and the search of the literature, behind one token (plan 261026g § Stage 4). */
+      where: "sources-where",
       bibliography: "bibliography",
       links: null,
       "not-cited": null,
@@ -158,10 +159,11 @@ describe("what a press arms (decisions 6 and 8)", () => {
     }
   });
 
-  it("a press on the Where it sits chip arms Bibliography's list, and nothing paid", () => {
+  it("a press on the Where it sits chip arms its own target, and nothing for the tools", () => {
     draw("links", "a-piece");
     act(() => radios()[0]?.click());
-    expect(pendingActivation("a-piece", "bibliography")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-where")).not.toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).toBeNull();
     expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });

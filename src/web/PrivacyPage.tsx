@@ -508,7 +508,9 @@ export function PrivacyPage() {
           {/* Plan 261024o (src/situate.ts, src/situate-citers.ts): the owner's
               press on Search the literature, in Sources › Where it sits and
               out of the experimental switch since plan 261025h.
-              The citers are asked on opening Sources since the same plan,
+              Since plan 261026g (spya-mfuz6g) the press that opens Where it
+              sits starts it too, and a pasted link or Back does not
+              (useWhereAutoRun.ts). The citers are asked on opening Sources since plan 261025h,
               because Where it sits is the owner's default and its After it
               is that list (SourcesMode.tsx § `useCiters`).
               The searches are planned by a model from the fenced title,
@@ -516,8 +518,8 @@ export function PrivacyPage() {
               Exa search through OpenRouter; the citing works are OpenAlex's,
               found by the DOI or the title as Cited by finds them.
               docs/project/privacy.md § Search the literature. */}{" "}
-          When you press Search the literature, in Sources’ Where it sits,
-          your article is searched for in the wider literature. Its title, headings, opening and
+          When you open Sources’ Where it sits with the Sources button or its tab, or press
+          Search the literature there, your article is searched for in the wider literature. Its title, headings, opening and
           details of works it cites go through OpenRouter to an AI that writes a dozen or so short
           searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is
           sent the article’s DOI, or the words of its title, to find papers that cite it. The whole

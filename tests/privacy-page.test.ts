@@ -221,7 +221,7 @@ describe("the privacy page", () => {
     const prose = PAGE.replace(/\s+/g, " ");
     expect(prose).not.toContain("Investigate (an experimental feature)");
     expect(prose).toContain(
-      "When you press Search the literature, in Sources’ Where it sits, your article is searched for in the wider literature. Its title, headings, opening and details of works it cites go through OpenRouter to an AI that writes a dozen or so short searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is sent the article’s DOI, or the words of its title, to find papers that cite it. The whole article, the search results, public abstracts, and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.",
+      "When you open Sources’ Where it sits with the Sources button or its tab, or press Search the literature there, your article is searched for in the wider literature. Its title, headings, opening and details of works it cites go through OpenRouter to an AI that writes a dozen or so short searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is sent the article’s DOI, or the words of its title, to find papers that cite it. The whole article, the search results, public abstracts, and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.",
     );
   });
 

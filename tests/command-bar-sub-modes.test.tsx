@@ -674,8 +674,10 @@ describe("Sources' seven sub-modes", () => {
   /* **Only Where it sits and Bibliography arm anything, and that is the
      citations** (plan 261025h, decisions 6 and 8): Reception's search and
      Claims' list are each their panel's own button since their chips went. */
-  it("arms the citations for Where it sits and Bibliography, and nothing for any other", () => {
-    expect(subModeTarget(WHERE)).toBe("bibliography");
+  it("arms the search for Where it sits, the citations for Bibliography, and nothing for any other", () => {
+    /* Where it sits arms its own composite token: the search, preceded by
+       the citations when they are missing too (plan 261026g, Stage 2). */
+    expect(subModeTarget(WHERE)).toBe("sources-where");
     expect(subModeGenerates(WHERE)).toBe(true);
     expect(subModeTarget(BIBLIOGRAPHY)).toBe("bibliography");
     expect(subModeGenerates(BIBLIOGRAPHY)).toBe(true);
@@ -767,13 +769,14 @@ describe("Sources' seven sub-modes", () => {
 
   /* Where it sits is the default (plan 261025h): a mode row with nothing
      named buys the citations, for *Before it*, and never the search. */
-  it("arms the citations from the mode row when Sources would open on Where it sits", () => {
+  it("arms the search from the mode row when Sources would open on Where it sits", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
     type("sources");
     press("Enter");
-    expect(pendingActivation("a-piece", "bibliography")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-where")).not.toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).toBeNull();
     expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });

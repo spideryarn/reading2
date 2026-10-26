@@ -415,13 +415,22 @@
   font-size: var(--type-item);
   font-weight: 600;
 }
-.where-what { margin: 0 0 0.2rem; }
+/* `.gloss-quiet`'s padding and size are for a band's empty sentence; under a
+   heading here it is a caption (plan 261026g: it drew large and indented). */
+.where-section > .where-what { margin: 0 0 0.25rem; padding: 0; font-size: max(var(--text-min), 0.8rem); }
 .where-lists { display: flex; flex-direction: column; }
 .where-lists-side-by-side {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
 }
 .where-before-list { margin: 0; padding: 0; list-style: none; }
+.where-before-list > li { display: flex; align-items: baseline; gap: 0.3rem; }
+.where-before-list > li > .where-work { flex: 1; min-width: 0; }
+.where-work-out { flex: none; color: var(--ink-faint); }
+.where-work-out:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .where-work-out:hover { color: var(--highlight-ink); }
+}
 .where-work {
   display: flex;
   flex-wrap: wrap;
@@ -442,18 +451,21 @@
 .where-work:focus-visible,
 .where-tool:focus-visible,
 .where-back:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* **Go further** (plan 261026g § Stage 3): under the dossier, each tool a
+   button in the house's outline style with a line under it saying what it
+   opens and what spends there. */
 .where-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.2rem 0.7rem;
-  margin-top: 0.3rem;
-  padding: 0.45rem 0.7rem 0.4rem;
-  border-top: 1px solid var(--rule);
+  margin: 0.2rem 0 0.3rem;
+  padding: 0.2rem 0.7rem 0.4rem;
   font-size: max(var(--text-min), 0.82rem);
 }
-.where-tools-head { color: var(--ink-faint); }
-.where-tool,
+.where-tools-head { padding-top: 0.15rem; }
+.where-tool-list { display: grid; gap: 0.35rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.where-tool-list > li { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; }
+.where-tool-what { min-width: 0; color: var(--ink-faint); font-size: max(var(--text-min), 0.78rem); }
+.where-experiments-head { color: var(--ink-faint); }
+.where-experiments { margin-top: 0.4rem; }
+.where-experiments .where-tool,
 .where-back {
   display: inline-flex;
   align-items: center;
@@ -477,12 +489,12 @@
 .where-crumb-tool::before { content: "›"; margin-right: 0.4rem; color: var(--ink-faint); }
 @media (hover: hover) {
   .where-work:hover,
-  .where-tool:hover,
+  .where-experiments .where-tool:hover,
   .where-back:hover { color: var(--ink); }
 }
 @media (any-pointer: coarse) {
   .where-work,
-  .where-tool,
+  .where-experiments .where-tool,
   .where-back { min-height: max(40px, 2.5rem); }
 }
 /* The experiments' links after the tools, with the switch on (plan 261025h,
@@ -517,8 +529,9 @@
    and the few parts with no sibling to borrow from. */
 .situate-before { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; padding: 0.2rem 0 0.4rem; }
 .situate-what,
-.situate-disclosure,
 .situate-working { margin: 0; }
+/* What leaves, under the button: needed, but quieter than what the search does. */
+.situate-disclosure { margin: 0; font-size: max(var(--text-min), 0.76rem); }
 .situate-headline {
   display: flex;
   align-items: center;
@@ -528,17 +541,102 @@
   font-size: var(--type-item);
   font-weight: 600;
 }
-.situate-overview { margin: 0 0 0.35rem; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.5; }
-.situate-group { padding-top: 0.1rem; }
-.situate-group-head { cursor: help; }
+/* **The summary in a box** (plan 261026g § Stage 2): head line, overview
+   and its chat, and the count strip — Reception's AI frame's border, so the
+   shape of the result sits in one place above the groups. */
+.situate-summary {
+  margin: 0.2rem 0 0.45rem;
+  padding: 0.4rem 0.6rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+}
+.situate-summary > .situate-headline { margin-top: 0; }
+.situate-overview { margin: 0; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.5; }
+/* A note and its chat button side by side: the overview's, and each finding's. */
+.situate-note-row { display: flex; align-items: flex-start; gap: 0.45rem; }
+.situate-note-row > p { flex: 1; min-width: 0; }
+.situate-note-row > :not(p) { flex: none; }
+.situate-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+.situate-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.8rem);
+  cursor: pointer;
+}
+.situate-count > .rcp-section-count { margin-left: 0; padding-left: 0; }
+/* A chip whose group is open says so, as a chosen sort chip does
+   (glossary.css § `.gloss-sort-btn.on`): the second persona pass could not
+   tell open from shut. */
+.situate-count[aria-expanded="true"] {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  font-weight: 600;
+}
+.situate-count:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .situate-count:hover { color: var(--highlight-ink); }
+}
+@media (any-pointer: coarse) {
+  .situate-count { min-height: max(40px, 2.5rem); }
+}
+/* The groups are Reception's folding sections (`.rcp-section`); a dotted
+   rule between them, as between its AI sections. Their meaning line is our
+   words, so the app's face, and whole, shut or open: a clamp cut it short on
+   a phone. */
+.situate-group + .situate-group { border-top: 1px dotted var(--rule); }
+.situate-group > .situate-group-head .rcp-section-gist {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+  font-family: var(--font-ui);
+  color: var(--ink-faint);
+}
 .situate-findings,
 .situate-sources,
 .situate-queries { margin: 0; padding: 0; list-style: none; }
-.situate-finding { padding: 0.35rem 0; border-top: 1px solid var(--rule); }
-.situate-finding:first-child { border-top: none; }
+/* **A passage as a card**: a left edge says where one ends and the next
+   begins, which a hairline between equal paragraphs did not. */
+.situate-finding {
+  margin: 0.15rem 0 0.45rem;
+  padding: 0.1rem 0 0.15rem 0.6rem;
+  border-left: 2px solid var(--rule);
+}
+.situate-group[data-situate-kind="challenged"] .situate-finding { border-left-color: var(--highlight-text); }
 .situate-finding-head { display: flex; align-items: baseline; gap: 0.35rem; margin: 0; }
 .situate-finding-head > .situate-quote { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .situate-finding-head > :not(.situate-quote) { flex: none; }
+/* The quote is the way to its passage: a button that reads as the words. */
+button.situate-quote {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Visibly the way to the passage, before a pointer finds it: two persona
+     passes read the quote as a label (plan 261026g § The second look). */
+  text-decoration: underline dotted;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+button.situate-quote:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+@media (hover: hover) {
+  button.situate-quote:hover { text-decoration-style: solid; text-decoration-color: var(--ink-faint); }
+}
+.situate-finding-body + .situate-finding-body { margin-top: 0.35rem; padding-top: 0.3rem; border-top: 1px dotted var(--rule); }
 .situate-chat { margin-left: 0.2rem; }
 .situate-note { margin: 0.2rem 0 0; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.45; }
 .situate-strength { color: var(--ink-faint); font-family: var(--font-ui); }

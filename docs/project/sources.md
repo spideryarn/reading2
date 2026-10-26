@@ -55,7 +55,7 @@ for Reception and Claims. This page owns the merge.
 - [§ Investigate](#investigate) — suggested questions and your own, each a chat with a web search; why a launcher and why the name
 - [§ Where this piece sits](#where-this-piece-sits) — the literature search's dossier: one press, a planned search, findings anchored to passages
 - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
-- [§ What a press buys](#what-a-press-buys) — what each press arms (only Bibliography, now), each tool's own button, and what is made on import
+- [§ What a press buys](#what-a-press-buys) — the *Where it sits* composite, Bibliography, each tool's own button, and what is made on import
 - [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one), and no Not cited or Investigate
 - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
@@ -67,7 +67,8 @@ for Reception and Claims. This page owns the merge.
 ```
  ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                                   (i)
  │ WhereItSitsPanel                          ← Where it sits (the owner's default)
- │   Tools: Pages about it 3 · Check a claim 8 · Close to it, not cited 18 · Ask your own question
+ │   the search's summary box, its groups, then Go further:
+ │   [Pages about it 3] [Check a claim 8] [Close to it, not cited 18] [Ask your own question]
  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (a visitor's default)
  │ LinksPanel                                          ← Links
  │
@@ -131,8 +132,15 @@ Top to bottom:
   year, a neutral line. Once the dossier exists its own head line (the planner's kind and year)
   takes this one's place, so there are never two.
 - **The literature search** ([§ Where this piece sits](#where-this-piece-sits)): the dossier when one
-  is stored, else *Search the literature* with its line on what leaves. Lists first until you ask;
-  after that, the dossier first (decision 1).
+  is stored, else *Search the literature* with its line on what leaves — and, since 2026-10-26, the
+  search itself started by the press that opened *Where it sits* ([§ Opening it is the
+  request](#opening-it-is-the-request)).
+- **Go further** (since 2026-10-26, [261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md)
+  § Stage 3; *Tools* at the foot until then): *Pages about it* (Reception), *Check a claim*
+  (Claims), *Close to it, not cited* (Not cited), *Ask your own question* (Investigate), each a
+  button with its number where it has one and a line under it saying what it opens and where its
+  spending is (`SOURCES_TOOL_WHAT`). A press moves `?sources=` and arms nothing ([§ What a press
+  buys](#what-a-press-buys)).
 - **After it**: OpenAlex's papers that cite the piece, most cited first, five then *Show all* — the
   same read and the same sentence for every outcome as Reception's *Cited by* (`useCiters`,
   `CitersAnswer`), never a copy of them.
@@ -143,14 +151,29 @@ Top to bottom:
 - **After it and Before it are ordered by the piece's age** when its year is known: older than two
   years, After it first (it has had time to be answered); otherwise Before it first. With no year,
   side by side (`whereOrder`).
-- **The tools row**: *Pages about it* (Reception), *Check a claim* (Claims), *Close to it, not cited*
-  (Not cited), *Ask your own question* (Investigate), each with its number where it has one. Plain
-  links: a press moves `?sources=` and arms nothing ([§ What a press buys](#what-a-press-buys)).
 
-**Nothing paid runs on opening it.** *After it* is a free OpenAlex read, now asked whenever Sources
-opens on it ([privacy.md](privacy.md#crossref-datacite-and-openalex-are-sent-a-doi)), *Before it* is
-Bibliography, which a press here arms if it is missing, and the dossier is read, never started. The
-plan's cost ladder has the rest. **Owner only**: a visitor reads the bare address as Bibliography,
+### Opening it is the request
+
+> when I open that submode, I want it to automatically start running rather than requiring me to
+> open the submode and then click.
+>
+> — Greg, 2026-10-26 (spya-mfuz6g)
+
+**A press that lands on *Where it sits* starts what it is missing** — the Sources button when it is
+the view, its chip, its command-bar row — through one composite activation target,
+`sources-where` (src/web/useWhereAutoRun.ts): the search of the literature, with Bibliography
+before it in the same job when the works cited are missing too, or Bibliography alone. A stored
+dossier, stale or outdated included, is never re-run by it; the step's allowance still applies.
+**Arriving starts nothing**: a pasted link, a reload, Back and Forward, a last-view restore, a
+margin's *Open in Sources*, a chat's way back and a tool's *Where it sits* crumb are not presses
+(activation.ts § Why a mount is not a click). Until 2026-10-26 the press armed Bibliography
+alone and the search was its button's.
+
+Greg's cost rule puts the ~$0.30 search *"upon user request"* (q-vg2b69, above). The press that
+opens the sub-mode is taken as that request, and only the press; said so in the report's note.
+*After it* is a free OpenAlex read, asked whenever Sources opens on it
+([privacy.md](privacy.md#crossref-datacite-and-openalex-are-sent-a-doi)). The plan's cost ladder
+has the rest. **Owner only**: a visitor reads the bare address as Bibliography,
 because the citers have no public projection yet (GPT Sol's F3).
 
 **After it starts unfiltered** (decision 10, GPT Sol's F15): every citer, most cited first. For a
@@ -425,12 +448,30 @@ another chip, and the deeper dive on any one finding is its *Ask in chat*.
   ([privacy.md § Search the literature](privacy.md#search-the-literature)).
   It is the dearest press in Sources ($0.26–0.48 in the six-article trial, mean $0.33; four an hour
   and twelve a day per reader, and 100 a day across everyone: `SITUATE_RATE_POLICY`), so arriving
-  never starts it: the chip arms only Bibliography, and the hook has no automatic run.
-- **Done**: a head line (*A review from 2023: what has happened since*), the model's overview, and
-  the findings grouped by kind in the order a reader most needs them — Challenged, Citation?, Since,
-  Not cited?, Reception, Supported — each with its passage as a jump, the model's note, its sources
-  as links with *What it says* one press away, and *Ask in chat*. The model's five questions are
-  Investigate's *Suggested for this piece*.
+  never starts it; a press that opens *Where it sits* does, since 2026-10-26 ([§ Opening it is the
+  request](#opening-it-is-the-request)). `useSituate` itself has no automatic run, because
+  Investigate mounts it too.
+- **Done** (laid out since 2026-10-26 from four persona reviews,
+  [261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md) §
+  Stage 2): **a summary box** — the head line (*A review from 2023: what has happened since*), the
+  model's overview with its own *Ask in chat*, and a **count strip**, one press per kind that opens
+  and scrolls to its group. Then **the groups, folded** (Reception's `<details>` sections): each
+  heading its name, count and what the kind means; **the first in the reader's order open**, the
+  rest shut, which is component state, not the address. The reader's order is what most changes
+  how far to trust the piece — Challenged, Since, Citation?, Not cited?, Reception, Supported
+  (`SITUATE_DISPLAY_ORDER`; the stored kinds and the margin's order are unchanged). Each passage is
+  a card: its quoted words, themselves the jump to the passage, and its id; then each finding about
+  it — two findings on the same words share one quote (`passageClusters`) — the model's note, its
+  *Ask in chat*, its sources as links with *What it says* one press away. A finding asked for (the
+  margin's *Open in Sources*, a chat's way back) opens its group first, and waits through a failed
+  read rather than being dropped. The model's five questions are Investigate's *Suggested for this
+  piece*.
+- **The overview's chat** (spya-mfuz6g): a `situate` origin whose item is the overview,
+  `so-` and the digits of the dossier's `generatedAt` (`situateOverviewId`), so each search's
+  overview has its own chat, Chat's list says *Started from the overview in Sources › Where it
+  sits*, and its way back opens *Where it sits* and lands on the summary box. The question carries
+  the overview whole, because no chat tool reads the dossier. Not a `reception` lens, which would have been filed under
+  Investigate (GPT Sol's F3 on the plan).
 - **A finding's chat has its own origin** since 2026-10-25, `{ mode: "situate", itemId }`, the
   finding's stable id with its passage as a snapshot (decision 9; queue item `qi-mmtsxdhg`). Its
   mark is found by the id, so a *Search again* that rewords the note keeps it; Chat's list says
