@@ -26,9 +26,10 @@ export const BRAND_OUTPUTS = [
   { file: "favicon-32x32.png", size: 32, padding: 0.005 },
   { file: "favicon-48x48.png", size: 48, padding: 0.005 },
   { file: "spideryarn-reader.png", size: 512, padding: 0.03 },
-  { file: "apple-touch-icon.png", size: 180, padding: 0.08, background: LIGHT },
-  { file: "android-chrome-192x192.png", size: 192, padding: 0.08, background: LIGHT },
-  { file: "android-chrome-512x512.png", size: 512, padding: 0.08, background: LIGHT },
+  { file: "apple-touch-icon.png", size: 180, padding: 0.08, background: DARK },
+  { file: "apple-touch-icon-light.png", size: 180, padding: 0.08, background: LIGHT },
+  { file: "android-chrome-192x192.png", size: 192, padding: 0.08, background: DARK },
+  { file: "android-chrome-512x512.png", size: 512, padding: 0.08, background: DARK },
   { file: "app-icon-light-1024.png", size: 1024, padding: 0.12, background: LIGHT },
   { file: "app-icon-dark-1024.png", size: 1024, padding: 0.12, background: DARK },
 ] as const;

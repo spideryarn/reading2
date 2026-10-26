@@ -64,7 +64,7 @@ describe("brand assets", () => {
   it("publishes the intended dimensions", async () => {
     const expected = new Map([
       ["spideryarn-logo.png", 256], ["favicon-16x16.png", 16], ["favicon-32x32.png", 32], ["favicon-48x48.png", 48],
-      ["spideryarn-reader.png", 512], ["apple-touch-icon.png", 180], ["android-chrome-192x192.png", 192],
+      ["spideryarn-reader.png", 512], ["apple-touch-icon.png", 180], ["apple-touch-icon-light.png", 180], ["android-chrome-192x192.png", 192],
       ["android-chrome-512x512.png", 512], ["app-icon-light-1024.png", 1024], ["app-icon-dark-1024.png", 1024],
     ]);
     for (const [file, size] of expected) {
@@ -78,7 +78,7 @@ describe("brand assets", () => {
     // Source resolutions differ from display sizes: Android512 is a phone tile.
     const expected = [
       ["favicon-16x16.png", 0.99], ["favicon-32x32.png", 0.99], ["favicon-48x48.png", 0.99],
-      ["spideryarn-logo.png", 0.99], ["apple-touch-icon.png", 0.84],
+      ["spideryarn-logo.png", 0.99], ["apple-touch-icon.png", 0.84], ["apple-touch-icon-light.png", 0.84],
       ["android-chrome-192x192.png", 0.84], ["android-chrome-512x512.png", 0.84],
       ["spideryarn-reader.png", 0.94], ["app-icon-light-1024.png", 0.76], ["app-icon-dark-1024.png", 0.76],
     ] as const;
@@ -163,9 +163,11 @@ describe("brand assets", () => {
     for (let i = 3; i < transparent.data.length; i += 4) if ((transparent.data[i] ?? 0) > 128) alpha++;
     expect(alpha).toBeGreaterThan(512 * 512 * 0.15);
     for (const [file, background] of [
-      ["apple-touch-icon.png", [255, 249, 238, 255]],
-      ["android-chrome-192x192.png", [255, 249, 238, 255]],
-      ["android-chrome-512x512.png", [255, 249, 238, 255]],
+      // Dark by default; the cream touch icon is for a phone in light mode (touch-icon.test.ts).
+      ["apple-touch-icon.png", [36, 35, 33, 255]],
+      ["apple-touch-icon-light.png", [255, 249, 238, 255]],
+      ["android-chrome-192x192.png", [36, 35, 33, 255]],
+      ["android-chrome-512x512.png", [36, 35, 33, 255]],
       ["app-icon-light-1024.png", [255, 249, 238, 255]],
       ["app-icon-dark-1024.png", [36, 35, 33, 255]],
     ] as const) {
@@ -260,7 +262,7 @@ describe("brand assets", () => {
     // The ICO is repacked from the kept frame, as the other machine's would be.
     await generateBrandAssets({ outputDir });
     expect((await readFile(file)).equals(driftedBytes)).toBe(true);
-    await expect(generateBrandAssets({ outputDir, check: true })).resolves.toHaveLength(11);
+    await expect(generateBrandAssets({ outputDir, check: true })).resolves.toHaveLength(12);
 
     const changedReader = path.join(temporary, "changed-reader.png");
     const master = await loadImage(path.join(ROOT, "assets/brand/source/reader.png"));
@@ -277,14 +279,14 @@ describe("brand assets", () => {
     await writeFile(changedReader, changed.toBuffer("image/png"));
     const publicNames = [
       "spideryarn-logo.png", "favicon-16x16.png", "favicon-32x32.png", "favicon-48x48.png",
-      "spideryarn-reader.png", "apple-touch-icon.png", "android-chrome-192x192.png",
+      "spideryarn-reader.png", "apple-touch-icon.png", "apple-touch-icon-light.png", "android-chrome-192x192.png",
       "android-chrome-512x512.png", "app-icon-light-1024.png", "app-icon-dark-1024.png", "favicon.ico",
     ];
     const publicBefore = await Promise.all(publicNames.map((name) => readFile(path.join(outputDir, name))));
     const extensionFiles = [16, 32, 48, 128].map((size) => path.join(outputDir, "extension-icons", `icon-${size}.png`));
     const extensionBefore = await Promise.all(extensionFiles.map((file) => readFile(file)));
     await expect(generateBrandAssets({ outputDir, readerPath: changedReader, check: true }))
-      .rejects.toThrow(/spideryarn-logo.png, favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, spideryarn-reader.png, apple-touch-icon.png, android-chrome-192x192.png, android-chrome-512x512.png, app-icon-light-1024.png, app-icon-dark-1024.png, icon-16.png, icon-32.png, icon-48.png, icon-128.png, favicon.ico/);
+      .rejects.toThrow(/spideryarn-logo.png, favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, spideryarn-reader.png, apple-touch-icon.png, apple-touch-icon-light.png, android-chrome-192x192.png, android-chrome-512x512.png, app-icon-light-1024.png, app-icon-dark-1024.png, icon-16.png, icon-32.png, icon-48.png, icon-128.png, favicon.ico/);
     for (const [index, name] of publicNames.entries()) expect(await readFile(path.join(outputDir, name))).toEqual(publicBefore[index]);
     for (const [index, file] of extensionFiles.entries()) expect(await readFile(file)).toEqual(extensionBefore[index]);
     await generateBrandAssets({ outputDir });
@@ -371,7 +373,7 @@ describe("brand assets", () => {
   });
 
   it("keeps the committed public family fresh", async () => {
-    await expect(generateBrandAssets({ outputDir: path.join(ROOT, "public"), extensionDir: path.join(ROOT, "extension/icons"), check: true })).resolves.toHaveLength(11);
+    await expect(generateBrandAssets({ outputDir: path.join(ROOT, "public"), extensionDir: path.join(ROOT, "extension/icons"), check: true })).resolves.toHaveLength(12);
   });
 
   it.each(["preview.png", "tiny-size-preview.png", "browser-preview.html"])("detects missing/stale %s without writing", async (file) => {
@@ -388,7 +390,7 @@ describe("brand assets", () => {
     expect(await readFile(proof, "utf8")).toBe("deliberately stale proof");
     await writeFile(proof, original);
     const before = await Promise.all(["preview.png", "tiny-size-preview.png", "browser-preview.html"].map((file) => stat(path.join(previewDir, file))));
-    await expect(generateBrandAssets({ ...options, check: true })).resolves.toHaveLength(11);
+    await expect(generateBrandAssets({ ...options, check: true })).resolves.toHaveLength(12);
     for (const [i, file] of ["preview.png", "tiny-size-preview.png", "browser-preview.html"].entries()) {
       expect((await stat(path.join(previewDir, file))).mtimeMs).toBe(before[i]?.mtimeMs);
     }
@@ -455,8 +457,8 @@ describe("brand assets", () => {
     expect(pngLinks).toHaveLength(4);
     for (const link of pngLinks) {
       const href = link.getAttribute("href");
-      expect(href).toMatch(/^\/[\w-]+\.png$/);
-      const image = await pixels(path.join(ROOT, "public", href?.slice(1) ?? ""));
+      expect(href).toMatch(/^\/[\w-]+\.png(\?v=\d+)?$/);
+      const image = await pixels(path.join(ROOT, "public", href?.replace(/\?.*$/, "").slice(1) ?? ""));
       expect(link.getAttribute("sizes")).toBe(`${image.width}x${image.height}`);
     }
     const manifest = JSON.parse(await readFile(path.join(ROOT, "public/site.webmanifest"), "utf8")) as {
