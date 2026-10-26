@@ -1,0 +1,655 @@
+diff --git a/docs/project/experimental-features.md b/docs/project/experimental-features.md
+index 854f5140b..51aab6a7d 100644
+--- a/docs/project/experimental-features.md
++++ b/docs/project/experimental-features.md
+@@ -23,7 +23,7 @@ neither gets made properly.
+ - [§ The three controls](#the-three-controls) — the /profile checkbox, the bar button, the command-bar row, and how each failure state is drawn
+ - [§ Putting a feature behind it](#putting-a-feature-behind-it) — adding a gate, and what must happen mid-flight
+ - [§ What is behind it today](#what-is-behind-it-today) — the list, and a reader says a mode has vanished; plus the history of what left the switch and when
+-- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, Sources' two experiments, and Learn's Explore until 2026-10-11
++- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, Sources' two experiments, *Possible citations*, and Learn's Explore until 2026-10-11
+ - [§ See also](#see-also)
+ 
+ ## The four rules
+@@ -486,7 +486,7 @@ not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
+ 
+ ## Gated below mode level
+ 
+-Four of Diagram's pictures, and Sources' two experiments ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
++Four of Diagram's pictures, Sources' two experiments and *Possible citations* ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
+ 2026-10-11 ([§ What is behind it today](#what-is-behind-it-today) has the history); the flag it
+ used, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), is
+ still read for Learn by `visibleLearnViews` there and by `subModeRows`
+@@ -534,6 +534,17 @@ with the switch on: the tools row is their only door. Hidden is still not unreac
+ `?sources=guess-first` draws the experiment with the switch off, and its crumb leads back to
+ *Where it sits*.
+ 
++**Possible citations, since 2026-10-26**: under a *no DOI* or *no sure record* answer in *Papers
++that cite it* and in Reception's *Cited by*, the papers whose full text matched OpenAlex's search
++for the piece's title ([261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md);
++[reception.md § Cited by](reception.md#cited-by-the-papers-that-cite-the-piece)). Behind the switch
++because it was measured below the 95% a list shown to everyone should meet: 82% of the rows it
++would show cite the piece
++([261026a](../investigations/261026a-cited-by-with-no-doi-full-text-and-web-search-recall-and-cost.md)).
++**This one is gated on the server's question, not only on the drawing**: `useCiters` asks
++`?with=possible` only with the switch on, so with it off the title is not sent to the full-text
++search at all, and a cached answer carrying the list is stripped of it when the switch goes off.
++
+ ## See also
+ 
+ - [reader-profile.md](reader-profile.md) — the page this switch is on, and the boxes above it.
+diff --git a/docs/project/reception.md b/docs/project/reception.md
+index f4668bde7..e0b846a39 100644
+--- a/docs/project/reception.md
++++ b/docs/project/reception.md
+@@ -464,6 +464,17 @@ honestly finds nothing.
+   built by us from the citing paper's DOI or OpenAlex id, never taken from the answer
+   ([security-map.md](security-map.md)). A citer's title is drawn in the app's face, like a source's
+   title in the rows above: [fonts.md](fonts.md) leaves third-party text there.
++- **Possible citations, when there is no list** (since 2026-10-26, with the experimental switch on;
++  [261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md)).
++  Under a *no DOI* or *no sure record* answer, `?with=possible` adds the works whose **full text**
++  matched OpenAlex's search for the title (`src/citation-fulltext.ts`): free, no model, asked on
++  open. Only for an article added from a public web address, never an upload's title; only for a
++  title distinctive enough (six words, or fewer with a year); and not for a title whose words were
++  as common in papers from before the piece as after it (*the phrase gate*), which says so instead.
++  The piece's own records are dropped; a recent or undated piece lists newest first, an older one
++  most cited first. Called *Possible citations*, never *Cited by*, never in a count, with *See all
++  at OpenAlex* and a line saying it finds papers only. No cache yet. A paid web search for blog
++  posts that cite the piece, on a press, is designed in the plan's Stage 3 and queued.
+ - **What is sent**: the article's DOI, or with none the words of its title (below), and our contact
+   address, from the server. No key.
+   [privacy.md](privacy.md) has the page's sentence.
+diff --git a/src/citation-fulltext.ts b/src/citation-fulltext.ts
+index b58346901..0337ca109 100644
+--- a/src/citation-fulltext.ts
++++ b/src/citation-fulltext.ts
+@@ -225,11 +225,12 @@ export async function possibleCitersOf(article: PossibleIdentity, deps: Possible
+       if (before === null) return done({ kind: "unavailable" });
+     }
+     const order = orderFor(year, now);
++    const fromYear = year === undefined ? null : year - BEFORE_TO + 1;
+     const listed = await openAlexInTurn(
+       "fulltext",
+       openAlexFulltextUrl(
+         phrase,
+-        year === undefined ? null : { from: year - BEFORE_TO + 1, to: now },
++        fromYear === null ? null : { from: fromYear, to: now },
+         { perPage: POSSIBLE_PER_PAGE, order },
+       ),
+       deps,
+@@ -247,7 +248,7 @@ export async function possibleCitersOf(article: PossibleIdentity, deps: Possible
+     const everyObservedResultIsOwn = page.dropped === 0 && page.returned > 0 && ownRecords === page.returned;
+     if (observedEveryResult && everyObservedResultIsOwn) return done({ kind: "none" }, { since: page.count });
+     return done(
+-      { kind: "found", total: page.count, dropped: page.dropped + ownRecords, order, phrase, citers },
++      { kind: "found", total: page.count, dropped: page.dropped + ownRecords, order, phrase, fromYear, citers },
+       { since: page.count, listed: citers.length, ...(before !== null ? { before } : {}) },
+     );
+   } catch {
+diff --git a/src/citer-link.ts b/src/citer-link.ts
+index 05eaa0805..5ed241d67 100644
+--- a/src/citer-link.ts
++++ b/src/citer-link.ts
+@@ -23,3 +23,15 @@ export function citerUrl(citer: { doi?: string; openalexId: string }): string |
+   if (citer.doi !== undefined) return doiUrl(citer.doi);
+   return OPENALEX_WORK_ID.test(citer.openalexId) ? `https://openalex.org/${citer.openalexId}` : null;
+ }
++
++/**
++ * **OpenAlex's own page for a full-text search**, the *See all* link under
++ * *Possible citations* (plan 261026f): the same phrase and the same first year
++ * as the count beside it. The phrase is ours, made from the article's title by
++ * `fulltextPhraseOf`, and goes in as one encoded parameter, so it cannot add a
++ * filter or change the address.
++ */
++export function openAlexFulltextPageUrl(phrase: string, fromYear: number | null): string {
++  const range = fromYear === null ? "" : `,publication_year:>${fromYear - 1}`;
++  return `https://openalex.org/works?${new URLSearchParams({ filter: `fulltext.search:"${phrase}"${range}` }).toString()}`;
++}
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index 56974f082..69caba167 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -277,7 +277,7 @@
+   "summary": "What this piece cites, and what others say about it.",
+   "keywords": "where it sits after it before it peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier peer review literature further reading sources",
+   "experimental": false,
+-  "body": "## In short\n\nA piece sits among other people’s work: the works it builds on, and what others have said about it\nsince. Sources shows both. **Where it sits** opens first: the papers that have cited the piece since,\nthe works it leans on most, and a search of the wider literature at one press. **Bibliography**\nlists everything this piece cites, with a link for each, and **Links** every web address the piece\nitself links to. Under Where it sits are four tools: **Pages about it** (what others say about the\npiece itself), **Check a claim** (the claims it rests on, to check against the web), **Close to it,\nnot cited** (papers close to it that its bibliography does not list), and **Ask your own question**\n(questions about all of it to put to [Chat](/help/mode-chat), which searches the web to answer).\nEvery source links out, so you can check it rather than take our word for it.\n\n(Picture: The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button. Caption: Bibliography, prioritised: each work with its two bars, and where the piece first cites it.)\n\n## How it works\n\nWhat this piece cites, and what others say about it.\n\nBibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Not cited, for the article's owner, is OpenAlex's search for papers close to the piece, run only when you press and with no AI, less the works in that bibliography. Links is every web address the article's own text links to, read off its markup in your browser with no model and nothing fetched. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.\n\n## When to use it\n\nFor an academic paper or a report, where the questions are “what is this built on, and where do I\nfind it?” and “what have others made of it?”. Three buttons at the top choose the view: Where it\nsits, Bibliography and Links; the number on Bibliography and Links is how much each has to show.\nBibliography is usually prepared in the background when the article is added; if it was not,\nopening Where it sits or Bibliography makes it, at no charge to you. Nothing else is made by opening\na view: each tool has its own button for that, such as **Search the web** in Pages about it or\n**List its claims** in Check a claim, and the search of the literature is its own button in Where it\nsits. Whatever is made is kept. The web search behind Pages about it takes about a minute, and often\nfinds nothing, which it says plainly, because many pieces have no reception at all. A link or Back to\na view never starts anything. Only whoever added the article can make these; visitors to a shared\narticle see Bibliography, Links, Reception and Claims, with what has already been made.\n\nSources used to be two modes, Citations and Debate, and was briefly called Peer review. Old links\nto any of them still open the right view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode\nfor that.\n\n## Reading it\n\n**Where it sits**\n\n- A line at the top says how old the piece is, when we know: for an older piece, what has been said\n  since; for a recent one, where it sits now.\n- **Search the literature** is one press. Over a few minutes an AI plans a dozen or so web searches\n  from the piece, reads what they find and the later papers that cite it, and lists the passages\n  later work challenges, supports or has moved on from, each with its sources and what they say,\n  checked against the source’s own words. Its press sends the piece to an AI, sends the searches\n  that AI writes to a web search engine, and sends its DOI or title to a public index of papers; the\n  line under the button says so before you press. Finding nothing does not mean there is nothing.\n  Once it has run, its findings come first, and its own questions appear in Ask your own question as\n  **Suggested for this piece**. A finding’s chat icon asks about that finding in\n  [Chat](/help/mode-chat); the chat goes back to the finding. Only you see any of it.\n- **After it** lists the papers that cite the piece, most cited first, from OpenAlex, a free public\n  index of published work. It is the same list as Cited by in Pages about it. No AI is involved, and\n  we have not read what those papers say about the piece.\n- For a much-cited piece, a second button sits beside **Most cited**: **About** and a keyword in\n  quotes, such as *About “extended mind”*. The keyword is OpenAlex’s own for the piece. Pressing it\n  lists only the citing papers whose title or abstract mentions that keyword, which often cite the\n  piece for more than a passing nod. It is asked from OpenAlex when you press it, not before, and\n  once it has been asked the button shows how many there are. Leaving Where it sits puts the list\n  back to Most cited.\n- **Before it** lists the works the piece leans on most, as Bibliography rated them. Press one to\n  open its row in Bibliography.\n- For an older piece, After it comes first; for a recent one, Before it; with no year, side by side.\n- **Tools** at the foot open the other four views. Opening one starts nothing; inside, **Where it\n  sits**, at the top beside the view's name, brings you back.\n- With [experimental features](/help/experimental-features) turned on, **Experiments** after the\n  tools offers two ways to meet the search of the literature before reading its verdicts. Both use\n  the search already made for this piece, cost nothing and start nothing; with no search yet, they\n  say so and take you to **Search the literature**. Nothing you choose in them is saved or sent.\n  - **Guess first** shows the passages the search found something about, without saying what. Take\n    a moment to predict what critics, supporters and later work said about each, then press\n    **Reveal what the search found**.\n  - **Evidence first** shows each passage beside what a source says. Decide whether the source\n    supports it, challenges it or updates it, then press **Reveal the search’s reading** to see how\n    the search read it. Your answer is not marked: the search’s own labels do not map onto those\n    three words.\n\n**Bibliography**\n\n- The **(i)** at the top of the band says we have read none of those works, only the article that\n  cites them. A row says more only when that changes: a page found for it, a search extract read, or\n  the paper itself read. The sentence on what the piece uses a work for is written from the article,\n  not from the cited work.\n- Many rows have a **short note** under the authors: a sentence or two an AI wrote from that work’s\n  abstract alone, looked up in a public catalogue of papers (Crossref, DataCite, or OpenAlex). It is\n  not a web search and not a reading of the paper, so it can be wrong. Under it, *From the abstract ·\n  Crossref* (or wherever it came from): point at those words, or tap them, to see the day it was read\n  and the words of the abstract each sentence rests on. A work with no note had no abstract we could\n  be sure was its own, or its note did not pass our checks; that says nothing about the work. Notes\n  are written by themselves a minute or so after the list, for every work at once, and visitors to a\n  shared article see them too.\n- **A work with no note can get one from the web.** Point at a citation in the article and press\n  *Open in Sources* on its card: we search the web once for the work’s page, and an AI writes a\n  sentence from the search engine’s extract of that page, which code and a second check hold to the\n  page’s own words. Its DOI page or its arXiv page is its own, and the note is labelled *From a web\n  search ·* and the site. Any other page counts only when its title names the work and its title or\n  extract names the work’s first author — a publisher’s page, a library record, an author’s own\n  copy. Code refuses Wikipedia, Goodreads, Amazon, one review journal and a short list of summary\n  sites, but elsewhere the page can still be someone else’s catalogue entry, blurb, review or\n  encyclopedia entry. That is why the note says *may not be the work’s own page*. A web page can\n  say more or less than the paper, so either can be wrong. While it looks, the row says so. If no page passed, the row says\n  that, and it is not searched again for a week. A work with no DOI or arXiv id is searched by its\n  title and first author only when the article came from a web address; in a file you uploaded it\n  is not searched. Only you see these notes, not visitors.\n- Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the\n  model’s memory of the work, not a citation count. New lists give a number only when the model is\n  confident it knows the work; a low number then means a work it knows and thinks minor. If\n  relevance was scored but influence has no usable score, the row says *influence unknown*. Older\n  lists keep their numbers, including low scores that could mean the model did not know the work,\n  until regenerated from Metadata.\n- A row’s influence bar marked *from the web* was read from a web page about the work by an\n  earlier web search on that row; point at those words, or tap them, to see the site, the day and\n  the page’s own words. It is an AI estimate from web evidence, not a citation count, and the page’s\n  words may be about something else on that page.\n- Some rows also say something like *cited 357 times · Crossref*. That one is a real count, not the\n  model’s view: Crossref is the registry that issues most DOIs, and where the article gives a DOI\n  that Crossref holds, this is its own number for the work. Point at the words, or tap them, for the\n  day we read it; it is not refreshed after that. Crossref only counts citations from works whose\n  publishers have sent it their reference lists, so the number is usually lower than Google\n  Scholar’s, and it should not be compared across fields or between an old work and a new one. *no\n  citations recorded* means Crossref has none on file, not that nobody has cited the work. Most rows\n  have no count, because most works are cited without a DOI. It sits beside influence and does not\n  change the order or what the slider hides.\n- The **chat icon** opens a new conversation in [Chat](/help/mode-chat) and asks a question about\n  the work straight away, with the work named; if one exists, it reopens that instead. Chat can search the web and your library to answer,\n  and you can go back and forth. It is on the row, and on the card you get by pointing at a\n  citation in the text. A longer reading kept on a row from before (once made by a button called\n  **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a\n  line with the chat's short summary; press it to open that conversation again beside\n  Bibliography. The conversation is also in Chat’s list, marked *Bibliography* beside Sources’ icon. Only\n  whoever added the article has this.\n- **Does it say that?** is on the card you get by pointing at a citation in a paragraph. It opens\n  a new chat beside that paragraph, asking whether the work says what the paragraph\n  cites it for. Chat then tries to read the work itself: it can when the article gives a DOI or\n  arXiv link to a freely available PDF, and it checks the PDF is that work before reading it. It\n  says what it read, and says so plainly when it could not read the work. You do not have to press\n  it: rest the pointer on a citation (or tab to a linked one) and, after about two seconds, the card\n  asks this by itself and shows the answer in the card, with **Continue in Chat** to carry on. It\n  happens only when the card names one work, never from a tap on a phone or tablet, and only once\n  for each work and paragraph: rest there again, or press the button, and you get the same chat. An\n  answer takes about 20 seconds. There is a daily limit on the automatic ones; past it the card\n  says so, and the button still works. Only whoever added the article has this.\n- **first cited** jumps to where the article first cites it. *only in the references* means the\n  article lists it but never cites it in the text.\n- **In your library** or **On the public shelf** means the work is already an article here, and\n  links straight to it.\n- Once the list exists, the places a work is cited are underlined with a dashed line in the text, in\n  every mode. Point at one, or tap it, to see the work.\n- Orders: **prioritised** (the default, with a slider), **first cited**, **relevance** and\n  **influence**. The slider hides the works that score lowest on relevance and influence together,\n  relevance counting double; a work whose influence is unknown is judged on its relevance alone\n  when available. Ordered by influence, the unknown ones come last, the most relevant first.\n\n**Close to it, not cited** (Not cited)\n\n- Papers close to this piece that are not among the works Spideryarn found in its bibliography,\n  closest first. Nothing is searched until you press **Search OpenAlex for related work**, which\n  sends the piece’s title and the opening of its text (its abstract, on a paper) to OpenAlex, a\n  free index of research papers, and nothing else of the article. No AI is involved. The answer is\n  kept, so the list is there next time; **Search again** asks afresh.\n- Each paper is checked against the bibliography by DOI or arXiv number, by title, and by the\n  article’s own reference text, and left out if it matches. A paper the piece only mentions in its\n  text can still be listed, and if the bibliography was made from an older version of the piece, or\n  leaves some works out, the list says it may include works the piece does cite. Whether any of\n  them belongs in the piece is yours to judge.\n- Each row is the paper’s title (press it to open the paper in a new tab), its authors, year, venue\n  and how often it is cited, and the opening of its abstract, so you can see why it came up.\n- Only whoever added the article has this view, and it needs Bibliography first.\n\n**Links**\n\n- Every web address the article’s own text links to, one row each, in the order you meet them in\n  the piece. Each row is the article’s words for the link, then the site it goes to (and a DOI or\n  arXiv number when the address carries one), then the paragraphs that link it, each a jump to that\n  paragraph. Press the words to open the page in a new tab.\n- It is read straight off the article in your browser: no AI, no search, and nothing is fetched, so\n  it is there as soon as the article is and costs nothing. Links to another part of the piece,\n  footnote markers, and links with no words of their own (around a picture) are left out.\n- **In Bibliography**, on a row, means Bibliography lists a work at that address, or the same paper\n  at another address; press it to open that work’s row.\n- An article read from a PDF has no links of its own: its addresses, if any, are in Bibliography.\n\n**Pages about it** (Reception)\n\n- Nothing is searched until you press **Search the web**, about a minute of searching that is kept.\n- What others have written about this piece itself: replies, reviews, and work that cites it and\n  says something about it. The AI's sections and **Cited by** start folded, so you see their outline\n  first; press one to open it. **Every page** starts open, so no source depends on a press.\n- **What the AI noticed in these sources**, at the top, holds **Key sources** (the ones the AI\n  thinks matter most, starred) and the themes several sources share, each with how many sources\n  are in it. A source can be in more than one.\n- **Every page**, open from the start, lists every source found. Pages that link to the piece or\n  quote it come first. Pages that only mention its title follow under **Mentions its title only —\n  may be another piece**: often a paper citing it, sometimes a page about something else with the\n  same title, so check before you rely on one. Each source is two lines: its title, then the site,\n  the year and one word of the AI's reading. Press the arrow beside it for the quoted excerpt, the\n  AI's full reading, and how we know the page is about this piece.\n- **Cited by**, at the end, lists the papers that cite the piece, most cited first. It is free and\n  is there before you search: it comes from OpenAlex, a public index of published work, which we\n  ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of\n  those papers says about the piece. When the piece has no DOI on record, we look for it in\n  OpenAlex by its title instead, and list its citers only if the record's title and authors (or an\n  author and the year) match; the list then names the record it matched, so you can check it. Only\n  whoever added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s\n  title.\n- To ask about the piece from an angle of your own, use **Investigate** (below). The box that was here has\n  moved there.\n- Reception can be ordered **as found**, by **date** or by **stance** (most critical first); the\n  order applies inside every section.\n\n**Check a claim** (Claims)\n\n- Press **List its claims** to make the list the first time, with one AI call over the piece and no\n  web search; opening the view makes nothing. Each claim is quoted in the\n  piece’s own words, with a link to that passage, and under it a short line in the AI’s words. If\n  the piece changes afterwards, the list is shown with **List again**. The number on Claims is how\n  many claims are listed, or, once you have checked some, how many sources the checks found.\n- Under a claim, **Cited in this paragraph** names the works the piece cites in the same paragraph\n  as the claim, once Bibliography has been made. Press one to open its row in Bibliography, with its\n  link. It only means the work is cited near the claim: it does not say the work supports it, and a\n  work the piece cites many times may be missing from a later paragraph.\n- To check claims on the web, tick up to four in the list, or type one of your own in **Check a\n  claim of your own**, and press **Check**. That is one web search over all of them together, takes\n  about a minute and a half, and costs real money; nothing is searched until you press. The sources\n  it finds appear under each claim, with your own claim after the list. **This search found nothing\n  it could quote on this claim** is a real answer. If the search did not answer for a claim at all,\n  it says so in different words, and you can check it again. **Dig further**, beside a claim that\n  has been checked, runs one more search for that claim alone and looks for sources it has not\n  found yet. One check runs at a time per article, and there is a limit on how many web searches you\n  can ask for in an hour and in a day. Visitors see the list, not the checks or anything you typed.\n- To look into one claim yourself, press the chat icon beside it. It opens a new conversation in\n  [Chat](/help/mode-chat) and sends a question with the claim quoted; if one exists, it reopens that\n  instead. Once you have asked, the icon becomes a line with the chat's short summary; press it to\n  open that conversation again. Only whoever added the article has this.\n- A search made before 2026-10-08 also picked three or four claims by itself and searched those;\n  it still shows them, under **Claims the earlier search chose**, each with the sources on it.\n  Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to\n  bear on their claim only loosely or partly.\n\n**Ask your own question** (Investigate)\n\n- Questions about the piece and what others say about it, each answered in a new conversation in\n  [Chat](/help/mode-chat), which searches the web. A press sends the question straight away, and\n  costs one chat answer; opening Investigate, or coming back to it, sends nothing.\n- **Suggested** questions are the same for every piece: how it has been received, whether its main\n  claims are borne out, who disagrees with it most, whether the studies it leans on have held up,\n  and what has been published since.\n- **About its claims** asks about up to four of the claims in Claims, once that list has been made\n  (Investigate never makes it). **About the works it cites** asks about the three works Bibliography says\n  the piece leans on most. These are the same conversations as the chat icon in Claims and\n  Bibliography: one already started shows its short summary instead, and opens it again.\n- Or type your own question in the box at the top and press **Ask in chat**. **Your questions**,\n  under the box, lists every conversation started here, newest first; press one to open it again.\n- Coming back to Investigate opens your newest of those conversations beside it, so you carry on\n  where you left off. Close it to see the questions; it stays closed until you next come back.\n- Once the literature search in Where it sits has run, its own questions appear here as\n  **Suggested for this piece**, above the others.\n- Only whoever added the article has Investigate: visitors to a shared article have no chat.\n\n(Picture: The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work. Caption: Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.)\n\nAnything tagged **AI** is the AI’s reading, checked against nothing: the themes, the key-source\npicks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could\nnot tell) and its relevance. Quoted excerpts, by contrast, are checked against what the search\nreturned."
++  "body": "## In short\n\nA piece sits among other people’s work: the works it builds on, and what others have said about it\nsince. Sources shows both. **Where it sits** opens first: the papers that have cited the piece since,\nthe works it leans on most, and a search of the wider literature at one press. **Bibliography**\nlists everything this piece cites, with a link for each, and **Links** every web address the piece\nitself links to. Under Where it sits are four tools: **Pages about it** (what others say about the\npiece itself), **Check a claim** (the claims it rests on, to check against the web), **Close to it,\nnot cited** (papers close to it that its bibliography does not list), and **Ask your own question**\n(questions about all of it to put to [Chat](/help/mode-chat), which searches the web to answer).\nEvery source links out, so you can check it rather than take our word for it.\n\n(Picture: The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button. Caption: Bibliography, prioritised: each work with its two bars, and where the piece first cites it.)\n\n## How it works\n\nWhat this piece cites, and what others say about it.\n\nBibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Not cited, for the article's owner, is OpenAlex's search for papers close to the piece, run only when you press and with no AI, less the works in that bibliography. Links is every web address the article's own text links to, read off its markup in your browser with no model and nothing fetched. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.\n\n## When to use it\n\nFor an academic paper or a report, where the questions are “what is this built on, and where do I\nfind it?” and “what have others made of it?”. Three buttons at the top choose the view: Where it\nsits, Bibliography and Links; the number on Bibliography and Links is how much each has to show.\nBibliography is usually prepared in the background when the article is added; if it was not,\nopening Where it sits or Bibliography makes it, at no charge to you. Nothing else is made by opening\na view: each tool has its own button for that, such as **Search the web** in Pages about it or\n**List its claims** in Check a claim, and the search of the literature is its own button in Where it\nsits. Whatever is made is kept. The web search behind Pages about it takes about a minute, and often\nfinds nothing, which it says plainly, because many pieces have no reception at all. A link or Back to\na view never starts anything. Only whoever added the article can make these; visitors to a shared\narticle see Bibliography, Links, Reception and Claims, with what has already been made.\n\nSources used to be two modes, Citations and Debate, and was briefly called Peer review. Old links\nto any of them still open the right view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode\nfor that.\n\n## Reading it\n\n**Where it sits**\n\n- A line at the top says how old the piece is, when we know: for an older piece, what has been said\n  since; for a recent one, where it sits now.\n- **Search the literature** is one press. Over a few minutes an AI plans a dozen or so web searches\n  from the piece, reads what they find and the later papers that cite it, and lists the passages\n  later work challenges, supports or has moved on from, each with its sources and what they say,\n  checked against the source’s own words. Its press sends the piece to an AI, sends the searches\n  that AI writes to a web search engine, and sends its DOI or title to a public index of papers; the\n  line under the button says so before you press. Finding nothing does not mean there is nothing.\n  Once it has run, its findings come first, and its own questions appear in Ask your own question as\n  **Suggested for this piece**. A finding’s chat icon asks about that finding in\n  [Chat](/help/mode-chat); the chat goes back to the finding. Only you see any of it.\n- **After it** lists the papers that cite the piece, most cited first, from OpenAlex, a free public\n  index of published work. It is the same list as Cited by in Pages about it. No AI is involved, and\n  we have not read what those papers say about the piece.\n- For a much-cited piece, a second button sits beside **Most cited**: **About** and a keyword in\n  quotes, such as *About “extended mind”*. The keyword is OpenAlex’s own for the piece. Pressing it\n  lists only the citing papers whose title or abstract mentions that keyword, which often cite the\n  piece for more than a passing nod. It is asked from OpenAlex when you press it, not before, and\n  once it has been asked the button shows how many there are. Leaving Where it sits puts the list\n  back to Most cited.\n- **Before it** lists the works the piece leans on most, as Bibliography rated them. Press one to\n  open its row in Bibliography.\n- For an older piece, After it comes first; for a recent one, Before it; with no year, side by side.\n- **Tools** at the foot open the other four views. Opening one starts nothing; inside, **Where it\n  sits**, at the top beside the view's name, brings you back.\n- With [experimental features](/help/experimental-features) turned on, **Experiments** after the\n  tools offers two ways to meet the search of the literature before reading its verdicts. Both use\n  the search already made for this piece, cost nothing and start nothing; with no search yet, they\n  say so and take you to **Search the literature**. Nothing you choose in them is saved or sent.\n  - **Guess first** shows the passages the search found something about, without saying what. Take\n    a moment to predict what critics, supporters and later work said about each, then press\n    **Reveal what the search found**.\n  - **Evidence first** shows each passage beside what a source says. Decide whether the source\n    supports it, challenges it or updates it, then press **Reveal the search’s reading** to see how\n    the search read it. Your answer is not marked: the search’s own labels do not map onto those\n    three words.\n\n**Bibliography**\n\n- The **(i)** at the top of the band says we have read none of those works, only the article that\n  cites them. A row says more only when that changes: a page found for it, a search extract read, or\n  the paper itself read. The sentence on what the piece uses a work for is written from the article,\n  not from the cited work.\n- Many rows have a **short note** under the authors: a sentence or two an AI wrote from that work’s\n  abstract alone, looked up in a public catalogue of papers (Crossref, DataCite, or OpenAlex). It is\n  not a web search and not a reading of the paper, so it can be wrong. Under it, *From the abstract ·\n  Crossref* (or wherever it came from): point at those words, or tap them, to see the day it was read\n  and the words of the abstract each sentence rests on. A work with no note had no abstract we could\n  be sure was its own, or its note did not pass our checks; that says nothing about the work. Notes\n  are written by themselves a minute or so after the list, for every work at once, and visitors to a\n  shared article see them too.\n- **A work with no note can get one from the web.** Point at a citation in the article and press\n  *Open in Sources* on its card: we search the web once for the work’s page, and an AI writes a\n  sentence from the search engine’s extract of that page, which code and a second check hold to the\n  page’s own words. Its DOI page or its arXiv page is its own, and the note is labelled *From a web\n  search ·* and the site. Any other page counts only when its title names the work and its title or\n  extract names the work’s first author — a publisher’s page, a library record, an author’s own\n  copy. Code refuses Wikipedia, Goodreads, Amazon, one review journal and a short list of summary\n  sites, but elsewhere the page can still be someone else’s catalogue entry, blurb, review or\n  encyclopedia entry. That is why the note says *may not be the work’s own page*. A web page can\n  say more or less than the paper, so either can be wrong. While it looks, the row says so. If no page passed, the row says\n  that, and it is not searched again for a week. A work with no DOI or arXiv id is searched by its\n  title and first author only when the article came from a web address; in a file you uploaded it\n  is not searched. Only you see these notes, not visitors.\n- Two small bars: **relevance** to this piece, and **influence** in its field. Influence is the\n  model’s memory of the work, not a citation count. New lists give a number only when the model is\n  confident it knows the work; a low number then means a work it knows and thinks minor. If\n  relevance was scored but influence has no usable score, the row says *influence unknown*. Older\n  lists keep their numbers, including low scores that could mean the model did not know the work,\n  until regenerated from Metadata.\n- A row’s influence bar marked *from the web* was read from a web page about the work by an\n  earlier web search on that row; point at those words, or tap them, to see the site, the day and\n  the page’s own words. It is an AI estimate from web evidence, not a citation count, and the page’s\n  words may be about something else on that page.\n- Some rows also say something like *cited 357 times · Crossref*. That one is a real count, not the\n  model’s view: Crossref is the registry that issues most DOIs, and where the article gives a DOI\n  that Crossref holds, this is its own number for the work. Point at the words, or tap them, for the\n  day we read it; it is not refreshed after that. Crossref only counts citations from works whose\n  publishers have sent it their reference lists, so the number is usually lower than Google\n  Scholar’s, and it should not be compared across fields or between an old work and a new one. *no\n  citations recorded* means Crossref has none on file, not that nobody has cited the work. Most rows\n  have no count, because most works are cited without a DOI. It sits beside influence and does not\n  change the order or what the slider hides.\n- The **chat icon** opens a new conversation in [Chat](/help/mode-chat) and asks a question about\n  the work straight away, with the work named; if one exists, it reopens that instead. Chat can search the web and your library to answer,\n  and you can go back and forth. It is on the row, and on the card you get by pointing at a\n  citation in the text. A longer reading kept on a row from before (once made by a button called\n  **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a\n  line with the chat's short summary; press it to open that conversation again beside\n  Bibliography. The conversation is also in Chat’s list, marked *Bibliography* beside Sources’ icon. Only\n  whoever added the article has this.\n- **Does it say that?** is on the card you get by pointing at a citation in a paragraph. It opens\n  a new chat beside that paragraph, asking whether the work says what the paragraph\n  cites it for. Chat then tries to read the work itself: it can when the article gives a DOI or\n  arXiv link to a freely available PDF, and it checks the PDF is that work before reading it. It\n  says what it read, and says so plainly when it could not read the work. You do not have to press\n  it: rest the pointer on a citation (or tab to a linked one) and, after about two seconds, the card\n  asks this by itself and shows the answer in the card, with **Continue in Chat** to carry on. It\n  happens only when the card names one work, never from a tap on a phone or tablet, and only once\n  for each work and paragraph: rest there again, or press the button, and you get the same chat. An\n  answer takes about 20 seconds. There is a daily limit on the automatic ones; past it the card\n  says so, and the button still works. Only whoever added the article has this.\n- **first cited** jumps to where the article first cites it. *only in the references* means the\n  article lists it but never cites it in the text.\n- **In your library** or **On the public shelf** means the work is already an article here, and\n  links straight to it.\n- Once the list exists, the places a work is cited are underlined with a dashed line in the text, in\n  every mode. Point at one, or tap it, to see the work.\n- Orders: **prioritised** (the default, with a slider), **first cited**, **relevance** and\n  **influence**. The slider hides the works that score lowest on relevance and influence together,\n  relevance counting double; a work whose influence is unknown is judged on its relevance alone\n  when available. Ordered by influence, the unknown ones come last, the most relevant first.\n\n**Close to it, not cited** (Not cited)\n\n- Papers close to this piece that are not among the works Spideryarn found in its bibliography,\n  closest first. Nothing is searched until you press **Search OpenAlex for related work**, which\n  sends the piece’s title and the opening of its text (its abstract, on a paper) to OpenAlex, a\n  free index of research papers, and nothing else of the article. No AI is involved. The answer is\n  kept, so the list is there next time; **Search again** asks afresh.\n- Each paper is checked against the bibliography by DOI or arXiv number, by title, and by the\n  article’s own reference text, and left out if it matches. A paper the piece only mentions in its\n  text can still be listed, and if the bibliography was made from an older version of the piece, or\n  leaves some works out, the list says it may include works the piece does cite. Whether any of\n  them belongs in the piece is yours to judge.\n- Each row is the paper’s title (press it to open the paper in a new tab), its authors, year, venue\n  and how often it is cited, and the opening of its abstract, so you can see why it came up.\n- Only whoever added the article has this view, and it needs Bibliography first.\n\n**Links**\n\n- Every web address the article’s own text links to, one row each, in the order you meet them in\n  the piece. Each row is the article’s words for the link, then the site it goes to (and a DOI or\n  arXiv number when the address carries one), then the paragraphs that link it, each a jump to that\n  paragraph. Press the words to open the page in a new tab.\n- It is read straight off the article in your browser: no AI, no search, and nothing is fetched, so\n  it is there as soon as the article is and costs nothing. Links to another part of the piece,\n  footnote markers, and links with no words of their own (around a picture) are left out.\n- **In Bibliography**, on a row, means Bibliography lists a work at that address, or the same paper\n  at another address; press it to open that work’s row.\n- An article read from a PDF has no links of its own: its addresses, if any, are in Bibliography.\n\n**Pages about it** (Reception)\n\n- Nothing is searched until you press **Search the web**, about a minute of searching that is kept.\n- What others have written about this piece itself: replies, reviews, and work that cites it and\n  says something about it. The AI's sections and **Cited by** start folded, so you see their outline\n  first; press one to open it. **Every page** starts open, so no source depends on a press.\n- **What the AI noticed in these sources**, at the top, holds **Key sources** (the ones the AI\n  thinks matter most, starred) and the themes several sources share, each with how many sources\n  are in it. A source can be in more than one.\n- **Every page**, open from the start, lists every source found. Pages that link to the piece or\n  quote it come first. Pages that only mention its title follow under **Mentions its title only —\n  may be another piece**: often a paper citing it, sometimes a page about something else with the\n  same title, so check before you rely on one. Each source is two lines: its title, then the site,\n  the year and one word of the AI's reading. Press the arrow beside it for the quoted excerpt, the\n  AI's full reading, and how we know the page is about this piece.\n- **Cited by**, at the end, lists the papers that cite the piece, most cited first. It is free and\n  is there before you search: it comes from OpenAlex, a public index of published work, which we\n  ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of\n  those papers says about the piece. When the piece has no DOI on record, we look for it in\n  OpenAlex by its title instead, and list its citers only if the record's title and authors (or an\n  author and the year) match; the list then names the record it matched, so you can check it. With\n  experimental features on, when there is no such record, it lists instead **Possible citations**:\n  papers whose text matched a search for the piece's title. Most of them refer to it, but we have\n  not checked each one, and it finds research papers only. Only\n  whoever added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s\n  title.\n- To ask about the piece from an angle of your own, use **Investigate** (below). The box that was here has\n  moved there.\n- Reception can be ordered **as found**, by **date** or by **stance** (most critical first); the\n  order applies inside every section.\n\n**Check a claim** (Claims)\n\n- Press **List its claims** to make the list the first time, with one AI call over the piece and no\n  web search; opening the view makes nothing. Each claim is quoted in the\n  piece’s own words, with a link to that passage, and under it a short line in the AI’s words. If\n  the piece changes afterwards, the list is shown with **List again**. The number on Claims is how\n  many claims are listed, or, once you have checked some, how many sources the checks found.\n- Under a claim, **Cited in this paragraph** names the works the piece cites in the same paragraph\n  as the claim, once Bibliography has been made. Press one to open its row in Bibliography, with its\n  link. It only means the work is cited near the claim: it does not say the work supports it, and a\n  work the piece cites many times may be missing from a later paragraph.\n- To check claims on the web, tick up to four in the list, or type one of your own in **Check a\n  claim of your own**, and press **Check**. That is one web search over all of them together, takes\n  about a minute and a half, and costs real money; nothing is searched until you press. The sources\n  it finds appear under each claim, with your own claim after the list. **This search found nothing\n  it could quote on this claim** is a real answer. If the search did not answer for a claim at all,\n  it says so in different words, and you can check it again. **Dig further**, beside a claim that\n  has been checked, runs one more search for that claim alone and looks for sources it has not\n  found yet. One check runs at a time per article, and there is a limit on how many web searches you\n  can ask for in an hour and in a day. Visitors see the list, not the checks or anything you typed.\n- To look into one claim yourself, press the chat icon beside it. It opens a new conversation in\n  [Chat](/help/mode-chat) and sends a question with the claim quoted; if one exists, it reopens that\n  instead. Once you have asked, the icon becomes a line with the chat's short summary; press it to\n  open that conversation again. Only whoever added the article has this.\n- A search made before 2026-10-08 also picked three or four claims by itself and searched those;\n  it still shows them, under **Claims the earlier search chose**, each with the sources on it.\n  Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to\n  bear on their claim only loosely or partly.\n\n**Ask your own question** (Investigate)\n\n- Questions about the piece and what others say about it, each answered in a new conversation in\n  [Chat](/help/mode-chat), which searches the web. A press sends the question straight away, and\n  costs one chat answer; opening Investigate, or coming back to it, sends nothing.\n- **Suggested** questions are the same for every piece: how it has been received, whether its main\n  claims are borne out, who disagrees with it most, whether the studies it leans on have held up,\n  and what has been published since.\n- **About its claims** asks about up to four of the claims in Claims, once that list has been made\n  (Investigate never makes it). **About the works it cites** asks about the three works Bibliography says\n  the piece leans on most. These are the same conversations as the chat icon in Claims and\n  Bibliography: one already started shows its short summary instead, and opens it again.\n- Or type your own question in the box at the top and press **Ask in chat**. **Your questions**,\n  under the box, lists every conversation started here, newest first; press one to open it again.\n- Coming back to Investigate opens your newest of those conversations beside it, so you carry on\n  where you left off. Close it to see the questions; it stays closed until you next come back.\n- Once the literature search in Where it sits has run, its own questions appear here as\n  **Suggested for this piece**, above the others.\n- Only whoever added the article has Investigate: visitors to a shared article have no chat.\n\n(Picture: The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work. Caption: Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.)\n\nAnything tagged **AI** is the AI’s reading, checked against nothing: the themes, the key-source\npicks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could\nnot tell) and its relevance. Quoted excerpts, by contrast, are checked against what the search\nreturned."
+  },
+  {
+   "anchor": "mode-structure",
+diff --git a/src/messages.ts b/src/messages.ts
+index 9c48fe904..4d16ccd0d 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -6046,6 +6046,49 @@ export const CITERS_ABOUT =
+   "the piece's DOI, or the words of its title when we have no DOI, and our contact address; " +
+   "never its text or reader details. No AI is involved, and we have not read the papers.";
+ 
++/* ---- *Possible citations*: when the list above cannot be made ----
++
++   Under a `no-doi` or `no-match` answer, with the experimental switch on: the
++   works whose full text matched OpenAlex's search for the piece's title
++   (src/citation-fulltext.ts, plan 261026f). The plain words are the persona
++   reviews' and GPT Sol's (F2: "matched a search", never "contains the exact
++   title", because the search stems words and also reads titles and
++   abstracts). */
++
++export const POSSIBLE_CITERS_HEADING = "Possible citations";
++/** Under the heading, once. Two hedges in one line read as noise (the persona reviews). */
++export const POSSIBLE_CITERS_WHAT =
++  "Research papers whose text matched a search for this piece's title. Most will refer to it; " +
++  "we have not checked each one.";
++/** `25 of 134`: the rows listed, of OpenAlex's count. One count, said once (the designer). */
++export function possibleCitersCount(listed: number, total: number): string {
++  return listed >= total ? `${total}` : `${listed} of ${total}`;
++}
++/** The link to the rest, naming what OpenAlex is for a reader who has never heard of it. */
++export function possibleCitersAll(total: number): string {
++  return `See all ${total} at OpenAlex, a free index of research papers`;
++}
++/** Beside the count: which rows come first when there are more than fit (`orderFor`, src/citation-fulltext.ts). */
++export const POSSIBLE_CITERS_ORDER = { newest: "newest first", "most-cited": "most cited first" } as const;
++/** What it does not find, so it is not read as complete. */
++export const POSSIBLE_CITERS_PAPERS_ONLY =
++  "This finds research papers only. Blog posts and web pages that cite it are not here.";
++/** A count with no row we could show (GPT Sol's S1-F2): the count and the link are still worth having. */
++export const POSSIBLE_CITERS_NO_ROWS = "None of them could be shown here.";
++/** The phrase gate (plan 261026f, decision 3), in Sol's evidenced words. */
++export const POSSIBLE_CITERS_COMMON_PHRASE =
++  "Older papers used the words of this title too often for a search of papers' text to tell " +
++  "citations of this piece from other uses of them.";
++export const POSSIBLE_CITERS_NONE = "No research paper's text matched a search for its title either.";
++/**
++ * **The sentence above the list when there is one** — the no-DOI sentence,
++ * moved to the empty case and said as what we did instead (the persona
++ * reviews: the reader met "cannot" and then a list).
++ */
++export const POSSIBLE_CITERS_LEAD =
++  "We have no DOI or sure OpenAlex record for this piece, so there is no citation list. " +
++  "Instead, a search of research papers' text:";
++
+ const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
+ 
+ /**
+diff --git a/src/types.ts b/src/types.ts
+index 68c413982..19e1ff136 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -8250,6 +8250,8 @@ export type PossibleCiters =
+       dropped: number;
+       order: "newest" | "most-cited";
+       phrase: string;
++      /** The first year the list and `total` cover, or null for a piece with no year: the *See all* link asks the same. */
++      fromYear: number | null;
+       citers: Citer[];
+     }
+   | { kind: "common-phrase" }
+diff --git a/src/web/ReceptionAndClaimsPanel.tsx b/src/web/ReceptionAndClaimsPanel.tsx
+index eaf703f39..918af1329 100644
+--- a/src/web/ReceptionAndClaimsPanel.tsx
++++ b/src/web/ReceptionAndClaimsPanel.tsx
+@@ -207,6 +207,16 @@ import {
+   CITERS_UNCONFIRMED,
+   citedTimes,
+   citersLines,
++  POSSIBLE_CITERS_COMMON_PHRASE,
++  POSSIBLE_CITERS_HEADING,
++  POSSIBLE_CITERS_LEAD,
++  POSSIBLE_CITERS_NONE,
++  POSSIBLE_CITERS_NO_ROWS,
++  POSSIBLE_CITERS_ORDER,
++  POSSIBLE_CITERS_PAPERS_ONLY,
++  POSSIBLE_CITERS_WHAT,
++  possibleCitersAll,
++  possibleCitersCount,
+   RECEPTION_BEFORE_SEARCH,
+   SOURCES_CLAIM_CHECK_FOUND_NOTHING,
+   SOURCES_CLAIM_CHECK_NOT_ANSWERED,
+@@ -251,6 +261,7 @@ import {
+   type BlockId,
+   type Citer,
+   type CitersResult,
++  type PossibleCiters,
+   type ClaimOrigin,
+   type Reception,
+   type SourcesClaimsBears,
+@@ -294,7 +305,7 @@ import {
+ } from "./reception-order.js";
+ import { registryAuthorName } from "../registry-work.js";
+ import { scholarUrl } from "../scholar-search.js";
+-import { citerUrl } from "../citer-link.js";
++import { citerUrl, openAlexFulltextPageUrl } from "../citer-link.js";
+ import { keyByRow, shownInThread, type Thread, threadsOf } from "./reception-threads.js";
+ import { readStoredSynthesis } from "../reception-synthesis.js";
+ import type { ReceptionAndClaimsView } from "./params.js";
+@@ -1832,9 +1843,9 @@ export function CitersAnswer({
+ }) {
+   switch (result.kind) {
+     case "no-doi":
+-      return <p className="rcp-citers-note">{CITERS_NO_DOI}</p>;
++      return <NoListAnswer sentence={CITERS_NO_DOI} possible={result.possible} shown={shown} />;
+     case "no-match":
+-      return <p className="rcp-citers-note">{CITERS_NO_MATCH}</p>;
++      return <NoListAnswer sentence={CITERS_NO_MATCH} possible={result.possible} shown={shown} />;
+     case "not-indexed":
+       return <p className="rcp-citers-note">{CITERS_NOT_INDEXED}</p>;
+     case "unconfirmed":
+@@ -1898,6 +1909,82 @@ function CitersList({ found, shown: first }: { found: Extract<CitersResult, { ki
+   );
+ }
+ 
++/**
++ * **No list, and what we found instead.** `possible` is there only with the
++ * experimental switch on (useCiters.ts); without it, or when the full-text
++ * search could not be asked, the plain sentence is the whole answer. With a
++ * list, the sentence gives way to one that says what was done instead, so the
++ * reader does not meet "cannot" and then a list (plan 261026f).
++ */
++function NoListAnswer({
++  sentence,
++  possible,
++  shown,
++}: {
++  sentence: string;
++  possible: PossibleCiters | undefined;
++  shown: number;
++}) {
++  if (possible?.kind === "found") return <PossibleCitersList found={possible} shown={shown} />;
++  const more =
++    possible?.kind === "common-phrase" ? POSSIBLE_CITERS_COMMON_PHRASE : possible?.kind === "none" ? POSSIBLE_CITERS_NONE : null;
++  return (
++    <>
++      <p className="rcp-citers-note">{sentence}</p>
++      {more !== null && <p className="rcp-citers-note">{more}</p>}
++    </>
++  );
++}
++
++/**
++ * **Possible citations**: works whose full text matched OpenAlex's search for
++ * the title (src/citation-fulltext.ts). Never called *Cited by* and never
++ * added to a count: about four rows in five were measured to cite the piece
++ * (docs/investigations/261026a), so it says it has not checked them.
++ */
++function PossibleCitersList({ found, shown: first }: { found: Extract<PossibleCiters, { kind: "found" }>; shown: number }) {
++  const [all, setAll] = useState(false);
++  const listed = found.citers.length;
++  const shown = all ? found.citers : found.citers.slice(0, first);
++  return (
++    <>
++      <p className="rcp-citers-note">{POSSIBLE_CITERS_LEAD}</p>
++      <div className="rcp-possible">
++        <p className="rcp-possible-head">
++          <span className="rcp-possible-label">{POSSIBLE_CITERS_HEADING}</span>
++          <span className="rcp-possible-count">{possibleCitersCount(listed, found.total)}</span>
++          {listed > 1 && <span className="rcp-possible-order">{POSSIBLE_CITERS_ORDER[found.order]}</span>}
++        </p>
++        <p className="rcp-citers-note">{POSSIBLE_CITERS_WHAT}</p>
++        {listed > 0 ? (
++          <ul className="rcp-citers-list">
++            {shown.map((citer) => (
++              <CiterRow key={citer.openalexId} citer={citer} />
++            ))}
++          </ul>
++        ) : (
++          <p className="rcp-citers-note">{POSSIBLE_CITERS_NO_ROWS}</p>
++        )}
++        {!all && listed > first && (
++          <button type="button" className="rcp-more rcp-citers-all" onClick={() => setAll(true)}>
++            Show all {listed}
++          </button>
++        )}
++        <a
++          className="rcp-possible-all"
++          href={openAlexFulltextPageUrl(found.phrase, found.fromYear)}
++          target="_blank"
++          rel="noreferrer noopener"
++        >
++          {possibleCitersAll(found.total)}
++          <ExternalLink size={11} aria-hidden="true" />
++        </a>
++        <p className="rcp-citers-note">{POSSIBLE_CITERS_PAPERS_ONLY}</p>
++      </div>
++    </>
++  );
++}
++
+ function CiterRow({ citer }: { citer: Citer }) {
+   const url = citerUrl(citer);
+   /* `article` is what nearly every row is, so only the other kinds are said. */
+diff --git a/src/web/help/pages/modes/sources.md b/src/web/help/pages/modes/sources.md
+index c59ea09d5..aecedf3f3 100644
+--- a/src/web/help/pages/modes/sources.md
++++ b/src/web/help/pages/modes/sources.md
+@@ -201,7 +201,10 @@ for that.
+   ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of
+   those papers says about the piece. When the piece has no DOI on record, we look for it in
+   OpenAlex by its title instead, and list its citers only if the record's title and authors (or an
+-  author and the year) match; the list then names the record it matched, so you can check it. Only
++  author and the year) match; the list then names the record it matched, so you can check it. With
++  experimental features on, when there is no such record, it lists instead **Possible citations**:
++  papers whose text matched a search for the piece's title. Most of them refer to it, but we have
++  not checked each one, and it finds research papers only. Only
+   whoever added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s
+   title.
+ - To ask about the piece from an angle of your own, use **Investigate** (below). The box that was here has
+diff --git a/src/web/styles/reception.css b/src/web/styles/reception.css
+index 09b40503d..e6af04ac1 100644
+--- a/src/web/styles/reception.css
++++ b/src/web/styles/reception.css
+@@ -662,6 +662,19 @@ a.rcp-citer-title:hover { text-decoration: underline; text-underline-offset: 2px
+ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+ .rcp-citer-title svg { display: inline; margin-left: 0.25rem; vertical-align: -1px; opacity: 0.7; }
+ .rcp-citers-all { margin: 0.2rem 0 0; }
++/* **Possible citations** (plan 261026f), under a no-DOI answer with the
++   experimental switch on: Cited by's rows, set off by a left edge so they are
++   not read as Cited by itself. */
++.rcp-possible { margin: 0.2rem 0 0.4rem; padding-left: 0.6rem; border-left: 2px solid var(--rule); }
++.rcp-possible-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.5rem; margin: 0 0 0.1rem; }
++.rcp-possible-label { color: var(--ink); font-weight: 600; }
++.rcp-possible-count,
++.rcp-possible-order { color: var(--ink-faint); font-size: max(var(--text-min), 0.8rem); }
++.rcp-possible-order { margin-left: auto; }
++.rcp-possible-all { display: inline-flex; align-items: baseline; gap: 0.25rem; margin: 0.35rem 0 0.2rem; color: var(--ink-soft); }
++.rcp-possible-all:hover { text-decoration: underline; text-underline-offset: 2px; }
++.rcp-possible-all:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
++.rcp-possible-all svg { display: inline; opacity: 0.7; }
+ .rcp-citers .rcp-scholar { display: flex; margin-top: 0.6rem; }
+ 
+ /* **Sources › Not cited** — papers close to the piece that its Bibliography
+diff --git a/src/web/useCiters.ts b/src/web/useCiters.ts
+index b31604da3..12652cfd2 100644
+--- a/src/web/useCiters.ts
++++ b/src/web/useCiters.ts
+@@ -23,11 +23,21 @@
+  * its own outcomes with a 200; anything else (a dropped connection, a 5xx, a
+  * session that lapsed, a 200 that is not one of those outcomes) is, to the
+  * reader, the same "we could not get it just now", with the same button.
++ *
++ * ***Possible citations*, with the experimental switch on** (plan 261026f):
++ * the GET carries `?with=possible`, and a `no-doi` or `no-match` answer may
++ * then carry `possible`, the works whose full text matched OpenAlex's search
++ * for the title. Still free and still no model. If the switch is turned on
++ * after a `no-doi` or `no-match` answer came without it, that article is asked
++ * once more; with the switch off, `possible` is never returned. An answer
++ * without it (an older server after a rollback: GPT Sol's F7) is the plain
++ * sentence, as before.
+  */
+-import { useCallback, useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { OPENALEX_WORK_ID } from "../citer-link.js";
+-import type { Citer, CitersResult } from "../types.js";
++import type { Citer, CitersResult, PossibleCiters } from "../types.js";
+ import { apiFetch, readJson } from "./lib/api.js";
++import { useExperimental } from "./useExperimental.js";
+ import { useOrderedRead } from "./useOrderedRead.js";
+ 
+ export interface UseCiters {
+@@ -100,12 +110,54 @@ function asTopic(value: unknown): { keyword: string; count?: number } | null {
+  * is one, including each row's rendered fields. String bounds and citer-row
+  * identifier shapes remain the server parser's job.
+  */
++/**
++ * ***Possible citations*, checked as far as the panel reads** — or null, and
++ * then the sentence is drawn without it: a malformed `possible` never costs the
++ * answer it rides on. `phrase` is put into a link's query string, so it must be
++ * a string; the server built it from letters, digits and apostrophes.
++ */
++/* `fulltextPhraseOf`'s shape: words and inner apostrophes, so the phrase cannot close the quotes of the *See all* link's filter. */
++const PHRASE_SHAPE = /^[\p{L}\p{N}']+(?: [\p{L}\p{N}']+)*$/u;
++
++function asPossible(value: unknown): PossibleCiters | null {
++  if (typeof value !== "object" || value === null) return null;
++  const body = value as Record<string, unknown>;
++  switch (body.kind) {
++    case "common-phrase":
++    case "none":
++    case "unavailable":
++      return { kind: body.kind };
++    case "found":
++      return typeof body.total === "number" && body.total >= 0 &&
++        typeof body.dropped === "number" &&
++        (body.order === "newest" || body.order === "most-cited") &&
++        typeof body.phrase === "string" && PHRASE_SHAPE.test(body.phrase) &&
++        (body.fromYear === null || Number.isInteger(body.fromYear)) &&
++        Array.isArray(body.citers) && body.citers.every(isCiter)
++        ? {
++            kind: "found",
++            total: body.total,
++            dropped: body.dropped,
++            order: body.order,
++            phrase: body.phrase,
++            fromYear: body.fromYear as number | null,
++            citers: body.citers,
++          }
++        : null;
++    default:
++      return null;
++  }
++}
++
+ function asCitersResult(value: unknown): CitersResult | null {
+   if (typeof value !== "object" || value === null) return null;
+   const body = value as Record<string, unknown>;
+   switch (body.kind) {
+     case "no-doi":
+-    case "no-match":
++    case "no-match": {
++      const possible = body.possible === undefined ? null : asPossible(body.possible);
++      return possible === null ? { kind: body.kind } : { kind: body.kind, possible };
++    }
+     case "not-indexed":
+     case "unconfirmed":
+     case "unavailable":
+@@ -148,12 +200,20 @@ function asCitersResult(value: unknown): CitersResult | null {
+ export function useCiters(slug: string, wanted: boolean): UseCiters {
+   /* Kept with the slug it answers, so an article change shows the spinner
+      rather than the last article's list while the new one loads. */
+-  const [answer, setAnswer] = useState<{ slug: string; result: CitersResult } | null>(null);
++  const [answer, setAnswer] = useState<{ slug: string; result: CitersResult; withPossible: boolean } | null>(null);
++
++  /* *Possible citations* is asked for only with the switch on (plan 261026f).
++     A ref, so `load` reads the switch at the moment it asks without being
++     remade, and re-asking, when the switch turns on, every article. */
++  const { on: experimental } = useExperimental();
++  const possibleWanted = useRef(experimental);
++  possibleWanted.current = experimental;
+ 
+   const load = useCallback(
+     async (current: () => boolean) => {
+-      const result = await ask(`/api/citers/${encodeURIComponent(slug)}`);
+-      if (current()) setAnswer({ slug, result });
++      const withPossible = possibleWanted.current;
++      const result = await ask(`/api/citers/${encodeURIComponent(slug)}${withPossible ? "?with=possible" : ""}`);
++      if (current()) setAnswer({ slug, result, withPossible });
+     },
+     [slug],
+   );
+@@ -212,13 +272,34 @@ export function useCiters(slug: string, wanted: boolean): UseCiters {
+     void reload();
+   }, [wanted, slug, reload]);
+ 
++  /* The switch turned on after a no-list answer came without *Possible
++     citations*: ask once more. Only then — every other answer is the same
++     with it as without — and only once, because the next answer says it was
++     asked with it, whatever the server sent back. */
++  const current = answer?.slug === slug ? answer : null;
++  useEffect(() => {
++    if (!experimental || current === null || current.withPossible) return;
++    if (current.result.kind !== "no-doi" && current.result.kind !== "no-match") return;
++    void reload();
++  }, [experimental, current, reload]);
++
++  /* With the switch off, *Possible citations* is never handed on, even when an
++     answer asked with it is still held. */
++  const result = useMemo((): CitersResult | null => {
++    if (current === null) return null;
++    const plain = current.result;
++    return !experimental && (plain.kind === "no-doi" || plain.kind === "no-match") && plain.possible !== undefined
++      ? { kind: plain.kind }
++      : plain;
++  }, [current, experimental]);
++
+   const retry = useCallback(() => {
+     setAnswer(null);
+     void reload();
+   }, [reload]);
+ 
+   return {
+-    result: answer?.slug === slug ? answer.result : null,
++    result,
+     retry,
+     topic: topicAnswer?.slug === slug ? topicAnswer.result : undefined,
+     askTopic,
+diff --git a/tests/citation-fulltext.test.ts b/tests/citation-fulltext.test.ts
+index 9d896f18f..2b06600b6 100644
+--- a/tests/citation-fulltext.test.ts
++++ b/tests/citation-fulltext.test.ts
+@@ -258,7 +258,7 @@ describe("possibleCitersOf", () => {
+     expect(url.searchParams.get("filter")).toBe('fulltext.search:"verbalizable representations form a global workspace in language models"');
+     expect(url.searchParams.get("sort")).toBe("publication_date:desc");
+     expect(url.searchParams.get("per_page")).toBe(String(POSSIBLE_PER_PAGE));
+-    expect(got).toMatchObject({ kind: "found", total: 134, dropped: 1, order: "newest" });
++    expect(got).toMatchObject({ kind: "found", total: 134, dropped: 1, order: "newest", fromYear: null });
+     expect(got?.kind === "found" ? got.citers.map((c) => c.openalexId) : []).toEqual(["W2", "W3"]);
+   });
+ 
+@@ -271,7 +271,7 @@ describe("possibleCitersOf", () => {
+     expect(new URL(h.asked[0]!).searchParams.get("filter")).toBe('fulltext.search:"llm powered autonomous agents",publication_year:2013-2021');
+     expect(new URL(h.asked[1]!).searchParams.get("filter")).toBe('fulltext.search:"llm powered autonomous agents",publication_year:2022-2026');
+     expect(new URL(h.asked[1]!).searchParams.get("sort")).toBe("cited_by_count:desc,publication_date:desc");
+-    expect(got).toMatchObject({ kind: "found", total: 278, order: "most-cited" });
++    expect(got).toMatchObject({ kind: "found", total: 278, order: "most-cited", fromYear: 2022 });
+   });
+ 
+   it("says common-phrase, and lists nothing, when the gate fires", async () => {
+diff --git a/tests/use-citers.test.tsx b/tests/use-citers.test.tsx
+index 47e419724..cc3ad64a7 100644
+--- a/tests/use-citers.test.tsx
++++ b/tests/use-citers.test.tsx
+@@ -39,6 +39,25 @@ vi.mock("../src/web/lib/api.js", () => ({
+   },
+ }));
+ 
++/* The experimental switch, as the hook reads it (plan 261026f): off unless a
++   test turns it on, and a listener so a test can turn it on mid-flight. */
++let experimentalOn = false;
++const experimentalListeners = new Set<() => void>();
++function setExperimental(on: boolean): void {
++  experimentalOn = on;
++  for (const listener of experimentalListeners) listener();
++}
++vi.mock("../src/web/useExperimental.js", async () => {
++  const { useSyncExternalStore } = await import("react");
++  const subscribe = (listener: () => void) => {
++    experimentalListeners.add(listener);
++    return () => experimentalListeners.delete(listener);
++  };
++  return {
++    useExperimental: () => ({ on: useSyncExternalStore(subscribe, () => experimentalOn) }),
++  };
++});
++
+ const { useCiters } = await import("../src/web/useCiters.js");
+ 
+ let host: HTMLDivElement;
+@@ -62,6 +81,7 @@ beforeEach(() => {
+   gets.length = 0;
+   answer = { kind: "not-indexed" };
+   pending = null;
++  experimentalOn = false;
+   host = document.createElement("div");
+   document.body.append(host);
+   root = createRoot(host);
+@@ -279,3 +299,88 @@ it("drops a malformed topic label rather than the list", async () => {
+   await showTopic("odd-topic");
+   expect(host.textContent).toBe("no topic");
+ });
++
++/* ---------------------------------------- Possible citations (plan 261026f) -- */
++
++const POSSIBLE: CitersResult = {
++  kind: "no-match",
++  possible: {
++    kind: "found",
++    total: 134,
++    dropped: 1,
++    order: "newest",
++    phrase: "verbalizable representations form a global workspace in language models",
++    fromYear: null,
++    citers: [{ openalexId: "W2", title: "Reader--Writer Coupling", authors: [], authorCount: 0, citedByCount: 0 }],
++  },
++};
++
++let shownResult: CitersResult | null = null;
++function ResultProbe({ slug }: { slug: string }) {
++  const citers = useCiters(slug, true);
++  shownResult = citers.result;
++  return createElement("p", null, citers.result === null ? "waiting" : citers.result.kind);
++}
++async function showResult(slug: string): Promise<void> {
++  await act(async () => {
++    root.render(createElement(StrictMode, null, createElement(ResultProbe, { slug })));
++  });
++  for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
++}
++async function settle(): Promise<void> {
++  for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve(); });
++}
++
++it("asks with ?with=possible only with the experimental switch on, and hands the list on", async () => {
++  answer = POSSIBLE;
++  experimentalOn = true;
++  await showResult("workspace");
++  expect(gets).toEqual(["/api/citers/workspace?with=possible"]);
++  expect(shownResult).toEqual(POSSIBLE);
++});
++
++it("never hands Possible citations on with the switch off, even if the server sends them", async () => {
++  answer = POSSIBLE;
++  await showResult("workspace");
++  expect(gets).toEqual(["/api/citers/workspace"]);
++  expect(shownResult).toEqual({ kind: "no-match" });
++});
++
++it("asks once more when the switch is turned on after a no-list answer", async () => {
++  answer = { kind: "no-doi" };
++  await showResult("no-list");
++  expect(gets).toEqual(["/api/citers/no-list"]);
++
++  answer = { ...POSSIBLE, kind: "no-doi" } as CitersResult;
++  await act(async () => setExperimental(true));
++  await settle();
++  expect(gets).toEqual(["/api/citers/no-list", "/api/citers/no-list?with=possible"]);
++  expect(shownResult?.kind === "no-doi" && shownResult.possible?.kind).toBe("found");
++});
++
++it("asks an older server that ignores the parameter once more, not forever", async () => {
++  answer = { kind: "no-match" };
++  await showResult("old-server");
++  await act(async () => setExperimental(true));
++  await settle();
++  expect(gets).toEqual(["/api/citers/old-server", "/api/citers/old-server?with=possible"]);
++  expect(shownResult).toEqual({ kind: "no-match" });
++});
++
++it("asks nothing more for an answer that is the same with the switch on", async () => {
++  answer = { kind: "not-indexed" };
++  await showResult("indexed");
++  await act(async () => setExperimental(true));
++  await settle();
++  expect(gets).toEqual(["/api/citers/indexed"]);
++});
++
++it("drops a malformed Possible citations rather than the answer it rides on", async () => {
++  experimentalOn = true;
++  answer = { kind: "no-match", possible: { kind: "found", total: "many", citers: [{}] } } as unknown as CitersResult;
++  await showResult("odd-possible");
++  expect(shownResult).toEqual({ kind: "no-match" });
++  answer = { kind: "no-doi", possible: { kind: "common-phrase" } };
++  await showResult("phrase");
++  expect(shownResult).toEqual({ kind: "no-doi", possible: { kind: "common-phrase" } });
++});

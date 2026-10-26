@@ -23,11 +23,21 @@
  * its own outcomes with a 200; anything else (a dropped connection, a 5xx, a
  * session that lapsed, a 200 that is not one of those outcomes) is, to the
  * reader, the same "we could not get it just now", with the same button.
+ *
+ * ***Possible citations*, with the experimental switch on** (plan 261026f):
+ * the GET carries `?with=possible`, and a `no-doi` or `no-match` answer may
+ * then carry `possible`, the works whose full text matched OpenAlex's search
+ * for the title. Still free and still no model. If the switch is turned on
+ * after a `no-doi` or `no-match` answer came without it, that article is asked
+ * once more; with the switch off, `possible` is never returned. An answer
+ * without it (an older server after a rollback: GPT Sol's F7) is the plain
+ * sentence, as before.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { OPENALEX_WORK_ID } from "../citer-link.js";
-import type { Citer, CitersResult } from "../types.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MAX_FULLTEXT_PHRASE, OPENALEX_WORK_ID } from "../citer-link.js";
+import type { Citer, CitersResult, PossibleCiters } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { useExperimental } from "./useExperimental.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 
 export interface UseCiters {
@@ -100,12 +110,64 @@ function asTopic(value: unknown): { keyword: string; count?: number } | null {
  * is one, including each row's rendered fields. String bounds and citer-row
  * identifier shapes remain the server parser's job.
  */
+/**
+ * ***Possible citations*, checked as far as the panel reads** — or null, and
+ * then the sentence is drawn without it: a malformed `possible` never costs the
+ * answer it rides on. `phrase` is put into a link's query string, so it must be
+ * a short string with the exact shape the server can build from letters,
+ * digits and inner apostrophes.
+ */
+/* `fulltextPhraseOf`'s shape: each word starts and ends in a letter or digit,
+   with apostrophes allowed only inside, so the phrase cannot close the quotes
+   of the *See all* link's filter. */
+const PHRASE_WORD = String.raw`[\p{L}\p{N}](?:[\p{L}\p{N}']*[\p{L}\p{N}])?`;
+const PHRASE_SHAPE = new RegExp(`^${PHRASE_WORD}(?: ${PHRASE_WORD})*$`, "u");
+
+function asPossible(value: unknown): PossibleCiters | null {
+  if (typeof value !== "object" || value === null) return null;
+  const body = value as Record<string, unknown>;
+  switch (body.kind) {
+    case "common-phrase":
+    case "none":
+    case "unavailable":
+      return { kind: body.kind };
+    case "found": {
+      const yearRange =
+        (body.fromYear === null && body.toYear === null) ||
+        (Number.isInteger(body.fromYear) && Number.isInteger(body.toYear) &&
+          (body.fromYear as number) <= (body.toYear as number));
+      return typeof body.total === "number" && body.total >= 0 &&
+        typeof body.dropped === "number" &&
+        (body.order === "newest" || body.order === "most-cited") &&
+        typeof body.phrase === "string" && body.phrase.length <= MAX_FULLTEXT_PHRASE && PHRASE_SHAPE.test(body.phrase) &&
+        yearRange &&
+        Array.isArray(body.citers) && body.citers.every(isCiter)
+        ? {
+            kind: "found",
+            total: body.total,
+            dropped: body.dropped,
+            order: body.order,
+            phrase: body.phrase,
+            fromYear: body.fromYear as number | null,
+            toYear: body.toYear as number | null,
+            citers: body.citers,
+          }
+        : null;
+    }
+    default:
+      return null;
+  }
+}
+
 function asCitersResult(value: unknown): CitersResult | null {
   if (typeof value !== "object" || value === null) return null;
   const body = value as Record<string, unknown>;
   switch (body.kind) {
     case "no-doi":
-    case "no-match":
+    case "no-match": {
+      const possible = body.possible === undefined ? null : asPossible(body.possible);
+      return possible === null ? { kind: body.kind } : { kind: body.kind, possible };
+    }
     case "not-indexed":
     case "unconfirmed":
     case "unavailable":
@@ -148,12 +210,20 @@ function asCitersResult(value: unknown): CitersResult | null {
 export function useCiters(slug: string, wanted: boolean): UseCiters {
   /* Kept with the slug it answers, so an article change shows the spinner
      rather than the last article's list while the new one loads. */
-  const [answer, setAnswer] = useState<{ slug: string; result: CitersResult } | null>(null);
+  const [answer, setAnswer] = useState<{ slug: string; result: CitersResult; withPossible: boolean } | null>(null);
+
+  /* *Possible citations* is asked for only with the switch on (plan 261026f).
+     A ref, so `load` reads the switch at the moment it asks without being
+     remade, and re-asking, when the switch turns on, every article. */
+  const { on: experimental } = useExperimental();
+  const possibleWanted = useRef(experimental);
+  possibleWanted.current = experimental;
 
   const load = useCallback(
     async (current: () => boolean) => {
-      const result = await ask(`/api/citers/${encodeURIComponent(slug)}`);
-      if (current()) setAnswer({ slug, result });
+      const withPossible = possibleWanted.current;
+      const result = await ask(`/api/citers/${encodeURIComponent(slug)}${withPossible ? "?with=possible" : ""}`);
+      if (current()) setAnswer({ slug, result, withPossible });
     },
     [slug],
   );
@@ -212,13 +282,34 @@ export function useCiters(slug: string, wanted: boolean): UseCiters {
     void reload();
   }, [wanted, slug, reload]);
 
+  /* The switch turned on after a no-list answer came without *Possible
+     citations*: ask once more. Only then — every other answer is the same
+     with it as without — and only once, because the next answer says it was
+     asked with it, whatever the server sent back. */
+  const current = answer?.slug === slug ? answer : null;
+  useEffect(() => {
+    if (!experimental || current === null || current.withPossible) return;
+    if (current.result.kind !== "no-doi" && current.result.kind !== "no-match") return;
+    void reload();
+  }, [experimental, current, reload]);
+
+  /* With the switch off, *Possible citations* is never handed on, even when an
+     answer asked with it is still held. */
+  const result = useMemo((): CitersResult | null => {
+    if (current === null) return null;
+    const plain = current.result;
+    return !experimental && (plain.kind === "no-doi" || plain.kind === "no-match") && plain.possible !== undefined
+      ? { kind: plain.kind }
+      : plain;
+  }, [current, experimental]);
+
   const retry = useCallback(() => {
     setAnswer(null);
     void reload();
   }, [reload]);
 
   return {
-    result: answer?.slug === slug ? answer.result : null,
+    result,
     retry,
     topic: topicAnswer?.slug === slug ? topicAnswer.result : undefined,
     askTopic,

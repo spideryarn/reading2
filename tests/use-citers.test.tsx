@@ -39,6 +39,25 @@ vi.mock("../src/web/lib/api.js", () => ({
   },
 }));
 
+/* The experimental switch, as the hook reads it (plan 261026f): off unless a
+   test turns it on, and a listener so a test can turn it on mid-flight. */
+let experimentalOn = false;
+const experimentalListeners = new Set<() => void>();
+function setExperimental(on: boolean): void {
+  experimentalOn = on;
+  for (const listener of experimentalListeners) listener();
+}
+vi.mock("../src/web/useExperimental.js", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => {
+    experimentalListeners.add(listener);
+    return () => experimentalListeners.delete(listener);
+  };
+  return {
+    useExperimental: () => ({ on: useSyncExternalStore(subscribe, () => experimentalOn) }),
+  };
+});
+
 const { useCiters } = await import("../src/web/useCiters.js");
 
 let host: HTMLDivElement;
@@ -62,6 +81,7 @@ beforeEach(() => {
   gets.length = 0;
   answer = { kind: "not-indexed" };
   pending = null;
+  experimentalOn = false;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -278,4 +298,134 @@ it("drops a malformed topic label rather than the list", async () => {
   answer = { ...LANDMARK, topic: { keyword: 7 }, filteredBy: 3 } as unknown as CitersResult;
   await showTopic("odd-topic");
   expect(host.textContent).toBe("no topic");
+});
+
+/* ---------------------------------------- Possible citations (plan 261026f) -- */
+
+const POSSIBLE: CitersResult = {
+  kind: "no-match",
+  possible: {
+    kind: "found",
+    total: 134,
+    dropped: 1,
+    order: "newest",
+    phrase: "verbalizable representations form a global workspace in language models",
+    fromYear: null,
+    toYear: null,
+    citers: [{ openalexId: "W2", title: "Reader--Writer Coupling", authors: [], authorCount: 0, citedByCount: 0 }],
+  },
+};
+
+let shownResult: CitersResult | null = null;
+function ResultProbe({ slug }: { slug: string }) {
+  const citers = useCiters(slug, true);
+  shownResult = citers.result;
+  return createElement("p", null, citers.result === null ? "waiting" : citers.result.kind);
+}
+async function showResult(slug: string): Promise<void> {
+  await act(async () => {
+    root.render(createElement(StrictMode, null, createElement(ResultProbe, { slug })));
+  });
+  for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
+}
+async function settle(): Promise<void> {
+  for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve(); });
+}
+
+it("asks with ?with=possible only with the experimental switch on, and hands the list on", async () => {
+  answer = POSSIBLE;
+  experimentalOn = true;
+  await showResult("workspace");
+  expect(gets).toEqual(["/api/citers/workspace?with=possible"]);
+  expect(shownResult).toEqual(POSSIBLE);
+});
+
+it("never hands Possible citations on with the switch off, even if the server sends them", async () => {
+  answer = POSSIBLE;
+  await showResult("workspace");
+  expect(gets).toEqual(["/api/citers/workspace"]);
+  expect(shownResult).toEqual({ kind: "no-match" });
+});
+
+it("removes a drawn Possible citations answer as soon as the switch turns off", async () => {
+  answer = POSSIBLE;
+  experimentalOn = true;
+  await showResult("drawn-possible");
+  expect(shownResult).toEqual(POSSIBLE);
+
+  await act(async () => setExperimental(false));
+  expect(shownResult).toEqual({ kind: "no-match" });
+  expect(gets).toEqual(["/api/citers/drawn-possible?with=possible"]);
+});
+
+it("does not hand on a Possible citations reply that lands after the switch turns off", async () => {
+  let finish!: (response: Response) => void;
+  pending = new Promise<Response>((resolve) => { finish = resolve; });
+  experimentalOn = true;
+  await showResult("possible-in-flight");
+  expect(gets).toEqual(["/api/citers/possible-in-flight?with=possible"]);
+
+  await act(async () => setExperimental(false));
+  pending = null;
+  await act(async () => finish(new Response(JSON.stringify(POSSIBLE), { status: 200 })));
+  await settle();
+  expect(shownResult).toEqual({ kind: "no-match" });
+  expect(gets).toEqual(["/api/citers/possible-in-flight?with=possible"]);
+});
+
+it("asks once more when the switch is turned on after a no-list answer", async () => {
+  answer = { kind: "no-doi" };
+  await showResult("no-list");
+  expect(gets).toEqual(["/api/citers/no-list"]);
+
+  answer = { ...POSSIBLE, kind: "no-doi" } as CitersResult;
+  await act(async () => setExperimental(true));
+  await settle();
+  expect(gets).toEqual(["/api/citers/no-list", "/api/citers/no-list?with=possible"]);
+  expect(shownResult?.kind === "no-doi" && shownResult.possible?.kind).toBe("found");
+});
+
+it("asks an older server that ignores the parameter once more, not forever", async () => {
+  answer = { kind: "no-match" };
+  await showResult("old-server");
+  await act(async () => setExperimental(true));
+  await settle();
+  expect(gets).toEqual(["/api/citers/old-server", "/api/citers/old-server?with=possible"]);
+  expect(shownResult).toEqual({ kind: "no-match" });
+});
+
+it("asks nothing more for an answer that is the same with the switch on", async () => {
+  answer = { kind: "not-indexed" };
+  await showResult("indexed");
+  await act(async () => setExperimental(true));
+  await settle();
+  expect(gets).toEqual(["/api/citers/indexed"]);
+});
+
+it("drops a malformed Possible citations rather than the answer it rides on", async () => {
+  experimentalOn = true;
+  answer = { kind: "no-match", possible: { kind: "found", total: "many", citers: [{}] } } as unknown as CitersResult;
+  await showResult("odd-possible");
+  expect(shownResult).toEqual({ kind: "no-match" });
+  answer = { kind: "no-doi", possible: { kind: "common-phrase" } };
+  await showResult("phrase");
+  expect(shownResult).toEqual({ kind: "no-doi", possible: { kind: "common-phrase" } });
+});
+
+it("allows only the server's bounded phrase and coherent year window into the OpenAlex link", async () => {
+  experimentalOn = true;
+  const found = POSSIBLE.kind === "no-match" && POSSIBLE.possible?.kind === "found" ? POSSIBLE.possible : null;
+  expect(found).not.toBeNull();
+  const malformed = [
+    { ...found!, phrase: `safe",cites:W1` },
+    { ...found!, phrase: "'only-inner-apostrophes'" },
+    { ...found!, phrase: "a".repeat(301) },
+    { ...found!, fromYear: 2022, toYear: null },
+    { ...found!, fromYear: 2026, toYear: 2022 },
+  ];
+  for (const [index, possible] of malformed.entries()) {
+    answer = { kind: "no-match", possible } as CitersResult;
+    await showResult(`malformed-link-${index}`);
+    expect(shownResult, JSON.stringify(possible)).toEqual({ kind: "no-match" });
+  }
 });

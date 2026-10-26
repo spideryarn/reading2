@@ -258,7 +258,7 @@ describe("possibleCitersOf", () => {
     expect(url.searchParams.get("filter")).toBe('fulltext.search:"verbalizable representations form a global workspace in language models"');
     expect(url.searchParams.get("sort")).toBe("publication_date:desc");
     expect(url.searchParams.get("per_page")).toBe(String(POSSIBLE_PER_PAGE));
-    expect(got).toMatchObject({ kind: "found", total: 134, dropped: 1, order: "newest" });
+    expect(got).toMatchObject({ kind: "found", total: 134, dropped: 1, order: "newest", fromYear: null, toYear: null });
     expect(got?.kind === "found" ? got.citers.map((c) => c.openalexId) : []).toEqual(["W2", "W3"]);
   });
 
@@ -271,7 +271,7 @@ describe("possibleCitersOf", () => {
     expect(new URL(h.asked[0]!).searchParams.get("filter")).toBe('fulltext.search:"llm powered autonomous agents",publication_year:2013-2021');
     expect(new URL(h.asked[1]!).searchParams.get("filter")).toBe('fulltext.search:"llm powered autonomous agents",publication_year:2022-2026');
     expect(new URL(h.asked[1]!).searchParams.get("sort")).toBe("cited_by_count:desc,publication_date:desc");
-    expect(got).toMatchObject({ kind: "found", total: 278, order: "most-cited" });
+    expect(got).toMatchObject({ kind: "found", total: 278, order: "most-cited", fromYear: 2022, toYear: 2026 });
   });
 
   it("says common-phrase, and lists nothing, when the gate fires", async () => {

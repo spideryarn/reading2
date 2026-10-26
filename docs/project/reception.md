@@ -464,6 +464,17 @@ honestly finds nothing.
   built by us from the citing paper's DOI or OpenAlex id, never taken from the answer
   ([security-map.md](security-map.md)). A citer's title is drawn in the app's face, like a source's
   title in the rows above: [fonts.md](fonts.md) leaves third-party text there.
+- **Possible citations, when there is no list** (since 2026-10-26, with the experimental switch on;
+  [261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md)).
+  Under a *no DOI* or *no sure record* answer, `?with=possible` adds the works whose **full text**
+  matched OpenAlex's search for the title (`src/citation-fulltext.ts`): free, no model, asked on
+  open. Only for an article added from a public web address, never an upload's title; only for a
+  title distinctive enough (six words, or fewer with a year); and not for a title whose words were
+  as common in papers from before the piece as after it (*the phrase gate*), which says so instead.
+  The piece's own records are dropped; a recent or undated piece lists newest first, an older one
+  most cited first. Called *Possible citations*, never *Cited by*, never in a count, with *See all
+  at OpenAlex* and a line saying it finds papers only. No cache yet. A paid web search for blog
+  posts that cite the piece, on a press, is designed in the plan's Stage 3 and queued.
 - **What is sent**: the article's DOI, or with none the words of its title (below), and our contact
   address, from the server. No key.
   [privacy.md](privacy.md) has the page's sentence.

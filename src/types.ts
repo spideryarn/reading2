@@ -8236,7 +8236,8 @@ export interface Citer {
  * - `found` — `total` is OpenAlex's count of every such work; `citers` the
  *   first page of them, the piece's own records and works from more than a
  *   year before it taken out (`dropped` says how many); `order` how the page
- *   was sorted; `phrase` the exact words sent, which the panel's link to the
+ *   was sorted; `phrase` the exact words sent, and `fromYear`/`toYear` its
+ *   inclusive window (both null when unbounded), which the panel's link to the
  *   rest at OpenAlex repeats.
  * - `common-phrase` — the title turns up in works from before the piece
  *   existed often enough to be a phrase, not a citation of it.
@@ -8250,6 +8251,9 @@ export type PossibleCiters =
       dropped: number;
       order: "newest" | "most-cited";
       phrase: string;
+      /** The inclusive years the list and `total` cover, both null for a piece with no year: the *See all* link asks the same. */
+      fromYear: number | null;
+      toYear: number | null;
       citers: Citer[];
     }
   | { kind: "common-phrase" }

@@ -201,7 +201,10 @@ for that.
   ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of
   those papers says about the piece. When the piece has no DOI on record, we look for it in
   OpenAlex by its title instead, and list its citers only if the record's title and authors (or an
-  author and the year) match; the list then names the record it matched, so you can check it. Only
+  author and the year) match; the list then names the record it matched, so you can check it. With
+  experimental features on, when there is no such record, it lists instead **Possible citations**:
+  papers whose text matched a search for the piece's title. Most of them refer to it, but we have
+  not checked each one, and it finds research papers only. Only
   whoever added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s
   title.
 - To ask about the piece from an angle of your own, use **Investigate** (below). The box that was here has
