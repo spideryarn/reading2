@@ -492,6 +492,32 @@ describe.each(["glossary", "bibliography", "ideas", "situate"] as const)("a %s o
   });
 });
 
+describe("a Where it sits overview origin on the way in", () => {
+  const origin = {
+    mode: "situate",
+    itemId: "so-20261025122230533",
+    quote: "The report was followed by a peer-reviewed update",
+  } as const;
+
+  it("passes the route and database checks, and reads back through the summary", async () => {
+    const out = await ask({ threadId: THREAD, question: "what does this rest on?", origin });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect(out.frames[0]?.data.origin).toEqual(origin);
+    expect((await stored())?.origin).toEqual(origin);
+    const summaries = (await call("GET", `/api/chat/${SLUG}?summary=1`)).body?.threads as ThreadSummary[];
+    expect(summaries.find((thread) => thread.id === THREAD)?.origin).toEqual(origin);
+  });
+
+  it.each(["so-2026102512223", "so-202610251222305333", "so-2026-10-25T12:22:30Z"])(
+    "refuses malformed overview id %s",
+    async (itemId) => {
+      const out = await ask({ threadId: THREAD, question: "what?", origin: { ...origin, itemId } });
+      expect(out.status).toBe(400);
+      expect(await threads()).toHaveLength(0);
+    },
+  );
+});
+
 /**
  * **A cited work's origin as it was spelled before 2026-10-09** — plan
  * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md, Stage 2.

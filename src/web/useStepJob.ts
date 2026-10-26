@@ -166,7 +166,7 @@ interface StepRun<S extends StepName> {
    *
    * The one hole: `S` is inferred from the `step` argument, so a caller who
    * passes a `StepName`-typed **variable** rather than a literal widens it and
-   * the check quietly becomes no check. The two callers that use `precededBy`
+   * the check quietly becomes no check. The callers that use `precededBy`
    * instantiate the hook with literal steps; Metadata's generic caller does not
    * use this option.
    *

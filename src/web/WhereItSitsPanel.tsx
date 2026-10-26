@@ -18,19 +18,20 @@
  *  ┌ Where it sits │ Bibliography 17 │ Links 4 ┐                              (i)
  *  │ A piece from 1998: what has been said since       ← no dossier yet
  *  │ SEARCH OF THE LITERATURE  [ Search the literature ]  …what leaves
+ *  │ GO FURTHER: [Pages about it] [Check a claim] [Close to it…] [Ask…]
  *  │ AFTER IT                    ← OpenAlex's citers, most cited first
  *  │   Whatever next? · Clark · 2013 · cited 4,210 times  …  [ Show all 40 ]
  *  │ BEFORE IT                   ← Bibliography's works it leans on most
  *  │   Kirsh & Maglio 1994 · Putnam 1975 · Burge 1979 …
- *  │ Tools: Pages about it · Check a claim · Close to it, not cited · Ask your own question
  * ```
  *
- * **What it costs to open: nothing paid.** *After it* is the free OpenAlex
- * read Reception's *Cited by* already made (`useCiters`), *Before it* is
- * Bibliography, made on import and armed by a press here if missing
- * (activation.ts § `activationForSources`), and the dossier is the stored
- * one. *Search the literature*, the dearest press in Sources, is the
- * dossier's own button and nothing else (SituateDossier.tsx).
+ * **What it costs to open depends on how it opened.** *After it* is the free
+ * OpenAlex read Reception's *Cited by* already made (`useCiters`), and
+ * *Before it* is Bibliography. A deliberate press that lands here starts the
+ * literature search and Bibliography when either is missing, behind one
+ * composite activation token (useWhereAutoRun.ts); an arrival, reload, Back,
+ * margin link, chat way back or tool crumb starts neither. The empty dossier
+ * keeps its own button for those arrivals.
  *
  * **Lists first until you ask; after that, the dossier first** (decision 1,
  * B+). The two lists are ordered by the piece's age when its year is known:
@@ -50,12 +51,15 @@
  * address as Bibliography (params.ts § `visitorSourcesView`): the citers have
  * no public projection yet (GPT Sol's F3).
  */
-import { LoaderCircle } from "lucide-react";
+import { ExternalLink, LoaderCircle, MessagesSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { type ReactNode, useState } from "react";
 import { CITERS_ABOUT, CITERS_LOADING } from "../messages.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, CitedWork } from "../types.js";
+import { sourceOf } from "./BibliographyPanel.js";
 import { shortTitle, workShortName } from "./cited-in-paragraph.js";
+import { isWebUrl } from "../urls.js";
 import { investigateWorks } from "./InvestigatePanel.js";
 import type { ItemFocus } from "./item-focus.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -121,8 +125,24 @@ export const WHERE_ABOUT_FELL_BACK = "OpenAlex's papers about it could not be li
 /** The crumb's way back, in its tooltip. */
 export const WHERE_BACK_TIP = "Back to Where it sits";
 
-/** The tools row's lead-in. */
-export const WHERE_TOOLS_HEAD = "Tools";
+/**
+ * **The tools' heading**, under the dossier since plan 261026g § Stage 3:
+ * *Tools* at the foot of the band read as a footnote, and none of four
+ * persona reviews could tell what each did or what it cost.
+ */
+export const WHERE_TOOLS_HEAD = "Go further";
+
+/**
+ * **What each tool opens, and where the spending is** — under its button,
+ * because the press itself only moves: each view has its own button, and that
+ * one is what spends (GPT Sol's F7 on plan 261026g).
+ */
+export const SOURCES_TOOL_WHAT: Readonly<Record<SourcesTool, string>> = {
+  reception: "Web pages that discuss this piece. Searching for them there costs a few cents.",
+  claims: "The piece's main claims, each one you can check in chat. Listing them there costs a few cents.",
+  "not-cited": "Papers close to this one that it does not cite. Searching there is free, and sends its opening to OpenAlex.",
+  investigate: "Your own question about where it sits, or one of ours, answered in chat.",
+};
 /** The two lists' headings, and the line under each. */
 export const WHERE_AFTER_HEAD = "After it";
 export const WHERE_AFTER_WHAT = "Papers that cite it, most cited first";
@@ -206,7 +226,7 @@ export function WhereItSitsPanel({
   before: WhereBefore;
   /** The piece's year from its metadata, or `null`. The dossier's own year stands in when this has none. */
   articleYear: number | null;
-  /** A finding's chat (SituateDossier.tsx § `SituateChats`). */
+  /** A finding's or the overview's chat (SituateDossier.tsx § `SituateChats`). */
   chats: SituateChats;
   onJump(id: BlockId): void;
   /** Open Bibliography on one work (Reader.tsx § `openBibliographyWork`). */
@@ -215,7 +235,7 @@ export function WhereItSitsPanel({
   onView(view: SourcesView): void;
   /** A tool's number beside its link, when it has one worth saying (sources-counts.ts). */
   toolCounts?: Partial<Record<SourcesTool, number>>;
-  /** One finding to bring into view, once — a margin line's *Open in Sources*, or its chat's way back. */
+  /** One finding or overview to bring into view once — from the margin or a chat's way back. */
   findingFocus?: ItemFocus | null;
   onFindingFocusTaken?: ((focus: ItemFocus) => void) | undefined;
   /** The experimental switch: draw the experiments' links after the tools (plan 261025h, Stage 4). */
@@ -269,33 +289,41 @@ export function WhereItSitsPanel({
           focus={findingFocus}
           onFocusTaken={onFindingFocusTaken}
         />
-        <div className={`where-lists where-lists-${order}`} data-where-order={order}>
-          {order === "before-first" ? [beforeList, after] : [after, beforeList]}
-        </div>
         <nav className="where-tools" aria-label={`${SOURCES_SUB_MODES.where.label}: ${WHERE_TOOLS_HEAD.toLowerCase()}`}>
-          <span className="where-tools-head">{WHERE_TOOLS_HEAD}:</span>
-          {SOURCES_TOOLS.map((tool) => {
-            const n = toolCounts[tool];
-            return (
-              <button
-                key={tool}
-                type="button"
-                className="where-tool"
-                data-tool={tool}
-                data-tip={`${SOURCES_SUB_MODES[tool].description}.`}
-                onClick={() => onView(tool)}
-              >
-                {SOURCES_TOOL_LABEL[tool]}
-                {n !== undefined && n > 0 && <span className="rcp-view-count">{n}</span>}
-              </button>
-            );
-          })}
+          <h3 className="rcp-group-head where-head where-tools-head">{WHERE_TOOLS_HEAD}</h3>
+          <ul className="where-tool-list">
+            {SOURCES_TOOLS.map((tool) => {
+              const n = toolCounts[tool];
+              return (
+                <li key={tool}>
+                  {/* A mode's run button's look (controls.md): these are
+                      presses that open something, not links in prose. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="where-tool"
+                    data-tool={tool}
+                    aria-describedby={`where-tool-what-${tool}`}
+                    onClick={() => onView(tool)}
+                  >
+                    {tool === "investigate" && <MessagesSquare size={13} aria-hidden="true" />}
+                    {SOURCES_TOOL_LABEL[tool]}
+                    {n !== undefined && n > 0 && <span className="rcp-view-count">{n}</span>}
+                  </Button>
+                  <span id={`where-tool-what-${tool}`} className="where-tool-what">
+                    {SOURCES_TOOL_WHAT[tool]}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
           {/* Behind the experimental switch, and nowhere else: no chip, no
               command-bar row (params.ts § `SOURCES_EXPERIMENTS`). Plain moves,
               arming nothing, as the tools are. */}
           {experiments && (
             <span className="where-experiments">
-              <span className="where-tools-head">{WHERE_EXPERIMENTS_HEAD}:</span>
+              <span className="where-experiments-head">{WHERE_EXPERIMENTS_HEAD}:</span>
               {SOURCES_EXPERIMENTS.map((experiment) => (
                 <button
                   key={experiment}
@@ -311,6 +339,9 @@ export function WhereItSitsPanel({
             </span>
           )}
         </nav>
+        <div className={`where-lists where-lists-${order}`} data-where-order={order}>
+          {order === "before-first" ? [beforeList, after] : [after, beforeList]}
+        </div>
       </div>
     </ModeSurface>
   );
@@ -318,7 +349,7 @@ export function WhereItSitsPanel({
 
 /** The (i)'s first paragraph: what the band is made of, and what costs what. */
 export const WHERE_ABOUT =
-  "After it and Before it cost nothing and use no AI: the papers that cite this piece, from OpenAlex, and the works Bibliography rates the piece as leaning on most. Search the literature is the one press here that pays for an AI: it runs only when you press it. The tools below each open their own view, and nothing starts until you press a button there.";
+  "After it and Before it cost nothing and use no AI: the papers that cite this piece, from OpenAlex, and the works Bibliography rates the piece as leaning on most. Search the literature pays for an AI: a press that opens Where it sits starts it when it is missing; after an arrival, its own button does. Each tool under Go further opens its own view, and nothing starts until you press a button there.";
 
 /**
  * ***Before it*** — Bibliography's works the piece leans on most, a press
@@ -370,6 +401,7 @@ function BeforeIt({
                   <span className="where-work-title voice-author">{shortTitle(work.title.trim())}</span>
                   {byline !== "" && <span className="where-work-by">{byline}</span>}
                 </button>
+                <WorkOut work={work} />
               </li>
             );
           })}
@@ -381,6 +413,36 @@ function BeforeIt({
     </>
   );
 }
+
+/**
+ * **The work's own address, out** (spya-mfuz6g: *"the sources should be
+ * really densely linking"*, plan 261026g § Stage 5): beside the row's way into
+ * Bibliography, when the article gave an address or the web search found one
+ * (`sourceOf`). A Scholar search we built is not the work's address, so it
+ * has none here; Bibliography labels it as a search. Re-checked with
+ * `isWebUrl`, as every active link to a stored address is.
+ */
+function WorkOut({ work }: { work: CitedWork }) {
+  /* Imported and older stored rows can predate `linkFrom`, despite the
+     current DTO requiring it; `sourceOf` then reaches its exhaustive
+     default and returns `undefined` at runtime. Leave such a row unlinked. */
+  const source = sourceOf(work) as ReturnType<typeof sourceOf> | undefined;
+  if (source?.kind !== "address" || !isWebUrl(source.url)) return null;
+  return (
+    <a
+      className="where-work-out"
+      href={source.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      data-tip={`${WHERE_WORK_OUT} · ${source.host}`}
+      aria-label={`${WHERE_WORK_OUT}: ${work.title.trim()}, at ${source.host}`}
+    >
+      <ExternalLink size={12} aria-hidden="true" />
+    </a>
+  );
+}
+/** What the outward link beside a *Before it* row does. */
+export const WHERE_WORK_OUT = "Open the work itself";
 
 /**
  * ***Where it sits › Pages about it***, in a tool's head beside the chip row:

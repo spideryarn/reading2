@@ -17,7 +17,7 @@
  */
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
-import { type ChatThread, isLensOrigin, type LearnKind, type ThreadKind, type ThreadOrigin } from "../types.js";
+import { type ChatThread, isLensOrigin, isSituateOverviewId, type LearnKind, type ThreadKind, type ThreadOrigin } from "../types.js";
 import { CHAT_FROM_WORDS, type ChatFrom, type LearnView } from "./params.js";
 import { LEARN_SUB_MODES, SOURCES_SUB_MODES, type SubMode, subModeWords } from "./sub-modes.js";
 
@@ -42,10 +42,10 @@ export interface ThreadSource {
   quote?: string;
   /**
    * Whose words `quote` is, for its face (docs/project/fonts.md), when they
-   * are not the article's: a question asked in Sources › Investigate is the reader's.
-   * Absent means the author's.
+   * are not the article's: a question asked in Sources › Investigate is the reader's,
+   * a literature search's overview the model's. Absent means the author's.
    */
-  voice?: "reader";
+  voice?: "reader" | "ai";
   /**
    * **The part of Learn this conversation lives in**, on a Learn row
    * and on no other. A row with this is not opened in Chat's band: a press
@@ -83,6 +83,8 @@ export const SOURCE_RECEPTION_LENS = `Started from a question in ${SOURCES_IN} $
  * before then, and such a chat still says `SOURCE_RECEPTION_LENS`.
  */
 export const SOURCE_SITUATE_FINDING = `Started from a finding in ${SOURCES_IN} ${SOURCES_SUB_MODES.where.label}`;
+/** The same origin when its item is the dossier's overview (plan 261026g § Stage 2). */
+export const SOURCE_SITUATE_OVERVIEW = `Started from the overview in ${SOURCES_IN} ${SOURCES_SUB_MODES.where.label}`;
 
 /** And for one started from a Glossary entry's *Ask in chat* (plan 261006d, D6). */
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
@@ -216,9 +218,12 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
          and this is a chat, opened in Chat like any other. */
       case "quiz":
         return { ...at, label: SOURCE_QUIZ_MARK, quote: origin.quote };
-      /* The finding's passage: the article's words, so no voice. */
+      /* The finding's passage: the article's words, so no voice. The
+         overview's words are the model's. */
       case "situate":
-        return { ...at, label: SOURCE_SITUATE_FINDING, quote: origin.quote };
+        return isSituateOverviewId(origin.itemId)
+          ? { ...at, label: SOURCE_SITUATE_OVERVIEW, quote: origin.quote, voice: "ai" }
+          : { ...at, label: SOURCE_SITUATE_FINDING, quote: origin.quote };
       default:
         return origin satisfies never;
     }

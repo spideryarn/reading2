@@ -11,7 +11,6 @@ import {
   type LensOrigin,
   MAX_LENS_CHARS,
   originName,
-  SITUATE_FINDING_KINDS,
   type Situate,
   type SituateAngle,
   type SituateFinding,
@@ -20,6 +19,7 @@ import {
   type SituateQueryGroup,
   type SituateQueryOutcome,
   type SituateOrigin,
+  situateOverviewId,
   type SituateSearched,
 } from "../types.js";
 
@@ -29,19 +29,21 @@ import {
  * have said the chip's name twice.
  */
 export const SITUATE_HEAD = "Search of the literature";
-/** Before it has run: what a press does, in one sentence. */
+/** Before it has run: what the search does, in one sentence. */
 export const SITUATE_WHAT =
   "Searches the web and the papers that cite this piece, then marks the passages that later work challenges, supports or has moved on from.";
 /** The button that starts it, and the one that starts it again. */
 export const SITUATE_RUN = "Search the literature";
 export const SITUATE_AGAIN = "Search again";
 /**
- * **What leaves, said before the press** (plan § Privacy, GPT Sol's S4). The
- * piece's own words go to a search engine, which none of Investigate's other
- * presses does before the reader has typed or picked a question.
+ * **What leaves** (plan § Privacy, GPT Sol's S4), under the manual button; the
+ * privacy page carries the same disclosure before a press that opens the
+ * sub-mode. The piece's own words go to a search engine, which none of
+ * Investigate's other presses does before the reader has typed or picked a
+ * question.
  */
 export const SITUATE_DISCLOSURE =
-  "Pressing it sends this piece through OpenRouter to an AI, which writes short searches from its text. Those searches go through OpenRouter to Exa, a web search engine; its DOI or title goes to OpenAlex to find papers that cite it. The article, results and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.";
+  "It starts by itself when you open Where it sits with the Sources button or its tab. It sends this piece through OpenRouter to an AI, which writes short searches from its text. Those searches go through OpenRouter to Exa, a web search engine; its DOI or title goes to OpenAlex to find papers that cite it. The article, results and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.";
 /** While the job runs. */
 export const SITUATE_WORKING = "This takes a few minutes. You can keep reading; the findings appear here when it is done.";
 /** The stale banner's words. */
@@ -113,13 +115,32 @@ export interface FindingGroup {
 }
 
 /**
+ * **The order the groups are drawn in**: what most changes how far to trust
+ * the piece first — challenged, then what has happened since, then a citation
+ * to check and the work it leaves out, then how it was received, and what
+ * bears it out last. A display order only: the stored kinds and the margin's
+ * stamp order (`SITUATE_FINDING_KINDS`, `strongestFirst`) are untouched.
+ * Plan docs/plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md
+ * § Stage 2, from four persona reviews that each found the old order
+ * (Supported last, Since in the middle) followed no rule a reader could see.
+ */
+export const SITUATE_DISPLAY_ORDER: readonly SituateFindingKind[] = [
+  "challenged",
+  "since",
+  "citation",
+  "missing",
+  "reception",
+  "supported",
+];
+
+/**
  * **The findings, grouped by kind in the order a reader most needs them**
- * (`SITUATE_FINDING_KINDS`), each group in the stored order, which is
+ * (`SITUATE_DISPLAY_ORDER`), each group in the stored order, which is
  * strongest first. An empty kind has no group: a heading over nothing would
  * read as a finding. A kind the client does not know is left out.
  */
 export function groupFindings(findings: readonly SituateFinding[]): FindingGroup[] {
-  return SITUATE_FINDING_KINDS.map((kind) => ({
+  return SITUATE_DISPLAY_ORDER.map((kind) => ({
     kind,
     label: SITUATE_FINDING_LABEL[kind],
     findings: findings.filter((f) => f.kind === kind),
@@ -130,6 +151,53 @@ export function groupFindings(findings: readonly SituateFinding[]): FindingGroup
 export function groupHeading(group: Pick<FindingGroup, "label" | "findings">): string {
   return `${group.label} · ${group.findings.length}`;
 }
+
+/**
+ * **One passage and what the search found about it, in one group**: the
+ * findings that quote the same words of the same block, run together under
+ * one quote. Two *Since* findings on one passage drawn as two cards with the
+ * same quote read as a bug (plan 261026g § Stage 2). Only neighbours merge, so
+ * the group's strongest-first order stands.
+ */
+export interface PassageCluster {
+  blockId: SituateFinding["blockId"];
+  quote: string;
+  findings: SituateFinding[];
+}
+export function passageClusters(findings: readonly SituateFinding[]): PassageCluster[] {
+  const out: PassageCluster[] = [];
+  for (const finding of findings) {
+    const last = out[out.length - 1];
+    if (last && last.blockId === finding.blockId && last.quote === finding.quote) last.findings.push(finding);
+    else out.push({ blockId: finding.blockId, quote: finding.quote, findings: [finding] });
+  }
+  return out;
+}
+
+/**
+ * **What *Ask about this in chat* on the overview asks** (spya-mfuz6g): the
+ * overview's own words, whole, because no chat tool reads the dossier, then
+ * the question. Sent through `askInSources` (Reader.tsx § `askOverview`).
+ */
+export function overviewQuestion(overview: string): string {
+  return `A search of the literature on this piece summed up where it sits like this: “${overview.replace(/\s+/g, " ").trim()}” What does that rest on, and how far should I trust it?`;
+}
+
+/**
+ * **The overview chat's origin** (plan 261026g § Stage 2, GPT Sol's F3): a
+ * `situate` origin whose item is this dossier's overview
+ * (`situateOverviewId`), so the chat is listed under *Where it sits*, its
+ * way back opens it, and a new search's overview gets a chat of its own. The
+ * quote is the overview's first words, for the title and the list.
+ */
+export function overviewOrigin(situate: Pick<Situate, "generatedAt" | "overview">): SituateOrigin {
+  return { mode: "situate", itemId: situateOverviewId(situate.generatedAt), quote: originName(situate.overview) };
+}
+/** The overview's chat button and mark. */
+export const ASK_OVERVIEW_IN_CHAT = "Ask about this in chat";
+export const OPEN_OVERVIEW_CHAT = "Open the chat about this overview";
+/** The count strip's name, for a screen reader. */
+export const SITUATE_COUNTS_LABEL = "What the search found, by kind";
 
 function clip(text: string, max: number): string {
   const words = text.replace(/\s+/g, " ").trim();

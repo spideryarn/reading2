@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "25 October 2026";
+const LAST_UPDATED = "26 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -436,7 +436,9 @@ export function PrivacyPage() {
             something of the reader's. These are sent the identifier of a
             published work, or since 2026-10-11, for an article with no DOI,
             the words of its title to OpenAlex (Cited by's title search,
-            docs/plans/261011q-…), or, on the owner's press in Sources' Not
+            docs/plans/261011q-…, and, for an article from a public address,
+            its full-text search for Possible citations, docs/plans/261026f-…,
+            src/citation-fulltext.ts), or, on the owner's press in Sources' Not
             cited, the title and the opening of the text (src/related-work.ts,
             docs/plans/261011ac-…, its review's F1), and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
             is the whole list of hosts, and the request is built in
@@ -477,10 +479,12 @@ export function PrivacyPage() {
           , when you open Sources on an article of yours, for the list of papers that cite it. Our
           server sends each one the identifier of a published work — for your article, its DOI —
           and our own contact address. When your article has no DOI, OpenAlex is sent the words of
-          its title instead, to find it by. And when you press Search OpenAlex for related work, in
-          Sources’ Not cited, OpenAlex is sent your article’s title and the opening of its text (its
-          abstract, on a paper), to find papers close to it. When the list of works your article
-          cites is made, each is looked up to write a short note on it from its abstract: Crossref
+          its title instead, to find it by; and, for an article you added from a public web address,
+          to find papers that matched a full-text search for its title. And when you press Search
+          OpenAlex for related work, in Sources’ Not cited, OpenAlex is sent your article’s title and
+          the opening of its text (its abstract, on a paper), to find papers close to it. When the
+          list of works your article cites is made, each is looked up to write a short note on it
+          from its abstract: Crossref
           and DataCite are sent its DOI or arXiv identifier, and OpenAlex its DOI. For an article
           you added from a public web address, a cited work with no DOI may be looked up at Crossref
           by its title and its first author’s surname instead; for a file you uploaded, the works it
@@ -504,7 +508,9 @@ export function PrivacyPage() {
           {/* Plan 261024o (src/situate.ts, src/situate-citers.ts): the owner's
               press on Search the literature, in Sources › Where it sits and
               out of the experimental switch since plan 261025h.
-              The citers are asked on opening Sources since the same plan,
+              Since plan 261026g (spya-mfuz6g) the press that opens Where it
+              sits starts it too, and a pasted link or Back does not
+              (useWhereAutoRun.ts). The citers are asked on opening Sources since plan 261025h,
               because Where it sits is the owner's default and its After it
               is that list (SourcesMode.tsx § `useCiters`).
               The searches are planned by a model from the fenced title,
@@ -512,8 +518,8 @@ export function PrivacyPage() {
               Exa search through OpenRouter; the citing works are OpenAlex's,
               found by the DOI or the title as Cited by finds them.
               docs/project/privacy.md § Search the literature. */}{" "}
-          When you press Search the literature, in Sources’ Where it sits,
-          your article is searched for in the wider literature. Its title, headings, opening and
+          When you open Sources’ Where it sits with the Sources button or its tab, or press
+          Search the literature there, your article is searched for in the wider literature. Its title, headings, opening and
           details of works it cites go through OpenRouter to an AI that writes a dozen or so short
           searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is
           sent the article’s DOI, or the words of its title, to find papers that cite it. The whole

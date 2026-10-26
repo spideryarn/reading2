@@ -4494,7 +4494,9 @@ const rawPgArticleReader: ArticleReader = {
    * columns, with `titleFor` deliberately not applied (the contract says why).
    * The heading query runs only for a revision with no stored title.
    */
-  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">> {
+  async loadArticleIdentity(
+    slug: string,
+  ): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear" | "filename">> {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
     if (!found) throw notFound(slug);
@@ -4513,6 +4515,9 @@ const rawPgArticleReader: ArticleReader = {
          through, as `metaFrom` passes them. */
       ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
       ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
+      /* An upload's title is never sent to OpenAlex's full-text search
+         (src/citation-fulltext.ts § fulltextQuestionOf, plan 261026f). */
+      ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
     };
   },
 
