@@ -66,7 +66,7 @@
  */
 import { MessagesSquare } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { CitedWork, ClaimOrigin, ListedClaim, SituateFinding, ThreadSummary } from "../types.js";
+import type { CitedWork, ClaimOrigin, ListedClaim, Situate, SituateFinding, ThreadSummary } from "../types.js";
 import { MAX_LENS_CHARS } from "../types.js";
 import { MODE_LABEL } from "../title-text.js";
 import { shortTitle, workShortName } from "./cited-in-paragraph.js";
@@ -112,6 +112,8 @@ export interface SourcesInvestigateChats {
    * in this bundle because it is built from the same summaries and senders.
    */
   onFinding(finding: SituateFinding): void;
+  /** The dossier's overview's sender, the same way (Reader.tsx § `askOverview`, plan 261026g). */
+  onOverview(situate: Situate): void;
   /** Open a conversation already started, beside Sources. */
   onOpen(threadId: string): void;
 }

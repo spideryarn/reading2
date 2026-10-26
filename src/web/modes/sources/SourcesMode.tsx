@@ -5,8 +5,7 @@
  *
  * ```
  *  ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                           (i)
- *  │ WhereItSitsPanel: Papers that cite it, What it builds on, the dossier  ← Where it sits (owner default)
- *  │   Tools: Pages about it · Check a claim · Close to it, not cited · Ask your own question
+ *  │ WhereItSitsPanel: dossier, Go further, Papers that cite it, What it builds on ← Where it sits (owner default)
  *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (a visitor's default)
  *  │ LinksPanel, read from the article's markup                    ← Links
  *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims (tools)
@@ -36,10 +35,11 @@
  * numbers come from sources-counts.ts, the same selectors the panels draw
  * their lists with (GPT Sol's F4).
  *
- * **Every read stays mounted in every sub-mode**, so each chip and tool can
- * show its count, and **each auto-run is gated on its own sub-mode**: a press
- * that lands on *Where it sits* or Bibliography arms the citations and nothing
- * else, and a press armed for one sub-mode that finds another on screen is
+ * **Every shared read stays mounted in every sub-mode**, so each chip and tool
+ * can show its count, and **each auto-run is gated on its own sub-mode**: a
+ * press that lands on *Where it sits* arms its composite (Bibliography plus
+ * the literature search, whichever is missing); Bibliography arms only its
+ * own list. A press armed for one sub-mode that finds another on screen is
  * retired unspent (useAutoRun.ts § `enabled`). The reads are free GETs. Not
  * cited's read, like *Cited by*'s, is not asked until its view is first shown,
  * and its search is only ever the panel's button (plan 261011ac, F1); the
@@ -88,6 +88,7 @@ import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
 import { useRenderCount } from "../../perf.js";
 import { useBibliography, type BibliographyRead } from "../../useBibliography.js";
+import { useWhereAutoRun, type WhereRunnable } from "../../useWhereAutoRun.js";
 import { useReception } from "../../useReception.js";
 import { useSourcesClaims } from "../../useSourcesClaims.js";
 import { useSourcesClaimChecks } from "../../useSourcesClaimChecks.js";
@@ -190,7 +191,7 @@ export function SourcesBand({
   /** One claim to bring into view in Claims, once (ReceptionAndClaimsPanel § `Props.focus`). */
   claimFocus: ItemFocus | null;
   onClaimFocusTaken(focus: ItemFocus): void;
-  /** One Situate finding to bring into view in *Where it sits*' dossier, once (plan 261024o; SituateDossier § `focus`). */
+  /** One Situate finding or overview to bring into view in *Where it sits*' dossier, once (plans 261024o and 261026g; SituateDossier § `focus`). */
   findingFocus?: ItemFocus | null;
   onFindingFocusTaken?: (focus: ItemFocus) => void;
   /** Open Bibliography on one work — Claims' *Cited in this paragraph* (Reader.tsx § `openBibliographyWork`). */
@@ -256,6 +257,7 @@ export function SourcesBand({
       return (
         <WhereBand
           slug={slug}
+          bibliography={bibliography}
           head={head}
           citers={citers}
           before={{
@@ -267,6 +269,7 @@ export function SourcesBand({
           chats={{
             summaries: investigateChats.summaries,
             onFinding: investigateChats.onFinding,
+            onOverview: investigateChats.onOverview,
             onOpen: investigateChats.onOpen,
           }}
           onJump={onJump}
@@ -376,14 +379,23 @@ export function pieceYear(publishedAt: unknown, publishedYear: unknown): number 
  * ***Where it sits*, with the literature search's read mounted** — for every
  * owner since plan 261025h moved the dossier out of the experimental switch
  * (decision 5). A component of its own so `useSituate`'s read and job watch
- * live only while this or Investigate is on screen; it has no automatic run
- * (useSituate.ts), so mounting it spends nothing.
+ * live only while this or Investigate is on screen.
+ *
+ * **And the owner of a press that lands here** (useWhereAutoRun.ts, plan
+ * 261026g § Stage 4): it asks for whichever of the works cited and the search
+ * of the literature is missing. Mounting with no press spends nothing.
  */
 function WhereBand({
   slug,
+  bibliography,
   ...props
-}: Omit<ComponentProps<typeof WhereItSitsPanel>, "situate"> & { slug: string; before: WhereBefore }) {
+}: Omit<ComponentProps<typeof WhereItSitsPanel>, "situate"> & {
+  slug: string;
+  before: WhereBefore;
+  bibliography: WhereRunnable;
+}) {
   const situate = useSituate(slug);
+  useWhereAutoRun(slug, bibliography, situate);
   return <WhereItSitsPanel situate={situate} {...props} />;
 }
 
@@ -604,9 +616,9 @@ function useReceptionAndClaimsControls() {
  * what others say.
  *
  * The owner's press arms the chip's own work, the same contract as its
- * command-bar row (activation.ts § `activationForSources`): *Where it sits* and
- * Bibliography the citations, Links nothing. A stored list consumes its token
- * without running. A visitor can never arm owner work.
+ * command-bar row (activation.ts § `activationForSources`): *Where it sits*'
+ * composite, Bibliography's list, and nothing for Links. Stored artefacts
+ * consume the token without running. A visitor can never arm owner work.
  */
 export function SourcesViews({
   view,
@@ -695,10 +707,12 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
 /** The second paragraph of each chip's card: how its rows were got, and what was checked. */
 const VIEW_HOW: Record<SourcesView, string> = {
   /* Checked against WhereItSitsPanel.tsx: Papers that cite it is `useCiters`' OpenAlex
-     read, What it builds on Bibliography's `relevance`, and the dossier's press is its
-     own button (SituateDossier.tsx). */
+     read, What it builds on Bibliography's `relevance`, and the dossier is the
+     literature search (`SituateDossier.tsx`). Gesture-specific spending copy
+     stays in the band's (i), because this card is also shown on plain links
+     and to visitors (docs/project/tooltips.md). */
   where:
-    "The papers that cite it come from OpenAlex and the works it leans on from Bibliography, with no AI and nothing to press. Search the literature is one press that pays for an AI to search the web and read what it finds; every quote it shows is checked against its source by the app.",
+    "The papers that cite it come from OpenAlex and the works it leans on from Bibliography, with no AI. Search the literature pays for an AI to search the web and read what it finds; every quote it shows is checked against its source by the app.",
   bibliography:
     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
   /* Checked against src/related-work.ts: `openAlexRelatedUrl` (semantic search

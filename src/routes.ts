@@ -282,6 +282,7 @@ import { isWebUrl, savedSource } from "./urls.js";
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
 /* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
+import { possibleCitersOf } from "./citation-fulltext.js";
 import { citersOf } from "./citation-index.js";
 import type { CitersResult } from "./types.js";
 /* Papers close to the article that its Bibliography does not list, for Sources'
@@ -567,6 +568,7 @@ import {
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
   SITUATE_FINDING_ID,
+  SITUATE_OVERVIEW_ID,
   currentOriginMode,
   sameAnchor,
   sameOrigin,
@@ -5614,19 +5616,21 @@ function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Reco
 }
 
 /**
- * **A literature-search finding's origin** (plan 261025h, qi-mmtsxdhg): the
- * finding's id, shaped as src/situate.ts § `findingId` mints it
- * (`SITUATE_FINDING_ID`), and a snapshot of its passage. Shape only: the id is
- * not looked up, so a finding a newer search dropped never refuses its own
- * chat. No part of the passage reaches a thrown message.
+ * **A literature-search item's origin**: a finding's id, shaped as
+ * src/situate.ts § `findingId` mints it (`SITUATE_FINDING_ID`), or an
+ * overview's dossier-time id (`SITUATE_OVERVIEW_ID`), plus its snapshot.
+ * Shape only: the id is not looked up, so an item a newer search dropped
+ * never refuses its own chat. No part of the snapshot reaches a thrown
+ * message. Plans 261025h (qi-mmtsxdhg) and 261026g.
  */
 function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
   const { itemId, quote, blockId, lens } = body;
   if (blockId !== undefined || lens !== undefined) {
     throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
   }
-  if (typeof itemId !== "string" || !SITUATE_FINDING_ID.test(itemId)) {
-    throw httpError(400, "origin.itemId must be a finding id");
+  /* A finding's id, or its dossier's overview's (plan 261026g § Stage 2). */
+  if (typeof itemId !== "string" || !(SITUATE_FINDING_ID.test(itemId) || SITUATE_OVERVIEW_ID.test(itemId))) {
+    throw httpError(400, "origin.itemId must be a finding id or an overview id");
   }
   if (typeof quote !== "string" || quote.trim() === "") {
     throw httpError(400, "origin.quote must be a non-empty string");
@@ -13054,6 +13058,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    *
    * **The identity is the imported one, not the shelf's**: a reader's rename
    * would fail the title check on a correct DOI (F2).
+   *
+   * **`?with=possible` adds *Possible citations*** to a `no-doi` or `no-match`
+   * answer: the works that matched OpenAlex's full-text search for the piece's
+   * title, for an article from a public address — up to two more
+   * free requests, made only when the panel asks (src/citation-fulltext.ts,
+   * plan 261026f). Without it the answer is what it was.
    */
   {
     kind: "pattern",
@@ -13067,8 +13077,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          same shape, when the list has a topic (plan 261025h, decision 10). */
       const about = query.get("about");
       if (about !== null && about !== "topic") throw httpError(400, "about must be topic");
+      const withParams = query.getAll("with");
+      if (withParams.some((value) => value !== "possible")) throw httpError(400, "with must be possible");
+      const withPossible = withParams.length > 0;
       const identity = await loadArticleIdentity(slugPart(captures, 1));
       const citers: CitersResult = await citersOf(identity, {}, about === "topic" ? { about } : {});
+      if (withPossible && (citers.kind === "no-doi" || citers.kind === "no-match")) {
+        const possible = await possibleCitersOf(identity);
+        if (possible !== null) {
+          send(res, 200, { ...citers, possible } satisfies CitersResult);
+          return;
+        }
+      }
       send(res, 200, citers);
     },
   },

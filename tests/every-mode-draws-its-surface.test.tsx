@@ -806,6 +806,8 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   reception: true,
   /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
   "sources-claims": true,
+  /* Where it sits: the works cited and the search of the literature, behind one press (plan 261026g). */
+  "sources-where": true,
   bibliography: true,
   faq: true,
   relations: true,
@@ -1298,7 +1300,9 @@ const SPENDS: Record<Mode, Spend> = {
   sources: {
     kind: "delegated",
     presses: [
-      { search: "", steps: ["bibliography"], spends: [] },
+      /* Since plan 261026g (spya-mfuz6g) the press on Where it sits is also
+         the request for the search of the literature, after the citations. */
+      { search: "", steps: ["bibliography", "situate"], spends: [] },
       { search: "?sources=bibliography", steps: ["bibliography"], spends: [] },
       { search: "?sources=not-cited", steps: [], spends: [] },
       { search: "?sources=links", steps: [], spends: [] },

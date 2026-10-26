@@ -219,11 +219,11 @@ function NoDossier({ onGo }: { onGo(): void }) {
   );
 }
 
-/** The article's passage, which is the link to it: what both experiments start every finding from. */
+/** The article's passage, its quote the jump to it: what both experiments start every finding from. */
 function Passage({ finding, onJump }: { finding: SituateFinding; onJump(id: BlockId): void }) {
   return (
     <p className="situate-finding-head">
-      <FindingPassage finding={finding} onJump={onJump} />
+      <FindingPassage blockId={finding.blockId} quote={finding.quote} onJump={onJump} />
     </p>
   );
 }

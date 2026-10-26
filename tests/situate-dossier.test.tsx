@@ -26,7 +26,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sourcesHead } from "./helpers/sources-head.js";
 import type { BlockId, Job, Situate, SituateFinding, ThreadSummary } from "../src/types.js";
-import { MAX_LENS_CHARS } from "../src/types.js";
+import { MAX_LENS_CHARS, SITUATE_FINDING_ID, SITUATE_OVERVIEW_ID } from "../src/types.js";
 import type { UseSituate } from "../src/web/useSituate.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -80,8 +80,13 @@ const {
   SITUATE_QUESTIONS_HEAD,
   SITUATE_STALE,
   ASK_FINDING_IN_CHAT,
+  ASK_OVERVIEW_IN_CHAT,
   OPEN_FINDING_CHAT,
+  OPEN_OVERVIEW_CHAT,
+  SITUATE_FINDING_TIP,
   findingLens,
+  overviewOrigin,
+  overviewQuestion,
   findingOrigin,
   groupFindings,
   groupHeading,
@@ -224,6 +229,8 @@ let root: Root;
 const questions: string[] = [];
 /** The findings a press on *Ask in chat* handed to the sender. */
 const askedFindings: string[] = [];
+/** The dossiers whose overview a press on *Ask about this in chat* handed to the sender. */
+const askedOverviews: string[] = [];
 const opened: string[] = [];
 const jumped: string[] = [];
 const pressed: string[] = [];
@@ -271,6 +278,7 @@ function panel(
     chats: {
       summaries,
       onFinding: (f: SituateFinding) => askedFindings.push(f.id),
+      onOverview: (s: Situate) => askedOverviews.push(s.generatedAt),
       onOpen: (id: string) => opened.push(id),
     },
     onJump: (id: BlockId) => jumped.push(id),
@@ -292,6 +300,7 @@ function investigate(pieceQuestions: readonly string[]): ReactElement {
       onCheck: () => {},
       onAskWork: () => {},
       onFinding: () => {},
+      onOverview: () => {},
       onOpen: (id: string) => opened.push(id),
     },
     claims: null,
@@ -314,6 +323,7 @@ beforeEach(() => {
   jobEngine.reset();
   questions.length = 0;
   askedFindings.length = 0;
+  askedOverviews.length = 0;
   opened.length = 0;
   jumped.length = 0;
   pressed.length = 0;
@@ -331,7 +341,14 @@ const section = () => host.querySelector<HTMLElement>(".where-situate");
 const text = () => (section()?.textContent ?? "").replace(/\s+/g, " ");
 const buttonCalled = (words: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").trim() === words);
-const groupHeads = () => [...host.querySelectorAll<HTMLElement>(".situate-group-head")].map((h) => h.textContent);
+/** Each group's head as *Name · count* — its name and count, without the meaning line under them. */
+const groupHeads = () =>
+  [...host.querySelectorAll<HTMLElement>(".situate-group-head")].map(
+    (h) => `${h.querySelector(".rcp-section-name")?.textContent} · ${h.querySelector(".rcp-section-count")?.textContent}`,
+  );
+/** The groups that are open: their kinds, in order. */
+const openGroups = () =>
+  [...host.querySelectorAll<HTMLDetailsElement>("details.situate-group")].filter((d) => d.open).map((d) => d.dataset.situateKind);
 
 describe("a finding asked for from the margin or its chat's way back (plan 261024o § Marginalia; 261025h)", () => {
   function paintFocused(id: string, taken: string[], summaries: ThreadSummary[] = []): void {
@@ -370,6 +387,159 @@ describe("a finding asked for from the margin or its chat's way back (plan 26102
     paintFocused("c2", taken, [chat]);
     expect(taken).toEqual(["c2"]);
     expect(opened).toEqual([]);
+  });
+});
+
+describe("the shape at a glance (plan 261026g § Stage 2, spya-c5gvp0)", () => {
+  it("opens only the first group in the reader's order; the rest are shut with their counts and meaning", () => {
+    paint(owner());
+    expect(openGroups()).toEqual(["challenged"]);
+    const shut = host.querySelector<HTMLDetailsElement>('details[data-situate-kind="supported"]');
+    expect(shut?.querySelector(".rcp-section-gist")?.textContent).toBe(SITUATE_FINDING_TIP.supported);
+    /* A shut group draws no rows. */
+    expect(shut?.querySelector(".situate-finding")).toBeNull();
+  });
+
+  it("orders the groups by what most changes how far to trust the piece", () => {
+    paint(
+      owner({
+        situate: situate({
+          findings: [
+            finding({ id: "r1", kind: "reception" }),
+            finding({ id: "t1", kind: "citation" }),
+            finding({ id: "s1", kind: "supported" }),
+            finding({ id: "n1", kind: "since" }),
+          ],
+        }),
+      }),
+    );
+    expect(groupHeads()).toEqual(["Since · 1", "Citation? · 1", "Reception · 1", "Supported · 1"]);
+    /* No challenge: the first group there is, is the open one. */
+    expect(openGroups()).toEqual(["since"]);
+  });
+
+  it("has a count strip whose press opens that group", () => {
+    paint(owner());
+    const strip = [...host.querySelectorAll<HTMLButtonElement>(".situate-count")];
+    expect(strip.map((b) => b.textContent)).toEqual(["Challenged2", "Since1", "Not cited?1", "Supported1"]);
+    expect(strip[3]?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById(strip[3]?.getAttribute("aria-controls") ?? "")?.dataset.situateKind).toBe("supported");
+    act(() => strip[3]?.click());
+    expect(openGroups()).toEqual(["challenged", "supported"]);
+    expect(strip[3]?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector('[data-finding="s1"]')).not.toBeNull();
+  });
+
+  it("resets the folds for a new dossier and opens that dossier's first group", () => {
+    paint(owner());
+    act(() => host.querySelector<HTMLButtonElement>('.situate-count[data-situate-kind="supported"]')?.click());
+    expect(openGroups()).toEqual(["challenged", "supported"]);
+
+    act(() =>
+      root.render(
+        panel(
+          owner({
+            situate: situate({
+              generatedAt: "2026-10-26T09:00:00.000Z",
+              findings: [finding({ id: "n-new", kind: "since" }), finding({ id: "s-new", kind: "supported" })],
+            }),
+          }),
+        ),
+      ),
+    );
+    expect(openGroups()).toEqual(["since"]);
+  });
+
+  it("a finding asked for in a shut group opens the group and lands on it", () => {
+    flashed.length = 0;
+    const taken: string[] = [];
+    act(() => {
+      root.render(panel(owner(), [], { findingFocus: { id: "s1", n: 1 }, onFindingFocusTaken: (f) => taken.push(f.id) }));
+    });
+    expect(openGroups()).toContain("supported");
+    expect(flashed).toEqual(["s1"]);
+    expect(taken).toEqual(["s1"]);
+  });
+
+  it("the way back from the overview's chat lands on the summary box", () => {
+    flashed.length = 0;
+    const taken: string[] = [];
+    const id = overviewOrigin(situate()).itemId;
+    act(() => {
+      root.render(panel(owner(), [], { findingFocus: { id, n: 1 }, onFindingFocusTaken: (f) => taken.push(f.id) }));
+    });
+    expect(section()?.querySelector(".situate-summary")?.getAttribute("data-finding")).toBe(id);
+    expect(flashed).toEqual([id]);
+    expect(taken).toEqual([id]);
+  });
+
+  it("keeps a finding asked for while the read has failed, and lands it once a retry answers", () => {
+    flashed.length = 0;
+    const taken: string[] = [];
+    const focus = { findingFocus: { id: "s1", n: 1 }, onFindingFocusTaken: (f: { id: string }) => taken.push(f.id) };
+    act(() => root.render(panel(owner({ status: "error", situate: null, error: "Could not read" }), [], focus)));
+    expect(taken).toEqual([]);
+    act(() => root.render(panel(owner(), [], focus)));
+    expect(flashed).toEqual(["s1"]);
+    expect(taken).toEqual(["s1"]);
+  });
+
+  it("draws two findings about the same words under one quote", () => {
+    paint(
+      owner({
+        situate: situate({
+          findings: [
+            finding({ id: "n1", kind: "since", note: "First later paper." }),
+            finding({ id: "n2", kind: "since", note: "Second later paper." }),
+            finding({ id: "n3", kind: "since", blockId: B, quote: "broadcast is all or none" }),
+          ],
+        }),
+      }),
+    );
+    const cards = [...host.querySelectorAll<HTMLElement>(".situate-passage")];
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.querySelectorAll(".situate-quote")).toHaveLength(1);
+    expect([...(cards[0]?.querySelectorAll("[data-finding]") ?? [])].map((e) => (e as HTMLElement).dataset.finding)).toEqual([
+      "n1",
+      "n2",
+    ]);
+  });
+
+  it("the quote itself goes to the passage", () => {
+    paint(owner());
+    act(() => host.querySelector<HTMLButtonElement>("button.situate-quote")?.click());
+    expect(jumped).toEqual([A]);
+  });
+
+  it("asks about the overview in chat, and shows the chat's mark once there is one (spya-mfuz6g)", () => {
+    paint(owner());
+    act(() => host.querySelector<HTMLButtonElement>(`button[aria-label="${ASK_OVERVIEW_IN_CHAT}"]`)?.click());
+    expect(askedOverviews).toEqual([situate().generatedAt]);
+    const chat: ThreadSummary = {
+      id: "about-overview",
+      title: "Where it sits: The report became a reference point.",
+      createdAt: "2026-10-24T10:00:00.000Z",
+      updatedAt: "2026-10-24T10:00:00.000Z",
+      kind: "chat",
+      turns: 1,
+      origin: overviewOrigin(situate()),
+    };
+    act(() => root.render(panel(owner(), [chat])));
+    expect(host.querySelector(`button[aria-label="${ASK_OVERVIEW_IN_CHAT}"]`)).toBeNull();
+    expect(host.querySelector(`[aria-label="${OPEN_OVERVIEW_CHAT}"]`)).not.toBeNull();
+    /* A new search's overview is a new item: the old chat is not its mark. */
+    act(() => root.render(panel(owner({ situate: situate({ generatedAt: "2026-10-26T09:00:00.000Z" }) }), [chat])));
+    expect(host.querySelector(`button[aria-label="${ASK_OVERVIEW_IN_CHAT}"]`)).not.toBeNull();
+  });
+
+  it("the overview's origin is a situate item the route accepts, and its question carries the overview whole", () => {
+    const origin = overviewOrigin(situate());
+    expect(origin.mode).toBe("situate");
+    expect(origin.itemId).toMatch(SITUATE_OVERVIEW_ID);
+    expect(origin.itemId).not.toMatch(SITUATE_FINDING_ID);
+    const long = "word ".repeat(400).trim();
+    expect(overviewQuestion(long)).toContain(long);
+    expect(overviewQuestion(long).endsWith("how far should I trust it?")).toBe(true);
   });
 });
 
@@ -429,19 +599,6 @@ describe("the section", () => {
     const first = section()?.querySelector<HTMLAnchorElement>(".situate-finding a.block-ref");
     act(() => first?.click());
     expect(jumped).toEqual([A]);
-  });
-
-  /* A persona review, 2026-10-26: the grey block id after each quote
-     (`df4crx`) meant nothing to a reader. The quote is the link now; the
-     address, the card's hook and the jump are kept. */
-  it("makes the quoted passage the link, and draws no block id", () => {
-    paint(owner());
-    const head = section()?.querySelector<HTMLElement>(".situate-finding .situate-finding-head");
-    const link = head?.querySelector<HTMLAnchorElement>("a.block-ref");
-    expect(link?.textContent).toMatch(/^“.+”$/);
-    expect(link?.getAttribute("href")).toContain(`at=${A}`);
-    expect(link?.getAttribute("data-block-link")).toBe(A);
-    expect(head?.textContent).not.toContain(A.replace(/^spya-/, ""));
   });
 
   it("links each source and shows what it says one press away", () => {

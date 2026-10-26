@@ -23,6 +23,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ADDING_SENDS_TEXT_AWAY } from "../src/messages.js";
 import { formatBytes, MAX_PAGES, MAX_UPLOAD_BYTES } from "../src/uploads.js";
 import type { UseJobs } from "../src/web/useJobs.js";
 
@@ -84,9 +85,9 @@ const pdfButton = (): HTMLButtonElement => {
   return button;
 };
 
-/** The (i) beside it, which holds the limits since spya-kx8z6d. */
+/** The (i) beside it: upload limits, then where the article's text goes. */
 const limitsInfo = (): HTMLButtonElement => {
-  const button = host.querySelector<HTMLButtonElement>('button[aria-label="What you can add"]');
+  const button = host.querySelector<HTMLButtonElement>('button[aria-label="What you can add and where its text goes"]');
   if (!button) throw new Error("no (i) beside the File button");
   return button;
 };
@@ -159,6 +160,10 @@ describe("the add box, before a file is chosen", () => {
     expect(card, "focusing the (i) opened no house tooltip").not.toBeNull();
     expect(card?.textContent).toContain(formatBytes(MAX_UPLOAD_BYTES));
     expect(card?.textContent).toContain(String(MAX_PAGES));
+    /* The keyboard's way to the provider sentence too, and so a screen
+       reader's: the open card describes the (i) (Tooltip.tsx). */
+    expect(card?.textContent).toContain(ADDING_SENDS_TEXT_AWAY);
+    expect(limitsInfo().getAttribute("aria-describedby")?.split(/\s+/)).toContain(card?.id);
   });
 
   it("keeps File and its tappable (i) in one non-wrapping group", () => {
@@ -186,5 +191,28 @@ describe("the add box, before a file is chosen", () => {
     expect(pdfButton().getAttribute("aria-describedby")).toBe(description().id);
     expect(description().textContent).toContain(formatBytes(MAX_UPLOAD_BYTES));
     expect(description().textContent).toContain(String(MAX_PAGES));
+  });
+});
+
+/**
+ * **And the sentence about where the text goes, since 2026-10-26.** It was the
+ * add box's last visible line of small print, kept back from 261026b because
+ * 260831an made it a promise made before adding. Greg (reply `spya-dqhrvy` to
+ * q-p6fvep): *"B I think it's pretty obvious that we're sending stuff to AI.
+ * I mean, the whole thing is AI powered, and it's all in the privacy policy."*
+ * So it is in the same card as the limits, and asserted the same two ways:
+ * no visible line at rest, and there on a press. Plan 261026h.
+ */
+describe("the add box says where the text goes only in the (i)", () => {
+  it("does not spend a visible line on it", () => {
+    expect(host.textContent).not.toContain(ADDING_SENDS_TEXT_AWAY);
+  });
+
+  it("says it in the card, after the limits, when the (i) is pressed", () => {
+    act(() => limitsInfo().click());
+    const card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    const text = card?.textContent ?? "";
+    expect(text).toContain(ADDING_SENDS_TEXT_AWAY);
+    expect(text.indexOf(String(MAX_PAGES))).toBeLessThan(text.indexOf(ADDING_SENDS_TEXT_AWAY));
   });
 });

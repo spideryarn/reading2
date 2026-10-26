@@ -28,7 +28,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
-- [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's press
+- [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's opening or manual press
 - [§ The Chrome extension](#the-chrome-extension) — what one press takes, and where it goes
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
@@ -773,6 +773,20 @@ title instead"*, and its earlier *"never the article's text"* became *"never the
 article's text"*, since a title is text. `LAST_UPDATED` moved to 11 October 2026, and
 `tests/privacy-page.test.ts` holds both clauses.
 
+**Since 2026-10-26, the same words may go to OpenAlex's full-text search**, when that title search
+(or the lack of a DOI) leaves no list: *Possible citations*, the works that matched a full-text
+search for the title ([261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md),
+[`src/citation-fulltext.ts`](../../src/citation-fulltext.ts)). The same lower-cased words and a
+year range, up to two requests, when its owner opens Sources and the panel asks
+(`GET /api/citers/:slug?with=possible`), and **only for an article added from a public web
+address** (`importedFromAPublicAddress`): an uploaded file's title may be the reader's own
+unpublished work, and is never sent to this search, which would match it against other people's
+text. Nothing is stored. The page adds *"and, for an article you added from a public web address,
+to find papers that matched a full-text search for its title"*; `LAST_UPDATED` moved to 26 October
+2026. GPT Sol's plan review, F6, is why the page moved with the route rather than with the panel: a
+route that can be called is a disclosure whether or not today's client calls it. The title search
+before it is unchanged, and still runs for an upload with a byline.
+
 **Also since 2026-10-11, Sources' Not cited sends the opening of the text, on the owner's press.**
 *Search OpenAlex for related work*
 ([sources.md § Not cited](sources.md#not-cited),
@@ -864,10 +878,11 @@ names the uploaded-file exception; `LAST_UPDATED` moved to 25 October 2026.
 
 **Added 2026-10-24**, with [sources.md § Where this piece sits](sources.md#where-this-piece-sits)
 ([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md),
-[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, in
-Sources › *Where it sits* for every owner since 2026-10-25 (at the top of Investigate, behind the
-experimental switch, until then: [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)),
-searches **the article itself**: a
+[`src/situate.ts`](../../src/situate.ts)). The owner's request — a press that opens Sources ›
+*Where it sits*, or its own *Search the literature* button after an arrival — searches **the
+article itself**. The dossier has been in *Where it sits* for every owner since 2026-10-25 (at the
+top of Investigate, behind the experimental switch, until then:
+[261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)). A
 model (Claude Sonnet, through OpenRouter) is shown the fenced title, headings, opening and the works
 Bibliography says it leans on, and writes a dozen or so short searches. Each search goes through
 OpenRouter to Exa (the quick-tier model running it sees the search too); Exa receives the query, not
@@ -887,15 +902,21 @@ the same data goes the same way to the same provider (an Anthropic model, reache
 OpenRouter, and the page names neither the model nor the number of calls), and nothing new is sent
 anywhere. So `LAST_UPDATED` did not move.
 
-So the press says what leaves before it is pressed (`SITUATE_DISCLOSURE`,
+**The press that opens *Where it sits* starts it too** — the Sources button when
+*Where it sits* is the view, its tab, its command-bar row; a pasted link, a reload or Back does not
+([261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md) §
+Stage 4, Greg's spya-mfuz6g). So the button's line says what leaves (`SITUATE_DISCLOSURE`,
 [`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts)), and the page says *"When you
-press Search the literature, in Sources’ Where it sits, your article is searched for in the wider
-literature"* (it said *in Sources’ Investigate (an experimental feature)* until 2026-10-25), then
+open Sources’ Where it sits with the Sources button or its tab, or press Search the literature
+there, your article is searched for in the wider literature"* (until 2026-10-26 *"When you press
+Search the literature, in Sources’ Where it sits"*, and *in Sources’ Investigate (an experimental
+feature)* until 2026-10-25), then
 names the planner, Exa, OpenAlex and final read, in the
 indexes paragraph beside the cited-work search, whose *"never the article’s text"* stays true of
 that search alone. The dossier is stored on the article's
 revision (`article_revisions.situate`), goes with the article, and is never shown to a visitor.
-`LAST_UPDATED` moved to 24 October 2026, and to 25 October with the move out of the switch;
+`LAST_UPDATED` moved to 24 October 2026, to 25 October with the move out of the switch, and to
+26 October when opening the sub-mode started it;
 `tests/privacy-page.test.ts` holds the sentence.
 
 ## A claim typed into Sources › Claims

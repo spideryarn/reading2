@@ -39,6 +39,7 @@ import {
   openAlexWorkUrl,
   titleQueryOf,
 } from "../src/citation-index.js";
+import { POSSIBLE_PER_PAGE, openAlexFulltextUrl } from "../src/citation-fulltext.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { OwnerId } from "../src/owner.js";
@@ -85,6 +86,29 @@ const EM_CITERS_URL = openAlexCitersUrl(EM_UNION, 100);
 const EM_TOPIC_URL = openAlexCitersUrl(EM_UNION, 100, "extended mind");
 const EM_KEY = "openalex:w393180982|w4239232206";
 
+/* Plan 261026f: the reported piece, no DOI, no author and no year, so its
+   full-text search is the one request, newest first. */
+const WORKSPACE_TITLE = "Verbalizable Representations Form a Global Workspace in Language Models";
+const POSSIBLE_URL = openAlexFulltextUrl(
+  "verbalizable representations form a global workspace in language models",
+  null,
+  { perPage: POSSIBLE_PER_PAGE, order: "newest" },
+);
+const POSSIBLE_ANSWER = {
+  meta: { count: 134 },
+  results: [
+    { id: "https://openalex.org/W1", display_name: `A ${WORKSPACE_TITLE}`, publication_year: 2026, cited_by_count: 0, authorships: [] },
+    {
+      id: "https://openalex.org/W2",
+      display_name: "Reader--Writer Coupling in Transformer MLPs",
+      publication_year: 2026,
+      cited_by_count: 0,
+      authorships: [{ author: { display_name: "A. Researcher" } }],
+      type: "preprint",
+    },
+  ],
+};
+
 /** Every address the fake fetcher was asked for, in order. */
 let asked: string[] = [];
 
@@ -103,6 +127,7 @@ vi.mock("../src/fetch.js", async (importActual) => {
       if (url === EM_SEARCH_URL) return fixture("extended-mind-search.json");
       if (url === EM_CITERS_URL) return fixture("extended-mind-citers.json");
       if (url === EM_TOPIC_URL) return fixture("extended-mind-topic.json");
+      if (url === POSSIBLE_URL) return POSSIBLE_ANSWER;
       throw new actual.FetchFailure("not-found", url, "HTTP 404", { status: 404 });
     },
   };
@@ -327,6 +352,9 @@ const WRONG_DOI = "test-citers-wrong-doi";
 const THEIRS = "test-citers-theirs";
 const BY_TITLE = "test-citers-by-title";
 const TWINS = "test-citers-twins";
+/** The reported piece's identity (plan 261026f), from its public address and as an upload. */
+const POSSIBLE = "test-citers-possible";
+const UPLOADED = "test-citers-possible-upload";
 /** A second real reader, so "not yours" is the owner filter rather than a typo. */
 const CAROL = "00000000-0000-4000-8000-00000c17e4c1" as OwnerId;
 
@@ -405,6 +433,22 @@ beforeAll(async () => {
     }),
   );
   scratch.push(await scratchArticleInPg(THEIRS, { ownerId: CAROL, mutate: asLevin }));
+  /* The identity columns set on the revision directly, as an import would have
+     left them: the same title, from a public address or off the reader's disk. */
+  for (const [slug, filename] of [
+    [POSSIBLE, null],
+    [UPLOADED, "workspace-draft.pdf"],
+  ] as const) {
+    scratch.push(await scratchArticleInPg(slug, { ownerId: TEST_OWNER }));
+    await getDb().execute(sql`
+      update spideryarn.article_revisions r
+         set title = ${WORKSPACE_TITLE}, doi = null, byline = null, authors = null,
+             published_at = null, published_year = null,
+             final_url = 'https://transformer-circuits.pub/2026/workspace/index.html',
+             raw_filename = ${filename}
+        from spideryarn.articles a
+       where a.current_revision_id = r.id and a.slug = ${slug}`);
+  }
 }, 240_000);
 
 afterAll(async () => {
@@ -556,6 +600,46 @@ describe("GET /api/citers/:slug", () => {
   it("is a 401 for a signed-out caller, and asks nothing", async () => {
     const { status } = await citers(MINE, {});
     expect(status).toBe(401);
+    expect(asked).toEqual([]);
+  });
+});
+
+describe("GET /api/citers/:slug?with=possible (261026f)", () => {
+  it("adds Possible citations to a no-doi answer for an article from a public address", async () => {
+    expect(await citers(POSSIBLE)).toEqual({ status: 200, body: { kind: "no-doi" } });
+    expect(asked).toEqual([]);
+
+    const { status, body } = await call("GET", `/api/citers/${POSSIBLE}?with=possible`);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      kind: "no-doi",
+      possible: { kind: "found", total: 134, dropped: 1, order: "newest" },
+    });
+    /* The piece's own record (*A Verbalizable…*) is out; the citer is in. */
+    expect((body?.possible as { citers: { openalexId: string }[] }).citers.map((c) => c.openalexId)).toEqual(["W2"]);
+    expect(asked).toEqual([POSSIBLE_URL]);
+  });
+
+  it("never sends an upload's title, and answers it as before", async () => {
+    expect(await call("GET", `/api/citers/${UPLOADED}?with=possible`)).toEqual({ status: 200, body: { kind: "no-doi" } });
+    expect(asked).toEqual([]);
+  });
+
+  it("leaves a found list as it was, and asks nothing more for it", async () => {
+    const plain = (await citers(MINE)).body;
+    asked = [];
+    expect((await call("GET", `/api/citers/${MINE}?with=possible`)).body).toEqual(plain);
+    expect(asked).toEqual([]);
+  });
+
+  it("refuses a with= it does not know, alone or repeated, before asking anything", async () => {
+    expect((await call("GET", `/api/citers/${POSSIBLE}?with=everything`)).status).toBe(400);
+    expect((await call("GET", `/api/citers/${POSSIBLE}?with=possible&with=everything`)).status).toBe(400);
+    expect(asked).toEqual([]);
+  });
+
+  it("is a 404 for another reader's article, with=possible or not", async () => {
+    expect((await call("GET", `/api/citers/${THEIRS}?with=possible`)).status).toBe(404);
     expect(asked).toEqual([]);
   });
 });

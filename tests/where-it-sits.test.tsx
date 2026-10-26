@@ -30,6 +30,7 @@ import { whereToolCounts } from "../src/web/sources-counts.js";
 import type { UseSituate } from "../src/web/useSituate.js";
 import {
   SOURCES_TOOL_LABEL,
+  SOURCES_TOOL_WHAT,
   SOURCES_TOOLS,
   titleIsOnlyByline,
   ToolBack,
@@ -143,7 +144,7 @@ function draw({
         experiments,
         before,
         articleYear: year,
-        chats: { summaries: [], onFinding: () => {}, onOpen: () => {} },
+        chats: { summaries: [], onFinding: () => {}, onOverview: () => {}, onOpen: () => {} },
         onJump: () => {},
         onOpenWork: (id) => openedWorks.push(id),
         onView: (v) => moved.push(v),
@@ -323,6 +324,23 @@ describe("What it builds on", () => {
     expect(row?.querySelector(".where-work-by")?.textContent).toBe("Putnam 1975");
   });
 
+  it("links each work out to its own address when it has one, and never to a built search or a non-web one (plan 261026g § Stage 5)", () => {
+    draw({
+      before: {
+        status: "ready",
+        listing: false,
+        works: [
+          { ...work("w1", "Has a DOI", 0.9), url: "https://doi.org/10.1/x", linkFrom: "doi" } as CitedWork,
+          { ...work("w2", "Only a search", 0.8), url: "https://scholar.google.com/scholar?q=x", linkFrom: "search" } as CitedWork,
+          { ...work("w3", "Hostile", 0.7), url: "javascript:alert(1)", linkFrom: "article" } as CitedWork,
+        ],
+      },
+    });
+    const outs = [...host.querySelectorAll<HTMLAnchorElement>(".where-before a.where-work-out")];
+    expect(outs.map((a) => a.getAttribute("href"))).toEqual(["https://doi.org/10.1/x"]);
+    expect(outs[0]?.getAttribute("rel")).toContain("noreferrer");
+  });
+
   it("says why there are no rows", () => {
     draw({ before: { status: "none", works: null, listing: false } });
     expect(host.querySelector(".where-before")?.textContent).toContain(WHERE_BEFORE_NONE);
@@ -339,12 +357,19 @@ describe("the literature search", () => {
   });
 });
 
-describe("the tools row", () => {
+describe("Go further, the tools", () => {
   it("names the four tools, each moving to its address and arming nothing", () => {
     draw();
     const tools = [...host.querySelectorAll<HTMLButtonElement>(".where-tool")];
     expect(tools.map((t) => t.getAttribute("data-tool"))).toEqual([...SOURCES_TOOLS]);
-    expect(tools.map((t) => t.firstChild?.textContent)).toEqual(SOURCES_TOOLS.map((t) => SOURCES_TOOL_LABEL[t]));
+    expect(tools.map((t) => [...t.childNodes].find((n) => n.nodeType === Node.TEXT_NODE)?.textContent)).toEqual(
+      SOURCES_TOOLS.map((t) => SOURCES_TOOL_LABEL[t]),
+    );
+    /* Each says what it opens and where the spending is (plan 261026g § Stage 3). */
+    for (const tool of tools) {
+      const what = document.getElementById(tool.getAttribute("aria-describedby") ?? "");
+      expect(what?.textContent).toBe(SOURCES_TOOL_WHAT[tool.getAttribute("data-tool") as (typeof SOURCES_TOOLS)[number]]);
+    }
     /* A count wherever a stored result was read, 0 included; none where nothing is stored. */
     expect(tools[0]?.querySelector(".rcp-view-count")?.textContent).toBe("3");
     expect(tools[1]?.querySelector(".rcp-view-count")?.textContent).toBe("0");
@@ -357,19 +382,18 @@ describe("the tools row", () => {
     }
   });
 
-  /* A persona review, 2026-10-26: at the foot of a tall band, in small grey
-     links, three of four readers never found the tools. */
-  it("comes first, under the head line and above the literature search, each tool drawn as the chips are", () => {
+  /* Plan 261026g § Stage 3: Go further sits under the dossier and above the
+     two lists, with the experiments after it when the switch is on (F6). */
+  it("sits under the literature search and above the two lists, the experiments after it", () => {
     draw({ experiments: true });
     const nav = host.querySelector("nav.where-tools");
     const dossier = host.querySelector(".where-situate");
-    const headline = host.querySelector(".where-headline");
-    expect(nav?.compareDocumentPosition(dossier as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(headline?.compareDocumentPosition(nav as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    for (const tool of host.querySelectorAll(".where-tool")) {
-      expect(tool.classList.contains("summ-view-btn"), tool.textContent ?? "").toBe(true);
-      expect(tool.parentElement?.classList.contains("summ-views")).toBe(true);
-    }
+    const lists = host.querySelector(".where-lists");
+    const experiments = host.querySelector(".where-experiments");
+    expect(dossier?.compareDocumentPosition(nav as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(nav?.compareDocumentPosition(lists as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const last = [...host.querySelectorAll("nav.where-tools .where-tool-list .where-tool")].at(-1);
+    expect(last?.compareDocumentPosition(experiments as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   /* Plan 261025h, Stage 4: the two experiments, behind the switch, after the tools. */
@@ -412,7 +436,7 @@ describe("the piece's year", () => {
   });
 });
 
-describe("the tools row's numbers", () => {
+describe("Go further's numbers", () => {
   const counts = { bibliography: 17, notCited: null, links: 0, reception: 0, claims: { n: 8, unit: "claim" as const } };
   it("has one for every stored result, 0 included, and none where nothing is stored", () => {
     expect(whereToolCounts(counts, { reception: true, claims: true })).toEqual({ reception: 0, claims: 8 });

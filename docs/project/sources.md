@@ -48,14 +48,14 @@ for Reception and Claims. This page owns the merge.
 ## In this doc
 
 - [§ The band](#the-band) — three chips for the owner, four tools inside the first, one surface
-- [§ Where it sits](#where-it-sits) — the default: the tools row, the literature search, Papers that cite it (and its *About "keyword"* view) and What it builds on; whose year it prints
+- [§ Where it sits](#where-it-sits) — the default: the literature search, Go further (the tools), Papers that cite it (and its *About "keyword"* view) and What it builds on; whose year it prints; opening it is the request
 - [§ The experiments](#the-experiments) — Guess first and Evidence first, behind the switch: the dossier met before its verdicts
 - [§ Not cited](#not-cited) — OpenAlex's search on the owner's press, less the bibliography, and why every row says "not among the works Spideryarn found"
 - [§ Links](#links) — the article's own hyperlinks, read in the browser, and why not a fold into Bibliography
 - [§ Investigate](#investigate) — suggested questions and your own, each a chat with a web search; why a launcher and why the name
 - [§ Where this piece sits](#where-this-piece-sits) — the literature search's dossier: one press, a planned search, findings anchored to passages
 - [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
-- [§ What a press buys](#what-a-press-buys) — what each press arms (only Bibliography, now), each tool's own button, and what is made on import
+- [§ What a press buys](#what-a-press-buys) — the *Where it sits* composite, Bibliography, each tool's own button, and what is made on import
 - [§ Visitors](#visitors) — open on any one of its three artefacts (Links is not one), and no Not cited or Investigate
 - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
@@ -67,7 +67,8 @@ for Reception and Claims. This page owns the merge.
 ```
  ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                                   (i)
  │ WhereItSitsPanel                          ← Where it sits (the owner's default)
- │   Tools [Pages about it 3] [Check a claim 8] [Close to it, not cited 18] [Ask your own question]
+ │   the search's summary box, its groups, then Go further:
+ │   [Pages about it 3] [Check a claim 8] [Close to it, not cited 18] [Ask your own question]
  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (a visitor's default)
  │ LinksPanel                                          ← Links
  │
@@ -85,7 +86,7 @@ Greg asked for fewer sub-modes where they could be unified:
 > — Greg, 2026-10-25 (answer to q-vg2b69)
 
 Reception, Claims, Not cited and Investigate stayed the panels they were, at the addresses they
-had, and left the chip row: *Where it sits* opens with a row of buttons to them, and each of
+had, and left the chip row: *Where it sits* has a button to each under *Go further*, and each of
 them carries *Where it sits › its own name* after the chip row, the first words the way back (`ToolBack`). Folding them into
 one page was passed over for now (the plan's § The simpler option). **`SOURCES_VIEWS` is the list of
 addresses and `SOURCES_CHIPS` the owner's chips** ([`params.ts`](../../src/web/params.ts)), and one
@@ -104,7 +105,7 @@ under it.
 [`sources-counts.ts`](../../src/web/sources-counts.ts) that the panels draw their lists
 with, so a number and the list under it cannot disagree (GPT Sol's F4): every work cited for
 Bibliography (no number while there is no list), Links' distinct addresses, and on *Where it sits*'
-tools row Reception's rows through its thread, Claims' listed claims or, once checked, the sources
+*Go further* Reception's rows through its thread, Claims' listed claims or, once checked, the sources
 the checks found, and Not cited's rows. **A tool has a number exactly when its stored result has
 been read, 0 included** (`whereToolCounts`): until 2026-10-26 a 0 was left off, so a Reception
 search that confirmed no page looked like no search at all, and Not cited's stored answer was not
@@ -133,26 +134,28 @@ Top to bottom:
   piece two years old or less *…: where it sits now*; with no year, a neutral line. Once the dossier
   exists its own head line (the planner's kind, and the same year) takes this one's place, so there
   are never two.
-- **The tools row**: *Pages about it* (Reception), *Check a claim* (Claims), *Close to it, not cited*
-  (Not cited), *Ask your own question* (Investigate), each with its number once its stored result is
-  read ([§ The band](#the-band)). Each is the part-switcher's button (`.summ-view-btn`,
-  [controls.md](controls.md)) alone in its own outline, so the row wraps between whole tools, and a
-  press moves `?sources=` and arms nothing ([§ What a press buys](#what-a-press-buys)). **It is at
-  the top since 2026-10-26**: at the foot, in small grey links under a band that can be 2000px tall,
-  three of four readers in a persona review never found it.
 - **The literature search** ([§ Where this piece sits](#where-this-piece-sits)): the dossier when one
-  is stored, else *Search the literature* with its line on what leaves. Lists first until you ask;
-  after that, the dossier first (decision 1).
+  is stored, else *Search the literature* with its line on what leaves — and, since 2026-10-26, the
+  search itself started by the press that opened *Where it sits* ([§ Opening it is the
+  request](#opening-it-is-the-request)).
+- **Go further** (since 2026-10-26, [261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md)
+  § Stage 3; *Tools* at the foot until then): *Pages about it* (Reception), *Check a claim*
+  (Claims), *Close to it, not cited* (Not cited), *Ask your own question* (Investigate), each a
+  button with its number once its stored result is read, 0 included ([§ The band](#the-band)), and
+  a line under it saying what it opens and where its spending is (`SOURCES_TOOL_WHAT`). A press
+  moves `?sources=` and arms nothing ([§ What a press buys](#what-a-press-buys)). At the foot, in
+  small grey links under a band that can be 2000px tall, three of four readers in a persona review
+  never found the tools.
 - **Papers that cite it**: OpenAlex's papers that cite the piece, most cited first, five then *Show
   all* — the same read and the same sentence for every outcome as Reception's *Cited by*
   (`useCiters`, `CitersAnswer`), never a copy of them. That sentence says the order, so no line
   under the heading says it again.
 - **What it builds on**: the five works Bibliography rates the piece as leaning on most
   (`relevance`, the ranking Investigate's *About the works it cites* uses), each a press that opens
-  its row in Bibliography, then the way to the whole list. A row is the work's title, then its
-  authors and year; when Bibliography's title is only an author–year label (*Putnam (1975)*), the
-  authors and year once (`titleIsOnlyByline`). A work with no rating is left out; a list with none
-  rated, or no list yet, says so.
+  its row in Bibliography, and a link out to the work itself where it has a DOI or URL, then the way
+  to the whole list. A row is the work's title, then its authors and year; when Bibliography's title
+  is only an author–year label (*Putnam (1975)*), the authors and year once (`titleIsOnlyByline`). A
+  work with no rating is left out; a list with none rated, or no list yet, says so.
 - **The two lists are ordered by the piece's age** when its year is known: older than two years,
   Papers that cite it first (it has had time to be answered); otherwise What it builds on first.
   With no year, side by side (`whereOrder`).
@@ -170,11 +173,28 @@ which no reader sees.
 read `publishedAt` alone, missing a year-only paper. The dossier's year may still choose which list
 leads, which claims nothing.
 
-**Nothing paid runs on opening it.** *Papers that cite it* is a free OpenAlex read, now asked
-whenever Sources opens on it ([privacy.md](privacy.md#crossref-datacite-and-openalex-are-sent-a-doi)),
-*What it builds on* is
-Bibliography, which a press here arms if it is missing, and the dossier is read, never started. The
-plan's cost ladder has the rest. **Owner only**: a visitor reads the bare address as Bibliography,
+### Opening it is the request
+
+> when I open that submode, I want it to automatically start running rather than requiring me to
+> open the submode and then click.
+>
+> — Greg, 2026-10-26 (spya-mfuz6g)
+
+**A press that lands on *Where it sits* starts what it is missing** — the Sources button when it is
+the view, its chip, its command-bar row — through one composite activation target,
+`sources-where` (src/web/useWhereAutoRun.ts): the search of the literature, with Bibliography
+before it in the same job when the works cited are missing too, or Bibliography alone. A stored
+dossier, stale or outdated included, is never re-run by it; the step's allowance still applies.
+**Arriving starts nothing**: a pasted link, a reload, Back and Forward, a last-view restore, a
+margin's *Open in Sources*, a chat's way back and a tool's *Where it sits* crumb are not presses
+(activation.ts § Why a mount is not a click). Until 2026-10-26 the press armed Bibliography
+alone and the search was its button's.
+
+Greg's cost rule puts the ~$0.30 search *"upon user request"* (q-vg2b69, above). The press that
+opens the sub-mode is taken as that request, and only the press; said so in the report's note.
+*Papers that cite it* is a free OpenAlex read, asked whenever Sources opens on it
+([privacy.md](privacy.md#crossref-datacite-and-openalex-are-sent-a-doi)). The plan's cost ladder
+has the rest. **Owner only**: a visitor reads the bare address as Bibliography,
 because the citers have no public projection yet (GPT Sol's F3).
 
 **Papers that cite it starts unfiltered** (decision 10, GPT Sol's F15): every citer, most cited first. For a
@@ -236,7 +256,7 @@ features.
   replaced, was dropped as Referee's ground (F13); *Lineage* was dropped as a redraw of the two
   lists that overclaims influence (F18).
 
-**Offered only on *Where it sits*' tools row**, after the tools under *Experiments*, and only with
+**Offered only on *Where it sits*, after *Go further*,** under *Experiments*, and only with
 the switch on: no chip (each lights *Where it sits*, `chipOf`), no command-bar row (`subModesOf`
 leaves them out), and each carries the *Where it sits ›* crumb back.
 
@@ -252,7 +272,7 @@ browser's storage to nothing through a whole session of presses.
 
 **Hidden from the controls, not unreachable**, as the switch's rule says
 ([experimental-features.md](experimental-features.md#the-four-rules)) and Structure's Hover does:
-with the switch off the tools row does not offer them, but a pasted address still draws the
+with the switch off *Go further* is not followed by them, but a pasted address still draws the
 experiment, and its *Where it sits ›* crumb leads back.
 
 **Whose words** ([fonts.md](fonts.md)): the passage is the article's, in the author's face; a
@@ -374,7 +394,7 @@ from `meta.source`; a visitor gets the neutral sentence, because their meta does
 > — Greg, 2026-10-19 (addendum spya-x4xpw4), in [261020n](../plans/261020n-sources-reception-layout-and-a-sources-chat-sub-mode.md)
 
 Since 2026-10-20, for the owner, at `?sources=investigate`: a chip until 2026-10-25, and since then
-*Ask your own question* on *Where it sits*' tools row. It is **a place to start chats from**, not a
+*Ask your own question* under *Where it sits*' *Go further*. It is **a place to start chats from**, not a
 chat drawn in the band. Top to bottom:
 
 - **A question box.** It replaced Reception's *Look at the debate from an angle*.
@@ -481,15 +501,31 @@ has none and stays current, because its prompt and checks are today's (`isOutdat
   ([privacy.md § Search the literature](privacy.md#search-the-literature)).
   It is the dearest press in Sources (about $0.30, or $0.52 under high-powered AI, above; four an
   hour and twelve a day per reader, and 100 a day across everyone: `SITUATE_RATE_POLICY`), so arriving
-  never starts it: the chip arms only Bibliography, and the hook has no automatic run.
-- **Done**: a head line (*A review from 2023: what has happened since*: the planner's kind, and the
-  year from the piece's metadata, never the planner's, [§ Where it sits](#where-it-sits)), the
-  model's overview, and the findings grouped by kind in the order a reader most needs them —
-  Challenged, Citation?, Since, Not cited?, Reception, Supported — each with its quoted passage as
-  the link to it (`FindingPassage`; a press jumps, the `href` carries `?at=`, and since 2026-10-26
-  no short block id beside it, which meant nothing to a reader), the model's note, its sources
-  as links with *What it says* one press away, and *Ask in chat*. The model's five questions are
-  Investigate's *Suggested for this piece*.
+  never starts it; a press that opens *Where it sits* does, since 2026-10-26 ([§ Opening it is the
+  request](#opening-it-is-the-request)). `useSituate` itself has no automatic run, because
+  Investigate mounts it too.
+- **Done** (laid out since 2026-10-26 from four persona reviews,
+  [261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md) §
+  Stage 2): **a summary box** — the head line (*A review from 2023: what has happened since*: the
+  planner's kind, and the year from the piece's metadata, never the planner's, [§ Where it
+  sits](#where-it-sits)), the model's overview with its own *Ask in chat*, and a **count strip**,
+  one press per kind that opens and scrolls to its group. Then **the groups, folded** (Reception's
+  `<details>` sections): each heading its name, count and what the kind means; **the first in the
+  reader's order open**, the rest shut, which is component state, not the address. The reader's
+  order is what most changes how far to trust the piece — Challenged, Since, Citation?, Not cited?,
+  Reception, Supported (`SITUATE_DISPLAY_ORDER`; the stored kinds and the margin's order are
+  unchanged). Each passage is a card: its quoted words, themselves the jump to the passage, and its
+  id; then each finding about it — two findings on the same words share one quote
+  (`passageClusters`) — the model's note, its *Ask in chat*, its sources as links with *What it
+  says* one press away. A finding asked for (the margin's *Open in Sources*, a chat's way back)
+  opens its group first, and waits through a failed read rather than being dropped. The model's
+  five questions are Investigate's *Suggested for this piece*.
+- **The overview's chat** (spya-mfuz6g): a `situate` origin whose item is the overview,
+  `so-` and the digits of the dossier's `generatedAt` (`situateOverviewId`), so each search's
+  overview has its own chat, Chat's list says *Started from the overview in Sources › Where it
+  sits*, and its way back opens *Where it sits* and lands on the summary box. The question carries
+  the overview whole, because no chat tool reads the dossier. Not a `reception` lens, which would have been filed under
+  Investigate (GPT Sol's F3 on the plan).
 - **A finding's chat has its own origin** since 2026-10-25, `{ mode: "situate", itemId }`, the
   finding's stable id with its passage as a snapshot (decision 9; queue item `qi-mmtsxdhg`). Its
   mark is found by the id, so a *Search again* that rewords the note keeps it; Chat's list says
@@ -572,15 +608,17 @@ rule 5). Sources has come first since 2026-10-10 and ranks before Referee for *p
 
 ## What a press buys
 
-**Only Bibliography is ever armed by a press that moves you**: a press on the Sources button, a
-chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
-`activationForSources`), and since 2026-10-25 that is the `bibliography` list for *Where it sits*
-and for Bibliography, and nothing for any other. *Where it sits* arms it because *Before it* is
-drawn from it and an article can arrive without one (Rebuild, Start again, a re-add): the mode
-contract's "opening an unmade sub-mode starts it" ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 8, GPT Sol's F4).
+**Only *Where it sits* and Bibliography are ever armed by a press that moves you**: a press on the
+Sources button, a chip, or a command-bar row arms the work of the sub-mode it lands on
+(activation.ts § `activationForSources`). For Bibliography that is the `bibliography` list; for
+*Where it sits*, since 2026-10-26, the composite `sources-where`: the search of the literature and,
+when missing, Bibliography before it ([§ Opening it is the request](#opening-it-is-the-request)).
+Nothing for any other. *Where it sits* needs Bibliography because *What it builds on* is drawn from
+it and an article can arrive without one (Rebuild, Start again, a re-add): the mode contract's
+"opening an unmade sub-mode starts it" ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), decision 8, GPT Sol's F4).
 
 **Each tool's work is its own panel's button.** Until 2026-10-25 a press on Reception's chip armed
-its web search and a press on Claims' armed their list. The chips went, and the tools row's links
+its web search and a press on Claims' armed their list. The chips went, and *Go further*'s buttons
 arm nothing, because a link that spends is the bug this file keeps guarding against. So each
 starts from inside: Reception's *Search the web*, under *Nobody has asked the web about this one
 yet*, and Claims' *List its claims* (both checked in `ReceptionAndClaimsPanel.tsx` before the arm
@@ -715,7 +753,7 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
 - [`src/web/modes/sources/SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx)
   — the owner's band, the visitor's, and the chip row (`SourcesViews`).
 - [`src/web/WhereItSitsPanel.tsx`](../../src/web/WhereItSitsPanel.tsx) — *Where it sits*, its
-  tools row, and a tool's *Where it sits ›* crumb (`ToolBack`).
+  *Go further*, and a tool's *Where it sits ›* crumb (`ToolBack`).
 - [`src/web/SourcesExperiments.tsx`](../../src/web/SourcesExperiments.tsx) — Guess first and
   Evidence first.
 - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
@@ -726,7 +764,7 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) and
   [`src/web/InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) — the other five panels; each takes the chip row
   as `head`, ReceptionAndClaimsPanel draws C1's cited works under claims, and its `CitersAnswer`
-  is *Cited by*'s and *After it*'s.
+  is *Cited by*'s and *Papers that cite it*'s.
 - [`src/web/useRelatedWork.ts`](../../src/web/useRelatedWork.ts) — Not cited's read and press;
   [`src/related-work.ts`](../../src/related-work.ts) — the query, the search and the exclusion,
   behind `GET` and `POST /api/related-work/:slug`.

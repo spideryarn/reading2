@@ -222,13 +222,16 @@ describe("Guess first", () => {
     expect(guessLine(null, "since")).toBe(`The search found ${SITUATE_FINDING_LABEL.since}`);
   });
 
-  it("draws the passage in the author's face, as the link to it with no block id, and the note in the model's", () => {
+  /* The passage is drawn as the dossier draws it (SituateDossier.tsx §
+     `FindingPassage`, plan 261026g): the quote the way to it, the block id
+     beside it. */
+  it("draws the passage in the author's face, its quote the way to it, and the note in the model's", () => {
     draw("guess-first");
     act(() => button(GUESS_REVEAL_ALL)?.click());
-    const quote = host.querySelector(".rcp-group-quote");
+    const quote = host.querySelector<HTMLButtonElement>("button.situate-quote");
     expect(quote?.textContent).toContain("The effect is large and robust");
-    expect(quote?.querySelector("a.block-ref")?.textContent).toMatch(/^“.+”$/);
-    expect(text()).not.toContain("aaaaaa");
+    expect(quote?.textContent).toMatch(/^“.+”$/);
+    expect(quote?.nextElementSibling?.classList.contains("block-ref")).toBe(true);
     expect(host.querySelector(".situate-note")?.classList.contains("voice-ai")).toBe(true);
   });
 });
