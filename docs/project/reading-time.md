@@ -195,6 +195,11 @@ experimental features off" pins it through the real `App`.
   [`ReadSoFarMark.tsx`](../../src/web/ReadSoFarMark.tsx); plan
   [261025j](../plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md).
 
+- **Each shelf card**, since 2026-10-25: the same pie, worked out on the server from the totals and
+  a cached denominator that the flush keeps current — Greg's *"1A"* to
+  [q-y78eth](../user-feedback/questions/q-y78eth.md).
+  [library.md § How much of it you have read](library.md#how-much-of-it-you-have-read).
+
 ## Not built
 
 - **A way to switch it off, and a way to erase it** — the obvious next step now that every owner

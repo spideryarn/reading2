@@ -47,6 +47,7 @@ import { exactly, publishedOf } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
+import { ReadSoFarMark } from "./ReadSoFarMark.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useCopy } from "./useCopy.js";
 import type { useShelf } from "./useShelf.js";
@@ -222,10 +223,11 @@ export function ShelfCard({
      opened) are on the bottom row. `publishedOf` prints it, so a paper dated
      only to a year says the year. Plan 261005e. */
   const published = publishedOf(entry)?.label;
+  const minutes = `~${entry.minutes} min`;
   const facts = (
     minimal
       ? [entry.byline, entry.siteName, published]
-      : [entry.byline, entry.siteName, published, `~${entry.minutes} min`, `${entry.blocks} blocks`]
+      : [entry.byline, entry.siteName, published, minutes, `${entry.blocks} blocks`]
   ).filter(Boolean) as string[];
 
   return (
@@ -291,6 +293,9 @@ export function ShelfCard({
           // biome-ignore lint/suspicious/noArrayIndexKey: the line is rebuilt whole and never reorders
           <span key={`${i}:${f}`} data-shelf-fact="" className="tw:min-w-0 tw:max-w-full tw:break-words">
             {f}
+            {/* How much of it you have read, right after how long it takes,
+                as on the masthead: the same mark and words (plan 261025l). */}
+            {f === minutes && !minimal && <ReadSoFarMark band={entry.readBand} />}
             {i < facts.length - 1 && <span className="tw:ml-2 tw:opacity-50">·</span>}
           </span>
         ))}

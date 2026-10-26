@@ -2418,6 +2418,15 @@ export interface LibraryEntry {
   /** The committed `example/` fixture rather than real pipeline output. */
   fixture?: boolean;
   /**
+   * **How much of it the owner has read**, coarsely: the masthead's pie,
+   * worked out on the server from a cached denominator
+   * (src/store/read-so-far-basis.ts). Absent for no pie: little or nothing
+   * read, or a cache not yet written or gone stale. Only the owner's shelf
+   * sends it, and a shelf painted from the browser's cache has it stripped
+   * (src/web/lib/cached-shelf.ts). Plan 261025l.
+   */
+  readBand?: "started" | "half" | "most" | "finished";
+  /**
    * **`"public"` when anyone with the link can read this, and absent otherwise.**
    *
    * The owner's side of `Visibility` below: the shelf is the one place they see

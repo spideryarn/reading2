@@ -1555,6 +1555,13 @@
       "when": 1792930620195,
       "tag": "20261025121700_citation_web_note_old_writer_compat",
       "breakpoints": true
+    },
+    {
+      "idx": 222,
+      "version": "7",
+      "when": 1792970934259,
+      "tag": "20261025232854_read_so_far_words",
+      "breakpoints": true
     }
   ]
 }

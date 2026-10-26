@@ -70,6 +70,7 @@ import {
   privateLinkOpeners,
   privateLinkSignedOutOpens,
   quizAttempts,
+  readSoFarWords,
   staleNoticeDismissals,
   commandSuggestionDismissals,
   relatedWorkSearches,
@@ -1263,6 +1264,9 @@ describe("destroying an article", () => {
         db.insert(privateLinkOpeners).values({ articleId: GONE_ARTICLE, readerId: owner }),
       private_link_signed_out_opens: () =>
         db.insert(privateLinkSignedOutOpens).values({ articleId: GONE_ARTICLE }),
+      /* The shelf pie's cached denominator — plan 261025l. Goes with the article. */
+      read_so_far_words: () =>
+        db.insert(readSoFarWords).values({ articleId: GONE_ARTICLE, basis: "b", words: { [GONE_BLOCK]: 12 } }),
       realtime_sessions: () =>
         db.insert(realtimeSessions).values({
           id: GONE_SESSION,

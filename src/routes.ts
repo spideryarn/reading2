@@ -13238,6 +13238,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const slug = slugPart(captures, 1);
       const batch = readingTimeBatch(await readBody(req, MAX_READING_TIME_BODY_BYTES));
       await readingTimeStore.add(slug, batch);
+      /* The shelf's pie reads a cached denominator, kept true here, the one
+         place the owner's reading moves (plan 261025l). Not the shelf's GET,
+         which the unauthenticated health check also calls. A failure costs
+         one card its pie, so it is logged and the seconds still count. */
+      try {
+        await readingTimeStore.refreshShelfWords(slug);
+      } catch (err) {
+        log("store").warn({ ...errorFields(err), slug }, `could not refresh the shelf's read-so-far words for ${slug}`);
+      }
       res.statusCode = 204;
       res.end();
     },

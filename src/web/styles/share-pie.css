@@ -53,3 +53,16 @@
   margin-left: 0;
   vertical-align: middle;
 }
+
+/* --------------------------------------------------- § the shelf's mark ----
+   The same mark after "~N min" on a shelf card and in the table's title cell
+   (ShelfEntry.tsx, library-columns.tsx; plan 261025l). `relative` lifts it
+   above the card's stretched title link, which covers the card, so the press
+   opens the pie's card rather than the article. Centred on the line, and a
+   hair after the minutes, as on the masthead. */
+[data-shelf-facts] .read-so-far,
+[data-shelf-title-sub] .read-so-far {
+  position: relative;
+  margin-left: 0;
+  vertical-align: middle;
+}

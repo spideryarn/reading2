@@ -560,7 +560,7 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
       .flatMap((w) => (w.fields.slugs as string[] | undefined) ?? [])
       .filter((slug) => slug.startsWith("test-shelf-reads-"));
 
-  it("asks two questions for the whole page, and neither is about a block", async () => {
+  it("asks three questions for the whole page, and none is about a block", async () => {
     const { value, sent } = await statementsDuring(() => pgArticleReader.listArticles({ archived: false }));
 
     /* **The entries first**, so an empty shelf cannot make `1 + 2N` come out as
@@ -597,7 +597,7 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
     });
   });
 
-  it("sends exactly two statements when the scalars are all there", async () => {
+  it("sends exactly three statements when the scalars are all there", async () => {
     /* The whole change, as a number. It was `1 + 2N`. */
     const db = getDb();
     /* Both of the hollow ones, so this run has nothing to recompute. */
@@ -646,11 +646,19 @@ describe("the shelf's reads", { timeout: 30_000 }, () => {
        * Counted **and** inspected: one batched read of every block row in the
        * database would be a single constant statement and would pass a count.
        */
+      /* **Three since 2026-10-25**: the read-so-far bands for the page, one
+         statement however many cards (plan 261025l). It names the articles'
+         slug too, inside the cache's basis, so the shelf query is counted
+         without it. */
       expect({ statements: sent.length, sent }).toEqual({
-        statements: 2 + warnings.length,
+        statements: 3 + warnings.length,
         sent,
       });
-      expect(mentions(sent, '"spideryarn"."articles"."slug"').length).toBe(1);
+      const bands = mentions(sent, 'from "spideryarn"."read_so_far_words"');
+      expect(bands.length).toBe(1);
+      expect(
+        mentions(sent, '"spideryarn"."articles"."slug"').filter((s) => !bands.includes(s)).length,
+      ).toBe(1);
       expect(mentions(sent, 'group by "spideryarn"."comments"."article_id"').length).toBe(1);
       /* Accounted for, not absent: a foreign fixture mid-run can force one, and
          the assertion that matters is that every block read had a reason. None

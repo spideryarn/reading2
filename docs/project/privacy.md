@@ -530,6 +530,15 @@ route reads the totals only for the article's owner, and the line is never store
 **Section names, per-part detail or a percentage would be a new disclosure**: rewrite the bullet
 first. Plan [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md).
 
+**Since 2026-10-25 the owner's own shelf shows the masthead's coarse pie on each card**, worked out
+on our server from the totals at each shelf load, in memory, and sent only to the owner
+([library.md § How much of it you have read](library.md#how-much-of-it-you-have-read)). That is the
+"owner-only, in memory" case above, so the bullet did not change. **One thing is stored for it, and it
+is not from the totals**: `read_so_far_words`, which blocks of the article count and their words,
+derived from the article itself. No seconds and no band are stored, it goes with the article, and it
+is left out of both exports. The browser's kept copy of the shelf has the band stripped. Plan
+[261025l](../plans/261025l-shelf-cards-show-the-how-much-read-pie.md).
+
 ## Article open times
 
 **Added 2026-10-20**, with plan

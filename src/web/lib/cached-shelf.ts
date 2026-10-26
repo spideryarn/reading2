@@ -177,6 +177,27 @@ export function shelfFromCachedBody(body: unknown): LibraryEntry[] | null {
   return articles.map((entry) => ({ ...entry, tags: entry.tags ?? [] })) as LibraryEntry[];
 }
 
+/**
+ * **A shelf body as it may be kept: with no read-so-far bands.** The band is
+ * worked out on the server from the owner's reading as of that answer (plan
+ * 261025l), and a kept copy is painted before the next answer arrives, and is
+ * all there is offline. A day-old pie saying "about half" over an article
+ * finished since is the pie lying, so a kept shelf draws none and the live
+ * answer draws them. The one place a `/api/library` body is written to the
+ * cache calls this (api.ts § the copy), so no kept body ever has one.
+ */
+export function withoutReadBands(body: unknown): unknown {
+  if (!isRecord(body) || !Array.isArray(body.articles)) return body;
+  return {
+    ...body,
+    articles: body.articles.map((entry: unknown) => {
+      if (!isRecord(entry) || !("readBand" in entry)) return entry;
+      const { readBand: _band, ...rest } = entry;
+      return rest;
+    }),
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
