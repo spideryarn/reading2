@@ -21,7 +21,7 @@ import type { ServiceLimiter } from "../src/bibliographic.js";
 import type { Article } from "../src/article-input.js";
 import { cascadeForce } from "../src/jobs.js";
 import { SITUATE_LIMITED, SITUATE_SEARCHES_FAILED, SITUATE_SHORTLIST_EMPTY } from "../src/messages.js";
-import { CAPABLE_MODEL, CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL, HIGH_POWER_MODEL_OPENROUTER, SITUATE_TRIAGE_MODEL } from "../src/models.js";
+import { CAPABLE_MODEL, CAPABLE_MODEL_OPENROUTER, HIGH_POWER_MODEL, HIGH_POWER_MODEL_OPENROUTER, modelFor, SITUATE_TRIAGE_MODEL } from "../src/models.js";
 import { DEFAULT_INGEST_STEPS, FORCE_ONLY_WHEN_NAMED, STEP_ORDER, STEPS, situateStep } from "../src/pipeline.js";
 import { paperwork } from "../src/paperwork.js";
 import { plainWords } from "../src/plain-words.js";
@@ -65,19 +65,22 @@ import { untrusted } from "../src/untrusted-fence.js";
 const answers: Record<string, string> = {};
 /** Each call: its task, its body, its power, and the model the real wire body would name. */
 const sent: { task: string; body: unknown; power: string; model: string }[] = [];
+/** A future task pin, represented at the wire boundary rather than copied into the stage. */
+const wireModelOverrides: Record<string, string> = {};
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
     ...real,
     streamMessage: (task: Parameters<typeof real.streamMessage>[0], body: Parameters<typeof real.streamMessage>[1], options: { power: "standard" | "high" }) => {
+      const model = wireModelOverrides[task] ?? real.messagesWireBody(task, body, options.power).model;
       sent.push({
         task,
         body: JSON.parse(JSON.stringify(body)),
         power: options.power,
         /* What the real call would send: `messagesWireBody` is the one place
            the model is resolved. */
-        model: real.messagesWireBody(task, body, options.power).model,
+        model,
       });
       const message = {
         id: "msg_stub",
@@ -90,6 +93,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
         usage: { input_tokens: 10, output_tokens: 5 },
       };
       return {
+        model,
         onText: () => undefined,
         aborted: () => false,
         finalMessage: () => Promise.resolve(message),
@@ -100,6 +104,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 
 beforeEach(() => {
   for (const k of Object.keys(answers)) delete answers[k];
+  for (const k of Object.keys(wireModelOverrides)) delete wireModelOverrides[k];
   sent.length = 0;
 });
 
@@ -1417,12 +1422,30 @@ describe("the triage, then the read (plan 261025h stage 3)", () => {
       const { situate } = await runAt(power, shortlistOf("S1"));
       expect(situate.generator).toBe(capable);
       expect(situate.phases).toEqual({
-        plan: capable,
+        plan: modelFor("situate-plan", power),
         triage: { model: SITUATE_TRIAGE_MODEL, version: TRIAGE_PROMPT_VERSION, candidates: 1, shortlisted: 1, of: 11 },
-        write: capable,
+        write: modelFor("situate", power),
       });
       expect(isOutdated(JSON.parse(JSON.stringify(situate)))).toBe(false);
     }
+  });
+
+  it("stamps the exact model each wire call used rather than inferring all three from the article's power", async () => {
+    wireModelOverrides["situate-plan"] = "test/plan-pin";
+    wireModelOverrides["situate-triage"] = "test/triage-pin";
+    wireModelOverrides.situate = "test/write-pin";
+    const { situate } = await runAt("high", shortlistOf("S1"));
+    expect(situate.phases).toEqual({
+      plan: "test/plan-pin",
+      triage: {
+        model: "test/triage-pin",
+        version: TRIAGE_PROMPT_VERSION,
+        candidates: 1,
+        shortlisted: 1,
+        of: 11,
+      },
+      write: "test/write-pin",
+    });
   });
 
   it("stamps a nothing-found run with its plan alone: no triage, no read", async () => {
@@ -1432,7 +1455,7 @@ describe("the triage, then the read (plan 261025h stage 3)", () => {
       { search: async () => searchAnswer({ searches: 1 }), citers: noCiters, now: () => new Date() },
     );
     expect(sent.map((s) => s.task)).toEqual(["situate-plan"]);
-    expect(run.situate.phases).toEqual({ plan: CAPABLE_MODEL, triage: null, write: null });
+    expect(run.situate.phases).toEqual({ plan: modelFor("situate-plan", "standard"), triage: null, write: null });
     expect(isOutdated(run.situate)).toBe(false);
   });
 
@@ -1464,7 +1487,7 @@ describe("the triage, then the read (plan 261025h stage 3)", () => {
 
 describe("isOutdated, by each call's model", () => {
   const triage = { model: SITUATE_TRIAGE_MODEL, version: TRIAGE_PROMPT_VERSION, candidates: 1, shortlisted: 1, of: 2 };
-  const current = { version: PROMPT_VERSION, generator: CAPABLE_MODEL, phases: { plan: CAPABLE_MODEL, write: CAPABLE_MODEL, triage } };
+  const current = { version: PROMPT_VERSION, generator: CAPABLE_MODEL, outcome: "read" as const, phases: { plan: CAPABLE_MODEL, write: CAPABLE_MODEL, triage } };
 
   it("is current as written today, at either power", () => {
     expect(isOutdated(current)).toBe(false);
@@ -1472,8 +1495,8 @@ describe("isOutdated, by each call's model", () => {
   });
 
   it("keeps a situate/2 dossier from before the triage current: the same prompt and checks, one model", () => {
-    expect(isOutdated({ version: PROMPT_VERSION, generator: CAPABLE_MODEL })).toBe(false);
-    expect(isOutdated({ version: PROMPT_VERSION, generator: HIGH_POWER_MODEL })).toBe(false);
+    expect(isOutdated({ version: PROMPT_VERSION, generator: CAPABLE_MODEL, outcome: "read" })).toBe(false);
+    expect(isOutdated({ version: PROMPT_VERSION, generator: HIGH_POWER_MODEL, outcome: "read" })).toBe(false);
   });
 
   it.each([
@@ -1487,6 +1510,22 @@ describe("isOutdated, by each call's model", () => {
     expect(isOutdated(situate)).toBe(true);
   });
 
+  it.each([
+    ["no outcome", { version: PROMPT_VERSION, generator: CAPABLE_MODEL, phases: undefined }],
+    ["null phases", { ...current, phases: null }],
+    ["no plan", { ...current, phases: { triage, write: CAPABLE_MODEL } }],
+    ["no triage", { ...current, phases: { plan: CAPABLE_MODEL, write: CAPABLE_MODEL } }],
+    ["a read with no triage", { ...current, phases: { plan: CAPABLE_MODEL, triage: null, write: CAPABLE_MODEL } }],
+    ["a read with no writer", { ...current, phases: { plan: CAPABLE_MODEL, triage, write: null } }],
+    [
+      "a nothing-found result with a writer",
+      { ...current, outcome: "nothing-found", phases: { plan: CAPABLE_MODEL, triage: null, write: CAPABLE_MODEL } },
+    ],
+  ])("fails a malformed phase stamp closed: %s", (_why, situate) => {
+    expect(() => isOutdated(situate as never)).not.toThrow();
+    expect(isOutdated(situate as never)).toBe(true);
+  });
+
   it("makes the step's stamp no stamp when the stored dossier is outdated in any call, so the queue re-runs it", async () => {
     const withStored = (situate: unknown): ArtifactReads => {
       const base = storeFor(example);
@@ -1498,6 +1537,7 @@ describe("isOutdated, by each call's model", () => {
     const step = STEPS.situate;
     const old = { ...current, phases: { ...current.phases, triage: { ...triage, model: "anthropic/claude-haiku-4.5" } } };
     expect(await step.stamp?.(ctx(), withStored(old))).toBeNull();
+    expect(await step.stamp?.(ctx(), withStored({ ...current, phases: { plan: CAPABLE_MODEL, write: CAPABLE_MODEL } }))).toBeNull();
     expect(await step.stamp?.(ctx(), withStored(current))).toMatchObject({ promptVersion: PROMPT_VERSION, model: CAPABLE_MODEL });
     expect(await step.stamp?.(ctx(), withStored(null))).toMatchObject({ promptVersion: PROMPT_VERSION });
   });

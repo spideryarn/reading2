@@ -178,7 +178,8 @@ the run (production's key is a different one).
 **Built (2026-10-26)**, with no paid call (the local key was still over its limit), so the first
 real triage will be production's. `src/situate.ts` § `generateSituate` makes three calls: the plan,
 then `situate-triage` (Haiku 5.5 pinned in `PINNED_MODEL` at both powers; the eval's prompt as
-`situate-triage/1`; adaptive thinking at effort `medium` with 12,000 tokens of room), then the read,
+`situate-triage/1`; adaptive thinking at effort `medium` with 12,000 tokens of thinking headroom,
+15,000 total), then the read,
 shown only the shortlist under the sources' own ids. `checkFindings` still checks against all the
 evidence. The dossier records each call's model in `phases`; `isOutdated` compares all three, and
 the step's stamp and the metadata page's `isCurrent` arm both ask `phasesOutdated`, the part a

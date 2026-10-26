@@ -8592,7 +8592,7 @@ export interface SituateCounts {
  * plan 261025h stage 3).
  */
 export interface SituateTriage {
-  /** The model sent, as `modelFor("situate-triage", …)` names it. */
+  /** The exact model id sent on the triage call's wire body. */
   model: string;
   /** `situate-triage/N` — src/situate.ts § `TRIAGE_PROMPT_VERSION`. */
   version: string;
@@ -8610,11 +8610,11 @@ export interface SituateTriage {
  * `isOutdated` compares each with what a run today would send.
  */
 export interface SituatePhases {
-  /** The planner, as `generatorFor` names it. */
+  /** The exact model id sent on the planner call's wire body. */
   plan: string;
   /** Null when no read was made (`nothing-found`), so nothing was triaged. */
   triage: SituateTriage | null;
-  /** The writer, as `generatorFor` names it; null when no read was made. */
+  /** The exact model id sent on the writer call's wire body; null when no read was made. */
   write: string | null;
 }
 

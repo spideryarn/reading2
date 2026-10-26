@@ -365,7 +365,9 @@ function minimal(step: StepName): Artefact {
     case "citation-blurbs":
       return { ...made, entries: {}, counts: {} };
     case "situate":
-      return { ...made, profileHash: null, findings: [] };
+      /* `outcome` as every dossier since situate/1 carries it: one without is
+         malformed, and `phasesOutdated` fails it closed (GPT Sol's S3 review). */
+      return { ...made, profileHash: null, outcome: "read", findings: [] };
     case "reception":
       return { ...made, direct: { rows: [] }, claims: { rows: [] } };
     case "sketch":

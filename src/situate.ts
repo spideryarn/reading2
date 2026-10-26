@@ -212,11 +212,11 @@ const NO_THINKING_HEADROOM = 1_000;
  * **The triage's budget, its thinking given room explicitly.** Haiku 5.5
  * thinks adaptively and by default, and on the longest of the eval's articles
  * (38,000 words) it spent 3,947 of a 4,000-token budget reasoning and wrote 53
- * tokens of answer; with 12,000 tokens of room it finished. So: the measured
- * answer room, plus the measured headroom, at the effort it was measured on
- * (`medium`, Haiku 5.5's default, sent explicitly so a change of default
- * cannot move it). Thinking is not turned off: the shortlist the eval scored
- * was written with it on.
+ * tokens of answer; with 12,000 tokens of thinking headroom (15,000 total) it
+ * finished. So: the measured answer room, plus the measured headroom, at the
+ * effort it was measured on (`medium`, Haiku 5.5's default, sent explicitly
+ * so a change of default cannot move it). Thinking is not turned off: the
+ * shortlist the eval scored was written with it on.
  */
 const TRIAGE_ANSWER_TOKENS = 3_000;
 const TRIAGE_THINKING_HEADROOM = 12_000;
@@ -301,7 +301,7 @@ export function isStale(
  * would ask for a paid re-run to buy an economy. A *new* dossier always has
  * `phases`, so a later change to any one call's model is seen.
  */
-export function isOutdated(situate: Pick<Situate, "version" | "generator" | "phases">): boolean {
+export function isOutdated(situate: Pick<Situate, "version" | "generator" | "outcome" | "phases">): boolean {
   if (situate.version !== PROMPT_VERSION || !sameGenerator(situate.generator, CAPABLE_MODEL)) return true;
   return phasesOutdated(situate);
 }
@@ -313,17 +313,28 @@ export function isOutdated(situate: Pick<Situate, "version" | "generator" | "pha
  * step's `stamp` (src/pipeline.ts) and the metadata page's `isCurrent` arm
  * (src/store/pg.ts) both ask it, so the two deciders agree.
  */
-export function phasesOutdated(situate: Pick<Situate, "phases">): boolean {
+export function phasesOutdated(situate: Pick<Situate, "outcome" | "phases">): boolean {
+  if (situate.outcome !== "read" && situate.outcome !== "nothing-found") return true;
   const phases = situate.phases;
   if (phases === undefined) return false;
-  if (!sameGenerator(phases.plan, CAPABLE_MODEL)) return true;
-  if (phases.write !== null && !sameGenerator(phases.write, CAPABLE_MODEL)) return true;
-  if (phases.triage !== null) {
-    /* `standard`: the pin ignores power, and asking at one power keeps that a
-       fact about the pin rather than something this check decides. */
-    if (!sameGenerator(phases.triage.model, modelFor("situate-triage", "standard"))) return true;
-    if (phases.triage.version !== TRIAGE_PROMPT_VERSION) return true;
-  }
+  /* Stored JSON is untrusted at this boundary. A partial phase stamp must
+     cause a re-run, not throw from the metadata page or silently omit one of
+     the calls from freshness. */
+  if (phases === null || typeof phases !== "object" || Array.isArray(phases)) return true;
+  if (typeof phases.plan !== "string" || !sameGenerator(phases.plan, modelFor("situate-plan", "standard"))) return true;
+
+  if (situate.outcome === "nothing-found") return phases.triage !== null || phases.write !== null;
+  if (situate.outcome !== "read") return true;
+  if (typeof phases.write !== "string" || !sameGenerator(phases.write, modelFor("situate", "standard"))) return true;
+
+  const triage = phases.triage;
+  if (triage === null || typeof triage !== "object" || Array.isArray(triage)) return true;
+  /* `standard`: the pin ignores power, and asking at one power keeps that a
+     fact about the pin rather than something this check decides. */
+  if (typeof triage.model !== "string" || !sameGenerator(triage.model, modelFor("situate-triage", "standard"))) return true;
+  if (triage.version !== TRIAGE_PROMPT_VERSION) return true;
+  if (![triage.candidates, triage.shortlisted, triage.of].every((n) => Number.isInteger(n) && n >= 0)) return true;
+  if (triage.shortlisted > triage.of) return true;
   return false;
 }
 
@@ -1528,16 +1539,18 @@ async function messagesCall(
   maxTokens: number,
   opts: { power: ModelPower; signal?: AbortSignal },
   headroom: number = NO_THINKING_HEADROOM,
-): Promise<{ raw: string; message: Anthropic.Message }> {
+): Promise<{ raw: string; message: Anthropic.Message; model: string }> {
   let message: Anthropic.Message;
+  let model: string;
   try {
     const call = streamMessage(job, body, { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
+    model = call.model;
     /* `call.finalMessage()`, never the stream's own: the wrapper records the cost. */
     message = await call.finalMessage();
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  return { raw: finishedText(message, job, maxTokens, answerTokens, headroom), message };
+  return { raw: finishedText(message, job, maxTokens, answerTokens, headroom), message, model };
 }
 
 /**
@@ -1632,7 +1645,7 @@ export async function generateSituate(
     return {
       situate: {
         ...base,
-        phases: { plan: capable, triage: null, write: null },
+        phases: { plan: planned.model, triage: null, write: null },
         outcome: "nothing-found",
         overview: "",
         findings: [],
@@ -1714,7 +1727,7 @@ export async function generateSituate(
   const shown = shortlisted(sources, shortlist.ids);
   const triageMs = Date.now() - triageStarted;
   const triage: SituateTriage = {
-    model: modelFor("situate-triage", opts.power),
+    model: triaged.model,
     version: TRIAGE_PROMPT_VERSION,
     candidates: shortlist.candidates,
     shortlisted: shown.length,
@@ -1769,7 +1782,7 @@ export async function generateSituate(
   return {
     situate: {
       ...base,
-      phases: { plan: capable, triage, write: capable },
+      phases: { plan: planned.model, triage, write: read.model },
       outcome: "read",
       overview: cutAtWord(modelProse(parsed.overview), MAX_OVERVIEW_CHARS),
       findings,
