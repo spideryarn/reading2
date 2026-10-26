@@ -2,7 +2,8 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-One mode in the band, with seven sub-modes. Since 2026-10-25 the owner sees three of them as chips,
+One mode in the band, with nine sub-mode addresses: seven established views and two experiments.
+Since 2026-10-25 the owner sees three of the established views as chips,
 and the other four as tools inside the first
 ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)):
 

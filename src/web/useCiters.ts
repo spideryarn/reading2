@@ -172,11 +172,16 @@ export function useCiters(slug: string, wanted: boolean): UseCiters {
   const { reload: reloadTopic } = useOrderedRead(loadTopic);
   const topicAsked = useRef<string | null>(null);
   const askTopic = useCallback(() => {
+    /* A settled answer survives leaving and returning to this article, so it
+       is still the answer to the press. A `null` answer is only an in-flight
+       marker: a slug change invalidates that request below and must allow a
+       new press to ask again. */
+    if (topicAnswer?.slug === slug && topicAnswer.result !== null) return;
     if (topicAsked.current === slug) return;
     topicAsked.current = slug;
     setTopicAnswer({ slug, result: null });
     void reloadTopic();
-  }, [slug, reloadTopic]);
+  }, [slug, reloadTopic, topicAnswer]);
   const retryTopic = useCallback(() => {
     topicAsked.current = slug;
     setTopicAnswer({ slug, result: null });
@@ -195,8 +200,11 @@ export function useCiters(slug: string, wanted: boolean): UseCiters {
   if (article.current !== slug) {
     article.current = slug;
     /* useOrderedRead invalidates the previous article even when this section
-       is unwanted. Its ask-once mark must be invalidated at the same time. */
+       is unwanted. Both ask-once marks must be invalidated at the same time:
+       otherwise A -> B -> A can leave the topic mark saying "asked" after
+       useOrderedRead has discarded the only request that could answer it. */
     askedFor.current = null;
+    topicAsked.current = null;
   }
   useEffect(() => {
     if (!wanted || askedFor.current === slug) return;

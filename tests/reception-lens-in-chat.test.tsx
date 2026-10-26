@@ -1137,13 +1137,9 @@ describe("Where it sits", () => {
       await until(() => param("sources") === null && dossier() !== null, "back to Where it sits");
     });
 
-    it("with the switch off, has no experiments on the tools row, and a pasted address still draws the experiment", async () => {
+    it("with the switch off, pasted, Back/Forward and remounted experiment addresses draw without starting work", async () => {
       storedSituate = DOSSIER;
       who.set(OWNER);
-      await open("?mode=sources");
-      await until(() => tool("reception") !== null, "Where it sits' tools");
-      expect(tool("guess-first")).toBeNull();
-      expect(tool("evidence-first")).toBeNull();
       await open("?mode=sources&sources=evidence-first");
       await until(() => experimentBand() !== null, "Evidence first, with the switch off");
       await settle();
@@ -1153,6 +1149,36 @@ describe("Where it sits", () => {
       expect(checked()).toEqual(["Where it sits"]);
       expect(host.querySelector(".mode-band .where-back"), "the crumb back").not.toBeNull();
       expect(sent()).toEqual([]);
+      const outsideReads = () => trace.filter((r) => r.url.startsWith(`/api/citers/${SLUG}`));
+      expect(outsideReads(), "an experiment does not ask OpenAlex, including the topic view").toEqual([]);
+
+      /* The history changes the experiment, but does not make either address a
+         press that starts work. */
+      history.pushState(null, "", `/read/${SLUG}?mode=sources&sources=guess-first`);
+      await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+      await until(() => param("sources") === "guess-first" && experimentBand() !== null, "Guess first from history");
+      await act(async () => history.back());
+      await until(() => param("sources") === "evidence-first", "Back to Evidence first");
+      await act(async () => history.forward());
+      await until(() => param("sources") === "guess-first", "Forward to Guess first");
+      expect(outsideReads(), "Back and Forward start no OpenAlex read").toEqual([]);
+      expect(sent(), "Back and Forward start no job").toEqual([]);
+
+      /* A real unmount/remount, beyond StrictMode's effect replay. */
+      await act(async () => root.unmount());
+      root = createRoot(host);
+      await open("?mode=sources&sources=evidence-first");
+      await until(() => experimentBand() !== null, "Evidence first after a remount");
+      expect(outsideReads(), "a remount starts no OpenAlex read").toEqual([]);
+      expect(sent(), "a remount starts no job").toEqual([]);
+
+      /* The ordinary switch-off rule is the other direction: Where it sits
+         still hides both doors. Opening it may make its documented plain
+         citer read, so this check deliberately follows the no-start trace. */
+      await open("?mode=sources");
+      await until(() => tool("reception") !== null, "Where it sits' tools");
+      expect(tool("guess-first")).toBeNull();
+      expect(tool("evidence-first")).toBeNull();
     });
 
     it("with no dossier, says so, points at Search the literature, and starts nothing", async () => {

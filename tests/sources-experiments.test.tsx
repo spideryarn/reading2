@@ -43,11 +43,13 @@ const moved: SourcesView[] = [];
 /** Every request the panels made, of any method. There should be none. */
 const requests: string[] = [];
 const stored: string[] = [];
+const addressWrites: string[] = [];
 
 beforeEach(() => {
   moved.length = 0;
   requests.length = 0;
   stored.length = 0;
+  addressWrites.length = 0;
   resetActivations();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     requests.push(`${init?.method ?? "GET"} ${String(input)}`);
@@ -58,7 +60,21 @@ beforeEach(() => {
      `window.sessionStorage`, because jsdom's `localStorage` reads undefined
      here; the two share the prototype in a browser. */
   vi.spyOn(Object.getPrototypeOf(window.sessionStorage) as Storage, "setItem").mockImplementation((key: string) => {
-    stored.push(key);
+    stored.push(`storage:${key}`);
+  });
+  /* `setItem` is the app's ordinary storage path, but it is not the only
+     browser persistence sink. An injected cookie write passed the old test
+     while making the experiment's promise false. */
+  vi.spyOn(document, "cookie", "set").mockImplementation((value: string) => {
+    stored.push(`cookie:${value}`);
+  });
+  /* The final address alone is not evidence: code could write a choice and
+     remove it again during the same press. Refuse every history write. */
+  vi.spyOn(history, "pushState").mockImplementation((_data: unknown, _unused: string, url?: string | URL | null) => {
+    addressWrites.push(`push:${String(url)}`);
+  });
+  vi.spyOn(history, "replaceState").mockImplementation((_data: unknown, _unused: string, url?: string | URL | null) => {
+    addressWrites.push(`replace:${String(url)}`);
   });
   host = document.createElement("div");
   document.body.append(host);
@@ -221,6 +237,7 @@ describe("what they cost and keep", () => {
     for (const b of [...host.querySelectorAll<HTMLButtonElement>(".experiment-reveal")]) act(() => b.click());
     expect(requests).toEqual([]);
     expect(stored).toEqual([]);
+    expect(addressWrites).toEqual([]);
     expect(location.search).toBe("");
   });
 });

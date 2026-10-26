@@ -185,17 +185,17 @@ it("refuses malformed citer rows before they can crash the Debate band", async (
 let askTopic: () => void = () => {};
 let shownTopic: CitersResult | null | undefined;
 
-function TopicProbe({ slug }: { slug: string }) {
-  const citers = useCiters(slug, true);
+function TopicProbe({ slug, wanted = true }: { slug: string; wanted?: boolean }) {
+  const citers = useCiters(slug, wanted);
   askTopic = citers.askTopic;
   shownTopic = citers.topic;
   const topic = citers.result?.kind === "found" ? citers.result.topic : undefined;
   return createElement("p", null, topic === undefined ? "no topic" : `${topic.keyword}:${topic.count ?? "?"}`);
 }
 
-async function showTopic(slug: string): Promise<void> {
+async function showTopic(slug: string, wanted = true): Promise<void> {
   await act(async () => {
-    root.render(createElement(StrictMode, null, createElement(TopicProbe, { slug })));
+    root.render(createElement(StrictMode, null, createElement(TopicProbe, { slug, wanted })));
   });
   for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
 }
@@ -219,6 +219,59 @@ it("asks the plain list on open and the keyword view only when asked, once", asy
   /* A second press keeps the answer. */
   await act(async () => askTopic());
   expect(gets).toHaveLength(2);
+
+  /* A fresh mount asks for the ordinary list again, but never treats the
+     earlier component's choice as a new press of About. */
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  answer = LANDMARK;
+  await showTopic("landmark");
+  expect(gets).toEqual([
+    "/api/citers/landmark",
+    "/api/citers/landmark?about=topic",
+    "/api/citers/landmark",
+  ]);
+  expect(shownTopic).toBeUndefined();
+});
+
+it("asks again after a pending topic read is invalidated by leaving and returning to the article", async () => {
+  const about = {
+    ...LANDMARK,
+    count: 1234,
+    topic: { keyword: "extended mind", count: 1234 },
+    filteredBy: "extended mind",
+  } as CitersResult;
+  answer = LANDMARK;
+  await showTopic("landmark");
+
+  let finishOld!: (response: Response) => void;
+  pending = new Promise<Response>((resolve) => {
+    finishOld = resolve;
+  });
+  act(() => askTopic());
+  expect(gets).toEqual(["/api/citers/landmark", "/api/citers/landmark?about=topic"]);
+
+  /* Changing the callback invalidates the old read in useOrderedRead. The
+     middle article does not want citers, as an experiment address does not. */
+  await showTopic("another-piece", false);
+  pending = null;
+  answer = LANDMARK;
+  await showTopic("landmark");
+
+  answer = about;
+  await act(async () => askTopic());
+  for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
+  expect(gets).toEqual([
+    "/api/citers/landmark",
+    "/api/citers/landmark?about=topic",
+    "/api/citers/landmark",
+    "/api/citers/landmark?about=topic",
+  ]);
+  expect(shownTopic?.kind === "found" && shownTopic.filteredBy).toBe("extended mind");
+
+  /* The invalidated first reply cannot replace the second one. */
+  await act(async () => finishOld(new Response(JSON.stringify(LANDMARK), { status: 200 })));
+  expect(shownTopic?.kind === "found" && shownTopic.filteredBy).toBe("extended mind");
 });
 
 it("drops a malformed topic label rather than the list", async () => {

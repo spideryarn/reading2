@@ -1,6 +1,6 @@
 /**
  * **Sources mode's controller** — what this piece cites, and what others
- * say about it. One band, seven sub-modes (`?sources=`), three of them chips
+ * say about it. One band, nine sub-mode addresses (`?sources=`), three of them chips
  * for the owner since plan 261025h:
  *
  * ```
@@ -117,7 +117,7 @@ function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | nu
 const NO_WORKS: readonly LinkableWork[] = [];
 
 /**
- * **The owner's band.** Every read the seven sub-modes need, the chip row, and
+ * **The owner's band.** Every read the nine sub-mode addresses need, the chip row, and
  * the panel the sub-mode names.
  *
  * A component of its own for the reason every artefact band is: the hooks
