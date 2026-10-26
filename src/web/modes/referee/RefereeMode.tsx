@@ -99,7 +99,10 @@ import { ModeSurface } from "../../ModeSurface.js";
  * it was anything else. A notice here saying *this will send your manuscript to
  * a third party* would be warning about something the app has already done. The
  * present-tense half of the same fact belongs at the point of adding an
- * article, and is there: `ADDING_SENDS_TEXT_AWAY` in src/web/AddArticle.tsx.
+ * article, and is there: `ADDING_SENDS_TEXT_AWAY`, in the add box's (i) beside
+ * File since 2026-10-26 (plan 261026h) rather than on show. So this notice may
+ * be the first a reader reads of it, and its wording stands alone: it says what
+ * happened and when, and does not claim they were told before.
  *
  * **No acknowledgement**, which the plan's first draft asked for. A box that
  * says "I understand" in front of something already done would imply that

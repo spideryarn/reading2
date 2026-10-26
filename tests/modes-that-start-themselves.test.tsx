@@ -161,12 +161,14 @@ const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
 const { useCiters } = await import("../src/web/useCiters.js");
 const { useBibliography, useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useSituate } = await import("../src/web/useSituate.js");
+const { useWhereAutoRun } = await import("../src/web/useWhereAutoRun.js");
+type WhereRunnable = import("../src/web/useWhereAutoRun.js").WhereRunnable;
 const { useFaq } = await import("../src/web/useFaq.js");
 const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { diagramInSearch } = await import("../src/web/params.js");
-const { resetActivations } = await import("../src/web/activation.js");
+const { armActivation, resetActivations } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
 /**
@@ -276,14 +278,53 @@ function SourcesBand({ slug, view }: { slug: string; view: SourcesView }): React
     "div",
     { "data-band": "sources" },
     shown.automatic ? "auto" : shown.starting ? "starting" : shown.status,
-    view === "where" ? createElement(WhereRead, { slug }) : null,
+    view === "where" ? createElement(WhereRead, { slug, bibliography }) : null,
   );
 }
 
-/** The dossier is mounted only by Where it sits (and Investigate in production). */
-function WhereRead({ slug }: { slug: string }): ReactElement {
+/**
+ * **Where it sits' own band**: the dossier, mounted only there (and in
+ * Investigate in production), and the press's owner, the real
+ * `useWhereAutoRun` (plan 261026g § Stage 4).
+ */
+function WhereRead({ slug, bibliography }: { slug: string; bibliography: WhereRunnable }): ReactElement {
   const situate = useSituate(slug);
+  useWhereAutoRun(slug, bibliography, situate);
   return createElement("span", { "data-situate-status": situate.status });
+}
+
+/** A direct probe for the composite's four settled combinations and races. */
+const whereRuns: Array<{ step: "bibliography" | "situate"; withBibliography?: boolean }> = [];
+const whereRereads: Array<"bibliography" | "situate"> = [];
+function WhereAutoRunProbe({
+  bibliographyStatus,
+  situateStatus,
+}: {
+  bibliographyStatus: WhereRunnable["status"];
+  situateStatus: WhereRunnable["status"];
+}): ReactElement {
+  useWhereAutoRun(
+    "constitution",
+    {
+      status: bibliographyStatus,
+      ensure: async () => {
+        whereRuns.push({ step: "bibliography" });
+      },
+      retryRead: async () => {
+        whereRereads.push("bibliography");
+      },
+    },
+    {
+      status: situateStatus,
+      ensure: async ({ withBibliography = false } = {}) => {
+        whereRuns.push({ step: "situate", withBibliography });
+      },
+      retryRead: async () => {
+        whereRereads.push("situate");
+      },
+    },
+  );
+  return createElement("span", null, `${bibliographyStatus}/${situateStatus}`);
 }
 
 /**
@@ -589,6 +630,8 @@ beforeEach(() => {
   postRefuses = false;
   holdGets = false;
   held = [];
+  whereRuns.length = 0;
+  whereRereads.length = 0;
   resetActivations();
   jobEngine.reset();
   setDiagram(null);
@@ -601,6 +644,70 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+});
+
+describe("Where it sits' composite automatic run", () => {
+  const draw = async (bibliographyStatus: WhereRunnable["status"], situateStatus: WhereRunnable["status"]) => {
+    await act(async () => {
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(WhereAutoRunProbe, { bibliographyStatus, situateStatus }),
+        ),
+      );
+    });
+    await settle();
+  };
+
+  it("asks for both missing steps in one situate run, once under StrictMode", async () => {
+    armActivation("constitution", "sources-where");
+    await draw("none", "none");
+    expect(whereRuns).toEqual([{ step: "situate", withBibliography: true }]);
+  });
+
+  it.each([
+    ["none", "ready", [{ step: "bibliography" }]],
+    ["ready", "none", [{ step: "situate", withBibliography: false }]],
+  ] as const)("with bibliography %s and situate %s, asks only for what is missing", async (bibliography, situate, expected) => {
+    armActivation("constitution", "sources-where");
+    await draw(bibliography, situate);
+    expect(whereRuns).toEqual(expected);
+  });
+
+  it("waits for the two reads to settle at different times, then runs once", async () => {
+    armActivation("constitution", "sources-where");
+    await draw("loading", "loading");
+    expect(whereRuns).toEqual([]);
+    await draw("none", "loading");
+    expect(whereRuns).toEqual([]);
+    await draw("none", "none");
+    expect(whereRuns).toEqual([{ step: "situate", withBibliography: true }]);
+  });
+
+  it("re-reads only a failed half and keeps the press for its answer", async () => {
+    armActivation("constitution", "sources-where");
+    await draw("error", "ready");
+    expect(whereRereads).toEqual(["bibliography"]);
+    expect(whereRuns).toEqual([]);
+    await draw("none", "ready");
+    expect(whereRuns).toEqual([{ step: "bibliography" }]);
+  });
+
+  it("consumes a press answered by stored artefacts and never reruns them if their status later changes", async () => {
+    armActivation("constitution", "sources-where");
+    await draw("ready", "ready");
+    await draw("ready", "none");
+    expect(whereRuns).toEqual([]);
+  });
+
+  it("drops a claimed press when its mount leaves before the reads settle, so Back cannot spend it", async () => {
+    armActivation("constitution", "sources-where");
+    await draw("loading", "loading");
+    await act(async () => root.render(createElement("div", null, "elsewhere")));
+    await draw("none", "none");
+    expect(whereRuns).toEqual([]);
+  });
 });
 
 describe("a press", () => {
@@ -723,17 +830,27 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["timeline"] }]);
   });
 
-  /* Where it sits, Sources' default since plan 261025h: a press on the
-     button with nothing named lists the citations, reads the dossier, and
-     starts no literature search. */
-  it("lists the citations when the Sources press lands on Where it sits, and starts no search", async () => {
+  /* Where it sits, Sources' default since plan 261025h. Since plan 261026g
+     (spya-mfuz6g), the press is the request for the search of the literature
+     too, after the works it cites. */
+  it("lists the citations and starts the search of the literature when the Sources press lands on Where it sits", async () => {
     await open("plain");
     await press("Sources");
     await settle();
 
     expect(artefactGets("bibliography").length).toBeGreaterThan(0);
     expect(artefactGets("situate").length).toBeGreaterThan(0);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["bibliography"] }]);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["bibliography", "situate"] }]);
+  });
+
+  it("starts nothing when Where it sits is arrived at, not pressed (a link, a reload, Back)", async () => {
+    await open("plain");
+    await act(async () => arriveView("where"));
+    await act(async () => arrive("sources"));
+    await settle();
+
+    expect(artefactGets("situate").length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
   });
 
   /* The fourth positive control, and the dearest. See SourcesBand above. */

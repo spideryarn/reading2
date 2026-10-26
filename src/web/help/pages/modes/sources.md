@@ -23,13 +23,14 @@ For an academic paper or a report, where the questions are “what is this built
 find it?” and “what have others made of it?”. Three buttons at the top choose the view: Where it
 sits, Bibliography and Links; the number on Bibliography and Links is how much each has to show.
 Bibliography is usually prepared in the background when the article is added; if it was not,
-opening Where it sits or Bibliography makes it, at no charge to you. Nothing else is made by opening
-a view: each tool has its own button for that, such as **Search the web** in Pages about it or
-**List its claims** in Check a claim, and the search of the literature is its own button in Where it
-sits. Whatever is made is kept. The web search behind Pages about it takes about a minute, and often
-finds nothing, which it says plainly, because many pieces have no reception at all. A link or Back to
-a view never starts anything. Only whoever added the article can make these; visitors to a shared
-article see Bibliography, Links, Reception and Claims, with what has already been made.
+opening Where it sits or Bibliography makes it, at no charge to you. A press that opens Where it
+sits also starts its search of the literature when that is missing. The four tools start nothing on
+the way in: each has its own button, such as **Search the web** in Pages about it or **List its
+claims** in Check a claim. Whatever is made is kept. The web search behind Pages about it takes
+about a minute, and often finds nothing, which it says plainly, because many pieces have no
+reception at all. A link, reload or Back to a view never starts anything. Only whoever added the
+article can make these; visitors to a shared article see Bibliography, Links, Reception and Claims,
+with what has already been made.
 
 Sources used to be two modes, Citations and Debate, and was briefly called Peer review. Old links
 to any of them still open the right view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode
@@ -41,15 +42,23 @@ for that.
 
 - A line at the top says how old the piece is, when we know: for an older piece, what has been said
   since; for a recent one, where it sits now.
-- **Search the literature** is one press. Over a few minutes an AI plans a dozen or so web searches
+- **Search the literature** starts by itself when you open Where it sits with the Sources button
+  or its tab, the first time, and is a button otherwise (after a link, say). Over a few minutes an
+  AI plans a dozen or so web searches
   from the piece, reads what they find and the later papers that cite it, and lists the passages
   later work challenges, supports or has moved on from, each with its sources and what they say,
-  checked against the source’s own words. Its press sends the piece to an AI, sends the searches
-  that AI writes to a web search engine, and sends its DOI or title to a public index of papers; the
-  line under the button says so before you press. Finding nothing does not mean there is nothing.
-  Once it has run, its findings come first, and its own questions appear in Ask your own question as
-  **Suggested for this piece**. A finding’s chat icon asks about that finding in
-  [Chat](/help/mode-chat); the chat goes back to the finding. Only you see any of it.
+  checked against the source’s own words. It sends the piece to an AI, sends the searches that AI
+  writes to a web search engine, and sends its DOI or title to a public index of papers
+  ([Privacy](/privacy) says more). Finding nothing does not mean there is nothing. Once it has run,
+  a box at the top sums it up, with a count of each kind of finding; press a count to open that
+  kind. The kind that most changes how far to trust the piece is open first. Its own questions
+  appear in Ask your own question as **Suggested for this piece**. The chat icon beside the summary,
+  or beside a finding, asks about it in [Chat](/help/mode-chat); the chat goes back to it. Press a
+  finding’s quoted words to go to that passage. Only you see any of it.
+- **Go further**, under the search, opens the tools: Pages about it, Check a claim, Close to it, not
+  cited, and Ask your own question. Opening one starts nothing: each has its own button inside, and
+  the line under each says what that costs. Inside, **Where it sits**, at the top beside the view's
+  name, brings you back.
 - **After it** lists the papers that cite the piece, most cited first, from OpenAlex, a free public
   index of published work. It is the same list as Cited by in Pages about it. No AI is involved, and
   we have not read what those papers say about the piece.
@@ -62,8 +71,6 @@ for that.
 - **Before it** lists the works the piece leans on most, as Bibliography rated them. Press one to
   open its row in Bibliography.
 - For an older piece, After it comes first; for a recent one, Before it; with no year, side by side.
-- **Tools** at the foot open the other four views. Opening one starts nothing; inside, **Where it
-  sits**, at the top beside the view's name, brings you back.
 - With [experimental features](/help/experimental-features) turned on, **Experiments** after the
   tools offers two ways to meet the search of the literature before reading its verdicts. Both use
   the search already made for this piece, cost nothing and start nothing; with no search yet, they

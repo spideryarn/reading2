@@ -177,11 +177,11 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
   "adding-articles.png": {
     src: addingArticlesPng,
     w: 1344,
-    h: 296,
-    shows: "The Add an article box on the shelf, cropped to the box alone; the row of earlier imports under it hidden with CSS so no title shows.",
+    h: 200,
+    shows: "The Add an article box on the shelf, cropped to the box alone; the row of earlier imports under it hidden with CSS so no title shows; the (i) beside File closed.",
     article: "none (the shelf, cropped to the box)",
     window: "1440×900 at 2×",
-    taken: "2026-10-11",
+    taken: "2026-10-26",
   },
   "comment-margin.png": {
     src: commentMarginPng,

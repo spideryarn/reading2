@@ -14,11 +14,11 @@
  * (and in Investigate for the dossier's suggested questions); a visitor never
  * asks. The dossier left the experimental switch in plan 261025h.
  *
- * **Nothing here spends on arrival.** There is no `useAutoRun`, and no Sources
- * activation targets `situate`: *Where it sits* arms Bibliography alone and
- * Investigate arms nothing (activation.ts § `activationForSources`). This is
- * the dearest press in Sources, so the only way in is the section's own
- * button, *Search the literature*, which calls `ensure`.
+ * **Nothing here spends on arrival.** There is no `useAutoRun` in this hook,
+ * which Investigate mounts too. Since plan 261026g a press that lands on
+ * *Where it sits* is the request (useWhereAutoRun.ts, the composite
+ * `sources-where` target, owned by that band alone); otherwise the way in is
+ * the section's own button, *Search the literature*, which calls `ensure`.
  *
  * The read half is exported alone (`useSituateRead`) for the margin's notes
  * (plan § Marginalia), which must read and never start: the same split as
@@ -71,8 +71,11 @@ export interface UseSituate extends Omit<SituateRead, "reload" | "fresh"> {
   /**
    * **Search the literature if nobody has** — unforced, for *Search the
    * literature*. A dossier already current makes the server skip the run.
+   * `withBibliography` lists the works the piece cites first, in the same job
+   * (`precededBy`), for *Where it sits*' press when both are missing
+   * (useWhereAutoRun.ts): one press, one request.
    */
-  ensure(): Promise<void>;
+  ensure(options?: { withBibliography?: boolean }): Promise<void>;
   /**
    * **Search again** — forced (`force: ["situate"]`), for the button at the
    * dossier's foot and in the stale banner. Safe to force because the step
@@ -176,9 +179,12 @@ export function useSituate(slug: string): UseSituate {
   }, [refresh]);
   const queue = useStepJob(slug, "situate", finished, "watches-queue");
 
-  const ensure = useCallback(async () => {
-    await queue.start({});
-  }, [queue]);
+  const ensure = useCallback(
+    async (options: { withBibliography?: boolean } = {}) => {
+      await queue.start(options.withBibliography ? { precededBy: ["bibliography"] } : {});
+    },
+    [queue],
+  );
   /* The forced verb holds the dossier it was pressed on (rewrite-hold.ts); its
      clock, `generatedAt`, is its identity. */
   const hold = useRewriteHold({

@@ -28,6 +28,10 @@ Up: [plans.md](../project/plans.md) · Report: `spya-kx8z6d` (Greg, admin, sugge
 
 ## What does not change yet, and why
 
+**Superseded on 2026-10-26:** Greg chose B, and the sentence moved into the same card —
+[261026h](261026h-the-provider-sentence-into-the-add-box-info.md). The section below is the
+reasoning as it stood.
+
 **The disclosure sentence stays visible** (`ADDING_SENDS_TEXT_AWAY`, `src/web/AddArticle.tsx`). Its
 comment records a deliberate commitment: *"Visible at rest while either way in is available, or the
 promise is not made"*, made in

@@ -401,7 +401,7 @@ function reply(url: string, method: string, body: unknown): Response {
 
 const { App } = await import("../src/web/App.js");
 const { SOURCES_INVESTIGATE_SUGGESTED } = await import("../src/web/InvestigatePanel.js");
-const { SITUATE_RUN } = await import("../src/web/situate-dossier.js");
+const { SITUATE_RUN, overviewOrigin, overviewQuestion } = await import("../src/web/situate-dossier.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 const activation = await import("../src/web/activation.js");
 
@@ -981,9 +981,10 @@ describe("asking a question in Sources › Investigate", () => {
 
 /* Plan 261025h: *Where it sits* is Sources' default for the owner, and the
    literature search's dossier is in it for every owner, out of the
-   experimental switch (decision 5, GPT Sol's F7). Opening it reads, offers the
-   press, and buys nothing; a finding's chat stores the finding's own origin,
-   and its way back lands on *Where it sits*, on the finding (decision 9). */
+   experimental switch (decision 5, GPT Sol's F7). An arrival reads, offers the
+   press and buys nothing. A finding's chat stores the finding's own origin;
+   plan 261026g gives the overview another item id under the same origin. Each
+   way back lands on its item in *Where it sits*. */
 describe("Where it sits", () => {
   const situateReads = () => trace.filter((r) => r.url === `/api/situate/${SLUG}`);
   const dossier = () => host.querySelector<HTMLElement>(".mode-band .where-situate");
@@ -1024,6 +1025,7 @@ describe("Where it sits", () => {
     profileChanged: false,
   };
   const findingRow = () => host.querySelector<HTMLElement>(`.mode-band .where-situate [data-finding="${FINDING_ID}"]`);
+  const overviewRow = () => host.querySelector<HTMLElement>(".mode-band .where-situate .situate-summary");
 
   it("is the owner's bare Sources address, and with the switch off offers Search the literature and buys nothing", async () => {
     who.set(OWNER);
@@ -1081,6 +1083,33 @@ describe("Where it sits", () => {
     expect(sent.origin).toEqual({ mode: "situate", itemId: FINDING_ID, quote: CLAIM_QUOTE });
   });
 
+  it("asks about the overview with its own origin and reopens that chat from its mark", async () => {
+    storedSituate = DOSSIER;
+    who.set(OWNER);
+    await open("?mode=sources");
+    await until(() => overviewRow() !== null, "the overview");
+    const ask = () => overviewRow()?.querySelector<HTMLButtonElement>('button[aria-label="Ask about this in chat"]');
+    await act(async () => ask()?.click());
+    if (chatPosts().length === 0) await act(async () => ask()?.click());
+    await until(() => chatPosts().length === 1, "the overview's chat");
+    const sent = chatPosts()[0]?.body as { threadId: string; question: string; origin: ThreadOrigin };
+    expect(sent.question).toBe(askInSources(overviewQuestion(DOSSIER.situate.overview)));
+    expect(sent.origin).toEqual(overviewOrigin(DOSSIER.situate));
+
+    await act(async () => history.back());
+    await until(() => param("mode") === "sources" && overviewRow() !== null, "Where it sits again");
+    await until(
+      () => overviewRow()?.querySelector('button[aria-label="Open the chat about this overview"]') !== null,
+      "the overview's chat mark",
+    );
+    const before = chatPosts().length;
+    await act(async () =>
+      overviewRow()?.querySelector<HTMLButtonElement>('button[aria-label="Open the chat about this overview"]')?.click(),
+    );
+    await until(() => param("thread") === sent.threadId, "the existing overview chat");
+    expect(chatPosts()).toHaveLength(before);
+  });
+
   it("the way back from a finding's chat opens Where it sits on that finding", async () => {
     storedSituate = DOSSIER;
     const chat: ChatThread = {
@@ -1099,6 +1128,31 @@ describe("Where it sits", () => {
     await until(() => param("mode") === "sources" && findingRow() !== null, "Where it sits, with the finding");
     expect(param("sources"), "the default, left off").toBeNull();
     expect(param("thread"), "the chat does not cover the row").toBeNull();
+    expect(chatPosts()).toEqual([]);
+  });
+
+  it("the way back from an overview chat opens Where it sits on the summary", async () => {
+    storedSituate = DOSSIER;
+    const origin = overviewOrigin(DOSSIER.situate);
+    const chat: ChatThread = {
+      ...structuredClone(STORED),
+      id: "spya-smmcht",
+      title: "Where it sits: argued over",
+      origin,
+    };
+    server = [structuredClone(STORED), chat];
+    who.set(OWNER);
+    await open(`?mode=chat&thread=${chat.id}`);
+    const back = () => host.querySelector<HTMLButtonElement>(".mode-band .chat-origin-back");
+    await until(() => back() !== null, "Chat's way back");
+    expect(back()?.textContent).toContain("Where it sits");
+    await act(async () => back()?.click());
+    await until(
+      () => param("mode") === "sources" && overviewRow()?.getAttribute("data-finding") === origin.itemId,
+      "Where it sits, with the overview",
+    );
+    expect(param("sources")).toBeNull();
+    expect(param("thread")).toBeNull();
     expect(chatPosts()).toEqual([]);
   });
 

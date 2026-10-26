@@ -2,8 +2,9 @@
 /**
  * **The direct-add pages must say where the article's text went.**
  *
- * The shelf's add box carries `ADDING_SENDS_TEXT_AWAY` beside its Add button
- * (src/web/AddArticle.tsx), so the reader who types a URL is told before
+ * The shelf's add box carries `ADDING_SENDS_TEXT_AWAY` in the (i) beside File
+ * (src/web/UploadPicker.tsx § LimitsInfo; a visible line under the box until
+ * 2026-10-26, plan 261026h), so the reader who types a URL can be told before
  * anything happens. `/add/<url>` and `/add/upload/<id>` are the other two ways
  * in — the bookmarklet and the share sheet — and they have no box, no button
  * and no pause: `AddPage` queues the ingest from its first effect, and the

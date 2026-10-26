@@ -361,8 +361,8 @@ export type StepsMissingFromOrder<
  * arrives by `STEP_ORDER` and nothing else — so `precededBy: ["assets"]` on
  * `structure` would come back as `["structure", "assets"]`, a "preceding" step
  * that runs afterwards, with nothing anywhere saying so. GPT Sol reproduced
- * exactly that on 2026-09-03; the one caller in the tree is safe, so what this
- * closes is the next caller rather than a live bug.
+ * exactly that on 2026-09-03; the callers in the tree are safe, so what this
+ * closes is a future caller rather than a live bug.
  *
  * **A type rather than a `STEP_ORDER.indexOf` comparison at the call site**,
  * because a wrong `precededBy` should fail the build rather than a test, and

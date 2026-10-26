@@ -1753,10 +1753,12 @@ export function AddPage({
       )}
 
       {/* **What happened to the text, said on the page where it already has.**
-          The shelf's add box says the present-tense half beside the Add button
-          (`ADDING_SENDS_TEXT_AWAY`, src/web/AddArticle.tsx), because there the
-          reader still has a choice to make. This page has no button and no
-          form — a bookmarklet or a share sheet handed us an address, and the
+          The shelf's add box has the present-tense half in the (i) beside File
+          (`ADDING_SENDS_TEXT_AWAY`, `LimitsInfo` in src/web/UploadPicker.tsx,
+          since 2026-10-26 — plan 261026h), because there the reader still has
+          a choice to make. This page keeps its sentence visible: it has room,
+          and q-p6fvep was about the add box's small print. It has no button and
+          no form — a bookmarklet or a share sheet handed us an address, and the
           effect above queues it before the first paint — so by the time anyone
           reads this the POST has gone. Hence the past tense, and hence no
           checkbox: the two sentences differ on purpose, exactly as Referee

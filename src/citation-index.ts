@@ -475,7 +475,7 @@ function isThisArticle(article: ArticleIdentity, target: CitedTarget): target is
 }
 
 /** The article's year: `publishedYear`, or the year of `publishedAt` — or undefined. */
-function articleYear(article: ArticleIdentity): number | undefined {
+export function articleYear(article: ArticleIdentity): number | undefined {
   return article.publishedYear ?? plausibleYear(/^\d{4}/.exec(article.publishedAt ?? "")?.[0]);
 }
 
@@ -704,10 +704,13 @@ async function resolveDeps(deps: CitersDeps): Promise<Resolved> {
 /** One request, in its turn: the JSON, or the one-word reason there is none. */
 type Got = { kind: "json"; json: unknown } | { kind: "missing" | "too-large" | "unavailable" };
 
-/** `id` is what the log names: the cache key, or `title` for a search, whose address is never logged. */
+/**
+ * `id` is what the log names: the cache key, or `title` for a search, or
+ * `fulltext` for src/citation-fulltext.ts's — whose addresses are never logged.
+ */
 async function get(
-  id: CitersKey | "title",
-  what: "work" | "citers" | "search" | "situate-citers",
+  id: CitersKey | "title" | "fulltext",
+  what: "work" | "citers" | "search" | "situate-citers" | "fulltext-count" | "fulltext-list",
   url: string,
   d: Resolved,
 ): Promise<Got> {
@@ -825,14 +828,16 @@ export async function confirmedWorkOf(
 /**
  * **One OpenAlex request in its polite turn** — the shared limiter, the
  * cooling after a 429, the bounded log — for a caller asking its own question.
- * `key` is what the log names; the address is never logged.
+ * `key` is what the log names; the address is never logged. `what` says which
+ * question it was: Situate's citers unless told otherwise.
  */
 export async function openAlexInTurn(
-  key: CitersKey,
+  key: CitersKey | "fulltext",
   url: string,
   deps: CitersDeps = {},
+  what: "situate-citers" | "fulltext-count" | "fulltext-list" = "situate-citers",
 ): Promise<{ kind: "json"; json: unknown } | { kind: "missing" | "too-large" | "unavailable" }> {
-  return get(key, "situate-citers", url, await resolveDeps(deps));
+  return get(key, what, url, await resolveDeps(deps));
 }
 
 /** How the list was reached. The panel says so when it was by title. */

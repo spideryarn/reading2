@@ -4719,17 +4719,16 @@ export type QuizOrigin = {
 };
 
 /**
- * **One finding of the literature search's dossier** — Sources › Where it
- * sits, a finding's *Ask in chat* (plan 261025h, decision 9; queue item
- * qi-mmtsxdhg). Until then a finding's chat stored a lens, its question's
- * words, so a *Search again* that reworded a note lost the chat's mark.
+ * **One item in the literature search's dossier** — a finding (plan 261025h,
+ * decision 9) or, since plan 261026g, the overview. Until findings had this
+ * origin, their chats stored a lens, so a *Search again* that reworded a note
+ * lost the chat's mark.
  *
- * `GlossaryOrigin`'s rules: **the finding's id is the identity**
- * (`sameOrigin`), minted by src/situate.ts § `findingId` from its kind, block
- * and first source, so it survives a rewording; `quote` is a snapshot of the
- * finding's passage (the article's words), cut by `originName`, for the
- * chat's title, the list's tooltip and the way back. The id's shape is
- * `SITUATE_FINDING_ID`.
+ * `GlossaryOrigin`'s rules: **the item id is the identity** (`sameOrigin`). A
+ * finding's is minted by src/situate.ts § `findingId`; an overview's is
+ * `situateOverviewId(generatedAt)`. `quote` is a cut snapshot for the title,
+ * list and way back: the article's words for a finding, the model's for the
+ * overview.
  */
 export type SituateOrigin = { mode: "situate"; itemId: string; quote: string };
 
@@ -4742,7 +4741,25 @@ export type SituateOrigin = { mode: "situate"; itemId: string; quote: string };
 export const SITUATE_FINDING_ID = /^si-[0-9a-f]{12}$/;
 
 /**
- * The most the name snapshot of a glossary, citations, ideas, cite-check, Quiz or finding origin may be.
+ * **The id of a dossier's overview, as a chat origin** — `so-` and the digits
+ * of the dossier's `generatedAt` (`situateOverviewId`), so each search's
+ * overview has its own chat and a *Search again* starts a new one rather than
+ * reopening a chat about words the dossier no longer says. Stored as a
+ * `situate` origin, so the chat is listed under *Where it sits* and its way
+ * back opens it (plan 261026g § Stage 2, GPT Sol's F3 on that plan: a
+ * `reception` lens would have been filed under Investigate). The route takes
+ * either shape (routes.ts § `parseSituateOrigin`).
+ */
+export const SITUATE_OVERVIEW_ID = /^so-\d{14,17}$/;
+export function situateOverviewId(generatedAt: string): string {
+  return `so-${generatedAt.replace(/\D/g, "").slice(0, 17)}`;
+}
+export function isSituateOverviewId(itemId: string): boolean {
+  return SITUATE_OVERVIEW_ID.test(itemId);
+}
+
+/**
+ * The most the name snapshot of a glossary, citations, ideas, cite-check, Quiz or situate origin may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
@@ -4845,7 +4862,7 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
     case "glossary":
     case "bibliography":
     case "ideas":
-    /* A finding: its id, never its words (plan 261025h, qi-mmtsxdhg). */
+    /* A dossier item: its id, never its snapshot (plans 261025h and 261026g). */
     case "situate":
       return b.mode === a.mode && a.itemId === b.itemId;
     /* The mark, which names its batch and question (`QuizOrigin`). */
@@ -8226,6 +8243,37 @@ export interface Citer {
 }
 
 /**
+ * **Papers that may cite a piece OpenAlex cannot list citers for** —
+ * `possible` on a `no-doi` or `no-match` answer, only when asked
+ * (`?with=possible`) and only for an article from a public address
+ * (src/citation-fulltext.ts, plan 261026f). Works that matched OpenAlex's
+ * full-text search for the piece's title: a sign each cites it, not a citation
+ * count, and never added to one.
+ *
+ * - `found` — `total` is OpenAlex's count of every such work; `citers` the
+ *   first page of them, the piece's own records and works from more than a
+ *   year before it taken out (`dropped` says how many); `order` how the page
+ *   was sorted; `phrase` the exact words sent, which the panel's link to the
+ *   rest at OpenAlex repeats.
+ * - `common-phrase` — the title turns up in works from before the piece
+ *   existed often enough to be a phrase, not a citation of it.
+ * - `none` — no such work.
+ * - `unavailable` — OpenAlex could not be read.
+ */
+export type PossibleCiters =
+  | {
+      kind: "found";
+      total: number;
+      dropped: number;
+      order: "newest" | "most-cited";
+      phrase: string;
+      citers: Citer[];
+    }
+  | { kind: "common-phrase" }
+  | { kind: "none" }
+  | { kind: "unavailable" };
+
+/**
  * `GET /api/citers/:slug` — **who cites this article, or why there is no
  * list.** No model made any of it, and it is not part of the stored Debate.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
@@ -8267,8 +8315,8 @@ export interface Citer {
  *   Plan 261025h, decision 10.
  */
 export type CitersResult =
-  | { kind: "no-doi" }
-  | { kind: "no-match" }
+  | { kind: "no-doi"; possible?: PossibleCiters }
+  | { kind: "no-match"; possible?: PossibleCiters }
   | { kind: "not-indexed" }
   | { kind: "unconfirmed" }
   | { kind: "unavailable" }

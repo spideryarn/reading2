@@ -3,17 +3,25 @@
  * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md,
  * decision 9; queue item qi-mmtsxdhg.
  *
- * The route refuses a `situate` origin whose id is not `SITUATE_FINDING_ID`
- * (src/routes.ts § `parseSituateOrigin`), and the ids are minted by
- * src/situate.ts § `findingId`. Two files, one pattern: if the step ever mints
- * another shape, every finding's *Ask in chat* would get a 400, and this is
- * the test that says so first.
+ * For a finding, the route requires `SITUATE_FINDING_ID`; the overview is the
+ * one other admitted shape, `SITUATE_OVERVIEW_ID` (src/routes.ts §
+ * `parseSituateOrigin`). Finding ids are minted by src/situate.ts §
+ * `findingId`. If the step ever mints another finding shape, every finding's
+ * *Ask in chat* would get a 400, and this is the test that says so first.
  */
 import { describe, expect, it } from "vitest";
 
 import { titleFromOrigin } from "../src/chat-title.js";
 import { findingId } from "../src/situate.js";
-import { SITUATE_FINDING_ID, SITUATE_FINDING_KINDS, sameOrigin, type ThreadOrigin } from "../src/types.js";
+import {
+  SITUATE_FINDING_ID,
+  SITUATE_FINDING_KINDS,
+  SITUATE_OVERVIEW_ID,
+  sameOrigin,
+  situateOverviewId,
+  type ThreadOrigin,
+} from "../src/types.js";
+import { threadSource } from "../src/web/thread-source.js";
 
 describe("a finding's id", () => {
   it("is what the origin's pattern admits, for every kind", () => {
@@ -43,5 +51,43 @@ describe("a finding's origin", () => {
 
   it("names its chat after the passage", () => {
     expect(titleFromOrigin(FINDING)).toBe("Finding: Ignition is a step-function");
+  });
+});
+
+/* The overview's chat (plan 261026g § Stage 2): a `situate` origin whose
+   item is the dossier's overview, a second shape the route takes. */
+describe("an overview's origin", () => {
+  const OVERVIEW: ThreadOrigin = {
+    mode: "situate",
+    itemId: situateOverviewId("2026-10-25T12:22:30.533Z"),
+    quote: "The report was followed by a peer-reviewed update",
+  };
+
+  it("is minted from the dossier's time, in its own shape, never a finding's", () => {
+    expect(situateOverviewId("2026-10-25T12:22:30.533Z")).toBe("so-20261025122230533");
+    expect(situateOverviewId("2026-10-25T12:22:30Z")).toMatch(SITUATE_OVERVIEW_ID);
+    expect(situateOverviewId("2026-10-25T12:22:30.533Z")).not.toMatch(SITUATE_FINDING_ID);
+    expect("so-2026").not.toMatch(SITUATE_OVERVIEW_ID);
+    expect("so-20261025122230533x").not.toMatch(SITUATE_OVERVIEW_ID);
+  });
+
+  it("is another search's overview's chat only when the time matches", () => {
+    expect(sameOrigin(OVERVIEW, { ...OVERVIEW, quote: "reworded" })).toBe(true);
+    expect(sameOrigin(OVERVIEW, { ...OVERVIEW, itemId: situateOverviewId("2026-10-26T09:00:00.000Z") })).toBe(false);
+  });
+
+  it("names its chat after Where it sits, not a finding", () => {
+    expect(titleFromOrigin(OVERVIEW)).toMatch(/^Where it sits: The report was followed/);
+  });
+
+  it("labels the chat list as the overview in Where it sits, in the model's voice", () => {
+    expect(threadSource({ kind: "chat", origin: OVERVIEW })).toEqual({
+      from: "sources",
+      mode: "sources",
+      place: "Where it sits",
+      label: "Started from the overview in Sources › Where it sits",
+      quote: OVERVIEW.quote,
+      voice: "ai",
+    });
   });
 });

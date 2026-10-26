@@ -76,7 +76,7 @@ import {
 } from "../modes/skim/SkimMode.js";
 import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
-import type { ChatAnchor, Quote, SituateFinding } from "../../types.js";
+import type { ChatAnchor, Quote, Situate, SituateFinding } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
@@ -106,7 +106,7 @@ import {
   askToCheckClaim,
 } from "../chat-handoff.js";
 import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
-import { findingLens, findingLensOrigin, findingOrigin } from "../situate-dossier.js";
+import { findingLens, findingLensOrigin, findingOrigin, overviewOrigin, overviewQuestion } from "../situate-dossier.js";
 import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
@@ -1801,8 +1801,8 @@ export function Reader({
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
-  /* A Situate finding in Where it sits' dossier (plan 261025h), asked for by
-     a margin *literature* line's *Open in Sources* or a chat's way back. */
+  /* A Situate item in Where it sits' dossier: a finding asked for by a margin
+     *literature* line's *Open in Sources*, or a finding/overview chat's way back. */
   const [findingFocus, setFindingFocus] = useState<ItemFocus | null>(null);
   const findingFocusTaken = useCallback((taken: ItemFocus) => setFindingFocus(focusTaken(taken)), []);
   /**
@@ -1911,22 +1911,20 @@ export function Reader({
    */
   const findWebNote = owner?.bibliography.findWebNote;
   /**
-   * **Open *Where it sits* on one literature-search finding** — a margin
-   * *literature* line's *Open in Sources* (plan 261024o § Marginalia), and
-   * since plan 261025h a finding's chat's way back (`openOrigin`). It opened
-   * Investigate until that plan moved the dossier. The focus and the move in
-   * one tick, as `openBibliographyWork` does; the dossier lands on the
-   * finding once it has drawn it (SituateDossier.tsx, `data-finding`), and a
-   * finding a newer search has replaced is dropped there, opening on the list.
-   * An open conversation is cleared so it cannot cover the row.
+   * **Open *Where it sits* on one literature-search item** — a margin
+   * finding's *Open in Sources*, or a finding/overview chat's way back. The
+   * focus and the move happen in one tick; the dossier lands once its target
+   * is drawn (`data-finding`). An item a newer search has replaced is dropped
+   * there, opening on the dossier. An open conversation is cleared so it
+   * cannot cover the target.
    *
    * `sources: null` is *Where it sits*: the default is written as no
    * parameter, as nuqs writes it (sub-modes.ts § `subModeParams`).
    */
   const openFindingInSources = useCallback(
-    (findingId: string) => {
+    (itemId: string) => {
       setBandAway(false);
-      setFindingFocus(focusOn(findingId));
+      setFindingFocus(focusOn(itemId));
       if (mode !== "sources") leavePassageChat();
       if (mode !== "sources" || sourcesView !== "where" || thread !== null) {
         void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
@@ -2022,11 +2020,10 @@ export function Reader({
         case "quiz":
           openQuizAt(origin.batchId, origin.itemId);
           return;
-        /* A literature-search finding lands on *Where it sits*, on its row
-           (plan 261025h, decision 9): the way *Open in Sources* goes, with
-           `?thread=` cleared as a claim's is, so the chat cannot cover the
-           row it went back to. A finding a newer search replaced opens the
-           dossier on its list (SituateDossier § `focus`). */
+        /* A literature-search finding lands on its row; the overview lands
+           on the summary box (plan 261026g). `?thread=` is cleared so the
+           chat cannot cover the target. An item a newer search replaced
+           opens the dossier at its ordinary start (SituateDossier § focus). */
         case "situate":
           openFindingInSources(origin.itemId);
           return;
@@ -3162,6 +3159,17 @@ export function Reader({
     },
     [reopenItemChat, askFindingInChat],
   );
+  /* **The literature search's overview, in chat** (spya-mfuz6g, plan
+     261026g § Stage 2): its words whole in the question, its own origin
+     (`overviewOrigin`), reopened if it has a chat, as a finding is. */
+  const askOverview = useCallback(
+    (situate: Situate) => {
+      const origin = overviewOrigin(situate);
+      if (reopenItemChat(origin)) return;
+      handToChat(askInSources(overviewQuestion(situate.overview)), "send", origin);
+    },
+    [reopenItemChat, handToChat],
+  );
   /* What Debate's claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
@@ -3187,6 +3195,7 @@ export function Reader({
       onCheck: checkClaim,
       onAskWork: askWork,
       onFinding: askFinding,
+      onOverview: askOverview,
       onOpen: openClaimChat,
     }),
     [
@@ -3200,6 +3209,7 @@ export function Reader({
       checkClaim,
       askWork,
       askFinding,
+      askOverview,
       openClaimChat,
     ],
   );

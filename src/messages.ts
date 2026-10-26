@@ -6283,9 +6283,12 @@ export const RECEPTION_EXTRACTS_ONLY =
    in src/pipeline.ts runs extraction, structure and gists at ingest, and a PDF
    is read by a model before it is anything else. GPT Sol's review of the plan
    found it and called it the most serious thing in the draft. So the sentence
-   at the *add* surface is present tense and comes first in the reader's life,
-   and the one in the mode is past tense and does not pretend a choice is still
-   open. docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+   at the *add* surface is present tense, and the one in the mode is past tense
+   and does not pretend a choice is still open.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+   Since 2026-10-26 the add surface's sentence is in an (i) rather than on
+   show (plan 261026h), so the mode's may be the first a reader reads; it is
+   worded to stand alone, and does not claim they were told before.
 
    There is deliberately **no acknowledgement to tick** in either place. A box
    that says "I understand" in front of something already done would imply that
@@ -6297,13 +6300,20 @@ export const RECEPTION_EXTRACTS_ONLY =
  * **One sentence at the point of adding an article**, before any of it happens.
  *
  * True of everything this app does, so it belongs on that page whatever happens
- * to Referee mode — and it is the sentence that makes the past-tense notice
- * below honest rather than a surprise. No gate, no checkbox, no attestation:
- * the reader is told, and then they decide.
+ * to Referee mode. No gate, no checkbox, no attestation: the reader can be told,
+ * and then they decide. Until 2026-10-26 this was also what made the past-tense
+ * notice below a reminder rather than news; see the next paragraph but one.
  *
  * It says *processing* rather than naming steps or the provider. Which model
  * ran which stage is our machinery and changes; that the text leaves this app
- * is the fact a person needs. src/web/AddArticle.tsx is where it is shown.
+ * is the fact a person needs.
+ *
+ * **Shown in the add box's (i), beside File, since 2026-10-26** (`LimitsInfo`,
+ * src/web/UploadPicker.tsx), rather than as a visible line under the box. So it
+ * is available before adding but no longer seen by everyone who adds. Greg
+ * (reply `spya-dqhrvy` to q-p6fvep): *"B I think it's pretty obvious that
+ * we're sending stuff to AI. I mean, the whole thing is AI powered, and it's
+ * all in the privacy policy."* Plan 261026h.
  */
 export const ADDING_SENDS_TEXT_AWAY =
   "The article's text is sent to a third-party model provider for processing.";
@@ -6321,7 +6331,7 @@ export const ADDING_SENDS_TEXT_AWAY =
  * So this is `ADDING_SENDS_TEXT_AWAY` with its tense corrected, and **the
  * asymmetry between the two is the point rather than an inconsistency to tidy
  * up**. Above, the reader still has a choice, so the sentence is present tense
- * and sits beside the control that makes it. Here the choice is already spent
+ * and sits in the (i) beside the controls that make it. Here the choice is already spent
  * once the server accepts the job.
  *
  * **A job receipt does not prove a model provider has received the text.** The
