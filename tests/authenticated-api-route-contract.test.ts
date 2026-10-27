@@ -774,6 +774,26 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/skim/w1/profile-notice-dismissal"],
   },
   {
+    /* The owner's added Skim briefs — plan 261027d. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/briefs$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/skim/w1/briefs"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET", "PATCH", "DELETE"],
+    witnesses: ["/api/skim/w1/briefs/w2"],
+  },
+  {
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)\\/profile-notice-dismissal$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/skim/w1/briefs/w2/profile-notice-dismissal"],
+  },
+  {
     /* Get a mode ready without opening it, the guide's prepare step — plan
        261019p § Stage 2b. Owner only; a `now` press claims the thread's one start. */
     match: { kind: "regex", source: "^\\/api\\/guide-prepare\\/([\\w.%-]+)$", flags: "" },
@@ -1214,8 +1234,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j); 132
    with a draft gift's email preview and the lookup's guidance (plan 261024f);
    133 with Situate's owner read (plan 261024o); 134 with the extension's
-   owner-scoped already-on-the-shelf lookup (plan 261024y). */
-const EXPECTED_MATCHER_COUNT = 134;
+   owner-scoped already-on-the-shelf lookup (plan 261024y); 137 with the
+   added Skim briefs (plan 261027d). */
+const EXPECTED_MATCHER_COUNT = 137;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1240,8 +1261,9 @@ const EXPECTED_MATCHER_COUNT = 134;
    (plan 261021j); 163 with a discarded gift's DELETE, a draft's email preview
    and the guidance's GET and PUT (plan 261024f); 164 with Situate's owner
    read (plan 261024o); 165 with the extension's owner-scoped
-   already-on-the-shelf lookup (plan 261024y). */
-const EXPECTED_GUARD_COUNT = 165;
+   already-on-the-shelf lookup (plan 261024y); 171 with the added Skim
+   briefs' six (plan 261027d). */
+const EXPECTED_GUARD_COUNT = 171;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2524,6 +2546,13 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         // Skim's profile notice, 261009i
         "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
+        // the added Skim briefs, 261027d
+        "GET regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs$/",
+        "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs$/",
+        "GET regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$/",
+        "PATCH regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
         // the guide's prepare step, 261019p stage 2b
         "POST regex /^\\/api\\/guide-prepare\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/reception\\/([\\w.%-]+)$/",

@@ -50,6 +50,7 @@ import {
   sourcesClaimChecks,
   revisionBlocks,
   searchRuns,
+  skimBriefs,
 } from "../db/schema.js";
 import { ownedSlug } from "./owned-slug.js";
 import { ACTIVE_REVISION_COLUMNS, type ActiveRevisionRow } from "./revision-columns.js";
@@ -201,6 +202,14 @@ export const ARTICLE_TABLE_COVERAGE = {
         "to data/<slug>/ has nothing to resolve against. The reader's zip carries them.",
     },
     bundle: { exported: true, into: "augmentations/chat.json" },
+  },
+  /* The owner's added Skim briefs — their sentences, and the route planned for
+     each. Reader state with the reader's own words, exported for
+     `reading_time`'s reason, planned or not: the sentence is worth having
+     before any model succeeds (plan 261027d, Sol F8). */
+  skim_briefs: {
+    rollback: { exported: true, into: "skim-briefs.json" },
+    bundle: { exported: true, into: "augmentations/skim-briefs.json" },
   },
   search_runs: {
     rollback: { exported: true, into: "searches.json" },
@@ -856,6 +865,8 @@ export interface ArticleRows {
    */
   readonly chatMentions: readonly (typeof chatMentions.$inferSelect)[];
   readonly searchRuns: readonly (typeof searchRuns.$inferSelect)[];
+  /** The owner's added Skim briefs, oldest first. Plan 261027d. */
+  readonly skimBriefs: readonly (typeof skimBriefs.$inferSelect)[];
   readonly refereeCriteria: readonly (typeof refereeCriteria.$inferSelect)[];
   /**
    * At most one row — `referee_promises.article_id` is its primary key. An array
@@ -1114,6 +1125,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(citationWebNotes)
     .where(eq(citationWebNotes.articleId, article.id))
     .orderBy(asc(citationWebNotes.entryId));
+  const briefs = await tx
+    .select()
+    .from(skimBriefs)
+    .where(eq(skimBriefs.articleId, article.id))
+    .orderBy(asc(skimBriefs.createdAt), asc(skimBriefs.id));
   const hiddenTerms = await tx
     .select()
     .from(glossaryHiddenEntries)
@@ -1156,6 +1172,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     chatMessages: messages,
     chatMentions: mentions,
     searchRuns: runs,
+    skimBriefs: briefs,
     refereeCriteria: criteria,
     refereePromises: promises,
     sourcesClaimChecks: checks,

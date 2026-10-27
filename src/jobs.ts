@@ -135,12 +135,14 @@ import {
   type JobStep,
   type JobUpload,
   type PaidPurchase,
+  type Skim,
   type StepName,
   type StepPreview,
   type StepProgress,
 } from "./types.js";
 import { articlePower, type ModelPower } from "./models.js";
-import { highPowerStore } from "./store/index.js";
+import { highPowerStore, skimBriefStore } from "./store/index.js";
+import { sameStamp, stampOf } from "./store/artifacts.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
    from either module — they are only ever used structurally, inside types.ts,
@@ -1246,7 +1248,61 @@ function stillForced(step: JobStep): boolean {
  * kind of `cancelled`, because the walk's hand-back otherwise asks whether the
  * *controller* was aborted by the deadline, and here nothing aborted it.
  */
-type StepOutcome = "skipped" | "ran" | "cancelled" | "failed" | "handed-back";
+/**
+ * `kept-elsewhere`: the step ran and its product was kept **outside the
+ * draft** — an added Skim brief's route, written to its `skim_briefs` row
+ * (`SkimBriefTarget`). Nothing was committed into the revision, so the walk
+ * goes on as after a skip and the draft publishes through the skipped-tail
+ * door. Plan 261027d.
+ */
+type StepOutcome = "skipped" | "ran" | "kept-elsewhere" | "cancelled" | "failed" | "handed-back";
+
+/**
+ * **Where a step's product goes when it is not the draft** — today one case:
+ * the `skim` step of a job carrying `Job.skimBrief`, whose route belongs to the
+ * brief's row, not to `article_revisions.skim` (the default brief's).
+ * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md.
+ *
+ * **Why here and not in the step.** The step is unchanged: it plans from
+ * `ctx.profile`, which for a brief's job the route already rendered with the
+ * brief in place of the article's purpose, and its `stamp` already hashes that
+ * profile. What differs is only the two places the runner talks to the
+ * revision about a step — the freshness check (`stepIsDone` reads the
+ * revision's stamp) and the commit (which writes into the draft and marks the
+ * revision's step run) — and both are here. A brief therefore never opens a
+ * `revision_step_runs` marker for `skim`, which would read as the default's
+ * route being interrupted.
+ */
+interface SkimBriefTarget {
+  readonly id: string;
+}
+
+/** The brief a step's product belongs to, or `undefined` for the draft. */
+function skimBriefTarget(job: Job, step: JobStep): SkimBriefTarget | undefined {
+  return step.name === "skim" && job.skimBrief !== undefined ? { id: job.skimBrief } : undefined;
+}
+
+/**
+ * **Is the brief's route already the one this job would plan?** The default's
+ * question (`stepIsDone`: the step's expected stamp against the stored one),
+ * asked of the brief's row. A brief that has gone counts as done: there is
+ * nothing to plan for, and paying for a route nobody can read would be the
+ * wrong way to be wrong.
+ */
+async function briefRouteIsDone(
+  job: Job,
+  brief: SkimBriefTarget,
+  step: PipelineStep,
+  ctx: StepContext,
+  reads: StoreSession["reads"],
+): Promise<boolean> {
+  const held = await skimBriefStore.routeForJob(job.ownerId, job.slug, brief.id);
+  if (!held.found) return true;
+  if (!held.skim || !step.stamp) return false;
+  const expected = await step.stamp(ctx, reads);
+  if (!expected) return false;
+  return sameStamp(stampOf(held.skim), expected);
+}
 
 /**
  * **How often a step's counted progress may reach the job row**: at the first
@@ -1393,6 +1449,9 @@ async function runStep(
   /* The long-PDF reprice and its stage-2 assertion, bound to this claim — see
      `StepContext.priceFetchedPdf`. */
   billing: Pick<StepContext, "priceFetchedPdf" | "pdfIsPriced">,
+  /* `SkimBriefStore.writeRoute` bound to this claim, for a brief's route
+     (`SkimBriefTarget`): fenced on the attempt as the commit is. */
+  keepBriefRoute: (briefId: string, route: Skim) => Promise<boolean>,
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
   /* **The article's power, read once per step, when the step starts** (plan
      260930f decision 3): flipping High-powered AI mid-job moves the steps
@@ -1498,9 +1557,13 @@ async function runStep(
      failed read is the step's failure. It is **not** an answer of "not
      current": that would start paid work on a question nobody answered.
      tests/jobs-walk.test.ts § the exits of a claim. */
+  const brief = skimBriefTarget(job, step);
   const freshRead =
     powerRead.ok && !gated && !stillForced(step)
-      ? await stepIsDone(registry[step.name], ctx, session.reads).then(
+      ? await (brief
+          ? briefRouteIsDone(job, brief, registry[step.name], ctx, session.reads)
+          : stepIsDone(registry[step.name], ctx, session.reads)
+        ).then(
           (done) => ({ ok: true as const, done }),
           (error: unknown) => ({ ok: false as const, error }),
         )
@@ -1590,7 +1653,9 @@ async function runStep(
       const begun = await beginPaidStep(step.name);
       if (begun === "begun-before") throw stageFailure(PAID_STEP_NOT_REPEATED);
     }
-    const attempt = await session.beginStep(job.slug, step.name);
+    /* Not for a brief's route: the marker is the revision's, for the default's
+       (`SkimBriefTarget`). */
+    const attempt = brief ? undefined : await session.beginStep(job.slug, step.name);
     /* Opening the marker also yields: honour a Stop/deadline that arrived
        there before invoking a step that might ignore its signal. */
     controller.signal.throwIfAborted();
@@ -1659,6 +1724,26 @@ async function runStep(
     if ((step.name === "extract" || step.name === "metadata") && product.detail?.trim()) {
       job.title = product.detail;
     }
+
+    /* **An added brief's route goes to its row, and nothing to the draft**
+       (`SkimBriefTarget`). Our own deadline drops the product here as
+       `transitionAfter` drops it for the draft, for its reason; a reader's
+       Stop keeps it, as on the last step of any job. The write is fenced on
+       this claim and on the brief still being there: deleted meanwhile, or the
+       article transferred, it keeps nothing and says so. */
+    if (brief) {
+      if (controller.signal.reason instanceof DeadlineReached) throw controller.signal.reason;
+      const route = product.parts.skim;
+      if (!route) throw new Error("the skim step returned no route for the brief");
+      const kept = await keepBriefRoute(brief.id, route);
+      if (!kept) step.detail = "the brief was deleted before its route was ready, so nothing was kept";
+      jlog.info(
+        { step: step.name, ms: since(stepStarted), brief: brief.id, kept, ...spendFields(spend) },
+        `step done: ${step.name} for a brief — ${job.slug}`,
+      );
+      return { outcome: "kept-elsewhere" };
+    }
+    if (attempt === undefined) throw new Error("a step committing into the draft has no marker");
 
     /* **The whole of what used to be four calls, three here and one in the
        caller.** `commit` validates the product against `produces` before it
@@ -3319,10 +3404,18 @@ async function walkClaim(
             priceWithResync(job.ownerId, () => priceFetchedPdf(job.id, attempt, pages, previousPages)),
           pdfIsPriced: (pages) => pdfPricing(job.id, pages),
         },
+        (briefId, route) =>
+          skimBriefStore.writeRoute({ jobId: job.id, attempt }, job.ownerId, job.slug, briefId, route),
       );
 
       if (ran.outcome === "skipped") continue;
       lastRan = step.name;
+      /* Kept outside the draft (an added Skim brief's route): nothing was
+         committed, so the walk carries on as after a skip, and the draft —
+         holding whatever Quotes or Ideas ran before it — publishes through the
+         skipped-tail door below. The brief's step is always the job's last
+         (`parseJobRequest`). Plan 261027d. */
+      if (ran.outcome === "kept-elsewhere") continue;
 
       if (ran.outcome === "cancelled" || ran.outcome === "failed" || ran.outcome === "handed-back") {
         /**
@@ -3717,6 +3810,14 @@ export interface EnqueueRequest {
    */
   illustrationNote?: string;
   /**
+   * **The added Skim brief this `skim` job plans a route for**, already
+   * checked by the route (it exists, on this article) and only on a request
+   * whose steps are Skim's own (`quotes`, `ideas`, `skim`). Frozen onto the job
+   * as `Job.skimBrief` and part of the work key. `profile` is already the
+   * brief's own rendering. Plan 261027d.
+   */
+  skimBrief?: string;
+  /**
    * **The quota slot this ingest is spending**, from `reserveIngest`.
    *
    * Carried through to the `EnqueueTicket` (src/store/jobs.ts) so that the
@@ -3967,6 +4068,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     {
       ...(request.reset ? { reset: request.reset } : {}),
       ...(request.illustrationNote ? { illustrationNote: request.illustrationNote } : {}),
+      ...(request.skimBrief ? { skimBrief: request.skimBrief } : {}),
     },
   );
   /* **Every exit from this function honours it**, including the two that hand
@@ -4201,6 +4303,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
           request.url,
           request.reset,
           request.illustrationNote,
+          request.skimBrief,
         )
       ) {
         log("jobs").info(
@@ -4247,6 +4350,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       createdAt: new Date().toISOString(),
       ...(request.profile ? { profile: request.profile } : {}),
       ...(request.illustrationNote ? { illustrationNote: request.illustrationNote } : {}),
+      ...(request.skimBrief ? { skimBrief: request.skimBrief } : {}),
       ...(request.reset ? { reset: request.reset } : {}),
     };
 
@@ -4566,8 +4670,10 @@ export function sameWork(
   upload?: JobUpload,
   url?: string,
   reset?: JobReset,
-  /** Last, so adding it shifted nothing before it. */
+  /** Last but one, so adding it shifted nothing before it. */
   illustrationNote?: string,
+  /** Last, for the same reason: `Job.skimBrief`, plan 261027d. */
+  skimBrief?: string,
 ): boolean {
   if (job.steps.length !== names.length) return false;
   /* **A reset is not a re-read**, though its steps and forcing are exactly
@@ -4613,6 +4719,10 @@ export function sameWork(
      different note is asking for a different picture, and being handed the
      running one would paint the note it replaced. Plan 261002j. */
   if ((job.illustrationNote ?? "") !== (illustrationNote ?? "")) return false;
+  /* **And the Skim brief**: a press for one brief's route is not the default's
+     route, nor another brief's, even when the sentences (and so the rendered
+     profiles) agree. Plan 261027d. */
+  if ((job.skimBrief ?? "") !== (skimBrief ?? "")) return false;
   return job.steps.every(
     (s, i) => s.name === names[i] && (s.force === true) === forced.has(s.name),
   );
@@ -5242,6 +5352,9 @@ export async function retryJob(
     ...(old.profile ? { profile: old.profile } : {}),
     /* The note goes with it, or a retried paint would quietly be a plain one. */
     ...(old.illustrationNote ? { illustrationNote: old.illustrationNote } : {}),
+    /* And the brief, or a retried brief's route would be planned as the
+       default's and written over the revision's (plan 261027d). */
+    ...(old.skimBrief ? { skimBrief: old.skimBrief } : {}),
     /* **A retried reset still resets**, with the same list and the same profile
        snapshot. Without this the retry is a plain re-read: it mints a fresh
        draft copied from the published revision, extras and all, and publishes

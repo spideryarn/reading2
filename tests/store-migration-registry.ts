@@ -3534,6 +3534,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      that has to agree with the pipeline's stamp, and there is no honest
      version of that without the rows. */
   "tests/skim-freshness-pg.test.ts": "private-postgres",
+  /* Plan 261027d stage 2: added Skim briefs — their table, routes and the
+     `skim` job that writes a brief's row, all on Postgres. */
+  "tests/skim-briefs-pg.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
      its three enforcers are pure functions and need nothing; the third is

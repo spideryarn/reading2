@@ -114,6 +114,7 @@ import type {
   RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
+  Skim,
   SkimFound,
   TimelineFound,
   ThreadFound,
@@ -2050,6 +2051,63 @@ export interface SkimNoticeStore {
    * when it is not — a re-plan landed in between — and nothing is written.
    */
   dismissProfileNotice(slug: string, generatedAt: string, key: string): Promise<boolean>;
+}
+
+/** One added Skim brief as the store holds it — plan 261027d. */
+export interface SkimBriefRow {
+  id: string;
+  /** The reader's own words: never logged. */
+  brief: string;
+  createdAt: string;
+  updatedAt: string;
+  plannedAt: string | null;
+  /** Its route, or `null` until a job has planned one. */
+  skim: Skim | null;
+  /** `profileNoticeKey` of the notice sent away, or `null`. Never sent to the client. */
+  profileNoticeDismissedFor: string | null;
+}
+
+/**
+ * **The owner's added Skim briefs** —
+ * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md,
+ * src/store/pg-skim-briefs.ts. Every reader-facing method is owner-scoped (a
+ * stranger's slug is a 404) and refuses a brief not on the article with a 404;
+ * the two job methods take the job's owner. Errors carry an HTTP `status`.
+ */
+export interface SkimBriefStore {
+  /** Oldest first. */
+  list(slug: string): Promise<SkimBriefRow[]>;
+  get(slug: string, id: string): Promise<SkimBriefRow>;
+  /**
+   * Its route judged as `loadSkim` judges the default's (`routeFreshness`,
+   * src/skim.ts), or `null` before it is planned.
+   */
+  loadRoute(slug: string, id: string): Promise<SkimFound | null>;
+  /** At most `SKIM_BRIEFS_MAX` per article (409 past it). The same id and sentence again answer the row. */
+  create(slug: string, id: string, brief: string): Promise<SkimBriefRow>;
+  /** The sentence only; the route stays, and reads as planned for another profile. */
+  updateBrief(slug: string, id: string, brief: string): Promise<SkimBriefRow>;
+  /** `false` when there was none. */
+  remove(slug: string, id: string): Promise<boolean>;
+  /** As `SkimNoticeStore.dismissProfileNotice`, on this brief's route. */
+  dismissProfileNotice(slug: string, id: string, generatedAt: string, key: string): Promise<boolean>;
+  /** For the job's freshness check: whether the brief is still there, and its route. */
+  routeForJob(
+    ownerId: OwnerId,
+    slug: string,
+    id: string,
+  ): Promise<{ found: false } | { found: true; skim: Skim | null }>;
+  /**
+   * The job's write, fenced on its claim (`StaleAttemptError` when lost) and
+   * on the row: `false`, writing nothing, when the brief has gone.
+   */
+  writeRoute(
+    fence: { jobId: string; attempt: string },
+    ownerId: OwnerId,
+    slug: string,
+    id: string,
+    skim: Skim,
+  ): Promise<boolean>;
 }
 
 /**

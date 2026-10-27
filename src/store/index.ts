@@ -79,6 +79,7 @@ import type {
   CommentStore,
   ReadingTimeStore,
   GlossaryHiddenStore,
+  SkimBriefStore,
   SkimNoticeStore,
   StaleNoticeStore,
   SuggestionDismissalStore,
@@ -126,6 +127,7 @@ import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
 import { pgSkimNoticeStore } from "./pg-skim-notice.js";
+import { pgSkimBriefStore } from "./pg-skim-briefs.js";
 import { pgStaleNoticeStore } from "./pg-stale-notices.js";
 import { pgSuggestionDismissalStore } from "./pg-suggestion-dismissals.js";
 import { pgRelatedWorkStore } from "./pg-related-work.js";
@@ -398,6 +400,8 @@ export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgRead
 export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
 /** The Skim profile-changed notice an owner sent away — plan 261009i. */
 export const skimNoticeStore: SkimNoticeStore = guarded("skim-notice", pgSkimNoticeStore);
+/** The owner's added Skim briefs and their routes — plan 261027d. */
+export const skimBriefStore: SkimBriefStore = guarded("skim-briefs", pgSkimBriefStore);
 /** The "older version of the article" notices an owner sent away, by mode — plan 261010a. */
 export const staleNoticeStore: StaleNoticeStore = guarded("stale-notices", pgStaleNoticeStore);
 /** The command bar's suggestions an owner dismissed, as hashes — plan 261010u. */

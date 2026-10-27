@@ -78,7 +78,7 @@ loadEnvLocal();
 
 const { pool } = await pgReady({
   suite: "tests/article-transfer.test.ts",
-  tables: ["spideryarn.articles", "spideryarn.ingest_events", "spideryarn.link_summaries", "spideryarn.article_tags"],
+  tables: ["spideryarn.articles", "spideryarn.ingest_events", "spideryarn.link_summaries", "spideryarn.article_tags", "spideryarn.skim_briefs"],
   columns: [{ table: "spideryarn.articles", column: "skim_profile_notice_dismissed_for" }],
   keepPool: true,
   max: 4,
@@ -205,6 +205,13 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
     "insert into spideryarn.search_runs (article_id, id, owner_id, criterion, status) values ($1, $2, $3, 'my search', 'done')",
     [a.id, mintId(), owner],
   );
+  /* An added Skim brief, with a route, so a transfer is seen deleting the
+     sentence and the route together (plan 261027d, Sol F1). */
+  await q(
+    `insert into spideryarn.skim_briefs (article_id, id, brief, skim, planned_at)
+     values ($1, $2, 'my own skim brief', '{"stops":[]}'::jsonb, now())`,
+    [a.id, mintId()],
+  );
   await q("insert into spideryarn.article_tags (article_id, tag) values ($1, 'to-read')", [a.id]);
   await q("insert into spideryarn.glossary_hidden_entries (article_id, entry_id) values ($1, $2)", [a.id, mintId()]);
   await q(
@@ -246,7 +253,7 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
     [owner, a.id, a.block],
   );
   return new Set<ReaderStateTable>([
-    "referee_criteria", "comments", "chat_threads", "chat_mentions", "chat_messages", "quiz_attempts", "referee_promises",
+    "referee_criteria", "comments", "chat_threads", "skim_briefs", "chat_mentions", "chat_messages", "quiz_attempts", "referee_promises",
     "referee_hidden_checks", "sources_claim_checks", "search_runs", "article_tags", "glossary_hidden_entries",
     "glossary_lookups", "citation_finds", "citation_investigations", "citation_web_notes", "reading_time", "stale_notice_dismissals",
     "command_suggestion_dismissals", "link_summaries",

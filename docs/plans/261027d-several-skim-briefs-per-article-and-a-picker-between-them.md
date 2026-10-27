@@ -140,3 +140,29 @@ show the default's). One real end-to-end plan after the reset is queued.
 - 2026-10-27: Sol plan review ([…-plan-review-sol.md](261027d-several-skim-briefs-plan-review-sol.md)):
   F1 (P0, transfer) and F2–F8 accepted; the direct request replaced by a job parameter; edit
   allowed; brief remembered with position; replace-vs-supplement added to the question.
+- 2026-10-27: **stage 2 landed** (server only, no UI). Table `skim_briefs` and `jobs.skim_brief`
+  (`drizzle/20261027130746_skim_briefs.sql`, `drizzle/20261027130814_jobs_skim_brief.sql`);
+  the store [`src/store/pg-skim-briefs.ts`](../../src/store/pg-skim-briefs.ts) (article lock as
+  the mutex, 12 per article, idempotent create on the id, the job's write fenced on its claim);
+  `Job.skimBrief` carried as `illustrationNote` is (route parse, `publicJob` strips it, row,
+  work key, `sameWork`, retry); the six owner-only routes; `routeFreshness` and `skimResponseFor`
+  in [`src/skim.ts`](../../src/skim.ts), which the default's `loadSkim` and GET now go through too;
+  transfer (`ownWords: true`) and export (rollback `skim-briefs.json`, bundle
+  `augmentations/skim-briefs.json`, and `your-words.md` on the shelf list). Tests:
+  `tests/skim-briefs-pg.test.ts`, plus rows in the transfer, voucher-claim, export-coverage,
+  your-words and `sameWork` grid tests.
+  **Design choice, where the brief's route is written.** The `skim` step itself is unchanged: the
+  job route renders `renderProfile({ profile, purpose: brief })` into `Job.profile`, so the step
+  plans and stamps for the brief with no new branch. Only the runner's two conversations with the
+  revision differ, and both are in `runStep` (src/jobs.ts § `SkimBriefTarget`): freshness compares
+  the step's expected stamp with the brief row's route instead of the revision's run row, and
+  after `run` the route goes to `skim_briefs` (fenced on the claim, conditional on the row) with no
+  `beginStep` marker and no commit into the draft. The step returns a new outcome,
+  `kept-elsewhere`, which the walk treats as a skip, so the draft — with any Quotes or Ideas run
+  before it — publishes through the existing skipped-tail door. Passed over: a separate
+  `skim-brief` step name (a new entry in `STEP_ORDER`, the registries, Metadata and every
+  exhaustive table over steps, for one destination), and teaching the session's `commit` a second
+  destination (the transaction is the revision's, and a brief does not belong in it). The cost of
+  the choice: the brief's step must be the job's last, which `parseSkimBrief` enforces by allowing
+  only `quotes`, `ideas` and `skim` beside it. Brief routes carry no `viewAs` (they fail closed
+  while the administrator views as a reader).

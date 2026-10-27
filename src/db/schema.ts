@@ -3091,6 +3091,18 @@ export const jobs = spideryarn.table(
     illustrationNote: text("illustration_note"),
 
     /**
+     * **The added Skim brief this job plans a route for** (`skim_briefs.id`),
+     * or null for every other job, the default route's included.
+     * `Job.skimBrief`, src/types.ts: on the row for `illustration_note`'s
+     * reason — a job resumed elsewhere without it would plan the default
+     * route and write it over the revision's. Part of `work_key` when present.
+     * No foreign key: a brief deleted mid-run is a completion that writes
+     * nothing, not a job that cannot be stored.
+     * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md.
+     */
+    skimBrief: text("skim_brief"),
+
+    /**
      * **This job is a reset**, and what to make again once it publishes — or
      * null, which is every other job.
      *
@@ -4909,6 +4921,72 @@ export const chatThreads = spideryarn.table(
      * 2026-10-07, with no SQL run; see `jobs_queued_idx`.
      */
     index("chat_threads_article_updated_idx").on(t.articleId, t.updatedAt.desc().nullsFirst()),
+  ],
+);
+
+/**
+ * **The owner's added Skim briefs** — one sentence each, *what are you
+ * skimming for?*, and the route planned for it.
+ * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md
+ * (report `spya-xyje0z`).
+ *
+ * The default brief is not here: it is the reader profile plus the article's
+ * *why you're reading*, and its route stays `article_revisions.skim`. A row
+ * here is planned from the profile with `brief` **in place of** that purpose
+ * (`renderProfile({ profile, purpose: brief })`), by a `skim` job carrying
+ * `Job.skimBrief`, which writes `skim` on this row and nowhere else.
+ *
+ * Modelled on `chat_threads`: keyed `(article_id, id)`, the id minted by the
+ * client in the house format, deleted with the article, and owner-only through
+ * the article (src/store/pg-skim-briefs.ts). **Reader state with the reader's
+ * own words**: a transfer deletes it and an unattended voucher transfer is
+ * refused while one exists (src/admin-articles.ts § `READER_STATE`). At most
+ * `SKIM_BRIEFS_MAX` per article, enforced in the store under the article lock.
+ *
+ * Never log `brief`: it is the reader's own words (docs/project/logging.md).
+ */
+export const skimBriefs = spideryarn.table(
+  "skim_briefs",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    /** The reader's sentence. Also its name in the picker. */
+    brief: text("brief").notNull(),
+    /**
+     * The route planned for it — the `Skim` artefact, stamp inside it
+     * (`sourceHash`, `profileHash`, `version`, `generatedAt`) as on the
+     * revision's column. Null until planned. Not tied to a revision, as the
+     * default's route survives re-extraction (plan review: brief text stays on
+     * the article); freshness compares its stamp against the article now.
+     */
+    skim: jsonb("skim").$type<Skim>(),
+    /**
+     * The profile-changed notice the owner sent away for this route, as
+     * `profileNoticeKey(generatedAt, profileHash)` (src/skim.ts) — the
+     * default's `articles.skim_profile_notice_dismissed_for`, per brief.
+     */
+    profileNoticeDismissedFor: text("profile_notice_dismissed_for"),
+    profileNoticeDismissedAt: timestamp("profile_notice_dismissed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    /** When the sentence was last written: on create, and on every edit. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** When `skim` was last written by a finished job. Null until then. */
+    plannedAt: timestamp("planned_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("skim_briefs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /* 600 is `MAX_PURPOSE_CHARS` (src/types.ts), written out because this file
+       may import nothing but its leaves (tests/public-imports.test.ts);
+       tests/skim-briefs-pg.test.ts holds the two to one number. */
+    check(
+      "skim_briefs_brief_length",
+      sql`length(btrim(${t.brief})) > 0 and length(${t.brief}) <= 600`,
+    ),
+    /* A route and when it was planned arrive together. */
+    check("skim_briefs_planned_both", sql`(${t.skim} is null) = (${t.plannedAt} is null)`),
   ],
 );
 
