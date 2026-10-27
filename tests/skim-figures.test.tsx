@@ -352,6 +352,16 @@ describe("the Figures chip", () => {
     /* Public payloads are the whole data source: no owner read and no job. */
     expect(apiRequests).toEqual([]);
   });
+
+  it("does not apply an owner's brief position to a visitor's default route", async () => {
+    history.replaceState(null, "", `/read/figs?mode=skim&brief=spya-bf2abc&depth=figures&stop=${TAB}`);
+    await mount(BLOCKS, true);
+
+    expect(control?.door?.noun, "the private brief's Figures position was drawn").toBe("stop");
+    expect(control?.blockId).toBe(P[2]);
+    expect(scrolled, "the private brief's arrival still moved the visitor").toEqual([]);
+    expect([param("brief"), param("depth"), param("stop")]).toEqual([null, null, null]);
+  });
 });
 
 describe("the Figures walk", () => {

@@ -14862,7 +14862,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }, captures) => {
       const advanced = await advanceJob(part(captures, 1));
       if (!advanced) throw httpError(404, "No such job");
-      send(res, 200, advanced);
+      /* The poll and create routes project jobs through `publicJob`; an
+         advance response is the same browser wire, not a trusted back door
+         for the rendered profile or other owner-only job fields. */
+      send(res, 200, { ...advanced, job: publicJob(advanced.job) });
     },
   },
 

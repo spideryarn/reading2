@@ -218,3 +218,53 @@ show the default's). One real end-to-end plan after the reset is queued.
   Greg removed the default's standing button in favour of Metadata, which cannot re-plan a
   brief (Sol F5). Tests: `tests/skim-briefs-client.test.tsx`, and § an added brief in
   `tests/skim-panel.test.tsx`; each seen red with its fix undone.
+- 2026-10-27: **stage 4, the picker (option A, Greg's choice).** A ▾ (`.chat-icon`) beside
+  *Reading for: …* opens [`SkimBriefPicker.tsx`](../../src/web/SkimBriefPicker.tsx): the default
+  (the article's purpose, marked *default*), each added brief, and *New brief…*; the current one has
+  a tick and `aria-current`. **A Radix `Popover` on `MENU_SURFACE`, not a `DropdownMenu`**: each row
+  carries its own pencil and Chat's `ArmedDelete` (moved to
+  [`ArmedDelete.tsx`](../../src/web/ArmedDelete.tsx) so both use one control), and a menu item cannot
+  hold a second control a keyboard reaches; Tab walks the rows, Escape closes. Decisions:
+  - **The list is read lazily**, once the ▾ is first opened (or when `?brief=` names one, as
+    before), so Skim on the default costs no request it did not cost before. The price is a short
+    *Reading your briefs…* the first time the list opens; *New brief…* works meanwhile, and the
+    server's 409 covers the limit if the list has not answered.
+  - **Nothing is typed inside the popover.** *Edit* and *New brief…* close it and open the band's own
+    box (`BriefIntent`, held in `SkimBand` above the per-route remount): *Edit* on another route
+    switches first and opens the box on arrival; the default's *Edit* is `PurposeLine`'s, unchanged;
+    an added brief's line gains the same *Edit*, which saves with `edit` and then asks `ensure()`
+    (unforced; the new sentence changes the stamp). *New brief…* creates with a client-minted id,
+    switches `?brief=` to it, and the arriving band calls the empty state's `ensure()` once its read
+    says none. At 12 the item is disabled with the reason.
+  - **A switch is one `useQueryStates` write** of `brief`, `stop: null`, `depth: null`, with
+    `history: "replace"`. Deleting the brief on screen switches to the default.
+  - **`useSkimBriefs` lays this tab's writes over the list** until a read that began after them
+    lands: a read in flight at the create could otherwise land without the new brief, and `SkimBand`
+    would clear the id as unknown.
+  - **The added brief's foot keeps *Plan it again*.** *Edit* re-plans only a changed sentence, and
+    Metadata's row is the default's, so the foot is the only re-plan of an unchanged brief. Moving it
+    into the picker would put a paid press in a list of choices.
+  - **Not done:** the picker is not offered where `PurposeLine` draws nothing (the purpose could not
+    be read), nor in the default's empty state (Sol F6's race). Under a banner the picker's *Edit*
+    opens its box only once the banner has gone, since the banner re-plans there. No arrow-key
+    navigation inside the list.
+  Tests: § the picker between briefs in `tests/skim-panel.test.tsx` (lazy read, one-write switch,
+  New brief creates and plans, the limit, two-press delete back to the default, the default's box
+  from the list, an added brief's edit re-plans, none for a visitor); each but the visitor's seen red
+  with its piece of the fix undone.
+- 2026-10-27: **GPT Sol's code review of stages 3 and 4**
+  ([review](261027d-several-skim-briefs-code-review-3-sol.md)) found D1–D6, and fixed each red-first:
+  - D1: one id for *New brief* across retries.
+  - D2: a lost reply to a create or edit is checked against the list before it is called a failure.
+  - D3: `POST /api/jobs/:id/advance` now goes through `publicJob` too. Until then it put the rendered
+    profile on the owner's wire; that predated this plan.
+  - D4 (P0): drafts are held above the per-route remount, so Back/Forward no longer loses typing.
+  - D5: a visitor drops the private brief's stop and depth along with `?brief=`.
+  - D6: a create or edit that finishes after a Back leaves navigation alone, and keeps its re-plan
+    pending.
+
+  Browser check (Sonnet, desktop and 390px): all nine items passed. Two notes left as they are:
+  - An unplanned brief's line sits inside the empty state's padding, so it is indented about 14px more
+    than the default's line over a ready route.
+  - Escape sometimes takes two presses when focus is on a tooltipped icon in the list. That is the
+    shared tooltip's behaviour, not the picker's.

@@ -383,6 +383,24 @@
 }
 .skim-purpose-ask .gloss-error { margin: 0; }
 
+/* **The switcher between briefs** (SkimBriefPicker.tsx, plan 261027d stage 4):
+   the ▾ is a `.chat-icon` (mode-band.css), centred on the line's text rather
+   than on its baseline; its list is portalled, on `MENU_SURFACE` (menu.ts),
+   so these rules are not scoped to the band. */
+.skim-brief-trigger { flex: none; align-self: center; }
+.skim-briefs-list { list-style: none; margin: 0; padding: 0; }
+.skim-brief-row { display: flex; align-items: center; gap: 0.15rem; min-width: 0; }
+.skim-brief-mark { flex: none; display: inline-flex; width: 14px; color: var(--highlight-text); }
+.skim-brief-words { min-width: 0; overflow-wrap: anywhere; }
+.skim-brief-tag {
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+.skim-brief-fallback { color: var(--ink-soft); }
+.skim-briefs-note { margin: 0.25rem 0.5rem; font-size: 0.78rem; color: var(--ink-soft); }
+.skim-briefs .gloss-error { margin: 0.25rem 0.5rem; font-size: 0.78rem; }
+
 /* ------------------------------------------------------ the door in the prose --
    After the current stop's block, outside `.prose` (TableView.tsx §
    `afterBlock`). Right-aligned, where the eye lands at the end of a paragraph,

@@ -1,8 +1,8 @@
-# Code review: several Skim briefs, stage 3, the client minus the picker (261027d)
+# Code review: several Skim briefs, stages 3 and 4, the client and the picker (261027d)
 
-You are reviewing, and may fix, uncommitted code in the repo at the current directory (a worktree of Spideryarn). Candidate: the working-tree diff against HEAD (`git diff HEAD`, plus the untracked `src/web/skim-briefs.ts` and `tests/skim-briefs-client.test.tsx`). The plan is `docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md`. Its Log's last entry describes this stage, and the entries above it cover stage 2's server, which you reviewed in `docs/plans/261027d-several-skim-briefs-code-review-sol.md` and `-code-review-2-sol.md`. Stage 3 is client only, apart from `publicJob` now keeping `skimBrief` (your C4).
+You are reviewing, and may fix, code in the repo at the current directory (a worktree of Spideryarn). Candidate: **stage 3**, commit `626998085` (`git show 626998085`), and **stage 4**, the picker, uncommitted in the working tree (`git diff HEAD`, plus the untracked `src/web/SkimBriefPicker.tsx` and `src/web/ArmedDelete.tsx`, which is Chat's control moved out of ChatPanel.tsx unchanged). Greg chose the picker's option A: the *Reading for:* line gets a ▾ that opens the list (plan § The picker). The plan is `docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md`. Its Log's last two entries describe these stages, and the entries above it cover stage 2's server, which you reviewed in `docs/plans/261027d-several-skim-briefs-code-review-sol.md` and `-code-review-2-sol.md`. Both stages are client only, apart from `publicJob` now keeping `skimBrief` (your C4).
 
-Start with `src/web/useStepJob.ts` (`writesStep`, `start`), `src/web/useSkim.ts`, `src/web/rewrite-hold.ts` (`keyOf`), `src/web/modes/skim/SkimMode.tsx` (`SkimBand`, `SkimRouteBand`), `src/web/SkimPanel.tsx`, `src/web/skim-briefs.ts`, `src/web/params.ts` (`briefParam`), and `src/web/last-view.ts`. This list does not limit scope.
+Start with `src/web/SkimBriefPicker.tsx`, `src/web/useStepJob.ts` (`writesStep`, `start`), `src/web/useSkim.ts`, `src/web/rewrite-hold.ts` (`keyOf`), `src/web/modes/skim/SkimMode.tsx` (`SkimBand`, `SkimRouteBand`), `src/web/SkimPanel.tsx`, `src/web/skim-briefs.ts`, `src/web/params.ts` (`briefParam`), and `src/web/last-view.ts`. This list does not limit scope.
 
 ## What I want
 
@@ -11,6 +11,14 @@ An independent attack on:
 - **The hold and the auto-run.** Does switching routes release or inherit a hold? Can the band's automatic run ever spend on a brief?
 - **URL and last-view (F7).** Brief, stop and depth are one position. Can a stop from one route be applied to another: on switch, on an unknown id, on a back/forward, or in a restored last view? Does a visitor ever act on `?brief=`?
 - **The read.** Does a 404 for a deleted brief show as an error rather than an empty state with a button? Does the remount by `key` lose anything that must survive, or keep anything that must not?
+- **The picker (stage 4).**
+  - *New brief* creates the brief, switches to it, and plans it exactly once: no double job, and no plan for a brief that already has a route.
+  - Deleting the brief on screen returns to the default.
+  - *Edit* on a brief re-plans it, and the default's *Edit* still re-plans the default.
+  - `useSkimBriefs`'s local overlay (for a read in flight across a create) is correct, and can neither bring back a deleted brief nor hide a real one.
+  - The 12-brief limit.
+  - Keyboard, phone width and touch.
+  - controls.md's rule that controls doing the same job look the same.
 - **Privacy.** Is the brief's sentence ever sent to a visitor, a log or the job wire?
 
 ## Fix as well as find

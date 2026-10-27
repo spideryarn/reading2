@@ -735,7 +735,8 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   Skim-only focus**, separate from the purpose and closer to a search query, was weighed and not
   built: its own column, its own stamp field, and either several routes per article or a rule for
   which one wins — the "a lot of complexity" Greg said to push back on. Queued, for if the shared
-  purpose feels wrong in use.
+  purpose feels wrong in use; built on 2026-10-27 as added briefs beside the purpose (§ Several
+  briefs per article, below).
 - What Greg wondered might already exist did: the route is planned for the reading goals (§ The
   route says what it was planned for), and a changed goal brings up the profile-changed banner, with
   *Plan it again* and an ×.
@@ -794,6 +795,30 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   ([261018m](../plans/261018m-skim-figure-stops-cross-to-visitors.md)).
 - The input hash covers the figures, so a `skim/14` route is stale when they change; older routes
   have no figures until planned again, and are only outdated, which is not announced.
+
+**Several briefs per article, and a ▾ between them** — 2026-10-27
+([plan 261027d](../plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md),
+which holds the design, the passed-over options and each stage's decisions in its Log):
+
+> Could we allow for multiple Skim briefs, i.e. a default one (perhaps based on user profile + why
+> you're reading), with the option to add one or more new briefs, and then select between them
+> (kinda like how you can choose between Chat threads).
+>
+> — Greg, 2026-10-27 (`spya-xyje0z`)
+
+- **The default is the route above**, unchanged. An **added brief** is one sentence the owner types,
+  planned for the profile with that sentence in the purpose's place, stored in `skim_briefs` (at most
+  12 per article) and planned by the same `skim` job named for it (`Job.skimBrief`).
+- **The ▾ on *Reading for: …* is the switcher** (option A in the plan, Greg's choice): the default,
+  each brief with *Edit* and Chat's two-press bin, and *New brief…*, which opens the same *What are
+  you skimming for?* box with *Plan a route for this*.
+  [`SkimBriefPicker.tsx`](../../src/web/SkimBriefPicker.tsx); the boxes are in
+  [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
+- **`?brief=` says which route is drawn**, and a switch writes it with `stop` and `depth` in one
+  update ([url-state.md](url-state.md)). The list is read only once the ▾ has been opened, or when
+  `?brief=` names one, so Skim on the default costs no extra request.
+- **Owner only.** A visitor sees the default's route and no ▾. Metadata's Skim row re-plans only the
+  default, so an added brief keeps *Plan it again* in its foot.
 
 ### What we tried for v2
 

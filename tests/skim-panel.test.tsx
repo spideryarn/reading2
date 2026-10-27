@@ -60,6 +60,14 @@ let skimBody: unknown = null;
 let briefsList: unknown[] = [];
 /** Any added brief's route: `null` is unplanned. */
 let briefRouteBody: unknown = null;
+/** A brief write lands, but its reply does not reach the client. */
+let loseBriefWrite: "create" | "edit" | null = null;
+/** The briefs list is temporarily unreadable, including reconciliation after a lost write reply. */
+let briefsListFails = false;
+/** Hold an answered brief write across a route remount. */
+let briefWriteGate: Promise<void> | null = null;
+/** `GET /api/reader`'s purpose, or `null` for a 404 (no purpose line at all). */
+let readerBody: { purpose: string | null } | null = null;
 /** The Ideas the stop card may show, or `null` for none (404). */
 let ideasBody: unknown = null;
 /** The FAQ a stop card must not show (SPIDERYARN-READING2-8Z), or `null` for none (404). */
@@ -72,6 +80,37 @@ let ideasFails = false;
 const requested: { url: string; method: string }[] = [];
 /** The body of every POST, parsed — what a press asked the queue for. */
 const posted: unknown[] = [];
+/**
+ * A brief's create, edit or delete, kept as the server keeps it, so a later
+ * list read has the write in it. `null` for anything else.
+ */
+function briefWrite(url: string, init?: RequestInit): Response | null {
+  const method = init?.method ?? "GET";
+  if (url === "/api/skim/a-route/briefs" && method === "POST") {
+    const { id, brief } = JSON.parse(String(init?.body)) as { id: string; brief: string };
+    const existing = briefsList.find((b) => (b as { id: string }).id === id) as
+      | { id: string; brief: string }
+      | undefined;
+    if (existing) return new Response(JSON.stringify(existing), { status: 201 });
+    const row = { id, brief: brief.trim(), createdAt: "2026-10-27T10:00:00.000Z", plannedAt: null, planned: false };
+    briefsList = [...briefsList, row];
+    return new Response(JSON.stringify(row), { status: 201 });
+  }
+  if (!url.startsWith("/api/skim/a-route/briefs/")) return null;
+  const briefId = decodeURIComponent(url.slice("/api/skim/a-route/briefs/".length));
+  if (method === "DELETE") {
+    briefsList = briefsList.filter((b) => (b as { id: string }).id !== briefId);
+    return new Response(null, { status: 204 });
+  }
+  if (method === "PATCH") {
+    const { brief } = JSON.parse(String(init?.body)) as { brief: string };
+    const was = briefsList.find((b) => (b as { id: string }).id === briefId) as Record<string, unknown> | undefined;
+    const row = { ...was, id: briefId, brief: brief.trim() };
+    briefsList = briefsList.map((b) => ((b as { id: string }).id === briefId ? row : b));
+    return new Response(JSON.stringify(row), { status: 200 });
+  }
+  return null;
+}
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
     "../src/web/lib/api.js",
@@ -79,9 +118,23 @@ vi.mock("../src/web/lib/api.js", async () => {
   const apiFetch = async (url: string, init?: RequestInit) => {
     requested.push({ url, method: init?.method ?? "GET" });
     if (init?.method === "POST" && typeof init.body === "string") posted.push(JSON.parse(init.body));
-    /* The added briefs (plan 261027d): the list, and one brief's route. */
+    if (url.startsWith("/api/reader"))
+      return readerBody === null ? new Response(null, { status: 404 }) : new Response(JSON.stringify(readerBody), { status: 200 });
+    /* The added briefs (plan 261027d): their writes, the list, and one brief's route. */
+    const written = briefWrite(url, init);
+    if (written) {
+      if (briefWriteGate) await briefWriteGate;
+      const kind = url === "/api/skim/a-route/briefs" ? "create" : init?.method === "PATCH" ? "edit" : null;
+      if (kind !== null && loseBriefWrite === kind) {
+        loseBriefWrite = null;
+        throw new TypeError("The reply was lost");
+      }
+      return written;
+    }
     if (url === "/api/skim/a-route/briefs")
-      return new Response(JSON.stringify({ briefs: briefsList }), { status: 200 });
+      return briefsListFails
+        ? new Response(JSON.stringify({ error: "The briefs could not be read." }), { status: 500 })
+        : new Response(JSON.stringify({ briefs: briefsList }), { status: 200 });
     if (url.startsWith("/api/skim/a-route/briefs/"))
       return new Response(JSON.stringify(briefRouteBody), { status: 200 });
     if (url.startsWith("/api/skim/"))
@@ -372,6 +425,10 @@ beforeEach(() => {
   skimBody = SKIM_BODY;
   briefsList = [];
   briefRouteBody = null;
+  loseBriefWrite = null;
+  briefsListFails = false;
+  briefWriteGate = null;
+  readerBody = null;
   history.replaceState(null, "", "/read/a-route?mode=skim");
   host = document.createElement("div");
   document.body.append(host);
@@ -1710,6 +1767,7 @@ const MARKS: Found[] = resolveQuotes(
 
 let published: Found[] = [];
 let control: SkimControl | null = null;
+const controlBlocks: (BlockId | null)[] = [];
 let away = 0;
 
 function Harness({ covers = false, stepped = false, arrival }: { covers?: boolean; stepped?: boolean; arrival?: SkimArrival }) {
@@ -1725,6 +1783,7 @@ function Harness({ covers = false, stepped = false, arrival }: { covers?: boolea
   }, []);
   const onControl = useCallback((c: SkimControl | null) => {
     control = c;
+    controlBlocks.push(c?.blockId ?? null);
   }, []);
   return createElement(
     NuqsAdapter,
@@ -1827,6 +1886,7 @@ async function settled(): Promise<void> {
 async function mount(covers = false) {
   published = [];
   control = null;
+  controlBlocks.length = 0;
   away = 0;
   await act(async () => root.render(createElement(Harness, { covers })));
   await settled();
@@ -2735,7 +2795,7 @@ describe("the band on an added brief's route", () => {
   const buttonNamed = (name: string) =>
     [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === name) ?? null;
 
-  it("reads the brief's route, not the default's, and draws it with the brief's sentence and no Edit", async () => {
+  it("reads the brief's route, not the default's, and draws it with the brief's sentence and its Edit", async () => {
     history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
     briefsList = [summary(true)];
     briefRouteBody = SKIM_BODY;
@@ -2746,7 +2806,7 @@ describe("the band on an added brief's route", () => {
     expect(reads, "the default's route was read for a brief").not.toContain("/api/skim/a-route");
     expect(text(".band-head")).toContain("Stop 1 of 2");
     expect(text(".skim-purpose")).toContain("Only the statistics");
-    expect(buttonNamed("Edit"), "editing a brief is the picker's").toBeNull();
+    expect(buttonNamed("Edit"), "a brief's line has its own Edit since stage 4").not.toBeNull();
     /* No Metadata row re-plans a brief, so its foot keeps the button. */
     expect(buttonNamed("Plan it again")).not.toBeNull();
     expect(param("brief")).toBe(BRIEF);
@@ -2782,11 +2842,417 @@ describe("the band on an added brief's route", () => {
     expect(param("stop"), "the unknown route's stop survived onto the default").not.toBe(Q[3]);
     expect(param("depth")).toBeNull();
     expect(requested.some((r) => r.url === "/api/skim/a-route")).toBe(true);
+    expect(controlBlocks, "the unknown brief's stop was briefly applied to the default").not.toContain(B[3]);
     expect(text(".band-head")).toContain("Stop 1 of 2");
   });
 
   it("reads no list of briefs on the default's route", async () => {
     await mount();
     expect(requested.some((r) => r.url.includes("/briefs"))).toBe(false);
+  });
+});
+
+/* ======================================= the picker between briefs (261027d) == */
+
+describe("the picker between briefs (plan 261027d, stage 4)", () => {
+  const BRIEF = "spya-bf2abc";
+  const OTHER = "spya-bf3def";
+  const brief = (id: string, sentence: string, planned = true) => ({
+    id,
+    brief: sentence,
+    createdAt: "2026-10-27T09:00:00.000Z",
+    plannedAt: planned ? "2026-10-27T09:01:00.000Z" : null,
+    planned,
+  });
+  const trigger = () => host.querySelector<HTMLButtonElement>('button[aria-label="Choose what to skim for"]');
+  /** The open list, which Radix portals to the end of `<body>`. */
+  const list = () => document.querySelector<HTMLElement>(".skim-briefs");
+  const rowFor = (words: string) =>
+    [...(list()?.querySelectorAll<HTMLElement>(".skim-brief-row") ?? [])].find((r) => r.textContent?.includes(words)) ?? null;
+  const inList = (name: string) =>
+    [...(list()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent?.trim() === name) ?? null;
+  const buttonNamed = (name: string) =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === name) ?? null;
+  async function open() {
+    expect(trigger(), "no ▾ on the line").not.toBeNull();
+    await act(async () => trigger()!.click());
+    await settled();
+    expect(list(), "the ▾ opened nothing").not.toBeNull();
+  }
+  async function type(words: string) {
+    const box = host.querySelector<HTMLTextAreaElement>("textarea.skim-purpose-input");
+    expect(box, "no box").not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, words);
+      box!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  /** Every address the page is given while `run` runs, in order. */
+  function addressesAfter(run: () => Promise<void>) {
+    const seen: string[] = [];
+    const replace = history.replaceState.bind(history);
+    const push = history.pushState.bind(history);
+    const spies = [
+      vi.spyOn(history, "replaceState").mockImplementation((d, u, url) => {
+        seen.push(String(url));
+        replace(d, u, url);
+      }),
+      vi.spyOn(history, "pushState").mockImplementation((d, u, url) => {
+        seen.push(String(url));
+        push(d, u, url);
+      }),
+    ];
+    return run().then(() => {
+      for (const spy of spies) spy.mockRestore();
+      return seen.map((u) => new URL(u, location.origin).searchParams);
+    });
+  }
+
+  it("is a ▾ on the default's line that reads the list only when opened, the current item marked", async () => {
+    readerBody = { purpose: "Understand the method" };
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    await mount();
+    expect(text(".skim-purpose")).toContain("Reading for:");
+    expect(text(".skim-purpose")).toContain("Understand the method");
+    expect(requested.some((r) => r.url.includes("/briefs")), "opening Skim on the default read the list").toBe(false);
+    await open();
+    expect(requested.some((r) => r.url === "/api/skim/a-route/briefs")).toBe(true);
+    expect(rowFor("Understand the method")?.querySelector('[aria-current="true"]')).not.toBeNull();
+    expect(rowFor("Only the statistics")?.querySelector('[aria-current="true"]')).toBeNull();
+    expect(inList("New brief…")).not.toBeNull();
+    /* The default's own Edit is still on its line. */
+    expect(buttonNamed("Edit")).not.toBeNull();
+  });
+
+  it("switches route in one address write that clears the stop and the depth", async () => {
+    readerBody = { purpose: "Understand the method" };
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    history.replaceState(null, "", `/read/a-route?mode=skim&depth=2&stop=${Q[3]}`);
+    await mount();
+    await open();
+    const choose = rowFor("Only the statistics")!.querySelector<HTMLButtonElement>("button")!;
+    const writes = await addressesAfter(async () => {
+      await act(async () => choose.click());
+      await settled();
+    });
+    const first = writes[0];
+    expect(first, "no address was written").toBeDefined();
+    expect(first!.get("brief"), "the first write was not the switch").toBe(BRIEF);
+    expect(first!.get("depth")).toBeNull();
+    expect(first!.get("stop"), "the old route's stop rode along").not.toBe(Q[3]);
+    expect(param("brief")).toBe(BRIEF);
+    expect(requested.some((r) => r.url === `/api/skim/a-route/briefs/${BRIEF}`)).toBe(true);
+    expect(text(".skim-purpose")).toContain("Only the statistics");
+  });
+
+  it("adds a brief from New brief…, switches to it, and asks for its route", async () => {
+    readerBody = { purpose: "Understand the method" };
+    briefsList = [];
+    briefRouteBody = null;
+    await mount();
+    await open();
+    await act(async () => inList("New brief…")!.click());
+    await settled();
+    expect(text(".skim-purpose-ask")).toContain("What are you skimming for?");
+    await type("  How they handled missing data ");
+    await act(async () => buttonNamed("Plan a route for this")!.click());
+    await settled();
+    await settled();
+    const made = requested.find((r) => r.method === "POST" && r.url === "/api/skim/a-route/briefs");
+    expect(made, "no brief was created").toBeDefined();
+    const sent = posted.find((b) => typeof b === "object" && b !== null && "brief" in b && "id" in b) as { id: string; brief: string };
+    expect(sent.brief, "the box sends its words trimmed").toBe("How they handled missing data");
+    expect(sent.id).toMatch(/^spya-/);
+    expect(param("brief")).toBe(sent.id);
+    const job = posted.find((b) => typeof b === "object" && b !== null && "steps" in b) as { skimBrief?: string; force?: unknown };
+    expect(job, "the new brief's route was never asked for").toBeDefined();
+    expect(job.skimBrief).toBe(sent.id);
+    expect(job.force).toBeUndefined();
+  });
+
+  it("reuses New brief's id when the create landed but neither its reply nor reconciliation did", async () => {
+    readerBody = { purpose: "Understand the method" };
+    briefsList = [];
+    briefRouteBody = null;
+    await mount();
+    await open();
+    await act(async () => inList("New brief…")!.click());
+    await settled();
+    await type("How they handled missing data");
+
+    loseBriefWrite = "create";
+    briefsListFails = true;
+    await act(async () => buttonNamed("Plan a route for this")!.click());
+    await settled();
+    expect(text(".skim-purpose-ask")).toContain("No brief was added");
+    const first = posted.find((b) => typeof b === "object" && b !== null && "brief" in b && "id" in b) as {
+      id: string;
+    };
+
+    briefsListFails = false;
+    await act(async () => buttonNamed("Plan a route for this")!.click());
+    await settled();
+    await settled();
+    const creates = posted.filter((b) => typeof b === "object" && b !== null && "brief" in b && "id" in b) as {
+      id: string;
+    }[];
+    expect(creates.map((b) => b.id), "a retry became a second logical create").toEqual([first.id, first.id]);
+    expect(briefsList, "the lost answer left two briefs behind").toHaveLength(1);
+    expect(posted.filter((b) => typeof b === "object" && b !== null && "steps" in b), "planned the route twice").toHaveLength(1);
+  });
+
+  it("says so at the limit instead of offering New brief…", async () => {
+    readerBody = { purpose: "Understand the method" };
+    briefsList = Array.from({ length: 12 }, (_, i) => brief(`spya-bf${String(i).padStart(4, "0")}`, `Brief ${i}`));
+    await mount();
+    await open();
+    expect(inList("New brief…")?.disabled).toBe(true);
+    expect(list()?.textContent).toContain("12 briefs");
+  });
+
+  it("deletes the brief on screen with two presses, and goes back to the default", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [brief(BRIEF, "Only the statistics"), brief(OTHER, "The limitations")];
+    briefRouteBody = SKIM_BODY;
+    await mount();
+    await open();
+    const bin = () => rowFor("Only the statistics")?.querySelector<HTMLButtonElement>('button[aria-label^="Delete this brief"], button[aria-label^="Press again"]');
+    await act(async () => bin()!.click());
+    await settled();
+    expect(requested.some((r) => r.method === "DELETE"), "one press deleted").toBe(false);
+    await act(async () => bin()!.click());
+    await settled();
+    expect(requested.some((r) => r.method === "DELETE" && r.url === `/api/skim/a-route/briefs/${BRIEF}`)).toBe(true);
+    expect(param("brief")).toBeNull();
+    expect(requested.some((r) => r.url === "/api/skim/a-route")).toBe(true);
+  });
+
+  it("opens the default's box from the list's Edit, as the line's Edit does", async () => {
+    readerBody = { purpose: "Understand the method" };
+    await mount();
+    await open();
+    const pencil = rowFor("Understand the method")!.querySelector<HTMLButtonElement>('button[aria-label="Edit why you\'re reading this piece"]');
+    await act(async () => pencil!.click());
+    await settled();
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.skim-purpose-input")?.value).toBe("Understand the method");
+    expect(buttonNamed("Plan the route for this")).not.toBeNull();
+  });
+
+  it("edits an added brief's sentence, then asks for its route again", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    await mount();
+    await act(async () => buttonNamed("Edit")!.click());
+    await settled();
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.skim-purpose-input")?.value).toBe("Only the statistics");
+    await type("Only the effect sizes");
+    posted.length = 0;
+    await act(async () => buttonNamed("Plan the route for this")!.click());
+    await settled();
+    const patch = requested.find((r) => r.method === "PATCH");
+    expect(patch?.url).toBe(`/api/skim/a-route/briefs/${BRIEF}`);
+    const job = posted.find((b) => typeof b === "object" && b !== null && "steps" in b) as { skimBrief?: string };
+    expect(job?.skimBrief, "the edit did not re-plan the brief").toBe(BRIEF);
+    expect(text(".skim-purpose")).toContain("Only the effect sizes");
+  });
+
+  it("confirms an added brief edit after a lost PATCH reply, then plans that saved sentence", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    await mount();
+    await act(async () => buttonNamed("Edit")!.click());
+    await settled();
+    await type("Only the effect sizes");
+    posted.length = 0;
+    loseBriefWrite = "edit";
+
+    await act(async () => buttonNamed("Plan the route for this")!.click());
+    await settled();
+    await settled();
+
+    expect(host.querySelector(".gloss-error"), "a saved edit was reported as not saved").toBeNull();
+    expect(text(".skim-purpose")).toContain("Only the effect sizes");
+    const jobs = posted.filter((b) => typeof b === "object" && b !== null && "steps" in b) as { skimBrief?: string }[];
+    expect(jobs, "the saved edit was never re-planned").toHaveLength(1);
+    expect(jobs[0]?.skimBrief).toBe(BRIEF);
+  });
+
+  it("keeps an added brief's typed edit through Back and Forward", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=skim");
+    history.pushState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    await mount();
+    await act(async () => buttonNamed("Edit")!.click());
+    await settled();
+    await type("Only the effect sizes");
+
+    const traverse = async (go: () => void) => {
+      await act(async () => {
+        const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+        go();
+        await popped;
+      });
+      await settled();
+    };
+    await traverse(() => history.back());
+    await traverse(() => history.forward());
+
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.skim-purpose-input")?.value).toBe("Only the effect sizes");
+  });
+
+  it("keeps the default purpose's typed edit through Back and Forward", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    history.pushState(null, "", "/read/a-route?mode=skim");
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    readerBody = { purpose: "Understand the method" };
+    await mount();
+    await act(async () => buttonNamed("Edit")!.click());
+    await settled();
+    await type("Understand the missing-data method");
+
+    const traverse = async (go: () => void) => {
+      await act(async () => {
+        const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+        go();
+        await popped;
+      });
+      await settled();
+    };
+    await traverse(() => history.back());
+    await traverse(() => history.forward());
+
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.skim-purpose-input")?.value).toBe(
+      "Understand the missing-data method",
+    );
+  });
+
+  it("keeps a typed New brief through Back and Forward", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=skim");
+    history.pushState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    await mount();
+    await open();
+    await act(async () => inList("New brief…")!.click());
+    await settled();
+    await type("How they handled missing data");
+
+    const traverse = async (go: () => void) => {
+      await act(async () => {
+        const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+        go();
+        await popped;
+      });
+      await settled();
+    };
+    await traverse(() => history.back());
+    await traverse(() => history.forward());
+
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.skim-purpose-input")?.value).toBe("How they handled missing data");
+  });
+
+  it("does not let a create completing after Back override navigation, but plans it when chosen", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=skim");
+    history.pushState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    readerBody = { purpose: "Understand the method" };
+    let release!: () => void;
+    briefWriteGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await mount();
+    await open();
+    await act(async () => inList("New brief…")!.click());
+    await settled();
+    await type("How they handled missing data");
+    posted.length = 0;
+    await act(async () => buttonNamed("Plan a route for this")!.click());
+    await act(async () => {
+      const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+      history.back();
+      await popped;
+    });
+    await settled();
+
+    /* The in-flight action lives above the keyed route too: revisiting the
+       box cannot submit the same logical Create a second time. */
+    await act(async () => {
+      const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+      history.forward();
+      await popped;
+    });
+    await settled();
+    expect(buttonNamed("Plan a route for this")?.disabled).toBe(true);
+    await act(async () => {
+      const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+      history.back();
+      await popped;
+    });
+    await settled();
+    release();
+    await settled();
+
+    expect(param("brief"), "the late create took over the route reached by Back").toBeNull();
+    expect(posted.filter((b) => typeof b === "object" && b !== null && "steps" in b)).toHaveLength(0);
+
+    briefWriteGate = null;
+    briefRouteBody = null;
+    await open();
+    const choose = rowFor("How they handled missing data")!.querySelector<HTMLButtonElement>("button")!;
+    await act(async () => choose.click());
+    await settled();
+    await settled();
+    const jobs = posted.filter((b) => typeof b === "object" && b !== null && "steps" in b) as { skimBrief?: string }[];
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.skimBrief).toBe((briefsList.at(-1) as { id: string }).id);
+  });
+
+  it("does not let an edit completing after Back override navigation, and re-plans when its route is revisited", async () => {
+    history.replaceState(null, "", "/read/a-route?mode=skim");
+    history.pushState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [brief(BRIEF, "Only the statistics")];
+    briefRouteBody = SKIM_BODY;
+    let release!: () => void;
+    briefWriteGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await mount();
+    await act(async () => buttonNamed("Edit")!.click());
+    await settled();
+    await type("Only the effect sizes");
+    posted.length = 0;
+    await act(async () => buttonNamed("Plan the route for this")!.click());
+    await act(async () => {
+      const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+      history.back();
+      await popped;
+    });
+    await settled();
+    release();
+    await settled();
+
+    expect(param("brief"), "the late edit took over the route reached by Back").toBeNull();
+    expect(posted.filter((b) => typeof b === "object" && b !== null && "steps" in b)).toHaveLength(0);
+
+    await act(async () => {
+      const popped = new Promise<void>((resolve) => window.addEventListener("popstate", () => resolve(), { once: true }));
+      history.forward();
+      await popped;
+    });
+    await settled();
+    const jobs = posted.filter((b) => typeof b === "object" && b !== null && "steps" in b) as { skimBrief?: string }[];
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.skimBrief).toBe(BRIEF);
+  });
+
+  it("is not on a visitor's panel", async () => {
+    await drawVisitor(view());
+    expect(trigger()).toBeNull();
   });
 });

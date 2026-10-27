@@ -65,7 +65,8 @@ import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { BriefLine, PurposeLine } from "./SkimPurpose.js";
+import { BriefLine, NewBriefBox, PurposeLine } from "./SkimPurpose.js";
+import { type BriefPicking, intends } from "./SkimBriefPicker.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Excerpt } from "./Excerpt.js";
@@ -771,6 +772,13 @@ export type SkimAccess =
        * for the default, whose line is the article's purpose (`PurposeLine`).
        */
       briefSentence?: string | null;
+      /**
+       * The switcher between the default and the added briefs, with *Edit* and
+       * *New brief…* (SkimBriefPicker.tsx, plan 261027d stage 4). The band's
+       * own; a test of the panel alone may leave it out, and the line then
+       * has no ▾.
+       */
+      picking?: BriefPicking;
     }
   | { kind: "visitor"; route: PublicSkim };
 
@@ -799,8 +807,10 @@ export function SkimPanel({ access, view, away }: Props) {
      route* in place of the automatic run, and *Plan it again* standing in the
      foot, since Metadata's Skim row re-plans only the default. */
   const added = owner !== null && owner.brief !== null;
-  const briefLine =
-    added && access.kind === "owner" && access.briefSentence ? <BriefLine sentence={access.briefSentence} /> : null;
+  const picking = access.kind === "owner" ? access.picking : undefined;
+  /* *New brief…* opens its box in place of this route's line (stage 4). */
+  const newBrief =
+    owner !== null && picking !== undefined && intends(picking, owner.brief, "new") ? <NewBriefBox picking={picking} /> : null;
   const route = access.kind === "owner" ? access.owner.skim : access.route;
   /* A visitor's route arrived with the page, so it is ready by construction. */
   const ready = route !== null && (owner === null || owner.status === "ready");
@@ -814,6 +824,11 @@ export function SkimPanel({ access, view, away }: Props) {
     identities: owner?.stale ? (owner.skim?.generatedAt ?? null) : null,
   });
   const reason = owner ? bannerReason(owner, staleNotice.showing.length === 0) : null;
+  const briefLine =
+    newBrief ??
+    (added && access.kind === "owner" && access.briefSentence ? (
+      <BriefLine owner={access.owner} sentence={access.briefSentence} bannerUp={reason !== null} picking={picking} />
+    ) : null);
   const total = view.rows.length;
   const deepest = view.depths.at(-1)?.depth ?? null;
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
@@ -989,7 +1004,9 @@ export function SkimPanel({ access, view, away }: Props) {
            from Metadata shows here. */
         reason === null &&
         /* An added brief has no Metadata row (Sol F5 on plan 261027d), so its
-           *Plan it again* stands here, idle or not. */
+           *Plan it again* stands here, idle or not: its *Edit* re-plans only
+           a changed sentence, and this is the re-plan of the same one
+           (stage 4 kept it). */
         (added || owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
@@ -1028,12 +1045,14 @@ export function SkimPanel({ access, view, away }: Props) {
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
               run would race a press). SkimPurpose.tsx. An added brief's
-              line is its own sentence, with no *Edit* yet (plan 261027d). */}
-          {added ? briefLine : owner && (
+              line is its own sentence and *Edit*, and *New brief…* puts its
+              box here; both carry the ▾ between briefs (plan 261027d). */}
+          {added || newBrief ? briefLine : owner && (
             <PurposeLine
               key={owner.slug}
               owner={owner}
               bannerUp={reason !== null}
+              picking={picking}
             />
           )}
 

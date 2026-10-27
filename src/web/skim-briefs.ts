@@ -16,7 +16,7 @@
  * after a lost answer) is one row, because the server's create is idempotent
  * on the id.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mintId } from "../ids.js";
 import type { SkimBriefList, SkimBriefSummary } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -67,31 +67,46 @@ export interface SkimBriefs {
   error: string | null;
   /** Read the list again, trailing a read in flight. Never spends. */
   refresh(): Promise<void>;
-  /** `createBrief`, and the list read again after it. */
-  create(brief: string): Promise<SkimBriefSummary>;
+  /** `createBrief`, and the list read again after it. `id` identifies one logical press across retries. */
+  create(brief: string, id?: string): Promise<SkimBriefSummary>;
   edit(id: string, brief: string): Promise<SkimBriefSummary>;
   remove(id: string): Promise<void>;
 }
 
+
 /**
- * **The list, read while `enabled`.** Stage 3 reads it only when `?brief=`
- * names one — to find its sentence, and to tell an unknown id from a real one
- * — so opening Skim on the default costs no request it did not cost before.
- * Every write reads the list again afterwards, whether or not it answered:
- * a write whose answer was lost may still have landed.
+ * **The list, read while `enabled`.** Read when `?brief=` names one — to find
+ * its sentence, and to tell an unknown id from a real one — and once the
+ * picker has been opened (SkimBriefPicker.tsx), so opening Skim on the default
+ * costs no request it did not cost before. Every write reads the list again
+ * afterwards, whether or not it answered: a write whose answer was lost may
+ * still have landed.
+ *
+ * **What this tab wrote is laid over the list until a read agrees** (stage
+ * 4). A read already in flight when a brief is created can land after the
+ * create's answer, without it — and the band would take the brief the picker
+ * has just switched to for an id nobody has, and clear it (SkimBand §
+ * `unknown`). So a write's answer shows at once: a created or edited brief is
+ * kept, a deleted one hidden, until a read that **began after** the write has
+ * landed, which has the write in it either way.
  */
 export function useSkimBriefs(slug: string, enabled: boolean): SkimBriefs {
   const [state, setState] = useState<{ slug: string; status: BriefsStatus; briefs: SkimBriefSummary[]; error: string | null }>(
     { slug, status: "idle", briefs: [], error: null },
   );
+  /** Each write's number, so a read knows which writes it began after. */
+  const writes = useRef(0);
+  const [local, setLocal] = useState<{ slug: string; changes: LocalChange[] }>({ slug, changes: [] });
   const load = useCallback(
     async (current: () => boolean) => {
       if (!enabled) return;
+      const began = writes.current;
       setState((was) => (was.slug === slug && was.status === "ready" ? was : { slug, status: "loading", briefs: [], error: null }));
       try {
         const briefs = await listBriefs(slug);
         if (!current()) return;
         setState({ slug, status: "ready", briefs, error: null });
+        setLocal((was) => ({ slug, changes: was.slug === slug ? was.changes.filter((c) => c.n > began) : [] }));
       } catch (err) {
         if (!current()) return;
         const why = describeFetchFailure(err as Error);
@@ -118,18 +133,102 @@ export function useSkimBriefs(slug: string, enabled: boolean): SkimBriefs {
     },
     [refresh],
   );
-  const create = useCallback((brief: string) => after(() => createBrief(slug, brief)), [after, slug]);
-  const edit = useCallback((id: string, brief: string) => after(() => editBrief(slug, id, brief)), [after, slug]);
-  const remove = useCallback((id: string) => after(() => deleteBrief(slug, id)), [after, slug]);
+  const noted = useCallback(
+    (change: Omit<LocalChange, "n">) => {
+      const n = ++writes.current;
+      setLocal((was) => ({ slug, changes: [...(was.slug === slug ? was.changes : []), { ...change, n }] }));
+    },
+    [slug],
+  );
+  /**
+   * A write can land and lose only its reply. Confirm the exact sentence in
+   * the owner-only list before reporting failure: otherwise Create can be
+   * retried as a second row, and Edit can save without planning what it saved.
+   */
+  const confirmed = useCallback(
+    async (id: string, brief: string): Promise<SkimBriefSummary | null> => {
+      try {
+        const row = (await listBriefs(slug)).find((candidate) => candidate.id === id);
+        return row?.brief === brief.trim() ? row : null;
+      } catch {
+        return null;
+      }
+    },
+    [slug],
+  );
+  const create = useCallback(
+    (brief: string, id: string = mintId()) =>
+      after(async () => {
+        let made: SkimBriefSummary;
+        try {
+          made = await createBrief(slug, brief, id);
+        } catch (err) {
+          const stored = await confirmed(id, brief);
+          if (stored === null) throw err;
+          made = stored;
+        }
+        noted({ put: made });
+        return made;
+      }),
+    [after, slug, noted, confirmed],
+  );
+  const edit = useCallback(
+    (id: string, brief: string) =>
+      after(async () => {
+        let changed: SkimBriefSummary;
+        try {
+          changed = await editBrief(slug, id, brief);
+        } catch (err) {
+          const stored = await confirmed(id, brief);
+          if (stored === null) throw err;
+          changed = stored;
+        }
+        noted({ put: changed });
+        return changed;
+      }),
+    [after, slug, noted, confirmed],
+  );
+  const remove = useCallback(
+    (id: string) =>
+      after(async () => {
+        await deleteBrief(slug, id);
+        noted({ gone: id });
+      }),
+    [after, slug, noted],
+  );
 
   const mine = state.slug === slug && enabled;
+  const briefs = useMemo(
+    () => (local.slug === slug ? overlaid(state.briefs, local.changes) : state.briefs),
+    [state.briefs, local, slug],
+  );
   return {
     status: mine ? state.status : "idle",
-    briefs: mine ? state.briefs : [],
+    briefs: mine ? briefs : [],
     error: mine ? state.error : null,
     refresh,
     create,
     edit,
     remove,
   };
+}
+
+/** One write this tab made, numbered in the order it was answered. */
+interface LocalChange {
+  n: number;
+  put?: SkimBriefSummary;
+  gone?: string;
+}
+
+/** The list as read, with this tab's later writes applied in order. */
+function overlaid(read: SkimBriefSummary[], changes: readonly LocalChange[]): SkimBriefSummary[] {
+  let list = read;
+  for (const change of changes) {
+    if (change.gone !== undefined) list = list.filter((b) => b.id !== change.gone);
+    const put = change.put;
+    if (put !== undefined) {
+      list = list.some((b) => b.id === put.id) ? list.map((b) => (b.id === put.id ? put : b)) : [...list, put];
+    }
+  }
+  return list;
 }

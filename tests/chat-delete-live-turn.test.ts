@@ -19,7 +19,7 @@
  *   still running, and its frames go on arriving for as long as the server keeps
  *   writing;
  * - a second press changes neither. The button is armed rather than instant
- *   (`ArmedDelete` in ChatPanel.tsx), so two presses in a row is what a reader
+ *   (`ArmedDelete`, src/web/ArmedDelete.tsx), so two presses in a row is what a reader
  *   who is not sure it worked will do.
  *
  * Same harness as tests/chat-unmounted-turn.test.ts: React's own `act` and

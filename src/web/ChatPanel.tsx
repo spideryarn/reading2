@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { Fragment, type MutableRefObject, type RefObject, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type MutableRefObject, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -149,6 +149,7 @@ import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { ArmedDelete } from "./ArmedDelete.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
@@ -968,62 +969,6 @@ export function ChatPanel({
   );
 }
 
-/**
- * Delete, but only if you say so twice.
- *
- * One press arms it — the icon turns red and its tooltip changes to say what
- * the next press will do — and a second press within a few seconds deletes.
- * Not a `window.confirm`, which blocks the tab and cannot be styled, and not an
- * Undo strip like the shelf's, because a deleted conversation is really gone
- * rather than archived and there would be nothing to put back.
- *
- * **Deliberately stricter than the same button on the list.** There, the row is
- * one of several and its title is right beside the mouse; here, the thing you
- * are about to destroy is the page you are reading, and a single stray click
- * takes an hour of argument with it.
- *
- * The timeout disarms it, so a button left red on a panel nobody has touched
- * for a minute cannot be pressed by accident later. Mounted with `key={id}`, so
- * changing conversation gives it a fresh unarmed one.
- */
-function ArmedDelete({
-  onDelete,
-  tip = "Delete this conversation",
-  armedTip = "Press again to delete this conversation",
-  size = 14,
-  buttonRef,
-}: {
-  onDelete(): void;
-  /** What the button says at rest, and once armed. Learn calls it Start over. */
-  tip?: string;
-  armedTip?: string;
-  /** The bin's size: 14 in a header, 12 beside a question's pencil. */
-  size?: number;
-  /** Lets a row hand focus somewhere stable before this button disappears. */
-  buttonRef?: RefObject<HTMLButtonElement | null>;
-}) {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const timer = setTimeout(() => setArmed(false), DISARM_MS);
-    return () => clearTimeout(timer);
-  }, [armed]);
-
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      className={`chat-icon danger${armed ? " armed" : ""}`}
-      data-tip={armed ? armedTip : tip}
-      data-tip-describes="off"
-      aria-label={armed ? armedTip : tip}
-      onClick={() => (armed ? onDelete() : setArmed(true))}
-    >
-      <Trash2 size={size} aria-hidden="true" />
-    </button>
-  );
-}
-
 /** The exact second-press warning: the answer is named separately from later rows. */
 function deleteFromArmedTip(discards: number): string {
   if (discards === 0) return "Press again to delete this question";
@@ -1072,9 +1017,6 @@ function boxSize(learn: boolean, short: boolean): { rows: number; roof: () => nu
   if (!short) return { rows: 6, roof: () => 360 };
   return { rows: 2, roof: () => Math.round(window.innerHeight * 0.3) };
 }
-
-/** How long an armed delete stays armed. */
-const DISARM_MS = 4000;
 
 /**
  * What the panel shows instead of an empty list while the first fetch is out.
