@@ -1943,6 +1943,23 @@ export function waitingThreads(questions: readonly ThreadQuestion[]): number {
 }
 
 /**
+ * **The number beside the Feedback button, before the box is opened**
+ * (Greg, spya-wwyw8y): the dialog's own opening read of *Needs a decision*,
+ * counted by `waitingThreads`, so the trigger and the shortcut inside cannot
+ * disagree. `null` on any failure, or a server without the admin route: then
+ * the trigger shows no number rather than a wrong one. Admin only; the caller
+ * decides that (FeedbackButton.tsx § `FeedbackHost`).
+ */
+export async function readWaitingCount(): Promise<number | null> {
+  try {
+    const answer = await read({ detail: "admin", show: "waiting" });
+    return typeof answer === "object" && answer.detail === "admin" ? waitingThreads(answer.page.questions) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The shortcut's tooltip: `3 need a decision · newest asked 8 Oct 2026 · 1
  * you've replied to · 1 deferred`. Greg asked for "how many since my last
  * visit or when they were most recently added or something"; the newest

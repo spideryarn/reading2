@@ -91,7 +91,7 @@
  * `FEEDBACK_SHAPE.masthead` and `.nav`. App.tsx names all three exclusions in
  * one predicate.
  */
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 /* Type only, so that the `placement` strings in `FEEDBACK_SHAPE` below are
    checked against the vocabulary `Tooltip` actually accepts rather than being
    hopeful literals. */
@@ -100,6 +100,7 @@ import { MessageSquareWarning } from "lucide-react";
 
 import { isAdmin } from "../admin.js";
 import { FeedbackDialog, type FeedbackPrefill } from "./FeedbackDialog.js";
+import { readWaitingCount } from "./FeedbackEarlier.js";
 import { withoutShareKey } from "../share-key.js";
 import { useRoute } from "./router.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
@@ -128,6 +129,18 @@ interface FeedbackApi {
  * the far end.
  */
 const FeedbackContext = createContext<FeedbackApi | null>(null);
+
+/**
+ * **How many threads wait on an admin's decision**, for the small red number
+ * on the trigger (Greg, 2026-10-27, spya-wwyw8y): *"show a little number
+ * (perhaps in a subtle red) next to the Feedback button in the top right if
+ * "Needs a decision" > 0? Probably this is only for Admins"*. `null` for
+ * every other reader, and until the read lands or when it failed.
+ *
+ * Its own context, not a field on `FeedbackApi`, so that the number changing
+ * re-renders the triggers and nothing that only opens the box.
+ */
+const FeedbackWaitingContext = createContext<number | null>(null);
 
 /**
  * **The first way into the box that is not a button.**
@@ -198,11 +211,42 @@ export function FeedbackHost({ children, readerId }: { children: ReactNode; read
      the next reader already draws the box shut: an effect would run after
      the last reader's words had been on screen once. */
   const [heldFor, setHeldFor] = useState(readerId);
+  /* The trigger's number (`FeedbackWaitingContext`). */
+  const [waiting, setWaiting] = useState<number | null>(null);
+  /* Once the dialog has answered, its fresher read (including a failure that
+     clears the number) owns the trigger. A slower arrival read must not put an
+     older number back over it. Reset synchronously with the reader, beside the
+     state it guards. */
+  const dialogHasCount = useRef(false);
   if (heldFor !== readerId) {
     setHeldFor(readerId);
     setOpen(false);
     setPrefill(null);
+    setWaiting(null);
+    dialogHasCount.current = false;
   }
+  const admin = isAdmin(readerId);
+  /* **One read on arrival, for an admin only** — an ordinary reader's page
+     makes no extra request. It is the dialog's own opening read
+     (FeedbackEarlier.tsx § `readWaitingCount`), and once the dialog has been
+     opened its settled result replaces this one through `onWaitingCount` — a
+     count with the reader's own replies and deferrals laid over it, or no
+     count when that newer read failed or fell back to the plain list. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: readerId deliberately cancels an old reader's in-flight read even when both readers have the same admin boolean
+  useEffect(() => {
+    if (!admin) return;
+    let current = true;
+    void readWaitingCount().then((count) => {
+      if (current && !dialogHasCount.current && count !== null) setWaiting(count);
+    });
+    return () => {
+      current = false;
+    };
+  }, [admin, readerId]);
+  const takeDialogCount = useCallback((count: number | null) => {
+    dialogHasCount.current = true;
+    setWaiting(count);
+  }, []);
   /* **Stable**, so that opening the box does not re-render the bar and every
      button in it. Both setters are themselves stable, so an empty dependency
      list is honest rather than a lie the linter happens to accept. */
@@ -217,7 +261,7 @@ export function FeedbackHost({ children, readerId }: { children: ReactNode; read
   );
   return (
     <FeedbackContext.Provider value={api}>
-      {children}
+      <FeedbackWaitingContext.Provider value={admin ? waiting : null}>{children}</FeedbackWaitingContext.Provider>
       {/* **Where they were, as the address bar has it.**
 
           This was a `Record<Route["kind"], FeedbackRouteKind>` until 2026-09-02
@@ -257,7 +301,8 @@ export function FeedbackHost({ children, readerId }: { children: ReactNode; read
         prefill={prefill}
         /* Cosmetic, as everywhere in the client: it picks which list the
            Earlier tab asks for, and the server decides who is answered. */
-        admin={isAdmin(readerId)}
+        admin={admin}
+        onWaitingCount={takeDialogCount}
         onClose={() => setOpen(false)}
         where={{
           url: withoutShareKey(location.href),
@@ -492,6 +537,7 @@ export const FEEDBACK_TRIGGER_SELECTOR = Object.values(FEEDBACK_SHAPE)
 
 export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
   const api = useContext(FeedbackContext);
+  const waiting = useContext(FeedbackWaitingContext);
   /* **No host, no button** — a signed-out reader, for whom App.tsx mounts no
      host. Rendering nothing rather than throwing, because that reader is the
      ordinary case and not a programming error: `ArticlePage`'s loading and
@@ -500,6 +546,7 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
      what makes it reach the triggers it cannot see. */
   if (api === null) return null;
   const shape = FEEDBACK_SHAPE[variant];
+  const hasWaiting = waiting !== null && waiting > 0;
   return (
     /* **A card rather than the `title` attribute it replaced**, on Greg's ask
        of 2026-09-03. `title` waits about a second, cannot be styled,
@@ -548,7 +595,7 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
            own width and nothing else reads it, and a 7.5rem fixed-width
            exception in the bar's row would make a last-rung bar scroll where it
            would otherwise have fitted. GPT Sol, G7 and T2. */
-        className={shape.button}
+        className={`${shape.button}${hasWaiting ? " fb-has-waiting-count" : ""}`}
         /* Not `onClick={api.open}`: since `open` takes a request, handing it
            straight to `onClick` would pass the click event in as one. */
         onClick={() => api.open()}
@@ -566,7 +613,11 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
            variant would put a decision in the markup that the table above
            exists to hold. It is also the one thing here that must not depend on
            a `word` class staying non-empty. */
-        aria-label="Feedback"
+        aria-label={
+          hasWaiting
+            ? `Feedback, ${waiting} thread${waiting === 1 ? "" : "s"} need${waiting === 1 ? "s" : ""} a decision`
+            : "Feedback"
+        }
       >
         {shape.ring === "" ? (
           <MessageSquareWarning size={shape.icon} />
@@ -583,6 +634,14 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
             is the empty string: that row wraps rather than shedding controls,
             and the label is most of what makes this one findable. */}
         <span className={shape.word}>Feedback</span>
+        {/* **An admin's count of threads waiting on a decision**, in every
+            shape and at every width: unlike the word, it is never given up.
+            Nothing when there are none. feedback.css § `.fb-waiting-count`. */}
+        {hasWaiting ? (
+          <span className="fb-waiting-count" aria-hidden="true">
+            {waiting}
+          </span>
+        ) : null}
       </button>
     </Tooltip>
   );
