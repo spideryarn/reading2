@@ -879,3 +879,39 @@ details.fb-threads-group > summary { cursor: pointer; }
    in this file that declare their own `font: inherit` still win, and so does
    every utility. Two spellings of one rule is the thing worth not leaving
    behind. */
+
+/* **The number beside the Feedback trigger**, for an admin, when threads wait
+   on a decision (spya-wwyw8y): Greg asked for "a subtle red", so it is the
+   error text colour on no fill, slightly smaller than the word, rather than a
+   filled badge. FeedbackButton.tsx § `FeedbackWaitingContext`. */
+.fb-waiting-count {
+  color: var(--danger);
+  font-size: 0.85em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* The corner has a fixed ordinary width. Let an admin's exact count grow it
+   leftwards instead of squeezing or clipping the word; on a narrow window the
+   hidden word means it grows only by the number itself. */
+.fb-button.fb-has-waiting-count {
+  width: auto;
+  min-width: var(--feedback-w);
+}
+
+/* The Dock's fit ladder measures its row before the asynchronous count lands.
+   Keep the superscript out of flow so that arrival cannot invalidate that
+   measurement. At a coarse-pointer width Dock buttons share spare room, so
+   anchor it beside the centred icon rather than at the grown button's edge. */
+.dock-feedback { position: relative; }
+.dock-feedback .fb-waiting-count {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.15rem;
+}
+@media (any-pointer: coarse) {
+  .dock-feedback .fb-waiting-count {
+    right: calc(50% - 1.1rem);
+  }
+}
