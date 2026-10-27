@@ -204,13 +204,13 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   Metadata and `/profile` use both ([reader-profile.md § The page's six sections](reader-profile.md#the-pages-six-sections)).
 - **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
   on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
-  (glossary.css § a touch screen). Quotes, Citations, Glossary, Debate and FAQ use it.
+  (glossary.css § a touch screen). Quotes, Bibliography, Glossary, Reception and FAQ use it.
 - **`src/web/ThresholdSlider.tsx` § `ThresholdSlider`, with `src/web/threshold.ts` §
   `applyThreshold`** — "show the items above this score". The FAQ, the Glossary and
-  Citations use the component; Quotes, Search and Debate draw the same row for themselves, and
+  Bibliography use the component; Quotes, Search and Reception draw the same row for themselves, and
   share only `applyThreshold`.
 - **`src/web/StopRange.tsx` § `StopRange`, with `src/web/threshold.ts` § `thresholdStops`** — the
-  range input inside every numeric threshold slider (the five above bar Debate's word levels): it
+  range input inside every numeric threshold slider (the five above bar Reception's word levels): it
   moves only to the values that change the list and ticks each one under the track. A new
   threshold slider uses it rather than a bare `<input type="range">`
   ([261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md)).

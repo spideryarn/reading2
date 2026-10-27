@@ -1,4 +1,6 @@
 /**
+ * (Unrelated to Bibliography's per-citation `investigate` route and `citation-investigate*.ts`, which is Bibliography's *Dig deeper*, docs/project/bibliography.md: the shared word is a coincidence of history.)
+ *
  * **Sources › Investigate** — the owner's questions for Chat about the piece and what
  * others say about it. A tool reached from *Where it sits* since plan 261025h
  * (no longer a chip), which also moved the literature search's dossier out

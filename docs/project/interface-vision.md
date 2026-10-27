@@ -78,7 +78,7 @@ anchored, so placing it costs layout, not a model call.
 | Quiz questions | paragraphs | middle: italic line after the paragraph | **yes** ([quiz.md](quiz.md)) |
 | Socratic questions, the arc | parts | right, and the right's head | **yes**, in Marginalia |
 | Ideas (assumes / introduces) | block ids | right: a stamp at first occurrence | **in the margin**, once Ideas has run; marked in the prose only while Ideas' band is open (`selectPassages`, `src/web/reader/passages.ts`) |
-| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/reception.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first — Greg, 2026-10-02: *"Let's try with everything, and see how it feels"* (narrowing to `disputes` is one line in `src/web/marginalia/notes.ts`) |
+| Claims' disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/reception.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first — Greg, 2026-10-02: *"Let's try with everything, and see how it feels"* (narrowing to `disputes` is one line in `src/web/marginalia/notes.ts`) |
 | FAQ answers | the passages that answer | right, or a mark | **in the margin** since 261002b, beside the earliest answering passage, shut; marked nowhere in the prose |
 | Timeline events | resolved passages | right, or a mark | data yes; marked in the prose only while Timeline's band is open |
 | Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **partly** — the relation words *so*, *but* and *vs* are in the margin since 2026-10-03 ([marginalia.md § Relation words](marginalia.md#relation-words)); fuller rebuttals and conclusions are not, and would be a new model pass |
@@ -98,7 +98,7 @@ model pass, and they can come last.
 ## What is already true
 
 - **The right column exists.** Marginalia's notes sit level with their blocks, push each other down
-  when they collide, and generate nothing. Visitors see the public Ideas, FAQ and Debate artefacts
+  when they collide, and generate nothing. Visitors see the public Ideas, FAQ and Reception and Claims artefacts
   plus the owner's published comments, but never the owner's Citations. The notes are faint, small
   and hueless
   ([261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md)).
@@ -171,7 +171,7 @@ These are the reasons to go carefully, each one already said by Greg in another 
   >
   > — Greg, 2026-10-02
 
-  The worry does not hold: the margin reads the owner's FAQ, Debate and Ideas each time it opens,
+  The worry does not hold: the margin reads the owner's FAQ, Reception, Claims and Ideas each time it opens,
   and since [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md) it
   also refreshes them, and the Reader's shared Citations read, on completions announced by this
   tab's job engine — his "ideal", which turned out small.

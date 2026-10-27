@@ -7,7 +7,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 This doc is long, and a read stops about line 860. **Jump with these.**
 
 - [§ Asking about an entry in chat](#asking-about-an-entry-in-chat) — **the *Ask in chat* button**
-  (Glossary and Citations; also the pattern to copy when another mode wants one): origin, line under
+  (Glossary and Bibliography; also the pattern to copy when another mode wants one): origin, line under
   the buttons, what the server does not check. Line ~941.
 - [§ Looking a term up](#looking-a-term-up) — the box for a word the article does not contain (a
   different *Ask in chat*, with no origin)
@@ -733,7 +733,7 @@ aliases. The prompt now names both as examples of what not to do, and the re-run
 The prompt invited it: *"works … named without introduction"* earn entries, and a paper cited as
 "Saha et al." is one. Since `glossary/9` the prompt draws the line at **cited against discussed**. A
 work the piece only points at as a source, and its authors where they are named only as that
-citation, is not meant to get an entry or be an alias; [Citations](bibliography.md) lists them. The
+citation, is not meant to get an entry or be an alias; [Bibliography](bibliography.md) lists them. The
 test the prompt gives is the name's job in the piece: only there to say where a claim came from, or
 something the reader needs to know to follow it. A person the piece tells about, and a work it
 examines, still get entries, and a person it both tells about and cites keeps theirs. An idea a
@@ -851,8 +851,8 @@ searching to the model, which on anything it thought it knew chose not to. Asked
 
 There were three such places, and they are now one action, **Dig deeper**: this button, a comment's
 re-ask (*Search the web* until then — [comments.md § pushing back](comments.md#pushing-back)) and
-Bibliography's *Investigate* ([bibliography.md § Dig deeper](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
-Glossary and Citations say *Digging deeper…* while it runs and *Dig deeper again* over a kept
+Bibliography's *Dig deeper* ([bibliography.md § Dig deeper](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
+Glossary and Bibliography say *Digging deeper…* while it runs and *Dig deeper again* over a kept
 answer; a comment hides the button while it runs and keeps calling the re-ask *Dig deeper*. The
 shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts) — steps 1 and 2 below and the model;
 step 3 is the glossary's and a comment's, and Bibliography's is
@@ -868,7 +868,7 @@ step 3 is the glossary's and a comment's, and Bibliography's is
    `librarySearch.searchLibrary` — owner-scoped, free, and literal. Best-effort: nothing found is an
    answer, and a failure there does not fail the press. The answer names such an article by its
    title; it cannot link to the passage yet.
-3. **Answers on the high-power model** (glossary and comments; Citations hands the findings to
+3. **Answers on the high-power model** (glossary and comments; Bibliography hands the findings to
    `investigatePart` and streams `citation-investigate`), `DIG_DEEPER_MODEL`, whatever the article's
    [High-powered AI](high-powered-ai.md) switch says and whatever `SPIDERYARN_EXPLAIN_MODEL` is set
    to (the `dig-deeper` job). The findings go in the last user part, after the cache breakpoint,
@@ -1067,7 +1067,7 @@ What the owner gets:
   the icon's card names the term, and the filter above the list gains *Glossary*.
 - **A visitor has neither** the button nor the line.
 
-It is Debate's *Check this claim in chat* with a different origin, and nearly all of it is that
+It is Claims' *Check this claim in chat* with a different origin, and nearly all of it is that
 machinery: read [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat) first. What
 is this mode's own:
 
@@ -1093,7 +1093,7 @@ is this mode's own:
 - **The hover card in the prose has it too**, since 2026-10-09, in Dig deeper's old place
   ([§ The hover card](#the-hover-card)): the same sender, so the same origin.
 
-The button and the line are shared with Debate and Citations:
+The button and the line are shared with Reception, Claims and Bibliography:
 [`OriginChat.tsx`](../../src/web/OriginChat.tsx) and
 [`origin-chat.css`](../../src/web/styles/origin-chat.css). The seed is `askAboutGlossaryEntry` in
 [`chat-handoff.ts`](../../src/web/chat-handoff.ts). The plan is
@@ -1189,7 +1189,7 @@ and the two that still wait, are in
 The same route has a second sender since 2026-10-04: the button on a Summary paragraph
 ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)).
 And a third since 2026-10-05, the first whose conversation remembers where it was started: the
-button on a Debate claim ([reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat)).
+button on a Claims claim ([reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat)).
 
 Four things it has to get right, each with a test:
 
@@ -1483,7 +1483,7 @@ Four things about the slider are decisions rather than details:
   ambiguous between *there is nothing here* and *you have hidden it all* —
   [silent-success](../reusable/silent-success.md), which this codebase keeps catching itself in.
   `hiddenNote` in [`src/web/threshold.ts`](../../src/web/threshold.ts) writes it for all five
-  numeric sliders — this one, Quotes, Search, Citations and the FAQ — and for Debate's two categorical bars.
+  numeric sliders — this one, Quotes, Search, Bibliography and the FAQ — and for Reception's two categorical bars.
 - **The order no longer cancels itself just because the bar hides nothing.** It used to. The slider
   reverses that argument twice over: cancelling would take the slider away with it and strand the
   reader mid-adjustment, and a list with nothing hidden here is not silent — the bar is on screen

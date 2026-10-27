@@ -6,7 +6,7 @@
  *   npx tsx scripts/probes/261001a-paper-read-probe.ts [--paid] [--slug <slug>]... [--works <n>]
  *
  * **Free part (always).** Walks the local articles (owner-scoped, as
- * 260930a's probe does) for Citations rows the paper read can aim at: a DOI or
+ * 260930a's probe does) for Bibliography rows the paper read can aim at: a DOI or
  * arXiv link, or a stored quick-check match (a current *Look it up* page). For
  * up to `--works` of them (default 12, mixed across arXiv / DOI / matched
  * page), runs `readPaperEvidence` with the real `lookupWork` — the very pair

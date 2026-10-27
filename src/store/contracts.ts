@@ -349,7 +349,7 @@ export interface ArticleReader {
   loadFaq(slug: string): Promise<FaqFound>;
 
   /**
-   * Debate's claims list, plus whether its rendered body and cited head still
+   * Claims' list, plus whether its rendered body and cited head still
    * describe the article, and whether its prompt/model generation is current.
    * A visitor reads the list off the public payload instead
    * (src/store/public-reader.ts), without the staleness verdict.
@@ -408,7 +408,7 @@ export interface ArticleReader {
    * re-dated a post.
    *
    * **`searchedAt` is on the artefact and is deliberately not a third staleness
-   * fact.** Debate is time-sensitive research and a shared link outlives it, so
+   * fact.** Reception is time-sensitive research and a shared link outlives it, so
    * the panel says *"Searched on …"* — but age is displayed provenance, not
    * invalidity. A visitor opening a year-old article must be able to see how old
    * the search is without the artefact declaring itself unusable.
@@ -1774,7 +1774,7 @@ export interface ClaimCheckBegin {
 }
 
 /**
- * **Debate's reader-picked claim checks** — src/store/pg-sources-claim-checks.ts,
+ * **Claims' reader-picked claim checks** — src/store/pg-sources-claim-checks.ts,
  * plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3.
  *
  * Owner-scoped like every reader-state store: each method takes a slug and
@@ -1851,7 +1851,7 @@ export interface RefereeHiddenCheckStore {
 export interface CitationFindStore {
   save(slug: string, entryId: string, find: CitationFind): Promise<void>;
   /**
-   * One stored find, or `null` — for *Investigate*, which needs the URL of the
+   * One stored find, or `null` — for *Dig deeper*, which needs the URL of the
    * page a current *Look it up* read (the row carries its host, not its URL).
    * Owner-scoped: a slug the caller does not own is a 404.
    */
@@ -1859,7 +1859,7 @@ export interface CitationFindStore {
 }
 
 /**
- * **Where Bibliography's *Investigate* keeps an answer** — one row per `(article,
+ * **Where Bibliography's *Dig deeper* keeps an answer** — one row per `(article,
  * entry)`, overwritten by a second press. The read half is `loadBibliography`,
  * which attaches a row only while its fingerprint matches. Owner-scoped.
  * src/store/pg-citation-investigations.ts.
@@ -3434,7 +3434,7 @@ export type RateBucket =
   | "link-summary-fill"
   | "shelf-topics"
   | "upload-source-guess"
-  /* Bibliography's *Investigate* — a streamed, web-searching answer over the whole
+  /* Bibliography's *Dig deeper* — a streamed, web-searching answer over the whole
      article, several times *Find it*'s cost a press, so its own allowance
      (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`). */
   | "citation-investigate"

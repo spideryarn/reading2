@@ -535,7 +535,7 @@ chat's.
 ## See also
 
 - [chat-from-a-mode.md](chat-from-a-mode.md) — the *Ask in chat* hand-off this mode shares with
-  Glossary, Citations and Debate, and the way back from the chat
+  Glossary, Bibliography and Sources, and the way back from the chat
 - [glossary.md](glossary.md) — the sibling mode, and where the provenance-as-label treatment, the
   id-inheritance rule and the register traps all come from
 - [search.md](search.md) — the marks, the fallback, the rail, and the two rulers

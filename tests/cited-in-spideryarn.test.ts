@@ -131,7 +131,7 @@ describe("identityOf — a page about an arXiv paper is the arXiv paper", () => 
 
 describe("matchOf", () => {
   it("matches a work cited by its Hugging Face or alphaXiv page to the article stored under arXiv's PDF", () => {
-    /* End to end, the way Citations meets it: the article linked the mirror
+    /* End to end, the way Bibliography meets it: the article linked the mirror
        page, so the work's link is that page (`linkFrom: "article"`), and the
        article we hold was fetched from the PDF the arXiv source names. */
     const held = candidate({ urls: ["https://arxiv.org/pdf/2001.08361"] });

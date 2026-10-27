@@ -695,7 +695,7 @@ const ROWS: Row[] = [
         generator: "test",
         slug: SLUG,
         sourceHash: "hash",
-        /* Debate's only clock, and so its identity. */
+        /* Reception's only clock, and so its identity. */
         searchedAt: AT[which],
         direct: {
           rows: [

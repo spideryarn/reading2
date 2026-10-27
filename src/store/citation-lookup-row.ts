@@ -90,7 +90,7 @@ export function lookupFromRow(
 
 /**
  * **One whole `citation_finds` row as a `CitationFind`** — `loadBibliography`
- * reads every row this way, and *Investigate* reads one (`load` in
+ * reads every row this way, and *Dig deeper* reads one (`load` in
  * src/store/pg-citation-finds.ts). One function, so the two cannot disagree.
  */
 export function findFromRow(row: Row): CitationFind {

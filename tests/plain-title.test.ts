@@ -1,7 +1,7 @@
 /**
  * **A title that came from outside us is stored as plain text.**
  *
- * docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. A Debate
+ * docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. A Reception
  * source was drawn as `Physics - <i>Landmarks</i>—Millikan…`: the web search
  * handed us a title with inline markup in it, and every surface draws titles
  * as text, so the tags showed. The fix is one function, `plainTitle`, applied
@@ -116,7 +116,7 @@ describe("every seam an outside title enters by", () => {
     expect([...into.values()]).toStrictEqual([{ url: "https://a.test" }]);
   });
 
-  it("web-search evidence (Debate, citation finds, referee candidates)", () => {
+  it("web-search evidence (Reception, citation finds, referee candidates)", () => {
     const into = new Map<string, SearchEvidence>();
     collectSearchEvidence([annotation] as Parameters<typeof collectSearchEvidence>[0], into);
     expect([...into.values()][0]?.title).toBe(APS_PLAIN);

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **A Debate row written before the lean vocabulary changed, drawn by the panel
+ * **A Reception row written before the lean vocabulary changed, drawn by the panel
  * that came after it.**
  *
  * On 2026-09-08 `ReceptionValence` became `ReceptionLean` and its four values went

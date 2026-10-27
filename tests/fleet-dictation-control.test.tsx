@@ -22,7 +22,7 @@
  *
  * Nothing here opens a microphone: `useDictation`'s state is handed in as a
  * literal, which is the point — this file is about what is *drawn* for a given
- * state, and the state machine has its own tests in `tests/dictation-phases.ts`
+ * state, and the state machine has its own tests in `tests/dictation-phases.test.ts`
  * and `tests/dictation-recording.test.ts`.
  */
 import { act } from "react";

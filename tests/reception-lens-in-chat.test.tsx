@@ -10,7 +10,7 @@
  * sub-modes' senders.
  *
  * The whole app, for the reason tests/sources-claim-check-in-chat.test.tsx
- * gives: the angle crosses the panel, Debate's band, `Reader`, the
+ * gives: the angle crosses the panel, Reception's band, `Reader`, the
  * conversation band and the draft store on the way out, and comes back
  * through the thread summaries `Reader` holds. This is that file's harness.
  *
@@ -589,7 +589,7 @@ describe("asking a question in Sources › Investigate", () => {
     }
   });
 
-  /* One press is one action. Until 2026-10-06 Enter in Debate's box moved the
+  /* One press is one action. Until 2026-10-06 Enter in Reception's box moved the
      caret into Chat's box, already holding the question, and the same key,
      still held, must not then send it (found by GPT Sol's review;
      docs/postmortems/261005o). Enter now sends the question itself and the

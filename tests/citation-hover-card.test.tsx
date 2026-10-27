@@ -17,7 +17,7 @@
  * ## The assertion that earns its keep
  *
  * **A `search` row is drawn as a search, and never as the work's address.**
- * That is the one safety property Citations mode has
+ * That is the one safety property Bibliography mode has
  * (docs/project/bibliography.md § The one safety property): the model never
  * supplies a URL we keep, and where we could not be sure the row offers a
  * Google Scholar *search* rather than a link that might be to the wrong paper.

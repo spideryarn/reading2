@@ -1,5 +1,5 @@
 /**
- * **Citations rows carry the registry's record** — plan 261001a stage 5
+ * **Bibliography rows carry the registry's record** — plan 261001a stage 5
  * (src/citation-registry.ts). No network and no database: `lookupWork` is a
  * fake, and the one test of the wiring checks the real deps are `lookupWork`
  * itself (the memory note *mutate the composition root*).

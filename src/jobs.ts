@@ -1027,7 +1027,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      **What it does NOT bound is the spend, and it does not bound the runtime
      either** (GPT Sol's F31). This number is consulted only *between* steps, to
      decide whether to hand the claim back — see `advanceJobWith` — and the walk
-     runs its first runnable step **unconditionally**. A debate-only job, which
+     runs its first runnable step **unconditionally**. A reception-only job, which
      is how this step is normally asked for, therefore starts whatever is left
      and runs until the claim-wide abort at `LEASE_MS - DEADLINE_MARGIN_MS` =
      **740 s**. So 120 s is a *scheduling* number: it is what a long ingest asks

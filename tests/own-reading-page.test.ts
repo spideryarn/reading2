@@ -70,7 +70,7 @@ vi.mock("../src/store/find-article.js", async (original) => ({
 }));
 
 /* And, since plan 261009j, whether somebody else has made the address public
-   (Citations' candidates): none, for the same reason. The offer itself is
+   (Bibliography's candidates): none, for the same reason. The offer itself is
    tested against a real database in tests/billing-admission.test.ts. */
 vi.mock("../src/store/index.js", async (original) => ({
   ...(await original<typeof import("../src/store/index.js")>()),

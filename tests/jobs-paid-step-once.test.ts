@@ -231,7 +231,7 @@ describe("a paid-search step is begun once per job (261009l)", () => {
    * plates → debate, and only once `illustrated` is done. The later marker must
    * be the one a lapse leaves behind.
    */
-  it("keeps the latest marker through a lapse when a job marks the plates and then Debate", async () => {
+  it("keeps the latest marker through a lapse when a job marks the plates and then Reception", async () => {
     const { job } = await fixture("lapse", true);
     const attempt = mintAttempt();
     expect((await pgJobStore.claim(job.id, OWNER, attempt, 60_000, 100)).kind).toBe("claimed");

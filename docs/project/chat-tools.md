@@ -996,7 +996,7 @@ the one place this pulls against the "?" answer's pedagogical addendum, which is
 says nothing at all about where an answer comes from
 ([comments.md](comments.md), [260905c](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md)).
 
-Since 2026-10-05 Debate leans on exactly this trigger: *Check this claim in chat* on a claim's
+Since 2026-10-05 Claims leans on exactly this trigger: *Check this claim in chat* on a claim's
 heading starts an ordinary chat that asks whether the claim holds up, with no prompt of its own
 ([reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat)).
 
@@ -1036,7 +1036,7 @@ so the links **in the prose** are what carry the web half. Pinned by
 and the before-and-after numbers are in
 [260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md).
 
-Since 2026-10-05 Debate's *Look at the debate from an angle* leans on this trigger's *"what do others
+Since 2026-10-05 Reception's *Look at the debate from an angle* leans on this trigger's *"what do others
 say?"*: it starts an ordinary chat whose first question uses those words and also asks for a web
 search outright, with no prompt of its own
 ([reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle); since 2026-10-20 that box is [sources.md § Investigate](sources.md#investigate)).

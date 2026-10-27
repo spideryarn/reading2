@@ -275,7 +275,7 @@ export const RESOLUTION = "1K";
  * the 2026-09-04 switch to a lettering model happened: without the model and the
  * resolution in here, every article already illustrated would go on reporting
  * itself current and go on serving the old wordless plate, and nobody would see
- * the feature they paid for. `tests/illustrated.test.ts` § *the fingerprint
+ * the feature they paid for. `tests/illustrated-run.test.ts` § *the fingerprint
  * moves when the request does* pins each field separately rather than trusting
  * that the list is complete.
  *

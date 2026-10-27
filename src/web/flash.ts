@@ -106,7 +106,7 @@ export interface FlashTarget {
 /**
  * **What a jump may say about where it lands, beyond the block**: a bare string
  * is a passage key, which is what every caller passed before `quote` existed
- * and what Skim and Citations still pass. keynav.ts § `beginJump` takes it
+ * and what Skim and Bibliography still pass. keynav.ts § `beginJump` takes it
  * apart.
  */
 export type JumpAim = string | FlashTarget;

@@ -1,6 +1,6 @@
 /**
  * **Find one cited work's own page on the web** — Bibliography's *Find it*,
- * which since plan 260930d is the first step of the one *Investigate / Dig
+ * which since plan 260930d is the first step of the one *Dig
  * deeper* press (src/citation-investigate.ts) and has no route of its own:
  * `POST /api/bibliography/:slug/:id/find` was deleted on 2026-10-04.
  * docs/plans/260911g-citations-mode.md § Stage 3; docs/project/bibliography.md
@@ -405,7 +405,7 @@ export type LookupCall = (body: AiRequestBody, options: { signal: AbortSignal })
  * **The model call failed, and the provider is why** — refused (by status),
  * past its deadline, or an answer that could not be read. It carries the house
  * copy and an HTTP status, which `findWorkPage`'s callers answer with; the
- * class is so that *Investigate*, which runs this lookup as its first step,
+ * class is so that *Dig deeper*, which runs this lookup as its first step,
  * can tell *the provider failed* (stop, spend
  * nothing more) from *the store failed* or a bug (fail the press) — plan
  * 260930d P-5.
@@ -566,7 +566,7 @@ export interface CitationLookupDeps {
 /**
  * ***Look it up*, the whole of it, for one listed row — with no allowance and
  * no route.** The body the retired `/find` route had until plan 260930d,
- * extracted so *Investigate* can run it as its first step (P-1) — its only
+ * extracted so *Dig deeper* can run it as its first step (P-1) — its only
  * caller since the route was deleted on 2026-10-04: the lookup prompt, the raw
  * answer judged by `readFind` and then `judgeLookup`, the `CitationFind`
  * **saved before this returns**, and a `FindCitationResponse`. **Every caller

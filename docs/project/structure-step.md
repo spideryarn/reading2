@@ -1502,7 +1502,7 @@ lines longer, plainer words) turned out to be invisible on everything he had alr
 that bump changed what a Socratic question *looks like* — from a bare *"why does X?"* to
 `<topic> — <question>? (<shape hint>)`, which was then the only line a Summary row drew.
 So a reader's older articles keep questions in a shape nothing else in the library still writes, and
-**nothing on screen says so**: unlike quotes, quiz, glossary, ideas, timeline and debate, the tree
+**nothing on screen says so**: unlike quotes, quiz, glossary, ideas, timeline and reception, the tree
 has no `outdated` chip to show them, because it has no staleness mechanism at all.
 [§ The shape it has](#the-shape-it-has-since-toc7) is what changed.
 

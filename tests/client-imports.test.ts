@@ -97,7 +97,7 @@ const SHARED = new Set([
      the reader's, so the two cannot disagree. Imports `types.js` (types only)
      and nothing else. Plan 261012c. */
   "save-closeness.js",
-  /* Which influence a Citations row shows — the web one from a kept *Dig
+  /* Which influence a Bibliography row shows — the web one from a kept *Dig
      deeper* answer, else the list's own — read by the band and by chat's
      `article_citations` tool, so the two cannot disagree. Imports `types.js`
      (types only) and nothing else. Plan 261003m, stage 2. */

@@ -1,5 +1,5 @@
 /**
- * **Debate's authors and year, from the registry** — plan 261001a stage 6
+ * **Reception's authors and year, from the registry** — plan 261001a stage 6
  * (src/reception-registry.ts). No network: `lookupWork` is a fake.
  */
 import { describe, expect, it } from "vitest";

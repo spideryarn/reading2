@@ -169,7 +169,7 @@ const OWNED: Article = {
 let storeStatus = 200;
 /** When set, the comments POST waits for it — a slow store. */
 let held: Promise<void> | null = null;
-/** The experimental-features switch, as `/api/reader` answers it. Debate is behind it. */
+/** The experimental-features switch, as `/api/reader` answers it. Reception is behind it. */
 let experimentalSince: string | null = null;
 
 function json(body: unknown, status = 200): Response {
@@ -371,13 +371,13 @@ describe("the gutter's bookmark button", () => {
 
   /* **A sub-mode is a foreground choice too, and all six of them are.** The
      snapshot the late answer is checked against named five sub-mode parameters
-     by hand and left Debate's out (it arrived later, 4b502174a), so Reception →
+     by hand and left Reception's out (it arrived later, 4b502174a), so Reception →
      Claims while the store answered changed nothing the check could see, and
      the box opened over the view the reader had just chosen. The snapshot is
      built from a `Record<ModeWithSubModes, …>` now (Reader.tsx § `surface`).
 
      The first case is the control: without it, "no box" would also be what a
-     Debate band that never let the box open looks like.
+     Reception band that never let the box open looks like.
 
      **The view is changed through the address**, as the command bar's
      sub-mode row and a Forward step change it, rather than by pressing the
@@ -391,7 +391,7 @@ describe("the gutter's bookmark button", () => {
     await settle();
   };
 
-  it("opens over Debate when the reader stayed on the view they were in", async () => {
+  it("opens over Reception when the reader stayed on the view they were in", async () => {
     who.set(OWNER);
     experimentalSince = "2026-10-01T00:00:00.000Z";
     let release!: () => void;
@@ -408,7 +408,7 @@ describe("the gutter's bookmark button", () => {
     expect(host.querySelector(".cmt-dialog"), "nothing changed, so the box opens").not.toBeNull();
   });
 
-  it("does not open over a Debate view the reader chose while the store was answering", async () => {
+  it("does not open over a Reception view the reader chose while the store was answering", async () => {
     who.set(OWNER);
     experimentalSince = "2026-10-01T00:00:00.000Z";
     let release!: () => void;

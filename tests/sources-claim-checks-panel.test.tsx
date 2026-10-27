@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **Checking the claims the reader picked, on screen** — Debate's Claims with
+ * **Checking the claims the reader picked, on screen** — Claims's Claims with
  * its tick boxes, the box for a claim of your own, Check and Dig further.
  * src/web/ReceptionAndClaimsPanel.tsx § `OwnerListedClaims`, src/web/sources-claim-checks.ts.
  * Plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 and § 5,

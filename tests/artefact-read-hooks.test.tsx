@@ -151,8 +151,8 @@ async function mount(use: (slug: string) => unknown, name: string): Promise<void
 
 const jobRequests = () => asked.filter((r) => r.url.startsWith("/api/jobs"));
 
-/* FAQ and Debate since 2026-10-02: Marginalia reads both and must never
-   spend (plan 261002b, GPT Sol's F1 on it). Debate is the dearest step in the
+/* FAQ and Reception since 2026-10-02: Marginalia reads both and must never
+   spend (plan 261002b, GPT Sol's F1 on it). Reception is the dearest step in the
    app to start by accident. */
 const READS = [
   ["ideas", useIdeasRead],

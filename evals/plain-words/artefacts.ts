@@ -4,7 +4,7 @@
  * Bibliography's why, illustrated, quiz, FAQ, labels, sketch, timeline, quiz-mark,
  * search, Learn, chat's "?" help turn and the referee's claims.
  * docs/plans/260926a-plainer-summaries-and-glossary.md § Stage 3, "Measuring
- * it, per kind". Debate and live are not here; the plan says why.
+ * it, per kind". Reception and live are not here; the plan says why.
  *
  * **Link summaries are not here either, and not by choice.** A summary is
  * written from the destination's text in the ownerless preview cache, and

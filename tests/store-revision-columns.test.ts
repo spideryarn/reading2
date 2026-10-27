@@ -701,7 +701,7 @@ describe("the metadata page and the pipeline agree about which steps can be curr
     expect(missing).toEqual([]);
   });
 
-  it("uses Debate claims' full outdated decider on the owner read", async () => {
+  it("uses Claims claims' full outdated decider on the owner read", async () => {
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const source = await readFile(path.join(root, "src", "store", "pg.ts"), "utf-8");
     const from = source.indexOf("async loadSourcesClaims(slug: string)");

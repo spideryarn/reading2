@@ -11,7 +11,7 @@
  * > that appears in `npm run cost` rather than money that vanishes.
  *
  * Eight npm scripts started a module that spent money when this was written —
- * the seven Messages stages, plus `npm run pdf`, which is the other extractor
+ * the seven Messages stages, plus `npm run eval:pdf-read`, which is the other extractor
  * and goes through the chat seam instead. (One is left; see `PAID_CLIS` for
  * where the other seven went, and note that they went by two different routes.)
  * Six had that line and two did not, so `npm run labels` and

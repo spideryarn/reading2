@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Citations mode's panel: the five orders, the bar, and the one thing a row
+ * Bibliography mode's panel: the five orders, the bar, and the one thing a row
  * must never blur — whether its link is an address the article gave or a
  * search we built. docs/project/bibliography.md, src/web/BibliographyPanel.tsx.
  */
@@ -102,7 +102,7 @@ const BARE = work({ id: "spya-b2r3e5", title: "Bare" });
 const WORKS = [CENTRAL, FAMOUS, PASSING, UNKNOWN];
 
 const RUNNING: Job = {
-  id: "job-citations",
+  id: "job-bibliography",
   ownerId: "owner" as Job["ownerId"],
   slug: "a-piece",
   status: "running",
@@ -1405,7 +1405,7 @@ describe("what a row says after Look it up", () => {
     expect(readNoteOf({ linkFrom: "web" })).toBe(CITE_PAGE_FOUND);
   });
 
-  it("says the paper itself was read once Investigate read it, and only then (plan 261001a)", () => {
+  it("says the paper itself was read once Dig deeper read it, and only then (plan 261001a)", () => {
     const readAt = "2026-10-01T01:00:00.000Z";
     const investigated = (paper: unknown) => ({ paper }) as unknown as CitedWork["investigation"];
     const read = investigated({ state: "read", host: "arxiv.org", words: 11200, readAt });

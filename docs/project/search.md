@@ -80,7 +80,7 @@ empty one:
  │              │       An example, not    │  There is nothing it is like to   │
  │              │       an argument        │  be one.                          │
  ├──────────────┴──────────────────────────┴───────────────────────────────────┤
- │ ⊞Structure ▤Summary 𝐀Glossary 🔍Search ⌸Chat │ ✳Questions ≡Tweets ⓘMetadata  │
+ │ ⊞Structure ▤Summary 𝐀Glossary 🔍Search ⌸Chat │ ✳Questions ⓘMetadata          │
  └─────────────────────────────────────────────────────────────────────────────┘
 
    ▐92▌ the model's confidence, printed as well as drawn
@@ -842,7 +842,7 @@ Now **the gutter is its
 own button beside the row's**, not inside it (a button inside a button is invalid). Hovering the
 gutter, focusing it or pressing it opens the card, and pressing it goes nowhere. Pressing the words
 goes to the passage and opens nothing. The gutter is as tall as the row, so the whole left column is
-the target, and its `aria-label` says everything it draws. Glossary, Quotes and Citations already
+the target, and its `aria-label` says everything it draws. Glossary, Quotes and Bibliography already
 behaved this way, since `ScoreBars` puts their card on the bars rather than on the row.
 [260915c](../plans/260915c-search-result-score-card-only-from-the-score.md).
 

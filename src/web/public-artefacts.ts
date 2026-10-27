@@ -95,7 +95,7 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     faq: article.faq !== undefined,
     simpleSummary: article.simpleSummary !== undefined,
     bibliography: article.bibliography !== undefined,
-    /* Debate is open to a visitor with either of its artefacts: the search,
+    /* Reception and Claims are open to a visitor with either of its artefacts: the search,
        or Claims' list made with no search stored (plan 261008i § 2). */
     reception: article.reception !== undefined || article.sourcesClaims !== undefined,
     sketch: article.sketch !== undefined,

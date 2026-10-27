@@ -281,7 +281,7 @@ import { isWebUrl, savedSource } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
-/* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
+/* Who cites the article, for Reception: OpenAlex, no model. src/citation-index.ts. */
 import { possibleCitersOf } from "./citation-fulltext.js";
 import { citersOf } from "./citation-index.js";
 import type { CitersResult } from "./types.js";
@@ -607,7 +607,7 @@ import {
      413 cannot drift apart. */
   MAX_QUIZ_ANSWER_CHARS,
 } from "./types.js";
-/* Debate's reader claim checks — plan 261008i § 3. The two caps the panel's
+/* Claims' reader claim checks — plan 261008i § 3. The two caps the panel's
    button and this route must agree on, and the shapes the route builds. */
 import {
   type SourcesClaimCheckTarget,
@@ -2371,7 +2371,7 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
 /**
  * **Look into one cited work, a few words at a time, and keep the answer** —
  * `POST /api/bibliography/:slug/:id/investigate`, SSE out. Bibliography's
- * *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+ * *Dig deeper*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
  * `streamTermLookup`'s shape: the 404 and the allowance's 429/503 are decided
  * by `investigateCitation` before a header is written. Then, since plan
@@ -2404,7 +2404,7 @@ async function bibliographyForRoute(slug: string, found: BibliographyResponse): 
   /* **Which works are already articles here** — the reader's own or a public
      one, never another reader's private article (the `where` in
      src/store/pg-cited-in-spideryarn.ts). Here and not in `loadBibliography`,
-     which chat, *Look it up* and *Investigate* also call and none of them
+     which chat, *Look it up* and *Dig deeper* also call and none of them
      needs. A failure costs the links, not the list.
      docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
   let candidates: CitedCandidate[] = [];
@@ -2622,7 +2622,7 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  * **The client ticks a question answered only on `done`.** A stream that simply
  * stops — a dropped connection, a killed instance — produces neither frame, and
  * that is the case a mocked complete transcript cannot test:
- * tests/quiz-mark-stream.test.ts emits two deltas and then closes.
+ * tests/quiz-mark-stream.test.tsx emits two deltas and then closes.
  *
  * **Validation happens before a single header is written**, so a bad request is
  * an ordinary JSON 400/404/409 and the thrown `httpError` never reaches a
@@ -6458,7 +6458,7 @@ async function runRefereePromises(slug: string, res: ServerResponse): Promise<vo
   }
 }
 
-/* ------------------------------------------ debate's reader claim checks --
+/* ------------------------------------------ Claims' reader claim checks --
    The reader ticks claims in Sources' Claims, or types one, and presses Check:
    one web search over them all, stored as a check. Plan
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
@@ -6649,7 +6649,7 @@ async function finishCheck(
 }
 
 /**
- * **Check the claims a reader picked** — `POST /api/debate-claims/:slug/checks`,
+ * **Check the claims a reader picked** — `POST /api/sources-claims/:slug/checks`,
  * a JSON body in, SSE out. `runRefereePromises`' shape: the refusals before a
  * header, the `pending` row before the call, an attempt-fenced finish, and the
  * stream ends only after the answer is stored.
@@ -6668,7 +6668,7 @@ async function finishCheck(
  *     partial unique index, so two tabs at once get one search;
  *  7. for Dig further, the addresses already found — a read, not a spend,
  *     after the reservation so nothing can finish in between unseen;
- *  8. **the `debate-check` allowance** (429, 503), the check's own bucket
+ *  8. **the `sources-claim-check` allowance** (429, 503), the check's own bucket
  *     (src/reception.ts § `SOURCES_CLAIM_CHECK_RATE_POLICY`) — and a refusal there takes
  *     the reservation back, so nothing is left pending;
  *  9. then the stream and the model.
@@ -10292,7 +10292,7 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
 const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
 const REFEREE_PROMISES_PATTERN = /^\/api\/referee\/promises\/([\w.%-]+)$/;
-/* Debate's reader claim checks (plan 261008i § 3): GET lists them, POST makes
+/* Claims' reader claim checks (plan 261008i § 3): GET lists them, POST makes
    one. One pattern for both rows, as Promises above. */
 const SOURCES_CLAIM_CHECKS_PATTERN = /^\/api\/sources-claims\/([\w.%-]+)\/checks$/;
 /* The checks' path until 2026-10-09, for one deploy — removed by the contract,
@@ -13052,7 +13052,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    * article gets no list in v1: this is not under `/api/public/`, and adding it
    * there is a new field on the public boundary.
    *
-   * **No experimental gate.** Debate had none on the server even while its
+   * **No experimental gate.** Reception had none on the server even while its
    * bar button was behind the switch, and since 2026-10-09 this is Reception
    * inside Sources, which is offered to everyone. GPT Sol's F4.
    *
@@ -13191,7 +13191,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   /* **Look into one cited work on the web, and keep the answer** — Bibliography's
-     *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+     *Dig deeper*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
      SSE, `streamCitationInvestigation` above. Owner-only (the reader seam is
      owner-scoped), rate-limited on its own `citation-investigate` bucket after
      the free refusals (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`).

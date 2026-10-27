@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The Debate band, and the nine things about it that can be got wrong
+ * **The Reception and Claims band, and the nine things about it that can be got wrong
  * quietly.**
  *
  * This mode's whole design is a set of refusals, and a refusal is invisible on

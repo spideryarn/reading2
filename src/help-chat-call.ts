@@ -89,7 +89,7 @@ export const HELP_CHAT_MAX_TOKENS = 800;
  *
  * One at a time because the page shows one question and its answer; a second
  * while the first streams would replace it. The lease is the deadline plus
- * Investigate's margin, so a process that dies mid-answer frees the slot soon
+ * Bibliography's Dig deeper margin, so a process that dies mid-answer frees the slot soon
  * after.
  */
 export const HELP_CHAT_RATE_POLICY: RatePolicy = {

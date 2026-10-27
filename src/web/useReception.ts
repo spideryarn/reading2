@@ -11,7 +11,7 @@
  *
  * ## Two verbs, like the timeline next door
  *
- * `ensure` and `regenerate`, split on `force`. Debate replaces rather than
+ * `ensure` and `regenerate`, split on `force`. Reception replaces rather than
  * appends, so running the step again already *is* "search again", and the class
  * of bugs an append path brings — a FORBIDDEN list, "a stale list is not
  * appended to" — does not exist here to be got wrong. No DELETE route.
@@ -28,7 +28,7 @@
  * does not change what the web said, so the reader profile is not in this
  * stage's stamp at all.
  *
- * **Neither of them is `searchedAt`.** Debate is time-sensitive research and a
+ * **Neither of them is `searchedAt`.** Reception is time-sensitive research and a
  * shared link outlives it, so the artefact carries the day the search ran and
  * the band's (i) says when it was searched — displayed provenance, not automatic
  * staleness. A visitor opening a year-old shared article must be able to see how

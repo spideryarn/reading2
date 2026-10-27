@@ -595,7 +595,7 @@ function receptionOwner(stale: boolean): ReceptionOwner {
   };
 }
 
-/** Debate's Claims list, stale, with its own clock — `claimListOf` stamps a fixed one. */
+/** Claims's Claims list, stale, with its own clock — `claimListOf` stamps a fixed one. */
 function staleClaimList(): UseSourcesClaims {
   return claimListOwner({
     status: "ready",

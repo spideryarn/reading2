@@ -2,7 +2,7 @@
 /**
  * **A late *Find it* must not draw a web page over a link the article gave.**
  *
- * GPT Sol's code review of Citations mode, F14 (docs/plans/260911g-citations-mode.md
+ * GPT Sol's code review of Bibliography mode, F14 (docs/plans/260911g-citations-mode.md
  * § Code-review ledger): *Find it* takes up to a minute, and a re-run of the
  * citations step can land inside it. The re-run inherits the work's id by its
  * dedupe key, so the row the reply is about is still there, under the same id —

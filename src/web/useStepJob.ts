@@ -35,8 +35,8 @@
  * ## Who uses it
  *
  * **Fifteen call sites.** Fourteen are step-specific surfaces: Arc, Glossary,
- * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Skim,
- * Citations and the Thread page. The fifteenth is `RerunRow` in Metadata,
+ * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Reception, Skim,
+ * Bibliography and the Thread page. The fifteenth is `RerunRow` in Metadata,
  * generic over its offered step. This line has repeatedly lagged the real list;
  * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.
  *
@@ -383,7 +383,7 @@ function writesStep(job: Job, step: StepName): boolean {
  * completion half of `useStepJob`, for a surface that shows an artefact it must
  * never make.
  *
- * Marginalia's feed is the reason (plan 261002d): it reads FAQ, Debate and
+ * Marginalia's feed is the reason (plan 261002d): it reads FAQ, Reception and
  * Ideas through their read halves, and with the margin open beside the band
  * that runs one of them, the band's read was refreshed and the margin's was
  * not. The always-mounted reads `OwnedReader` holds for the prose — citations,

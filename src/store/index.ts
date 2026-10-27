@@ -368,7 +368,7 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-crite
 export const refereePromisesStore: RefereePromisesStore = guarded("referee-promises", pgRefereePromisesStore);
 
 /**
- * Debate's reader-picked claim checks (plan 261008i § 3). Owner-only, and a
+ * Claims' reader-picked claim checks (plan 261008i § 3). Owner-only, and a
  * target may be the reader's own typed words — db-errors.ts is why nothing a
  * failed query says leaves it.
  */
@@ -621,7 +621,7 @@ export const lookUpTerm = makeLookUpTerm({
   library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
 });
 
-/** Where *Investigate* keeps an answer — one row per `(article, entry)`. */
+/** Where *Dig deeper* keeps an answer — one row per `(article, entry)`. */
 export const citationInvestigationStore: CitationInvestigationStore = guarded(
   "citation-investigations",
   pgCitationInvestigationStore,
@@ -634,7 +634,7 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
 export const citationWebNoteStore: CitationWebNoteStore = guarded("citation-web-notes", pgCitationWebNoteStore);
 
 /**
- * Bibliography's *Investigate*: one streamed, web-searching answer about one cited
+ * Bibliography's *Dig deeper*: one streamed, web-searching answer about one cited
  * work, kept. Built here out of the parts, as `lookUpTerm` is: the reader seam
  * decides ownership (a stranger's slug is a 404), the allowance bounds the
  * presses, the finds are both written (its first step, *Look it up* —

@@ -824,7 +824,7 @@ Two shared shells have since been built on those pieces:
   it.
 - **Client: [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) § `readAnswerStream`** — `begin`,
   `delta`s, then exactly one `done` or `error`, with a body that simply stops treated as a failure.
-  The glossary and Citations read their answers through it.
+  The glossary and Bibliography read their answers through it.
 
 The hand-rolled loops in [`src/search.ts`](../../src/search.ts) and the referee runners
 (`src/referee-promises-run.ts`, `src/referee-criteria-run.ts`, `src/referee-mirror.ts`, and

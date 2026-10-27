@@ -53,7 +53,7 @@
  * ## Stage 2's step 0: the other eleven bands, captured before they move
  *
  * The stage-2 block records `VisitorBand`, Summary, Glossary, Ideas, Quotes,
- * Timeline, Quiz, Debate, Diagram, Outline and Referee — the eleven the plan's
+ * Timeline, Quiz, Reception, Diagram, Outline and Referee — the eleven the plan's
  * § Stage 2 migrates — in twenty shapes. The order matters more than the
  * count: a literal read off a panel *after* it has been migrated is the
  * implementation agreeing with itself, which is the failure the section above
@@ -69,7 +69,7 @@
  * absent, null or boolean `head`, so the migration that reads most naturally —
  * `head={glossary && <span/>}` — hands it `null` and **deletes a row the reader
  * has today**. The shape those five need is a fragment that is always present
- * with the conditionals inside it. Debate and Referee are the controls: their
+ * with the conditionals inside it. Reception and Referee are the controls: their
  * headers carry something unconditional and cannot empty out.
  *
  * ## Two harnesses, and why the cheap one is not used for everything
@@ -2126,7 +2126,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(TIMELINE_LOADING);
   });
 
-  it("draws Debate's band, whose header cannot come out empty", async () => {
+  it("draws Reception's band, whose header cannot come out empty", async () => {
     await paint(mountReception(RECEPTION));
     expectShape(RECEPTION_SHAPE);
   });

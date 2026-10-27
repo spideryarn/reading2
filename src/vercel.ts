@@ -343,7 +343,7 @@ async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
          docs/project/security-map.md describes did not exist here.
 
          **Wrapped here rather than in src/public/page.ts**, which would pull
-         src/owner.ts into the public import graph that tests/public-imports.ts
+         src/owner.ts into the public import graph that tests/public-imports.test.ts
          keeps closed. The transport does the wrapping; the closed room stays
          closed. Nothing calls `setRequestOwner` on this path, so the box stays
          empty and an owner-scoped read throws instead of succeeding against

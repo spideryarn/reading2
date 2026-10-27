@@ -135,7 +135,7 @@ decision for Greg**, not a detail of the change that needs it.
 - **Facts about the piece are UI**: bylines, site names, dates, origin URLs, shelf terms (the
   authors' phrases, normalised and picked by a program and a model, so nobody's sentence). A URL the
   reader typed or pasted is theirs.
-- **Undecided, so left UI**: third-party text (Debate's web quotes, Wikipedia extracts), and hidden
+- **Undecided, so left UI**: third-party text (Reception's web quotes, Wikipedia extracts), and hidden
   text a scan found in the source.
 
 ## How to put an element in its voice

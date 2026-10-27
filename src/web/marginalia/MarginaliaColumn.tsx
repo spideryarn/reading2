@@ -99,7 +99,7 @@ export const MarginCiteActions = createContext<MarginCiteSenders | null>(null);
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
 
-/* An idea's provenance and a Debate row's relation (`RELATION_WORD`, below)
+/* An idea's provenance and a Reception row's relation (`RELATION_WORD`, below)
    come off the wire, so these tables are read through `ownLabel`
    (lib/own-label.ts). A value from a newer server is stamped as its own word,
    and the sentence explaining it is left out of the card: this copy cannot
@@ -1186,14 +1186,14 @@ export const NO_OWNER_FEED: MarginFeed = {
 };
 
 /**
- * **The owner's ideas, FAQ, Timeline, Debate and literature findings, read and
+ * **The owner's ideas, FAQ, Timeline, Reception and literature findings, read and
  * never made** — and Marginalia's own relation words and notes, which are made
  * here. A component of its own so the reads happen only while Marginalia is
  * open — the read halves (`useIdeasRead`, `useFaqRead`, `useTimelineRead`,
  * `useReceptionRead`, `useSituateRead`), never the full hooks, which arm the
- * automatic run and could spend (Debate is the dearest step in the app). A
+ * automatic run and could spend (Reception is the dearest step in the app). A
  * stale list (the article moved under it) is not drawn: its blocks may not be
- * these. Owner only: a visitor's lists are in their payload. Citations and
+ * these. Owner only: a visitor's lists are in their payload. Bibliography and
  * comments are not read here — the Reader holds both in every mode.
  */
 export function OwnerMarginFeed({

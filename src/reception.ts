@@ -517,7 +517,7 @@ function str(value: unknown): string {
  * `claimQuote` in the named block, `articleReferenceQuote` in the annotation's
  * extract — so the mode cannot acquire a fourth check that quietly passes the
  * default. `validateHits` (src/search.ts) and `validateOccurrences`
- * (src/ideas.ts) still pass the default and are a known gap; Debate must not
+ * (src/ideas.ts) still pass the default and are a known gap; Reception must not
  * become the third.
  */
 /**
@@ -2102,7 +2102,7 @@ export function blockTextById(blocks: readonly Block[]): Map<string, ArticleBloc
 }
 
 /* ================================================ the reader's claim checks ==
-   **Debate's Claims, after the list: the reader ticks claims, or types one,
+   **Claims, after the list: the reader ticks claims, or types one,
    and presses Check** (Greg, 2026-10-08, q-sn37bt; plan
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3).
 
@@ -2133,7 +2133,7 @@ export const CHECK_PROMPT_VERSION = "debate-check/1";
 
 /**
  * **How long one check may run before it is abandoned.** 360 s, the budget the
- * Debate step gives its own comparable calls (src/jobs.ts § `STEP_BUDGET_MS`,
+ * Reception step gives its own comparable calls (src/jobs.ts § `STEP_BUDGET_MS`,
  * `debate`), because a check is one search call. A pass B took 602 s once in
  * the legacy two-search shape; the step's measured runs since have a p90 of
  * 115 s and a maximum of 162 s. A check that hits this is stored as an error,

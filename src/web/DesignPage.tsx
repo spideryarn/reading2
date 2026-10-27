@@ -468,7 +468,7 @@ const TEXT_ROLES: {
     token: "--type-quote",
     use: "verbatim source words under a row",
     samples: {
-      ui: "…a cited page's own words, which are nobody's here…", // Debate, Citations
+      ui: "…a cited page's own words, which are nobody's here…", // Reception, Bibliography
       author: "“The market can remain irrational longer than you can remain solvent.”",
     },
   },
@@ -1074,7 +1074,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <p className="design-note">
           The shell is <code className="design-token">.mode-band</code> and the title row is{" "}
           <code className="design-token">.band-head</code> (mode-band.css); the state bodies are the{" "}
-          <code className="design-token">.gloss-*</code> base classes that Ideas, Timeline, Debate,
+          <code className="design-token">.gloss-*</code> base classes that Ideas, Timeline, Reception,
           Quiz and Referee reuse beside their own, and whose position in the import order is
           load-bearing (glossary.css says why). <strong>Nothing here filters, scores, orders or
           attributes anything</strong> — that belongs to each feature and stays there; a design page
@@ -1514,7 +1514,7 @@ function ControlsAcrossModes() {
           </>
         }
         finger={<>44px tall (--control-h-lg) under a coarse pointer; about 25px for a mouse.</>}
-        usedBy="Summary, Debate, Structure, Referee and its criterion kinds, Learn, Diagram, Search's matcher, Skim's depths"
+        usedBy="Summary, Sources, Structure, Referee and its criterion kinds, Learn, Diagram, Search's matcher, Skim's depths"
       >
         <div className="summ-views" role="radiogroup" aria-label="Example parts">
           {DESIGN_PARTS.map((p) => (
@@ -1547,7 +1547,7 @@ function ControlsAcrossModes() {
           </>
         }
         finger={<>32px drawn; the button's own box is the target.</>}
-        usedBy="every JobProgress (Glossary, Ideas, Timeline, Quotes, Citations, FAQ, Simple, Skim, Debate, Tweets, Learn, Structure, Sketch, Illustrated, Metadata), Referee's five, Search's find, Glossary's Look up and Find more, and Glossary's and Bibliography's Ask in chat"
+        usedBy="every JobProgress (Glossary, Ideas, Timeline, Quotes, Bibliography, FAQ, Simple, Skim, Reception, Claims, Tweets, Learn, Structure, Sketch, Illustrated, Metadata), Referee's five, Search's find, Glossary's Look up and Find more, and Glossary's and Bibliography's Ask in chat"
       >
         <RunButton label="Find the terms" />
         <Button variant="outline" size="sm" aria-disabled="true">
@@ -1568,7 +1568,7 @@ function ControlsAcrossModes() {
           </>
         }
         finger={<>type at least 16px on a touchscreen (narrow-window.css), so iOS does not zoom.</>}
-        usedBy="Chat's composer, Search, Glossary's Look up, Debate, Referee's criterion, poles and Candidates, Learn's quiz answer, Illustrated's note, Skim's purpose"
+        usedBy="Chat's composer, Search, Glossary's Look up, Reception, Referee's criterion, poles and Candidates, Learn's quiz answer, Illustrated's note, Skim's purpose"
       >
         <textarea
           className="chat-input design-family-box"
@@ -1594,7 +1594,7 @@ function ControlsAcrossModes() {
             edge with more beyond it faded.
           </>
         }
-        usedBy="Glossary, Quotes, FAQ, Citations, Debate; Search's row is .srch-sort-btn, the same chip"
+        usedBy="Glossary, Quotes, FAQ, Bibliography, Reception, Claims; Search's row is .srch-sort-btn, the same chip"
       >
         <OrderGroup label="Order the examples by" selected={order}>
           {DESIGN_ORDERS.map((o) => (

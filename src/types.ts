@@ -3016,7 +3016,7 @@ export interface PublicArtefacts {
    */
   bibliography: boolean;
   /**
-   * **The eleventh, since 2026-09-29** — a stored Debate. `owners-only` until
+   * **The eleventh, since 2026-09-29** — a stored Reception. `owners-only` until
    * then, as a staging decision (the boundary its rows' addresses must pass was
    * not built) and for the cost of *running* a search, which a visitor never
    * pays. SPIDERYARN-READING2-56, plan 260929c stage 4.
@@ -3799,7 +3799,7 @@ export type StepName =
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
   | "reception"
-  /* **The article's own claims, listed for Debate's Claims to pick from** —
+  /* **The article's own claims, listed for Claims to pick from** —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. One
      Messages-wire call over `articleWithIds` on the body, **no web search**,
      made by a press on Claims. Ideas' article block at `high` effort, so an
@@ -4590,7 +4590,7 @@ export type ChatAnchor =
 
 /**
  * **Where a conversation was started from, when it was started from an item
- * in another mode** — Debate's *Check this claim in chat* is the first caller.
+ * in another mode** — Claims' *Check this claim in chat* is the first caller.
  * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
  *
  * Not a `ThreadKind` and not the anchor. Kind chooses the prompt and tools,
@@ -5474,7 +5474,7 @@ export interface CitedWork {
    */
   lookup?: CitationLookup;
   /**
-   * **What *Investigate* wrote about this work** — attached at read time from
+   * **What *Dig deeper* wrote about this work** — attached at read time from
    * `citation_investigations`, only while its context fingerprint matches what
    * would be sent now (src/citation-investigate-context.ts). Owner-only: never
    * crosses the public boundary.
@@ -5520,7 +5520,7 @@ export interface CitedWork {
 export type RegistrySource = "crossref" | "datacite";
 
 /**
- * **A registry's record, as a row keeps it** — Bibliography's and Debate's
+ * **A registry's record, as a row keeps it** — Bibliography's and Reception's
  * (plan 261001a stages 5 and 6). Public metadata about a public identifier.
  * Never read straight off a stored row on the client: nothing revalidates
  * stored JSON, so read it through a guard.
@@ -5551,7 +5551,7 @@ export interface RegistryCitedBy {
  * Bibliography's registry field: a record whose title agrees, or the fact that it
  * does not. `citedBy` is on the `found` arm alone, and not on `RegistryWork`:
  * a conflict's record is another work, whose count is not this row's, and
- * Debate's rows do not ask.
+ * Reception's rows do not ask.
  */
 export type CitationRegistry =
   | ({ kind: "found"; citedBy?: RegistryCitedBy } & RegistryWork)
@@ -5583,7 +5583,7 @@ export interface CitedInSpideryarn {
 }
 
 /**
- * **One *Investigate* answer, as kept** — docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+ * **One *Dig deeper* answer, as kept** — docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
  * `answer` is the AI's prose, written from web search extracts and instructed
  * not to quote them; any quotation-marked span in it was checked by code to be
@@ -5673,7 +5673,7 @@ export interface PaperPassage {
 }
 
 /**
- * **The paper, as one *Investigate* press found it** — src/paper-evidence.ts's
+ * **The paper, as one *Dig deeper* press found it** — src/paper-evidence.ts's
  * six outcomes, kept as a dated snapshot (`readAt`): nothing re-fetches on
  * read, so the row never implies the remote paper is unchanged (Sol P-10).
  * URLs and hosts are the owner's, like the rest of an investigation.
@@ -7888,7 +7888,7 @@ export interface ReceptionGroup<Row> {
 }
 
 /**
- * **Debate's second group, which since `debate/7` is not searched at all.**
+ * **Reception's second group, which since `debate/7` is not searched at all.**
  *
  * Until 2026-10-08 every search ran two passes, and pass B picked three or four
  * of the article's claims by itself and searched them. Greg asked for the
@@ -8030,7 +8030,7 @@ export interface Reception {
   /**
    * **When the search ran, as displayed provenance rather than staleness.**
    *
-   * Debate is time-sensitive research and a shared link outlives it, so this
+   * Reception is time-sensitive research and a shared link outlives it, so this
    * crosses both the owner and the public DTO deliberately and the panel says
    * *"Searched on …"*. `stale` continues to mean *the article changed*: a
    * visitor opening a year-old shared article must be able to see how old the
@@ -8312,7 +8312,7 @@ export type PossibleCiters =
 
 /**
  * `GET /api/citers/:slug` — **who cites this article, or why there is no
- * list.** No model made any of it, and it is not part of the stored Debate.
+ * list.** No model made any of it, and it is not part of the stored Reception.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
  * - `no-doi` — the article has no usable DOI, its own address is not an arXiv page

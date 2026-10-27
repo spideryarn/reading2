@@ -374,14 +374,14 @@ prioritising falls back to `document` in the panel without touching the URL. See
 [glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
 
 **`?bears=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
-The others sit on scores, so a number is the fact itself; debate's sits on one of three named
+The others sit on scores, so a number is the fact itself; Reception's sits on one of three named
 judgments — *loosely*, *partly*, *directly* — and there is a rank inside the panel only because
 `applyThreshold` needs one. Putting that rank in the URL would be our arithmetic dressed as a
 measurement, which is the composite the feature refused
 ([260906b § 2](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md)). A word also needs
 none of `snapToStop`'s machinery: it is a stop or it is nothing, and anything else reads as untouched.
 
-**`?name=` was the first such threshold, and it is retired** (2026-10-03): debate's identification
+**`?name=` was the first such threshold, and it is retired** (2026-10-03): Reception's identification
 bar — `named`, `quoted` or `linked` — whose default, `quoted`, hid the citing papers and published
 replies the search was changed to find
 ([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)).

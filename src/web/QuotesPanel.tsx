@@ -996,7 +996,7 @@ export function QuotesPanel({
                2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
                was where a rewrite's progress, Stop and failure showed; a run
                started from Metadata would otherwise show nowhere. Idle, nothing
-               — the Ideas, Timeline, Debate and Quiz feet do the same. **And on
+               — the Ideas, Timeline, Reception and Quiz feet do the same. **And on
                a stale list whose banner was sent away** (plan 261010a, GPT
                Sol's finding 4): that banner carried the job too. */
           quotes &&

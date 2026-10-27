@@ -296,7 +296,7 @@ describe("the sweep over the modes", () => {
     }
   });
 
-  it("does not tell the owner that a new Debate searched around individual claims", () => {
+  it("does not tell the owner that a new Reception searched around individual claims", () => {
     const row = sharedInventory(EVERYTHING).shared.find((item) => item.key === "sources");
     expect(row?.detail).toContain("Reception");
     expect(row?.detail).toContain("earlier search");
@@ -390,7 +390,7 @@ const WIRE_ROW = {
   /* The stored route, since 2026-09-29 — its own mode, like the timeline.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
   skim: "skim",
-  /* The FAQ and the Citations list, the same day and the same way.
+  /* The FAQ and the Bibliography list, the same day and the same way.
      A cited work's address is re-judged on its way out (src/public/dto.ts §
      `publicCitedWork`), which is invisible to this table. */
   faq: "faq",

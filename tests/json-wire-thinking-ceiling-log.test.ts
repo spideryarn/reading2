@@ -4,12 +4,12 @@
  *
  * `warnIfThinkingAteTheCeiling` (src/ai-call.ts) was added on 2026-09-28 at the
  * end of `openRouterStream` only, so the calls that go through `openRouterJson`
- * — Debate's passes and synthesis, the PDF front-matter pass, the PDF reader —
+ * — Reception's passes and synthesis, the PDF front-matter pass, the PDF reader —
  * could stop on `length` after thinking and leave nothing saying where the
  * tokens went. That is postmortem 260928b's class (*a lesson kept in a helper
  * does not reach the other wire*) a second time; plan 261010f.
  *
- * Debate is the job used here because it is the one whose answers have come
+ * Reception is the job used here because it is the one whose answers have come
  * closest to the ceiling in production, and it is a provider-default job, so
  * the line must say so.
  *

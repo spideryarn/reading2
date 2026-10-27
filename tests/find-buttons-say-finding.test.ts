@@ -2,7 +2,7 @@
  * **A band whose button says "Find the …" says "Finding…" while it runs**:
  * plan 261007a § K3.
  *
- * Citations and FAQ said "Find the citations" / "Find the questions" and then
+ * Bibliography and FAQ said "Find the citations" / "Find the questions" and then
  * "Reading…", where Ideas and Glossary say "Finding…". `runningLabel` is what
  * `JobProgress` shows for the moment between two named steps, so a mounted
  * test would need a job caught mid-step; this reads the source instead, which

@@ -341,7 +341,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      end in this code, or it would read as authored. */
   "live-upstream": "retry",
   "jb-slot-held": "bug",
-  /* Bibliography's *Investigate* — src/citation-investigate.ts. */
+  /* Bibliography's *Dig deeper* — src/citation-investigate.ts. */
   "cite-quoted": "retry",
   "cite-no-extract": "retry",
   "cite-unfinished": "retry",
@@ -435,7 +435,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      saved as whole. `retry`, `ai-mark-cut-off`'s reason: a second go usually
      fits. See `GLOSSARY_CUT_OFF`. */
   "gl-cut-off": "retry",
-  /* **Debate's own, and the only `db-`.** `retry` because the model choosing
+  /* **Reception's own, and the only `db-`.** `retry` because the model choosing
      not to search, and a provider falling back to one that dropped the tool,
      both come out differently next time. See `RECEPTION_SEARCH_DID_NOT_RUN` for
      why a search that did not run is a *failure* rather than an empty result. */
@@ -1242,7 +1242,7 @@ export const STEP_STOPPED: ReaderFacingFailure = {
  * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
  * A `checkTree` rule tightened over already-stored trees took roughly one
  * article in twenty off the air permanently, and each attempt to publish
- * *anything* for one of them — glossary, quotes, debate — completed its model
+ * *anything* for one of them — glossary, quotes, reception — completed its model
  * call, paid for it, and was then refused at the door. Four times on one
  * article in thirteen minutes, one of them $0.2454, every one of them shown
  * this file's `retry` sentence: *"a step that stops like this often comes out
@@ -5881,7 +5881,7 @@ export function sourcesClaimsHandoff(sources: number): string {
 }
 
 /**
- * **What the press on Debate searches, said before the button.** Since
+ * **What the press on Reception searches, said before the button.** Since
  * `debate/7` (2026-10-08) it is one search, for Reception only: the claims are
  * the reader's to pick (plan 261008i). The sub-mode control's own cards say
  * what each sub-mode is (src/web/sub-modes.ts § `SOURCES_SUB_MODES`); no
@@ -6260,7 +6260,7 @@ export function citedTimes(n: number): string {
 export const SOURCES_CLAIMS_UNJUDGED = "Not judged for relevance by the AI";
 
 /**
- * Where Debate's threads box would be, when the call that makes it failed
+ * Where Reception's threads box would be, when the call that makes it failed
  * (plan 260930j). Says the list is whole, because the reader's next question is
  * whether they are missing sources, and they are not.
  */
@@ -6290,7 +6290,7 @@ export function receptionWorkFieldsNote(parts: readonly string[]): string {
 }
 
 /**
- * **Which Debate fields came from a registry** (plan 261001a stage 6): the
+ * **Which Reception fields came from a registry** (plan 261001a stage 6): the
  * identifier is the page address's own, and the record was kept only because
  * its title agreed with the page's. `parts` names only fields actually used,
  * so a missing registry year cannot claim an extracted year as Crossref's.
@@ -7247,7 +7247,7 @@ export const CITATION_NO_MATCH =
 export const CITATION_LOOKUP_NO_MATCH =
   "No page the search found was clearly this work's own, so nothing was read from it. The article's own link is still there.";
 
-/* --------------------------------------------- Bibliography's *Investigate* --
+/* --------------------------------------------- Bibliography's *Dig deeper* --
    src/citation-investigate.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
    Every one of these reaches the reader as the whole of what they see in place
    of the answer: the client replaces the streamed text on an error. */
@@ -7284,9 +7284,10 @@ export const CITATION_INVESTIGATE_UNFINISHED: ReaderFacingFailure = {
     "a fresh one. [cite-unfinished]",
 };
 
+// Kept on purpose for old tabs while the server half waits on Greg (plan 261009k, decision D5): do not reword these refusal strings (`dig-resting` etc.).
 /**
  * ***Dig deeper* refused by its allowance** (`DIG_DEEPER_RATE_POLICY`,
- * src/dig-deeper.ts) — one sentence per reason, Investigate's three below in
+ * src/dig-deeper.ts) — one sentence per reason, Bibliography's three below in
  * shape. Said of the action rather than of a glossary entry or a comment,
  * because the one allowance covers both buttons. They say only that this
  * request changed nothing: the first glossary press may have no earlier answer.

@@ -47,7 +47,7 @@
  * — `done` or `error` — and this hook **ticks a question answered only on
  * `done`**. A stream that simply stops produces neither frame, leaves `status`
  * on `"marking"` → `"failed"`, and the reply stays visibly incomplete and
- * retryable. tests/quiz-mark-stream.test.ts is that case and nothing else.
+ * retryable. tests/quiz-mark-stream.test.tsx is that case and nothing else.
  *
  * One live request per attempt: `mark` refuses to start a second while one is
  * running, and aborts the old one when the reader moves to another question or

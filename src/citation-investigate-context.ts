@@ -1,6 +1,6 @@
 /**
- * **What *Investigate* sends about one cited work, and the fingerprint over
- * it** — the pure half of Bibliography's *Investigate*, so src/store/pg.ts can
+ * **What *Dig deeper* sends about one cited work, and the fingerprint over
+ * it** — the pure half of Bibliography's *Dig deeper*, so src/store/pg.ts can
  * recompute the fingerprint at read time without pulling the model call in
  * (src/citation-lookup.ts has the same split, for the same reason).
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § Staleness.
@@ -12,7 +12,7 @@
  * was written under: the article, the work's fields including its link and
  * where the link came from, `why` and the citing passages as capped, the
  * reader's rendered profile, the prompt version and the model. Anything else
- * reads *Investigate* again, and one press regenerates.
+ * reads *Dig deeper* again, and one press regenerates.
  *
  * **The article enters as the exact fields `articleWithIds` renders**: title,
  * byline, site, URL, then block ids and text. The current matched *Look it up*
@@ -76,7 +76,7 @@ export interface InvestigateContext {
   passages: string[];
 }
 
-/** The current *Look it up* page and the fields Investigate sends from it. */
+/** The current *Look it up* page and the fields Dig deeper sends from it. */
 export interface MatchedPage {
   url: string;
   title: string | null;

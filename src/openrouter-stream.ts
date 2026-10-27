@@ -397,7 +397,7 @@ interface Annotation {
  * Not a number the measured range comes near, and that is the point. Exa's
  * extracts ran 236–4,945 characters over nineteen annotations on 2026-09-05
  * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § 2), so at 8,000
- * this cap does not bite on the engine Debate uses — ~1.6× the longest one
+ * this cap does not bite on the engine Reception uses — ~1.6× the longest one
  * seen. What it bounds is the case nobody measured: the default engine already
  * returned 9,858 characters on the same probe (an extract of the article we
  * were holding anyway), and OpenRouter publishes no ceiling at all, so an
@@ -493,7 +493,7 @@ export function collectCitations(
  * **One page can come back several times with a different extract each
  * time**, and the model reads all of them. First sighting wins by default, so
  * the extract cannot change under a row a streaming caller has already
- * checked. But a caller that checks only once the whole answer is in — Debate
+ * checked. But a caller that checks only once the whole answer is in — Reception
  * — was refusing quotations the model copied correctly from a page's *second*
  * extract: 33 of 76 quotations missing from a first extract, measured over 48
  * recorded Debate runs on 2026-10-02
@@ -501,7 +501,7 @@ export function collectCitations(
  *
  * So such a caller may ask for **every distinct extract, in the order they
  * came**, joined by `EXTRACT_SEPARATOR` and capped as one. Opt-in, so chat,
- * explain, Citations and Dig deeper are untouched. The vetting is unchanged:
+ * explain, Bibliography and Dig deeper are untouched. The vetting is unchanged:
  * the URL was already accepted the first time it was seen, and the title stays
  * the first sighting's.
  */
@@ -620,7 +620,7 @@ function collectAnnotated<T>(
     }
     // The page's title as the search reported it, which is somebody's
     // `<title>` and carries their markup — `<i>Landmarks</i>` showed as tags in
-    // Debate. Made plain here, once, for every caller —
+    // Reception. Made plain here, once, for every caller —
     // docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md.
     /* The wire is JSON, whatever its TypeScript declaration says. Keep the old
        tolerance of a null/non-string title rather than turning it into a

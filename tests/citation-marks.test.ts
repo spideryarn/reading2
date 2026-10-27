@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **Every work the piece cites is marked where it cites it** — the prose half of
- * Citations mode, asked for by Greg on 2026-09-12 (SPIDERYARN-READING2-3M):
+ * Bibliography mode, asked for by Greg on 2026-09-12 (SPIDERYARN-READING2-3M):
  *
  * > And (just as we do with quotes and glossary), once generated, we should
  * > always visually indicate Citations somehow in the main text

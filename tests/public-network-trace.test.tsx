@@ -172,7 +172,7 @@ const PUBLIC_QUESTION = "Where does the argument come from?";
 /** The first paragraph of a stored Simple, in plain words. */
 const PUBLIC_SIMPLE = "This piece is about where an argument comes from.";
 const PUBLIC_WORK = "An information integration theory of consciousness";
-/** A stored Debate row's quotation from a stranger's page, since plan 260929c stage 4. */
+/** A stored Reception row's quotation from a stranger's page, since plan 260929c stage 4. */
 const PUBLIC_RECEPTION_QUOTE = "The integration measure cannot be computed for any real brain.";
 
 /**
@@ -958,7 +958,7 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      The drawn route is "draws a stored skim from the payload" below.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
   skim: { where: VISITOR_BAND, says: "Nobody has built a skim route for this one yet" },
-  /* And the FAQ and the Citations list, the same day and the same way: out of
+  /* And the FAQ and the Bibliography list, the same day and the same way: out of
      the owners-only group below once the payload grew a flag for each. The
      drawn ones are "draws a stored faq" and "draws a stored citations list"
      below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
@@ -1432,7 +1432,7 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A stored Citations list is shown to a visitor, and nothing is spent** —
+   * **A stored Bibliography list is shown to a visitor, and nothing is spent** —
    * plan 260929c stage 3. The work's title and its reason are drawn, the
    * article's own link is a link, and a row the boundary took the link off is
    * still a row. No *Find it* (a paid web search, and the owner's finds stay
@@ -1517,7 +1517,7 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A stored Debate is shown to a visitor, and nothing is spent** — plan
+   * **A stored Reception is shown to a visitor, and nothing is spent** — plan
    * 260929c stage 4. A search is the dearest press in the bar (two metered web
    * searches, ~$0.27 a run), so this asserts both halves: the stored rows are
    * drawn — a reply's quotation and a claim row's quotation — the boundary's

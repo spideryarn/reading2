@@ -7,7 +7,7 @@
  *     → { kind: "answered", passages: [{ chunk: "c7", page: 3, text, bears }], offered: 3, dropped: 1 }
  *     | { kind: "failed", why: "timed-out" }
  *
- * One non-streamed JSON call inside an *Investigate* press, sent the chunks of
+ * One non-streamed JSON call inside an *Dig deeper* press, sent the chunks of
  * the paper src/paper-evidence.ts read and confirmed, and what the article uses
  * the work for — each fenced as data, never instructions, with a reminder after.
  * No tools. It answers at most three `{ chunk, quote, bears }`, and **code keeps
@@ -136,7 +136,7 @@ export const PAPER_PASSAGES_OUTPUT_SCHEMA = {
 validateAnthropicJsonSchema(PAPER_PASSAGES_OUTPUT_SCHEMA);
 assertNoBlockIdEnums(PAPER_PASSAGES_OUTPUT_SCHEMA, []);
 
-/** What the call is sent about the work — the title, `why` and the citing passages, as Investigate sends them. */
+/** What the call is sent about the work — the title, `why` and the citing passages, as Dig deeper sends them. */
 export type PassagesContext = Pick<InvestigateContext, "title" | "why" | "passages">;
 
 /**

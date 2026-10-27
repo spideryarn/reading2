@@ -187,7 +187,7 @@
    Under an assessed row (BibliographyPanel.tsx § LookupReading): the verdict, each
    quote from the search extract, and what the work does. Quiet, like the lines
    around it — the row is still the article's citation first. The quotes wear
-   Debate's solid rule down the left (reception.css § `.rcp-quote`), the mark this
+   Reception's solid rule down the left (reception.css § `.rcp-quote`), the mark this
    app already uses for "these are not our words", with the caption under them
    saying whose words they are. Margins are reset explicitly: `figure` and
    `blockquote` carry 40px of browser indent, which at 288px would take a

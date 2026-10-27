@@ -644,7 +644,7 @@ export function confirmIdentity(input: IdentityInput): { ok: true; matchedBy: Ma
 /* ---------------------------------------------------------- the reading -- */
 
 export interface PaperEvidenceInput {
-  /** The work as *Investigate* describes it — its title, authors, link, `why` and citing passages. */
+  /** The work as *Dig deeper* describes it — its title, authors, link, `why` and citing passages. */
   work: Pick<InvestigateContext, "title" | "authors" | "url" | "why" | "passages"> & {
     year?: string | null;
     reference?: string | null;

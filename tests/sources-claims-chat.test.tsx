@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **A claim in Debate › Claims can start a chat about itself, and shows the
+ * **A claim in Sources › Claims can start a chat about itself, and shows the
  * way back to one already started** — the owner's panel only.
  * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D2, D4 and D6.
  *

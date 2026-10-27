@@ -634,7 +634,7 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         lookupEvidenceHash: "fedcba9876543210",
       });
     },
-    /* Citations' *Investigate* (plan 260930a): the sentinel is the answer. */
+    /* Bibliography's *Dig deeper* (plan 260930a): the sentinel is the answer. */
     citation_investigations: async () => {
       await db.insert(schema.citationInvestigations).values({
         articleId: ARTICLE_ID,

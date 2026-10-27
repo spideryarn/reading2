@@ -109,7 +109,7 @@ ${PROFILE_RULES}`;
   from it; `"part"` keeps Arc's one sentence for a paperwork part, about the argument and never the
   paperwork (a label broke Arc's sentence count).
   Every prompt handed the whole article carries it, or is in `PAPERWORK_EXEMPT` in the same file
-  with its reason — Citations, the referee prompts, and the modes that answer the reader, who may
+  with its reason — Bibliography, the referee prompts, and the modes that answer the reader, who may
   ask who funded it. `tests/paperwork-coverage.test.ts` holds that, the way the plain-words test
   does. The evidence is
   [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md),

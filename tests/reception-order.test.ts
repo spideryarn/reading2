@@ -1,5 +1,5 @@
 /**
- * **How each of Debate's two lists is arranged** (src/web/reception-order.ts),
+ * **How each of Reception's two lists is arranged** (src/web/reception-order.ts),
  * tested without a DOM. Since 2026-10-03 (plan 261003o) the two searches are two
  * sub-modes, so there are two arrangements rather than four orders over one
  * mixed list:

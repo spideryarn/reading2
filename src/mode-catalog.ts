@@ -397,7 +397,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     description: "The article's shape as a picture: a model reads the argument and draws it",
     /* **No superlative here, and that is measured rather than modest.** The
        first draft said this was the longest wait any button in the bar starts;
-       the Sketch takes 121–194 s (docs/project/diagram.md) and Debate's spike
+       the Sketch takes 121–194 s (docs/project/diagram.md) and Reception's spike
        run took 146.7 s (docs/plans/260905f-debate-mode-stage-0-spike-results.md
        § the completed run), so the two are the same size and the claim was one
        measurement away from being false. "About a minute" since 2026-10-02:

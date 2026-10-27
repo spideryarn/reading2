@@ -1,6 +1,6 @@
 /**
  * The FAQ's prioritised order (src/web/faq-order.ts), and the track arithmetic
- * it shares with the Glossary and Citations (src/web/threshold.ts § the track).
+ * it shares with the Glossary and Bibliography (src/web/threshold.ts § the track).
  * docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md.
  */
 import { describe, expect, it } from "vitest";

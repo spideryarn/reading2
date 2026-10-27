@@ -407,7 +407,7 @@ function snapshot(rows: FleetRow[] = [fleetRow()]): FleetSnapshot {
 /**
  * A dialog on screen, for the answer path.
  *
- * `gate` is CALLED rather than written out, matching tests/fleet-steer-route.ts:
+ * `gate` is CALLED rather than written out, matching tests/fleet-steer-route.test.ts:
  * `parseQuestion` recomputes it, so a literal here would be this file's opinion
  * of the classifier rather than the classifier's.
  */

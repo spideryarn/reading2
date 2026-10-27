@@ -1,5 +1,5 @@
 /**
- * **What does a Citations row say about a work, and where did each word come
+ * **What does a Bibliography row say about a work, and where did each word come
  * from?** Plan 261003j, Greg's report spya-zmdb7y: the row should say no more
  * about a paper than the article's bibliography supports.
  *

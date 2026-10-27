@@ -182,7 +182,7 @@
 
 /* -------------------------------------------------- § the part-switcher --
    **The one row that switches a mode's parts**, drawn the same in every mode:
-   Summary (Brief | Fuller | Thread), Debate, Structure, Referee and the kind
+   Summary (Brief | Fuller | Thread), Sources, Structure, Referee and the kind
    row under its criterion box, Learn, Diagram, Search's matchers and Skim's
    depths. Greg, 2026-10-07: *"controls that do the same job should look the
    same in every mode, though use your judgment."* Plan 261007h § F2.
@@ -1550,7 +1550,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 }
 /* ---- text boxes in the bands ----
    **One look for every box a reader types into inside a band**: chat's
-   composer, Search's and Glossary's (and Debate's) one-line boxes, Referee's
+   composer, Search's and Glossary's (and Reception's) one-line boxes, Referee's
    criterion, poles and Candidates box, Learn's quiz answer, Illustrated's note
    and Skim's purpose. Greg, 2026-10-07: *"controls that do the same job should
    look the same in every mode, though use your judgment."* Before this rule

@@ -35,7 +35,7 @@ const asked: string[] = [];
 vi.mock("../src/web/lib/api.js", () => {
   /* A whole-module mock, so anything link-facts.ts reaches for and this omits is
      `undefined` when it is called rather than the real thing talking to a server
-     that is not there — tests/add-to-shelf-from-the-card.tsx explains it. */
+     that is not there — tests/add-to-shelf-from-the-card.test.tsx explains it. */
   const api = {
     apiFetch: async (input: string) => {
       asked.push(input);

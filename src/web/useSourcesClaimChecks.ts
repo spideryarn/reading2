@@ -1,5 +1,5 @@
 /**
- * **Debate's reader-picked claim checks, as the reading view sees them** — the
+ * **Claims' reader-picked claim checks, as the reading view sees them** — the
  * article's checks, read, and the one thing you can do: press Check.
  * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3.
  *

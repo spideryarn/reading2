@@ -367,7 +367,7 @@ describe("what a visitor is told, mode by mode", () => {
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
       ["chat", "referee", "learn"].sort(),
     );
-    /* And one at a time, so a mode reading the wrong flag shows up. Citations'
+    /* And one at a time, so a mode reading the wrong flag shows up. Bibliography'
        and Debate's flags both open Sources since 2026-10-09. */
     const MODE_OF = { bibliography: "sources", reception: "sources" } as const;
     for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "bibliography", "reception"] as const) {
@@ -380,7 +380,7 @@ describe("what a visitor is told, mode by mode", () => {
    * **Sources opens for a visitor with any one of its artefacts** — the
    * `any-artefact` policy, GPT Sol's F3 on plan 261009l. A shared article with
    * a Reception search and no bibliography opens Sources, whose
-   * Bibliography then says there is no list (tests/sources-band.test.tsx);
+   * Bibliography then says there is no list (tests/reception-navigation.test.tsx);
    * one with nothing of the three is the one not-built gap, naming what is
    * missing, in the current product words rather than the retired storage
    * names (`citations` and `debate`).
@@ -423,7 +423,7 @@ describe("what a visitor is told, mode by mode", () => {
         /* An artefact mode since 2026-09-29, like the timeline: the stored
            route rides on the payload (SPIDERYARN-READING2-56). */
         mode === "skim" ||
-        /* And the FAQ and the Citations list, the same day, the same way
+        /* And the FAQ and the Bibliography list, the same day, the same way
            (plan 260929c stages 2 and 3). */
         mode === "faq" ||
         /* And Citations and Debate the same day (plan 260929c stages 3 and

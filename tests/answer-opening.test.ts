@@ -1,7 +1,7 @@
 /**
  * **How an answer begins, in plain words** — `answerOpening` in
- * src/answer-opening.ts. It is the one line a chat's mark shows under a Debate
- * claim, a Glossary entry and a Citations row, and the
+ * src/answer-opening.ts. It is the one line a chat's mark shows under a Reception
+ * claim, a Glossary entry and a Bibliography row, and the
  * collapsed floating chat's second line.
  *
  * The defect these were written against (queue item `qi-ezpyknnv`): that line
