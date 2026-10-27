@@ -8,7 +8,9 @@
  * its own page — the 40 most-cited citing works, with `abstract_inverted_index`
  * — and **reuses everything else**: the identity confirmation (the DOI's record
  * must carry the article's title and an author, or for an arXiv paper at its own
- * arXiv address two of its authors; or one title-search work, which may be
+ * arXiv address its bounded author list agrees four-in-five, checked against
+ * arXiv's own record when the article's facts are stale (plan 261027c); or one
+ * title-search work, which may be
  * twin records asked about together, `cites:W1|W2`: plan 261025h, decision 2),
  * the shared polite limiter, and the citers' text parser. Nothing is cached:
  * Situate runs on a press, a few times a day at most.

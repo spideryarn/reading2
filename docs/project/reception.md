@@ -447,10 +447,20 @@ honestly finds nothing.
   article's whole title and one of its authors, as imported (never a reader's rename). The check
   runs on a fresh answer, on a cache hit and on a stale fallback alike, so a second article carrying
   the same DOI by mistake gets nothing. **One exception, since 2026-10-25**: for an arXiv paper
-  read from its own arxiv.org address, whose DOI that address names, two of its structured authors
-  matched one-to-one stand in for the title. OpenAlex had given *Consciousness in AI*'s record a
+  read from its own arxiv.org address, whose DOI that address names, its author list stands in for
+  the title — at least two matched one to one, and four in five of the longer list since
+  2026-10-27, so the same team's other paper does not pass. OpenAlex had given *Consciousness in AI*'s record a
   merged Zenodo deposit's title, and arXiv papers are retitled between versions
   ([261025a](../investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md)).
+  **And when the article's own facts are stale, arXiv's stand in**, since 2026-10-27
+  ([261027c](../plans/261027c-cited-by-confirms-a-doi-against-arxiv-own-record.md), report
+  spya-ufn2xj): for that same arXiv DOI, once the article's own title and authors fail, the same
+  check is run against arXiv's own record of the paper (DataCite, through `lookupWork`: cached and
+  free). An import from before an extraction fix can carry a wrong title and no authors. With the
+  two fixes below, production went from 21 to 28 of 28 confirmed. The address alone is not enough: OpenAlex files
+  BERT's arXiv DOI under an unrelated paper, which arXiv's record of BERT refuses. A name's
+  footnote marks (`Webb1,*`) and a title's dash (`--` for `—`) are punctuation, and the record's
+  last author is kept within the 20, because a byline often names the senior author.
 - **Every outcome has its own sentence** (`CitersResult` in `src/types.ts`, the words in
   `src/messages.ts`): no DOI to ask with, no record a title search could be sure of, not in
   OpenAlex, could not be confirmed, could not be

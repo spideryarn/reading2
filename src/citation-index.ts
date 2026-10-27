@@ -10,6 +10,7 @@
  *   else ask OpenAlex, each request in its own polite turn:
  *     1. works/doi:<doi>              404 ► not-indexed (remembered)
  *        its title and an author must be the article's, with the bounded arXiv exception below,
+ *        or — for the arXiv DOI the address names — arXiv's own record's (`confirms`),
  *        else ► unconfirmed (nothing stored)
  *     2. works?filter=cites:<W id>    most cited first, one page of 100
  *        too large ► once more with 25 ► too-large
@@ -61,7 +62,8 @@
  * hit and a stale fallback are checked exactly as a fresh answer is. Without
  * that, a second article carrying the DOI by mistake would be handed the first
  * one's citers. **One exception, for the arXiv DOI named by the article's own
- * arXiv address**: two distinct structured author matches stand in for the title,
+ * arXiv address**: the structured author lists must agree (at least two people
+ * and four in five of the longer bounded list) to stand in for the title,
  * because arXiv retitles between versions and OpenAlex has given one arXiv
  * record a merged deposit's title (`isThisArticle`).
  *
@@ -91,13 +93,16 @@
 
 import { registryAuthorIsOurs, registryIsThisArticle } from "./article-registry.js";
 import {
+  type LookupResult,
   type ServiceLimiter,
   type WorkAuthor,
   type WorkId,
+  type WorkRecord,
   coolAfter,
   doiFor,
   inServiceTurn,
   list,
+  lookupWork,
   parseWorkId,
   plainRegistryText,
   plausibleYear,
@@ -177,10 +182,16 @@ function titleKeyOf(target: Pick<CitedTarget, "openalexId" | "alsoHeldAs">): Bas
 /** The prefix of every DOI arXiv mints, as `parseWorkId` writes it: lower case. */
 const ARXIV_DOI = "doi:10.48550/arxiv.";
 
+/** The arXiv paper the article's own arxiv.org address names, `arxiv:<id>` — or null. */
+function arxivAtAddress(article: ArticleIdentity): WorkId | null {
+  const named = article.url ? parseWorkId(article.url) : null;
+  return named?.startsWith("arxiv:") ? named : null;
+}
+
 /** The arXiv DOI independently named by the article's own arxiv.org address. */
 function arxivDoiAtAddress(article: ArticleIdentity): WorkId | null {
-  const named = article.url ? parseWorkId(article.url) : null;
-  return named?.startsWith("arxiv:") ? parseWorkId(doiFor(named)) : null;
+  const named = arxivAtAddress(article);
+  return named === null ? null : parseWorkId(doiFor(named));
 }
 
 /**
@@ -256,6 +267,8 @@ export interface CitersDeps {
   fetchJson?: (url: string) => Promise<unknown>;
   sleep?: (ms: number) => Promise<void>;
   log?: Log;
+  /** arXiv's own registry record, for `confirms`. src/bibliographic.ts's unless a test hands one in. */
+  lookupWork?: (id: WorkId) => Promise<LookupResult>;
 }
 
 /* --------------------------------------------------------- the addresses -- */
@@ -335,11 +348,47 @@ function authorsOf(value: unknown): { names: string[]; count: number } {
   const all = list(value);
   const names: string[] = [];
   for (const raw of all) {
-    const name = plainRegistryText(record(record(raw)?.author)?.display_name, MAX_NAME);
+    const name = nameOf(raw);
     if (name !== null) names.push(name);
     if (names.length === MAX_AUTHORS) break;
   }
   return { names, count: Math.max(all.length, names.length) };
+}
+
+function nameOf(authorship: unknown): string | null {
+  return plainRegistryText(record(record(authorship)?.author)?.display_name, MAX_NAME);
+}
+
+/**
+ * **The first 19 names and the last**, within the 20 that
+ * `citation_index_lookups_shape` lets a target keep. The last is conventionally
+ * the senior author and often who a page's byline names: Narratives' Uri Hasson
+ * is the 25th of 25 (plan 261027c). Any list compared with a target's is cut
+ * the same way, so the two cover the same people.
+ */
+function firstAndLast<T>(names: readonly T[]): T[] {
+  const last = names[names.length - 1];
+  return names.length <= MAX_AUTHORS || last === undefined ? [...names] : [...names.slice(0, MAX_AUTHORS - 1), last];
+}
+
+/**
+ * A work's authors to check against, for a DOI's record and a title search's
+ * alike. Walk the whole list to learn its actual last valid name, but retain at
+ * most 20 while doing so: physics records can name thousands. A citer's list
+ * is for display and keeps its first 20.
+ */
+function targetAuthorsOf(value: unknown): string[] {
+  const first: string[] = [];
+  let last: string | null = null;
+  let count = 0;
+  for (const raw of list(value)) {
+    const name = nameOf(raw);
+    if (name === null) continue;
+    count++;
+    if (first.length < MAX_AUTHORS) first.push(name);
+    last = name;
+  }
+  return count <= MAX_AUTHORS || last === null ? first : [...first.slice(0, MAX_AUTHORS - 1), last];
 }
 
 function count(value: unknown): number | null {
@@ -372,7 +421,7 @@ export function parseOpenAlexWork(json: unknown): CitedTarget | null {
   return {
     openalexId,
     title: plainRegistryText(work.title),
-    authors: authorsOf(work.authorships).names,
+    authors: targetAuthorsOf(work.authorships),
     ...(keyword !== undefined ? { keyword } : {}),
   };
 }
@@ -460,8 +509,8 @@ function isThisArticle(article: ArticleIdentity, target: CitedTarget): target is
   if (registryIsThisArticle(article.title, target.title)) {
     return registryAuthorIsOurs(article, openAlexAuthors(target.authors));
   }
-  /* **An arXiv DOI's record may carry another title** — two distinct structured
-     author matches stand in for it, but only when the article's own arXiv address
+  /* **An arXiv DOI's record may carry another title** — its author list, agreeing
+     with ours (`authorListsAgree`), stands in for it, but only when the article's own arXiv address
      independently names that DOI. OpenAlex merged a stranger's deposit into
      arXiv 2308.08708 and took its title while keeping the arXiv paper's authors
      and 196 real citers (investigation 261025a). Binding the exception to the
@@ -471,7 +520,49 @@ function isThisArticle(article: ArticleIdentity, target: CitedTarget): target is
   const id = citersIdOf(article);
   return id?.startsWith(ARXIV_DOI) === true &&
     arxivDoiAtAddress(article) === id &&
-    twoStructuredAuthorsAgree(article, target.authors);
+    authorListsAgree(article, target.authors);
+}
+
+/**
+ * **Whether the record is this article's: by the article's own facts, or else
+ * by arXiv's own record of the paper its address names** (plan 261027c, report
+ * spya-ufn2xj). An article's title and authors can be stale — Butlin et al. was
+ * imported as `1Indicator Properties` with no authors, before 261017a — and
+ * then the arXiv DOI its own arxiv.org address names is asked of the registry
+ * (`lookupWork`, DataCite: cached, polite, free), and the same `isThisArticle`
+ * is run with arXiv's title and structured authors as the identity. The bar
+ * does not move; only whose facts meet it. The address alone is not evidence
+ * enough: OpenAlex holds BERT's arXiv DOI under an unrelated 2025 paper, which
+ * arXiv's record of BERT refuses. Not for a DOI the article merely carries,
+ * which can be a cited work's, nor an arXiv DOI the address does not name.
+ *
+ * **Three answers, not two** (GPT Sol on plan 261027c): a registry that cannot
+ * be reached is no evidence either way, so it is `unavailable`, with its Try
+ * again, never `refused`.
+ */
+async function confirms(article: ArticleIdentity, target: CitedTarget, d: Resolved): Promise<Confirmation> {
+  if (isThisArticle(article, target)) return { kind: "confirmed", target };
+  const arxiv = arxivAtAddress(article);
+  const id = citersIdOf(article);
+  if (arxiv === null || id === null || arxivDoiAtAddress(article) !== id) return { kind: "refused" };
+  const looked = await d.lookupWork(arxiv);
+  const answer: Confirmation =
+    looked.kind === "unavailable" ? { kind: "unavailable" }
+    : looked.kind === "found" && isThisArticle(arxivIdentity(looked.record, arxiv), target) ? { kind: "confirmed", target }
+    : { kind: "refused" };
+  d.log.info({ id, outcome: answer.kind, registry: looked.kind }, "citation index arXiv record check");
+  return answer;
+}
+
+type Confirmation = { kind: "confirmed"; target: Confirmed } | { kind: "refused" | "unavailable" };
+
+/** arXiv's registry record as the identity `isThisArticle` checks: its title, its authors as structured names, its address. */
+function arxivIdentity(work: WorkRecord, arxiv: WorkId): ArticleIdentity {
+  return {
+    title: work.title,
+    authors: work.authors.map((a) => ({ name: [a.given, a.family].filter((part) => part).join(" "), affiliations: [] })),
+    url: `https://arxiv.org/abs/${arxiv.slice("arxiv:".length)}`,
+  };
 }
 
 /** The article's year: `publishedYear`, or the year of `publishedAt` — or undefined. */
@@ -507,17 +598,27 @@ function distinctNames(names: readonly string[]): string[] {
   return distinct;
 }
 
+/** With no title to agree, the share of the longer author list that must be matched one to one. */
+const AUTHOR_LISTS_AGREE = 0.8;
+
 /**
- * Whether two distinct OpenAlex authors match two distinct structured article
- * authors. The free-text byline deliberately cannot supply this evidence:
- * `registryAuthorIsOurs` scans the whole string, so `J. Smith Jones` can match
- * both John Smith and Jane Jones, and adjacent authors can be recombined across
- * their boundary. A title can tolerate that loose corroboration; no-title
- * confirmation cannot.
+ * **Whether the two author lists are the same list**: at least two distinct
+ * OpenAlex authors matched one to one with distinct structured article authors,
+ * and those at least four in five of the longer list, each cut to the same 20
+ * (`firstAndLast`). Two shared names alone would let a team's other paper
+ * through, whose title is no help here (GPT Sol on plan 261027c). The free-text
+ * byline deliberately cannot supply this evidence: `registryAuthorIsOurs` scans
+ * the whole string, so `J. Smith Jones` can match both John Smith and Jane
+ * Jones, and adjacent authors can be recombined across their boundary. A title
+ * can tolerate that loose corroboration; no-title confirmation cannot.
  */
-function twoStructuredAuthorsAgree(article: ArticleIdentity, targetNames: readonly string[]): boolean {
-  const ours = distinctNames((article.authors ?? []).map((author) => author.name));
-  return matchedAuthors(ours, distinctNames(targetNames)) >= 2;
+function authorListsAgree(article: ArticleIdentity, targetNames: readonly string[]): boolean {
+  /* Deduplicate before the cut. Otherwise repeated spellings among the first
+     nineteen can hide later people and lower the four-in-five denominator. */
+  const ours = firstAndLast(distinctNames((article.authors ?? []).map((author) => author.name)));
+  const theirs = distinctNames(targetNames);
+  const matched = matchedAuthors(ours, theirs);
+  return matched >= 2 && matched >= AUTHOR_LISTS_AGREE * Math.max(ours.length, theirs.length);
 }
 
 /**
@@ -647,7 +748,7 @@ export function titleMatchOf(article: ArticleIdentity, json: unknown): TitleMatc
     const title = plainRegistryText(work?.display_name);
     if (work === null || openalexId === null || title === null || passing.has(openalexId)) continue;
     if (!registryIsThisArticle(article.title, title)) continue;
-    const authors = authorsOf(work.authorships).names;
+    const authors = targetAuthorsOf(work.authorships);
     const agreeing = agreeingAuthors(article, authors);
     const theirYear = plausibleYear(work.publication_year);
     const yearAgrees = year !== undefined && theirYear !== undefined && Math.abs(year - theirYear) <= 1;
@@ -686,6 +787,7 @@ interface Resolved {
   fetchJson: (url: string) => Promise<unknown>;
   sleep: (ms: number) => Promise<void>;
   log: Log;
+  lookupWork: (id: WorkId) => Promise<LookupResult>;
 }
 
 async function resolveDeps(deps: CitersDeps): Promise<Resolved> {
@@ -698,6 +800,23 @@ async function resolveDeps(deps: CitersDeps): Promise<Resolved> {
     fetchJson: deps.fetchJson ?? ((url) => fetchBibliographicJson(url, { registryKey: "openalex" })),
     sleep: deps.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms))),
     log: deps.log ?? log("store").child({ lookup: "citation-index" }),
+    lookupWork: once(deps.lookupWork ?? ((id) => lookupWork(id))),
+  };
+}
+
+/**
+ * **Asked once per request**: `resolveDeps` runs once per `citersOf` or
+ * `confirmedWorkOf`, and a fresh list, its stored answer and its topic row are
+ * each confirmed, so arXiv's record would otherwise be read up to three times.
+ */
+function once(ask: (id: WorkId) => Promise<LookupResult>): (id: WorkId) => Promise<LookupResult> {
+  const asked = new Map<WorkId, Promise<LookupResult>>();
+  return (id) => {
+    const known = asked.get(id);
+    if (known !== undefined) return known;
+    const answer = ask(id);
+    asked.set(id, answer);
+    return answer;
   };
 }
 
@@ -756,7 +875,9 @@ async function askWork(id: WorkId, article: ArticleIdentity, d: Resolved): Promi
   if (target === null) return { kind: "unavailable" };
   /* Before the second request, so a DOI that is not this article's costs
      OpenAlex nothing more and can never have a list fetched for it. */
-  return isThisArticle(article, target) ? { kind: "confirmed", target } : { kind: "unconfirmed" };
+  const confirmed = await confirms(article, target, d);
+  if (confirmed.kind === "confirmed") return confirmed;
+  return { kind: confirmed.kind === "refused" ? "unconfirmed" : "unavailable" };
 }
 
 /**
@@ -845,9 +966,17 @@ type Via = Extract<CitersResult, { kind: "found" }>["via"];
 type Found = Extract<CitersResult, { kind: "found" }>;
 
 /** A remembered answer, as this article may see it. */
-function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: string, via: Via): CitersResult {
+async function answerFor(
+  article: ArticleIdentity,
+  stored: FetchedCiters,
+  fetchedAt: string,
+  via: Via,
+  d: Resolved,
+): Promise<CitersResult> {
   if (stored.kind === "not-indexed") return { kind: "not-indexed" };
-  if (!isThisArticle(article, stored.target)) return { kind: "unconfirmed" };
+  const confirmed = await confirms(article, stored.target, d);
+  if (confirmed.kind === "refused") return { kind: "unconfirmed" };
+  if (confirmed.kind === "unavailable") return { kind: "unavailable" };
   const { openalexId, title, alsoHeldAs } = stored.target;
   return {
     kind: "found",
@@ -876,12 +1005,12 @@ interface Listed {
 
 /** Steps 1–2: the cached list when fresh, else OpenAlex's, else an older list of this article's. */
 async function theList(route: Route, article: ArticleIdentity, d: Resolved): Promise<Listed> {
-  const of = (stored: FetchedCiters, fetchedAt: string, from: Listed["from"]): Listed => {
-    const result = answerFor(article, stored, fetchedAt, route.via);
+  const of = async (stored: FetchedCiters, fetchedAt: string, from: Listed["from"]): Promise<Listed> => {
+    const result = await answerFor(article, stored, fetchedAt, route.via, d);
     return { result, from, target: result.kind === "found" && stored.kind === "found" ? stored.target : null };
   };
   const stored = await d.store.read(route.key, CITERS_FRESH_MS);
-  if (stored?.fresh) return of(stored, stored.fetchedAt, "cache");
+  if (stored?.fresh) return await of(stored, stored.fetchedAt, "cache");
 
   let asked: Asked;
   if (route.via === "title") {
@@ -892,13 +1021,13 @@ async function theList(route: Route, article: ArticleIdentity, d: Resolved): Pro
   }
   if (asked.kind === "found" || asked.kind === "not-indexed") {
     const fetchedAt = await d.store.write(route.key, asked);
-    return of(asked, fetchedAt, "openalex");
+    return await of(asked, fetchedAt, "openalex");
   }
   /* OpenAlex could not be read, and an older list exists: serve it, with its
      own date, if it is still this article's. Not after `unconfirmed` — that
      is OpenAlex answering, and saying something else. */
   if (asked.kind !== "unconfirmed" && stored?.kind === "found") {
-    const stale = of(stored, stored.fetchedAt, "stale");
+    const stale = await of(stored, stored.fetchedAt, "stale");
     if (stale.result.kind === "found") return stale;
   }
   return { result: { kind: asked.kind }, from: "openalex", target: null };
@@ -941,16 +1070,16 @@ async function theTopicList(
   d: Resolved,
 ): Promise<TopicListed | null> {
   const topicKey: CitersKey = `${key}#topic`;
-  const of = (stored: FetchedCiters, fetchedAt: string, from: Listed["from"]): TopicListed | null => {
-    const result = answerFor(article, stored, fetchedAt, via);
+  const of = async (stored: FetchedCiters, fetchedAt: string, from: Listed["from"]): Promise<TopicListed | null> => {
+    const result = await answerFor(article, stored, fetchedAt, via, d);
     return result.kind === "found" ? { result, from } : null;
   };
   try {
     const same = await storedTopic(key, keyword, d);
-    if (same?.fresh) return of(same, same.fetchedAt, "cache");
+    if (same?.fresh) return await of(same, same.fetchedAt, "cache");
     const asked = await askCiters(topicKey, target, d, keyword);
-    if (asked.kind === "found") return of(asked, await d.store.write(topicKey, asked), "openalex");
-    return same !== null ? of(same, same.fetchedAt, "stale") : null;
+    if (asked.kind === "found") return await of(asked, await d.store.write(topicKey, asked), "openalex");
+    return same !== null ? await of(same, same.fetchedAt, "stale") : null;
   } catch {
     /* The plain list is answered. Nothing of the error is logged: a fetch
        seam's message can carry its address, which carries the keyword. */
