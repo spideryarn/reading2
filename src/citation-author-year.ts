@@ -50,16 +50,19 @@ export interface AuthorYearCite {
 }
 
 const PARTICLE = String.raw`(?:(?:van|von|der|den|de|du|da|di|del|della|la|le|ten|ter)\s+)`;
-/** A capitalised word, letters, apostrophes and hyphens inside: `LeCun`, `O'Brien`, `Grill-Spielberg`. */
-const WORD = String.raw`\p{Lu}[\p{L}'’]*(?:-\p{L}[\p{L}'’]*)*`;
+/** A capitalised or uncased word, with apostrophes and hyphens inside: `LeCun`, `李`, `O'Brien`. */
+const WORD = String.raw`(?:\p{Lu}|\p{Lo})[\p{L}'’]*(?:-\p{L}[\p{L}'’]*)*`;
 const SURNAME = String.raw`${PARTICLE}*${WORD}`;
 const AND = String.raw`(?:,?\s+(?:and|&)\s+|\s*&\s*)`;
-const NAMES = String.raw`${SURNAME}(?:\s+et\s+al\.?|(?:,\s+${SURNAME})*${AND}${SURNAME})?`;
+/* In-text styles name only a handful of authors before switching to `et al.`.
+   The bound also stops a malformed comma-list making the regexp retry every
+   suffix of an arbitrarily long run. */
+const NAMES = String.raw`${SURNAME}(?:\s+et\s+al\.?|(?:,\s+${SURNAME}){0,8}${AND}${SURNAME})?`;
 const YEAR = String.raw`(?:1[5-9]\d\d|20\d\d)[a-z]?`;
 const YEARS = String.raw`${YEAR}(?:,\s*${YEAR})*`;
 
-/** Up to four lowercase words between the bracket and the names: `see for example`, `e.g. as in`. */
-const LEAD = String.raw`(?:[\p{Ll}][\p{Ll}.,]*\s+){0,4}`;
+/** A citation signal between the bracket and names: `see for example`, `e.g.,`, `see also`, `but see`, `for recent reviews, see`. A fixed list, not any lowercase words, which let `(released for Linux, 2020)` through (GPT Sol's code review). */
+const LEAD = String.raw`(?:(?:but\s+)?(?:see(?:\s+also|\s+for\s+example|\s+e\.?g\.?,?)?|cf\.?|e\.?g\.?,?(?:\s+as\s+in)?|i\.?e\.?,?|as\s+in|for\s+example,?|for\s+(?:a\s+|recent\s+|the\s+)?reviews?,?\s+see|for\s+others,?\s+see)\s+)?`;
 const PARENTHETICAL = new RegExp(
   String.raw`(?<=(?:\(|;\s*)${LEAD})(${NAMES}),?\s+(${YEARS})(?=\s*[);,])`,
   "gu",
@@ -73,7 +76,7 @@ const NARRATIVE = new RegExp(String.raw`(${NAMES})\s+\((${YEARS})(?=\s*[);,])`, 
  * name, `Lucio`, as the author. The entry goes on after the year — its title —
  * which a sentence ending `… Levine (2021).` does not.
  */
-const ENTRY_LINE = new RegExp(String.raw`^\p{Lu}[^()]{0,200}\(${YEAR}\)[.:]\s+\S`, "u");
+const ENTRY_LINE = new RegExp(String.raw`^(?:\p{Lu}|\p{Lo})[^()]{0,200}\(${YEAR}\)[.:]\s+\S`, "u");
 
 /**
  * The lowercase word before a lone narrative name that makes it the end of a
@@ -91,7 +94,8 @@ const NOT_A_NAME = new Set(
     "version", "january", "february", "march", "april", "may", "june", "july", "august",
     "september", "october", "november", "december", "jan", "feb", "mar", "apr", "jun", "jul", "aug",
     "sep", "sept", "oct", "nov", "dec", "spring", "summer", "autumn", "fall", "winter", "this",
-    "that", "these", "those", "it", "we", "our",
+    "that", "these", "those", "it", "we", "our", "windows", "war", "nature", "science",
+    "cell", "lancet",
   ],
 );
 
@@ -127,7 +131,6 @@ export function citeKey(cite: Pick<AuthorYearCite, "surnames" | "year">): string
 
 /** Every author–year citation in `text`, in order; one per year when an item names several. */
 export function authorYearCites(text: string): AuthorYearCite[] {
-  if (ENTRY_LINE.test(text)) return [];
   const found = new Map<number, AuthorYearCite[]>();
   for (const pattern of [PARENTHETICAL, NARRATIVE]) {
     for (const m of text.matchAll(pattern)) {
@@ -137,8 +140,9 @@ export function authorYearCites(text: string): AuthorYearCite[] {
       const { surnames, etAl } = surnamesOf(names);
       const first = surnames[0];
       if (first === undefined || NOT_A_NAME.has(fold(first.split(/\s+/u)[0]!))) continue;
-      /* A surname has a lowercase letter: not `IV` of a manual's edition, not `OECD`. */
-      if (!surnames.every((s) => /\p{Ll}/u.test(s))) continue;
+      /* A surname in a cased script has a lowercase letter: not `IV` of a
+         manual's edition, not `OECD`. Scripts without case (`李`) still count. */
+      if (!surnames.every((s) => /\p{Ll}/u.test(s) || !/[\p{Lu}\p{Lt}]/u.test(s))) continue;
       const lone = surnames.length === 1 && !etAl;
       if (pattern === NARRATIVE && lone && BEFORE_A_TITLE.test(text.slice(0, start))) continue;
       /* A narrative cite's own bracket closes it: `Levine (2021)`, not `Levine (2021`. */
@@ -158,5 +162,9 @@ export function authorYearCites(text: string): AuthorYearCite[] {
       );
     }
   }
+  /* A stray reference-entry block normally contains one author-year shape.
+     Do not let that heuristic discard a prose block merely because its first
+     sentence starts `Smith (2020).`: two separate hits are prose evidence. */
+  if (ENTRY_LINE.test(text) && found.size <= 1) return [];
   return [...found.entries()].sort(([a], [b]) => a - b).flatMap(([, cites]) => cites);
 }

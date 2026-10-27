@@ -142,6 +142,55 @@ describe("a work cited in the text that the model did not list", () => {
     expect(rows.filter((r) => r.listedBy === "text").map((r) => r.title)).toEqual(["Yu et al. (2020)", "Hafner et al. (2020)"]);
   });
 
+  it("is listed when another row's compound footnote happens to name it", () => {
+    const text = "Advances came from robotics (Chua et al., 2018; Yu et al., 2020; Hafner et al., 2018).";
+    const footnote = "Chua et al. (2018), Deep reinforcement learning; Yu et al. (2020), Meta-learning.";
+    const { rows } = build(
+      [
+        {
+          ...row("Deep RL in a handful of trials", "Chua", "2018", "spya-p00001", "Chua et al., 2018"),
+          mentions: undefined,
+          reference: { block: "spya-n00001", quote: footnote },
+        },
+      ],
+      [
+        block("spya-p00001", text),
+        block("spya-n00001", footnote, { role: "footnote", noteId: "n1" }),
+      ],
+    );
+    expect(rows.filter((r) => r.listedBy === "text").map((r) => r.title)).toEqual([
+      "Yu et al. (2020)",
+      "Hafner et al. (2018)",
+    ]);
+  });
+
+  it("is listed when it is only the co-author of another row's entry", () => {
+    const text = "Results followed (Chua, 2020; Yu, 2020; Hafner, 2018).";
+    const entry = "Chua, C. and Yu, Y. (2020). Work A.";
+    const { rows } = build(
+      [
+        {
+          ...row("Work A", "Chua", "2020", "spya-r00001", entry),
+          mentions: undefined,
+          reference: { block: "spya-r00001", quote: entry },
+        },
+      ],
+      [block("spya-p00001", text), block("spya-r00001", entry, { role: "reference" })],
+    );
+    expect(rows.filter((r) => r.listedBy === "text").map((r) => r.title)).toEqual([
+      "Yu (2020)",
+      "Hafner (2018)",
+    ]);
+  });
+
+  it("does not turn obvious titles, products, events or journal names into rows", () => {
+    const text =
+      "Prior work (Smith, 2020; Jones, 2021; Brown, 2022) set the context. " +
+      "Windows (2000) followed World War (1914, 1918), while the journal reported its figures (Nature, 2020).";
+    const { rows } = build([], [block("spya-p00001", text)]);
+    expect(rows.map((r) => r.title)).toEqual(["Smith (2020)", "Jones (2021)", "Brown (2022)"]);
+  });
+
   it("is not listed beside a model row whose year carries a letter the text leaves off", () => {
     const { rows } = build(
       [row("A Tutorial on Energy-Based Learning", "LeCun", "2006a", "spya-p00001", "a tutorial")],
@@ -180,6 +229,31 @@ describe("a work that moves between code's row and the model's keeps its id", ()
     expect(first.citations.map((c) => c.title)).toEqual(["Ha and Schmidhuber (2018a)", "Ha and Schmidhuber (2018b)"]);
     const second = build([row("World Models", "Ha, Schmidhuber", "2018", "spya-p00001", "Models")], two, false, first).bibliography;
     expect(first.citations.map((c) => c.id)).not.toContain(id(second, "World Models"));
+  });
+
+  it("does not move a suffixed year's id to a different suffixed work", () => {
+    const firstBlocks = [block("spya-p00001", "Earlier work (Smith et al., 2020a).")];
+    const first = build([], firstBlocks).bibliography;
+    const oldA = id(first, "Smith et al. (2020a)");
+    const secondBlocks = [block("spya-p00001", "Earlier works (Smith, 2020a; Smith, 2020b).")];
+    const second = build(
+      [row("Work B", "Smith", "2020b", "spya-p00001", "Smith, 2020b")],
+      secondBlocks,
+      false,
+      first,
+    ).bibliography;
+    expect(id(second, "Work B")).not.toBe(oldA);
+  });
+
+  it("uses the verified citation before an author-year-shaped model title", () => {
+    const blocks = [block("spya-p00001", "Prior work (Smith, 2020; Jones, 2021; Brown, 2022).")];
+    const first = build(
+      [{ ...row("Roberts (1999)", "", "", "spya-p00001", "Smith, 2020"), authors: undefined, year: undefined }],
+      blocks,
+    ).bibliography;
+    const old = id(first, "Roberts (1999)");
+    const second = build([], blocks, false, first).bibliography;
+    expect(id(second, "Smith (2020)")).toBe(old);
   });
 });
 

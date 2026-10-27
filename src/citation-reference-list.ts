@@ -104,7 +104,9 @@ function looksLikeContents(list: NumberedReferenceList): boolean {
  */
 function mostlyDated(list: NumberedReferenceList): boolean {
   let dated = 0;
-  for (const text of list.entries.values()) if (/\b(?:1[5-9]\d\d|20\d\d)[a-z]?\b/.test(text)) dated++;
+  for (const text of list.entries.values()) {
+    if (/\b(?:1[5-9]\d\d|20\d\d)[a-z]?\b|[‘’']\d{2}\b/.test(text)) dated++;
+  }
   return dated * 2 >= list.entries.size;
 }
 

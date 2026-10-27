@@ -79,6 +79,10 @@ describe("authorYearCites", () => {
     expect(authorYearCites(text)[0]!.surnames).toEqual(["van den Oord"]);
   });
 
+  it("reads a surname from a script without letter case", () => {
+    expect(keys("Earlier work reached the same result (李, 2020).")).toEqual(["李 2020"]);
+  });
+
   it("reads three authors with a serial comma", () => {
     expect(authorYearCites("(Porter, Vollrath, and Shao, 2019)")[0]).toMatchObject({
       surnames: ["Porter", "Vollrath", "Shao"],
@@ -92,9 +96,17 @@ describe("authorYearCites", () => {
       "James, Peter; Thorpe, Nick (1995). Ancient Inventions. Ballantine.",
       "Ptolemy (1998). Ptolemy's Almagest. Translated by Toomer, G. J.",
       "Russo, Lucio (2004). The Forgotten Revolution: How Science Was Born in 300 BC.",
+      "李 (2020). 一项研究的标题。",
     ]) {
       expect(keys(text), text).toEqual([]);
     }
+  });
+
+  it("does not discard a prose block merely because its first sentence starts like an entry", () => {
+    expect(keys("Smith (2020). Jones (2021) gives the contrasting account.")).toEqual([
+      "smith 2020",
+      "jones 2021",
+    ]);
   });
 
   it("does not take a title's last word for an author", () => {
@@ -120,6 +132,18 @@ describe("authorYearCites", () => {
       expect(keys(text), text).toEqual([]);
     }
   });
+
+  it("does not treat arbitrary lowercase prose inside parentheses as a citation lead-in", () => {
+    expect(keys("The software was (released for Linux, 2020), and the paper was (published in Nature, 2021)."))
+      .toEqual([]);
+  });
+
+  it("does not rescan every suffix of a long malformed author list", () => {
+    const hostile = `(${"Smith, ".repeat(7_200)})`;
+    const started = performance.now();
+    expect(authorYearCites(hostile)).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(750);
+  });
 });
 
 /* Wikipedia's synesthesia article (plan 261027b's measurement): a title
@@ -138,5 +162,17 @@ describe("the form of each citation", () => {
       "parenthetical",
       "narrative",
     ]);
+  });
+});
+
+/* After the code review narrowed the lead-in to citation signals: the signals
+   NIHMS 536461 and arXiv 2308.08708 actually use (plan 261027b). */
+describe("the citation signals before the names", () => {
+  it("reads each one", () => {
+    expect(
+      keys(
+        "a (e.g., Miller & Cohen, 2001) b (see also Banich, 2009) c (see e.g. Block, 1995) d (but see Tye, 1995) e (for recent reviews, see Seth, 2022) f (i.e., Lamme, 2006) g (cf. Baars, 1988)",
+      ),
+    ).toEqual(["miller 2001", "banich 2009", "block 1995", "tye 1995", "seth 2022", "lamme 2006", "baars 1988"]);
   });
 });

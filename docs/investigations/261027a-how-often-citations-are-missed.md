@@ -80,12 +80,13 @@ local article's stored list:
 | Article | Model's rows | Author–year works in the body | Rows code adds |
 |---|---|---|---|
 | LeCun (production) | 23 | 103 | 78 |
-| arXiv 2308.08708 | 66 | 194 | 136 |
+| arXiv 2308.08708 | 66 | 197 | 140 |
 | NIHMS 536461 | 76 | 183 | 115 |
 | *Antikythera mechanism* (Wikipedia) | 79 | 5 | 2 |
 | *Dropout* (JMLR) | 35 | 30 | 1 |
 | *The Scaling Hypothesis* | 58 | 6 | 1 |
-| the other fourteen | — | 0–11 | 0 |
+| *The Mythology of Conscious AI* | 2 | 1 | 1 |
+| the other thirteen | — | 0–11 | 0 |
 
 **Against the hand count on LeCun, code fills 79 of the 82 missed works and adds nothing that is
 not a real citation.** The three it leaves out are left out by design:

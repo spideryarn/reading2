@@ -71,7 +71,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
 import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import { firstAuthor, scholarUrl } from "./scholar-search.js";
-import { type AuthorYearCite, authorYearCites, citeKey, fold, surnameKey } from "./citation-author-year.js";
+import { type AuthorYearCite, authorYearCites, citeKey, surnameKey } from "./citation-author-year.js";
 import {
   type Block,
   type BlockId,
@@ -1722,9 +1722,9 @@ function authorYearOf(
 
 /**
  * **The id hand-over key between a code row and the model's row for one
- * work** — `levine 2021`, base year only — so a work that was a code row on
- * one run and the model's on the next keeps its id, and what is keyed on it: a
- * chat, a note (GPT Sol's plan review, 5). `from` is which side the row is on,
+ * work** — `levine 2021`, including a letter suffix when present — so a work
+ * that was a code row on one run and the model's on the next keeps its id, and
+ * what is keyed on it: a chat, a note (GPT Sol's plan review, 5). `from` is which side the row is on,
  * so the key only ever crosses between a code row and a model row; two model
  * rows go on inheriting by their own keys, as before. Used only where it is
  * unique on both sides.
@@ -1735,18 +1735,24 @@ export function authorYearAlias(
 ): string | null {
   /* The model's own words when the guard took the author out (`Draft.said`);
      a stored row has none, so then its verified mentions, when every one of
-     them is the same single citation (`Levine, 2021`). */
+     them is the same single citation (`Levine, 2021`). A label-shaped title is
+     last: a verified `Smith, 2020` outranks a mistaken title `Roberts (1999)`. */
   const cited = new Set(draft.mentions.flatMap((m) => authorYearCites(`(${m.quote})`).map((c) => citeKey(c))));
   const [onlyCited] = cited.size === 1 ? [...cited] : [];
   const ay =
-    authorYearOf(draft) ??
+    authorYearOf({
+      title: "",
+      ...(draft.authors === undefined ? {} : { authors: draft.authors }),
+      ...(draft.year === undefined ? {} : { year: draft.year }),
+    }) ??
     (draft.said ? authorYearOf({ ...draft.said, title: "" }) : null) ??
-    (onlyCited ? { surname: onlyCited.split(" ")[0]!, years: yearsOf(onlyCited.split(" ")[1]) } : null);
+    (onlyCited ? { surname: onlyCited.split(" ")[0]!, years: yearsOf(onlyCited.split(" ")[1]) } : null) ??
+    authorYearOf({ title: draft.title });
   const year = ay?.years[0];
-  if (!ay || !ay.surname || !year) return null;
+  if (!ay?.surname || !year) return null;
   /* An old code row is found by a new model row, and an old model row by a new code row. */
   const code = (draft.listedBy === "text") === (from === "old");
-  return `\0citation-author-year:${code ? "code" : "model"}:${ay.surname} ${year.base}`;
+  return `\0citation-author-year:${code ? "code" : "model"}:${ay.surname} ${year.base}${year.letter}`;
 }
 
 /**
@@ -1770,10 +1776,16 @@ function covers(draft: Draft, hit: { block: Block; cite: AuthorYearCite }): bool
   /* Its own entry names them: a row the model gave only a footnote
      `Porter, D. (2005). "Predicting…"` and no authors stands for `Porter (2005)`. */
   if (year && surname) {
-    const named = (text: string) =>
-      yearsOf(text).some((y) => y.base === year.base) &&
-      fold(text).split(/[^\p{L}'’-]+/u).includes(surname);
-    if ([draft.reference?.quote, draft.entry].some((text) => text !== undefined && named(text))) return true;
+    const named = (text: string) => {
+      const withoutNumber = text.replace(/^\s*(?:\[\d{1,3}\]|\d{1,3}[.)])\s*/u, "");
+      const first = /^((?:(?:van|von|der|den|de|du|da|di|del|della|la|le|ten|ter)\s+)*(?:\p{Lu}|\p{Lo})[\p{L}'’]*(?:-\p{L}[\p{L}'’]*)*)/u.exec(withoutNumber)?.[1];
+      return first !== undefined && surnameKey(first) === surname &&
+        yearsOf(text).some((y) => y.base === year.base && (!y.letter || !year.letter || y.letter === year.letter));
+    };
+    /* `entry` has already been proved to belong to this row. A `reference`
+       quote may be a compound footnote naming several works; finding this
+       surname and year somewhere in it does not prove this row is that work. */
+    if (draft.entry !== undefined && named(draft.entry)) return true;
   }
   return draft.mentions.some((m) => {
     if (m.blockId !== hit.block.id) return false;

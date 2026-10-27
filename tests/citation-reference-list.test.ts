@@ -146,6 +146,18 @@ describe("referenceListFrom", () => {
     ).toBeNull();
   });
 
+  it("accepts a real numbered list whose years are abbreviated with apostrophes", () => {
+    const list = referenceListFrom([
+      "References",
+      "[1] Smith, J. A first paper. Publisher, '20.",
+      "[2] Jones, A. A second paper. Publisher, ’21.",
+      "[3] Brown, B. A third paper. Publisher, '19.",
+      "[4] Green, C. A fourth paper. Publisher, ’18.",
+      "[5] White, D. A fifth paper. Publisher, '17.",
+    ]);
+    expect([...list!.entries.keys()]).toEqual([1, 2, 3, 4, 5]);
+  });
+
   it("fails closed on a row-interleaved two-column layer", () => {
     const interleaved = [
       "1. Left, A. (2020) First left-column reference.",

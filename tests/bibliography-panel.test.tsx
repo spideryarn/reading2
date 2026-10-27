@@ -793,7 +793,8 @@ describe("BibliographyPanel", () => {
     expect(INFLUENCE_NOTE).not.toMatch(/dig deeper/i);
     await draw(owner({ bibliography: artefact(WORKS, true) }));
     text = await card();
-    expect(text).toContain(CAPPED_NOTE);
+    /* Four rows, not 80: the note counts what the list holds (plan 261027b). */
+    expect(text).toContain(cappedNote(WORKS.length, 0));
     expect(CAPPED_NOTE).toBe(
       "This piece cites more than 80 works; these are the 80 we judged it leans on most.",
     );
@@ -812,12 +813,19 @@ describe("BibliographyPanel", () => {
     const text = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
     await act(async () => about?.click());
     expect(text).not.toContain(CAPPED_NOTE);
-    expect(text).toContain(cappedNote(1));
-    expect(cappedNote(1)).toBe(
-      "This piece cites more than 80 works. The model listed the 80 we judged it leans on most; 1 more, found in the article's text, is listed by name only.",
+    expect(text).toContain(`The model listed ${WORKS.length} works`);
+    expect(cappedNote(WORKS.length, 1)).toBe(
+      `This piece cites more than 80 works. The model listed ${WORKS.length} works it judged the piece leans on most; 1 more, found in the article's text, is listed by name only.`,
     );
     const fromTextRow = [...host.querySelectorAll(".cite-item")].find((r) => r.textContent?.includes("Levine (2021)"));
     expect(fromTextRow?.querySelector(".cite-from-text")?.textContent).toBe(CITE_FROM_TEXT_LABEL);
+  });
+
+  /* Synesthesia's list said `capped: true` over 44 rows: "these are the 80"
+     was false before any row came from the text (plan 261027b, code review). */
+  it("says how many the model listed when it said capped and listed fewer than 80", () => {
+    expect(cappedNote(80, 0)).toBe(CAPPED_NOTE);
+    expect(cappedNote(44, 0)).toBe("This piece cites more than 80 works; these are the 44 we judged it leans on most.");
   });
 
   it("treats a piece that cites nothing as an answer, with no retry", async () => {

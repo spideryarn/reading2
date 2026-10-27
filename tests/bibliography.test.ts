@@ -214,6 +214,13 @@ describe("an author or year the article never gives is dropped", () => {
     expect(replay.drops.yearUnfound).toBe(0);
     expect(replay.kept[0]?.authors).toBe("Sutton");
   });
+
+  it("the eval does not replay a row code derived from the text as a model row", () => {
+    const cited = block("spya-b00002", "Prior work (Smith, 2020).", { html: "<p>Prior work (Smith, 2020).</p>" });
+    const { rows } = build([], [cited]);
+    expect(rows[0]?.listedBy).toBe("text");
+    expect(replayGuard(rows, [cited], null).kept[0]?.listedBy).toBe("text");
+  });
 });
 
 /* ------------------------------------------------------------------ links */

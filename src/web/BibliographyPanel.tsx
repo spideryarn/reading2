@@ -626,10 +626,17 @@ export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; t
  * 261027b): the list then holds more than the model's 80, so *these are the
  * 80* would be false. GPT Sol's plan review, 3.
  */
-export function cappedNote(fromText: number): string {
-  if (fromText === 0) return CAPPED_NOTE;
+export function cappedNote(modelRows: number, fromText: number): string {
+  /* The model can say `capped` over fewer than 80 rows (Synesthesia: 44), and
+     the verification can drop some, so the count is the rows', not the cap's. */
+  if (fromText === 0) {
+    return modelRows >= MAX_CITATIONS
+      ? CAPPED_NOTE
+      : `This piece cites more than ${MAX_CITATIONS} works; these are the ${modelRows} we judged it leans on most.`;
+  }
   const more = fromText === 1 ? "1 more, found in the article's text, is" : `${fromText} more, found in the article's text, are`;
-  return `This piece cites more than ${MAX_CITATIONS} works. The model listed the ${MAX_CITATIONS} we judged it leans on most; ${more} listed by name only.`;
+  const works = modelRows === 1 ? "1 work" : `${modelRows} works`;
+  return `This piece cites more than ${MAX_CITATIONS} works. The model listed ${works} it judged the piece leans on most; ${more} listed by name only.`;
 }
 
 /**
@@ -1046,7 +1053,10 @@ export function BibliographyPanel({
             visible row relies on it (plan 261011c). */}
         {showListReadNote && <p>{listReadNote}</p>}
         {listWebNote && <p>{CITE_LIST_WEB_NOTES}</p>}
-        {bibliography.capped && <p>{cappedNote(all.filter((w) => w.listedBy === "text").length)}</p>}
+        {bibliography.capped && <p>{cappedNote(
+          all.filter((w) => w.listedBy !== "text").length,
+          all.filter((w) => w.listedBy === "text").length,
+        )}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
         <p>{CITED_BY_NOTE}</p>

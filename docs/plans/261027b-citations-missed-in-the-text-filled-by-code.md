@@ -170,3 +170,36 @@ false fills. The three it leaves are left by design. On the other nineteen local
 between 0 and 136 rows, and a spot check found no false ones.
 [Investigation 261027a](../investigations/261027a-how-often-citations-are-missed.md) has the
 tables, and lists what waits for model calls.
+
+## GPT Sol's code review
+
+On 2026-10-27 the code review (`gpt-5.6-sol`, write-capable) fixed twelve findings, each with a
+test that failed first. The main ones:
+
+- **The parser was too permissive.** Any four lowercase words before the names was replaced by a
+  fixed list of citation signals, which ruled out `(released for Linux, 2020)`. Product, event and
+  journal words are now refused (`Windows`, `War`, `Nature`). Uncased scripts (`李`) are read. A
+  bound on the number of authors stops a 50,000-character malformed run taking 1.6 s.
+- **The entry-line rule threw away whole paragraphs.** It now applies only to a block with at most
+  one hit, so `Smith (2020). Jones (2021) gives…` keeps both citations.
+- **`covers` was too loose.** A compound footnote naming Yu no longer covers `Yu (2020)` for a
+  Chua row. An entry covers a citation only through its first author.
+- **The id hand-over could move between works.** The alias keeps the year's letter, so `2020a`
+  never hands its id to `2020b`. An explicit field outranks a label-shaped title.
+- **`mostlyDated`** accepts years written `'20`.
+- **Situate** no longer counts a code row among the works the piece leans on most.
+- **The capped note** counts the model's rows rather than assuming 80.
+- **The say-less eval** replays only the model's rows.
+
+My follow-ups to the review. The fixed signal list dropped real lead-ins that NIHMS and arXiv
+2308.08708 use (`e.g.,`, `see also`, `but see`, `for recent reviews, see`), so I added them, with a
+test. NIHMS went back to 183 citations read. I also fixed the capped note when there are no code
+rows: it said "these are the 80" over Synesthesia's 44 rows.
+
+Reported, not fixed, and accepted for now:
+
+- `in press` and `n.d.` are not read.
+- A novel proper noun before a year (`Acme (2020)`) is still ambiguous in an author–year article.
+- Two same-surname works from one year share a row, and Sources' tier 4 could hide an unrelated
+  paper by that author and year.
+- A numbered appendix table whose rows mostly carry years would still pass `mostlyDated`.
