@@ -155,6 +155,22 @@ describe("registryAuthorIsOurs", () => {
     expect(registryAuthorIsOurs(levin, [{ family: "Levin", given: "Sarah" }])).toBe(false);
     expect(registryAuthorIsOurs({ byline: "S. Levin" }, [{ family: "Levin", given: "Michael" }])).toBe(false);
   });
+
+  /* Plan 261027c: an arXiv byline glues its affiliation marks to the names.
+     The marks go without erasing a number that is a name of its own. */
+  it("reads glued footnote marks without merging numbered working groups", () => {
+    expect(registryAuthorIsOurs({ byline: "Taylor Webb1,*, Keith J. Holyoak1 , and Hongjing Lu1,2" },
+      [{ family: "Holyoak", given: "Keith J." }])).toBe(true);
+    expect(registryAuthorIsOurs({ byline: "Thomas L. Griffiths1∗, Brenden M. Lake1∗" },
+      [{ family: "Griffiths", given: "Thomas L." }])).toBe(true);
+    expect(registryAuthorIsOurs({ authors: [{ name: "Taylor Webb1", affiliations: [] }] },
+      [{ family: "Webb", given: "Taylor W." }])).toBe(true);
+    /* Another Webb is still not this one. */
+    expect(registryAuthorIsOurs({ byline: "Taylor Webb1,*" }, [{ family: "Webb", given: "Sarah" }])).toBe(false);
+    const ours = { authors: [{ name: "Working Group 1", affiliations: [] }] };
+    expect(registryAuthorIsOurs(ours, [{ family: "Working Group 2" }])).toBe(false);
+    expect(registryAuthorIsOurs(ours, [{ family: "Working Group 1" }])).toBe(true);
+  });
 });
 
 describe("registryIsThisArticle", () => {
@@ -183,6 +199,21 @@ describe("registryIsThisArticle", () => {
     expect(registryIsThisArticle("Learning from (x+y)*z in complex networks", "Learning from x+y*z in complex networks")).toBe(false);
     expect(registryIsThisArticle("Learning from <i>x</i>+y in complex networks", "Learning from x+y in complex networks")).toBe(true);
   });
+
+  /* Plan 261027c: arXiv's spaced `--` is the page's `—`. A single hyphen, spaced
+     or not, is still an operator (GPT Sol's plan review). */
+  it("reads arXiv's spaced double hyphen as the page's dash", () => {
+    const page = "Don’t Claim Benchmark-Oriented Optimization Improves General Coding Capability — Diverse Evaluation Is Required";
+    for (const registry of [
+      "Don't Claim Benchmark-Oriented Optimization Improves General Coding Capability -- Diverse Evaluation Is Required",
+      "Don't Claim Benchmark-Oriented Optimization Improves General Coding Capability – Diverse Evaluation Is Required",
+    ]) {
+      expect(registryIsThisArticle(page, registry)).toBe(true);
+    }
+    expect(registryIsThisArticle("Learning from x-y in complex networks", "Learning from x y in complex networks")).toBe(false);
+    expect(registryIsThisArticle("Learning from x - y in complex networks", "Learning from x y in complex networks")).toBe(false);
+    expect(registryIsThisArticle("Learning from x --- y in complex networks", "Learning from x y in complex networks")).toBe(false);
+  });
 });
 
 describe("withRegistryFacts", () => {
@@ -201,6 +232,23 @@ describe("withRegistryFacts", () => {
     const out = await withRegistryFacts(meta(), printed([ID]), { lookup });
     expect(out.meta).toEqual({ ...meta(), doi: "10.3390/e26060481", journal: "Entropy", publishedAt: "2024-05-31" });
     expect(out.outcome).toBe("agreed");
+  });
+
+  it("uses the article-side footnote and arXiv-dash normalisations in the import check", async () => {
+    const before = meta({
+      title: "Don’t Claim Benchmark-Oriented Optimization Improves General Coding Capability — Diverse Evaluation Is Required",
+      byline: "Taylor Webb1,*",
+    });
+    const { lookup } = lookupOf({
+      [ID]: {
+        kind: "found",
+        record: record("10.3390/e26060481", {
+          title: "Don't Claim Benchmark-Oriented Optimization Improves General Coding Capability -- Diverse Evaluation Is Required",
+          authors: [{ family: "Webb", given: "Taylor" }],
+        }),
+      },
+    });
+    expect((await withRegistryFacts(before, printed([ID]), { lookup })).outcome).toBe("agreed");
   });
 
   it("keeps the page's own date, and still takes the journal", async () => {

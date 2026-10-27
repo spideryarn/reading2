@@ -116,6 +116,9 @@ export function registryIsThisArticle(articleTitle: string, registryTitle: strin
      between the words while ignoring prose punctuation and registry markup. */
   const titleParts = (title: string) => title.replace(/<[^>]*>/g, " ")
     .normalize("NFKC")
+    /* arXiv's spaced `--` is a page's `—`, which is already punctuation (plan
+       261027c). A single hyphen, spaced or not, stays an operator: `x - y`. */
+    .replace(/\s+--(?!-)\s+/g, " ")
     .split(/([\p{Sm}*/()\[\]{}-])/u)
     .flatMap((part, i) => i % 2 === 1 ? [part] : tokens(part));
   const a = titleParts(articleTitle);
@@ -126,6 +129,16 @@ export function registryIsThisArticle(articleTitle: string, registryTitle: strin
 /** Letters and digits, lower-cased, accents off: `Müller` and `Muller` are one name. */
 function nameWords(value: string): string[] {
   return tokens(value.normalize("NFD").replace(/\p{M}+/gu, ""));
+}
+
+/**
+ * **The article's own names, without the affiliation marks an arXiv byline
+ * glues on** (`Taylor Webb1,*`; plan 261027c): digits straight after a letter
+ * go. Only the article's side, and only glued ones: a registry's `Working
+ * Group 1` keeps its number.
+ */
+function articleNameWords(value: string): string[] {
+  return nameWords(value.replace(/(\p{L})\p{N}+/gu, "$1"));
 }
 
 function authorWords(meta: Pick<Meta, "byline" | "authors">): Set<string> {
@@ -156,7 +169,7 @@ export function registryAuthorIsOurs(
     /* The family name whole, with the first given name among the words just
        before it (`Michael J. Levin`) or straight after it (`Levin, Michael`). */
     const fullNameIn = (name: string) => {
-      const words = nameWords(name);
+      const words = articleNameWords(name);
       return words.some((_, at) => {
         if (!family.every((word, j) => words[at + j] === word)) return false;
         const before = words.slice(Math.max(0, at - GIVEN_WORDS_BEFORE), at);
@@ -167,7 +180,7 @@ export function registryAuthorIsOurs(
       return (meta.authors ?? []).some((author) => fullNameIn(author.name)) || fullNameIn(meta.byline ?? "");
     }
     return (meta.authors ?? []).some((author) => {
-      const words = nameWords(author.name);
+      const words = articleNameWords(author.name);
       return words.length >= family.length && family.every((word, i) => words[words.length - family.length + i] === word);
     });
   });
