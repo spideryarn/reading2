@@ -740,7 +740,10 @@ export interface PublicCitedWork {
   title: string;
   authors?: string;
   year?: string;
-  why: string;
+  /** Absent on a row code listed from the text — `CitedWork.why`. */
+  why?: string;
+  /** `CitedWork.listedBy`: the article's own words, so it crosses. */
+  listedBy?: "text";
   relevance?: number;
   influence?: number;
   reference?: CitationPlace;

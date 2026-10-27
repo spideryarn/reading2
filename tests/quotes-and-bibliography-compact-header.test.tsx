@@ -399,7 +399,7 @@ describe("the states the fold depends on", () => {
               citations: WORKS.map((work) => ({
                 id: work.id,
                 title: work.title,
-                why: work.why,
+                why: work.why!,
                 mentions: work.mentions,
                 citedAt: work.citedAt,
                 firstCited: work.firstCited,

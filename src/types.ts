@@ -5402,8 +5402,19 @@ export interface CitedWork {
   /** As the article gives them. Absent when it gives none. */
   authors?: string;
   year?: string;
-  /** One plain sentence: what the piece uses this work for. */
-  why: string;
+  /**
+   * One plain sentence: what the piece uses this work for. **Absent on a row
+   * code listed from the text** (`listedBy: "text"`), which no model described.
+   */
+  why?: string;
+  /**
+   * **`"text"`: code found this work cited in the body and the model had not
+   * listed it** — an author–year citation read by src/citation-author-year.ts
+   * (plan 261027b, feedback spya-ez2vus). Such a row has the article's own
+   * words for its title, authors, year and mentions, and no `why` or scores.
+   * Absent on the model's rows.
+   */
+  listedBy?: "text";
   /** 0–1: how much THIS piece's argument leans on the work. The model's reading. */
   relevance?: number;
   /**
@@ -5891,6 +5902,11 @@ export interface CitationDrops {
   authorsUnfound: number;
   /** A year the work's entry does not carry, or with no entry, the article — dropped. */
   yearUnfound: number;
+  /**
+   * Works the body cites author–year that neither the model nor code listed,
+   * because code's rows reached `MAX_TEXT_ROWS` (plan 261027b). A count only.
+   */
+  textOverCap: number;
 }
 
 /**
@@ -5927,6 +5943,23 @@ export const MAX_CITATIONS = 80;
  * may not be in `citedAt`.
  */
 export const MAX_MENTIONS = 3;
+
+/**
+ * **The most rows code adds from the text** (`CitedWork.listedBy`, plan
+ * 261027b) — its own ceiling, apart from `MAX_CITATIONS`, which bounds the
+ * model's answer. These cost no tokens, but an article is a stranger's text and
+ * every row is stored, sent and drawn. Past it the rest are counted
+ * (`CitationDrops.textOverCap`), first cited first kept.
+ */
+export const MAX_TEXT_ROWS = 200;
+
+/**
+ * **What a prompt or a chat tool says for a row with no `why`** — one code
+ * listed from the text (`CitedWork.listedBy`, plan 261027b). Said, not left
+ * blank, so a model reading the context does not take an empty line for the
+ * article's own account of the work.
+ */
+export const WHY_NOT_DESCRIBED = "not described: code found this citation in the article's text, and no model has said what the article uses it for";
 
 /** The artefact. The `bibliography` column on `article_revisions`. */
 export interface Bibliography {

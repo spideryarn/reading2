@@ -118,6 +118,34 @@ describe("referenceListFrom", () => {
     ).toBeNull();
   });
 
+  /* Feedback spya-ez2vus (plan 261027b): LeCun's author–year list has no
+     numbers, so the first numbered run after its `References` heading was the
+     appendix's Table 1, and the model was told it was the article's reference
+     list. These are the PDF's own text-layer lines. */
+  it("refuses a numbered table after an author–year list: no entry carries a year", () => {
+    expect(
+      referenceListFrom([
+        "References",
+        "Agrawal, P., Nair, A., Abbeel, P., Malik, J., and Levine, S. (2016). Learning to poke by",
+        "poking: Experiential learning of intuitive physics. CoRR, abs/1606.07419.",
+        "Method Energy ˆy Generation Loss",
+        "1 Max Likelihood discrete y exhaustive Fw(x, y) + log ∑",
+        "y′∈Y exp(−Fw(x, y′))",
+        "2 Max Likelihood tractable exhaustive Fw(x, y) + log ∫",
+        "y′∈Y exp(−Fw(x, y′))",
+        "3 Max likelihood any MC or MCMC Fw(x, y) − Fw(x, ˆy)",
+        "4 Contr. Divergence any trunc’d MCMC Fw(x, y) − Fw(x, ˆy)",
+        "5 Pairwise Hinge any most offending [Fw(x, y) − Fw(x, ˆy) + m(y, ˆy)]+",
+        "6 Min-Hinge positive most offending Fw(x, y) + [m(y, ˆy) − Fw(x, ˆy)]+",
+        "6 Square-Hinge divergence most offending Fw(x, y)2 +",
+        "7 Square-Exp any most offending Fw(x, y)2 + exp(−βFw(x, ˆy))",
+        "8 Logistic any most offending log(1 + exp(Fw(x, y) − Fw(x, ˆy))",
+        "9 GAN any ˆy = gu(z) H(Fw(x, y), Fw(x, ˆy), m(y, ˆy))",
+        "10 Denoising AE D(y, gw(y)) ˆy = N (y) D(y, gw(ˆy)",
+      ]),
+    ).toBeNull();
+  });
+
   it("fails closed on a row-interleaved two-column layer", () => {
     const interleaved = [
       "1. Left, A. (2020) First left-column reference.",

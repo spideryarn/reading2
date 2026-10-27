@@ -6202,6 +6202,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           notesReached: run.coverage.notesReached,
           references: run.coverage.references,
           referencesReached: run.coverage.referencesReached,
+          /* The author–year witness (plan 261027b): what the body cites, and
+             how many of those rows code had to add because the model did not
+             list them. A high share filled is the model under-returning. */
+          authorYear: run.coverage.authorYear,
+          authorYearFilled: run.coverage.authorYearFilled,
           /* **The reference-list witness** (plan 260930i): a PDF whose list
              was not found (`referenceList: "no-list"`) or whose entries
              were found and none kept (`entries: 0` over a long list) is the

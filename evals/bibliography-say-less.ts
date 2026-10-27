@@ -98,12 +98,12 @@ export function measureRow(work: CitedWork, blocks: ReadonlyMap<string, Block>, 
   const grounded = new Set(articleWords);
   for (const w of wordsOf(work.entry ?? "")) grounded.add(w);
 
-  const why = contentWords(work.why);
+  const why = contentWords(work.why ?? "");
   const authors = wordsOf(work.authors ?? "").filter((w) => w !== "et" && w !== "al");
   const year = work.year ? wordsOf(work.year) : null;
   return {
     id: work.id,
-    whyWords: wordsOf(work.why).length,
+    whyWords: wordsOf(work.why ?? "").length,
     whyNovel: 1 - shareIn(why, citing),
     titleGrounded: shareIn(wordsOf(work.title), grounded),
     authorsGrounded: shareIn(authors, grounded),

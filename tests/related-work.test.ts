@@ -86,6 +86,24 @@ const TRANSFORMER: RelatedWorkArticle = {
 
 /* ------------------------------------------------------------ the matcher -- */
 
+/* Plan 261027b: a row code listed from the text has only `Levine (2021)` for a
+   title, so the real paper's title never agrees with it — and Sources would
+   show Levine's paper as one the piece does not cite (GPT Sol's plan review, 8). */
+describe("inBibliography: a row code listed from the text, by first author and year", () => {
+  const levine = row({ title: "Levine (2021)", authors: "Levine", year: "2021", listedBy: "text" });
+
+  it("matches the work with that first author's surname and year", () => {
+    expect(inBibliography(work({ title: "Offline reinforcement learning: tutorial", authors: ["Sergey Levine", "Aviral Kumar"], year: 2021 }), [levine])).toBe(true);
+  });
+
+  it("not another year, another first author, or a model row with the same names", () => {
+    expect(inBibliography(work({ title: "Offline reinforcement learning: tutorial", authors: ["Sergey Levine"], year: 2020 }), [levine])).toBe(false);
+    expect(inBibliography(work({ title: "Offline reinforcement learning: tutorial", authors: ["Aviral Kumar", "Sergey Levine"], year: 2021 }), [levine])).toBe(false);
+    const { listedBy: _l, ...modelRow } = levine;
+    expect(inBibliography(work({ title: "Offline reinforcement learning: tutorial", authors: ["Sergey Levine"], year: 2021 }), [modelRow])).toBe(false);
+  });
+});
+
 describe("inBibliography: tier 1, the identifier", () => {
   it("matches a DOI to a row keyed by it, whatever its case", () => {
     const rows = [row({ title: "Something else entirely here", key: "doi:10.18653/v1/d14-1179" })];

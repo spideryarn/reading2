@@ -92,6 +92,7 @@ import {
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
+  CITE_FROM_TEXT,
   CiteBlurb,
   showsWhy,
   InSpideryarn,
@@ -2349,7 +2350,7 @@ export function CiteCard({
   const source = sourceOf(work);
   const by = byLineOf(work);
   const line = workByLine(work);
-  const why = showsWhy({ lookup: work.lookup });
+  const why = work.why !== undefined && showsWhy({ lookup: work.lookup });
   /* A body paragraph that cites the work (`citedAt`, Sol S8), not the
      reference entry, and not a card with nowhere it was opened from. */
   const checkHere = onCheck && here !== null && work.citedAt.includes(here) ? here : null;
@@ -2418,6 +2419,8 @@ export function CiteCard({
           <p className="prose-card-cite-read">{CITE_ENTRY_NOTE}</p>
         </div>
       )}
+      {/* A row code listed from the text says so (plan 261027b). */}
+      {work.listedBy === "text" && <p className="prose-card-cite-read">{CITE_FROM_TEXT}</p>}
 
       {/* No part at all when it would be empty: an unread work with nothing
           checked draws neither line (plan 261011c). */}
