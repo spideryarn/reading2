@@ -19,7 +19,10 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIT_DISCONNECTED_DRAWINGS,
   type DrawnFigureInput,
+  drawingAround,
+  IN_A_DRAWING_RATIO,
   type InkBox,
+  isPartOfDrawing,
   locateDrawnFigure,
   MAX_INK_COMPONENTS,
   MAX_PAGE_OPERATORS,
@@ -471,5 +474,58 @@ describe("a figure made of drawings that do not touch", () => {
       reason: "not-located",
       detail: "too-many-components",
     });
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * A picture that is part of a drawing — report spya-m40r6t,
+ * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md
+ * ------------------------------------------------------------------ */
+
+describe("isPartOfDrawing", () => {
+  /** A 60 × 60 pt picture, the size of LeCun's Earth. */
+  const picture = { x0: 100, y0: 500, x1: 160, y1: 560 };
+
+  it("calls a picture wired into boxes and arrows a part of that drawing", () => {
+    const page = layout({
+      ink: [
+        ink(160, 528, 240, 532), // an arrow out of the picture
+        ink(240, 510, 320, 550, true), // the box it points at
+        ink(320, 528, 400, 532), // and on
+        ink(400, 510, 480, 550, true),
+      ],
+    });
+    expect(drawingAround(picture, page)).toEqual({ x0: 100, y0: 500, x1: 480, y1: 560 });
+    expect(isPartOfDrawing(picture, page)).toBe(true);
+  });
+
+  it("does not for a picture alone, or in a thin frame", () => {
+    expect(isPartOfDrawing(picture, layout())).toBe(false);
+    expect(isPartOfDrawing(picture, layout({ ink: [ink(98, 498, 162, 562, true)] }))).toBe(false);
+  });
+
+  it("does not for a raster chart with drawn axes and ticks along two edges", () => {
+    const ticks = Array.from({ length: 6 }, (_, i) => ink(100 + i * 12, 494, 100.5 + i * 12, 500));
+    const page = layout({ ink: [ink(99, 500, 100, 560), ink(100, 499, 160, 500), ...ticks] });
+    expect(isPartOfDrawing(picture, page)).toBe(false);
+  });
+
+  it("does not chain ink that does not touch the picture", () => {
+    /* More than TOUCH_GAP_PT away: beside the picture, not wired to it. */
+    const page = layout({ ink: [ink(180, 500, 480, 560, true)] });
+    expect(drawingAround(picture, page)).toEqual(picture);
+  });
+
+  it("leaves out a frame round the whole page, which touches everything", () => {
+    expect(isPartOfDrawing(picture, layout({ ink: [ink(20, 20, 575, 822, true)] }))).toBe(false);
+  });
+
+  it("draws the line at IN_A_DRAWING_RATIO times the picture's area", () => {
+    /* A bar out of the picture's right edge, as tall as the picture, so the
+       drawing's box is the picture widened by the bar's length. */
+    const atRatio = 60 * (IN_A_DRAWING_RATIO - 1);
+    const bar = (length: number) => layout({ ink: [ink(160, 500, 160 + length, 560)] });
+    expect(isPartOfDrawing(picture, bar(atRatio - 1))).toBe(false);
+    expect(isPartOfDrawing(picture, bar(atRatio))).toBe(true);
   });
 });
