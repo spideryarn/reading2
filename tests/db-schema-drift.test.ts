@@ -321,6 +321,7 @@ describe("declaredTables", () => {
       "search_runs",
       "shelf_topic_scores",
       "shelf_topic_sets",
+      "skim_briefs",
       "sources_claim_checks",
       "stale_notice_dismissals",
       "upload_source_guesses",
@@ -432,8 +433,9 @@ describe("against a real database", () => {
          `author_gift_guidance`, 2026-10-24 (plan 261024f); sixty-nine since
          `author_lookup_candidates`, the same day (plan 261024j); seventy
          since `article_revision_parts`, the same day (plan 261024p);
-         seventy-one since `read_so_far_words`, 2026-10-25 (plan 261025l). */
-      expect(report.declaredTables).toBe(71);
+         seventy-one since `read_so_far_words`, 2026-10-25 (plan 261025l); seventy-two
+         since `skim_briefs`, 2026-10-27 (plan 261027d). */
+      expect(report.declaredTables).toBe(72);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

@@ -87,6 +87,8 @@ export const READER_STATE = [
   { table: "chat_mentions", label: "articles brought into chats", ownWords: false },
   { table: "chat_messages", label: "chat messages", ownWords: true },
   { table: "chat_threads", label: "chats", ownWords: true },
+  /* Skim briefs: the sentence is the reader's own, like a chat's (plan 261027d, Sol F1). */
+  { table: "skim_briefs", label: "Skim briefs", ownWords: true },
   { table: "quiz_attempts", label: "quiz answers", ownWords: true },
   { table: "referee_promises", label: "Referee promises runs", ownWords: true },
   { table: "referee_hidden_checks", label: "Referee hidden checks", ownWords: true },

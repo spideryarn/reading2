@@ -81,7 +81,7 @@ loadEnvLocal();
 
 const { pool } = await pgReady({
   suite: "tests/claim-starter-article.test.ts",
-  tables: ["spideryarn.billing_vouchers", "spideryarn.author_gifts", "spideryarn.articles", "spideryarn.ingest_events"],
+  tables: ["spideryarn.billing_vouchers", "spideryarn.author_gifts", "spideryarn.articles", "spideryarn.ingest_events", "spideryarn.skim_briefs"],
   keepPool: true,
   max: 4,
 });
@@ -271,6 +271,21 @@ describe("claimVouchersFor — the starter stays, and the voucher is claimed any
     expect(await count("reading_time", a.id)).toBe(1);
     /* And the recipient, reading the creator's copy by its link, has used nothing (spya-np36qf). */
     expect(wallUsed(await usageFor(BOB, FREE))).toBe(0);
+  });
+
+  /* An added Skim brief is the creator's own words, as a chat is: nothing
+     they wrote is deleted unattended (plan 261027d, Sol F1). */
+  it("leaves it when the creator has added a Skim brief to it", async () => {
+    const a = await seed("briefed");
+    await pool.query("insert into spideryarn.skim_briefs (article_id, id, brief) values ($1, $2, 'the methods only')", [
+      a.id,
+      mintId(),
+    ]);
+    const v = await voucher(a);
+    expect(await claimAsBob()).toMatchObject({ claimed: 1, articles: [] });
+    expect(await ownerOf(a.id)).toBe(ALICE);
+    expect(await claimedBy(v)).toBe(BOB);
+    expect(await count("skim_briefs", a.id)).toBe(1);
   });
 
   it("leaves it when an illustration contains the creator's own direction", async () => {

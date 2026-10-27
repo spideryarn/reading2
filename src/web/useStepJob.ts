@@ -139,6 +139,13 @@ interface StepRun<S extends StepName> {
    */
   illustrationNote?: string;
   /**
+   * **The added Skim brief to plan a route for** — sent as `skimBrief`, and
+   * only when there is one, so the default's request is the same bytes it has
+   * always been. The server refuses it beside any step but `quotes`, `ideas`
+   * and `skim` (src/routes.ts § `parseSkimBrief`). Plan 261027d.
+   */
+  skimBrief?: string;
+  /**
    * **Steps this one needs run first, in the same job.**
    *
    * One job holding many steps is what the queue is already for: `orderSteps`
@@ -348,13 +355,14 @@ export interface StepJob<S extends StepName = StepName> {
 export function stepRunRequest<S extends StepName>(
   slug: string,
   step: S,
-  { force = false, useProfile = true, precededBy, illustrationNote }: StepRun<S> = {},
+  { force = false, useProfile = true, precededBy, illustrationNote, skimBrief }: StepRun<S> = {},
 ): {
   slug: string;
   steps: StepName[];
   force?: StepName[];
   useProfile?: false;
   illustrationNote?: string;
+  skimBrief?: string;
 } {
   const note = illustrationNote?.trim();
   return {
@@ -370,6 +378,7 @@ export function stepRunRequest<S extends StepName>(
     ...(force ? { force: [step] } : {}),
     ...(useProfile ? {} : { useProfile: false as const }),
     ...(note ? { illustrationNote: note } : {}),
+    ...(skimBrief ? { skimBrief } : {}),
   };
 }
 

@@ -80,6 +80,7 @@ import {
   refereeCriteria,
   revisionBlocks,
   searchRuns,
+  skimBriefs,
   uploadSourceGuesses,
 } from "../src/db/schema.js";
 import { mintId } from "../src/ids.js";
@@ -1299,6 +1300,7 @@ describe("destroying an article", () => {
           criterion: "is it any good",
           status: "pending",
         }),
+      skim_briefs: () => db.insert(skimBriefs).values({ articleId: GONE_ARTICLE, id: mintId(), brief: "A brief" }),
       search_runs: () =>
         db.insert(searchRuns).values({
           articleId: GONE_ARTICLE,

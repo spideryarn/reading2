@@ -203,6 +203,7 @@ function toJob(row: Row): Job {
     ...(row.title !== null && { title: row.title }),
     ...(row.profile !== null && { profile: row.profile }),
     ...(row.illustrationNote !== null && { illustrationNote: row.illustrationNote }),
+    ...(row.skimBrief !== null && { skimBrief: row.skimBrief }),
     ...(row.reset !== null && {
       reset: { ...row.reset, regenerate: row.reset.regenerate.map((n) => currentStepName(n) as StepName) },
     }),
@@ -646,6 +647,7 @@ async function enqueueIn(
       title: job.title ?? null,
       profile: job.profile ?? null,
       illustrationNote: job.illustrationNote ?? null,
+      skimBrief: job.skimBrief ?? null,
       reset: job.reset ?? null,
       uploadId: job.upload?.id ?? null,
       uploadFilename: job.upload?.filename ?? null,

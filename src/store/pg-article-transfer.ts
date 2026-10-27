@@ -99,6 +99,7 @@ import {
   refereeCriteria,
   refereeHiddenChecks,
   searchRuns,
+  skimBriefs,
   sourcesClaimChecks,
   staleNoticeDismissals,
 } from "../db/schema.js";
@@ -155,6 +156,8 @@ export const ARTICLE_TABLES = {
   /** Would cascade from the thread (`chat_messages_thread_fk`); deleted first so it is counted. */
   chat_messages: "reader-state",
   chat_threads: "reader-state",
+  /** The owner's added Skim briefs: their sentences and the routes planned for them (plan 261027d). */
+  skim_briefs: "reader-state",
   quiz_attempts: "reader-state",
   referee_promises: "reader-state",
   referee_hidden_checks: "reader-state",
@@ -212,6 +215,7 @@ export const READER_STATE_TABLES = {
   chat_mentions: chatMentions,
   chat_messages: chatMessages,
   chat_threads: chatThreads,
+  skim_briefs: skimBriefs,
   quiz_attempts: quizAttempts,
   referee_promises: refereePromises,
   referee_hidden_checks: refereeHiddenChecks,

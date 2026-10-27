@@ -422,6 +422,7 @@ describe("no Postgres store is selected without a guard", () => {
       /* The shelf's filter topics, 2026-09-28: its parameters are the
          reader's own articles' phrases. */
       "pgShelfTermsStore",
+      "pgSkimBriefStore",
       "pgSkimNoticeStore",
       /* An upload's guessed web address, 2026-09-29: its parameter is where
          somebody's upload lives. */

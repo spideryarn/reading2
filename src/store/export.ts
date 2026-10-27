@@ -1054,6 +1054,23 @@ export async function exportArticle(
     await put("reading_time", "reading-time.json", { seconds });
   }
 
+  /* The owner's added Skim briefs, oldest first, with each route as stored —
+     plan 261027d. */
+  if (rows.skimBriefs.length) {
+    await put("skim_briefs", "skim-briefs.json", {
+      briefs: rows.skimBriefs.map((row) => ({
+        id: row.id,
+        brief: row.brief,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        plannedAt: row.plannedAt?.toISOString() ?? null,
+        skim: row.skim ?? null,
+        profileNoticeDismissedFor: row.profileNoticeDismissedFor,
+        profileNoticeDismissedAt: row.profileNoticeDismissedAt?.toISOString() ?? null,
+      })),
+    });
+  }
+
   /* The glossary entries the owner hid, by id — plan 261002c § 2. */
   if (rows.glossaryHiddenEntries.length) {
     await put("glossary_hidden_entries", "glossary-hidden.json", {

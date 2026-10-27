@@ -501,6 +501,15 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         title: sentinel("chat_mentions"),
       });
     },
+    /* Unplanned on purpose: the sentence must be exported before any route
+       exists (plan 261027d, Sol F8). */
+    skim_briefs: async () => {
+      await db.insert(schema.skimBriefs).values({
+        articleId: ARTICLE_ID,
+        id: "spya-cvb234",
+        brief: sentinel("skim_briefs"),
+      });
+    },
     search_runs: async () => {
       await db.insert(schema.searchRuns).values({
         articleId: ARTICLE_ID,
@@ -877,6 +886,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     messageId: "Each mention is nested inside the question that made it, in chat.json.",
   },
   search_runs: {},
+  skim_briefs: {},
   referee_criteria: {},
   referee_promises: {},
   sources_claim_checks: {},
@@ -927,6 +937,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
       .flatMap((thread) => listAt(thread, "messages"))
       .flatMap((message) => listAt(message, "mentions")),
   search_runs: (parsed) => listAt(parsed, "runs"),
+  skim_briefs: (parsed) => listAt(parsed, "briefs"),
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
   referee_promises: (parsed) => [at(parsed, "run")],
   sources_claim_checks: (parsed) => listAt(parsed, "checks"),
@@ -990,6 +1001,7 @@ await pgReady({
     "spideryarn.stale_notice_dismissals",
     "spideryarn.command_suggestion_dismissals",
     "spideryarn.article_revision_parts",
+    "spideryarn.skim_briefs",
   ],
 });
 

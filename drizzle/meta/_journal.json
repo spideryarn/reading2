@@ -1576,6 +1576,20 @@
       "when": 1792978308375,
       "tag": "20261026013148_read_so_far_words",
       "breakpoints": true
+    },
+    {
+      "idx": 225,
+      "version": "7",
+      "when": 1793106466249,
+      "tag": "20261027130746_skim_briefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 226,
+      "version": "7",
+      "when": 1793106494715,
+      "tag": "20261027130814_jobs_skim_brief",
+      "breakpoints": true
     }
   ]
 }

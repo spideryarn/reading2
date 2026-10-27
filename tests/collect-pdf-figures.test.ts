@@ -39,6 +39,7 @@ import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
 import type { FigureLocator, FigureNeighbours, LocateSubject } from "../src/pdf-figure-locate.js";
 import type { PdfRasterRead } from "../src/pdf-figure-read.js";
+import { readPdfPageLayouts } from "../src/pdf-figure-layout.js";
 
 const HARDER = "evals/pdf/harder/source.pdf";
 
@@ -360,13 +361,42 @@ describe("the step's own deadline", () => {
       blobs: fakeBlobs(),
       captions: new Map([...HARDER_CAPTIONS, [drawn.ref, "Figure 1. A caption that turns the drawn route on."]]),
       signal: stop.signal,
-      readLayouts: async () => {
+      /* Slow for the drawn route's page only. The bitmap's own page is read
+         too, since 261027e, to ask whether its picture is part of a drawing;
+         that read is part of deciding the bitmap, not drawn-page work. */
+      readLayouts: async (options) => {
+        if (!options.pages.includes(drawn.page)) return readPdfPageLayouts(options);
         stop.abort();
         throw new Error("layout work stopped");
       },
     });
     expect(run.entries[0]).toMatchObject({ ref: drawn.ref, status: "failed", reason: "out-of-time" });
     expect(run.entries[1]).toMatchObject({ ref: bitmap.ref, status: "stored" });
+  }, 60_000);
+
+  it("keeps a bitmap already checked and stored when a later page's check runs out of time", async () => {
+    /* Each paired page is asked whether its picture is part of a drawing, and
+       stored, before the next page is read (261027e). A batch read of every
+       page first let one slow page turn them all `out-of-time`. GPT Sol, plan
+       review of 261027e, 6. */
+    const stop = new AbortController();
+    const first = marker(3);
+    const second = marker(6);
+    const run = await collectPdfFigures({ neighbours: new Map(),
+      locate: null,
+      markers: [first, second],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+      captions: HARDER_CAPTIONS,
+      signal: stop.signal,
+      readLayouts: async (options) => {
+        if (!options.pages.includes(second.page)) return readPdfPageLayouts(options);
+        stop.abort();
+        throw new Error("layout work stopped");
+      },
+    });
+    expect(run.entries[0]).toMatchObject({ ref: first.ref, status: "stored" });
+    expect(run.entries[1]).toMatchObject({ ref: second.ref, status: "failed", reason: "out-of-time" });
   }, 60_000);
 
   /**
@@ -466,6 +496,7 @@ describe("the step's own deadline", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(run.storageErrors).toEqual([]);
   }, 60_000);
+
 });
 
 /* ------------------------------------------------------------------ *

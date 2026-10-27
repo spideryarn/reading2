@@ -122,6 +122,7 @@ import {
 } from "../simple-summary.js";
 import {
   PROMPT_VERSION as SKIM_PROMPT_VERSION,
+  routeFreshness,
   skimInput,
   skimInputHash,
 } from "../skim.js";
@@ -1671,6 +1672,42 @@ export function currentRevisionQuery<K extends RevisionReader>(
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
     .where(ownedSlug(slug))
     .limit(1);
+}
+
+/**
+ * **A Skim route judged against the revision it would be planned from now** —
+ * `routeFreshness` (src/skim.ts) over the revision's Quotes, Ideas, tree and
+ * blocks. `loadSkim` asks it of the default's route, and an added brief's
+ * read (src/store/pg-skim-briefs.ts) of the brief's, through
+ * `currentSkimFreshness` below. Plan 261027d (Sol F6).
+ */
+async function skimFreshnessOf(
+  revision: RevisionRowFor<"skim">,
+  skim: Skim,
+): Promise<{ stale: boolean; outdated: boolean; notOnRoute: number }> {
+  const quotes = revision.quotes as Quotes | null;
+  const tree = revision.tree as Tree | null;
+  const ideas = revision.ideas as Ideas | null;
+  const hasQuotes = quotes !== null && Array.isArray(quotes.quotes) && quotes.quotes.length > 0;
+  /* The complete blocks, including HTML: `skimInput` needs positions for
+     Idea and section associations, and markup plus captions for figures. */
+  const blocks = hasQuotes && tree ? await blocksFor(revision.id) : [];
+  return routeFreshness(skim, { quotes, tree, ideas, blocks });
+}
+
+/**
+ * The same, for a route stored somewhere other than the revision — an added
+ * Skim brief's row. Owner-scoped like every read here: a stranger's slug is
+ * not-found.
+ */
+export async function currentSkimFreshness(
+  slug: string,
+  skim: Skim,
+): Promise<{ stale: boolean; outdated: boolean; notOnRoute: number }> {
+  requireSlug(slug);
+  const found = await currentRevision(slug, "skim");
+  if (!found) throw notFound(slug);
+  return skimFreshnessOf(found.revision, skim);
 }
 
 /** One article's current published revision, or undefined. */
@@ -4441,35 +4478,9 @@ const rawPgArticleReader: ArticleReader = {
           `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
       );
     }
-    const quotes = found.revision.quotes as Quotes | null;
-    const current = quotes && Array.isArray(quotes.quotes) ? quotes.quotes : [];
-    const onRoute = new Set(skim.stops.map((s) => s.quoteId));
-    const tree = found.revision.tree as Tree | null;
-    const ideas = found.revision.ideas as Ideas | null;
-    /* The complete blocks, including HTML: `skimInput` needs positions for
-       Idea and section associations, and markup plus captions for figures. */
-    const blocks = current.length > 0 && tree ? await blocksFor(found.revision.id) : [];
-    const input = tree ? skimInput({ quotes, blocks, tree, ideas }) : null;
-    /* A quote left out because it sits in the abstract is not missing from
-       the route — it was never offered (`inAbstract` in src/skim.ts). */
-    const leftOut = new Set(input?.abstractQuoteIds ?? []);
     return {
       skim,
-      /* No quotes any more counts as stale, the same way round as its
-         neighbours; so does no tree. Otherwise stale when anything the prompt
-         would render has moved — the Quotes, the Ideas (regenerated, or
-         arrived after a route planned without them), or the outline.
-         **Only for a route of this prompt version**: one from before
-         `trajectory/7` holds a quotes-only hash that can never match, and
-         calling it stale would tell the reader their Quotes changed when what
-         changed is us — `outdated` says that. */
-      stale:
-        current.length === 0 ||
-        !input ||
-        (skim.version === SKIM_PROMPT_VERSION &&
-          skim.sourceHash !== skimInputHash(input)),
-      outdated: skim.version !== SKIM_PROMPT_VERSION,
-      notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
+      ...(await skimFreshnessOf(found.revision, skim)),
       profileNoticeDismissedFor: found.article.skimProfileNoticeDismissedFor,
     };
   },

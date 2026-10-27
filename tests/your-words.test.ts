@@ -53,6 +53,7 @@ function rows(over: Rows = {}): ArticleRows {
     chatMentions: [],
     quizAttempts: [],
     articleTags: [],
+    skimBriefs: [],
     refereeCriteria: [],
     ...over,
   } as unknown as ArticleRows;
@@ -83,6 +84,23 @@ describe("yourWordsMarkdown", () => {
     );
     expect(md).toContain('# Your words on "My title"');
     expect(md).toContain("- **Your title:** My title\n- **Why you are reading it:** For the seminar\n- **Your tags:** ethology, to-read");
+  });
+
+  /* Plan 261027d, Sol F8: the sentences are the reader's own, planned or not. */
+  it("writes every Skim brief the reader added, an unplanned one included", () => {
+    const md = yourWordsMarkdown(
+      rows({
+        skimBriefs: [
+          { id: "spya-bbbbb2", brief: "The methods only", skim: null },
+          { id: "spya-bbbbb3", brief: "How it compares with\nSmith 2019", skim: { stops: [] } },
+        ],
+      }),
+      EXPORTED,
+    );
+    expect(md).toContain(
+      "- **A Skim brief you added:** The methods only\n- **A Skim brief you added:** How it compares with Smith 2019",
+    );
+    expect(md).not.toContain("You have not written anything");
   });
 
   it("lists comments in article order, by where the words start, with a lost paragraph's last", () => {

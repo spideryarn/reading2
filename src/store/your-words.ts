@@ -20,6 +20,9 @@
  * Spideryarn turns of a conversation. Nothing here is rendered by us — it is a
  * download — so there is no markup boundary to escape at.
  *
+ * The Skim briefs the reader added ride with the title and purpose (plan
+ * 261027d): each is a *why you're reading*, asked again.
+ *
  * Left out for now, and in the zip as JSON: searches, glossary look-ups,
  * referee criteria, Sources claim checks, reading time. Plan
  * docs/plans/261020w-export-your-own-words-and-a-chat-as-markdown.md § Deferred.
@@ -92,6 +95,8 @@ function shelfSection(rows: ArticleRows): string | null {
   if (rows.articleTags.length > 0) {
     lines.push(`- **Your tags:** ${rows.articleTags.map((t) => t.tag).join(", ")}`);
   }
+  /* The Skim briefs you added, planned or not (plan 261027d, Sol F8). */
+  for (const b of rows.skimBriefs) lines.push(`- **A Skim brief you added:** ${oneLine(b.brief)}`);
   return lines.length === 0 ? null : `## On your shelf\n\n${lines.join("\n")}`;
 }
 

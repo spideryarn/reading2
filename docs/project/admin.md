@@ -1184,7 +1184,8 @@ mode's model-made artefacts. It is **made private and its link's key dropped**, 
 carries the owner's notes and a key the old owner handed out must not open the new owner's. The old
 reader's state on the row is reset — *why you're reading this*, their rename, the archive, opens,
 the pasted address, High-powered AI — and **their own words and activity on it are deleted**
-(comments, chats, quiz answers, Referee criteria, searches, tags, glossary terms, reading time …),
+(comments, chats, quiz answers, Referee criteria, searches, tags, glossary terms, Skim briefs,
+reading time …),
 so the new owner never reads the old one's notes. Their ingest rows are frozen at the price they
 paid and unlinked, so their bill does not move with the new owner's choices. It is refused while a
 job or an unsettled slot is live on it, and for an article with only its abstract read. The page's

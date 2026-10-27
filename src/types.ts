@@ -1630,6 +1630,30 @@ export type SkimFound = Omit<SkimResponse, "profileChanged" | "profileNoticeDism
   profileNoticeDismissedFor: string | null;
 };
 
+/**
+ * **The most added Skim briefs one article may have** — beside the default.
+ * Enforced by the store under the article lock (src/store/pg-skim-briefs.ts).
+ * Plan 261027d.
+ */
+export const SKIM_BRIEFS_MAX = 12;
+
+/** One added Skim brief in `GET /api/skim/:slug/briefs`. Plan 261027d. */
+export interface SkimBriefSummary {
+  /** A house id, minted by the client so `?brief=` can name it from the first frame. */
+  id: string;
+  /** The reader's sentence, which is also its name. */
+  brief: string;
+  createdAt: string;
+  /** When its route was last planned, or `null` for never. */
+  plannedAt: string | null;
+  planned: boolean;
+}
+
+/** `GET /api/skim/:slug/briefs`, oldest first. */
+export interface SkimBriefList {
+  briefs: SkimBriefSummary[];
+}
+
 /** `POST /api/skim/:slug/profile-notice-dismissal`: the route the reader was looking at. */
 export interface SkimProfileNoticeDismissalRequest {
   /** That route's `Skim.generatedAt`, its identity. */
@@ -4101,6 +4125,19 @@ export interface Job {
    * docs/plans/261002j-illustrated-steering-note.md.
    */
   illustrationNote?: string;
+  /**
+   * **The added Skim brief this job plans a route for** — a `skim_briefs` id,
+   * present only on a job naming `skim` that was asked for one brief's route.
+   * Checked at the route (the brief exists and is on this article), frozen
+   * here, compared by `sameWork` and part of the work key, so one brief
+   * pressed twice is one job and two briefs are two. The `skim` step then
+   * writes the brief's row instead of the revision's column (src/jobs.ts §
+   * `runStep`). The job's `profile` is already the brief's: rendered by the
+   * route with the brief in place of the article's purpose. Stripped from the
+   * wire by `publicJob`. Absent: the default route, exactly as before.
+   * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md.
+   */
+  skimBrief?: string;
   /**
    * **Present exactly when this job is a reset** — "as if just imported", with
    * the extras dropped. `jobs.reset` in src/db/schema.ts; src/reset.ts says

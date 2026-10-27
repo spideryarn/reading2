@@ -49,6 +49,7 @@ import {
   tagStore,
   readingTimeStore,
   glossaryHiddenStore,
+  skimBriefStore,
   skimNoticeStore,
   staleNoticeStore,
   suggestionDismissalStore,
@@ -328,8 +329,10 @@ import type {
   NewFeedbackAnswer,
   NewFeedbackDeferral,
   SearchFinish,
+  SkimBriefRow,
   Visibility,
 } from "./store/contracts.js";
+import { checkBrief, checkBriefId } from "./store/pg-skim-briefs.js";
 import {
   ADMIN_FEEDBACK_DEFAULT_LIMIT,
   FEEDBACK_LIST_BYTES,
@@ -464,7 +467,7 @@ import { currentStepName, previousClientStepName } from "./step-order.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
-import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
+import { profileNoticeKey, routeProfileIsStale, skimResponseFor } from "./skim.js";
 import { prepareMode } from "./prepare-mode.js";
 import { MODE_PREPARATION_ALREADY_CLAIMED, preparable } from "./preparable-modes.js";
 import { parseStaleNoticeDismissal, type StaleNoticesResponse } from "./stale-notice.js";
@@ -524,6 +527,8 @@ import type {
   QuizFound,
   QuizResponse,
   QuotesResponse,
+  SkimBriefList,
+  SkimBriefSummary,
   SkimResponse,
   IllustratedResponse,
   SketchResponse,
@@ -1365,6 +1370,36 @@ function readingTimeBatch(body: unknown): Record<string, number> {
  * the route the reader was looking at, and nothing else
  * (`SkimProfileNoticeDismissalRequest`).
  */
+/** `/api/skim/:slug/briefs`, for its GET and POST. Plan 261027d. */
+const SKIM_BRIEFS_PATTERN = /^\/api\/skim\/([\w.%-]+)\/briefs$/;
+
+/** `/api/skim/:slug/briefs/:id`, for its GET, PATCH and DELETE. Plan 261027d. */
+const SKIM_BRIEF_PATTERN = /^\/api\/skim\/([\w.%-]+)\/briefs\/([\w.%-]+)$/;
+
+/** A brief as the list and the writes answer it: never the route, never the dismissal key. */
+function skimBriefSummary(row: SkimBriefRow): SkimBriefSummary {
+  return {
+    id: row.id,
+    brief: row.brief,
+    createdAt: row.createdAt,
+    plannedAt: row.plannedAt,
+    planned: row.skim !== null,
+  };
+}
+
+/**
+ * A brief write's body: an object with these fields and no others, each
+ * still unchecked (`checkBrief`, `checkBriefId` in src/store/pg-skim-briefs.ts).
+ * The message names no text: the sentence is the reader's own.
+ */
+function skimBriefBody(body: unknown, fields: readonly string[]): Record<string, unknown> {
+  const sent = objectBody(body);
+  for (const key of Object.keys(sent)) {
+    if (!fields.includes(key)) throw httpError(400, "That request has a field this endpoint does not take");
+  }
+  return sent;
+}
+
 function skimDismissalGeneratedAt(body: unknown): string {
   const sent = objectBody(body);
   for (const key of Object.keys(sent)) {
@@ -7450,6 +7485,25 @@ function parseIllustrationNote(raw: unknown, steps: StepName[] | undefined): str
 }
 
 /**
+ * **The Skim brief on a job request**, checked for shape — or `undefined` for
+ * none, the default route. Only beside steps that are Skim's own and end in
+ * `skim` (`quotes`, `ideas`, `skim`, as the band's *Plan it again* sends them):
+ * the brief's route is written by the runner after the `skim` step as the
+ * job's last, and a job that went on past it, or never reached it, would carry
+ * a field nothing reads. Whether the brief exists on the article is the job
+ * route's question, asked with the owner in scope. Plan 261027d.
+ */
+const SKIM_BRIEF_STEPS: readonly StepName[] = ["quotes", "ideas", "skim"];
+function parseSkimBrief(raw: unknown, steps: StepName[] | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || !isSpideryarnId(raw)) throw httpError(400, "skimBrief must be a spya- id");
+  if (!steps?.includes("skim") || !steps.every((s) => SKIM_BRIEF_STEPS.includes(s))) {
+    throw httpError(400, "skimBrief goes with a job whose steps are quotes, ideas and skim");
+  }
+  return raw;
+}
+
+/**
  * The body of `POST /api/article/:slug/reset`: `{ regenerate: boolean }`, and
  * nothing else. A boolean and not a list on purpose — which extras to make
  * again is the server's to read off the revision, not the client's to name
@@ -7513,6 +7567,12 @@ export function parseJobRequest(body: unknown): {
    */
   illustrationNote?: string;
   /**
+   * **The added Skim brief to plan a route for** — only with `steps` that are
+   * Skim's own (`parseSkimBrief`). The handler checks the brief is on the
+   * article and renders the profile with it in place of the purpose. Plan 261027d.
+   */
+  skimBrief?: string;
+  /**
    * With a plain `url` only: **the reader has chosen their own copy** over the
    * public one somebody else already made of this address, so the add does not
    * offer it again and is the ordinary paid one.
@@ -7520,7 +7580,7 @@ export function parseJobRequest(body: unknown): {
    */
   ownCopy?: true;
 } {
-  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote, ownCopy } = (body ??
+  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote, skimBrief, ownCopy } = (body ??
     {}) as Record<string, unknown>;
   if (ownCopy !== undefined) {
     if (ownCopy !== true) throw httpError(400, "ownCopy must be true, or left out");
@@ -7539,7 +7599,8 @@ export function parseJobRequest(body: unknown): {
       uploadId !== undefined ||
       steps !== undefined ||
       force !== undefined ||
-      illustrationNote !== undefined
+      illustrationNote !== undefined ||
+      skimBrief !== undefined
     ) {
       throw httpError(400, "readThis goes with a slug and nothing else");
     }
@@ -7573,6 +7634,7 @@ export function parseJobRequest(body: unknown): {
   }
   const parsedUseProfile = useProfile;
   const note = parseIllustrationNote(illustrationNote, parsedSteps);
+  const brief = parseSkimBrief(skimBrief, parsedSteps);
 
   /* The three optional fields, spelled once. They were written out at each of
      the three `return`s, which is three chances for one of them to be quietly
@@ -7591,6 +7653,7 @@ export function parseJobRequest(body: unknown): {
     ...(parsedForce ? { force: parsedForce } : {}),
     ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
     ...(note !== undefined ? { illustrationNote: note } : {}),
+    ...(brief !== undefined ? { skimBrief: brief } : {}),
   };
 
   /* Before the URL branch. `checkUploadOrigin` refuses every combination rather
@@ -8230,7 +8293,7 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
  * GPT Sol's review of the built code, 2026-08-26.
  *
  */
-function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNote"> {
+function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNote" | "skimBrief"> {
   /* `ownerId` goes too. The client never needs it — it can only ever be looking
      at its own jobs now — and an `auth.users` uuid on the wire is one more
      thing that has to not end up in a log, a bug report or a screenshot. */
@@ -8241,6 +8304,9 @@ function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNot
     profile: _hidden,
     ownerId: _whose,
     illustrationNote: _note,
+    /* The Skim brief's id too (plan 261027d): the client knows which brief it
+       pressed for, and keeps its own pending state by it. */
+    skimBrief: _brief,
     reset,
     ...rest
   } = job;
@@ -8381,6 +8447,25 @@ type ModelReport = {
  */
 async function resolveProfile(slug: string): Promise<string | null> {
   return renderProfile(await resolveProfileParts(slug));
+}
+
+/**
+ * **Who is reading, for one added Skim brief** — the reader's "about you" with
+ * the brief **in place of** the article's *why you're reading*. A brief is the
+ * answer to that question asked again, so mixing the two would lean every
+ * added route back towards the default (plan 261027d § What an added brief is
+ * planned from; one argument to change). `withProfile` false drops "about
+ * you" and keeps the brief, which is the request itself, not a profile.
+ *
+ * Reads the brief owner-scoped: a stranger's article, or a brief not on this
+ * one, is the store's 404. The brief's text never reaches a log.
+ */
+async function skimBriefProfile(slug: string, briefId: string, withProfile = true): Promise<string | null> {
+  const [brief, profile] = await Promise.all([
+    skimBriefStore.get(slug, briefId),
+    withProfile ? readerStore.readProfile() : Promise.resolve(null),
+  ]);
+  return renderProfile({ profile, purpose: brief.brief });
 }
 
 /**
@@ -12891,18 +12976,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       void profile.catch(() => {});
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadSkim(at));
       if (found === null) return;
-      const now = await profile;
-      const nowHash = now ? hashProfile(now) : null;
-      const { profileNoticeDismissedFor, ...rest } = found;
-      const profileChanged = routeProfileIsStale(found.skim.profileHash, nowHash);
-      const body: SkimResponse = {
-        ...rest,
-        profileChanged,
-        /* The stored key is never sent: it carries the profile's hash. */
-        profileNoticeDismissed:
-          profileChanged &&
-          profileNoticeDismissedFor === profileNoticeKey(found.skim.generatedAt, nowHash),
-      };
+      /* `skimResponseFor` (src/skim.ts), which an added brief's route answers
+         through too (plan 261027d). The stored key is never sent. */
+      const body: SkimResponse = skimResponseFor(found, await profile);
       send(res, 200, body);
     },
   },
@@ -12932,6 +13008,108 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (routeProfileIsStale(found.skim.profileHash, nowHash)) {
         const key = profileNoticeKey(generatedAt, nowHash);
         if (!(await skimNoticeStore.dismissProfileNotice(at, generatedAt, key))) throw replanned();
+      }
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+
+  /* **The owner's added Skim briefs** — plan
+     docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md
+     (`spya-xyje0z`). Owner-only through the store (`articleIdForOwned`): a
+     stranger's slug, or a brief not on this article, is a 404. No `viewAs`:
+     a brief is the owner's own steering, and these rows fail closed while the
+     administrator views as a reader. Planning one is not here — it is
+     `POST /api/jobs { slug, steps: [..., "skim"], skimBrief }`. None of these
+     spends, and none logs the sentence. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: SKIM_BRIEFS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const rows = await skimBriefStore.list(slugPart(captures, 1));
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { briefs: rows.map(skimBriefSummary) } satisfies SkimBriefList);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: SKIM_BRIEFS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const { id, brief } = skimBriefBody(await readBody(req), ["id", "brief"]);
+      const row = await skimBriefStore.create(at, checkBriefId(id), checkBrief(brief));
+      send(res, 201, skimBriefSummary(row));
+    },
+  },
+  /* One brief's route, answered exactly as the default's is (`skimResponseFor`):
+     its profile now is "about you" with the brief in the purpose's place.
+     **Unplanned is `200 null` to every caller**, not only to one that sends
+     the none-yet header as the default's route does: the brief is known to
+     exist (a missing one is the store's 404), so null can only mean "not
+     planned yet", and there is no client from before briefs to stay
+     compatible with. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: SKIM_BRIEF_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      res.setHeader("Cache-Control", "private, no-store");
+      const found = await skimBriefStore.loadRoute(at, id);
+      if (!found) {
+        send(res, 200, null);
+        return;
+      }
+      send(res, 200, skimResponseFor(found, await skimBriefProfile(at, id)));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: SKIM_BRIEF_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      const { brief } = skimBriefBody(await readBody(req), ["brief"]);
+      send(res, 200, skimBriefSummary(await skimBriefStore.updateBrief(at, id, checkBrief(brief))));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: SKIM_BRIEF_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      if (!(await skimBriefStore.remove(at, id))) throw httpError(404, "No such Skim brief on this article.");
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+  /* The default's dismissal (above), for one brief's route and the brief's
+     profile now. Same answers: 404, 409 when re-planned, 204. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/skim\/([\w.%-]+)\/briefs\/([\w.%-]+)\/profile-notice-dismissal$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      const generatedAt = skimDismissalGeneratedAt(await readBody(req));
+      const found = await skimBriefStore.loadRoute(at, id);
+      if (!found) throw httpError(404, "No route planned for this Skim brief yet.");
+      const now = await skimBriefProfile(at, id);
+      const nowHash = now ? hashProfile(now) : null;
+      const replanned = () => httpError(409, "This route has been planned again since. Read it again.");
+      if (found.skim.generatedAt !== generatedAt) throw replanned();
+      if (routeProfileIsStale(found.skim.profileHash, nowHash)) {
+        const key = profileNoticeKey(generatedAt, nowHash);
+        if (!(await skimBriefStore.dismissProfileNotice(at, id, generatedAt, key))) throw replanned();
       }
       res.statusCode = 204;
       res.end();
@@ -14560,10 +14738,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           }
         }
       }
+      /* **An added Skim brief's route is planned for the brief, in place of
+         the article's purpose** — `renderProfile({ profile, purpose: brief })`,
+         plan 261027d. Read with the owner in scope, so a brief not on this
+         reader's article is a 404 before anything is queued. */
       const profile =
-        request.url !== undefined || request.useProfile === false
-          ? null
-          : await resolveProfile(request.slug);
+        request.skimBrief !== undefined
+          ? await skimBriefProfile(request.slug, request.skimBrief, request.useProfile !== false)
+          : request.url !== undefined || request.useProfile === false
+            ? null
+            : await resolveProfile(request.slug);
       const { useProfile: _asked, ownCopy: _own, ...work } = request;
       /* `openEarly` on a pasted address only: the article opens on a stand-in
          outline and a second job builds the structure. `enqueue` honours it

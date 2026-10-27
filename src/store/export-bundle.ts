@@ -594,6 +594,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.readingTime.length) {
     at("reading-time.json", { blocks: rows.readingTime.map((row) => rowJson(row)) });
   }
+  if (rows.skimBriefs.length) {
+    at("skim-briefs.json", { briefs: rows.skimBriefs.map((row) => rowJson(row)) });
+  }
   if (rows.glossaryHiddenEntries.length) {
     at("glossary-hidden.json", {
       entries: rows.glossaryHiddenEntries.map((row) => rowJson(row)),
@@ -1059,6 +1062,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "chat threads", n: rows.chatThreads.length },
     { label: "chat messages", n: rows.chatMessages.length },
     { label: "searches", n: rows.searchRuns.length },
+    { label: "Skim briefs", n: rows.skimBriefs.length },
     { label: "referee criteria", n: rows.refereeCriteria.length },
     { label: "glossary lookups", n: rows.glossaryLookups.length },
     { label: "cited works found on the web", n: rows.citationFinds.length },

@@ -328,6 +328,25 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   [the measurement](../investigations/261019a-uncaptioned-pdf-figures-located-on-rovelli.md).
   An uncaptioned picture's `alt` is *"Figure without a caption"*, since there is no visible
   caption beside it to make empty alt right.
+- **Since 2026-10-27 a picture is not the figure merely because it is the one picture on the
+  page.** LeCun's diagrams wire small icons (a photo of the Earth, a "Z", an "S") into boxes and
+  arrows, and the same icons recur across figures. The bitmap route stored the Earth as three
+  different figures, and the located route then dropped four right answers because their regions
+  "shared a picture" (report spya-m40r6t,
+  [261027b](../postmortems/261027b-a-part-of-a-figure-was-taken-for-the-whole-figure.md)). Three
+  rules now hold this. First, a paired picture whose touching vector drawing is at least
+  `IN_A_DRAWING_RATIO` (3) times its area is refused `in-a-drawing` (`isPartOfDrawing`,
+  [`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts)). If the page cannot be measured it
+  is refused `unmeasured-picture`, which fails closed. Second, either refusal can be recovered
+  only as a rendered region, and not as one that is mostly a single picture, so a model that
+  boxes the icon cannot put it back. Third, located regions conflict over pictures only by the
+  **summed** share of the region those shared pictures cover (`REGION_PICTURE_SHARE`, 0.25): a
+  repeated photo grid still conflicts, and a reused 3 % icon does not. Measured over every
+  single-picture page in production's PDFs and the eval PDFs: real picture figures score 1.00–1.29
+  and LeCun's icons 17–31. The rule only follows ink that **touches** the picture, so a bitmap
+  panel beside disconnected vector panels is not caught; that case is named, not built.
+  `MAX_LOCATE_CALLS` went from 8 to 16 at the same time, because this paper needs nine calls —
+  [261027e](../plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md).
 - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
   is all there is; keeping the first meant the same picture appeared under two different captions —
   a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now
