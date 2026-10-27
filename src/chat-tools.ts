@@ -1284,7 +1284,7 @@ interface Destination {
 }
 
 /* `requestTarget` and `sameTarget` were declared here until 2026-09-05 and moved
-   to src/urls.ts when Debate needed the same identity: a citation
+   to src/urls.ts when Reception needed the same identity: a citation
    whose request target is the article's own address is the article presenting
    itself as a response to itself, and the plan for that mode
    (docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md

@@ -1,5 +1,5 @@
 /**
- * **A registry's record as a Bibliography or Debate row keeps it, and the guards
+ * **A registry's record as a Bibliography or Reception row keeps it, and the guards
  * that read one back** — plan 261001a stages 5 and 6
  * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
  *

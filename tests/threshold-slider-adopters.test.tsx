@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The Glossary's and Citations' threshold rows, as the reader gets them.**
+ * **The Glossary's and Bibliography's threshold rows, as the reader gets them.**
  *
  * Both panels drew this row for themselves (`GateSlider`, `BarSlider`) until
  * 2026-10-04, when they moved onto the shared `ThresholdSlider`
@@ -348,7 +348,7 @@ describe("the Glossary's threshold row", () => {
   });
 });
 
-describe("Citations' threshold row", () => {
+describe("Bibliography's threshold row", () => {
   const TITLE =
     "How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer.";
 

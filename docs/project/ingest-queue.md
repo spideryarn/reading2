@@ -1254,7 +1254,7 @@ and keeps the two-sided note only when the server cannot say
 ([261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md)). It is
 a prediction from the state the page read, and the page reads again after a run and after the
 purpose box saves; the
-sketch's wait, Debate's **one model call that searches the web plus optional search-free
+sketch's wait, Reception's **one model call that searches the web plus optional search-free
 synthesis**, and Skim's *needs Quotes first* are the same kind of note under those rows' names.
 Each note is also its button's accessible description. A Retry is one press too, and holds
 *Starting…* across its round trip so a double click sends one. The whole-article reset, the first
@@ -1924,7 +1924,7 @@ different things, and the reasoning was the half that was right (GPT Sol). Nothi
 before a window is granted, so an un-checkpointed paid call can be bought once per window; the two
 expensive fan-outs are checkpointed, which is why the number is the protection for most steps. The
 two dear purchases that cannot be checkpointed are marked once per job on the job row instead
-(`jobs.paid_step_begun`), and a later window refuses to buy them again: Debate's web search, at the
+(`jobs.paid_step_begun`), and a later window refuses to buy them again: Reception's web search, at the
 step ([261009l](../plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md)), and
 Illustrated's plates, at the plate phase, after the step's own deliberate hand-back
 ([261009o](../plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md)). The

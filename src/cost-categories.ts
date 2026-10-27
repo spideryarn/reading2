@@ -190,7 +190,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "simple-check": "step-driven",
   skim: "step-driven",
   reception: "step-driven",
-  /* Debate's claims list, one Messages call and no search (src/sources-claims.ts). */
+  /* Claims' list, one Messages call and no search (src/sources-claims.ts). */
   "sources-claims": "step-driven",
   /* A reader's claim check: one press, one web search, in request scope —
      `POST /api/sources-claims/:slug/checks` (src/routes.ts). */
@@ -227,9 +227,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
      an administrator for one article; run after the response in a collector
      of its own, attributed to the request's owner and the article. */
   "author-lookup": "interactive request work",
-  /* Bibliography's *Investigate* — src/citation-investigate.ts. A reader presses it. */
+  /* Bibliography's *Dig deeper* — src/citation-investigate.ts. A reader presses it. */
   "citation-investigate": "interactive request work",
-  /* The paper's passages, inside the same *Investigate* press. */
+  /* The paper's passages, inside the same *Dig deeper* press. */
   "citation-paper-passages": "interactive request work",
   /* The work's influence from the search's pages, inside the same press. */
   "citation-influence": "interactive request work",

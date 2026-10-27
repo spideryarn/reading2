@@ -1729,7 +1729,7 @@ function recordBoundaryFaults(
  *
  * ## What the shape is, and why it is not a judgment call
  *
- * Two adjacent gist columns of identical extent, neither marked `continuation`,
+ * Two adjacent Structure rows of identical extent, neither marked `continuation`,
  * so both render in full and both are fisheye items. One rung finer buys a
  * restatement of the same paragraphs, against
  * [granularity-zoom.md](../docs/project/granularity-zoom.md)'s promise that

@@ -409,7 +409,7 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
   });
 
-  it("places a Debate claim row only where its claim's words still are", () => {
+  it("places a Claims row only where its claim's words still are", () => {
     const notes = marginaliaNotes(null, quoted, null, {
       claims: [claim("https://a.example", "spya-aaaaa3", say(2)), claim("https://b.example", "spya-aaaaa4", "not said")],
     });
@@ -482,7 +482,7 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     expect([...notes.keys()].sort()).toEqual(["spya-aaaaa2", "spya-aaaaa4"]);
   });
 
-  it("orders the kinds on one block: question, idea, FAQ, Debate, citations, the reader's own", () => {
+  it("orders the kinds on one block: question, idea, FAQ, Reception, citations, the reader's own", () => {
     const tree2 = {
       ...tree,
       nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
@@ -654,7 +654,7 @@ describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
     });
   });
 
-  it("puts the Timeline line after FAQ and before Debate on one block", () => {
+  it("puts the Timeline line after FAQ and before Reception on one block", () => {
     const kinds = (
       marginaliaNotes(null, quoted, null, {
         claims: [claim("https://c.example", "spya-aaaaa2", say(1))],

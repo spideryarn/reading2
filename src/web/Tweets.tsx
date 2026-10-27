@@ -1,6 +1,9 @@
 /**
  * **The article as a numbered thread, in the band beside it.**
  *
+ * This file keeps the `Tweets` name on purpose: it is Summary's Thread view now, but the step,
+ * the column and the route are still `tweets` (plan 261003l).
+ *
  * A page of its own at `/read/<slug>/tweets` from 2026-08-25 until 2026-09-29,
  * when Greg asked for it as an ordinary mode:
  *

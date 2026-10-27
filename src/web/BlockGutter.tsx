@@ -235,7 +235,7 @@ interface Props {
   onBookmark?: ((id: BlockId) => Promise<boolean>) | undefined;
   /**
    * Go to this block without a page load, writing `?at=` as it goes — App's
-   * own jump, the one every gist cell and arrow key uses.
+   * own jump, the one every Structure row and arrow key uses.
    *
    * The gutter needs it for the one path where this element has to behave like
    * the link it says it is: **keyboard activation**. A bare `<a href>` left to

@@ -529,7 +529,7 @@ On the owner's reading view, for an article that has a *why you're reading this*
 *Suggest what to do here*, just under *Guide chat*. Pressing it makes one small model call; the bar stays open and then
 draws, under *From why you're reading*, up to three quick searches, up to two modes and one
 question for chat about what the web says, each with a line saying why. **Every one is a row the
-bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Debate's
+bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Sources'
 lens handoff), and nothing runs without its own press, whatever the model returned. The list is
 kept for the visit in state of its own, hidden while the reader types, and dropped when *About you*
 or the reason is saved.

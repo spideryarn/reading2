@@ -24,7 +24,7 @@
  * 1. **No id inheritance and no previous-artefact read at all.** Nothing
  *    addresses a question yet — no `?faq=`, no per-question reader state — so
  *    ids are minted fresh per run for React keys, as `quiz` decided.
- * 2. **Every passage is verified the Citations way**: the id must be a block in
+ * 2. **Every passage is verified the Bibliography way**: the id must be a block in
  *    the body evidence, `findQuote(…, "spaced")` must find the words in *that*
  *    block, and what is stored is `block.text.slice(start, end)`. Ideas' default
  *    forgiving match accepts `fall a part` for `fall apart`; a quotation shown

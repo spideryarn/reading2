@@ -1,6 +1,6 @@
 /**
  * **A chat started from an item in a mode: the button that starts one, and
- * the mark that reopens it.** Shared by Debate's claims, Glossary's entries,
+ * the mark that reopens it.** Shared by Claims' claims, Glossary's entries,
  * Bibliography's rows, Ideas' rows (since plan 261009k) and Quiz's marks
  * (since plan 261024i), so they are one design and not five copies.
  *
@@ -12,7 +12,7 @@
  * - `AskInChatButton` is Glossary's and Bibliography's *Ask in chat*, beside Dig
  *   deeper (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D5)
  *   until 2026-10-09, and in its place since (plan 261009k).
- *   Debate's claim has its own icon-only button on the claim's heading.
+ *   Claims' claim has its own icon-only button on the claim's heading.
  *
  * **Nothing is stored on the item's side.** A caller finds its chat by
  * matching the item's origin against the thread summaries `Reader` holds
@@ -55,7 +55,7 @@ export type IdeaChats = ItemChats<Pick<Idea, "id" | "name" | "statement">>;
 export const ASK_ENTRY_IN_CHAT = "Ask about this term in chat";
 export const ASK_WORK_IN_CHAT = "Ask about this work in chat";
 export const ASK_IDEA_IN_CHAT = "Ask about this idea in chat";
-/** The mark's accessible name on each. Debate's is `SOURCES_CLAIMS_OPEN_CLAIM_CHAT`. */
+/** The mark's accessible name on each. Claims' is `SOURCES_CLAIMS_OPEN_CLAIM_CHAT`. */
 export const OPEN_ENTRY_CHAT = "Open the chat about this term";
 export const OPEN_WORK_CHAT = "Open the chat about this work";
 export const OPEN_IDEA_CHAT = "Open the chat about this idea";
@@ -101,7 +101,7 @@ export function originChatTip(label: string, turns: number, words: "gist" | "ans
  * as a comment (spya-vj7wv0, plan 261006i). The count and the answer's
  * first words are what tell it from *Ask in chat* below.
  *
- * `preventDefault` on the press: in Debate the mark sits in a `<summary>`,
+ * `preventDefault` on the press: in Claims the mark sits in a `<summary>`,
  * and the press must not also fold the claim. It costs nothing elsewhere.
  */
 export function OriginChatMark({

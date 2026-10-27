@@ -530,7 +530,7 @@ export function Library({
      installed phone the document is laid out across the whole physical screen
      and every page has to add back the edge it faces (styles/tokens.css). Every
      other signed-in `<main>` does — `ProfilePage`, `PrivacyPage`, `ContactPage`
-     and `ChangelogPage` at `3.5rem + --safe-top`, `Metadata` and `Tweets` at
+     and `ChangelogPage` at `3.5rem + --safe-top`, `Metadata` at
      `2.5rem + --safe-top` — and this page's bare `pt-10` was the one that did
      not, so on an iPhone the shelf's own `<h1>` sat at y=40 inside a 59px
      inset: under the clock. Measured 2026-09-08 with the insets stood up in

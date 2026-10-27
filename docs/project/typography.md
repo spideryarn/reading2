@@ -158,10 +158,10 @@ jobs are settled, not that every number is. `/design` § Text roles shows each a
 meets.
 
 **A role is decided by the line's job in its row, not by whose words they are.** In Quotes the
-quotation *is* the row, so it is `--type-item`; under a Debate title, a quotation is `--type-quote`.
+quotation *is* the row, so it is `--type-item`; under a Reception title, a quotation is `--type-quote`.
 Search's results are Quotes' case. Face is a separate decision, [fonts.md](fonts.md)'s.
 
-**Exceptions, each with a comment beside the rule:** Quiz's one question stays 1.03rem; Debate's
+**Exceptions, each with a comment beside the rule:** Quiz's one question stays 1.03rem; Claims'
 foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and block-id fallback stay
 0.88rem. They occupy similar places without doing one of the six jobs. Skim's question before a
 quote (`.skim-cue`) does a body line's job but stays 0.78rem: Greg asked that it be smaller than the

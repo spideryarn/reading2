@@ -440,7 +440,7 @@ export function hostOf(url: string): string {
  *
  * Wrong in the over-matching direction is what costs something. In chat it is
  * `read_web_page` telling the model a page is "already open" when it is a
- * different page; in Debate it drops a legitimate annotation from
+ * different page; in Reception it drops a legitimate annotation from
  * `returnedSources` and files its row under `selfSource`.
  *
  * **It lived in src/chat-tools.ts until 2026-09-05**, and moved here unchanged

@@ -106,6 +106,7 @@ async function articleWithAList(slug: string): Promise<ScratchArticle> {
   const article = await scratchArticleInPg(slug, {
     ownerId: OWNER,
     mutate: async (dir) => {
+      // `citations.json` is the legacy fixture file name the loader reads for the bibliography step.
       await writeFile(path.join(dir, "citations.json"), JSON.stringify({ ...LIST, slug }));
     },
   });

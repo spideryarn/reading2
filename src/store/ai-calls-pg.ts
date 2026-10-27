@@ -47,7 +47,7 @@ async function articleIdFor(slug: string, ownerId: string): Promise<string | nul
       .select({ id: articles.id })
       .from(articles)
       /* `ownedSlug`, never a bare slug match: the column is globally unique, so
-         an unfiltered lookup finds anybody's article. `tests/owner-isolation.ts`
+         an unfiltered lookup finds anybody's article. `tests/owner-isolation.test.ts`
          greps this directory for the unsanctioned spelling and it caught this
          file writing one.
 

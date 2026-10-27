@@ -1,6 +1,6 @@
 /**
  * **A PDF's numbered reference list, read from its own text layer** — for the
- * Citations stage, which otherwise never sees one (plan 260930i,
+ * Bibliography stage, which otherwise never sees one (plan 260930i,
  * SPIDERYARN-READING2-6K).
  *
  * Stage 2 transcribes a PDF's bibliography and then deliberately does not

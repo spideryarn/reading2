@@ -77,7 +77,7 @@ claim*, each with *Where it sits › its name* in its head ([sources.md § The b
   visitor gets a Google Scholar search for who cites it instead.
 - **Claims**: the list of the claims the article rests on, for the reader to pick from
   ([§ The claims list](#the-claims-list)). The Reception search no longer looks into claims. A
-  debate from before `debate/7` still draws its saved claim sources under the list, exactly as
+  Reception from before `debate/7` still draws its saved claim sources under the list, exactly as
   before, headed *Claims the earlier search chose*: one open disclosure per claim, in article
   order, headed by the article's own words; the relevance bar belongs there.
 
@@ -330,7 +330,7 @@ changed here:
 - **Only a claim's block is checked against the article.** The route never looks an item's id up.
 - **The mark is one component**, `OriginChatMark` in
   [`OriginChat.tsx`](../../src/web/OriginChat.tsx), with its own stylesheet
-  ([`origin-chat.css`](../../src/web/styles/origin-chat.css)). Debate's sheet sets only where the
+  ([`origin-chat.css`](../../src/web/styles/origin-chat.css)). Reception's sheet sets only where the
   mark sits on a claim's heading.
 
 Not built yet, and in the plan: the same from a Summary paragraph. A claim typed in your own words
@@ -378,7 +378,7 @@ What the reader gets:
   the chat's gist once one is written, two lines then an ellipsis, as every item's mark does (plan
   [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)).
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
-  needs no stored debate.
+  needs no stored Reception.
 - **In Chat's list** the conversation says *Investigate* under its title, beside Sources' icon; the
   icon's card quotes the question.
 - **A visitor has neither.** Sources is outside the
@@ -388,7 +388,7 @@ What the reader gets:
 **Why the angle is a chat and not a steered search.** Telling the stored search to check one named
 claim was tried and worked, at about 20 cents and a minute and a half a run
 ([261003o § Q-claims-picker](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md)).
-But the stored debate is one result per article, shown to visitors when the article is shared and
+But the stored Reception is one result per article, shown to visitors when the article is shared and
 replaced by each run. An angled run would either overwrite the plain one, and show a visitor the owner's
 angle, or need storage per angle, a merge, a spending rule and the angle in the freshness stamp. A
 chat is one answer's cost, can be answered back, and can be pointed in several directions by
@@ -423,7 +423,7 @@ What to know before changing it:
   [`conversation-band-origin.test.tsx`](../../tests/conversation-band-origin.test.tsx).
 
 Tests: [`reception-lens.test.tsx`](../../tests/reception-lens.test.tsx) (the box, the list, no stored
-debate, a visitor), [`reception-lens-in-chat.test.tsx`](../../tests/reception-lens-in-chat.test.tsx) (the
+Reception, a visitor), [`reception-lens-in-chat.test.tsx`](../../tests/reception-lens-in-chat.test.tsx) (the
 whole journey, through the app), [`chat-origin-route.test.ts`](../../tests/chat-origin-route.test.ts)
 (the route and the columns), [`thread-origin-way-back.test.ts`](../../tests/thread-origin-way-back.test.ts)
 (the two shapes, the mapping, the list) and [`chat-handoff.test.ts`](../../tests/chat-handoff.test.ts)
@@ -439,9 +439,9 @@ honestly finds nothing.
 - **A list and a count, and no reading of either.** OpenAlex says which papers cite a DOI; it has no
   citing sentence, and no model is asked. The panel says so under the count. What each citer says,
   for or against, is not built.
-- **Not part of the stored debate.** It is free, has its own route (`GET /api/citers/<slug>`) and
+- **Not part of the stored Reception.** It is free, has its own route (`GET /api/citers/<slug>`) and
   its own cache, so it is on screen whenever the owner has Reception open: before the paid search
-  has run, and on a debate stored before it existed. Nothing in it can start the search, and it
+  has run, and on a Reception stored before it existed. Nothing in it can start the search, and it
   does not change Reception's count, which stays the web search's rows.
 - **The DOI is checked before it is trusted.** OpenAlex's record for the DOI must carry the
   article's whole title and one of its authors, as imported (never a reader's rename). The check
@@ -562,7 +562,7 @@ what the evals behind it measured is
 Since 2026-10-04 the owner's Reception ends with **Cited by**, the papers that cite the piece, from
 OpenAlex: 261002i's stage 2, built as
 [261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md). It is
-not part of the stored debate, so it is there before a search has run.
+not part of the stored Reception, so it is there before a search has run.
 
 How the mode was evaluated, and what that found:
 [260906b](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md), with the stage-0
@@ -637,10 +637,10 @@ Tests: `tests/reception*.test.ts(x)` and `tests/sources-claim*.test.ts(x)` — [
 evaluation's scorer is [`reception-eval-score.test.ts`](../../tests/reception-eval-score.test.ts).
 
 Related: [bibliography.md](bibliography.md) shares the bibliographic lookup
-([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;
+([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Reception's residual risk;
 [experimental-features.md](experimental-features.md) is the switch it sat behind until 2026-10-09; and
 [security.md § A third untrusted party](security.md#a-third-untrusted-party-what-the-model-returns)
-has the web-search evidence collector Debate added.
+has the web-search evidence collector Reception added.
 
 ---
 

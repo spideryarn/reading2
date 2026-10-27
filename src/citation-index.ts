@@ -1,6 +1,6 @@
 /**
  * **Who cites this article, from OpenAlex** — a list and a count, with no model
- * anywhere in it. Debate's Reception draws it as *Cited by*.
+ * anywhere in it. Sources' Reception draws it as *Cited by*.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md,
  * whose § GPT Sol's plan review is where most of the rules below come from.
  *

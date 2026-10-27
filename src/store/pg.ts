@@ -687,7 +687,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -715,7 +715,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -743,7 +743,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -823,7 +823,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -885,7 +885,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* FAQ's fingerprint exactly, so the outline too. */
     relations: "value",
-    /* Only for Debate Claims' fallback head when metadata has no title. */
+    /* Only for Claims' fallback head when metadata has no title. */
     sourcesClaims: "value",
     situate: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
@@ -2937,7 +2937,7 @@ export function shareableArtefacts(revision: {
         ? revision.simpleSummary
         : null,
     bibliography: revision.bibliography,
-    /* **Debate is on a shared link when either of its artefacts is**: a claims
+    /* **Sources is on a shared link when either of its artefacts is**: a claims
        list made with no Reception search stored is still the visitor's to read
        (src/public/dto.ts § `publicSourcesClaimList`, the same `claims` test). */
     reception:
@@ -4286,7 +4286,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * Debate's claims list on its own — the Postgres half of `loadSourcesClaims`.
+   * Claims' list on its own — the Postgres half of `loadSourcesClaims`.
    *
    * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
    * FAQ's. **A 404 is the ordinary case** (the step runs only on a press on
@@ -4615,7 +4615,7 @@ const rawPgArticleReader: ArticleReader = {
       ];
     });
     const withFinds = attachFinds(withLookups, finds);
-    /* **Investigate's answers, the same way and after `attachFinds`** — the
+    /* **Dig deeper's answers, the same way and after `attachFinds`** — the
        row the call was made from is the upgraded one, so that is the row the
        fingerprint is recomputed over, with the reader's profile as it is now
        (the call's `resolveProfile`: the global box and this article's

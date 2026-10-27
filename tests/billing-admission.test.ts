@@ -534,7 +534,7 @@ describe("a repeat paste of an article on the shelf", () => {
  * with nothing queued; `{ url, ownCopy: true }` is the ordinary paid add.
  * docs/plans/261009j-a-public-copy-offered-at-import.md.
  *
- * Which public articles count is Citations' read (pg-cited-in-spideryarn.ts),
+ * Which public articles count is Bibliography's read (pg-cited-in-spideryarn.ts),
  * so the absences below are the ones that matter: a stranger's private,
  * archived or unopenable article at the same address is never offered.
  */

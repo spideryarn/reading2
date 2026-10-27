@@ -477,7 +477,7 @@ credits are bought rather than on a per-token markup.
 
 **Everything else is on demand.** `DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, structure,
 assets`, of which only `structure` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
-debate, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
+Reception, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
 
 [billing.md § The quota](billing.md) is what a reader is charged against it — a slot, not a token.
 The per-token economics of a *search* pass, cold and warm, are a different measurement:
@@ -918,7 +918,7 @@ already have accepted it, and its searches can cost 15–20 cents a call with no
 second purchase. The reader sees that failure where they would once have had a retry. `send` also
 refuses redirects (`redirect: "error"`) on every request, so a refused connection cannot be the
 second hop of a POST that already went out. **What this does not close:** a pipeline step whose
-lease expires is requeued and run again (`src/store/pg-jobs.ts`), and Debate's step then buys its
+lease expires is requeued and run again (`src/store/pg-jobs.ts`), and Reception's step then buys its
 searches a second time.
 
 A `200` of any kind is never retried: not one whose body will not read, not one that does not

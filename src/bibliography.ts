@@ -1301,7 +1301,7 @@ function arxivUrl(id: string): string {
 }
 
 /* `scholarUrl` and `firstAuthor` moved to src/scholar-search.ts on 2026-10-03,
-   so Debate's panel can build the same search in the browser — this module is
+   so Reception's panel can build the same search in the browser — this module is
    server code. Re-exported, because the server's callers still reach them here. */
 export { firstAuthor, scholarUrl };
 
@@ -1627,7 +1627,7 @@ export function idsByKey(
        row keeps its id even if the model also changes its metadata on this
        re-run. The collision pass below still removes the alias when two old
        rows claim it (including one already stored under the arXiv key), rather
-       than moving either row's Find/Investigate state onto the other. */
+       than moving either row's Find/Dig deeper state onto the other. */
     if (c.key.startsWith("url:") && idKey?.startsWith("arxiv:") && idKey !== key) {
       claim(idKey, c.id);
     }

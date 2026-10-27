@@ -748,7 +748,7 @@ const READING_TIME = `/api/reading-time/${SLUG}`;
  *
  * **This line is the price of a decision, so it is worth being explicit about
  * what was bought.** The read could have been gated on the experimental-features
- * switch that Citations mode itself is behind, which would have kept this
+ * switch that Bibliography mode itself is behind, which would have kept this
  * request off most owners' article loads. It is not, on GPT Sol's review: the
  * band has to read the list somehow, so a gate either costs two states and two
  * requests or does not hold — and hiding a *control* behind that switch is not

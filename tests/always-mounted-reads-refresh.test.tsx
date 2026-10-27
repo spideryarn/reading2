@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **An always-mounted read hears its own step finish** — Citations, Glossary,
+ * **An always-mounted read hears its own step finish** — Bibliography, Glossary,
  * Quotes and Quiz, whose reads `OwnedReader` holds in every mode because the
  * prose marks them (and Marginalia shows the citations).
  *

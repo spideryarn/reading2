@@ -302,7 +302,7 @@ type ConversationKind = Exclude<ThreadKind, "candidates" | "guide">;
  * sent as its first question, or put in its composer to wait** (`send`).
  *
  * The senders are all in `Reader` (§ `handToChat`): *Ask in chat* in Glossary,
- * Citations and Debate, Debate's *Check this claim in chat*, and the button
+ * Bibliography and Reception, Claims' *Check this claim in chat*, and the button
  * on a Summary paragraph, which hands over the paragraph, quoted
  * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md). Greg,
  * 2026-09-11, asked whether the glossary's question should go into the
@@ -370,8 +370,8 @@ export interface ChatHandoffToChat extends ChatHandoffBase {
   readonly target: "chat";
   /**
    * The item the question is about, when the conversation should remember it
-   * (`ThreadOrigin`): Debate's *Check this claim in chat* since 2026-10-05,
-   * and *Ask in chat* on a Glossary entry or a Citations row since 2026-10-06
+   * (`ThreadOrigin`): Claims' *Check this claim in chat* since 2026-10-05,
+   * and *Ask in chat* on a Glossary entry or a Bibliography row since 2026-10-06
    * (docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md).
    * The band keeps it beside the new conversation and sends it with the
    * first question. The Summary's handoff sends none, and nor does the

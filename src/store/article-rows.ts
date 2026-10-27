@@ -223,7 +223,7 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: { exported: true, into: "referee-promises.json" },
     bundle: { exported: true, into: "augmentations/referee-promises.json" },
   },
-  /* Debate's checks of the claims the reader picked — reader state: their
+  /* Claims' checks of the claims the reader picked — reader state: their
      presses, the claims they typed in their own words, and what each search
      found. Exported for `reading_time`'s reason, it is the reader's own.
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3. */
@@ -247,7 +247,7 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: { exported: true, into: "citation-finds.json" },
     bundle: { exported: true, into: "augmentations/citation-finds.json" },
   },
-  /* Bibliography's *Investigate* — one kept answer per cited work, reader state
+  /* Bibliography's *Dig deeper* — one kept answer per cited work, reader state
      beside the `bibliography` artefact exactly as `citation_finds` is.
      docs/plans/260930a-citations-investigate-one-work-on-demand.md. */
   citation_investigations: {

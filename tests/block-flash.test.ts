@@ -384,7 +384,7 @@ describe("flashBlock with a passage", () => {
 });
 
 /**
- * **A cited work's words** — Citations' *first cited* jump (SPIDERYARN-READING2-6J,
+ * **A cited work's words** — Bibliography's *first cited* jump (SPIDERYARN-READING2-6J,
  * plan 260930i). The marks carry `data-cite`, not `data-hit`, and one phrase
  * can cite two works; `citePassageKey` is the one spelling `passageMarks` reads.
  */

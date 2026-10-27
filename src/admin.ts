@@ -517,7 +517,7 @@ export interface AdminImportFailure {
  * put `OPENROUTER_API_KEY` in it. The remedy that test names is to put the
  * shared thing in a module that imports nothing, and this is that module.
  *
- * **The two must agree**, and `tests/admin-spend-column.test.ts` holds them
+ * **The two must agree**, and `tests/admin-spend-column.test.tsx` holds them
  * against each other rather than trusting this comment: a report and a page
  * showing different dollars for the same account is a bug that would be argued
  * about for an hour before anybody suspected the formatter.

@@ -269,7 +269,7 @@ describe("the cards' words", () => {
     expect(MARG_TIPS.timeline.how).toMatch(/year.*assum|assum.*year/i);
   });
 
-  it("says when Debate's displayed headline can be AI's reading rather than the page's title", () => {
+  it("says when Reception's displayed headline can be AI's reading rather than the page's title", () => {
     expect(MARG_TIPS.reception.how).toMatch(/AI wrote the headline/i);
   });
 });
@@ -348,12 +348,12 @@ describe("a value this copy of the app was built before", () => {
     expect(cardLines()[0]).toBe("The piece takes this for granted rather than arguing for it.");
   });
 
-  it.each(UNKNOWN)("stamps a lone Debate page's relation %s as the server's own word", (relation) => {
+  it.each(UNKNOWN)("stamps a lone Reception page's relation %s as the server's own word", (relation) => {
     paint([{ kind: "reception", items: [{ ...claim, relation } as unknown as MarginClaim] }]);
     expect(stamps()).toEqual([words(relation)]);
   });
 
-  it.each(UNKNOWN)("stamps relation %s on one of several Debate pages", (relation) => {
+  it.each(UNKNOWN)("stamps relation %s on one of several Reception pages", (relation) => {
     const other = { ...claim, id: "d2", relation } as unknown as MarginClaim;
     paint([{ kind: "reception", items: [claim, other] }]);
     /* Each page's own stamp is inside the note, which is shut until pressed. */

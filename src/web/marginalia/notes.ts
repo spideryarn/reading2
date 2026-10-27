@@ -40,7 +40,7 @@ import { titleVoice } from "../tree.js";
 import { type AskedQuestion, type CommentKind, commentKind } from "../comment-nav.js";
 import type { Voice } from "../voice.js";
 
-/** A Debate claim row, the owner's or a visitor's — every owner row is one. */
+/** A Claims row, the owner's or a visitor's — every owner row is one. */
 export type MarginClaim = PublicClaimReceptionRow;
 /** A comment or bookmark, the owner's or a visitor's. */
 export type MarginComment = Comment | PublicComment;

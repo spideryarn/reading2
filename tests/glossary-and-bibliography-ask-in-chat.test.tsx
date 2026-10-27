@@ -37,7 +37,7 @@
  * **Ideas joined them on 2026-10-09** (plan 261009k, stage 3), with the same
  * seven claims, and so did **the way back from the chat** (stage 2): the line
  * above an open chat's transcript that opens the item's mode on the item —
- * for every origin, Debate's claim and angle included.
+ * for every origin, Claims' claim and Sources' Investigate angle included.
  *
  * **Since 2026-10-09 the button stands where Dig deeper was** (plan 261009k):
  * no entry and no row offers Dig deeper, and that is pinned here in the
@@ -303,7 +303,7 @@ const IDEAS: Ideas = {
   elapsedMs: 1,
 } as Ideas;
 
-/* One of Debate's claims, from an older search's rows (the legacy list), and
+/* One of Claims's claims, from an older search's rows (the legacy list), and
    the counts that search would have stored. */
 const CLAIM_QUOTE = "Qualia are the felt quality of an experience";
 const RECEPTION_COUNTS = {
@@ -787,7 +787,7 @@ describe("Ask in chat on a Glossary entry", () => {
   });
 });
 
-/* ------------------------------------------------------------ Citations -- */
+/* ------------------------------------------------------------ Bibliography -- */
 
 const workRow = (id: string): HTMLElement | null =>
   host.querySelector<HTMLElement>(`.mode-band li[data-citation-id="${id}"]`);
@@ -842,7 +842,7 @@ describe("Ask in chat on a cited work", () => {
     expect(sent.anchor).toBeUndefined();
     await until(() => (host.textContent ?? "").includes("many drafts"), "the answer");
 
-    /* 3. Back to Citations: the mark on that row and no other. */
+    /* 3. Back to Bibliography: the mark on that row and no other. */
     await act(async () => history.back());
     await until(() => param("mode") === "sources" && marks().length === 1, "the mark on the row");
     const mark = marks()[0] as HTMLButtonElement;
@@ -852,9 +852,9 @@ describe("Ask in chat on a cited work", () => {
     expect(mark.querySelector(".origin-chat-line")?.textContent).toBe("It argues consciousness is many drafts.");
     expect(workButton(WORK), "the mark stands in the button's place (plan 261010s, D2)").toBeNull();
 
-    /* 4. The mark opens the conversation beside Citations. */
+    /* 4. The mark opens the conversation beside Bibliography. */
     await act(async () => mark.click());
-    await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Citations");
+    await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Bibliography");
     expect(param("mode")).toBe("sources");
 
     /* 5. Chat's list. */
@@ -1316,21 +1316,21 @@ describe("the way back from a chat to its item", () => {
     const line = await openChatFrom({ mode: "bibliography", itemId: WORK, quote: WORK_TITLE });
     expect(line.textContent).toBe(`Back to “${WORK_TITLE}” in Bibliography`);
     await act(async () => line.click());
-    await until(() => param("mode") === "sources" && scrolled.length > 0, "Citations, on the row");
+    await until(() => param("mode") === "sources" && scrolled.length > 0, "Bibliography, on the row");
     expectLandedOn(workRow(WORK), ".tl-scroll");
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     await act(async () => history.back());
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
   });
 
-  it("does not replay an unfinished focus when Citations is visited later", async () => {
+  it("does not replay an unfinished focus when Bibliography is visited later", async () => {
     let letBibliographyReply!: () => void;
     bibliographyMayReply = new Promise<void>((resolve) => {
       letBibliographyReply = resolve;
     });
     const line = await openChatFrom({ mode: "bibliography", itemId: WORK, quote: WORK_TITLE });
     await act(async () => line.click());
-    await until(() => param("mode") === "sources", "Citations, while its list is loading");
+    await until(() => param("mode") === "sources", "Bibliography, while its list is loading");
     expect(scrolled, "there is no row to land on yet").toEqual([]);
 
     /* Leave before the row exists, then let the opening read finish while the
@@ -1345,7 +1345,7 @@ describe("the way back from a chat to its item", () => {
 
     history.pushState(null, "", `/read/${SLUG}?mode=sources&sources=bibliography`);
     await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
-    await until(() => workRow(WORK) !== null, "a later ordinary visit to Citations");
+    await until(() => workRow(WORK) !== null, "a later ordinary visit to Bibliography");
     expect(scrolled, "the abandoned focus is not replayed on the later visit").toEqual([]);
   });
 
@@ -1362,7 +1362,7 @@ describe("the way back from a chat to its item", () => {
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
   });
 
-  it("goes back to one of Debate's claims: Claims open, its filters cleared, the claim in view and unfolded", async () => {
+  it("goes back to one of Claims's claims: Claims open, its filters cleared, the claim in view and unfolded", async () => {
     const line = await openChatFrom(
       { mode: "sources-claims", blockId: "spya-bbbbbb", quote: CLAIM_QUOTE },
       "&bears=directly&receptionthread=key",

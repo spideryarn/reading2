@@ -1,5 +1,5 @@
 /**
- * A PDF's numbered reference list, read from its text layer for the Citations
+ * A PDF's numbered reference list, read from its text layer for the Bibliography
  * stage — src/citation-reference-list.ts, plan 260930i (SPIDERYARN-READING2-6K).
  * The lines are shaped like pass 0's reading of the paper the report came from,
  * after `pageLines` has taken the running headers out.

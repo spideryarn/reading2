@@ -99,7 +99,7 @@ export function AboutMade({
   version?: string | undefined;
   generatedAt?: string | undefined;
   elapsedMs?: number | undefined;
-  /** The participle the sentence starts with: "Searched" for Debate, "Drawn" for a picture. */
+  /** The participle the sentence starts with: "Searched" for Reception, "Drawn" for a picture. */
   verb?: string;
 }) {
   const exact = exactly(generatedAt);

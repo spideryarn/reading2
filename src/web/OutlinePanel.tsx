@@ -594,6 +594,7 @@ export function OutlinePanel({
          that test file's own preamble. jsdom does no layout, so
          `scrollHeight <= clientHeight` reads `0 <= 0` there and passes on any
          code at all. It needs a browser. docs/project/browser-testing.md. */
+      /* The `data-outline-rung` name is Outline mode's, kept because Structure's list face is that list (see the header). */
       data-outline-rung={expanded ? "expanded" : rung}
       /* And whether the list scrolls: Expanded always, the fisheye when its
          floor did not fit — `fit` above. The stylesheet keys the scroll on

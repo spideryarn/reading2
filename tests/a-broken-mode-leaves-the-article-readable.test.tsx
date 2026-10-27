@@ -8,7 +8,7 @@
  * behavioural statement of the fix: with the Ideas controller made to throw,
  * the reader keeps the article, keeps the bar, and is told which one thing is
  * broken. docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md.
- * Debate joined it on 2026-09-10 and has its own two blocks further down, and on
+ * Reception joined it on 2026-09-10 and has its own two blocks further down, and on
  * 2026-09-11 every other band did, through src/web/reader/ModeBoundary.tsx —
  * the last three blocks, which derive their list from `MODES` —
  * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
@@ -78,7 +78,7 @@ const probe = vi.hoisted(() => {
     bandRenders: 0,
     bandThrows: 0,
     panelThrows: 0,
-    /** The Debate controller throws during its own render. */
+    /** The Reception controller throws during its own render. */
     throwReception: false,
     /** `ReceptionAndClaimsPanel` throws while the real `useReception` hooks run above it. */
     throwReceptionAndClaimsPanel: false,
@@ -226,7 +226,7 @@ vi.mock("../src/web/IdeasPanel.js", async (importOriginal) => {
 });
 
 /**
- * **Debate's two throw sites**, the same shape as Ideas': the controller throws
+ * **Reception's and Claims' two throw sites**, the same shape as Ideas': the controller throws
  * before any of its hooks run, and the panel throws with the real `useReception`
  * — its read, its job poll and its `useAutoRun` — mounted above it. The second
  * is what shows the boundary encloses the controller's work and not only the
@@ -237,8 +237,8 @@ vi.mock("../src/web/modes/sources/SourcesMode.js", async (importOriginal) => {
   const { createElement: h } = await import("react");
   return {
     ...actual,
-    /* Sources' band since 2026-10-09, which holds Debate's reads; the
-       cases below open it on Reception, Debate's view (plan 261009l). */
+    /* Sources' band since 2026-10-09, which holds Reception's reads; the
+       cases below open it on Reception, Reception's view (plan 261009l). */
     SourcesBand(props: Parameters<typeof actual.SourcesBand>[0]) {
       probe.receptionRenders += 1;
       if (probe.throwReception) {
@@ -494,7 +494,7 @@ function reply(url: string, method: string): Response {
 
      **And the reads that check their reply has its artefact**, for the same
      reason: citations since plan 261006g, and Simple, FAQ, Timeline and
-     Debate since 261006h, each of which the fall-through's `{}` is now a
+     Reception since 261006h, each of which the fall-through's `{}` is now a
      reported fault for rather than an `undefined` quietly published — and
      Tweets, Relations, Skim, Sketch and Illustrated since 261007n, and
      Situate since 261024o (the owner's margin reads it whatever the switch
@@ -1117,16 +1117,16 @@ describe("the boundary will not retire a token newer than the one its render was
   });
 });
 
-/* ---------------------------------------------------- the second mode: Debate --
+/* ---------------------------------------------------- the second mode: Reception --
 
    The first stage of cluster B in
    docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md: the same
-   boundary, around `DebateBand` where `Reader` composes it. Debate is the one
+   boundary, around `DebateBand` where `Reader` composes it. Reception is the one
    worth doing next because it is the dearest press in the app — two metered
    web searches — so an unretired token here is the most expensive one to leave
    lying about.
 
-   Debate is behind the experimental-features switch, so every case turns it on:
+   Reception is behind the experimental-features switch, so every case turns it on:
    the bar draws an experimental mode only for a reader who has, or for the mode
    they are already in. And every case answers the debate GET 404 — *nobody has
    searched the web about this piece* — which is both the commonest state and
@@ -1138,7 +1138,7 @@ const SOURCES_FALLBACK = '[aria-label="Sources is not working"]';
 /** The article's spine (src/web/Spine.tsx), drawn in every mode, outside every band. */
 const SPINE = ".spine";
 
-/** Debate's counterpart to `containedInsideIdeas`, and it names the mode. */
+/** Reception's counterpart to `containedInsideIdeas`, and it names the mode. */
 function containedInsideReception(): void {
   expect(probe.receptionThrows + probe.receptionAndClaimsPanelThrows, "the throwing mock never ran").toBeGreaterThan(
     0,
@@ -1158,7 +1158,7 @@ function receptionOn(): void {
   notBuilt = "/api/reception/";
 }
 
-describe("Debate that throws is replaced by a band, not by an empty page", () => {
+describe("Reception that throws is replaced by a band, not by an empty page", () => {
   it("contains a throw from the controller's own render", async () => {
     receptionOn();
     probe.throwReception = true;
@@ -1201,7 +1201,7 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
     expect(jobPosts(), "a retry is not a fresh intent to spend").toEqual([]);
   });
 
-  it("comes back to a working Debate from retry, and buys nothing doing it", async () => {
+  it("comes back to a working Reception from retry, and buys nothing doing it", async () => {
     receptionOn();
     probe.throwReception = true;
     await open("?mode=sources&sources=reception");
@@ -1265,8 +1265,8 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   });
 
   /**
-   * **Owner → visitor.** Debate has no visitor band yet (`POLICY.reception` is
-   * owners-only), so the far side is not a Debate panel; what matters is that
+   * **Owner → visitor.** Reception has no visitor band yet (`POLICY.reception` is
+   * owners-only), so the far side is not a Reception panel; what matters is that
    * neither the fallback nor a press survives the change of reader, that the
    * owner's controller is not mounted for a visitor, and that the article is
    * still there.
@@ -1285,7 +1285,7 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
 
     /* Signing out is a change of reader, so the owner's view is taken off the
        address (last-view.ts § A change of reader). The visitor then asks for
-       Debate themselves, and gets the owners-only band rather than the panel. */
+       Reception themselves, and gets the owners-only band rather than the panel. */
     expect(modeInUrl(), "the visitor was left in the owner's mode").not.toBe("sources");
     await open("?mode=sources&sources=reception");
     expect(modeInUrl()).toBe("sources");
@@ -1308,9 +1308,9 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
    so the money rule is held on the one press Sources still arms: the
    citations, on `?sources=bibliography`, with none stored. The same band
    throws either way (`throwReception` is the SourcesBand's probe). */
-describe("a Debate press that met a broken band cannot be spent later", () => {
+describe("a Sources press that met a broken band cannot be spent later", () => {
   /** The positive control for every zero below: a press that works buys one search. */
-  it("gives exactly one job for an ordinary press on a working Debate", async () => {
+  it("gives exactly one Bibliography job for an ordinary press on a working Sources band", async () => {
     receptionOn();
     await open("?sources=bibliography");
     trace.length = 0;
@@ -1414,7 +1414,7 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
       says nothing about where the throw lands; the witness makes the band's own
       controller throw and requires the fallback that names that mode.
    3. **The press each band would have claimed is retired when it throws** —
-      the Ideas/Debate money rule, for the five other targets a press can arm. */
+      the Ideas/Reception money rule, for the five other targets a press can arm. */
 
 const { MODES } = await import("../src/modes.js");
 const { MODE_CONTAINMENT } = await import("../src/web/reader/ModeBoundary.js");
@@ -1749,7 +1749,7 @@ describe("a throw inside any band leaves the article", () => {
 
 /* ----------------------------------------- and the presses those bands take --
 
-   Ideas' and Debate's blocks above carry the full set of money cases. These are
+   Ideas' and Reception's blocks above carry the full set of money cases. These are
    the same rule for the other five things a press can arm, at the seam that
    arms each: the bar's button for a fixed mode and for Diagram's picture, and
    the chip inside the band for Referee and Learn. Each asserts the token is
@@ -1906,7 +1906,7 @@ describe("a press that met any broken band is retired", () => {
    Reception and Claims are chosen by `?debate=`, for the owner and for a
    visitor alike (DebateMode.tsx reads it in both `DebateBand` and
    `VisitorDebateBand`). Until 2026-10-06 `ModeBoundary`'s reset key named five
-   sub-mode parameters by hand and Debate's, which arrived later (4b502174a),
+   sub-mode parameters by hand and Reception's, which arrived later (4b502174a),
    was not among them: both views had one key, so a view that threw left its
    fallback over the other when the reader went Back or Forward to it. A fresh
    press could still clear it through activation, which is what hid this; a
@@ -1915,7 +1915,7 @@ describe("a press that met any broken band is retired", () => {
    The parameters and which reader they select a band for are a
    `Record<ModeWithSubModes, …>` in ModeBoundary.tsx now, so a seventh mode
    with sub-modes does not compile until it has been decided. */
-describe("a broken Debate view does not follow the reader to the other one", () => {
+describe("a broken Reception view does not follow the reader to the other one", () => {
   const sourcesView = () => new URLSearchParams(location.search).get("sources");
 
   it("owner: Back from a broken Claims to Reception is a fresh band", async () => {

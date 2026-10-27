@@ -900,7 +900,7 @@ export function Reader({
     setBandAway(true);
   }, [bandAway, rememberBandFocus]);
   const bandJump = useCallback(
-    /* `aim`: a passage key (Skim, Citations), or the quotation a chip in a
+    /* `aim`: a passage key (Skim, Bibliography), or the quotation a chip in a
        model's answer follows, to be painted on landing — flash.ts § `JumpAim`. */
     (blockId: BlockId, aim?: JumpAim) => {
       jumpTo(blockId, aim);
@@ -1109,7 +1109,7 @@ export function Reader({
     [handToChat],
   );
   /* **A third sender since 2026-10-05, and the first whose conversation
-     remembers where it was started**: Debate's *Check this claim in chat*. The
+     remembers where it was started**: Claims' *Check this claim in chat*. The
      claim travels twice, as words in the question and as the `origin` the
      thread will store, so the claim can find its chat again
      (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md). */
@@ -1117,10 +1117,10 @@ export function Reader({
     (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), "send", origin),
     [handToChat],
   );
-  /* **A fourth, the same day: Debate's *Look at the debate from an angle***,
+  /* **A fourth, the same day: Reception's *Look at the debate from an angle***,
      Sources › Investigate's questions since plan 261020n. The words travel twice too,
      in the question and as the lens the thread stores. A lens is
-     Debate's second origin shape and has no block or quote, so this takes the
+     Reception's second origin shape and has no block or quote, so this takes the
      words and builds the origin here: a claim's handler cannot be handed one
      (docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A).
      Trimmed here as the route trims it, so what is stored equals what is sent
@@ -1190,7 +1190,7 @@ export function Reader({
   }, [setGuideParam, showBand]);
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
-     and on a Citations row**, and since 2026-10-09 on the prose hover card of
+     and on a Bibliography row**, and since 2026-10-09 on the prose hover card of
      each, where Dig deeper was (plan 261009k). Each travels twice, as a claim does: its name fenced in the question, and as
      the `origin` the thread stores, which is the entry's durable id and a
      snapshot of its name cut to the route's cap (`itemOrigin`). Not
@@ -1594,7 +1594,7 @@ export function Reader({
    * whether or not the band has ever been opened — `citeMarks` in annotate.ts.
    *
    * **The prose marks and their cards stay owner-only.** A visitor does have a
-   * public projection of the list in the Citations band since 260929c, but this
+   * public projection of the list in the Bibliography band since 260929c, but this
    * prose path deliberately has no `?? artefacts?.bibliography` fallback, unlike
    * `terms` above. So `works` is empty for them, and the card's owner-only
    * `inSpideryarn` line has the named `showInSpideryarn` lock as well.
@@ -1629,7 +1629,7 @@ export function Reader({
    * row is in view (BibliographyPanel.tsx § `Props.focus`); state rather than a
    * URL parameter because nothing about it should survive a reload. A chat's
    * way back and, since plan 261010e, a citation card's *Open in Sources* set
-   * it; Glossary, Ideas and Debate have the same shape (item-focus.ts).
+   * it; Glossary, Ideas and Claims have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
@@ -2380,8 +2380,8 @@ export function Reader({
   const [ownerFeed, setOwnerFeed] = useState<MarginFeed>(NO_OWNER_FEED);
   const marginaliaIdeas = owner ? ownerFeed.ideas : (artefacts?.ideas?.ideas ?? null);
   /* **Other modes' items, already stored** (report 82, plan 261002b): the
-     owner's FAQ and Debate from the feed's read-only reads, a visitor's from
-     their payload. **Citations are the owner's, and only a fresh list** —
+     owner's FAQ and Reception from the feed's read-only reads, a visitor's from
+     their payload. **Bibliography is the owner's, and only a fresh list** —
      never `artefacts.bibliography`, because the prose's citation marks are
      owner-only (bibliography.md § Who sees it) and the margin is not the place to
      reverse that quietly. Comments are the one list both arms already share. */
@@ -2974,7 +2974,7 @@ export function Reader({
 
   /**
    * **Open the conversation a claim's mark names, beside the mode.** Only
-   * `?thread=` changes, so the reader stays in Debate and `overlay` draws the
+   * `?thread=` changes, so the reader stays in Sources and `overlay` draws the
    * conversation in `ChatDialog`: docked in the right-hand column when that
    * column is open and the window is wide enough, floating otherwise — the
    * block chat's rule, unchanged (plan 261005i, D3).
@@ -3173,7 +3173,7 @@ export function Reader({
     },
     [reopenItemChat, handToChat],
   );
-  /* What Debate's claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
+  /* What Claims' claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
   const claimChats = useMemo(
@@ -3495,7 +3495,7 @@ export function Reader({
             }
           : undefined,
         openQuickSearch: isOwner ? openQuickSearch : undefined,
-        /* The bar's suggested lens row: Debate's own handoff, so the question
+        /* The bar's suggested lens row: Reception's own handoff, so the question
            waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
         askThroughLens: isOwner ? suggestedLensInChat : undefined,
         /* The bar's *Ask the guide* row, after a pick that could not tell. The owner's, as Chat is. */
@@ -4605,7 +4605,7 @@ export function Reader({
 
        `null`, not `true`: the rail goes back to following the window and
        the mode, which in a mode means on. Writing `true` would pin it,
-       and the reader would find it still there in outline mode later
+       and the reader would find it still there in Plain later
        with no memory of having asked for that.
 
        On the transition and **not** as a standing effect, which is the
@@ -4781,7 +4781,7 @@ export function Reader({
           the rail is 12px of the window the band is negotiating for. The raw
           parameter, not the resolved `fit.spine`, because this is a question
           about a band that is *not open yet*: `fitView` turns the rail off in
-          outline mode, where there is no band, and reading that would make the
+          Plain, where there is no band, and reading that would make the
           banner blink in and out as an iPad reader switched modes. layout.ts §
           `modeSpine` is where the two resolutions were made one.
 

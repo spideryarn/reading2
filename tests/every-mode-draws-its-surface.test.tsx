@@ -23,7 +23,7 @@
  *    a mode with its artefact already there spends nothing, correctly;
  *  - but a controller with a missing artefact draws its *empty* or *running*
  *    state, not its populated body. Any `says` asserted from there would be
- *    matching chrome, and deleting the real Ideas, Quotes, Timeline or Debate
+ *    matching chrome, and deleting the real Ideas, Quotes, Timeline or Reception
  *    renderer would leave the sweep green.
  *
  * So: one `<App/>`/`NuqsAdapter`/`StrictMode` harness — the one
@@ -276,7 +276,7 @@ const IDEA_NAME = "Instruments outrun explanation";
 const QUOTE_LINE = "before anybody could say what it would measure";
 const TIMELINE_LABEL = "The Vienna calibration";
 const RECEPTION_APPLIES = "A replication in Leiden reached the opposite reading.";
-/* The page title a Debate row leads with since 260929h — the applies paragraph
+/* The page title a Reception row leads with since 260929h — the applies paragraph
    above now sits closed behind the row's `more`, so it is not what a reader sees. */
 const RECEPTION_TITLE = "The Leiden replication";
 /* A work's title, which is what a row leads with — drawn from the artefact,
@@ -804,7 +804,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   quotes: true,
   timeline: true,
   reception: true,
-  /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
+  /* Claims's Claims list — armed one level down, by a press that lands on Claims. */
   "sources-claims": true,
   /* Where it sits: the works cited and the search of the literature, behind one press (plan 261026g). */
   "sources-where": true,

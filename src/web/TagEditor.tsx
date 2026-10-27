@@ -36,7 +36,7 @@ type Option = { kind: "new"; tag: string } | { kind: "known"; tag: string; count
 
 /**
  * What the list offers for what has been typed — pure, so it is tested
- * without a browser (tests/tag-editor-options.test.ts).
+ * without a browser (tests/tag-editor.test.tsx).
  *
  * The typed text first, as "Add …", when it is a valid tag the reader has never
  * used; then the reader's tags containing it, most-used first; never one the

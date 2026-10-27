@@ -495,7 +495,7 @@ calls `describeFetchFailure`.
 
 **Eleven more catches joined on 2026-10-07**
 ([261007a K4](../plans/261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)): the four
-kept-answer streams (Glossary's two, Bibliography's *Investigate*, the quiz's mark), Diagram's two
+kept-answer streams (Glossary's two, Bibliography's *Dig deeper*, the quiz's mark), Diagram's two
 reads, Skim's purpose box, *View the original*, the bar's tag commands, the admin's cost read and
 the export download. Three things that work settled:
 

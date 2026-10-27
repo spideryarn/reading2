@@ -1,10 +1,10 @@
 /**
- * **The quote guard inside *Investigate*'s stream** — nothing quote-shaped
+ * **The quote guard inside Bibliography's *Dig deeper* stream** — nothing quote-shaped
  * reaches the reader until code has found it in a text we allow.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § No quotes
  * from sources, checked inside the stream.
  *
- * *Investigate* writes prose from web search extracts, and a quotation from a
+ * *Dig deeper* writes prose from web search extracts, and a quotation from a
  * page the reader has not seen would be shown as the paper's own words with
  * nothing checking it. So the prompt forbids quotation marks (plan 260930d),
  * and this is what holds it to that — letting through only a span it finds in

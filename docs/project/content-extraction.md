@@ -959,7 +959,7 @@ There is no model for this, though Greg remembered one; the plan says why not ye
 
 Since 2026-10-04 the `extract` step, and the `metadata` step for a minimal paper, ask Crossref or
 DataCite about **the article's own identifier**, after the extractor and outside any model call
-([`src/article-registry.ts`](../../src/article-registry.ts)). It is the lookup Citations uses
+([`src/article-registry.ts`](../../src/article-registry.ts)). It is the lookup Bibliography uses
 (`lookupWork`), with its cache and its politeness.
 
 - **The candidates are found without a model.** A PDF: every DOI and `arXiv:` stamp printed on its

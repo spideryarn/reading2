@@ -1,5 +1,5 @@
 /**
- * **Find it on the web — what is kept, and what never is.** Citations mode's
+ * **Find it on the web — what is kept, and what never is.** Bibliography mode's
  * stage 3, src/citation-find.ts; docs/plans/260911g-citations-mode.md § Stage 3
  * and review findings F1 and F4.
  *

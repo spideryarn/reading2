@@ -624,7 +624,7 @@ function publicFaq(faq: Faq): PublicFaq {
 }
 
 /**
- * **Debate's claims list, rebuilt claim by claim** — since 2026-10-08 (plan
+ * **Claims' list, rebuilt claim by claim** — since 2026-10-08 (plan
  * 261008i § 2). The article's quote and its place, the model's statement and
  * the claim's id, and nothing else: `dropped` is our checking's tally and the
  * rest is pipeline provenance. src/public-types.ts § `PublicSourcesClaimList`
@@ -805,7 +805,7 @@ function publicBibliographyList(
 }
 
 /**
- * **The Debate, rebuilt group by group, row by row and signal by signal** —
+ * **Reception, rebuilt group by group, row by row and signal by signal** —
  * since 2026-09-29 (SPIDERYARN-READING2-56, plan 260929c stage 4), by the
  * contract its own plan set: 260905f § Security and § Stage 4.
  *
@@ -814,7 +814,7 @@ function publicBibliographyList(
  *
  * - **The row's `url`** is a stranger's page the search returned — a citation,
  *   so `publicCitationUrl`, as a comment's citations are judged. **A refusal
- *   drops the whole row**, not the link: a Debate row is its source, and there
+ *   drops the whole row**, not the link: a Reception row is its source, and there
  *   is no public row type without one (260905f § Security).
  * - **A `linked` signal's `url`** is *the article's own address* as the page
  *   spelled it (src/reception.ts § `linkTo`, matched against `meta.url`, which is
@@ -1074,7 +1074,7 @@ function publicReceptionRowBase(
   };
 }
 
-/** A Debate row's registry record, rebuilt field by field (plan 261001a stage 6). */
+/** A Reception row's registry record, rebuilt field by field (plan 261001a stage 6). */
 function publicRegistryWork(registry: unknown): { registry?: RegistryWork } {
   const read = readRegistryWork(registry);
   return read === null ? {} : { registry: read };
@@ -1377,7 +1377,7 @@ export function publicArticle(row: {
    */
   citationBlurbs: CitationBlurbs | null;
   reception: Reception | null;
-  /** Debate's claims list, or `null` for none made. */
+  /** Claims' list, or `null` for none made. */
   sourcesClaims: SourcesClaimList | null;
   /** The stored cross-references, or `null` for none built. */
   crossrefs: Crossrefs | null;

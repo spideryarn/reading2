@@ -1,5 +1,5 @@
 /**
- * **Run Debate's synthesis call over stored debates, and print what it said** —
+ * **Run Reception's synthesis call over stored debates, and print what it said** —
  * the measurement behind
  * [260930j](../../docs/plans/260930j-debate-themes-and-key-sources.md).
  *

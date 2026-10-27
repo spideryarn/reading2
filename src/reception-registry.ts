@@ -1,5 +1,5 @@
 /**
- * **Debate's authors and year, from the registry** — plan 261001a stage 6
+ * **Reception's authors and year, from the registry** — plan 261001a stage 6
  * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md),
  * the item 260929h deferred (SPIDERYARN-READING2-5P).
  *
@@ -84,7 +84,7 @@ export function publisherPathDoi(url: string): string | null {
   return `${prefix}/${suffix}`;
 }
 
-/** The identifier a Debate source's address carries, or null. */
+/** The identifier a Reception source's address carries, or null. */
 export function receptionWorkId(url: string): WorkId | null {
   const direct = parseWorkId(url);
   if (direct !== null) return direct;

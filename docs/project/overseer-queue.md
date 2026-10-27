@@ -102,7 +102,7 @@ Four clusters wait on a product answer as well as a lull; the Overseer put the d
 | Cluster | One line | Waiting on |
 |---|---|---|
 | A — opening reads overwriting later actions | gate Run/Find/Save until the opening read settles, or reconcile | Greg: submit gate vs reconciliation |
-| B — contain failures in independently mounted modes | wrap Debate first, then an honest inventory of the rest | a lull |
+| B — contain failures in independently mounted modes | wrap Reception and Claims first, then an honest inventory of the rest | a lull |
 | C — carry a glossary question into chat | "Ask in chat" opens an editable question about the term | Greg: fresh conversation vs existing draft |
 | D — Knip without a fresh build | stop `vite.api.config.ts` evaluating the client shell at load | a lull; no product question |
 | E — stream the glossary's two lookups | stream the unsaved answer first, then the saved one | a lull |

@@ -1028,7 +1028,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      **What it does NOT bound is the spend, and it does not bound the runtime
      either** (GPT Sol's F31). This number is consulted only *between* steps, to
      decide whether to hand the claim back — see `advanceJobWith` — and the walk
-     runs its first runnable step **unconditionally**. A debate-only job, which
+     runs its first runnable step **unconditionally**. A reception-only job, which
      is how this step is normally asked for, therefore starts whatever is left
      and runs until the claim-wide abort at `LEASE_MS - DEADLINE_MARGIN_MS` =
      **740 s**. So 120 s is a *scheduling* number: it is what a long ingest asks
@@ -3749,13 +3749,6 @@ export interface EnqueueRequest {
    */
   force?: StepName[];
   /**
-   * A free-text steer for the steps that take one — today, only `summary`.
-   *
-   * The queue does not interpret it. It carries it onto the job, so that it
-   * survives a restart and so that two differently-steered requests are two
-   * different jobs (`sameWork` below).
-   */
-  /**
    * Who is reading, **already rendered** — `renderProfile` in src/profile.ts.
    *
    * Resolved by the route, once, and carried from here. That is the whole point
@@ -5323,8 +5316,8 @@ export async function retryJob(
     ...(old.upload ? { upload: old.upload } : {}),
     steps: old.steps.map((s) => s.name),
     force: forceForRetry(old.steps),
-    // Copied, unlike force. The steer is not a thing the first attempt used up
-    // — a retry of a summary run that was steered is still that run.
+    // Copied, unlike force. The profile snapshot is not a thing the first
+    // attempt used up — a retry of a run written for this reader is still that run.
     ...(old.profile ? { profile: old.profile } : {}),
     /* The note goes with it, or a retried paint would quietly be a plain one. */
     ...(old.illustrationNote ? { illustrationNote: old.illustrationNote } : {}),

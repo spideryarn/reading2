@@ -187,7 +187,7 @@ const para = (text: string, id = "spya-bbbbbb") => ({ text, ids: [id] });
 
 /** What each artefact's GET answers when it answers. Keyed by the path segment after `/api/`. */
 const BODIES: Record<string, unknown> = {
-  /* Debate's Claims list (plan 261008i stage 2): one listed claim, whose
+  /* Claims's Claims list (plan 261008i stage 2): one listed claim, whose
      AI line is what the band draws. */
   "sources-claims": {
     claimList: {
@@ -557,9 +557,9 @@ async function reply(url: string, method: string, body: string | null): Promise<
   if (url.startsWith("/api/search/")) return json({ runs: [] });
   /* Reception's *Cited by*, answered as the route answers an article with no
      DOI. A 404 here would be its `unavailable`, which draws a second *Try
-     again* in Debate's band beside the one this file counts (plan 261004h). */
+     again* in Reception's band beside the one this file counts (plan 261004h). */
   if (url.startsWith("/api/citers/")) return json({ kind: "no-doi" });
-  /* Debate's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
+  /* Claims's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
   if (/^\/api\/sources-claims\/[^/]+\/checks$/.test(url)) return json({ checks: [] });
   /* `sources-claims` by name: a general `[a-z-]+` would turn reading-time and the like from `{}` into a 404. */
   const other = /^\/api\/(sources-claims|[a-z]+)\/([^/]+)$/.exec(url);

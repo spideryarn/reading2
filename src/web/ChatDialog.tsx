@@ -200,7 +200,7 @@ interface Props {
   /**
    * An answer in this panel has just stopped arriving: finished, failed or
    * stopped. Whoever holds the thread summaries asks for them again, so a mark
-   * that shows a conversation's latest line (a Debate claim's) follows a
+   * that shows a conversation's latest line (a Claims claim's) follows a
    * follow-up asked here. Once per answer, never per token. Plan 261005i, F1.
    */
   onSettled?(): void;

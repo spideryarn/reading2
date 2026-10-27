@@ -1,5 +1,5 @@
 /**
- * **How often does the Citations list give a work an influence number, and is
+ * **How often does the Bibliography list give a work an influence number, and is
  * the number the same twice?** Plan 261003m: influence becomes a number only
  * when the model is confident it knows the work, otherwise unknown.
  *

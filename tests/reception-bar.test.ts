@@ -1,7 +1,7 @@
 /**
  * **Reception's two groups, and the two things the split must never do.**
  *
- * Debate's group-one rows carry the name of the strongest evidence that the page
+ * Reception's group-one rows carry the name of the strongest evidence that the page
  * is about *this* article — it links the address, it quotes the article's own
  * words, or it names the title. From 2026-09-06 to 2026-10-03 the reader set a
  * floor under that (`?name=`, defaulting to *quotes it*), and the default hid

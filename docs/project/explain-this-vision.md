@@ -51,7 +51,7 @@ pointed at gets wider as you go down the list:
   a term the author bends            what it means HERE                     Glossary (senseHere)
   a term, name or work, borrowed     what it ordinarily is                  Glossary (background)
     e.g. "Torricelli"
-  a cited work                       what it says, and why it is cited      Citations card (blurb)
+  a cited work                       what it says, and why it is cited      Bibliography card (blurb)
   a claim, an idea                   what the piece takes for granted       Ideas, Marginalia
   a hard sentence or passage         help me unpack it                      select → Ask AI
                                                                             ("Explain this passage.")

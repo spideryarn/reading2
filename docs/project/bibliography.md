@@ -170,7 +170,7 @@ The plan is
 - **An existing list gets counts when it is made again**, as every other registry fact does. The
   first such run asks Crossref once more about each DOI it had cached before 2026-10-05, because
   those answers were stored without a count. A failed ask leaves the record due again, so a
-  Crossref outage can make a cached record unavailable to import, Debate and *Dig deeper* too until
+  Crossref outage can make a cached record unavailable to import, Reception, Claims and *Dig deeper* too until
   one ask succeeds (`freshSql` in [`pg-bibliographic.ts`](../../src/store/pg-bibliographic.ts) has
   the rule, and the `cited_by_count_read_at` column's comment in
   [`schema.ts`](../../src/db/schema.ts) says why it needs a second timestamp).
@@ -697,7 +697,7 @@ deeper* read from the web counts in the threshold's `(2 × relevance + influence
 influence order exactly as the list's own would, and one press can make the influence order
 available on a list that had none.
 
-- **date** — publication year, oldest first, as Debate's date order is; same year in first-cited
+- **date** — publication year, oldest first, as Reception's date order is; same year in first-cited
   order, undated last. The year is the one the row draws (`workByLine`: the article's, the
   registry's only where the article gives none), read as its first four-digit year, so `2017a` is
   2017 and `n.d.` is undated. Offered only when some work has a year, and `?citeby=date` on a list
@@ -968,7 +968,7 @@ What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
 What it says to the reader: the provenance line (§ [What we have read of the
 work](#what-we-have-read-of-the-work)) names the extract, its size and host; the
 verdict is labelled *the AI's reading of that extract*, the quotes *from the search extract*. **The
-residual risk** is Debate's: a hostile page can steer the AI's reading while every quote shown is
+residual risk** is Reception's and Claims': a hostile page can steer the AI's reading while every quote shown is
 genuinely in its extract. That is why the verdict is labelled as a reading and never as a fact.
 
 On a row the article linked, the page found is used only for its extract: the row's `url` and

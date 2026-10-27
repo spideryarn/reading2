@@ -129,7 +129,7 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
   found?: CitedWork["found"];
   /** The owner's *Look it up* reading (plan 260929g). A public row cannot carry one. */
   lookup?: CitedWork["lookup"];
-  /** The owner's kept *Investigate* answer (plan 260930a). A public row cannot carry one. */
+  /** The owner's kept *Dig deeper* answer (plan 260930a). A public row cannot carry one. */
   investigation?: CitedWork["investigation"];
   /** Already an article here, the reader's or a public one (plan 260930b). A public row cannot carry one. */
   inSpideryarn?: CitedWork["inSpideryarn"];
@@ -435,7 +435,7 @@ export function effectiveOrder(works: readonly ShownWork[], order: CiteOrder): C
  * **The year the date order sorts by: the one the row draws** — `workByLine`'s,
  * the article's own and the registry's only where the article gives none — so
  * the order cannot disagree with the by-line. The first four-digit year in it,
- * 1000–9999 as Debate's `readPublishedYear` (`2017a` is 2017, `2019–2020` is
+ * 1000–9999 as Reception's `readPublishedYear` (`2017a` is 2017, `2019–2020` is
  * 2019); none (`n.d.`, `in press`, a five-digit run) is undated.
  */
 export function publicationYear(work: Pick<ShownWork, "authors" | "year" | "registry">): number | null {
@@ -483,7 +483,7 @@ export function barToReveal(
  * influence order the unknown tail is itself ordered, by relevance descending**
  * (no relevance last): with unknown common since `citations/6`, a tail in
  * first-cited order would be most of the list in no order at all. `date` is
- * oldest first, undated last, as Debate's date order is (reception-order.ts), with
+ * oldest first, undated last, as Reception's date order is (reception-order.ts), with
  * the same tie-break.
  */
 export function orderWorks<W extends ShownWork>(
@@ -809,7 +809,7 @@ export function citeReadUnreadable(host: string): string {
  * unions, as `sourceOf` is. The band and the hover card both call this.
  */
 export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup" | "investigation">): string | null {
-  /* *Investigate* read the paper itself (plan 261001a stage 3): the strongest
+  /* *Dig deeper* read the paper itself (plan 261001a stage 3): the strongest
      thing we have read, so it is what the row says, dated — a kept answer is a
      snapshot. Any other paper state leaves the line to what it was before. */
   const paper = work.investigation?.paper;
@@ -923,7 +923,7 @@ interface Props {
   access: BibliographyAccess;
   /**
    * **Sources' chip row**, drawn as this band's header (SourcesMode.tsx
-   * § `SourcesViews`) — the same row the Debate panel draws for Reception
+   * § `SourcesViews`) — the same row the Reception panel draws for Reception
    * and Claims, so switching sub-mode does not move it. Since 2026-10-09; the
    * band had no head row while its order row was drawn before then.
    */
@@ -953,7 +953,7 @@ interface Props {
 
 /**
  * `Props.focus`. The shared `ItemFocus` (src/web/item-focus.ts) since plan
- * 261009k, where Glossary, Ideas and Debate took the same shape; the name
+ * 261009k, where Glossary, Ideas and Claims took the same shape; the name
  * stays for this panel's callers.
  */
 export type CiteFocus = ItemFocus;
@@ -1711,7 +1711,7 @@ function CitedBy({ citedBy }: { citedBy: RegistryCitedBy }) {
  * extract's own characters, located by code — src/citation-lookup.ts §
  * `verifyQuote`); and `paperDoes.says`, the AI's sentence, only beside the
  * quote that bears it out. Quotes are `<blockquote>`s drawn as text, with
- * Debate's rule down the left (reception.css § `.rcp-quote`): a slice of a
+ * Reception's rule down the left (reception.css § `.rcp-quote`): a slice of a
  * stranger's page, which may never become markup.
  */
 /**

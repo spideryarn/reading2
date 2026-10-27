@@ -152,7 +152,7 @@ const REGISTRY: Row[] = [
   // Quotes — the quote IS the row here, so it is an item, not a quote.
   { file: "quotes.css", selector: ".quotes-text", role: "item" },
   { file: "quotes.css", selector: ".quotes-prov", role: "meta" },
-  // Citations
+  // Bibliography
   { file: "bibliography.css", selector: ".cite-title", role: "item" },
   { file: "bibliography.css", selector: ".cite-quote blockquote", role: "quote" },
   { file: "bibliography.css", selector: ".cite-why", role: "body" },

@@ -444,7 +444,7 @@ const PUBLIC_PROJECTIONS = {
        `publicSourceUrl`, as the masthead's is. `publicReception` in
        ../public/dto.ts. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     reception: articleRevisions.reception,
-    /* **Debate's claims list, from the day it was built** (2026-10-08):
+    /* **Claims' list, from the day it was built** (2026-10-08):
        generated output about the article, so a visitor sees the stored one
        and only making it is the owner's (docs/project/mode.md § The
        artefact). No profile, and the reader's checks of the listed claims

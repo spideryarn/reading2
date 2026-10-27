@@ -14,9 +14,9 @@
  *    pulls bare words out of source files and generates a utility for any that
  *    matches a utility name, whether or not it was ever a class name. Built
  *    against src/web/ unprefixed it generates 18 classes, two of which collide
- *    with live ones — and `.outline` draws a 1px border round the whole table
- *    in outline mode, because TableView sets `outline` as a MODE class and
- *    nothing in styles.css contests `outline-*`. Prefixed: zero collisions.
+ *    with live ones — and `.outline` drew a 1px border round the whole table
+ *    when TableView set `outline` as a MODE class (Outline mode went on
+ *    2026-09-10), and nothing in styles.css contests `outline-*`. Prefixed: zero collisions.
  *    Utilities are written `tw:flex`, `tw:hover:bg-accent` — v4 colon syntax,
  *    not the v3 `tw-` dash. Theme variables stay unprefixed.
  *
@@ -254,7 +254,7 @@
      an opaque blend, and NOT the same colour as Tailwind's `bg-highlight/20`,
      which composites the orange over whatever is behind it. The difference
      shows wherever the wash sits on --panel rather than --page — which is
-     exactly where the active gist cell and the active spine band put it. Use
+     exactly where the active Structure row and the active spine band put it. Use
      this name; do not "simplify" it to an opacity modifier. */
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);

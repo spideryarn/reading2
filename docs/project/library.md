@@ -1436,7 +1436,7 @@ run with two accounts against Postgres:
 article lookup, deletion, public resolution, usage, cheap-import duplicates, share links and AI
 cost attribution were each watched going red when removed
 ([261007f § Progress](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
-The pasted-link refusal is pinned in `tests/own-reading-page.test.ts`; Citations ordering is pinned
+The pasted-link refusal is pinned in `tests/own-reading-page.test.ts`; Bibliography ordering is pinned
 in `tests/cited-in-spideryarn.test.ts`.
 
 ## When this becomes Postgres

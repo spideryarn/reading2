@@ -1,5 +1,5 @@
 /**
- * **The rules a Debate synthesis must keep, in one place for both sides of the
+ * **The rules a Reception synthesis must keep, in one place for both sides of the
  * wire** — plan 260930j (SPIDERYARN-READING2-6M).
  *
  * Two readers apply them: `readSynthesisAnswer` (src/reception-themes.ts) to the

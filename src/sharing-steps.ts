@@ -98,7 +98,7 @@ export const STEP_SHARING = {
   /* A route through the quotes' ids, and since 260928a stage 6 the ideas too. */
   skim: { column: "skim", reads: ["quotes", "ideas"] },
   reception: { column: "reception", reads: [] },
-  /* Reads the article only — not the stored Debate — and writes its own column. */
+  /* Reads the article only — not the stored Reception — and writes its own column. */
   "sources-claims": { column: "sourcesClaims", reads: [] },
   bibliography: { column: "bibliography", reads: [] },
   /* Each note is keyed to a row of the list and fingerprinted by that row's

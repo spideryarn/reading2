@@ -29,7 +29,9 @@ mode. The owner's lists are read through each mode's *read half*
 can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
 read. A visitor's lists come in their payload.
 
-**So a FAQ, Timeline, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+**So a FAQ, Timeline or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+Reception also feeds its legacy claim-source rows to the margin; the current Claims list and its
+checks do not feed it (`OwnerMarginFeed` in `MarginaliaColumn.tsx`).
 The column keeps no copy of these lists: it reads them every time it opens, and while it is open
 it re-reads them when this tab's job engine announces a completion for them — the same feed each
 band listens to, through
@@ -81,7 +83,7 @@ one would otherwise be missed; it would not be, so it is not
   |---|---|---|
   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
   | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. A date with no year counts, and shows the article's words as the band does (*"On July 7"*). An untimed event or any other date we could not read stays in the band. A date we did read always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
-| Debate (Sources › Claims) | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
+| Reception's legacy claim-source rows (shown in Sources › Claims) | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band. The current Claims list and its checks are not read by the margin |
   | Literature (the literature search in Sources › *Where it sits*) | the finding's block | **owner only** (behind the experimental switch until 2026-10-26, a day after the dossier itself left it, when Greg asked for them beside the passage as he reads: spya-pkpqch, [261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md)), and only from a dossier that is not stale; the finding's quoted words must still be in that block. One line per block: the strongest finding's stamp (`strong` before `suggestive`, then `SITUATE_FINDING_KINDS` order; `strongestFirst` in `notes.ts`) and its note, or a count (*2 from the literature*). Opened, each note in the model's face, its sources as links, a quiet *From the web*, and *Open in Sources*, which lands on the finding in *Where it sits* (in Investigate until 2026-10-25; a `finding` focus, `item-focus.ts`). Its card says when the search ran. Plan [261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md) |
   | Bibliography | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([bibliography.md](bibliography.md)) |
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |

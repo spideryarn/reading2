@@ -79,7 +79,7 @@ describe("a shut line", () => {
     expect(el.querySelector(".marg-shut-button")?.getAttribute("data-marg-tip")).toBe("reception");
   });
 
-  it("puts a Debate row's link beside the button, never inside it", () => {
+  it("puts a Reception row's link beside the button, never inside it", () => {
     const el = draw([{ kind: "reception", items: [row] }]);
     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
     expect(button?.textContent).toContain("disputes");
@@ -91,7 +91,7 @@ describe("a shut line", () => {
     expect(el.textContent).toContain("“s”");
   });
 
-  it("gives two Debate rows from the same page distinct React keys", () => {
+  it("gives two Reception rows from the same page distinct React keys", () => {
     const complaints = vi.spyOn(console, "error").mockImplementation(() => {});
     const el = draw([{ kind: "reception", items: [row, { ...row, id: "second" }] }]);
     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");

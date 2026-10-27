@@ -45,7 +45,7 @@
  * never has: a conversation started, continued or deleted there left this list
  * as it was until a reload. That did not show while every summary anyone
  * looked at was made by `ChatDialog`. It does now that a caller mode draws a
- * mark from a chat started in the band (Debate's claims; plan 261005i, F1).
+ * mark from a chat started in the band (Claims' claims; plan 261005i, F1).
  *
  * So `Reader` calls `refresh()` when the reader leaves Chat, and the chat
  * controller calls it when a typed turn settles, even after the composer goes.

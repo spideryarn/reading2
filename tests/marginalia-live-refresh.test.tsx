@@ -2,7 +2,7 @@
 /**
  * **Marginalia shows what the modes it reads have made — later, and live.**
  *
- * Marginalia keeps no copy of FAQ, Debate or Ideas: `OwnerMarginFeed` reads each
+ * Marginalia keeps no copy of FAQ, Reception or Ideas: `OwnerMarginFeed` reads each
  * through its read half (`useFaqRead` and the rest) when it mounts. Greg's worry
  * on 2026-10-02 was that a mode generated *after* Marginalia first ran would
  * never reach the margin, and his answer to it was to run every missing mode
@@ -11,7 +11,7 @@
  * it opens.
  *
  * The rest are the gap that claim left: with the margin **open** on the right
- * while the reader generates FAQ (or Debate, or Ideas) in the left band, the
+ * while the reader generates FAQ (or Reception, or Ideas) in the left band, the
  * margin heard nothing until it was reopened. It now listens to the same
  * completion feed every band's `useStepJob` does — `useJobs`, quietly — and
  * calls the read's own `refresh`. The real `jobEngine` sits on the mocked

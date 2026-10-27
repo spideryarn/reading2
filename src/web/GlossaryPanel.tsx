@@ -255,7 +255,7 @@ interface Props {
    */
   gate: number | null;
   onGate(gate: number | null): void;
-  /** Jump the article to a block, exactly as a gist cell does. */
+  /** Jump the article to a block, exactly as a Structure row does. */
   onJump(id: BlockId): void;
   /**
    * **Hand the reader to Chat**, for a term the article does not contain.
@@ -778,7 +778,7 @@ export const PRIORITY_GATE = 0.1;
 /**
  * The slider's step and the floor onto it — `0.01`, and a floor that survives
  * binary floating point. Here until 2026-09-29, and in src/web/threshold.ts
- * since, where Citations and the FAQ share them (plan 260929g). Re-exported so
+ * since, where Bibliography and the FAQ share them (plan 260929g). Re-exported so
  * the names every caller and test imports from this file keep working.
  *
  * `0.01` because the whole usable range is short — a product of two scores the

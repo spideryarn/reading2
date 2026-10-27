@@ -388,7 +388,7 @@ describe("buildGlossary", () => {
 
   it("drops an entry that is a citation, and an alias that is one", () => {
     // Greg, 2026-10-03 (spya-zn97q5): "Saha et al." was listed as a term. Cited
-    // works belong to Citations. The reported "Name et al" shape is a citation,
+    // works belong to Bibliography. The reported "Name et al" shape is a citation,
     // so the code drops it whatever the prompt managed; plan 261003o.
     const g = buildGlossary(
       {

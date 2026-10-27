@@ -85,7 +85,7 @@
     .cite-entry,
     /* Marginalia's opened citation: the article's own reference entry */
     .marg-cite-entry,
-    /* Debate's claim heading: the article's own words for the claim */
+    /* Claims' claim heading: the article's own words for the claim */
     .rcp-group-quote,
     /* "first cited" — the words the article cites the work with */
     .cite-at,
@@ -189,7 +189,7 @@
     .marg-idea-statement,
     .marg-arc,
     .marg-arc-full,
-    /* Marginalia's shut notes, opened: Debate's reading of a page, the AI's
+    /* Marginalia's shut notes, opened: Reception's reading of a page, the AI's
        answer to a comment */
     .marg-reception-applies,
     .marg-open-answer,

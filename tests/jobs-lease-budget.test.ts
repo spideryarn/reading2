@@ -473,7 +473,7 @@ describe("the job lease and the platform's kill", () => {
     expect(STEP_BUDGET_MS.sketch).toBeLessThan(claimMs);
   });
 
-  it("reserves the token time of Debate's two current calls, and less than a claim", () => {
+  it("reserves the token time of Reception's two current calls, and less than a claim", () => {
     /* One Reception search and one optional synthesis, in sequence
        (src/reception.ts § `generateReception`). The search adds time no token count bounds, so this
        is a floor and not a ceiling. */

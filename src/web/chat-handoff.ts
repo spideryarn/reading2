@@ -160,7 +160,7 @@ export function discussQuizMark(parts: { question: string; answer: string; mark:
 export const CHECK_CLAIM_QUESTION = "What has been written about it, and does it hold up?";
 
 /**
- * **What Debate's *Check this claim in chat* asks**: the
+ * **What Claims' *Check this claim in chat* asks**: the
  * claim, quoted, and a question about it.
  *
  * The claim is the article's own words, so it is fenced like a Summary
@@ -368,7 +368,7 @@ export function citingSentences(
 }
 
 /**
- * **What *Ask in chat* on a Citations row asks**: the work, quoted, then the
+ * **What *Ask in chat* on a Bibliography row asks**: the work, quoted, then the
  * sentences that cite it (`citingSentences`), then the question. The work's
  * line is its title, then the authors and the year where the article gives
  * them. Both are the article's words, not the reader's, so both are fenced for

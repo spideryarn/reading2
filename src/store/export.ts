@@ -906,7 +906,7 @@ export async function exportArticle(
   }
 
   /* sources-claim-checks.json — the reader's checks of the claims they picked
-     in Debate (plan 261008i § 3). No filesystem store ever read this back, so
+     in Claims (plan 261008i § 3). No filesystem store ever read this back, so
      the shape is the rows, columns as they are, as the bundle writes them. */
   if (rows.sourcesClaimChecks.length) {
     await put("sources_claim_checks", "sources-claim-checks.json", {
@@ -974,7 +974,7 @@ export async function exportArticle(
     await put("citation_finds", "citation-finds.json", { finds });
   }
 
-  /* Bibliography's *Investigate*, keyed by entry id for the finds' reason. Column
+  /* Bibliography's *Dig deeper*, keyed by entry id for the finds' reason. Column
      for column, fingerprint included, so the rollback keeps an answer the read
      path would no longer attach. */
   if (rows.citationInvestigations.length) {

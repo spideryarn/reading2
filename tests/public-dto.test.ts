@@ -1375,7 +1375,7 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
-   * **Debate's claims list with every field set** — `dropped` above all, and a
+   * **Claims's claims list with every field set** — `dropped` above all, and a
    * key on a claim the stored document should not have, so a projection that
    * copied its argument would carry it out. Plan 261008i stage 2.
    */
@@ -1473,7 +1473,7 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
-   * **A stored Citations list with every field set, and three addresses** — a
+   * **A stored Bibliography list with every field set, and three addresses** — a
    * clean DOI, one carrying a credential, and one on a private host. The two
    * bad links must be gone from the wire and their rows kept (plan 260929c
    * stage 3). `key` embeds the credentialled address too, and `found` is set on
@@ -2316,7 +2316,7 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /** Each listed claim's id, place, quote and the AI's line, and nothing about our pipeline. Plan 261008i. */
-  it("carries Debate's listed claims, field by field, and not what checking dropped", () => {
+  it("carries Claims's listed claims, field by field, and not what checking dropped", () => {
     expect(pathsUnder("sourcesClaims")).toEqual(
       ["claims", "claims[].blockId", "claims[].id", "claims[].quote", "claims[].statement"].sort(),
     );

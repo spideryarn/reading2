@@ -9,7 +9,7 @@
  * And that a failed request is the `unavailable` answer rather than a throw or
  * a spinner that never ends.
  *
- * That it starts no job is tests/modes-that-start-themselves.test.tsx § Debate.
+ * That it starts no job is tests/modes-that-start-themselves.test.tsx § Reception.
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -129,7 +129,7 @@ it("calls any failed request unavailable: a refusal, a missing article, a broken
 it("calls a 200 that is not one of the route's answers unavailable, rather than handing it to the panel", async () => {
   /* Found by tests/a-broken-mode-leaves-the-article-readable.test.tsx, whose
      stub answers an unknown route `{}`: the panel switches exhaustively on
-     `kind`, so a body with no kind took the whole Debate band down. */
+     `kind`, so a body with no kind took the whole Reception band down. */
   const bodies: unknown[] = [
     {},
     { kind: "found" },
@@ -179,7 +179,7 @@ it("reads again after a pending article is left for an unwanted section and then
   expect(host.textContent).toBe("not-indexed");
 });
 
-it("refuses malformed citer rows before they can crash the Debate band", async () => {
+it("refuses malformed citer rows before they can crash the Reception band", async () => {
   const valid = {
     openalexId: "W1", title: "A citing paper", authors: ["Ada Lovelace"],
     authorCount: 1, citedByCount: 0,

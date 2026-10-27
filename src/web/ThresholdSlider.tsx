@@ -6,12 +6,12 @@
  * hands over the counts, so the list and the numbers here cannot disagree.
  *
  * **Who uses it:** the FAQ (the first, 2026-09-29, plan 260929g), and since
- * 2026-10-04 the Glossary (`GateSlider`) and Citations (`BarSlider`), which
+ * 2026-10-04 the Glossary (`GateSlider`) and Bibliography (`BarSlider`), which
  * drew the same row for themselves until then (plan 261004d, B1). Each keeps
  * its own pass, `max`, noun, title and foot line and hands them in.
  * tests/threshold-slider-adopters.test.tsx pins those two rows attribute by
  * attribute, and was written against the private copies before the move.
- * Search, Quotes and Debate still draw their own.
+ * Search, Quotes and Claims still draw their own.
  *
  * The four decisions it carries are the Glossary's, and the argument for each
  * is beside `GateSlider` in GlossaryPanel.tsx: the track ends where the data

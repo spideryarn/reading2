@@ -1,5 +1,5 @@
 /**
- * **The in-stream quote guard for Citations' *Investigate*** —
+ * **The in-stream quote guard for Bibliography's *Dig deeper*** —
  * src/investigate-quote-guard.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md
  * § No quotes from sources, checked inside the stream.
  *

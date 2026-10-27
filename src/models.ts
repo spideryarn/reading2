@@ -800,7 +800,7 @@ export type Task =
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      Article-reading like `ideas`, answering block ids, so `articleWithIds`. */
   | "relations"
-  /* The article's claims, listed for Debate's Claims to pick from —
+  /* The article's claims, listed for Claims to pick from —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. Article-reading
      like `faq`, naming block ids and quotes, so `articleWithIds`. No web search. */
   | "sources-claims"
@@ -946,7 +946,7 @@ export type Task =
    */
   | "reception"
   /**
-   * **A reader's claim check in Debate's Claims** — the ticked claims and the
+   * **A reader's claim check in Claims** — the ticked claims and the
    * typed one, searched on the open web in one call (src/reception.ts §
    * `generateClaimCheck`; plan docs/plans/261008i-debate-claims-picked-by-the-reader.md
    * § 3). `debate`'s wire and model, its own job so the ledger files it as
@@ -995,7 +995,7 @@ export type Task =
    */
   | "upload-source-guess"
   /**
-   * **One cited work, looked into on demand** — Bibliography's *Investigate*,
+   * **One cited work, looked into on demand** — Bibliography's *Dig deeper*,
    * src/citation-investigate.ts. A streamed answer written with a few web
    * searches over the whole article, so explain's shape and explain's model;
    * its own job because one press reads the article about twice and runs its
@@ -1005,7 +1005,7 @@ export type Task =
   | "citation-investigate"
   /**
    * **The cited paper's own passages, picked** — one non-streamed JSON call
-   * inside an *Investigate* press, sent the chunks of the paper code read and
+   * inside an *Dig deeper* press, sent the chunks of the paper code read and
    * confirmed (src/citation-paper-passages.ts, plan 261001a stage 3). Its own
    * job so the ledger shows what reading the paper adds to a press; no tools.
    */
@@ -1442,7 +1442,7 @@ export const TASK_TIER: Record<Task, Tier> = {
  * it is Opus whatever the article's setting.
  *
  * `chat` (plan 261020q): Greg, 2026-10-19, *"Default to Opus 5.5 for Chats"*.
- * Every thread kind that bills as `chat` — chat, Learn, the tutorial, Explore,
+ * Every thread kind that bills as `chat` — chat, Learn, Explore,
  * the guide (`jobFor` in src/converse.ts). Not Candidates, which is its own
  * job. About twice Sonnet's price a turn, on our bill, not the reader's.
  *
@@ -1866,7 +1866,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
   reception: "SPIDERYARN_RECEPTION_MODEL",
-  /* Shares Debate's override rather than adding a name: a check is pass B's
+  /* Shares Reception's override rather than adding a name: a check is pass B's
      call on the reader's claims, and a comparison run of one should move
      both. */
   "sources-claim-check": "SPIDERYARN_RECEPTION_MODEL",

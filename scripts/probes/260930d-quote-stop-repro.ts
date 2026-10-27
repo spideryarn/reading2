@@ -1,6 +1,6 @@
 /**
  * **What did the model put in quotation marks?** — a one-off repro for a quote
- * guard stop seen in a real browser press of Citations' *Investigate*
+ * guard stop seen in a real browser press of Bibliography's *Dig deeper*
  * (docs/plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md).
  * The production log line carries only the stop's cause, never the span, so
  * this rebuilds EXACTLY the production request and allowed texts for one row

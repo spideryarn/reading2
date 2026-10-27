@@ -25,7 +25,7 @@ way: same prompt, same tools.
 > — Greg, 2026-10-04 (spya-hyfqkq), same plan
 
 Both are quoted in full at the top of that plan. Three later answers shape what is built. On
-Glossary and Citations the chat came first as a second button beside Dig deeper: *"let's start with
+Glossary and Bibliography the chat came first as a second button beside Dig deeper: *"let's start with
 adding the "Ask in chat" button"* (Greg, 2026-10-06, [261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md)).
 The press is the Send: *"When I click "ask in Chat" anywhere, automatically submit the input"*
 (Greg, 2026-10-06, [261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). And then Dig
@@ -161,7 +161,7 @@ to go back to: the conversation is what Investigate takes you back to. Arriving 
 otherwise opens the newest one (Greg, spya-nhwy3d;
 [261021b](../plans/261021b-investigate-takes-you-back-to-your-conversation.md)).
 
-**A focus** is the one-shot that Citations had first (`CiteFocus`), now
+**A focus** is the one-shot that Bibliography had first (`CiteFocus`), now
 [`item-focus.ts`](../../src/web/item-focus.ts) § `ItemFocus` and `useLandOnItem`, one piece of
 state per band in `Reader`. Once the row (`data-term-id`, `data-citation-id`, `data-idea-id`,
 `data-claim-key`) is drawn, the band centres it in the list's own scroller — never the page — and
@@ -260,5 +260,5 @@ In the order you would do them:
   (the design, D1 to D5, and Greg's answers to its four questions),
   [261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)
   (the lens), [261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md)
-  (Glossary and Citations), [261006j](../plans/261006j-ask-in-chat-sends-the-question.md) (the
+  (Glossary and Bibliography), [261006j](../plans/261006j-ask-in-chat-sends-the-question.md) (the
   press sends).

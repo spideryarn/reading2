@@ -1,5 +1,5 @@
 /**
- * The pure half of Debate's threads (src/web/reception-threads.ts, plan 260930j).
+ * The pure half of Reception's threads (src/web/reception-threads.ts, plan 260930j).
  * The panel's behaviour is in tests/reception-and-claims-panel.test.tsx § threads.
  */
 import { describe, expect, it } from "vitest";

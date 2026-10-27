@@ -153,11 +153,11 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * them away from their paragraphs; and `spareBeyondTheMeasure` gives a band
  * only what the cell cannot use, so slack delays when bands widen. 34 would
  * have widened the band on an iPad in landscape (1194px) from 400 to 544, the
- * width Greg called too wide there for Tweets on 2026-09-30. Asked
+ * width Greg called too wide there for the Thread view (then Tweets) on 2026-09-30. Asked
  * (q-z3j0ep), he said *"Maybe somewhere in the middle? Dunno. Take
  * screenshots, use your judgment."* (2026-10-22). 42 is the middle of 34 and
  * 49, and the smallest whole value at which the standard band on his iPad in
- * landscape is no wider than the Tweets band he tuned there (486 against 496;
+ * landscape is no wider than the Thread view's band he tuned there (486 against 496;
  * 41 gives 502). Measured at 1194px: the notes sit 121px from the line's end
  * instead of 177; the standard band is unchanged below a 1109px window. Plan
  * 261023a.
@@ -251,7 +251,7 @@ export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading a
  * **The widest a `"wide"` band goes: a prose column's measure** — a ceiling
  * since 2026-09-30, reached from 1252px at a 16px root (where the widened
  * standard band reaches it, plan 261023a; by `WIDE_SHARE` alone it was about
- * 1307). Tweets' posts
+ * 1307). The Thread view's posts
  * are set in the prose face, so the width at which prose reads well is the width
  * at which they do. Greg, 2026-09-29: *"It could be quite a wide left-hand
  * column if that will help to make it be readable."*
@@ -282,7 +282,7 @@ export function wideIdeal(rootFontPx: number): number {
  * reacting to: 345 and 496 on those two, and 544 from 1252 up (about 1307
  * until the cap came down, 261023a).
  *
- * So in Tweets the prose gives up its `PROSE_MIN` defence (477 in portrait):
+ * So in the Thread view the prose gives up its `PROSE_MIN` defence (477 in portrait):
  * the thread is what is being read there and the prose is where its links
  * land. It never goes below `MODE_PROSE_FLOOR`, and the band never below the
  * standard one. docs/plans/260930h-tweets-band-fits-ipad-and-copy-buttons-become-icons.md.
@@ -686,7 +686,7 @@ export function margTitleReserve(fit: Fit): number {
  *
  *  - **The column takes its room first, then band and prose share the rest
  *    exactly as `fitMode` would share a window that much narrower** — so
- *    Structure's columns and Tweets' share behave as they always do, and the
+ *    Structure's columns and the Thread view's share behave as they always do, and the
  *    face Structure draws still follows the band it was given.
  *  - **The band wins.** When the rest would not hold a band beside
  *    `MODE_PROSE_FLOOR` of prose, there is no column and the fit is the band's
@@ -817,7 +817,7 @@ export function readerMinWidth(px: number): string {
  *    scrolls sideways**; it said it did until 2026-09-06, and that was already
  *    only reachable in the branch the cover check had made unreachable.
  *  - **Two bands can be wider.** Structure's columns, only once they fit
- *    beside `PROSE_MIN` — `structureColumnsBand` — and Tweets' wide band,
+ *    beside `PROSE_MIN` — `structureColumnsBand` — and the Thread view's wide band,
  *    which takes a share of the room and lets the prose down towards
  *    `MODE_PROSE_FLOOR` to do it (`WIDE_SHARE`). Both in `bandWidth` below.
  *  - **The prose is always on.** There is no longer any view that hides it
@@ -1010,7 +1010,7 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
  * deliberately loose cap around the measure, pads and gutter — so anything
  * the cell holds past that is page on either side of a centred column. The
  * band takes it, and stops at `wideIdeal`, which is already this file's name
- * for a prose column's measure and Tweets' ceiling.
+ * for a prose column's measure and the Thread view's ceiling.
  *
  * **Narrow windows are untouched by construction**: this is less than the
  * band until the cell is wider than the prose can use, which at a 16px root is

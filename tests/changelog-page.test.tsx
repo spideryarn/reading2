@@ -2,7 +2,7 @@
 /**
  * `/changelog`, actually rendered — src/web/ChangelogPage.tsx.
  *
- * `src/changelog/parse.test.ts` (if it exists) or the pipeline's own tests
+ * `tests/changelog-file.test.ts` (`parseChangelog`) or the pipeline's own tests
  * cover the NDJSON format; what only a render can see is the display logic
  * this page adds on top of it: quiet releases collapsing into one line,
  * newest-first order, and a commit sha actually linking where it says it

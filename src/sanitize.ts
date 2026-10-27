@@ -131,7 +131,7 @@ export function sanitizeHtml(html: string): string {
  * That is why `blocks` comes back by **identity** on the current path rather
  * than as a fresh array: a version that mapped over the blocks and happened to
  * return the same strings would look correct in every test and would still be
- * paying for a parse per block on every request. tests/sanitize-stale-artefact.ts
+ * paying for a parse per block on every request. tests/sanitize-stale-artefact.test.ts
  * asserts the identity for that reason.
  *
  * ## What it does not do

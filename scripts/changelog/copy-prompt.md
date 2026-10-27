@@ -145,8 +145,8 @@ Say what the reader sees instead:
 | a `[code]` in brackets, e.g. `[ai-busy]` | leave it out unless the entry is about error messages, then quote it once |
 | worktree, Vercel, deploy, build, CI, typecheck, lint, test suite | leave out, or "behind the scenes" |
 
-Mode names as they appear on the bar are fine, capitalised as names: Plain, Hierarchy, Outline,
-Summary, Glossary, Ideas, Quotes, Timeline, Search, Referee, Diagram, Chat, Debate, Learn (called Remember until 2026-10-05; and
+Mode names as they appear on the bar are fine, capitalised as names: Plain, Structure,
+Summary, Glossary, Ideas, Quotes, Timeline, Search, Referee, Diagram, Chat, Sources, FAQ, Skim, Marginalia, Learn (called Remember until 2026-10-05; and
 its quiz). If a mode is behind the *Experimental features* switch, the entry says so in a few words
 and links to `/profile`, because otherwise the reader will look for it and not find it.
 
