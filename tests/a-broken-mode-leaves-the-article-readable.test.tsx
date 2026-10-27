@@ -1303,14 +1303,14 @@ describe("Reception that throws is replaced by a band, not by an empty page", ()
 /* Sources' Reception since 2026-10-09: each case opened the article with
    `?sources=reception` already in the address (a sub-mode parameter
    outlives its mode), so the press on Sources landed on Reception and
-   armed the search, as a press on Reception did (plan 261009l). Since plan
+   armed the search, as a press on Debate did (plan 261009l). Since plan
    261025h no press arms Reception's search (it is its panel's own button),
    so the money rule is held on the one press Sources still arms: the
    citations, on `?sources=bibliography`, with none stored. The same band
    throws either way (`throwReception` is the SourcesBand's probe). */
-describe("a Reception press that met a broken band cannot be spent later", () => {
+describe("a Sources press that met a broken band cannot be spent later", () => {
   /** The positive control for every zero below: a press that works buys one search. */
-  it("gives exactly one job for an ordinary press on a working Reception", async () => {
+  it("gives exactly one Bibliography job for an ordinary press on a working Sources band", async () => {
     receptionOn();
     await open("?sources=bibliography");
     trace.length = 0;

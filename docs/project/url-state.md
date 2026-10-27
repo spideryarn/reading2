@@ -374,7 +374,7 @@ prioritising falls back to `document` in the panel without touching the URL. See
 [glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
 
 **`?bears=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
-The others sit on scores, so a number is the fact itself; Reception's sits on one of three named
+The others sit on scores, so a number is the fact itself; Claims' sits on one of three named
 judgments — *loosely*, *partly*, *directly* — and there is a rank inside the panel only because
 `applyThreshold` needs one. Putting that rank in the URL would be our arithmetic dressed as a
 measurement, which is the composite the feature refused

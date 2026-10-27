@@ -2900,7 +2900,7 @@ export function shareableArtefacts(revision: {
         ? revision.simpleSummary
         : null,
     bibliography: revision.bibliography,
-    /* **Reception is on a shared link when either of its artefacts is**: a claims
+    /* **Sources is on a shared link when either of its artefacts is**: a claims
        list made with no Reception search stored is still the visitor's to read
        (src/public/dto.ts § `publicSourcesClaimList`, the same `claims` test). */
     reception:

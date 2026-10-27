@@ -156,7 +156,7 @@
 
    **One set of rules for every band's slider.** Glossary, Bibliography and FAQ
    draw it through ThresholdSlider.tsx; Search's `ConfSlider`, Quotes'
-   `BarSlider` and Reception's `StopBar` are components of their own that emit the
+   `BarSlider` and Claims' `StopBar` are components of their own that emit the
    same classes. Until 2026-10-07 the last three each had a copy of these ten
    rules under their own names (`.srch-gate*`, `.quotes-bar*`, `.rcp-bar*`),
    kept in step by hand; plan 261007a § K5 measured the four alike and left
@@ -191,7 +191,7 @@
   font-size: max(var(--text-min), 0.79rem);
   white-space: nowrap;
 }
-/* **Reception's value is words, not a number**, so it is not mono: a proportional
+/* **Claims' value is words, not a number**, so it is not mono: a proportional
    face is what stops *"bears partly · 2 of 3"* reading as a reading off an
    instrument (reception.css § the relevance bar). `inherit` is what the span had
    when it set no face of its own. */
@@ -243,7 +243,7 @@
    glossary that never had them — or a search that found nothing, or a debate
    nobody answered. Until 2026-09-03 this said when the bar had *divided*
    nothing; the bar hides rather than groups now, so what it reports is the
-   count — `hiddenNote` in threshold.ts owns the wording. Search and Reception
+   count — `hiddenNote` in threshold.ts owns the wording. Search and Claims
    print it only when something is hidden; the others always. */
 .gloss-gate-note {
   margin: 0.3rem 0 0;

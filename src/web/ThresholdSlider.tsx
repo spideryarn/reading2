@@ -11,7 +11,7 @@
  * its own pass, `max`, noun, title and foot line and hands them in.
  * tests/threshold-slider-adopters.test.tsx pins those two rows attribute by
  * attribute, and was written against the private copies before the move.
- * Search, Quotes and Reception still draw their own.
+ * Search, Quotes and Claims still draw their own.
  *
  * The four decisions it carries are the Glossary's, and the argument for each
  * is beside `GateSlider` in GlossaryPanel.tsx: the track ends where the data

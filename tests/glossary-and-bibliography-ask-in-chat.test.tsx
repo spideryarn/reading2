@@ -37,7 +37,7 @@
  * **Ideas joined them on 2026-10-09** (plan 261009k, stage 3), with the same
  * seven claims, and so did **the way back from the chat** (stage 2): the line
  * above an open chat's transcript that opens the item's mode on the item —
- * for every origin, Claims's claim and angle included.
+ * for every origin, Claims' claim and Sources' Investigate angle included.
  *
  * **Since 2026-10-09 the button stands where Dig deeper was** (plan 261009k):
  * no entry and no row offers Dig deeper, and that is pinned here in the

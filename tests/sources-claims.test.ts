@@ -320,7 +320,7 @@ describe("the request", () => {
     expect(SOURCES_CLAIMS_SYSTEM).toContain(paperwork("pick"));
   });
 
-  it("has its own prompt version, not Claims's", () => {
+  it("has its own prompt version, not Reception's", () => {
     expect(PROMPT_VERSION).toMatch(/^debate-claims\//);
     expect(PROMPT_VERSION).not.toBe(RECEPTION_PROMPT_VERSION);
   });

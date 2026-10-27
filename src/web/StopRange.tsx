@@ -22,7 +22,7 @@
  * With no stops — an unscored list — it is the plain input, native step and all.
  *
  * Used by `ThresholdSlider` (Glossary, Bibliography, FAQ), Search's `ConfSlider`
- * and Quotes' `BarSlider`. Reception's `StopBar` is not one of them: its stops
+ * and Quotes' `BarSlider`. Claims' `StopBar` is not one of them: its stops
  * are words, one per position already.
  * docs/plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md.
  */

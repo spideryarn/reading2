@@ -3,7 +3,7 @@
  *
  * Glossary (`?gate=`), Quotes (`?bar=`) and Search (`?conf=`) each put a
  * threshold under the reader's hand — Bibliography (`?citebar=`) and the FAQ (`?faqbar=`) joined them later,
- * and Reception's categorical bar (`?bears=`, reception-order.ts) uses the same pass —
+ * and Claims' categorical bar (`?bears=`, reception-order.ts) uses the same pass —
  * and until 2026-09-03 the first three disagreed about
  * what one is for: Search hid what was below it, while the other two moved it
  * into a second group headed *"the rest"*. Greg looked at the built thing and
@@ -18,11 +18,11 @@
  * > — Greg, 2026-09-03
  *
  * So the three numeric sliders that existed then hide and say how many they are
- * holding back. Bibliography inherited that rule, and Reception reuses it over an
+ * holding back. Bibliography inherited that rule, and Claims reuses it over an
  * ordinal rank for its categorical levels. The rule lives here rather than in
  * one copy per panel. Each caller passes its own score accessor: the glossary
  * multiplies two scores, quotes take a maximum over whichever arrived, Search
- * carries confidence, Bibliography uses its weighted score, and Reception maps its
+ * carries confidence, Bibliography uses its weighted score, and Claims maps its
  * named levels to an ordinal only for this pass.
  *
  * The reference-list argument that justified grouping — *a term you cannot find

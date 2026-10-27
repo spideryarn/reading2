@@ -1282,8 +1282,8 @@ const SPENDS: Record<Mode, Spend> = {
   /* **Five presses since 2026-10-11**, one per sub-mode, as Diagram's are
      one per picture: Sources opens on whichever `?sources=` names
      (plan 261009l). Bibliography, the default, is one model call over the
-     article (Bibliography's row until then); Reception is the dearest press in the
-     app, one call out to the open web (Reception's); Claims is its own list.
+     article (Citations' row until then); Reception is the dearest press in the
+     app, one call out to the open web (Debate's); Claims is its own list.
      Links reads markup already in the article and spends nothing. Not cited
      reads its stored search and spends nothing: its search is its own button,
      never a press that opens it (plan 261011ac, F1), so a `POST

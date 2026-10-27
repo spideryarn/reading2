@@ -1,11 +1,11 @@
 /**
- * **How each of Reception's two lists is arranged** (src/web/reception-order.ts),
+ * **How Reception's and Claims' lists are arranged** (src/web/reception-order.ts),
  * tested without a DOM. Since 2026-10-03 (plan 261003o) the two searches are two
  * sub-modes, so there are two arrangements rather than four orders over one
  * mixed list:
  *
  *  - **Claims** is always grouped by claim, and nothing else.
- *  - **Reception** has three orders, `?debateby=`: *as found* (`prioritised`,
+ *  - **Reception** has three orders, `?receptionby=`: *as found* (`prioritised`,
  *    the default), *date* and *stance*.
  *
  * Three properties are invisible on screen until they are wrong:

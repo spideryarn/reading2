@@ -3230,8 +3230,10 @@ export async function openRouterImage(
  *    they leave open for a provider's own** — `provider.options.openai`. They
  *    document that *"unrecognized keys are silently dropped"*, which makes this
  *    the one parameter here that can stop working without anything going red.
- *    `tests/ai-call.test.ts` (the `keywords` case) is the guard, and it asserts that a
- *    *transcript changes*, never that a request succeeded.
+ *    `tests/ai-call.test.ts` guards the outgoing keyword nesting with a stubbed
+ *    transcript. Whether the provider actually uses those words needs a real
+ *    transcript comparison: `evals/dictation/probe-stt-routes.ts` compares the
+ *    same clip with and without keywords.
  * 5. **The bill is zero, and that is not a bug in this code.** `usage.cost`
  *    came back `0` for 3 seconds of audio and for 22. `Meter.saw` records what
  *    it is told, so dictation rows carry no cost. `unpriceZero` below drops

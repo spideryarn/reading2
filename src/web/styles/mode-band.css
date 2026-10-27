@@ -1550,7 +1550,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 }
 /* ---- text boxes in the bands ----
    **One look for every box a reader types into inside a band**: chat's
-   composer, Search's and Glossary's (and Reception's) one-line boxes, Referee's
+   composer, Search's, Glossary's, Claims' and Investigate's one-line boxes, Referee's
    criterion, poles and Candidates box, Learn's quiz answer, Illustrated's note
    and Skim's purpose. Greg, 2026-10-07: *"controls that do the same job should
    look the same in every mode, though use your judgment."* Before this rule

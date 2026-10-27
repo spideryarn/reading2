@@ -1568,7 +1568,7 @@ function ControlsAcrossModes() {
           </>
         }
         finger={<>type at least 16px on a touchscreen (narrow-window.css), so iOS does not zoom.</>}
-        usedBy="Chat's composer, Search, Glossary's Look up, Reception, Referee's criterion, poles and Candidates, Learn's quiz answer, Illustrated's note, Skim's purpose"
+        usedBy="Chat's composer, Search, Glossary's Look up, Claims, Sources' Investigate, Referee's criterion, poles and Candidates, Learn's quiz answer, Illustrated's note, Skim's purpose"
       >
         <textarea
           className="chat-input design-family-box"

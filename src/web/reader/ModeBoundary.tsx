@@ -30,7 +30,7 @@
  * `key={mode}` at the call site gives every mode its own boundary, so a broken
  * Quotes cannot follow the reader into Timeline. Within a mode, the sub-mode a
  * band is showing — Diagram's picture, Referee's view, Learn's part, Summary's
- * length, Structure's layout, Reception's view — goes in `resetKey`, which is
+ * length, Structure's layout, Sources' view — goes in `resetKey`, which is
  * `FeatureBoundary`'s documented extension point for it: Back from broken
  * Promises to Criteria is a different band and gets a fresh start. For three of
  * the six a visitor's key omits it, because the parameter does not select their

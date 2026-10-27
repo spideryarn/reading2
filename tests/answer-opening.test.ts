@@ -1,6 +1,6 @@
 /**
  * **How an answer begins, in plain words** — `answerOpening` in
- * src/answer-opening.ts. It is the one line a chat's mark shows under a Reception
+ * src/answer-opening.ts. It is the one line a chat's mark shows under a Claims
  * claim, a Glossary entry and a Bibliography row, and the
  * collapsed floating chat's second line.
  *
