@@ -159,8 +159,11 @@ const rawPgSkimBriefStore: SkimBriefStore = {
          would receive a route planned for words it does not have (GPT Sol's
          C5, plan 261027d). Asked under the article lock, which a job's
          completion also takes first (src/store/pg-session.ts), so a job seen
-         ending here has ended; a job queued after this check was queued for
-         this row. Refusing is one query where carrying the row's incarnation
+         ending here has ended. This does not fence a request that read the
+         old sentence before deletion but inserts its job after re-creation:
+         that route keeps the old profile hash, so differing replacement text
+         is reported as `profileChanged`, as for an edit during a run.
+         Refusing is one query where carrying the row's incarnation
          on every job would be a column, a wire field and a second fence. */
       const [live] = await tx
         .select({ id: jobs.id })
