@@ -209,6 +209,13 @@ interface Props {
    * the dialog on it, so a change of reader is a fresh dialog. Absent: no copy.
    */
   readerId?: string;
+  /**
+   * Told the admin's live count of threads waiting on a decision, or `null`
+   * once the read has settled without an admin list, so the trigger's number
+   * (FeedbackButton.tsx) follows replies, deferrals, failures and the old-server
+   * fallback rather than keeping an older arrival count (spya-wwyw8y).
+   */
+  onWaitingCount?(count: number | null): void;
 }
 
 /** How long after the last keystroke the draft is saved to the browser. */
@@ -418,7 +425,7 @@ function useDraftHeld(...held: boolean[]): void {
   }, [any]);
 }
 
-export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false, readerId }: Props) {
+export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false, readerId, onWaitingCount }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -888,6 +895,13 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   }, [open]);
   const { earlier, choice, setShow, retry, questions, liveQuestions, waitingQuestionCount, questionsLoading, replies, addenda } =
     useEarlierFeedback(open, view === "earlier", admin);
+  useEffect(() => {
+    /* A settled failure and the old-server 404 fallback have no admin
+       shortcut, so they clear a number learned by the host's earlier read.
+       Do not clear it during loading: that would make the badge blink between
+       the host's answer and this fresher one. */
+    if (open && admin && !questionsLoading) onWaitingCount?.(waitingQuestionCount);
+  }, [open, admin, waitingQuestionCount, questionsLoading, onWaitingCount]);
   const questionsSlow = useSlow(questionsLoading);
   /* One thread on its own, in Needs a decision: nothing else in the panel. */
   const threadOpen = choice.show === "waiting" && threadShowing(questions, replies);

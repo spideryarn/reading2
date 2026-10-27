@@ -3,6 +3,7 @@ id: q-knkbsk
 report: spya-ez2vus
 status: answered
 asked: 2026-10-27
+acted: spya-z0hdrz
 title: Citations rows code found in the text: mixed in with the model's, or listed after them?
 refs: qi-mf9r5hjk · docs/plans/261027b-citations-missed-in-the-text-filled-by-code.md · docs/investigations/261027a-how-often-citations-are-missed.md · docs/user-feedback/261026_2154-citations-missed-in-long-articles.md
 ---
@@ -34,3 +35,9 @@ So **A**: the rows code found stay mixed in, in reading order, and nothing is bu
 work again (from 1 November), the model is given code's list to describe and most of these rows get
 scores and sort themselves (qi-mf9r5hjk). If the interleaving still bothers you after that, B is
 the small change.
+
+## Greg's reply in the Feedback dialog, 2026-10-27 (`spya-z0hdrz`)
+
+> Use your judgment.
+
+The same answer as the terminal one above, so the decision stands: **A**, nothing built.
