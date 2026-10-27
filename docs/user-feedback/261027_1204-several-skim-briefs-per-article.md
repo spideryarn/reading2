@@ -1,7 +1,7 @@
 ---
 reports: spya-xyje0z
 ending: shipped
-comment: Skim now holds several briefs per article. The "Reading for" line has a ▾ that switches between the default and briefs you add, and lets you edit, delete or add one. Each brief gets its own route. Real routes for added briefs can be planned from 1 November, once the model key resets (qi-wthdvazd).
+comment: Skim holds several briefs per article. A ▾ on the "Reading for" line switches between them, and adds, edits or deletes one; each gets its own route. Real routes for added briefs can be planned once the key resets on 1 November.
 ---
 # Several Skim briefs per article
 
