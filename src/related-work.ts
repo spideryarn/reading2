@@ -99,6 +99,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { surnameKey } from "./citation-author-year.js";
 
 import { registryAuthorIsOurs, registryIsThisArticle } from "./article-registry.js";
 import {
@@ -607,12 +608,26 @@ function titleInEntry(candidate: string, entry: string | undefined): boolean {
   return titleForms(candidate).some((form) => registryTitleIsDistinctive(form) && containsRun(words, tokens(form)));
 }
 
-/** **Is this work one the Bibliography lists?** The three tiers in the header, in order. */
-export function inBibliography(work: Pick<RelatedWork, "doi" | "title">, rows: readonly CitedWork[]): boolean {
+/**
+ * Tier 4, for a row code listed from the text (`listedBy: "text"`, plan
+ * 261027b): it has only `Levine (2021)` for a title, so the work's own title
+ * never agrees with it. Its first author's surname and the year stand in —
+ * only for such a row, whose names and year are the article's own words.
+ */
+function authorYearAgrees(work: Pick<RelatedWork, "authors" | "year">, row: CitedWork): boolean {
+  if (row.listedBy !== "text" || work.year === undefined || row.year?.slice(0, 4) !== String(work.year)) return false;
+  const first = openAlexAuthors(work.authors.slice(0, 1))[0];
+  const rowFirst = (row.authors ?? "").split(/,|\bet al\b/)[0] ?? "";
+  return first !== undefined && surnameKey(first.family) !== "" && surnameKey(first.family) === surnameKey(rowFirst);
+}
+
+/** **Is this work one the Bibliography lists?** The three tiers in the header, in order, then code's rows by author and year. */
+export function inBibliography(work: Pick<RelatedWork, "doi" | "title" | "authors" | "year">, rows: readonly CitedWork[]): boolean {
   const id = workIdentity(work);
   if (id !== null && rows.some((row) => rowIdentities(row).includes(id))) return true;
   if (rows.some((row) => titlesAgree(work.title, row.title))) return true;
-  return rows.some((row) => titleInEntry(work.title, row.entry));
+  if (rows.some((row) => titleInEntry(work.title, row.entry))) return true;
+  return rows.some((row) => authorYearAgrees(work, row));
 }
 
 /**

@@ -696,8 +696,8 @@ function publicPlace(place: CitationPlace): CitationPlace {
  * `citation_finds` — so this is the second of two, for the day something
  * writes one back or hands this projection an attached owner read.
  *
- * `key` and `found` are not named, so they do not cross. src/public-types.ts §
- * `PublicCitedWork` has why for each.
+ * `key` and `found` are not named, so they do not cross. `why` is omitted on a
+ * text-filled row and `listedBy` crosses so the public reader can say why.
  *
  * **The note on the work comes from `blurbEntries`, never from `work.blurb`**
  * (plan 261017h stage 3c, G5): `shownBlurb` keeps only a `blurb` entry whose
@@ -721,7 +721,8 @@ function publicCitedWork(
     title: work.title,
     ...opt(work, "authors"),
     ...opt(work, "year"),
-    why: work.why,
+    ...opt(work, "why"),
+    ...opt(work, "listedBy"),
     ...opt(work, "relevance"),
     ...opt(work, "influence"),
     ...(work.reference === undefined ? {} : { reference: publicPlace(work.reference) }),

@@ -395,7 +395,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
     },
     bibliography: async () => {
       const run = await generateBibliography({ power: "standard", article, previous: null, referenceList: null });
-      write("bibliography", run.bibliography.citations.map((c) => ({ key: norm(c.title), field: "why", text: c.why, context: c.title })), usageOf(run));
+      write("bibliography", run.bibliography.citations.flatMap((c) => (c.why === undefined ? [] : [{ key: norm(c.title), field: "why", text: c.why, context: c.title }])), usageOf(run));
     },
     sketch: async () => {
       const run = await generateSketch({ power: "standard", article, profile: null });

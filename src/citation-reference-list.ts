@@ -94,6 +94,22 @@ function looksLikeContents(list: NumberedReferenceList): boolean {
   return sections >= 3 || leaders >= 3;
 }
 
+/**
+ * **A numbered run in which most entries carry no year is not a reference
+ * list** — a table's numbered rows, say. LeCun's author–year bibliography has
+ * no numbers, so the first numbered run after its `References` heading was the
+ * appendix's Table 1 of loss functions, and the model was told it was the
+ * article's reference list (feedback spya-ez2vus, plan 261027b). A real entry
+ * nearly always has a year; *in press* and *n.d.* are why half, not all.
+ */
+function mostlyDated(list: NumberedReferenceList): boolean {
+  let dated = 0;
+  for (const text of list.entries.values()) {
+    if (/\b(?:1[5-9]\d\d|20\d\d)[a-z]?\b|[‘’']\d{2}\b/.test(text)) dated++;
+  }
+  return dated * 2 >= list.entries.size;
+}
+
 /** One numbered list: its entries by number, in order. */
 export interface NumberedReferenceList {
   /** Number → the entry's text, whitespace collapsed, number included. */
@@ -120,7 +136,7 @@ export function referenceListFrom(lines: readonly string[]): NumberedReferenceLi
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!HEADING.test(lines[i] ?? "")) continue;
     const list = numberedEntries(lines.slice(i + 1));
-    if (list !== null && !looksLikeContents(list)) return list;
+    if (list !== null && !looksLikeContents(list) && mostlyDated(list)) return list;
   }
   return null;
 }

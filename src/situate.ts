@@ -594,10 +594,13 @@ export const SITUATE_PLAN_SCHEMA = {
 
 validateAnthropicJsonSchema(SITUATE_PLAN_SCHEMA);
 
-/** The works Bibliography rates as leaned on most, as the planner reads them. */
+/** The model-described works Bibliography rates as leaned on most, as the planner reads them. */
 export function leanedOn(bibliography: Bibliography | null): string[] {
   const works = [...(bibliography?.citations ?? [])]
-    .filter((w) => typeof w.title === "string" && w.title.trim() !== "")
+    /* A text-filled row proves only that the piece cites a work. With no
+       model-written `why` or relevance, calling it leaned on would overstate
+       what the bibliography knows. */
+    .filter((w) => w.listedBy !== "text" && typeof w.title === "string" && w.title.trim() !== "")
     .sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
     .slice(0, PLAN_WORKS);
   return works.map((w) =>

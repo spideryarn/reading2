@@ -28,6 +28,7 @@ import { generationKey } from "./models.js";
    store's read path does not pay for it. */
 import { PAPER_SELECTION_VERSION } from "./paper-evidence.js";
 import type { CitationFind, Bibliography, CitationInvestigation, CitedWork, Meta } from "./types.js";
+import { WHY_NOT_DESCRIBED } from "./types.js";
 
 /**
  * **Bump when the prompt (`INVESTIGATE_SYSTEM`, src/citation-investigate.ts),
@@ -135,7 +136,7 @@ export function investigateContext(
     reference: (work.entry ?? work.reference?.quote ?? null)?.slice(0, INVESTIGATE_REFERENCE_CAP) ?? null,
     url: work.url,
     linkFrom: work.linkFrom,
-    why: work.why,
+    why: work.why ?? WHY_NOT_DESCRIBED,
     passages,
   };
 }

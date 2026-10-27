@@ -22,7 +22,7 @@
  */
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
-import type { CitedWork } from "../src/types.js";
+import { type CitedWork, WHY_NOT_DESCRIBED } from "../src/types.js";
 import type { Block } from "../src/types.js";
 import { capEntry } from "../src/citation-entry.js";
 import type { NumberedReferenceList } from "../src/citation-reference-list.js";
@@ -31,7 +31,8 @@ import { emptyDrops, noScoreDrops, toDrafts } from "../src/bibliography.js";
 /** Replay the actual draft reader, including HTML entries and the PDF list. */
 export function replayGuard(works: readonly CitedWork[], blocks: readonly Block[], list: NumberedReferenceList | null) {
   const drops = emptyDrops();
-  const raw = works.map((w) => {
+  const model = works.filter((w) => w.listedBy !== "text");
+  const raw = model.map((w) => {
     const entries = w.entry && list
       ? [...list.entries].filter(([, entry]) => capEntry(entry) === w.entry)
       : [];
@@ -45,9 +46,13 @@ export function replayGuard(works: readonly CitedWork[], blocks: readonly Block[
       ...(entries.length === 1 ? { entry: entries[0]![0] } : {}),
     };
   });
-  const kept = toDrafts(raw, blocks, drops, noScoreDrops(), list);
+  const replayed = toDrafts(raw, blocks, drops, noScoreDrops(), list);
   /* A missing row is a failed replay, not evidence its metadata was grounded. */
-  if (kept.length !== works.length) throw new Error(`Guard replay anchored ${kept.length} of ${works.length} stored rows`);
+  if (replayed.length !== model.length) {
+    throw new Error(`Guard replay anchored ${replayed.length} of ${model.length} stored model rows`);
+  }
+  let at = 0;
+  const kept = works.map((work) => work.listedBy === "text" ? work : replayed[at++]!);
   return { drops, kept };
 }
 
@@ -98,12 +103,12 @@ export function measureRow(work: CitedWork, blocks: ReadonlyMap<string, Block>, 
   const grounded = new Set(articleWords);
   for (const w of wordsOf(work.entry ?? "")) grounded.add(w);
 
-  const why = contentWords(work.why);
+  const why = contentWords(work.why ?? "");
   const authors = wordsOf(work.authors ?? "").filter((w) => w !== "et" && w !== "al");
   const year = work.year ? wordsOf(work.year) : null;
   return {
     id: work.id,
-    whyWords: wordsOf(work.why).length,
+    whyWords: wordsOf(work.why ?? "").length,
     whyNovel: 1 - shareIn(why, citing),
     titleGrounded: shareIn(wordsOf(work.title), grounded),
     authorsGrounded: shareIn(authors, grounded),
@@ -181,7 +186,7 @@ async function main(): Promise<void> {
       for (const d of dropped) console.log(`  - the guard would drop ${d}`);
       for (const w of works.slice(0, rows)) {
         const m = measured.find((x) => x.id === w.id);
-        console.log(`  · ${w.title} — ${w.authors ?? ""} ${w.year ?? ""}\n    why: ${w.why}\n    novel ${m?.whyNovel.toFixed(2)} title ${m?.titleGrounded.toFixed(2)} authors ${m?.authorsGrounded.toFixed(2)} year ${m?.yearGrounded}`);
+        console.log(`  · ${w.title} — ${w.authors ?? ""} ${w.year ?? ""}\n    why: ${w.why ?? WHY_NOT_DESCRIBED}\n    novel ${m?.whyNovel.toFixed(2)} title ${m?.titleGrounded.toFixed(2)} authors ${m?.authorsGrounded.toFixed(2)} year ${m?.yearGrounded}`);
       }
       for (const m of measured.filter((x) => x.titleGrounded < 1 || x.authorsGrounded < 1 || x.yearGrounded === false)) {
         const w = works.find((x) => x.id === m.id);

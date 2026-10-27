@@ -34,6 +34,7 @@ import {
   generateSituate,
   inputFingerprint,
   isOutdated,
+  leanedOn,
   MAX_CANDIDATES,
   MAX_FINDINGS,
   readShortlist,
@@ -59,6 +60,23 @@ import type { ArtifactReads } from "../src/store/artifacts.js";
 import type { AllowanceTaken, RateBucket, RatePolicy } from "../src/store/contracts.js";
 import type { Block, Bibliography, CitationBlurbs, SituateQuery } from "../src/types.js";
 import { untrusted } from "../src/untrusted-fence.js";
+
+describe("the bibliography rows offered to the planner", () => {
+  it("does not call a text-only row a work the piece leans on", () => {
+    const row = (over: Record<string, unknown>) => ({
+      id: "c1", key: "k", title: "A work", why: "The article uses it.", relevance: 0.8,
+      mentions: [], citedAt: [], firstCited: "spya-p00001", citedInBody: true,
+      url: "https://example.com", linkFrom: "search", ...over,
+    });
+    const bibliography = {
+      citations: [
+        row({ id: "text", title: "Levine (2021)", why: undefined, relevance: undefined, listedBy: "text" }),
+        row({ id: "model", title: "Model work" }),
+      ],
+    } as unknown as Bibliography;
+    expect(leanedOn(bibliography)).toEqual(['- "Model work" — The article uses it.']);
+  });
+});
 
 /* ------------------------------------------------------- the stubbed model -- */
 

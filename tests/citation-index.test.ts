@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
-import type { LimiterService, ServiceLimiter, SlotLease, StartTaken } from "../src/bibliographic.js";
+import type { LimiterService, LookupResult, ServiceLimiter, SlotLease, StartTaken, WorkId } from "../src/bibliographic.js";
 import {
   CITERS_FRESH_MS,
   type CitersKey,
@@ -24,6 +24,7 @@ import {
   type FetchedCiters,
   type StoredCiters,
   citersOf,
+  confirmedWorkOf,
   openAlexAuthors,
   openAlexCitersUrl,
   openAlexTitleSearchUrl,
@@ -119,8 +120,11 @@ function harness(answers: Record<string, unknown | FetchFailure>) {
   const store = new MemoryCache();
   const limiter = new MemoryLimiter();
   const api = openAlex(answers);
-  const deps = { store, limiter, fetchJson: api.fetchJson, sleep: async () => {} };
-  return { store, limiter, api, deps };
+  /* arXiv's own record is asked only when an arXiv paper's own facts fail (plan
+     261027c); by default the registry knows nothing, so no test reaches a real one. */
+  const lookupWork = vi.fn(async (_id: WorkId): Promise<LookupResult> => ({ kind: "not-found" }));
+  const deps = { store, limiter, fetchJson: api.fetchJson, sleep: async () => {}, lookupWork };
+  return { store, limiter, api, deps, lookupWork };
 }
 
 /** A logger whose objects can be inspected without Pino's test-time silence. */
@@ -172,6 +176,21 @@ describe("parseOpenAlexWork", () => {
 
   it("keeps a record with no title, as one that cannot be confirmed", () => {
     expect(parseOpenAlexWork({ ...WORK, title: null })?.title).toBeNull();
+  });
+
+  /* Plan 261027c: a page's byline often names the senior author, who comes last;
+     Narratives' Uri Hasson is the 25th of 25. The CHECK keeps 20. */
+  it("keeps the first nineteen authors and the last one of a longer list", () => {
+    const names = Array.from({ length: 25 }, (_, i) => `Author Number${i + 1}`);
+    const of = (list: unknown[]) => parseOpenAlexWork({
+      ...WORK,
+      authorships: list.map((display_name) => ({ author: { display_name } })),
+    });
+    expect(of(names)?.authors).toEqual([...names.slice(0, 19), "Author Number25"]);
+    expect(of(names.slice(0, 20))?.authors).toEqual(names.slice(0, 20));
+    expect(of([...names.slice(0, 10), null, ...names.slice(10, 20)])?.authors).toEqual(names.slice(0, 20));
+    const thousands = Array.from({ length: 5_000 }, (_, i) => `Physics Author ${i + 1}`);
+    expect(of(thousands)?.authors).toEqual([...thousands.slice(0, 19), "Physics Author 5000"]);
   });
 });
 
@@ -405,9 +424,9 @@ describe("citersOf", () => {
   /* Investigation 261025a: OpenAlex's record for arXiv 2308.08708 (Butlin, Long et
      al.) has the right authors and its 196 real citers, but a Zenodo deposit
      merged into it gave it another title. When the article's own arXiv address
-     independently names that DOI, two of its structured authors can stand in
-     for the title. One author does not. */
-  it("confirms an arXiv DOI's record whose title is another's when two of our authors agree", async () => {
+     independently names that DOI, the bounded author lists can stand in for
+     the title only when at least two and four in five agree. */
+  it("confirms an arXiv DOI's retitled record when the bounded author lists agree", async () => {
     const arxivDoi = "10.48550/arxiv.2308.08708";
     const arxivId = `doi:${arxivDoi}` as CitersKey;
     const retitled = {
@@ -436,7 +455,7 @@ describe("citersOf", () => {
     h.api.fetchJson.mockRejectedValue(failure(503));
     expect((await citersOf(article, h.deps)).kind).toBe("found");
 
-    /* One agreeing author is not enough without the title. */
+    /* Half of a two-person list is not enough without the title. */
     const lone = harness({ [openAlexWorkUrl(arxivDoi)]: retitled, [CITERS_URL]: CITERS });
     expect(await citersOf({
       ...article,
@@ -810,6 +829,15 @@ describe("titleMatchOf", () => {
     expect(titleMatchOf({ ...one, publishedYear: 2017 }, searchOf(sole))).toEqual({ kind: "none" });
   });
 
+  /* Plan 261027c, GPT Sol's P2: a title search's target is a target too. */
+  it("finds the senior author at the end of a long list", () => {
+    const names = [...Array.from({ length: 24 }, (_, i) => `Author Number${i + 1}`), "Uri Hasson"];
+    const long = { ...VASWANI, publication_year: 2017, authorships: authorships(names) };
+    const got = titleMatchOf({ title: ATTENTION, byline: "Hasson, Uri", publishedYear: 2017 }, searchOf(long));
+    expect(got?.kind).toBe("match");
+    if (got?.kind === "match") expect(got.target.authors).toHaveLength(20);
+  });
+
   it("does not count one author listed twice as two", () => {
     const one = { title: ATTENTION, byline: "Ashish Vaswani" };
     const twice = { ...VASWANI, authorships: authorships(["Ashish Vaswani", "Ashish  vaswani"]) };
@@ -1121,6 +1149,200 @@ describe("the topic view: the citers that mention the work's own keyword (261025
     });
     expect(work?.keyword).toBe("first choice");
     expect(parseOpenAlexWork({ id: "https://openalex.org/W1", title: "A work" })?.keyword).toBeUndefined();
+  });
+});
+
+describe("arXiv's own record, when an arXiv paper's own facts cannot confirm (plan 261027c)", () => {
+  const arxivDoi = "10.48550/arxiv.2308.08708";
+  const ARXIV_TITLE = "Consciousness in Artificial Intelligence: Insights from the Science of Consciousness";
+  const RETITLED = {
+    ...WORK,
+    title: "Cheap Correlate or Discriminating Property? An Executable Validation Protocol",
+    authorships: authorships(["Patrick Butlin", "Long, Robert", "Eric Elmoznino", "Yoshua Bengio"]),
+  };
+  /* What arXiv's DataCite record says the paper is. */
+  const ARXIV_RECORD: LookupResult = {
+    kind: "found",
+    record: {
+      id: "arxiv:2308.08708" as WorkId,
+      source: "datacite",
+      title: ARXIV_TITLE,
+      authors: [
+        { family: "Butlin", given: "Patrick" },
+        { family: "Long", given: "Robert" },
+        { family: "Elmoznino", given: "Eric" },
+        { family: "Bengio", given: "Yoshua" },
+      ],
+      doi: arxivDoi,
+    },
+  };
+  /* Production's revision of spya-ufn2xj's article, imported before 261017a. */
+  const STALE = { title: "1Indicator Properties", url: "https://arxiv.org/html/2308.08708" };
+
+  it("carries confirmed, unavailable and refused through a write, fresh cache and stale fallback", async () => {
+    const h = harness({ [openAlexWorkUrl(arxivDoi)]: RETITLED, [CITERS_URL]: CITERS });
+    h.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    /* A just-written answer is checked again, against the memoised registry answer. */
+    expect((await citersOf(STALE, h.deps)).kind).toBe("found");
+    expect(h.lookupWork).toHaveBeenCalledWith("arxiv:2308.08708");
+
+    /* A registry outage cannot unlock a fresh row or become a permanent disagreement. */
+    h.lookupWork.mockResolvedValue({ kind: "unavailable", why: "error" });
+    expect(await citersOf(STALE, h.deps)).toEqual({ kind: "unavailable" });
+    h.lookupWork.mockResolvedValue({ kind: "not-found" });
+    expect(await citersOf(STALE, h.deps)).toEqual({ kind: "unconfirmed" });
+
+    /* Each public call has a new memo; the same dependency may recover. */
+    h.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    expect((await citersOf(STALE, h.deps)).kind).toBe("found");
+    expect(h.lookupWork).toHaveBeenCalledTimes(4);
+    expect(h.api.asked).toEqual([openAlexWorkUrl(arxivDoi), CITERS_URL]);
+
+    h.store.age(`doi:${arxivDoi}` as CitersKey);
+    h.api.fetchJson.mockRejectedValue(failure(503));
+    expect((await citersOf(STALE, h.deps)).kind).toBe("found");
+    h.lookupWork.mockResolvedValue({ kind: "unavailable", why: "error" });
+    expect(await citersOf(STALE, h.deps)).toEqual({ kind: "unavailable" });
+    h.lookupWork.mockResolvedValue({ kind: "not-found" });
+    /* OpenAlex is unavailable, but refusal still cannot make the stale row list. */
+    expect(await citersOf(STALE, h.deps)).toEqual({ kind: "unavailable" });
+  });
+
+  it("confirms by arXiv's title and an author when we have the title but no authors", async () => {
+    const h = harness({ [openAlexWorkUrl(arxivDoi)]: { ...RETITLED, title: ARXIV_TITLE }, [CITERS_URL]: CITERS });
+    h.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    expect((await citersOf({ ...STALE, title: ARXIV_TITLE }, h.deps)).kind).toBe("found");
+  });
+
+  /* Measured on dev: OpenAlex holds BERT's arXiv DOI under an unrelated 2025 paper. */
+  it("still refuses an arXiv DOI that OpenAlex has given to another work", async () => {
+    const bertDoi = "10.48550/arxiv.1810.04805";
+    const stranger = {
+      ...WORK,
+      title: "AI-Assisted Pipeline for Dynamic Generation of Trustworthy Health Supplement Content at Scale",
+      authorships: authorships(["Kefallinos, Dionysios", "Alexandris, Georgios", "Maras, Alexis"]),
+    };
+    const h = harness({ [openAlexWorkUrl(bertDoi)]: stranger, [CITERS_URL]: CITERS });
+    h.lookupWork.mockResolvedValue({
+      kind: "found",
+      record: {
+        id: "arxiv:1810.04805" as WorkId,
+        source: "datacite",
+        title: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+        authors: [{ family: "Devlin", given: "Jacob" }, { family: "Chang", given: "Ming-Wei" }],
+        doi: bertDoi,
+      },
+    });
+    const bert = {
+      title: "Pre-training of Deep Bidirectional Transformers for Language Understanding",
+      authors: ["Jacob Devlin", "Ming-Wei Chang"].map((name) => ({ name, affiliations: [] })),
+      url: "https://arxiv.org/abs/1810.04805",
+    };
+    expect(await citersOf(bert, h.deps)).toEqual({ kind: "unconfirmed" });
+    expect(h.lookupWork).toHaveBeenCalledWith("arxiv:1810.04805");
+    expect(h.api.asked).toEqual([openAlexWorkUrl(bertDoi)]);
+    expect(h.store.writes).toEqual([]);
+
+    /* The fallback is bounded to this address's own arXiv DOI. */
+    const own = harness({ [openAlexWorkUrl(arxivDoi)]: WORK, [CITERS_URL]: CITERS });
+    expect((await citersOf({ title: TITLE, byline: "Michael Levin", url: "https://arxiv.org/html/2308.08708" }, own.deps)).kind)
+      .toBe("found");
+    expect(own.lookupWork).not.toHaveBeenCalled();
+
+    /* A DOI the page carries, which can be a cited work's: our facts only. */
+    const journal = harness({ [WORK_URL]: RETITLED, [CITERS_URL]: CITERS });
+    journal.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    expect(await citersOf({ ...STALE, doi: DOI, url: "https://example.com/post" }, journal.deps)).toEqual({ kind: "unconfirmed" });
+    /* An arXiv DOI the address does not name: an author's later page carrying it. */
+    const later = harness({ [openAlexWorkUrl(arxivDoi)]: RETITLED, [CITERS_URL]: CITERS });
+    later.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    expect(await citersOf({ ...STALE, doi: arxivDoi, url: "https://arxiv.org/html/2401.12345" }, later.deps))
+      .toEqual({ kind: "unconfirmed" });
+    expect(journal.lookupWork).not.toHaveBeenCalled();
+    expect(later.lookupWork).not.toHaveBeenCalled();
+  });
+
+  it("is unconfirmed when arXiv has no record, and unavailable, with its Try again, when arXiv cannot be reached", async () => {
+    const none = harness({ [openAlexWorkUrl(arxivDoi)]: RETITLED, [CITERS_URL]: CITERS });
+    expect(await citersOf(STALE, none.deps)).toEqual({ kind: "unconfirmed" });
+    const down = harness({ [openAlexWorkUrl(arxivDoi)]: RETITLED, [CITERS_URL]: CITERS });
+    down.lookupWork.mockResolvedValue({ kind: "unavailable", why: "error" });
+    expect(await citersOf(STALE, down.deps)).toEqual({ kind: "unavailable" });
+    expect(down.api.asked).toEqual([openAlexWorkUrl(arxivDoi)]);
+    expect(down.store.writes).toEqual([]);
+  });
+
+  it("reads arXiv's record once per request, however many times the record is checked", async () => {
+    const target = {
+      ...RETITLED,
+      keywords: [{ display_name: "consciousness", score: 1 }],
+    };
+    const plain = { ...CITERS, meta: { count: TOPIC_MIN_CITERS + 1 } };
+    const topicUrl = openAlexCitersUrl("W4399223951", 100, "consciousness");
+    const h = harness({ [openAlexWorkUrl(arxivDoi)]: target, [CITERS_URL]: plain, [topicUrl]: CITERS });
+    h.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    expect((await citersOf(STALE, h.deps, { about: "topic" })).kind).toBe("found");
+    /* askWork, the just-written plain answer and the topic answer all confirm. */
+    expect(h.lookupWork).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the same confirmation and tri-state answer for Situate", async () => {
+    const h = harness({ [openAlexWorkUrl(arxivDoi)]: RETITLED });
+    h.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    expect(await confirmedWorkOf(STALE, h.deps)).toMatchObject({ kind: "confirmed", key: `doi:${arxivDoi}` });
+    h.lookupWork.mockResolvedValue({ kind: "unavailable", why: "busy" });
+    expect(await confirmedWorkOf(STALE, h.deps)).toEqual({ kind: "unavailable" });
+  });
+
+  /* GPT Sol on plan 261027c: with the title disagreeing, two shared names would let
+     the same team's other paper through. The lists must be the same list. */
+  it("refuses a record with another title whose authors are only some of arXiv's", async () => {
+    const teamsOtherPaper = { ...RETITLED, authorships: authorships(["Patrick Butlin", "Long, Robert"]) };
+    const h = harness({ [openAlexWorkUrl(arxivDoi)]: teamsOtherPaper, [CITERS_URL]: CITERS });
+    h.lookupWork.mockResolvedValue(ARXIV_RECORD);
+    expect(await citersOf(STALE, h.deps)).toEqual({ kind: "unconfirmed" });
+    /* The same holds for the article's own structured authors. */
+    const own = harness({ [openAlexWorkUrl(arxivDoi)]: teamsOtherPaper, [CITERS_URL]: CITERS });
+    const authors = ["Patrick Butlin", "Robert Long", "Eric Elmoznino"].map((name) => ({ name, affiliations: [] }));
+    expect(await citersOf({ ...STALE, authors }, own.deps)).toEqual({ kind: "unconfirmed" });
+  });
+
+  it("applies four-in-five against both list sizes, after duplicate people are removed", async () => {
+    const people = ["Patrick Butlin", "Robert Long", "Eric Elmoznino", "Yoshua Bengio", "Marta Halina"];
+    const article = {
+      ...STALE,
+      authors: people.map((name) => ({ name, affiliations: [] })),
+    };
+    const four = { ...RETITLED, authorships: authorships(people.slice(0, 4)) };
+    const passes = harness({ [openAlexWorkUrl(arxivDoi)]: four, [CITERS_URL]: CITERS });
+    expect((await citersOf(article, passes.deps)).kind).toBe("found");
+
+    const sixNames = [...people, "Anil Seth"];
+    const failsLongerArticle = harness({ [openAlexWorkUrl(arxivDoi)]: four, [CITERS_URL]: CITERS });
+    expect(await citersOf({ ...article, authors: sixNames.map((name) => ({ name, affiliations: [] })) }, failsLongerArticle.deps))
+      .toEqual({ kind: "unconfirmed" });
+    const six = { ...RETITLED, authorships: authorships(sixNames) };
+    const failsLongerTarget = harness({ [openAlexWorkUrl(arxivDoi)]: six, [CITERS_URL]: CITERS });
+    expect(await citersOf({ ...article, authors: people.slice(0, 4).map((name) => ({ name, affiliations: [] })) }, failsLongerTarget.deps))
+      .toEqual({ kind: "unconfirmed" });
+
+    /* Deduplicate before selecting the bounded comparison set. Otherwise the
+       repeated front author shrinks 21 people to the same two as the target. */
+    const duplicateHeavy: LookupResult = {
+      kind: "found",
+      record: {
+        ...ARXIV_RECORD.record,
+        authors: [
+          ...Array.from({ length: 19 }, () => ({ family: "Butlin", given: "Patrick" })),
+          ...Array.from({ length: 20 }, (_, i) => ({ family: `Collaborator${i + 1}`, given: "Casey" })),
+          { family: "Bengio", given: "Yoshua" },
+        ],
+      },
+    };
+    const two = { ...RETITLED, authorships: authorships(["Patrick Butlin", "Yoshua Bengio"]) };
+    const duplicates = harness({ [openAlexWorkUrl(arxivDoi)]: two, [CITERS_URL]: CITERS });
+    duplicates.lookupWork.mockResolvedValue(duplicateHeavy);
+    expect(await citersOf(STALE, duplicates.deps)).toEqual({ kind: "unconfirmed" });
   });
 });
 

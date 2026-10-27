@@ -621,6 +621,34 @@ export function sourceOf(work: Pick<CitedWork, "url" | "linkFrom">): Source {
  */
 export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; these are the ${MAX_CITATIONS} we judged it leans on most.`;
 
+/**
+ * **The capped note when code also listed works from the text** (plan
+ * 261027b): the list then holds more than the model's 80, so *these are the
+ * 80* would be false. GPT Sol's plan review, 3.
+ */
+export function cappedNote(modelRows: number, fromText: number): string {
+  /* The model can say `capped` over fewer than 80 rows (Synesthesia: 44), and
+     the verification can drop some, so the count is the rows', not the cap's. */
+  if (fromText === 0) {
+    return modelRows >= MAX_CITATIONS
+      ? CAPPED_NOTE
+      : `This piece cites more than ${MAX_CITATIONS} works; these are the ${modelRows} we judged it leans on most.`;
+  }
+  const more = fromText === 1 ? "1 more, found in the article's text, is" : `${fromText} more, found in the article's text, are`;
+  const works = modelRows === 1 ? "1 work" : `${modelRows} works`;
+  return `This piece cites more than ${MAX_CITATIONS} works. The model listed ${works} it judged the piece leans on most; ${more} listed by name only.`;
+}
+
+/**
+ * **A row code listed from the text** (`listedBy: "text"`, plan 261027b,
+ * feedback spya-ez2vus): the model that made the list left it out, so the row
+ * is the article's own words for it and nothing more. The label on the row; the
+ * sentence in its tooltip and in the prose card.
+ */
+export const CITE_FROM_TEXT_LABEL = "found in the text";
+export const CITE_FROM_TEXT =
+  "Found in the article's text by code: the model that made this list left it out, so this row is the article's own words for the work, with no scores and nothing on what the article uses it for.";
+
 /** What the influence bar measures, by where the number came from — the bar's tooltip and its spoken label. */
 const INFLUENCE_LABEL_LIST = "influence in its field (the model's memory)";
 const INFLUENCE_LABEL_WEB = "influence in its field (an AI estimate from web evidence)";
@@ -1025,7 +1053,10 @@ export function BibliographyPanel({
             visible row relies on it (plan 261011c). */}
         {showListReadNote && <p>{listReadNote}</p>}
         {listWebNote && <p>{CITE_LIST_WEB_NOTES}</p>}
-        {bibliography.capped && <p>{CAPPED_NOTE}</p>}
+        {bibliography.capped && <p>{cappedNote(
+          all.filter((w) => w.listedBy !== "text").length,
+          all.filter((w) => w.listedBy === "text").length,
+        )}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
         <p>{CITED_BY_NOTE}</p>
@@ -1348,7 +1379,7 @@ function WorkRow({
       {owned && !work.blurb && !work.webNote && <WebNoteProgress work={work} webNote={webNote ?? null} />}
       {line.conflict &&<p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       {/* The claim accompanies exactly the verdict or answer drawn below. */}
-      {showsWhy(work, kept !== undefined) && (
+      {work.why !== undefined && showsWhy(work, kept !== undefined) && (
         <p className="cite-why">
           <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
         </p>
@@ -1356,6 +1387,11 @@ function WorkRow({
       {readNote !== null && <p className="cite-read">{readNote}</p>}
       <LookupReading work={work} />
       <p className="cite-meta">
+        {work.listedBy === "text" && (
+          <span className="cite-source cite-from-text" data-tip={CITE_FROM_TEXT}>
+            {CITE_FROM_TEXT_LABEL}
+          </span>
+        )}
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
         {web !== undefined && <WebInfluence influence={web} />}
         {influenceIsUnknown(work) && <UnknownInfluence />}

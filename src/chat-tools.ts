@@ -88,7 +88,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "./types.js";
-import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, normaliseProfileText } from "./types.js";
+import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, normaliseProfileText, WHY_NOT_DESCRIBED } from "./types.js";
 import { guideModeKeys } from "./guide.js";
 import { checkNextSteps, MAX_ASK_CHARS, MAX_CHAT_CHARS, MAX_NEXT_STEPS, MAX_SEARCH_CHARS } from "./next-steps.js";
 import { PREPARABLE, preparable } from "./preparable-modes.js";
@@ -2186,7 +2186,7 @@ function citationRow(w: CitedWork): string {
   const note = blurbLine(w);
   return [
     `“${boundedCitationField(w.title)}”${byline ? ` — ${byline}` : ""}`,
-    `  used for: ${boundedCitationField(w.why)}`,
+    `  used for: ${boundedCitationField(w.why ?? WHY_NOT_DESCRIBED)}`,
     ...(note === null ? [] : [note]),
     `  ${score("relevance", w.relevance, "not scored")} · ${influenceScore(w)}`,
     `  link: ${url} (${linkWords(w.linkFrom)})`,
