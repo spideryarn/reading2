@@ -525,6 +525,20 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   opens**. **Earlier opens on *Needs a decision***, and moves to All when that first read says no
   thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
   thread). Every other reader's dialog is unchanged.
+- **The same number on the Feedback trigger**, since 2026-10-27 (`spya-wwyw8y`). Greg:
+
+  > Can you show a little number (perhaps in a subtle red) next to the Feedback button in the top
+  > right if "Needs a decision" > 0? Probably this is only for Admins, not regular users.
+
+  For an admin, every trigger shape draws N in `--danger` text beside its label or glyph when N >
+  0, and nothing at 0. The Dock's number is a superscript outside the measured flow, so its late
+  arrival cannot leave the bar on a stale fit rung. `FeedbackHost` makes the dialog's own opening
+  read once when the page loads (`readWaitingCount`, counted by `waitingThreads`), and once the
+  dialog has been opened its count replaces that one, so a reply or deferral moves the trigger at
+  once; a failed admin read or an old-server fallback to the plain list removes it. A late page-load
+  answer cannot replace that fresher result. An ordinary reader's page makes no extra request. It is
+  not refreshed in the background: a question published while the tab sits open shows on the next
+  page load or the next opening of the box.
 - **Two builds at once.** The browser asks `questions=4`. A tab from before 261020p asks
   `questions=3` and gets the previous report shape exactly; one from before 261010h asks
   `questions=2` and gets threads without acted replies; one from before 261008i asks nothing and

@@ -624,6 +624,55 @@ export function inkComponents(band: BandContents, gap: number = TOUCH_GAP_PT): I
   });
 }
 
+/* ------------------------------------------------------------------ *
+ * A picture that is part of a drawing
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A picture whose drawing is at least this many times its own area is a part
+ * of that drawing, not the figure.** LeCun's diagrams wire a 60 pt photo of
+ * the Earth into boxes and arrows, and the bitmap route stored the Earth as
+ * three different figures (report spya-m40r6t). Measured 2026-10-27 over every
+ * single-picture page in production's 13 PDF articles and the 14 eval PDFs:
+ * real picture figures 1.00–1.29 (a raster chart with drawn marks round it),
+ * the Earth 17–31. docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
+ */
+export const IN_A_DRAWING_RATIO = 3;
+
+/**
+ * **The box of the drawing a picture is wired into**: the picture's own box,
+ * grown by every painted path chained to it by touching (`TOUCH_GAP_PT`, the
+ * same chaining as `inkComponents`). Page furniture, white artboards and paths
+ * the size of a page region are left out, since a frame round the whole page
+ * touches everything. Pure.
+ */
+export function drawingAround(picture: PageBox, layout: PageLayout): PageBox {
+  const [vx0, vy0, vx1, vy1] = layout.view;
+  const page: Page = { width: vx1 - vx0, height: vy1 - vy0, top: vy1, bottom: vy0 };
+  const ink = withoutFurniture(layout.ink, page).filter(
+    (b) => !b.white && area(b) <= MAX_REGION_AREA_FRACTION * page.width * page.height,
+  );
+  const joined = ink.map(() => false);
+  const queue: PageBox[] = [picture];
+  let box = picture;
+  while (queue.length > 0) {
+    const from = queue.pop() as PageBox;
+    for (const [i, other] of ink.entries()) {
+      if (joined[i] || !touches(from, other)) continue;
+      joined[i] = true;
+      queue.push(other);
+      box = union(box, other);
+    }
+  }
+  return box;
+}
+
+/** Whether this picture is a small part of a drawing — `IN_A_DRAWING_RATIO`. Pure. */
+export function isPartOfDrawing(picture: PageBox, layout: PageLayout): boolean {
+  const own = area(picture);
+  return own > 0 && area(drawingAround(picture, layout)) >= IN_A_DRAWING_RATIO * own;
+}
+
 /**
  * One closed rectangle — painted once, or filled and stroked as two paths over
  * the same corners — with a line of text inside its conservative page box.
