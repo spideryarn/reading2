@@ -1,7 +1,7 @@
 ---
 id: q-knkbsk
 report: spya-ez2vus
-status: open
+status: answered
 asked: 2026-10-27
 title: Citations rows code found in the text: mixed in with the model's, or listed after them?
 refs: qi-mf9r5hjk · docs/plans/261027b-citations-missed-in-the-text-filled-by-code.md · docs/investigations/261027a-how-often-citations-are-missed.md · docs/user-feedback/261026_2154-citations-missed-in-long-articles.md
@@ -25,3 +25,12 @@ What I found: the model that writes the list returned only 23 of the 105 works t
 What shipped (to dev, not yet deployed): code now reads author-year citations like "(Levine, 2021)" itself, and adds a row for every one the model left out. On LeCun's paper that recovers 79 of the 82 missing works, with no false ones. Those rows say "found in the text" and have no scores, because no model has read them. Your article changes only when its list is made again (Metadata, then make again), which needs model calls, so after 1 November.
 
 The question is only where those bare rows sit in the list. In the prose they are marked like any other citation whatever you choose.
+
+## Greg's answer, 2026-10-27 (in the Overseer's terminal)
+
+> Use your judgment on the rest
+
+So **A**: the rows code found stay mixed in, in reading order, and nothing is built. Once model calls
+work again (from 1 November), the model is given code's list to describe and most of these rows get
+scores and sort themselves (qi-mf9r5hjk). If the interleaving still bothers you after that, B is
+the small change.
