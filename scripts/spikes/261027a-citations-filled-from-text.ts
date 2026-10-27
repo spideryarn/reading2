@@ -17,13 +17,14 @@ import { readFileSync } from "node:fs";
 import pg from "pg";
 import { bodyAuthorYearCites, emptyDrops, rowsFromText } from "../../src/bibliography.js";
 import { citeKey } from "../../src/citation-author-year.js";
+import { sslDecisionFor } from "../../src/db/ssl.js";
 import type { Bibliography, Block } from "../../src/types.js";
 
 const verbose = process.argv.includes("-v");
 const url = /^DATABASE_URL=["']?([^"'\n]+)/m.exec(readFileSync(".env.local", "utf8"))?.[1];
 if (!url || !url.includes("127.0.0.1")) throw new Error("This spike reads the local stack only.");
 
-const client = new pg.Client({ connectionString: url });
+const client = new pg.Client({ connectionString: url, ssl: sslDecisionFor(url).ssl });
 await client.connect();
 await client.query("begin read only");
 const articles = await client.query<{ slug: string; rev: string; bibliography: Bibliography }>(
