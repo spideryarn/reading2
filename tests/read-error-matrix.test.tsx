@@ -756,6 +756,8 @@ const NOT_A_ROW: Record<string, string> = {
     "Marginalia's relation words: a failed read stores no message and draws nothing, the notes simply have no connective.",
   "useCrossrefs.ts":
     "an enhancement over the prose with no error state at all: a failed first read draws no links, a failed re-read keeps the ones it had, and neither says anything (tests/crossrefs-revalidate.test.tsx).",
+  "skim-briefs.ts":
+    "the list of a Skim's added briefs, not a mode's artefact read: nothing draws its error yet. The band reads it only to find the chosen brief's sentence and to tell an unknown `?brief=` from a real one; a failed read keeps the asked brief, whose own route read (`useSkim`, a row above) says what is wrong. The picker that will draw the list is plan 261027d's stage 4.",
   "Metadata.tsx":
     "the metadata page's provenance read, not a mode band: no ReadError and no Try again, the sentence heads AI processing and a failed first read asks again on a timer. It goes through `describeFetchFailure` since 2026-10-06, checked in tests/metadata-failed-read-says-a-readers-sentence.test.tsx.",
 };

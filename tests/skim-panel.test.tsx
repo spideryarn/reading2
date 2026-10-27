@@ -56,6 +56,10 @@ globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.
 /* ------------------------------------------------------------ the network -- */
 
 let skimBody: unknown = null;
+/** `GET /api/skim/a-route/briefs`'s list. */
+let briefsList: unknown[] = [];
+/** Any added brief's route: `null` is unplanned. */
+let briefRouteBody: unknown = null;
 /** The Ideas the stop card may show, or `null` for none (404). */
 let ideasBody: unknown = null;
 /** The FAQ a stop card must not show (SPIDERYARN-READING2-8Z), or `null` for none (404). */
@@ -75,6 +79,11 @@ vi.mock("../src/web/lib/api.js", async () => {
   const apiFetch = async (url: string, init?: RequestInit) => {
     requested.push({ url, method: init?.method ?? "GET" });
     if (init?.method === "POST" && typeof init.body === "string") posted.push(JSON.parse(init.body));
+    /* The added briefs (plan 261027d): the list, and one brief's route. */
+    if (url === "/api/skim/a-route/briefs")
+      return new Response(JSON.stringify({ briefs: briefsList }), { status: 200 });
+    if (url.startsWith("/api/skim/a-route/briefs/"))
+      return new Response(JSON.stringify(briefRouteBody), { status: 200 });
     if (url.startsWith("/api/skim/"))
       return skimBody === null
         ? new Response(null, { status: 404 })
@@ -361,6 +370,8 @@ beforeEach(() => {
   ideasFails = false;
   finishers.length = 0;
   skimBody = SKIM_BODY;
+  briefsList = [];
+  briefRouteBody = null;
   history.replaceState(null, "", "/read/a-route?mode=skim");
   host = document.createElement("div");
   document.body.append(host);
@@ -387,6 +398,7 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
     dismissProfileNotice: async () => {},
     notOnRoute: 0,
     slug: "a-route",
+    brief: null,
     error: null,
     job: null,
     failed: null,
@@ -2706,5 +2718,75 @@ describe("the scrapbook, walked", () => {
     await act(async () => void control!.step(1));
     await settled();
     expect(control?.door).toEqual({ kind: "end", noun: "stop", pass: "Gist", count: 2, deeper: "More" });
+  });
+});
+
+/* ============================================ an added brief (plan 261027d) == */
+
+describe("the band on an added brief's route", () => {
+  const BRIEF = "spya-bf2abc";
+  const summary = (planned: boolean) => ({
+    id: BRIEF,
+    brief: "Only the statistics",
+    createdAt: "2026-10-27T09:00:00.000Z",
+    plannedAt: planned ? "2026-10-27T09:01:00.000Z" : null,
+    planned,
+  });
+  const buttonNamed = (name: string) =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === name) ?? null;
+
+  it("reads the brief's route, not the default's, and draws it with the brief's sentence and no Edit", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [summary(true)];
+    briefRouteBody = SKIM_BODY;
+    skimBody = null;
+    await mount();
+    const reads = requested.filter((r) => r.method === "GET" && r.url.startsWith("/api/skim/")).map((r) => r.url);
+    expect(reads).toContain(`/api/skim/a-route/briefs/${BRIEF}`);
+    expect(reads, "the default's route was read for a brief").not.toContain("/api/skim/a-route");
+    expect(text(".band-head")).toContain("Stop 1 of 2");
+    expect(text(".skim-purpose")).toContain("Only the statistics");
+    expect(buttonNamed("Edit"), "editing a brief is the picker's").toBeNull();
+    /* No Metadata row re-plans a brief, so its foot keeps the button. */
+    expect(buttonNamed("Plan it again")).not.toBeNull();
+    expect(param("brief")).toBe(BRIEF);
+  });
+
+  it("waits for a press on an unplanned brief — the band's automatic run is the default's — and the press names the brief", async () => {
+    const { armActivation, resetActivations } = await import("../src/web/activation.js");
+    resetActivations();
+    history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}`);
+    briefsList = [summary(false)];
+    briefRouteBody = null;
+    armActivation("a-route", "skim");
+    await mount();
+    expect(text(".gloss-empty")).toContain("No route has been planned for this brief yet.");
+    expect(text(".gloss-empty")).toContain("Only the statistics");
+    expect(posted, "an unplanned brief planned itself").toEqual([]);
+    const press = buttonNamed("Plan this route");
+    expect(press).not.toBeNull();
+    await act(async () => press!.click());
+    await settled();
+    const job = posted.at(-1) as { steps: string[]; skimBrief?: string; force?: string[] };
+    expect(job.skimBrief).toBe(BRIEF);
+    expect(job.steps.at(-1)).toBe("skim");
+    expect(job.force, "the empty state's press is the unforced ensure").toBeUndefined();
+    resetActivations();
+  });
+
+  it("falls back to the default for an id the owner has no brief for, clearing it with its stop and depth", async () => {
+    history.replaceState(null, "", `/read/a-route?mode=skim&brief=${BRIEF}&depth=2&stop=${Q[3]}`);
+    briefsList = [];
+    await mount();
+    expect(param("brief")).toBeNull();
+    expect(param("stop"), "the unknown route's stop survived onto the default").not.toBe(Q[3]);
+    expect(param("depth")).toBeNull();
+    expect(requested.some((r) => r.url === "/api/skim/a-route")).toBe(true);
+    expect(text(".band-head")).toContain("Stop 1 of 2");
+  });
+
+  it("reads no list of briefs on the default's route", async () => {
+    await mount();
+    expect(requested.some((r) => r.url.includes("/briefs"))).toBe(false);
   });
 });

@@ -525,6 +525,23 @@ export type SkimPart = SkimDepth | "figures";
 export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
+ * **Which Skim route is drawn** — an added brief's id, absent for the default
+ * (the reader profile with the article's *why you're reading*). Minted by
+ * `mintId` on the client (src/web/skim-briefs.ts), so it validates as a block
+ * id the way `?thread=` does. Plan 261027d.
+ *
+ * `replace`, like `?thread=`: choosing a route narrows what one mode shows.
+ * `?stop=` and `?depth=` mean a place **on this route**, so the three are one
+ * position: written together when the route changes, and remembered together
+ * (last-view.ts), so one route's stop is never applied to another (GPT Sol's
+ * F7). Like them it outlives a mode switch, so leaving Skim and coming back
+ * reopens the brief you left. An id the owner has no brief for falls back to
+ * the default and is cleared (SkimMode.tsx § `SkimBand`). A visitor's Skim
+ * reads only the default and ignores it.
+ */
+export const briefParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
  * How the quote list is ordered.
  *
  * **`document` is the default, and that is Greg's own instruction rather than

@@ -65,7 +65,7 @@ import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { PurposeLine } from "./SkimPurpose.js";
+import { BriefLine, PurposeLine } from "./SkimPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Excerpt } from "./Excerpt.js";
@@ -762,7 +762,16 @@ export function PlacePath({ place }: { place: readonly PlaceStep[] | null }) {
  * mode.md asks for. Since 2026-09-29, SPIDERYARN-READING2-56.
  */
 export type SkimAccess =
-  | { kind: "owner"; owner: UseSkim }
+  | {
+      kind: "owner";
+      owner: UseSkim;
+      /**
+       * An added brief's sentence, when `owner.brief` names one and the list
+       * has been read — what its route is planned for (plan 261027d). Absent
+       * for the default, whose line is the article's purpose (`PurposeLine`).
+       */
+      briefSentence?: string | null;
+    }
   | { kind: "visitor"; route: PublicSkim };
 
 /**
@@ -785,6 +794,13 @@ export function SkimPanel({ access, view, away }: Props) {
   useRenderCount("SkimPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
+  /* An added brief's route (plan 261027d): drawn exactly as the default's,
+     but with its own sentence where the purpose line is, its own *Plan this
+     route* in place of the automatic run, and *Plan it again* standing in the
+     foot, since Metadata's Skim row re-plans only the default. */
+  const added = owner !== null && owner.brief !== null;
+  const briefLine =
+    added && access.kind === "owner" && access.briefSentence ? <BriefLine sentence={access.briefSentence} /> : null;
   const route = access.kind === "owner" ? access.owner.skim : access.route;
   /* A visitor's route arrived with the page, so it is ready by construction. */
   const ready = route !== null && (owner === null || owner.status === "ready");
@@ -972,7 +988,9 @@ export function SkimPanel({ access, view, away }: Props) {
            (plan 261009i) or stale (plan 261010a), has no button left, so a job
            from Metadata shows here. */
         reason === null &&
-        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
+        /* An added brief has no Metadata row (Sol F5 on plan 261027d), so its
+           *Plan it again* stands here, idle or not. */
+        (added || owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
           </div>
@@ -983,13 +1001,25 @@ export function SkimPanel({ access, view, away }: Props) {
 
       {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the route…</BandWaiting>}
 
-      {owner?.status === "none" && (
-        <div className="gloss-empty">
-          <p>Nobody has planned a route through this one yet.</p>
-          <p className="gloss-hint">{emptyHint(owner)}</p>
-          {run("Plan the route")}
-        </div>
-      )}
+      {owner?.status === "none" &&
+        (added ? (
+          /* **Never planned by itself**: the band's automatic run is the
+             default's (useSkim.ts), so an added brief waits for this press.
+             Its sentence is shown here too, since it is the only thing that
+             says which route this is. */
+          <div className="gloss-empty">
+            {briefLine}
+            <p>No route has been planned for this brief yet.</p>
+            <p className="gloss-hint">{emptyHint(owner)}</p>
+            {run("Plan this route")}
+          </div>
+        ) : (
+          <div className="gloss-empty">
+            <p>Nobody has planned a route through this one yet.</p>
+            <p className="gloss-hint">{emptyHint(owner)}</p>
+            {run("Plan the route")}
+          </div>
+        ))}
 
       {ready && (
         <>
@@ -997,8 +1027,9 @@ export function SkimPanel({ access, view, away }: Props) {
 
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
-              run would race a press). SkimPurpose.tsx. */}
-          {owner && (
+              run would race a press). SkimPurpose.tsx. An added brief's
+              line is its own sentence, with no *Edit* yet (plan 261027d). */}
+          {added ? briefLine : owner && (
             <PurposeLine
               key={owner.slug}
               owner={owner}

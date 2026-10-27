@@ -389,7 +389,11 @@ describe("a brief's route, planned by a job", () => {
     expect(job.skimBrief).toBe(BRIEF_A);
     const polled = await request("GET", `/api/jobs/${job.id}`);
     expect(polled.status).toBe(200);
-    expect("skimBrief" in (polled.body as object), "the brief id reached the wire").toBe(false);
+    /* The id is on the wire, so the client can tell this job from the
+       default's (GPT Sol's C4); the sentence and the profile are not. */
+    expect((polled.body as { skimBrief?: string }).skimBrief, "the brief id is on the wire").toBe(BRIEF_A);
+    expect("profile" in (polled.body as object), "the job's profile reached the wire").toBe(false);
+    expect(JSON.stringify(polled.body), "the brief's sentence reached the wire").not.toContain("Only the statistics");
 
     const row = await briefRow(BRIEF_A);
     expect(row?.skim?.stops.map((s) => s.quoteId)).toEqual(quoteIds);

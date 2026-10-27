@@ -38,7 +38,8 @@ import type {
 } from "../../../public-types.js";
 import { blockIndex, sectionNodesOf } from "../../../section-path.js";
 import { titleVoice } from "../../tree.js";
-import { depthParam, type SkimPart, stopParam } from "../../params.js";
+import { briefParam, depthParam, type SkimPart, stopParam } from "../../params.js";
+import { useSkimBriefs } from "../../skim-briefs.js";
 import { type Figure, figuresOf } from "../../../figures.js";
 import type { Voice } from "../../voice.js";
 import { FiguresWalk } from "./FiguresWalk.js";
@@ -207,8 +208,43 @@ const NO_WHERE: WhereRow[] = [];
 const NO_QUOTES: Quote[] = [];
 const NONE_FOUND: Found[] = [];
 
-export function SkimBand({
+type SkimBandProps = Omit<Parameters<typeof SkimRouteBand>[0], "brief" | "briefSentence">;
+
+/**
+ * **Which route the band draws** — the default, or the added brief `?brief=`
+ * names (plan 261027d) — and the band for it, **remounted per route**, so
+ * nothing one route's read, × or press left in state can show over another's
+ * (Sol F4). The hold and the job outlive the remount (rewrite-hold.ts, the
+ * job engine), keyed by the route themselves.
+ *
+ * The briefs' list is read only while `?brief=` names one: its sentence is
+ * the line over the route, and it is how an id the owner has no brief for is
+ * told from one still loading. An unknown id falls back to the default at
+ * once, and is cleared with its `?stop=` and `?depth=`, which were a place on
+ * a route that is not there (Sol F7). A list that could not be read keeps the
+ * asked brief, whose own read then says what is wrong.
+ */
+export function SkimBand(props: SkimBandProps) {
+  useRenderCount("SkimBand");
+  const [{ brief: asked }, setRoute] = useQueryStates({
+    brief: briefParam,
+    stop: stopParam,
+    depth: depthParam,
+  });
+  const briefs = useSkimBriefs(props.slug, asked !== null);
+  const chosen = asked === null ? null : (briefs.briefs.find((b) => b.id === asked) ?? null);
+  const unknown = asked !== null && briefs.status === "ready" && chosen === null;
+  useEffect(() => {
+    if (unknown) void setRoute({ brief: null, stop: null, depth: null });
+  }, [unknown, setRoute]);
+  const brief = unknown ? null : asked;
+  return <SkimRouteBand key={brief ?? ""} {...props} brief={brief} briefSentence={chosen?.brief ?? null} />;
+}
+
+function SkimRouteBand({
   slug,
+  brief,
+  briefSentence,
   blocks,
   tree,
   quotes,
@@ -228,6 +264,10 @@ export function SkimBand({
   arrival,
 }: {
   slug: string;
+  /** The added brief whose route this is, or `null` for the default. */
+  brief: string | null;
+  /** That brief's sentence, once the list has been read. */
+  briefSentence: string | null;
   blocks: Block[];
   tree: Tree;
   /** The Quotes read `OwnedReader` holds — the stops' words and blocks. */
@@ -265,13 +305,13 @@ export function SkimBand({
   onOpenKey(key: string | null): void;
   onControl(control: SkimControl | null): void;
 }) {
-  useRenderCount("SkimBand");
+  useRenderCount("SkimRouteBand");
   /* **The Ideas read comes first, and the route's hook is handed it** (Sol
      F61): since stage 6 the route's own job finds the Ideas when there are
      none, so its completion has to refresh this read — the one the stop card
      draws from — or a fresh article's card shows no Ideas until a reload. */
   const ideas = useIdeasRead(slug);
-  const owner = useSkim(slug, quotes, ideas);
+  const owner = useSkim(slug, quotes, ideas, brief);
   /* **The scrapbook's other sources, read and never written.** The read-only
      hooks carry no job machinery at all, so the card cannot be the reason any
      of these is generated (Sol F22). The glossary is `Reader`'s own read. The
@@ -324,7 +364,7 @@ export function SkimBand({
   }
   return (
     <RouteWalk
-      access={{ kind: "owner", owner }}
+      access={{ kind: "owner", owner, briefSentence }}
       away={away}
       walk={{
         sources,

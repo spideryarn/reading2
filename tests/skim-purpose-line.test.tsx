@@ -96,6 +96,7 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
     dismissProfileNotice: async () => {},
     notOnRoute: 0,
     slug: "a-route",
+    brief: null,
     error: null,
     job: null,
     failed: null,

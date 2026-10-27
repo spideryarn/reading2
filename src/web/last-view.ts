@@ -129,6 +129,7 @@ export const REMEMBERED = [
   "event", // selected timeline event
   "depth", // which part of a Skim — Gist, More, Most, or Figures (plan 261011b)
   "stop", // which Skim stop you were reading — a quote on a pass, a figure's block under Figures
+  "brief", // which Skim route `stop` and `depth` are on — an added brief, absent for the default (plan 261027d, Sol F7)
 ] as const;
 
 /**

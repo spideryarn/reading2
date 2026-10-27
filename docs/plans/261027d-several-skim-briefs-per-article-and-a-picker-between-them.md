@@ -196,3 +196,25 @@ show the default's). One real end-to-end plan after the reset is queued.
   insert) degrades to an edit mid-run, which the route's profile stamp already reports as
   `profileChanged`. Commit's `kept: false` cannot hide an existing brief: the session's
   article lock already refuses an article that is not the draft's under the same owner.
+- 2026-10-27: **stage 3, the client minus the picker.** C4: `publicJob` keeps `skimBrief`
+  (an id, not the sentence), and `useStepJob` takes the target as a fifth argument —
+  `writesStep(job, step, brief)` scopes only `skim`, so a brief job's Quotes and Ideas stay
+  ordinary prerequisites; `start` names the brief on every request. Metadata's row, which
+  passes none, is the default's and ignores brief jobs, Retry included. F4: `useSkim(slug,
+  quotes, ideas, brief)` — one hook, not a sibling, since everything but the address and the
+  automatic run is identical; the read, dismissal, job and rewrite hold (`keyOf` gains the
+  brief) are the route's, and its refs are keyed by route; `useAutoRun` is disabled for a
+  brief, which drops the opening press rather than spend it. A brief's 404 is an error, not
+  the empty state. `SkimBand` reads `?brief=` and **remounts per route** (`key`), so no state
+  crosses routes. Client module [`src/web/skim-briefs.ts`](../../src/web/skim-briefs.ts)
+  (list, create with a client-minted id, edit, delete, and `useSkimBriefs`, read only while
+  `?brief=` names one). F7, **a change from "Leaving Skim clears `?brief=`" above**: the
+  brief is kept like `?stop=` and `?depth=` (every parameter outlives a mode switch, and
+  `brief` is in last-view's `REMEMBERED`), so leaving and returning reopens it with its own
+  position; an unknown id is cleared together with its stop and depth. The band: an added
+  brief draws as the default, with its sentence in the *Reading for:* line (no Edit),
+  *Plan this route* in its empty state, its banner's *Plan it again* pointed at it, and a
+  standing *Plan it again* in the foot — **a decision for the picker stage to revisit**:
+  Greg removed the default's standing button in favour of Metadata, which cannot re-plan a
+  brief (Sol F5). Tests: `tests/skim-briefs-client.test.tsx`, and § an added brief in
+  `tests/skim-panel.test.tsx`; each seen red with its fix undone.

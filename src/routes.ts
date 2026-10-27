@@ -8293,20 +8293,22 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
  * GPT Sol's review of the built code, 2026-08-26.
  *
  */
-function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNote" | "skimBrief"> {
+function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNote"> {
   /* `ownerId` goes too. The client never needs it — it can only ever be looking
      at its own jobs now — and an `auth.users` uuid on the wire is one more
      thing that has to not end up in a log, a bug report or a screenshot. */
   /* The Illustrated note too, for the profile's reason: the reader's own
      words, polled every eight seconds, and nothing on the client reads it off
      a job — the panel reads it off the picture. */
+  /* **The Skim brief's id stays** (plan 261027d, GPT Sol's C4 on stage 2).
+     It is a minted id, not the reader's sentence, and the client needs it:
+     without it a brief's `skim` job looks like the default's, so the default
+     band would show its progress and Metadata's Skim row would offer to retry
+     it (useStepJob.ts § `writesStep`). */
   const {
     profile: _hidden,
     ownerId: _whose,
     illustrationNote: _note,
-    /* The Skim brief's id too (plan 261027d): the client knows which brief it
-       pressed for, and keeps its own pending state by it. */
-    skimBrief: _brief,
     reset,
     ...rest
   } = job;

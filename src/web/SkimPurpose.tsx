@@ -88,14 +88,7 @@ export function PurposeLine({ owner, bannerUp }: Props) {
   if (set && (!editing || bannerTakesBox)) {
     return (
       <div className="skim-purpose">
-        <Tooltip content={<p>{purpose}</p>} placement="bottom" className="skim-purpose-tip">
-          {/* Focusable so a keyboard reaches the whole sentence too. */}
-          {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip's trigger */}
-          <span className="skim-purpose-said" tabIndex={0}>
-            <span className="skim-purpose-label">Reading for:</span>{" "}
-            <span className="skim-purpose-text">{purpose}</span>
-          </span>
-        </Tooltip>
+        <ReadingFor sentence={purpose} />
         {/* Not under a banner: its own button re-plans, and two ways to ask
             for a route at once is the race the hold exists to stop. */}
         {!bannerUp && (
@@ -190,6 +183,36 @@ export function PurposeLine({ owner, bannerUp }: Props) {
       error={error}
       onBusyChange={setDictating}
     />
+  );
+}
+
+/** *Reading for: …* on one line, the whole sentence in a tooltip. */
+function ReadingFor({ sentence }: { sentence: string }) {
+  return (
+    <Tooltip content={<p>{sentence}</p>} placement="bottom" className="skim-purpose-tip">
+      {/* Focusable so a keyboard reaches the whole sentence too. */}
+      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip's trigger */}
+      <span className="skim-purpose-said" tabIndex={0}>
+        <span className="skim-purpose-label">Reading for:</span>{" "}
+        <span className="skim-purpose-text">{sentence}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+/**
+ * **An added brief's line** — its own sentence where the default shows the
+ * article's purpose, in the same quiet line (plan 261027d). No *Edit* yet:
+ * editing a brief belongs to the picker between briefs, which waits on Greg's
+ * answer to its question. Shown over its route and in its empty state alike,
+ * since nothing plans an added brief by itself, so there is no automatic run
+ * for the line to race (Sol F6 is the default's reason for hiding it there).
+ */
+export function BriefLine({ sentence }: { sentence: string }) {
+  return (
+    <div className="skim-purpose">
+      <ReadingFor sentence={sentence} />
+    </div>
   );
 }
 

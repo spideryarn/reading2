@@ -382,9 +382,20 @@ export function stepRunRequest<S extends StepName>(
   };
 }
 
-/** Is this job one that would write the artefact this step writes? */
-function writesStep(job: Job, step: StepName): boolean {
-  return job.steps.some((s) => s.name === step);
+/**
+ * Is this job one that would write the artefact this step writes — **for this
+ * target**? Every step has one artefact per article but Skim, whose `skim`
+ * step can be asked for one added brief's route instead of the default's
+ * (`Job.skimBrief`, plan 261027d). `brief` is that id, or `null` for the
+ * default: a job for another brief, or the default's job seen from a brief, is
+ * not this surface's, or the default's band would show a brief's progress and
+ * Metadata's Skim row would offer to retry it (GPT Sol's C4 on stage 2). A
+ * brief job's Quotes and Ideas are ordinary prerequisites, so only its `skim`
+ * is scoped.
+ */
+export function writesStep(job: Job, step: StepName, brief: string | null = null): boolean {
+  if (!job.steps.some((s) => s.name === step)) return false;
+  return step !== "skim" || (job.skimBrief ?? null) === brief;
 }
 
 /**
@@ -463,6 +474,13 @@ export function useStepJob<S extends StepName>(
   step: S,
   onFinished: () => void,
   cadence: QueueCadence,
+  /**
+   * **Skim's target**: an added brief's id, or `null` (the default, and every
+   * other step). The job list, the completion and the failure are this
+   * target's alone (`writesStep`), and `start` names it on every request, so
+   * a caller cannot press for one route while watching another's job.
+   */
+  brief: string | null = null,
 ): StepJob<S> {
   /**
    * Ids this mount has already announced through `onFinished`.
@@ -476,11 +494,11 @@ export function useStepJob<S extends StepName>(
   const announced = useRef<Set<string>>(new Set());
   const announce = useCallback(
     (job: Job) => {
-      if (job.slug !== slug || !writesStep(job, step)) return;
+      if (job.slug !== slug || !writesStep(job, step, brief)) return;
       announced.current.add(job.id);
       onFinished();
     },
-    [slug, step, onFinished],
+    [slug, step, brief, onFinished],
   );
   const queue = useJobs(cadence, announce);
 
@@ -507,7 +525,7 @@ export function useStepJob<S extends StepName>(
    * every poll to pick one of them is work nobody reads.
    */
   const job = useMemo(() => {
-    const mine = queue.jobs.filter((j) => j.slug === slug && writesStep(j, step));
+    const mine = queue.jobs.filter((j) => j.slug === slug && writesStep(j, step, brief));
     const running = mine.find((j) => j.status === "running");
     if (running) return running;
     let oldest: Job | null = null;
@@ -526,7 +544,7 @@ export function useStepJob<S extends StepName>(
       }
     }
     return oldest;
-  }, [queue.jobs, slug, step]);
+  }, [queue.jobs, slug, step, brief]);
 
   /**
    * What went wrong, in the two quite different ways it can.
@@ -689,7 +707,7 @@ export function useStepJob<S extends StepName>(
          trip rather than from whenever it comes back. */
       setStarting(true);
       /* The body is `stepRunRequest`'s, shared with the command bar. */
-      const started = await queue.run(stepRunRequest(slug, step, run));
+      const started = await queue.run(stepRunRequest(slug, step, brief === null ? run : { ...run, skimBrief: brief }));
       /* **The reason is taken here, and kept.** See `failed` below: the two
          obvious places to read it from are both wrong, and this is the one
          instant at which the right value is available. */
@@ -705,7 +723,7 @@ export function useStepJob<S extends StepName>(
       setStarting(false);
       return null;
     },
-    [queue, slug, step],
+    [queue, slug, step, brief],
   );
 
   /**

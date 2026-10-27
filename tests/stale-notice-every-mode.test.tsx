@@ -658,6 +658,7 @@ function skimOwner(): UseSkim {
     ...COMMON,
     status: "ready",
     skim: SKIM,
+    brief: null,
     profileChanged: false,
     profileNoticeDismissed: false,
     dismissFailed: null,

@@ -4133,8 +4133,10 @@ export interface Job {
    * pressed twice is one job and two briefs are two. The `skim` step then
    * writes the brief's row instead of the revision's column (src/jobs.ts §
    * `runStep`). The job's `profile` is already the brief's: rendered by the
-   * route with the brief in place of the article's purpose. Stripped from the
-   * wire by `publicJob`. Absent: the default route, exactly as before.
+   * route with the brief in place of the article's purpose. **Kept on the
+   * wire** by `publicJob` — an id, not the sentence — so the client can tell
+   * a brief's job from the default's (src/web/useStepJob.ts § `writesStep`).
+   * Absent: the default route, exactly as before.
    * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md.
    */
   skimBrief?: string;
