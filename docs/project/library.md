@@ -648,12 +648,17 @@ just above the list of articles."* The order the page renders in is now **add bo
 errors and Undo → search → `ShelfControls` → the "n of m" count → the list**
 ([`Library.tsx`](../../src/web/Library.tsx)).
 
-**The box has the focus when the shelf arrives**, since 2026-09-29 — Greg: *"let's put the focus by
-default on the search box."* Decided once, on mount, and not when the primary pointer is a finger
-(the on-screen keyboard would cover the shelf), when the page arrived with a `?q=`, when something
-else already has the focus, or when the box is not on screen (Back can mount the shelf scrolled).
-`takesFocusOnArrival` in `Library.tsx` has the reasons;
-[260929g](../plans/260929g-shelf-search-focus-and-metadata-chord.md) § Part A has the cost.
+**The add box has the focus when the shelf arrives, not the search box:**
+
+> By default, put the focus in the add box, not the search box.
+>
+> — Greg, 2026-10-26, `spya-nmx5ga`
+
+Decided once, on mount, and not when the primary pointer is a finger (the on-screen keyboard would
+cover the shelf), when the page arrived with a non-empty `?q=` (then nothing is focused), when
+something else already has the focus, or when the box is not on screen (Back can mount the shelf
+scrolled). `takesFocusOnArrival` in `AddArticle.tsx` has the reasons;
+[261027a](../plans/261027a-the-shelf-focuses-the-add-box-on-arrival.md) has the history and cost.
 
 **It must not look like the add box above it**, since 2026-10-11:
 
@@ -664,8 +669,8 @@ else already has the focus, or when the box is not on screen (Back can mount the
 
 So the two are different shapes: the add box is the wider card on the left (`max-w-2xl`), with a
 heading in the foreground colour and a link icon at the start of its field; the search box is
-narrower and on the right, with its magnifier, and keeps a step on the left even on a phone. And
-because the search box has the focus on arrival, a link pasted into it is offered to the add box —
+narrower and on the right, with its magnifier, and keeps a step on the left even on a phone. A link
+pasted into the search box is offered to the add box —
 *That's a link. Add it to your shelf?* — through the same `/add/<url>` as Add, on a press only.
 `linkToAdd` in `Library.tsx` is the rule: what `slugFromUrl` accepts, one token, with a scheme or a
 path, so `nature.com` stays a search.

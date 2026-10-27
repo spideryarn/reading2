@@ -1,21 +1,24 @@
 // @vitest-environment jsdom
 /**
- * **The shelf's search box has the focus when you arrive — on a desk, with
- * nothing typed and nothing else focused, and with the box on screen.**
+ * **The shelf's add box has the focus when you arrive — on a desk, with
+ * nothing typed and nothing else focused, and with the box on screen.** The
+ * search box does not.
  *
- * > When I open the logged-in Spideryarn homepage with the shelf, let's put the
- * > focus by default on the search box.
+ * > By default, put the focus in the add box, not the search box.
  * >
- * > — Greg, 2026-09-29, SPIDERYARN-READING2-5E
+ * > — Greg, 2026-10-26, spya-nmx5ga
+ *
+ * (From 2026-09-29, SPIDERYARN-READING2-5E, until then it was the search box.)
  *
  * Each refusal below is somebody the focus would hurt: a phone reader whose
  * on-screen keyboard would cover the shelf, a reader already looking at
  * results, a control that had the focus first, and a box scrolled out of sight
- * after Back. docs/project/library.md § the search box;
- * docs/plans/260929g-shelf-search-focus-and-metadata-chord.md § Part A.
+ * after Back. docs/project/library.md § Finding an article;
+ * docs/plans/261027a-the-shelf-focuses-the-add-box-on-arrival.md.
  *
  * The mocks are the ones tests/shelf-archived-in-the-list.test.tsx uses, cut
- * down: nothing here is about what is on the shelf.
+ * down: nothing here is about what is on the shelf. The add box is the real
+ * one, with no jobs in its queue.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -49,8 +52,7 @@ vi.mock("../src/web/lib/api.js", () => ({
   },
 }));
 vi.mock("../src/web/lib/cached-shelf.js", () => ({ readCachedShelf: async () => null }));
-vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => ({}) }));
-vi.mock("../src/web/AddArticle.js", () => ({ AddArticle: () => null }));
+vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => ({ jobs: [] }) }));
 vi.mock("../src/web/FeedbackButton.js", () => ({ FeedbackTrigger: () => null }));
 vi.mock("../src/web/useSession.js", () => ({
   useSession: () => ({ session: null, user: null, loading: false, known: true }),
@@ -117,27 +119,35 @@ async function show(path: string): Promise<void> {
 }
 
 const box = (): HTMLInputElement => {
+  const el = host.querySelector<HTMLInputElement>("input#add-url");
+  expect(el, "the shelf draws no add box").not.toBeNull();
+  return el as HTMLInputElement;
+};
+
+const searchBox = (): HTMLInputElement => {
   const el = host.querySelector<HTMLInputElement>('input[aria-label="Search the library"]');
   expect(el, "the shelf draws no search box").not.toBeNull();
   return el as HTMLInputElement;
 };
 
-describe("the shelf's search box", () => {
-  it("has the focus when the shelf mounts", async () => {
+describe("the shelf's add box", () => {
+  it("has the focus when the shelf mounts, and the search box does not", async () => {
     await show("/");
     expect(document.activeElement).toBe(box());
   });
 
-  it("does not, when the page arrived with a query in it", async () => {
+  it("does not, and nor does the search box, when the page arrived with a query in it", async () => {
     await show("/?q=attention");
-    expect(box().value).toBe("attention");
+    expect(searchBox().value).toBe("attention");
     expect(document.activeElement).not.toBe(box());
+    expect(document.activeElement).not.toBe(searchBox());
   });
 
   it("does not, where the primary pointer is a finger", async () => {
     stubMatchMedia(["(pointer: coarse)"]);
     await show("/");
     expect(document.activeElement).not.toBe(box());
+    expect(document.activeElement).not.toBe(searchBox());
   });
 
   it("does not take the focus from a control that already has it", async () => {

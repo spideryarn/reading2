@@ -26,7 +26,7 @@
  *
  * See docs/project/ingest-queue.md.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, BookPlus, Check, ChevronRight, Circle, Copy, LoaderCircle, Link as LinkIcon, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
@@ -46,10 +46,12 @@ import { mintId } from "../ids.js";
 import { isWebUrl } from "../urls.js";
 import { useFeedbackOpen } from "./FeedbackButton.js";
 import { importProblemReport } from "./import-report.js";
+import { media } from "./media.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { addHref, navigate, readHref } from "./router.js";
 import { isMinimalJob } from "./read-this.js";
+import { layoutViewportWidth } from "./reader/measure.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
 import { useCopy } from "./useCopy.js";
@@ -138,8 +140,60 @@ export function earlier(job: Job, before: number): boolean {
   return Number.isFinite(at) && at < before;
 }
 
-export function AddArticle({ queue }: { queue: UseJobs }) {
+/**
+ * **Does the add box take the focus as the shelf arrives?**
+ *
+ * > By default, put the focus in the add box, not the search box.
+ * >
+ * > — Greg, 2026-10-26, spya-nmx5ga
+ *
+ * Yes, unless one of three readers would be worse off for it — the fourth, a
+ * page that arrived with a non-empty `?q=`, is the caller's to decide
+ * (`Library`):
+ *
+ *  - **a finger is the primary pointer** — the on-screen keyboard would cover
+ *    half the shelf they came to look at. `pointer`, not `any-pointer`, so a
+ *    touchscreen laptop with a trackpad still gets it; and `media()` answers
+ *    `false` where it cannot tell, so an unknown pointer gets it too;
+ *  - **something else already has the focus** — the shelf takes it from nobody;
+ *  - **the box is not wholly on screen** — scroll restoration is manual
+ *    (main.tsx), so Back from far down an article can mount the shelf scrolled,
+ *    and typing into a box you cannot see is worse than no focus. Scrolling to
+ *    it would yank the page instead.
+ *
+ * docs/plans/261027a-the-shelf-focuses-the-add-box-on-arrival.md.
+ */
+function takesFocusOnArrival(input: HTMLInputElement): boolean {
+  if (media("(pointer: coarse)")) return false;
+  const active = document.activeElement;
+  if (active !== null && active !== document.body) return false;
+  const box = input.getBoundingClientRect();
+  return (
+    box.top >= 0 &&
+    box.right <= layoutViewportWidth() &&
+    box.bottom <= window.innerHeight &&
+    box.left >= 0
+  );
+}
+
+export function AddArticle({
+  queue,
+  focusOnArrival = false,
+}: {
+  queue: UseJobs;
+  /** Whether to try for the focus on mount — the shelf's call, from its `?q=`. */
+  focusOnArrival?: boolean;
+}) {
   const [url, setUrl] = useState("");
+  /* **Decided once, on mount**: the shelf's data landing must not re-grab the
+     focus. Back from an article remounts the shelf, so it asks again — that
+     is arriving too. `preventScroll`, so arriving never moves the page. */
+  const urlInput = useRef<HTMLInputElement>(null);
+  const focusAtMount = useRef(focusOnArrival);
+  useEffect(() => {
+    const el = urlInput.current;
+    if (el && focusAtMount.current && takesFocusOnArrival(el)) el.focus({ preventScroll: true });
+  }, []);
   const slug = useMemo(() => slugFromUrl(url), [url]);
   /**
    * Which of the two ways in Add will take, when both are available.
@@ -310,6 +364,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                     className="tw:pointer-events-none tw:absolute tw:left-3 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground"
                   />
                   <input
+                    ref={urlInput}
                     id="add-url"
                     type="text"
                     inputMode="url"
