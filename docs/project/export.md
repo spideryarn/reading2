@@ -69,7 +69,7 @@ nothing could take one conversation anywhere. Since
 both Markdown with a small front-matter header (every value a JSON string, so any YAML reader takes
 it), because Markdown is what a person reads plainly and what every chat model reads natively:
 
-- **`your-words.md`** — the reader's title, purpose and tags; their comments, notes, highlights and
+- **`your-words.md`** — the reader's title, purpose, Skim briefs and tags; their comments, notes, highlights and
   bookmarks in article order, each under the passage it was made on; their quiz answers; and every
   conversation but Referee's candidate threads. Wherever the AI's words sit beside the reader's
   (an answer under a comment, a mark, a turn) they are labelled as the AI's. Built by
