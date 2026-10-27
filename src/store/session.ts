@@ -258,9 +258,11 @@ export interface StoreSession {
   commit(
     ctx: StepContext,
     step: PipelineStep,
-    attempt: string,
+    attempt: string | undefined,
     product: StepProduct,
     transition: JobTransition,
+    /** A brief owns its route outside the draft, but shares its publication transaction. */
+    target?: { skimBrief: string },
   ): Promise<JobSettlement>;
   /**
    * The job transition on its own, for the endings that have no product.

@@ -71,6 +71,8 @@ import {
   transferBetween,
 } from "../src/store/pg-article-transfer.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
+import { pgSkimBriefStore } from "../src/store/pg-skim-briefs.js";
+import * as ownedArticle from "../src/store/pg.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -327,6 +329,70 @@ async function readsAs(owner: string, slug: string): Promise<"ok" | number> {
 /* --------------------------------------------------------------- the move -- */
 
 describe("transferArticle — the move", () => {
+  it.each(["list", "get"] as const)("does not leak the new owner's briefs when %s crosses a transfer", async (method) => {
+    const a = await seed(`brief-${method}-transfer-race`);
+    const original = ownedArticle.articleIdForOwned;
+    const lookup = vi.spyOn(ownedArticle, "articleIdForOwned").mockImplementationOnce(async (...args) => {
+      const id = await original(...args);
+      /* Pause at the exact gap between authorising the article and reading
+         its child rows. The new owner's private text must remain private. */
+      await pool.query("update spideryarn.articles set owner_id = $2 where id = $1", [a.id, BOB]);
+      await pool.query("insert into spideryarn.skim_briefs (article_id, id, brief) values ($1, $2, $3)",
+        [a.id, "spya-race2a", "The new owner's private sentence"]);
+      return id;
+    });
+    try {
+      if (method === "list") {
+        expect(await runAsOwner(ALICE as OwnerId, () => pgSkimBriefStore.list(a.slug))).toEqual([]);
+      } else {
+        await expect(runAsOwner(ALICE as OwnerId, () => pgSkimBriefStore.get(a.slug, "spya-race2a")))
+          .rejects.toMatchObject({ status: 404 });
+      }
+      expect(lookup).toHaveBeenCalled();
+    } finally {
+      lookup.mockRestore();
+    }
+  });
+
+  it("refuses a brief create that waited behind an ownership transfer", async () => {
+    const a = await seed("brief-create-transfer-race");
+    const mover = await pool.connect();
+    let writing: Promise<unknown> | undefined;
+    let settled = false;
+    try {
+      await mover.query("begin");
+      const pid = (await mover.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
+      await mover.query("update spideryarn.articles set owner_id = $2 where id = $1", [a.id, BOB]);
+      /* The old owner still sees their committed ownership. Their write must
+         wait, then recheck it, rather than insert after the transfer's cleanup. */
+      writing = runAsOwner(ALICE as OwnerId, () =>
+        pgSkimBriefStore.create(a.slug, "spya-race2a", "The old owner's private sentence"),
+      ).then(
+        (value) => { settled = true; return value; },
+        (error: unknown) => { settled = true; return error; },
+      );
+      const deadline = Date.now() + 10_000;
+      let blocked = false;
+      while (!settled && Date.now() < deadline) {
+        const waiting = await pool.query<{ blocked: boolean }>(
+          "select exists (select 1 from pg_stat_activity where $1::integer = any(pg_blocking_pids(pid))) as blocked",
+          [pid],
+        );
+        if (waiting.rows[0]?.blocked) { blocked = true; break; }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(blocked, "the brief write actually waited for the article lock").toBe(true);
+      await mover.query("commit");
+      expect(await writing).toMatchObject({ status: 404 });
+      const rows = await pool.query("select id from spideryarn.skim_briefs where article_id = $1", [a.id]);
+      expect(rows.rows).toEqual([]);
+    } finally {
+      await mover.query("rollback");
+      mover.release();
+      await writing;
+    }
+  });
+
   it("re-owns the article, makes it private, resets the row and deletes every kind of the old owner's state", async () => {
     const a = await seed("full", { visibility: "public", linkOn: true });
     await pool.query(

@@ -101,6 +101,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "../db/client.js";
 import { jobs as jobsTable } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
+import { whyUnusable, ProductRefused } from "./artifacts.js";
+import { writeSkimBriefRouteIn } from "./pg-skim-brief-route.js";
 import { assertProduced } from "../pipeline.js";
 import type { StepName } from "../types.js";
 import {
@@ -128,6 +130,7 @@ import {
   logRebase,
   markNavLabelsFailedIn,
   publishRevisionIn,
+  requireLiveJobOwnsDraft,
   openOrBeginJobDraft,
   rebaseSharingDraftIn,
   type PublishRevisionResult,
@@ -775,11 +778,19 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
       return settled;
     },
 
-    async commit(ctx, step, attempt, product, transition) {
+    async commit(ctx, step, attempt, product, transition, target) {
       /* **Before the transaction opens**, because it is a claim about the
          product and not about the database, and a refusal that has not touched
          Postgres is one nothing has to roll back. */
       checkProduct(step, product);
+      const briefRoute = product.parts?.skim;
+      if (target && (step.name !== "skim" || !briefRoute)) {
+        throw new ProductRefused("Only a Skim route may be committed to a brief.");
+      }
+      if (!target && attempt === undefined) throw new Error("a draft step has no marker");
+      if (target && whyUnusable("skim", briefRoute)) {
+        throw new ProductRefused("The brief's Skim route is not usable.");
+      }
 
       let announced: Announcement = {};
       const settled = await db
@@ -789,16 +800,30 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
              publish, or one of them deadlocks with a publication. */
           await lockArticleFor(tx, ctx.slug);
 
-          const artifacts = pgArtifactsIn(ref, tx);
-          if (product.parts) {
-            await artifacts.write(ctx.slug, step.name, product.parts, product.stamp ?? {});
+          if (target) {
+            // No revision marker or revision skim write: only the brief owns this route.
+            await requireLiveJobOwnsDraft(tx, job, ref.revisionId);
+            const kept = await writeSkimBriefRouteIn(
+              tx, { jobId: job.id, attempt: job.attemptId }, currentOwnerId(),
+              ctx.slug, target.skimBrief, briefRoute!,
+            );
+            if (!kept) {
+              const steps = transition.kind === "end" ? transition.ending.steps : transition.steps;
+              const finished = steps.find((s) => s.name === "skim");
+              if (finished) finished.detail = "the brief was deleted before its route was ready, so nothing was kept";
+            }
+          } else {
+            const artifacts = pgArtifactsIn(ref, tx);
+            if (product.parts) {
+              await artifacts.write(ctx.slug, step.name, product.parts, product.stamp ?? {});
+            }
+            /* Asked of the same transaction that just wrote, so it sees this
+               step's own uncommitted writes and nothing else's. `checkProduct`
+               knows what the step *says* it made; this knows what the store can
+               read back. */
+            await assertProduced(step, ctx, readsPgArtifacts(ref, tx));
+            await artifacts.finishStep(ctx.slug, step.name, attempt!);
           }
-          /* Asked of the same transaction that just wrote, so it sees this
-             step's own uncommitted writes and nothing else's. `checkProduct`
-             knows what the step *says* it made; this knows what the store can
-             read back. */
-          await assertProduced(step, ctx, readsPgArtifacts(ref, tx));
-          await artifacts.finishStep(ctx.slug, step.name, attempt);
 
           /* **No unfinished step**, because the line above just finished it in
              this transaction. `settleIn` would otherwise ask `finishStepRun` to

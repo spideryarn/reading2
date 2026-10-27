@@ -23,11 +23,11 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { MessagesBody } from "../src/messages-stream.js";
-import type { Job, Quotes, Skim, SkimBriefSummary, SkimResponse } from "../src/types.js";
+import type { Ideas, Job, Quotes, Skim, SkimBriefSummary, SkimResponse } from "../src/types.js";
 
 const model = vi.hoisted(() => ({
   prompts: [] as string[],
@@ -97,7 +97,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 const { closeDb, getDb } = await import("../src/db/client.js");
 const { aiCalls, articleRevisions, articles, jobs: jobsTable, skimBriefs } = await import("../src/db/schema.js");
 const { loadEnvLocal } = await import("../src/env.js");
-const { advanceJobWith, claimSession, enqueue } = await import("../src/jobs.js");
+const { advanceJobWith, claimSession, enqueue, retryJob } = await import("../src/jobs.js");
 const { EVAL_OWNER_ID, runAsOwner } = await import("../src/owner.js");
 const { STEPS } = await import("../src/pipeline.js");
 const { hashProfile, renderProfile } = await import("../src/profile.js");
@@ -210,8 +210,10 @@ beforeAll(async () => {
   other = await scratchArticleInPg(OTHER, { ownerId: TEST_OWNER });
   strangers = await scratchArticleInPg(STRANGERS, { ownerId: EVAL_OWNER_ID });
   quoteIds = await giveQuotes(article);
-  defaultRoute = await revisionSkim(article);
   model.answer = routeAnswer(quoteIds);
+  expect((await planThroughTheRoute(undefined, true)).status).toBe("done");
+  defaultRoute = await revisionSkim(article);
+  expect(defaultRoute?.stops).toHaveLength(quoteIds.length);
 });
 
 afterAll(async () => {
@@ -278,8 +280,8 @@ async function planThroughTheRoute(skimBrief?: string, force = false): Promise<J
   return drive((posted.body as { id: string }).id);
 }
 
-async function drive(id: string): Promise<Job> {
-  const parts = { power: async () => "standard" as const, session: claimSession, steps: STEPS };
+async function drive(id: string, overrides: Partial<typeof STEPS> = {}): Promise<Job> {
+  const parts = { power: async () => "standard" as const, session: claimSession, steps: { ...STEPS, ...overrides } };
   for (let n = 1; n <= 60; n++) {
     const advanced = await runAsOwner(TEST_OWNER, () => advanceJobWith(id, parts));
     if (advanced?.done) return advanced.job;
@@ -498,6 +500,154 @@ describe("a brief's route, planned by a job", () => {
     expect(await revisionSkim(article)).toEqual(defaultRoute);
   });
 
+  it("does not buy a forced route for a brief deleted while queued", async () => {
+    const id = "spya-sbd2ca";
+    expect((await create(SLUG, id, "Deleted before starting")).status).toBe(201);
+    const job = await runAsOwner(TEST_OWNER, () => enqueue({
+      slug: SLUG, steps: ["skim"], force: ["skim"], skimBrief: id, profile: "queued brief", pump: false,
+    }));
+    await getDb().delete(skimBriefs).where(eq(skimBriefs.id, id));
+    model.prompts.length = 0;
+    const skim = (await drive(job.id)).steps.find((s) => s.name === "skim");
+    expect(skim?.status).toBe("skipped");
+    /* Not "already done": nothing was planned, and the card says why. */
+    expect(skim?.detail).toMatch(/deleted/);
+    expect(model.prompts).toHaveLength(0);
+  });
+
+  it("refuses to re-create a deleted brief's id while a job for the old one is still live", async () => {
+    const id = "spya-sbe2ca";
+    expect((await create(SLUG, id, "The first incarnation")).status).toBe(201);
+    const job = await runAsOwner(TEST_OWNER, () => enqueue({
+      slug: SLUG, steps: ["skim"], force: ["skim"], skimBrief: id, profile: "first incarnation", pump: false,
+    }));
+    expect((await request("DELETE", `/api/skim/${SLUG}/briefs/${id}`)).status).toBe(204);
+    /* The old job would otherwise plan for the first sentence and write into the second row. */
+    expect((await create(SLUG, id, "A second incarnation")).status).toBe(409);
+    expect((await drive(job.id)).status).toBe("done");
+    expect(await briefRow(id)).toBeUndefined();
+    /* Once nothing live targets the id, it is free again, and unplanned. */
+    expect((await create(SLUG, id, "A second incarnation")).status).toBe(201);
+    expect((await briefRow(id))?.skim).toBeNull();
+  });
+
+  it("publishes distinct Quotes and Ideas run before the brief, without changing the default route", async () => {
+    const id = "spya-sbp2ca";
+    expect((await create(SLUG, id, "With new prerequisites")).status).toBe(201);
+    const [before] = await getDb().select({ quotes: articleRevisions.quotes, ideas: articleRevisions.ideas })
+      .from(articleRevisions).where(eq(articleRevisions.id, await revisionOf(article)));
+    if (!before?.quotes) throw new Error("fixture has no Quotes");
+    const first = before.quotes.quotes[0];
+    const block = article?.blocks.find((b) => b.id === first?.blockId);
+    if (!first || !block) throw new Error("fixture quote has no block");
+    const quotes = {
+      ...before.quotes,
+      quotes: before.quotes.quotes.map((q, i) => i === 0 ? { ...q, text: block.text.slice(0, 61) } : q),
+      generatedAt: "2099-01-01T00:00:00.000Z",
+    };
+    const ideas: Ideas = {
+      version: "ideas/fixture", generator: "fixture", slug: SLUG, sourceHash: "fixture",
+      generatedAt: "2099-01-02T00:00:00.000Z", elapsedMs: 0,
+      ideas: [{
+        id: "spya-sbn2ca", name: "A distinct prerequisite idea", provenance: "introduced",
+        statement: "This newly generated idea must be published alongside its route.",
+        occurrences: [{ blockId: block.id, quote: block.text.slice(0, 61), reasoning: "Fixture passage supporting the idea." }],
+      }],
+    };
+    const job = await runAsOwner(TEST_OWNER, () => enqueue({
+      slug: SLUG, steps: ["quotes", "ideas", "skim"], force: ["quotes", "ideas", "skim"],
+      skimBrief: id, profile: "new prerequisites", pump: false,
+    }));
+    expect((await drive(job.id, {
+      quotes: { ...STEPS.quotes, run: async () => ({ parts: { quotes }, detail: "new Quotes" }) },
+      ideas: { ...STEPS.ideas, run: async () => ({ parts: { ideas }, detail: "new Ideas" }) },
+    })).status).toBe("done");
+    const [after] = await getDb().select({ quotes: articleRevisions.quotes, ideas: articleRevisions.ideas })
+      .from(articleRevisions).where(eq(articleRevisions.id, await revisionOf(article)));
+    expect(after).toEqual({ quotes, ideas });
+    expect((await briefRow(id))?.skim).toBeTruthy();
+    expect(await revisionSkim(article)).toEqual(defaultRoute);
+  });
+
+  it("refuses a route returned after its claim expires", async () => {
+    const id = "spya-sbf2ca";
+    expect((await create(SLUG, id, "A stale claimant")).status).toBe(201);
+    const job = await runAsOwner(TEST_OWNER, () => enqueue({
+      slug: SLUG, steps: ["skim"], skimBrief: id, profile: "stale claim", pump: false,
+    }));
+    model.during = async () => {
+      await getDb().update(jobsTable).set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+        .where(eq(jobsTable.id, job.id));
+    };
+    try {
+      const result = await runAsOwner(TEST_OWNER, () => advanceJobWith(job.id, {
+        power: async () => "standard", session: claimSession, steps: STEPS,
+      }));
+      expect(result?.busy).toBe(true);
+      expect((await briefRow(id))?.skim).toBeNull();
+      expect(await revisionSkim(article)).toEqual(defaultRoute);
+    } finally {
+      model.during = async () => {};
+      await getDb().delete(jobsTable).where(eq(jobsTable.id, job.id));
+    }
+  });
+
+  it("keeps the target brief on a server retry", async () => {
+    const id = "spya-sbr2cx";
+    expect((await create(SLUG, id, "Retry this brief")).status).toBe(201);
+    model.during = async () => { throw new Error("fixture model failure"); };
+    let failed: Job;
+    try {
+      failed = await planThroughTheRoute(id, true);
+    } finally {
+      model.during = async () => {};
+    }
+    expect(failed.status).toBe("error");
+    const retried = await runAsOwner(TEST_OWNER, () => retryJob(failed.id));
+    expect(retried?.skimBrief).toBe(id);
+    if (!retried) throw new Error("retry returned no job");
+    expect((await drive(retried.id)).status).toBe("done");
+    expect((await briefRow(id))?.skim).toBeTruthy();
+    expect(await revisionSkim(article)).toEqual(defaultRoute);
+  });
+
+  it("commits a brief route and its job ending together, and rolls both back on publication failure", async () => {
+    const id = "spya-sba2cx";
+    expect((await create(SLUG, id, "One atomic completion")).status).toBe(201);
+    const job = await runAsOwner(TEST_OWNER, () => enqueue({
+      slug: SLUG, steps: ["skim"], force: ["skim"], skimBrief: id, profile: "atomic brief", pump: false,
+    }));
+    const db = getDb();
+    type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+    const transact = db.transaction.bind(db);
+    let inside: { route: boolean; status: string | undefined; step: string | undefined } | undefined;
+    let reject = false;
+    const watched = vi.spyOn(db, "transaction").mockImplementation((body, config) => transact(async (tx: Tx) => {
+      const answer = await body(tx);
+      if (reject && inside === undefined) {
+        const [brief] = await tx.select({ skim: skimBriefs.skim }).from(skimBriefs).where(eq(skimBriefs.id, id));
+        if (brief?.skim) {
+          const [saved] = await tx.select({ status: jobsTable.status, steps: jobsTable.steps }).from(jobsTable).where(eq(jobsTable.id, job.id));
+          inside = { route: true, status: saved?.status, step: saved?.steps.find((s) => s.name === "skim")?.status };
+          throw new Error("review injected publication rollback");
+        }
+      }
+      return answer;
+    }, config));
+    model.during = async () => { reject = true; };
+    try {
+      expect((await drive(job.id)).status).toBe("error");
+      expect(inside).toEqual({ route: true, status: "done", step: "done" });
+      expect((await briefRow(id))?.skim).toBeNull();
+      expect(await revisionSkim(article)).toEqual(defaultRoute);
+    } finally {
+      model.during = async () => {};
+      watched.mockRestore();
+    }
+    expect((await planThroughTheRoute(id, true)).status).toBe("done");
+    expect((await briefRow(id))?.skim).toBeTruthy();
+  });
+
   it("leaves the default's job writing the revision's column, exactly as before", async () => {
     const job = await planThroughTheRoute(undefined, true);
     expect(job.status).toBe("done");
@@ -508,4 +658,3 @@ describe("a brief's route, planned by a job", () => {
     expect((await briefRow(BRIEF_A))?.skim?.stops.map((s) => s.quoteId)).toEqual(quoteIds);
   });
 });
-

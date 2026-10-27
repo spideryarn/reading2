@@ -166,3 +166,33 @@ show the default's). One real end-to-end plan after the reset is queued.
   the choice: the brief's step must be the job's last, which `parseSkimBrief` enforces by allowing
   only `quotes`, `ideas` and `skim` beside it. Brief routes carry no `viewAs` (they fail closed
   while the administrator views as a reader).
+- 2026-10-27: **stage 2 code review corrections** against `2a56e2ea8`: a brief's route
+  now goes through `StoreSession.commit`, with its own target, so its write, any earlier
+  Quotes/Ideas publication and the job's completion share one transaction. This replaces
+  the `kept-elsewhere` path described above; otherwise a lost claim could buy a forced
+  route twice, or expose a route before its inputs published. A forced job also checks
+  whether its brief still exists before spending. Brief mutations check ownership in
+  their article-lock query; reads repeat it in the child-row query, closing the transfer
+  race for this store ([postmortem](../postmortems/261027b-authorisation-by-a-parent-lookup-expires-before-a-child-row-read-or-write.md)).
+  Regression tests were written first, but the review sandbox cannot reach Postgres,
+  so their failing and passing assertions still need running. Stage 3 must retain enough
+  job-target information on the wire to distinguish brief jobs from the default after
+  polling or remounting; stripping `skimBrief` currently prevents that. Reusing a deleted
+  brief id during an old job also remains an open server edge: the job needs a durable
+  row-incarnation token to distinguish the replacement.
+- 2026-10-27: **review corrections verified against Postgres, and two more fixes.** Sol's
+  regressions now run: all red-then-green bar the server-retry one, which stayed red for a
+  reason of its own. `retryJob` handed the job's URL back (read off the shelf at enqueue, for
+  display), so the retry allocated through `slugForRetry`'s address branch and adopted the
+  reader's *other* article with that URL; no brief there, so the step read "already done"
+  and the job ended `done` having planned nothing. A brief's retry now keeps its slug and
+  sends no URL, and a missing brief's skip says "the brief was deleted" instead of "already
+  done". (The same adoption can move any late-stage retry when a reader holds two articles
+  for one address; not changed here.) C5 is fixed by refusal rather than an incarnation
+  token: `create` answers 409 for an id a queued or running job on this article still
+  targets, under the article lock the job's completion also takes — one query, where a
+  token would be a column, a wire field, a retry copy and a second fence. The window it
+  leaves (delete and re-create between the job route reading the brief and the job's
+  insert) degrades to an edit mid-run, which the route's profile stamp already reports as
+  `profileChanged`. Commit's `kept: false` cannot hide an existing brief: the session's
+  article lock already refuses an article that is not the draft's under the same owner.

@@ -5,15 +5,15 @@
  *
  * The default brief is not here: its route is `article_revisions.skim`, read by
  * `loadSkim`. A brief's route is written by a `skim` job carrying
- * `Job.skimBrief` (src/jobs.ts § `runStep`), through `writeRoute` below, and by
- * nothing else.
+ * `Job.skimBrief` (src/jobs.ts § `runStep`), through the transaction shared by
+ * `StoreSession.commit` and `writeSkimBriefRouteIn` (pg-skim-brief-route.ts).
  *
  * ## The article lock is the mutex, as in src/store/pg-chat.ts
  *
  * Every write takes `select … from articles … for update` first, so the
  * twelve-per-article limit is a decision rather than a race (two tabs creating
  * the twelfth and thirteenth at once), and a route write cannot interleave with
- * a delete. A job's write takes the article before the job row, which is the
+ * a delete. A job's session commit takes the article before the job row, which is the
  * order a step's commit takes them in (src/store/pg-session.ts), so the two
  * cannot deadlock.
  *
@@ -31,20 +31,21 @@
  * of the reader's profile. Nothing here logs at all.
  */
 
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articles, jobs, skimBriefs } from "../db/schema.js";
 import { isSpideryarnId } from "../ids.js";
+import { currentOwnerId } from "../owner.js";
 import { normaliseProfileText } from "../profile.js";
 import { MAX_PURPOSE_CHARS, SKIM_BRIEFS_MAX, type Skim, type SkimFound } from "../types.js";
 import type { SkimBriefRow, SkimBriefStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
+import { ACTIVE } from "./jobs.js";
 import { READ_COMMITTED } from "./isolation.js";
-import { liveAttempt } from "./job-fence.js";
-import { StaleAttemptError } from "./jobs.js";
+import { writeSkimBriefRouteIn } from "./pg-skim-brief-route.js";
 import { ownedSlug } from "./owned-slug.js";
-import { articleIdForOwned, currentSkimFreshness, lockArticleRow } from "./pg.js";
+import { articleIdForOwned, currentSkimFreshness, requireSlug } from "./pg.js";
 
 type Row = typeof skimBriefs.$inferSelect;
 
@@ -98,20 +99,33 @@ async function rowFor(articleId: string, id: string, db: Pick<ReturnType<typeof 
   return row;
 }
 
+/** Authorise while taking the mutex: a transfer can finish while this waits. */
+async function lockOwnedArticle(slug: string, tx: Pick<ReturnType<typeof getDb>, "select">): Promise<string> {
+  requireSlug(slug);
+  const [article] = await tx.select({ id: articles.id }).from(articles)
+    .where(ownedSlug(slug)).for("update").limit(1);
+  if (!article) throw refused(404, "No such article.");
+  return article.id;
+}
+
 const rawPgSkimBriefStore: SkimBriefStore = {
   async list(slug) {
     const articleId = await articleIdForOwned(slug);
     const rows = await getDb()
-      .select()
+      .select({ brief: skimBriefs })
       .from(skimBriefs)
-      .where(eq(skimBriefs.articleId, articleId))
+      .innerJoin(articles, eq(articles.id, skimBriefs.articleId))
+      .where(and(eq(skimBriefs.articleId, articleId), ownedSlug(slug)))
       .orderBy(asc(skimBriefs.createdAt), asc(skimBriefs.id));
-    return rows.map(briefOf);
+    return rows.map((row) => briefOf(row.brief));
   },
 
   async get(slug, id) {
     const articleId = await articleIdForOwned(slug);
-    const row = await rowFor(articleId, id);
+    const [found] = await getDb().select({ brief: skimBriefs }).from(skimBriefs)
+      .innerJoin(articles, eq(articles.id, skimBriefs.articleId))
+      .where(and(eq(skimBriefs.articleId, articleId), eq(skimBriefs.id, id), ownedSlug(slug))).limit(1);
+    const row = found?.brief;
     if (!row) throw refused(404, NO_SUCH_BRIEF);
     return briefOf(row);
   },
@@ -133,13 +147,34 @@ const rawPgSkimBriefStore: SkimBriefStore = {
    */
   async create(slug, id, brief) {
     return getDb().transaction(async (tx) => {
-      const articleId = await articleIdForOwned(slug, tx);
-      await lockArticleRow(tx, articleId);
+      const articleId = await lockOwnedArticle(slug, tx);
       const existing = await rowFor(articleId, id, tx);
       if (existing) {
         if (existing.brief === brief) return briefOf(existing);
         throw refused(409, "That brief id is already taken on this article.");
       }
+      /* **An id a live job still targets is not free yet.** The job was queued
+         for the deleted row, with that row's sentence in its profile, and its
+         route write names the brief by id: a replacement under the same id
+         would receive a route planned for words it does not have (GPT Sol's
+         C5, plan 261027d). Asked under the article lock, which a job's
+         completion also takes first (src/store/pg-session.ts), so a job seen
+         ending here has ended; a job queued after this check was queued for
+         this row. Refusing is one query where carrying the row's incarnation
+         on every job would be a column, a wire field and a second fence. */
+      const [live] = await tx
+        .select({ id: jobs.id })
+        .from(jobs)
+        .where(
+          and(
+            eq(jobs.ownerId, currentOwnerId()),
+            eq(jobs.slug, slug),
+            eq(jobs.skimBrief, id),
+            inArray(jobs.status, [...ACTIVE]),
+          ),
+        )
+        .limit(1);
+      if (live) throw refused(409, "A route is still being planned for a brief that had this id. Try again in a moment.");
       const [held] = await tx
         .select({ n: count() })
         .from(skimBriefs)
@@ -161,8 +196,7 @@ const rawPgSkimBriefStore: SkimBriefStore = {
    */
   async updateBrief(slug, id, brief) {
     return getDb().transaction(async (tx) => {
-      const articleId = await articleIdForOwned(slug, tx);
-      await lockArticleRow(tx, articleId);
+      const articleId = await lockOwnedArticle(slug, tx);
       const [row] = await tx
         .update(skimBriefs)
         .set({ brief, updatedAt: sql`clock_timestamp()` })
@@ -175,8 +209,7 @@ const rawPgSkimBriefStore: SkimBriefStore = {
 
   async remove(slug, id) {
     return getDb().transaction(async (tx) => {
-      const articleId = await articleIdForOwned(slug, tx);
-      await lockArticleRow(tx, articleId);
+      const articleId = await lockOwnedArticle(slug, tx);
       const gone = await tx
         .delete(skimBriefs)
         .where(and(eq(skimBriefs.articleId, articleId), eq(skimBriefs.id, id)))
@@ -192,19 +225,20 @@ const rawPgSkimBriefStore: SkimBriefStore = {
    * route they never saw.
    */
   async dismissProfileNotice(slug, id, generatedAt, key) {
-    const articleId = await articleIdForOwned(slug);
-    const done = await getDb()
-      .update(skimBriefs)
-      .set({ profileNoticeDismissedFor: key, profileNoticeDismissedAt: sql`now()` })
-      .where(
-        and(
-          eq(skimBriefs.articleId, articleId),
-          eq(skimBriefs.id, id),
-          sql`${skimBriefs.skim} ->> 'generatedAt' = ${generatedAt}`,
-        ),
-      )
-      .returning({ id: skimBriefs.id });
-    return done.length > 0;
+    return getDb().transaction(async (tx) => {
+      const articleId = await lockOwnedArticle(slug, tx);
+      const done = await tx.update(skimBriefs)
+        .set({ profileNoticeDismissedFor: key, profileNoticeDismissedAt: sql`now()` })
+        .where(
+          and(
+            eq(skimBriefs.articleId, articleId),
+            eq(skimBriefs.id, id),
+            sql`${skimBriefs.skim} ->> 'generatedAt' = ${generatedAt}`,
+          ),
+        )
+        .returning({ id: skimBriefs.id });
+      return done.length > 0;
+    }, READ_COMMITTED);
   },
 
   async routeForJob(ownerId, slug, id) {
@@ -226,31 +260,12 @@ const rawPgSkimBriefStore: SkimBriefStore = {
    * reader asked for the brief to go, and the job ends having kept nothing.
    */
   async writeRoute(fence, ownerId, slug, id, skim: Skim) {
-    return getDb().transaction(async (tx) => {
-      const [article] = await tx
-        .select({ id: articles.id })
-        .from(articles)
-        .where(ownedSlug(slug, ownerId))
-        .for("update")
-        .limit(1);
-      const [live] = await tx
-        .select({ id: jobs.id })
-        .from(jobs)
-        .where(liveAttempt(fence.jobId, fence.attempt))
-        .for("update")
-        .limit(1);
-      if (!live) throw new StaleAttemptError(fence.jobId);
-      if (!article) return false;
-      const written = await tx
-        .update(skimBriefs)
-        .set({ skim, plannedAt: sql`clock_timestamp()` })
-        .where(and(eq(skimBriefs.articleId, article.id), eq(skimBriefs.id, id)))
-        .returning({ id: skimBriefs.id });
-      return written.length > 0;
-    }, READ_COMMITTED);
+    return getDb().transaction(
+      (tx) => writeSkimBriefRouteIn(tx, fence, ownerId, slug, id, skim),
+      READ_COMMITTED,
+    );
   },
 };
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
 export const pgSkimBriefStore: SkimBriefStore = guardDbStore("skim-briefs", rawPgSkimBriefStore);
-
