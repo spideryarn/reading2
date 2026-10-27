@@ -527,8 +527,8 @@ describe("structureProjection", () => {
          through as a blank row. */
       expect(p.columnA.rows.map((r) => r.text)).toEqual(["The bit about ships", "Ends"]);
       /* **The gap in the numbering is deliberate.** Renumbering to 1, 2 would
-         tell the reader the third part is the second one, while the spine,
-         Outline and Hierarchy all still call it the third. */
+         tell the reader the third part is the second one, while the spine
+         and Structure's list face still call it the third. */
       expect(p.columnA.rows.map((r) => r.number)).toEqual(["1", "3"]);
     });
 

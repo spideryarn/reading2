@@ -1297,7 +1297,7 @@ article. It asks for the call first, before any prose, because a lone offer does
 
 Neither save-at-once route reaches these kinds: `typed` is refused on any kind but the guide
 (src/routes.ts), the tool consults `savesAtOnce` only for the guide, and the card drops any `now`
-on a stored run. Learn, Tutorial and Candidates are not offered it yet, nor Live, which has nowhere
+on a stored run. Learn and Candidates are not offered it yet, nor Live, which has nowhere
 for the button. The eval is `evals/guide/offers.ts --kind chat|explore`.
 
 ## The guide

@@ -255,7 +255,7 @@ interface Props {
    */
   gate: number | null;
   onGate(gate: number | null): void;
-  /** Jump the article to a block, exactly as a gist cell does. */
+  /** Jump the article to a block, exactly as a Structure row does. */
   onJump(id: BlockId): void;
   /**
    * **Hand the reader to Chat**, for a term the article does not contain.

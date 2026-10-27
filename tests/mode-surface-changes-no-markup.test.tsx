@@ -2272,7 +2272,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(DIAGRAM_VISITOR);
   });
 
-  it("draws Outline's band, carrying data-outline-rung on the aside itself", async () => {
+  it("draws Structure's list face, carrying data-outline-rung on the aside itself", async () => {
     await paint(mountOutline());
     expectShape(OUTLINE);
   });

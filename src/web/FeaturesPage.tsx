@@ -384,7 +384,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         </div>
 
         {/* -------------------------------------------------------- elsewhere --
-            [tissue] heading. Tweets is a mode and out from behind the switch;
+            [tissue] heading. Tweets (now Summary's Thread view) is out from behind the switch;
             cross-references and maths are not modes and are drawn for every
             reader in every mode (src/web/useCrossrefs.ts from
             src/web/article/ArticlePage.tsx unconditionally;

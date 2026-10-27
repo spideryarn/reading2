@@ -282,7 +282,7 @@ function articleOf(blocks: Block[], entries: AssetEntry[]): Article {
   return {
     meta: { slug: "a-piece", title: "A piece" },
     blocks,
-    tree: { version: "hierarchy/4", nodes: [], roots: [] },
+    tree: { version: "toc/4", nodes: [], roots: [] },
     assets: { version: "assets/2", sourceHash: "x", fetchedAt: "2026-09-11T00:00:00.000Z", entries },
   } as unknown as Article;
 }

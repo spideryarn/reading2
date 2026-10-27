@@ -393,7 +393,7 @@ describe("the Start this article again section", () => {
     const label = box?.closest("label")?.textContent ?? "";
     for (const name of ["Arc", "Glossary", "Quotes", "FAQ"]) expect(label).toContain(name);
     /* Not an extra the article lacks, and not an import step. */
-    for (const name of ["Ideas", "Quiz", "Sketch", "Hierarchy", "assets"]) {
+    for (const name of ["Ideas", "Quiz", "Sketch", "Structure", "assets"]) {
       expect(label).not.toContain(name);
     }
   });

@@ -4605,7 +4605,7 @@ export function Reader({
 
        `null`, not `true`: the rail goes back to following the window and
        the mode, which in a mode means on. Writing `true` would pin it,
-       and the reader would find it still there in outline mode later
+       and the reader would find it still there in Plain later
        with no memory of having asked for that.
 
        On the transition and **not** as a standing effect, which is the
@@ -4781,7 +4781,7 @@ export function Reader({
           the rail is 12px of the window the band is negotiating for. The raw
           parameter, not the resolved `fit.spine`, because this is a question
           about a band that is *not open yet*: `fitView` turns the rail off in
-          outline mode, where there is no band, and reading that would make the
+          Plain, where there is no band, and reading that would make the
           banner blink in and out as an iPad reader switched modes. layout.ts §
           `modeSpine` is where the two resolutions were made one.
 

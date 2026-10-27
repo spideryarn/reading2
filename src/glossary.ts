@@ -1660,7 +1660,7 @@ export async function generateGlossary(opts: {
    * top-up minutes later are two calls, and a reader who edits their profile in
    * between must not get one artefact stamped with a profile only half of it
    * was written from. src/jobs.ts resolves it once and carries it, exactly as
-   * it already does for the summary steer.
+   * it does for every step that takes the profile.
    *
    * Absent means "written without one", which the artefact records as
    * `profileHash: null` — a real answer, and stale only once the reader has a

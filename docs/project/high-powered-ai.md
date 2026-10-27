@@ -125,7 +125,7 @@ what Sonnet already made stays. [admin.md § Author gifts](admin.md#author-gifts
   not, at about $0.05 a press more: `ALWAYS_HIGH_POWER` in `src/models.ts`,
   [261001p](../plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md).
 - **Chat is on Opus for every article**, so the switch does not change its answers: every thread
-  kind that bills as `chat` — chat, Learn, the tutorial, Explore, the guide. Greg, 2026-10-19:
+  kind that bills as `chat` — chat, Learn, Explore, the guide. Greg, 2026-10-19:
 
   > Default to Opus 5.5 for Chats
 

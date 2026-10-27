@@ -25,7 +25,7 @@
  *    change — see docs/project/block-ids.md#showing-an-id.
  *  - **Left-click jumps in place.** A reload to move down the page you are
  *    already on would be a waste, so a plain left-click hands off to the same
- *    `onJump` a gist cell uses: push history, scroll smoothly, and flash the
+ *    `onJump` a Structure row uses: push history, scroll smoothly, and flash the
  *    paragraph on arrival (keynav.ts § `beginJump`). Every other kind of click
  *    is left to the browser.
  *  - **Has a card, and no `title`.** `data-block-link` is what the one card for

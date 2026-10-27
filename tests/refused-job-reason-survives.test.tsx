@@ -43,7 +43,7 @@
  * One *hook* surface is driven rather than three. All three go through
  * `useStepJob`, and `tests/step-job-force.test.tsx` is what proves that they do.
  *
- * The thread (a page then, the Tweets band now) is driven separately below,
+ * The thread (a page then, the Thread view now) is driven separately below,
  * because it was the fourth copy of
  * this and the one that did **not** go through the hook — so for it, "does the
  * reason survive the poll" was a live question rather than a fact inherited
@@ -89,7 +89,7 @@ const { TweetsBand } = await import("../src/web/modes/summary/TweetsMode.js");
 const { AddPage } = await import("../src/web/AddPage.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
-/** Enough article for the Tweets band to render its head. */
+/** Enough article for the Thread view to render its head. */
 const ARTICLE = {
   meta: { slug: "constitution", title: "A Constitution", url: "https://example.com/c" },
   blocks: [{ id: "spya-a", kind: "p", text: "some words here" }],
@@ -300,7 +300,7 @@ describe("a job the server received and refused", () => {
   });
 });
 
-describe("the Tweets band, whose page had its own copy of all this", () => {
+describe("the Thread view, whose page had its own copy of all this", () => {
   /**
    * The fourth surface, mounted whole and clicked, because it is a component
    * rather than a hook and its `failed` was written out longhand in the
@@ -323,7 +323,7 @@ describe("the Tweets band, whose page had its own copy of all this", () => {
     const button = [...host.querySelectorAll("button")].find(
       (b) => b.textContent?.trim() === "Write the thread",
     );
-    if (!button) throw new Error("the Tweets band did not render its write button");
+    if (!button) throw new Error("the Thread view did not render its write button");
 
     await act(async () => {
       button.click();
@@ -361,7 +361,7 @@ describe("the Tweets band, whose page had its own copy of all this", () => {
       const button = [...host.querySelectorAll("button")].find(
         (b) => b.textContent?.trim() === "Write the thread",
       );
-      if (!button) throw new Error("the Tweets band did not render its write button");
+      if (!button) throw new Error("the Thread view did not render its write button");
       await act(async () => {
         button.click();
         await Promise.resolve();

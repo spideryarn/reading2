@@ -59,7 +59,9 @@ export const ROOT_CALL_CAP_MS = 60_000;
  * book) and the caller's own write.
  */
 export const SLICES_FINISH_RESERVE_MS = 30_000;
-/** Bumped when the root prompt, or what is done with its answer, changes. */
+/** Bumped when the root prompt, or what is done with its answer, changes.
+ *  The `toc` tags (here and `PROMPT_VERSION` in src/structure-prompt.ts) are kept on purpose: changing
+ *  them would mark every stored tree outdated (plan 261002b). */
 export const ROOT_PROMPT_VERSION = "toc-root/1";
 const ROOT_MAX_TOKENS = 6000;
 const ROOT_ANSWER_TOKENS = 200;

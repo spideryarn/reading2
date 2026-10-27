@@ -3688,13 +3688,6 @@ export interface EnqueueRequest {
    */
   force?: StepName[];
   /**
-   * A free-text steer for the steps that take one — today, only `summary`.
-   *
-   * The queue does not interpret it. It carries it onto the job, so that it
-   * survives a restart and so that two differently-steered requests are two
-   * different jobs (`sameWork` below).
-   */
-  /**
    * Who is reading, **already rendered** — `renderProfile` in src/profile.ts.
    *
    * Resolved by the route, once, and carried from here. That is the whole point
@@ -5237,8 +5230,8 @@ export async function retryJob(
     ...(old.upload ? { upload: old.upload } : {}),
     steps: old.steps.map((s) => s.name),
     force: forceForRetry(old.steps),
-    // Copied, unlike force. The steer is not a thing the first attempt used up
-    // — a retry of a summary run that was steered is still that run.
+    // Copied, unlike force. The profile snapshot is not a thing the first
+    // attempt used up — a retry of a run written for this reader is still that run.
     ...(old.profile ? { profile: old.profile } : {}),
     /* The note goes with it, or a retried paint would quietly be a plain one. */
     ...(old.illustrationNote ? { illustrationNote: old.illustrationNote } : {}),

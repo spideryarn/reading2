@@ -107,6 +107,7 @@
  * Metadata. Greg, 2026-08-26 — *"Rearrange the buttons in the bottom-bar. It
  * should be Hierarchy, Summary, Glossary, Search, Chat, Questions, Thread
  * (renamed to 'Tweets'), Metadata."*
+ * (Hierarchy has since become Structure, and Tweets is Summary's Thread view.)
  *
  * That was the seed of the bar rather than a permanent enumeration. The mode
  * list has since grown and been regrouped; `MODES_UI` below is the current

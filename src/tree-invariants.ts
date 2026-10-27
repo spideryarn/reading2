@@ -290,7 +290,7 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
          * **No child may cover its parent's whole range** — unless it is a leaf.
          *
          * A rung that restates the one above it gives the reader two adjacent
-         * gist columns of identical extent, neither marked `continuation`, so
+         * Structure rows of identical extent, neither marked `continuation`, so
          * both render in full and both are fisheye items. One rung finer buys a
          * restatement of the same paragraphs, against
          * docs/project/granularity-zoom.md's promise that level N is a

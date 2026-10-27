@@ -80,7 +80,7 @@ empty one:
  │              │       An example, not    │  There is nothing it is like to   │
  │              │       an argument        │  be one.                          │
  ├──────────────┴──────────────────────────┴───────────────────────────────────┤
- │ ⊞Hierarchy ▤Summary 𝐀Glossary 🔍Search ⌸Chat │ ✳Questions ≡Tweets ⓘMetadata  │
+ │ ⊞Structure ▤Summary 𝐀Glossary 🔍Search ⌸Chat │ ✳Questions ≡Tweets ⓘMetadata  │
  └─────────────────────────────────────────────────────────────────────────────┘
 
    ▐92▌ the model's confidence, printed as well as drawn

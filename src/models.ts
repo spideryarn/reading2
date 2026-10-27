@@ -1442,7 +1442,7 @@ export const TASK_TIER: Record<Task, Tier> = {
  * it is Opus whatever the article's setting.
  *
  * `chat` (plan 261020q): Greg, 2026-10-19, *"Default to Opus 5.5 for Chats"*.
- * Every thread kind that bills as `chat` — chat, Learn, the tutorial, Explore,
+ * Every thread kind that bills as `chat` — chat, Learn, Explore,
  * the guide (`jobFor` in src/converse.ts). Not Candidates, which is its own
  * job. About twice Sonnet's price a turn, on our bill, not the reader's.
  *

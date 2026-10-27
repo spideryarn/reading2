@@ -75,6 +75,7 @@ import { ARTICLE_VIEWS } from "./read-address.js";
  */
 const RETIRED_STEPS: Readonly<Record<string, (typeof STEPS)[number]>> = {
   trajectory: "skim",
+  /* A stale tab's old step word, kept on purpose. */
   hierarchy: "structure",
   citations: "bibliography",
   debate: "reception",

@@ -1,5 +1,6 @@
-/* tooltip.css — the hover panel's surface, and the hierarchy tooltip's contents
-   (`.tip-*`). Tooltip.tsx, over Floating UI, which ships no styles of its own.
+/* tooltip.css — the hover panel's surface, and the contents of the tree-node tooltips
+   (`.tip-*`: title, gist, children, matches; used by Spine, HeadingsCrumbs,
+   StructurePanel and the shelf). Tooltip.tsx, over Floating UI, which ships no styles of its own.
 
    `.tooltip` is borrowed rather than copied: annotations.css,
    column-context.css, dock.css, prose-hover-card.css, footnotes.css,

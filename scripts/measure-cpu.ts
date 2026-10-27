@@ -867,8 +867,8 @@ async function clickModes(cdp: Cdp, modes: string[], repeats: number): Promise<M
  * **The first switch into a mode and the fourth are different events** — the
  * first mounts the panel and may fetch, the rest do not — so `first` and
  * `later mean` are printed apart. A mean over both hides whichever of the two
- * is the complaint, and on a run that starts in `mode=hierarchy` the first
- * "Hierarchy" click is a click on the mode you are already in: 20-30ms, and the
+ * is the complaint, and on a run that starts in `mode=structure` the first
+ * "Structure" click is a click on the mode you are already in: 20-30ms, and the
  * fastest-looking number in the table.
  */
 function reportModeClicks(clicks: ModeClick[], modeList: string[]): void {
@@ -1130,7 +1130,7 @@ async function main(): Promise<void> {
     const before = first.total;
     const t0 = Date.now();
     const scrolling = has("scroll");
-    /* `--modes plain,hierarchy,outline` clicks each in turn, `--repeats` times
+    /* `--modes plain,structure,summary` clicks each in turn, `--repeats` times
        round. Mutually exclusive with `--scroll`: a run that did both would
        charge each gesture's cost to the other. */
     const modeList = flag("modes", "")

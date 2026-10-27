@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The Tweets band's one pure part: the text that lands on the clipboard.
+ * The Thread view's one pure part: the text that lands on the clipboard.
  *
  * Everything else in `?mode=tweets` (a page at `/read/<slug>/tweets` until
  * 2026-09-29) is rendering, and the rendering is

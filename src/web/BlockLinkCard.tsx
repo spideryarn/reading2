@@ -13,7 +13,7 @@
  * **One panel, not one per link** (Sol F4 on
  * docs/plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md):
  * the glossary draws a link per occurrence, literal search is uncapped, and the
- * table draws two per gist cell, so a Floating UI instance each would be
+ * table draws two per Structure row, so a Floating UI instance each would be
  * thousands of them for the one the reader is pointing at. So it is
  * `ProseHoverCard`'s shape — a delegated `pointerover` / `focusin` on
  * `[data-block-link]`, and `setPositionReference` against whichever element
@@ -94,7 +94,7 @@ export const MISSING_BLOCK = "This passage is not in this version of the article
  * The section a block sits in is the last one starting at or above its row —
  * `sectionIndexContaining`'s answer (position.ts), and so the same place the
  * return chip names. Walked once here rather than asked per link, because a
- * link is drawn per glossary occurrence and per gist cell, and because the
+ * link is drawn per glossary occurrence and per Structure row, and because the
  * result is then one value the provider can hand down unchanged while the
  * reader scrolls (Sol F5). Above the first section it answers the first
  * section, as `activeSectionIndex` does.

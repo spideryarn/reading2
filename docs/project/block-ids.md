@@ -90,7 +90,7 @@ chosen to prevent.
 So stage 3 also **carries ids over from the previous run's blocks** when there are any, matching a
 new block to an old one by its text. A paragraph keeps its id as long as its words are unchanged, no
 matter how far it has moved. Blocks with no text — images, figures — match on their `src` instead,
-so a Hierarchy row aimed at a diagram doesn't go stale. Each previous id is consumed once, so a page with
+so a Structure row aimed at a diagram doesn't go stale. Each previous id is consumed once, so a page with
 several identical short paragraphs cannot hand the same id to two blocks.
 
 #### Where the previous run comes from, and the three answers it can give
@@ -348,15 +348,15 @@ Blocks are the **finest** unit a reader takes in as one thing — so an `<li>` i
 matters to the tree.
 
 Some blocks get an id but never get a gist (`gistable: false`): images, horizontal rules, and
-pull-quotes that repeat body text verbatim. They stay addressable — Hierarchy may well want to point
+pull-quotes that repeat body text verbatim. They stay addressable — Structure may well want to point
 at a diagram — they simply must not generate a row of their own. On the test article all 11
-pull-quotes are word-for-word repeats of body sentences, so without this Hierarchy would grow eleven
+pull-quotes are word-for-word repeats of body sentences, so without this Structure would grow eleven
 phantom rows quoting text it had already listed.
 
-### A bare `<svg>` gets no id, and Hierarchy cannot point at a diagram
+### A bare `<svg>` gets no id, and Structure cannot point at a diagram
 
 **Known hole, found 2026-08-28** while measuring extraction
-([260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)). The sentence above says Hierarchy
+([260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)). The sentence above says Structure
 may well want to point at a diagram. For a `<figure>`-wrapped one it can. For a bare inline `<svg>`
 it cannot, and nothing says so:
 
@@ -376,7 +376,7 @@ escapes by accident — a formula has text.
 That matters because keeping inline diagrams was a deliberate choice — Greg, 2026-08-25, recorded in
 [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts), knowingly accepting that foreign content is
 where most historical mXSS bypasses live. We take that risk to keep the diagram and then cannot
-address it: no Hierarchy row, no note anchored to it, nothing for zoom to fold.
+address it: no Structure row, no note anchored to it, nothing for zoom to fold.
 
 The fix is small — a lower-case leaf set — and is **not** made here, because widening what gets an id
 is this document's decision and not an extraction eval's. Note if it is taken: adding `"SVG"` to
@@ -482,7 +482,7 @@ one saying where you were and one saying where you asked to go ([url-state.md](u
 
 An article that ships an `id` in **our** format — `<h2 id="spya-k3m9qt">` — is believed. Stage 3
 treats it as an id it minted on a previous run and reuses it, which means a page can name a block id
-belonging to somebody else's paragraph and take every comment, search hit and Hierarchy row anchored to
+belonging to somebody else's paragraph and take every comment, search hit and Structure row anchored to
 it. Nothing about that is hard to do once you know an id — and ids are printed beside every
 paragraph and pasted into links, so **knowing one is not a barrier**. What keeps it narrow today is
 that articles are fetched once from addresses a reader chose. It stops being narrow the moment an

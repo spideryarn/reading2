@@ -628,7 +628,7 @@ export const barParam = createParser<number>({
  * offer the control. So an old glossary with no scores behaves exactly as it
  * did before, and the default never labels an order that isn't one.
  *
- * `push`, like `cols` and `text` and unlike `term`: changing the order of a
+ * `push`, like `text` (and the retired `?cols=`) and unlike `term`: changing the order of a
  * list is a deliberate act on the view, and Back should undo it.
  *
  * An unknown value parses to the default, so a link written by a version with
@@ -800,7 +800,7 @@ export const faqBarParam = createParser<number>({
  * out loud (Library.tsx). Nothing else produces a bare `?find=`: reaching words
  * mode by hand pushes `match=words` on the way.
  *
- * `push`, like `cols` and `text`: switching matcher changes what the article
+ * `push`, like `text` (and the retired `?cols=`): switching matcher changes what the article
  * looks like, and Back should undo it.
  *
  * **`meaning` asks the quick search first, and swaps in the thorough one**
@@ -932,12 +932,12 @@ export const runParam = parseAsBlockId.withOptions({ history: "replace" });
  * as `resolveMatcher`: a rule about what an *absent* parameter means, written
  * once, rather than a default that would erase the distinction.
  *
- * Comma-separated and spelled out, exactly like `?cols=`, and for the reason
+ * Comma-separated and spelled out, exactly like the retired `?cols=` was, and for the reason
  * given there — these URLs get pasted to people, and a reader should be able to
  * see what a link is going to show them. Ids are already URL-safe by
  * construction (docs/project/block-ids.md), so nothing needs encoding.
  *
- * **Order is preserved rather than sorted.** `?cols=` sorts because a set of
+ * **Order is preserved rather than sorted.** the retired `?cols=` sorted because a set of
  * depths has a natural order and two spellings of one view should be one
  * string; a set of ids does not. Sorting them would order the reader's searches
  * by a random six characters, which is not an order — so the order kept is the
@@ -971,8 +971,8 @@ export const parseAsIdList = createParser<string[]>({
   parse(value) {
     if (value === NO_RUNS) return [];
     const parts = value.split(",").filter((p) => p !== "");
-    /* Every id validated, and a single bad one drops **only itself**. `?cols=`
-       takes the opposite view and rejects the whole value, which is right there
+    /* Every id validated, and a single bad one drops **only itself**. The retired `?cols=`
+       took the opposite view and rejected the whole value, which is right there
        because a depth list is short and hand-written; a run list is machine-
        written and long-lived, and the id most likely to be wrong in one is a
        search the reader deleted on another machine. Throwing away the other
@@ -1142,7 +1142,7 @@ export const confParam = createParser<number>({
  * model call landed — which was the right rule while it was the picture
  * everybody saw.
  *
- * `push`, like `?cols=`. Switching picture is a deliberate act on
+ * `push`, like the retired `?cols=`. Switching picture is a deliberate act on
  * the view and Back should undo it — and unlike stepping between glossary terms,
  * you do not do it twice in ten seconds.
  *

@@ -731,7 +731,7 @@ words: *if what you wrote would be just as true had you never been told which ar
 from, you have written the wrong thing.*
 
 So four things travel, and the last two are the ones that make it relative: the article's title, its
-one-sentence gist (the hierarchy root's), **the link's own anchor text**, and **the paragraph the
+one-sentence gist (the tree root's), **the link's own anchor text**, and **the paragraph the
 author put it in**. Those two cost nothing — the blocks are already in memory for the membership
 check the route does anyway. The reader's profile rides along after the fence, as it does in explain.
 

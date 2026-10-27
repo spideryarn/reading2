@@ -196,7 +196,7 @@ interface Props {
    * nodes are sections anyway.
    */
   atRow: number | null;
-  /** Jump the article to a block, exactly as a gist cell does — a press on a node or a row. */
+  /** Jump the article to a block, exactly as a Structure row does — a press on a node or a row. */
   onJump(id: BlockId): void;
   /**
    * **The article following the picture** — the step buttons under it and the

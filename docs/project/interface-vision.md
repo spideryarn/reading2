@@ -42,7 +42,7 @@ always the simpler-first version, not the end state.
        │                         │ disclosed                    │
    ▮   │ Structure (the tree)    │ ¶ … a ·glossary· term, a     │
    ▮   │ Summary                 │   quote's rule, a citation   │ ? What would have to be true
-   ▯   │ Tweets                  │   mark, a cross-reference …  │   for this to hold?
+   ▯   │ Summary's Thread view   │   mark, a cross-reference …  │   for this to hold?
    ▯   │ (Diagram, Skim?)  │                              │
    ▯   │                         │ ¶ …                          │ ⚑ Disputed — 2 replies  ▸
    ▯   │                         │                              │
@@ -56,7 +56,7 @@ always the simpler-first version, not the end state.
   passage they are about, scrolling with it. Today's Marginalia (called Annotations until the
   rename in [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md))
   is the first cut.
-- **The left is everything that is about the piece as a whole**: Structure, Summary, Tweets. It
+- **The left is everything that is about the piece as a whole**: Structure and Summary (whose Thread view is the post-per-passage face). It
   stays put while the text scrolls.
 - **Both sides can be open at once** when the window is wide enough.
 - **The single-purpose mode bands still exist but recede.** Glossary's list, Ideas' list, Timeline,
@@ -85,7 +85,7 @@ anchored, so placing it costs layout, not a model call.
 | Explaining a hard paragraph | blocks | right, collapsed | **no** — needs [vision.md](vision.md)'s difficulty map, which does not exist |
 | Structure | the whole | left | yes, as a band |
 | Summary | the whole, linked to passages | left | yes, as a band |
-| Tweets | the whole, posts linked to passages | left | yes, as a wide band (Greg already called it *"its own left-hand column"*, 5A) |
+| Summary's Thread view | the whole, posts linked to passages | left | yes, as a wide band (Greg already called it *"its own left-hand column"*, 5A) |
 | Diagram / Sketch / Illustrated | the whole | left, or a surface of its own | yes, as bands |
 | Skim | a route through quotes | left? it is walked, not read | yes, as a band |
 | Comments and bookmarks | blocks or quoted passages | right: collapsed | **in the margin** since 261002b; a visitor sees the owner's published comments |
