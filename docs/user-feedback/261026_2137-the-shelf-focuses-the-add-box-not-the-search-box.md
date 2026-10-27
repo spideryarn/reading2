@@ -5,7 +5,7 @@ ending: shipped
 # The shelf focuses the add box on arrival, not the search box
 
 Greg (admin, `feedback-reporter.ts` exit 0), 2026-10-26 21:37 UTC, a suggestion filed from
-`https://www.spideryarn.com/`. Sentry event 55d1e29632f7436ba191aa85fba012e1 (#716). Session
+`https://www.spideryarn.com/`. Sentry SPIDERYARN-READING2-PG (#716), resolved. Session
 `fbnmx5ga-add-box-focus`. No addenda when re-read before acting and before this note.
 
 > By default, put the focus in the add box, not the search box.
