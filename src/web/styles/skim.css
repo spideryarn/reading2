@@ -394,12 +394,12 @@
 .skim-brief-words { min-width: 0; overflow-wrap: anywhere; }
 .skim-brief-tag {
   margin-left: 0.4rem;
-  font-size: 0.72rem;
+  font-size: max(var(--text-min), 0.72rem);
   color: var(--ink-faint);
 }
 .skim-brief-fallback { color: var(--ink-soft); }
-.skim-briefs-note { margin: 0.25rem 0.5rem; font-size: 0.78rem; color: var(--ink-soft); }
-.skim-briefs .gloss-error { margin: 0.25rem 0.5rem; font-size: 0.78rem; }
+.skim-briefs-note { margin: 0.25rem 0.5rem; font-size: max(var(--text-min), 0.78rem); color: var(--ink-soft); }
+.skim-briefs .gloss-error { margin: 0.25rem 0.5rem; font-size: max(var(--text-min), 0.78rem); }
 
 /* ------------------------------------------------------ the door in the prose --
    After the current stop's block, outside `.prose` (TableView.tsx §

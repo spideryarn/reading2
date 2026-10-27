@@ -1,7 +1,7 @@
 ---
 reports: spya-xyje0z
-ending: awaiting
-comment: Storage and planning for added briefs are being built; the picker waits on you: where it goes, and whether a new brief replaces "why you're reading" (q-gu0dw6).
+ending: shipped
+comment: Skim now holds several briefs per article. The "Reading for" line has a ▾ that switches between the default and briefs you add, and lets you edit, delete or add one. Each brief gets its own route. Real routes for added briefs can be planned from 1 November, once the model key resets (qi-wthdvazd).
 ---
 # Several Skim briefs per article
 
@@ -11,9 +11,20 @@ comment: Storage and planning for added briefs are being built; the picker waits
 >
 > — Greg, 2026-10-27 (`spya-xyje0z`, admin, suggestion, on Skim)
 
-**Ending: awaiting Greg** on [q-gu0dw6](questions/q-gu0dw6.md): where the picker goes, and whether an
-added brief replaces the article's *why you're reading*. The plan is
-[261027d](../plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md). The parts
-that do not depend on the answer (storage, the brief on the job, the API, the client reading a
-brief's route by `?brief=`) are being built meanwhile. No route for an added brief can be planned for
-real until the model key resets on 1 November.
+**Ending: shipped**, on `dev`. The plan is
+[261027d](../plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md).
+
+- **The default brief is today's route, unchanged**: the reader profile plus the article's *why
+  you're reading*. Visitors see only that one.
+- **Added briefs** are one sentence each, up to 12 per article. Each is planned for the profile plus
+  that sentence, **in place of** the purpose, which was answer 2A in
+  [q-gu0dw6](questions/q-gu0dw6.md). Greg answered only question 1, so 2A stands as recommended.
+  Planning goes through the same job queue as the default. The address shows the brief as
+  `?brief=`, and Skim remembers it, along with your place on its route. Briefs are the owner's own
+  words: they are in the export and are deleted if the article changes hands.
+- **The picker is 1A, Greg's choice** (reply `spya-hugkak`): a ▾ on the *Reading for* line. Its list
+  holds the default (with *Edit*), each added brief (*Edit*, and Chat's two-press bin) and *New
+  brief…*.
+- **Waits for 1 November:** the box's model key is over its monthly limit, so no real route for an
+  added brief has been planned yet. Every test used a stand-in model, and the browser check saw the
+  planning job fail on the key. One real end-to-end check is queued as `qi-wthdvazd`.

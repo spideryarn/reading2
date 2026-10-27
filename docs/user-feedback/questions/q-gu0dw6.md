@@ -1,8 +1,9 @@
 ---
 id: q-gu0dw6
 report: spya-xyje0z
-status: open
+status: answered
 asked: 2026-10-27
+acted: spya-hugkak
 title: Several Skim briefs: where should the picker go, and does a new brief replace "why you're reading"?
 refs: docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md · docs/plans/261027d-several-skim-briefs-plan-review-sol.md · docs/user-feedback/261027_1204-several-skim-briefs-per-article.md
 ---
@@ -30,3 +31,9 @@ What I am building. The default brief is exactly today's route, untouched. Visit
 What waits. The model key is over its monthly limit until 1 November, so no new route can actually be planned before then. The tests use a stand-in model. The picker itself waits for your answer to question 1.
 
 Why 1A. Chat's list (B) suits dozens of conversations. You will likely have one to four briefs per article, and the route list already fills the band. Chips (C) are fastest to switch but crowd the band's head. A reuses the line that already names the brief.
+
+## Greg's answer, 2026-10-27 (in the Feedback dialog, reply `spya-hugkak`)
+
+> 1a
+
+Settled, and built: the "Reading for: ..." line has a ▾ that opens the list of briefs. The list holds the default (with Edit), each brief you added (with Edit and a two-press bin), and "New brief...". Question 2 had no answer, so the recommended 2A stands, as built: an added brief's route is planned for your profile plus the brief, in place of the article's "why you're reading" sentence. Switching to 2B is a one-line change if you want it. On dev; the plan is docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md. No route for an added brief can actually be planned until the model key resets on 1 November.
