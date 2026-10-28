@@ -56,3 +56,23 @@ describe("splitQuestionBody — the short version first, the details shut", () =
     expect(splitQuestionBody("Which?\nDetails below\nmore").details).toBeNull();
   });
 });
+
+/* Plan 261028b, Stage 2, Sol's F3: the split reads the same line state as the
+   monospaced blocks, so an ASCII mockup with the word in it is drawn whole. */
+describe("splitQuestionBody — a fence's Details is content", () => {
+  it("does not split on a Details line inside a fence, and splits on the one after it", () => {
+    expect(splitQuestionBody("Which?\n```\n| x |\nDetails\n```\nDetails\nWhy.")).toEqual({
+      summary: "Which?\n```\n| x |\nDetails\n```",
+      details: "Why.",
+    });
+    expect(splitQuestionBody("Which?\n```\nDetails\n```\nmore").details).toBeNull();
+  });
+
+  it("splits a CRLF body the same as an LF one", () => {
+    expect(splitQuestionBody("Which?\r\nDetails\r\nWhy.")).toEqual({ summary: "Which?", details: "Why." });
+  });
+
+  it("reads an unclosed fence as plain text, splitting where it always did", () => {
+    expect(splitQuestionBody("Which?\n```\nDetails\nWhy.")).toEqual({ summary: "Which?\n```", details: "Why." });
+  });
+});

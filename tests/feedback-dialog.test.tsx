@@ -3495,6 +3495,26 @@ describe("the Earlier tab", () => {
         ).not.toContain("Details");
       });
 
+      /* Plan 261028b, Stage 2: an ASCII mockup between two ``` lines is drawn
+         monospaced, line for line, and its own Details line is not the split. */
+      it("draws a fenced block as a <pre>, its lines kept, and does not split on a Details inside it", async () => {
+        const box = "+---------+\n| Details |\nDetails\n   indented";
+        const fenced = { ...Q1, body: `Which layout?\n\n\`\`\`\n${box}\n\`\`\`\n\nRecommended: A.\nDetails\nWhy, at length.` };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [fenced, Q2] }, { ...WAITING, questions: [fenced, Q2] });
+        const article = thread().querySelector(".fb-question");
+        const pre = article?.querySelector("pre.fb-mono");
+        expect(pre?.textContent).toBe(box);
+        expect([...(article?.querySelectorAll(":scope > .fb-question-text") ?? [])].map((p) => p.textContent)).toEqual([
+          "Which layout?",
+          "Recommended: A.",
+        ]);
+        expect(article?.textContent).not.toContain("```");
+        const more = [...thread().querySelectorAll<HTMLDetailsElement>("details.fb-question-more")].find(
+          (d) => d.querySelector("summary")?.textContent === "Details",
+        );
+        expect(more?.textContent).toContain("Why, at length.");
+      });
+
       /* Decision 2: every reply no agent has acted on, oldest first, and how
          many older ones were not sent (F12). */
       it("shows every reply not yet acted on as You replied, oldest first, and says how many earlier ones are not shown", async () => {

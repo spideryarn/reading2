@@ -482,8 +482,11 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 - **What a thread shows.** The ids, `q-k3m9qt · about #301 (spya-mdp0em)`, the ones to say to the
   Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
   its title and text, which an agent wrote, in the model's face and as plain text with its line
-  breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
-  *Details*; the report it is about, whole and shut, under *Your report #301*, **or, since
+  breaks ([fonts.md](fonts.md)), and the lines between two lines that are exactly ```` ``` ````
+  in the monospace, unwrapped and scrolling sideways, for an ASCII mockup (since 2026-10-28,
+  [plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md);
+  the compiler refuses an unclosed fence, and a row published with one is drawn as plain text);
+  everything after a line that is exactly `Details`, outside such a block, shut under *Details*; the report it is about, whole and shut, under *Your report #301*, **or, since
   2026-10-20, a reader's** (below); and the admin's replies, in the reader's face: first those **an agent has
   acted on**, each marked *acted on*, with a line saying what happened next is written in the
   question; then those **no agent has acted on yet**. At most the newest five of each, with a count

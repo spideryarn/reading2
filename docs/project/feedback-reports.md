@@ -578,7 +578,12 @@ What the report asked and when, what was done, what each option means, and what 
 - `refs` is for agents (the queue item, plan, note and Sentry short id) and **is never sent to the
   browser**. `acted` is added later (below).
 - **The body is plain text, at most 6,000 characters, shown exactly as written with its line
-  breaks.** No markdown is rendered, so no `**`, backticks or links. Write it to
+  breaks.** No markdown is rendered, so no `**`, inline backticks or links. The one exception:
+  lines between two lines that are exactly ```` ``` ```` are shown monospaced, line for line and
+  scrolling sideways, for an ASCII mockup or diagram; a `Details` line inside one is content, and a
+  fence left unclosed is refused
+  ([plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md),
+  Stage 2). Write it to
   [ask-me-questions.md](../reusable/ask-me-questions.md): Greg should be able to answer "1A" without
   opening anything else. When `report` is somebody else's, he sees it beside the question, shut and
   marked as a reader's, with the address it came from (since 2026-10-20,
