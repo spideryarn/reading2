@@ -1,6 +1,7 @@
 /**
  * **What a question for Greg may look like**: the rules its file, the server
- * and the dialog all hold it to. An import-light leaf (only src/ids.ts), so
+ * and the dialog all hold it to. An import-light leaf (only src/ids.ts and
+ * src/plain-text-blocks.ts), so
  * scripts/feedback-endings.ts can check the files without loading the store,
  * and the dialog may import the rules without importing the server's reads.
  *
@@ -11,6 +12,7 @@
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  */
 import { ID_PREFIX, isSpideryarnId, mintId } from "./ids.js";
+import { fencedLines } from "./plain-text-blocks.js";
 
 /** `open` is shown in the dialog; `answered` has been acted on and is not. */
 export const FEEDBACK_QUESTION_STATUSES = ["open", "answered"] as const;
@@ -35,11 +37,24 @@ export const MAX_FEEDBACK_QUESTION_BODY_CHARS = 6_000;
  */
 export const QUESTION_DETAILS_LINE = "Details";
 
-/** A body as the dialog draws it: the part shown, and the part behind *Details*, or null when there is none. */
+/**
+ * **The lines of a body that are `Details` and outside a fence**, by index:
+ * one line state for the split, the compiler and the server's read (plan
+ * 261028b, Sol's F3), so an ASCII mockup with the word on a line of its own is
+ * drawn, not split on. With an unclosed fence, fences are not fences
+ * (src/plain-text-blocks.ts § `fencedLines`) and every such line counts, as it
+ * did before fences existed.
+ */
+export function detailsLines(body: string): { lines: string[]; at: number[] } {
+  const { lines, inside } = fencedLines(body);
+  return { lines, at: lines.flatMap((line, index) => (line === QUESTION_DETAILS_LINE && !inside[index] ? [index] : [])) };
+}
+
+/** A body as the dialog draws it: the part shown, and the part behind *Details*, or null when there is none. CRLF reads as LF. */
 export function splitQuestionBody(body: string): { summary: string; details: string | null } {
-  const lines = body.split("\n");
-  const at = lines.indexOf(QUESTION_DETAILS_LINE);
-  if (at === -1) return { summary: body, details: null };
+  const { lines, at: found } = detailsLines(body);
+  const at = found[0];
+  if (at === undefined) return { summary: body, details: null };
   const summary = lines.slice(0, at).join("\n").trim();
   const details = lines.slice(at + 1).join("\n").trim();
   /* A body that is all details, or a heading with nothing under it, is drawn whole. */
@@ -179,7 +194,9 @@ export function publishedQuestionProblem(row: PublishedFeedbackQuestion): string
   }
   if (!isCalendarDay(row.asked)) return "asked is not a calendar day written yyyy-mm-dd";
   if (row.body.trim() === "" || row.body.length > MAX_FEEDBACK_QUESTION_BODY_CHARS) return "body is blank or too long";
-  if (row.body.split("\n").filter((line) => line === QUESTION_DETAILS_LINE).length > 1) return "body splits twice";
+  /* No stricter than before fences (plan 261028b, F3): an unclosed fence is
+     drawn as plain text, not refused here; only the compiler refuses it. */
+  if (detailsLines(row.body).at.length > 1) return "body splits twice";
   if (!FEEDBACK_QUESTION_STATUSES.includes(row.status)) return "status is neither open nor answered";
   if (row.acted.some((one) => !isSpideryarnId(one))) return "acted names something that is not an answer id";
   return null;

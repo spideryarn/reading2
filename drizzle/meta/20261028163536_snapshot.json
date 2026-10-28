@@ -1,6 +1,6 @@
 {
-  "id": "3fd6431d-536f-4e54-b038-9bfe29173360",
-  "prevId": "944fe5bb-af36-4766-a229-b85b5aed2ea5",
+  "id": "33de2c7f-2e74-4131-9783-f34f18d17cb2",
+  "prevId": "185d839a-4431-4544-924c-e8b60aa4cf66",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5698,7 +5698,7 @@
         },
         "feedback_kind": {
           "name": "feedback_kind",
-          "value": "\"spideryarn\".\"feedback\".\"kind\" is null or \"spideryarn\".\"feedback\".\"kind\" in ('problem', 'suggestion')"
+          "value": "\"spideryarn\".\"feedback\".\"kind\" is null or \"spideryarn\".\"feedback\".\"kind\" in ('problem', 'suggestion', 'discussion')"
         },
         "feedback_reporter_email": {
           "name": "feedback_reporter_email",

@@ -91,6 +91,9 @@ export const ADMIN_COSTS_PATH = "/admin/costs";
 /** **Every article, and moving one to another account**: the router's `ADMIN_ARTICLES_HREF`. Plan 261011n § D4. */
 export const ADMIN_ARTICLES_PATH = "/admin/articles";
 
+/** **The mockups agents make for Greg's decisions**: the router's `ADMIN_MOCKUPS_HREF`. Plan 261028b, Stage 3. */
+export const ADMIN_MOCKUPS_PATH = "/admin/mockups";
+
 /**
  * **Where this article lives on Spideryarn** — the link back, from anywhere.
  *

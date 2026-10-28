@@ -6666,7 +6666,8 @@ export const feedback = spideryarn.table(
      */
     body: text("body").notNull(),
     /**
-     * *A problem* or *a suggestion* — `FEEDBACK_KINDS` in src/types.ts.
+     * *A problem*, *a suggestion* or (an admin only) *a discussion* —
+     * `FEEDBACK_KINDS` in src/types.ts.
      *
      * **Nullable, and starting unset is the design.** Greg, 2026-09-02: *"don't
      * default to Problem. Default to null/unknown."* So null means the reader
@@ -6881,7 +6882,7 @@ export const feedback = spideryarn.table(
      * **Null is a member of the domain and not of the list**: it means the
      * reader did not say, which is what the toggle starts as.
      */
-    check("feedback_kind", sql`${t.kind} is null or ${t.kind} in ('problem', 'suggestion')`),
+    check("feedback_kind", sql`${t.kind} is null or ${t.kind} in ('problem', 'suggestion', 'discussion')`),
     check("feedback_reporter_email", sql`length(btrim(${t.reporterEmail})) > 0`),
     /**
      * **Diagnostics cannot exist without consent.** The tick-box is the whole

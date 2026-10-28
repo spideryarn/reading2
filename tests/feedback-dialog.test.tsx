@@ -467,6 +467,29 @@ describe("the feedback dialog", () => {
     expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
   });
 
+  /* **A third kind, for an admin only** (Greg, 2026-10-28, plan 261028b): only
+     an admin can read a reply, so only an admin is offered a kind that promises
+     a conversation. A reader's dialog keeps exactly its two buttons. */
+  it("offers A discussion to an admin only, and sends it as its kind", async () => {
+    const labels = () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].map((b) => b.textContent ?? "");
+    mount();
+    expect(labels()).toEqual(["A problem", "A suggestion"]);
+    act(() => root.unmount());
+    host.remove();
+
+    asAdmin = true;
+    mount();
+    expect(labels()).toEqual(["A problem", "A suggestion", "A discussion"]);
+    pick("A discussion");
+    expect(host.textContent ?? "").toMatch(/nothing is built until you say so/i);
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+    type("Thinking out loud.");
+    send();
+    await act(async () => {});
+    expect(body().kind).toBe("discussion");
+  });
+
   /* Un-picking puts the general sentence back, which is the same code path as a
      dialog nobody has touched — and the one a reader reaches by pressing the
      pressed button, which is why the toggle is two buttons rather than radios. */
@@ -1339,6 +1362,44 @@ describe("the draft kept for a reload", () => {
     expect(suggestion?.getAttribute("aria-pressed")).toBe("true");
   });
 
+  /* A discussion is an admin's kind (plan 261028b). A saved draft under it keeps
+     its words either way; it keeps the kind only for a reader who has the
+     button, and comes back unset for anybody else rather than as a kind the
+     server would refuse. */
+  it.each([
+    [true, "true"],
+    [false, null],
+  ])("restores a discussion draft for an admin (%s) with the kind, otherwise unset", (admin, pressed) => {
+    asAdmin = admin;
+    kept.set(KEY, JSON.stringify({ body: "Half a thought", kind: "discussion", id: "spya-k3m9qt", at: Date.now() }));
+    mount();
+    expect(firstBox().value).toBe("Half a thought");
+    const discussion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A discussion"),
+    );
+    expect(discussion?.getAttribute("aria-pressed") ?? null).toBe(pressed);
+    expect(
+      [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].filter(
+        (button) => button.getAttribute("aria-pressed") === "true",
+      ),
+    ).toHaveLength(admin ? 1 : 0);
+  });
+
+  it("keeps an admin's discussion draft, kind and all, across a reload", async () => {
+    asAdmin = true;
+    mount();
+    type("Half a thought");
+    pick("A discussion");
+    await later(1000);
+    expect(saved()).toMatchObject({ body: "Half a thought", kind: "discussion" });
+    reload();
+    expect(firstBox().value).toBe("Half a thought");
+    const discussion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A discussion"),
+    );
+    expect(discussion?.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("brings them back after a reload, as a new report", async () => {
     mount();
     type("Half a report");
@@ -1570,6 +1631,14 @@ describe("the thank-you, and getting out of it", () => {
     mount();
     await fileOne("A suggestion");
     expect(thanks().toLowerCase()).toContain("suggestion");
+    expect(thanks().toLowerCase()).not.toContain("sorry");
+  });
+
+  it("answers an admin's discussion with proposals to come", async () => {
+    asAdmin = true;
+    mount();
+    await fileOne("A discussion");
+    expect(thanks().toLowerCase()).toContain("proposals");
     expect(thanks().toLowerCase()).not.toContain("sorry");
   });
 
@@ -3424,6 +3493,26 @@ describe("the Earlier tab", () => {
         expect(
           [...thread().querySelectorAll("details.fb-question-more summary")].map((s) => s.textContent),
         ).not.toContain("Details");
+      });
+
+      /* Plan 261028b, Stage 2: an ASCII mockup between two ``` lines is drawn
+         monospaced, line for line, and its own Details line is not the split. */
+      it("draws a fenced block as a <pre>, its lines kept, and does not split on a Details inside it", async () => {
+        const box = "+---------+\n| Details |\nDetails\n   indented";
+        const fenced = { ...Q1, body: `Which layout?\n\n\`\`\`\n${box}\n\`\`\`\n\nRecommended: A.\nDetails\nWhy, at length.` };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [fenced, Q2] }, { ...WAITING, questions: [fenced, Q2] });
+        const article = thread().querySelector(".fb-question");
+        const pre = article?.querySelector("pre.fb-mono");
+        expect(pre?.textContent).toBe(box);
+        expect([...(article?.querySelectorAll(":scope > .fb-question-text") ?? [])].map((p) => p.textContent)).toEqual([
+          "Which layout?",
+          "Recommended: A.",
+        ]);
+        expect(article?.textContent).not.toContain("```");
+        const more = [...thread().querySelectorAll<HTMLDetailsElement>("details.fb-question-more")].find(
+          (d) => d.querySelector("summary")?.textContent === "Details",
+        );
+        expect(more?.textContent).toContain("Why, at length.");
       });
 
       /* Decision 2: every reply no agent has acted on, oldest first, and how

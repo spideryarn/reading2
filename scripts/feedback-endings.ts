@@ -63,6 +63,7 @@ import {
 } from "../src/feedback-ending-values.js";
 import {
   type CompiledFeedbackQuestion,
+  detailsLines,
   FEEDBACK_QUESTION_STATUSES,
   type FeedbackQuestionStatus,
   type PublishedFeedbackQuestion,
@@ -73,6 +74,7 @@ import {
   QUESTION_DETAILS_LINE,
 } from "../src/feedback-question-values.js";
 import { isSpideryarnId } from "../src/ids.js";
+import { fencedLines, PLAIN_TEXT_FENCE } from "../src/plain-text-blocks.js";
 import { isMain } from "../src/is-main.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -387,7 +389,8 @@ function parseRepeats(value: string | undefined, report: string): string[] | str
  *
  * `id` is the file's name. `report` is one report id or `none`. `repeats`,
  * `refs` and `acted` are optional. The body is plain text: the dialog draws it as text
- * with its line breaks, and renders no markdown.
+ * with its line breaks, and renders no markdown; lines between two lines that are exactly
+ * three backticks are drawn monospaced (src/plain-text-blocks.ts, plan 261028b).
  */
 export function parseQuestionFile(name: string, text: string): QuestionFile | string {
   if (!text.startsWith("---\n")) return "a question file starts with a `---` header";
@@ -431,8 +434,14 @@ export function parseQuestionFile(name: string, text: string): QuestionFile | st
   }
   /* The dialog shuts everything after the first such line: a second would be
      a heading inside the details that reads as a split nobody gets (261008i). */
-  if (body.split("\n").filter((line) => line === QUESTION_DETAILS_LINE).length > 1) {
-    return `the body may have at most one line that is exactly \`${QUESTION_DETAILS_LINE}\``;
+  /* A fence's lines are drawn monospaced and never split on, so a Details
+     inside one is content; and a fence never closed would draw the whole body
+     as plain text, so it is refused here (plan 261028b, Stage 2). */
+  if (fencedLines(body).unclosed) {
+    return `the body opens a monospaced block with a line that is exactly \`${PLAIN_TEXT_FENCE}\` and never closes it`;
+  }
+  if (detailsLines(body).at.length > 1) {
+    return `the body may have at most one line that is exactly \`${QUESTION_DETAILS_LINE}\` outside a monospaced block`;
   }
   const refs = fields.get("refs");
   return {

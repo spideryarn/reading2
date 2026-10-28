@@ -14,8 +14,10 @@ import {
   settleAddress,
   ADMIN_FEEDBACK_HREF,
   ADMIN_HREF,
+  ADMIN_MOCKUPS_HREF,
   ADMIN_USERS_HREF,
   addHref,
+  adminMockupHref,
   addUploadHref,
   addUrlFrom,
   addUrlFromQuery,
@@ -190,6 +192,12 @@ describe("the admin routes", () => {
     for (const path of ["/admin/feedback", "/admin/feedback/"]) {
       expect(parseRoute(path), path).toEqual({ kind: "admin", page: "feedback" });
     }
+    for (const path of ["/admin/mockups", "/admin/mockups/"]) {
+      expect(parseRoute(path), path).toEqual({ kind: "admin", page: "mockups" });
+    }
+    for (const path of ["/admin/mockups/m-k3m9qt", "/admin/mockups/m-k3m9qt/"]) {
+      expect(parseRoute(path), path).toEqual({ kind: "admin", page: "mockup", id: "m-k3m9qt" });
+    }
   });
 
   it("sends anything else under /admin to the not-found page, like every other unknown address", () => {
@@ -207,6 +215,10 @@ describe("the admin routes", () => {
       "/admin/nonsense",
       "/admin/users/extra",
       "/admin/feedback/extra",
+      "/admin/mockups/nonsense",
+      "/admin/mockups/q-k3m9qt",
+      "/admin/mockups/M-K3M9QT",
+      "/admin/mockups/m-k3m9qt/extra",
       "/adminx",
       "/admin/USERS",
       "/admin/FEEDBACK",
@@ -223,6 +235,8 @@ describe("the admin routes", () => {
     expect(parseRoute(ADMIN_HREF)).toEqual({ kind: "admin", page: "home" });
     expect(parseRoute(ADMIN_USERS_HREF)).toEqual({ kind: "admin", page: "users" });
     expect(parseRoute(ADMIN_FEEDBACK_HREF)).toEqual({ kind: "admin", page: "feedback" });
+    expect(parseRoute(ADMIN_MOCKUPS_HREF)).toEqual({ kind: "admin", page: "mockups" });
+    expect(parseRoute(adminMockupHref("m-k3m9qt"))).toEqual({ kind: "admin", page: "mockup", id: "m-k3m9qt" });
   });
 });
 

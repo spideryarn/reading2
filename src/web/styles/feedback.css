@@ -365,6 +365,28 @@ a.fb-earlier-page:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* **An ASCII mockup or diagram in a question** (plan 261028b, Stage 2): the
+   lines between two ``` lines, in the one monospace, never wrapped, scrolling
+   sideways when wider than the dialog, so its columns line up. Boxed as a code
+   block in a chat answer is (mode-band.css § `.fmt-pre`), the same job. On a
+   touch screen `--text-min` holds it at 13px, so a 70-column drawing scrolls
+   rather than shrinking past reading. */
+.fb-mono {
+  align-self: stretch;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-size: max(var(--text-min), 0.72rem);
+  line-height: 1.35;
+  color: var(--ink);
+  white-space: pre;
+  overflow-x: auto;
+}
+.fb-question-more > pre.fb-mono { margin-top: 0.35rem; }
 /* What the admin replied, set apart the way a note's comment is. */
 .fb-question-answer {
   align-self: stretch;

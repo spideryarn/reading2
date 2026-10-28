@@ -199,6 +199,15 @@ import { ArtefactNotMadeYet } from "./store/artefact-not-made-yet.js";
    imports the HEAD writer, because this dispatcher answers no HEAD. */
 import { sendBinary } from "./binary-response.js";
 import {
+  isMockupId,
+  type MockupDetail,
+  type MockupFile,
+  type MockupImageType,
+  type MockupSummary,
+  mockupImageType,
+} from "./mockups.js";
+import { mockupsDir, readMockupDirectory, readMockupImage, readOneMockup } from "./mockups-dir.js";
+import {
   adminStore,
   commentStore,
   feedbackStore,
@@ -9059,8 +9068,8 @@ function feedbackBody(sent: Record<string, unknown>): string {
 }
 
 /**
- * *A problem*, *a suggestion*, or **nothing**, which is a third answer rather
- * than a missing one.
+ * *A problem*, *a suggestion*, *a discussion* (an admin only), or **nothing**,
+ * which is an answer rather than a missing one.
  *
  * Greg asked for the toggle to start unset — *"don't default to Problem. Default
  * to null/unknown"* — so an absent field is valid and an unrecognised one is
@@ -9068,11 +9077,20 @@ function feedbackBody(sent: Record<string, unknown>): string {
  * and the cheap failure is now; the CHECK in src/db/schema.ts is the same
  * refusal for every other writer.
  */
-function feedbackKind(value: unknown): FeedbackKind | null {
+function feedbackKind(value: unknown, user: VerifiedUser): FeedbackKind | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string" || !(FEEDBACK_KINDS as readonly string[]).includes(value)) {
     /* The list is ours and the value is not the reader's prose — but it is still
        a string off the wire, so it does not go in the message. `[fb-kind]`. */
+    throw httpError(400, "kind is not one of ours [fb-kind]");
+  }
+  /* **A discussion is an admin's alone.** Only an admin can read a reply, so a
+     kind that promises a conversation is accepted only from somebody one can be
+     held with. The dialog offers the button only to an admin, so anybody else
+     sending it is a client that is not ours, and gets the same plain 400 as any
+     other value we do not take — no new error shape. Greg, 2026-10-28,
+     docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md. */
+  if (value === "discussion" && !isAdmin(user.id)) {
     throw httpError(400, "kind is not one of ours [fb-kind]");
   }
   return value as FeedbackKind;
@@ -9287,7 +9305,7 @@ function parseFeedback(
   const where = feedbackWhere(sent);
 
   const body = feedbackBody(sent);
-  const kind = feedbackKind(sent.kind);
+  const kind = feedbackKind(sent.kind, user);
 
   if (
     sent.diagnostics !== undefined &&
@@ -10326,6 +10344,28 @@ export type AuthRoute = ExactAuthRoute | PatternAuthRoute;
 const JOBS_PATH = "/api/jobs";
 /* An article's private link: GET reads it, POST makes one, DELETE turns it off. */
 const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
+/**
+ * **One mockup for `/api/admin/mockups/:id` and its images**: the id checked
+ * before it is joined onto the directory, a missing file and a failing one the
+ * same 404 (the failing one logged). Plan 261028b, Stage 3.
+ */
+async function adminMockup(id: string): Promise<MockupFile> {
+  if (!isMockupId(id)) throw httpError(400, "That is not a mockup id (m-xxxxxx).");
+  const mockup = await readOneMockup(mockupsDir(), id);
+  if (typeof mockup === "string") {
+    log("http").warn({ mockup: id, problem: mockup }, "admin mockups: a file was refused");
+  }
+  if (mockup === null || typeof mockup === "string") throw httpError(404, "There is no such mockup.");
+  return mockup;
+}
+
+/** A checked mockup's image always has an allowed type; this says so to the compiler. */
+function mockupImageTypeOf(file: string): MockupImageType {
+  const type = mockupImageType(file);
+  if (type === null) throw new Error(`mockup image without an allowed type: ${file}`);
+  return type;
+}
+
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 /* Author gifts: GET lists, POST ensures one for an article (261010c). */
@@ -11554,6 +11594,83 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         silentLiveSessions,
       };
       send(res, 200, cost);
+    },
+  },
+
+  /* **The mockups, for `/admin/mockups`** — Greg, 2026-10-28 (`spya-zytb0g`):
+     *"a /admin/mockups page with a table that can link out to particular
+     mockups"*. Three reads of `docs/mockups/` from disk, which vercel.json's
+     `includeFiles` ships with the function (src/mockups-dir.ts says why from
+     `process.cwd()`, and why only here, never at import). Under `/api/admin/`,
+     so the namespace gate has refused everybody else before any of them runs
+     (tests/admin-mockups-route.test.ts asks all three). The URL names only a
+     validated mockup id and an image's index; file names come from a mockup
+     that passed `parseMockupFile` (GPT Sol's plan review, F2). Plan 261028b,
+     Stage 3; docs/project/admin.md § `/admin/mockups`.
+
+     **A file that fails is left out, with a log line, not a 500**: one bad
+     mockup should not hide the rest. The test suite runs the same check over
+     the real directory, so one should not reach a deploy. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/mockups",
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      /* Validate the signatures here too. Otherwise a file named `.png` whose
+         bytes are HTML appears as a good row and fails only after it is opened;
+         the list's promise is that a bad mockup is left out, not deferred. */
+      const { mockups, problems } = await readMockupDirectory(mockupsDir(), { checkContent: true });
+      for (const { file, problem } of problems) {
+        log("http").warn({ file, problem }, "admin mockups: a file was left out of the list");
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, {
+        mockups: mockups.map(({ body: _body, images, ...header }): MockupSummary => ({
+          ...header,
+          images: images.length,
+        })),
+      });
+    },
+  },
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/mockups\/([^/]+)$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const mockup = await adminMockup(captures[1] ?? "");
+      res.setHeader("Cache-Control", "private, no-store");
+      const { images, ...rest } = mockup;
+      const detail: MockupDetail = {
+        ...rest,
+        images: images.map((file, index) => ({ index, contentType: mockupImageTypeOf(file) })),
+      };
+      send(res, 200, { mockup: detail });
+    },
+  },
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/mockups\/([^/]+)\/images\/([^/]+)$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = "", n = ""] = captures;
+      /* An index written one way only: `0`, `1`, … — not `01`, `1.0` or `-1`. */
+      if (!/^(?:0|[1-9]\d{0,3})$/.test(n)) throw httpError(400, "The image index must be a whole number.");
+      const mockup = await adminMockup(id);
+      const image = await readMockupImage(mockupsDir(), mockup, Number(n));
+      if (image === null) throw httpError(404, "That mockup has no such image.");
+      if (typeof image === "string") {
+        log("http").warn({ mockup: mockup.id, problem: image }, "admin mockups: an image was refused");
+        throw httpError(404, "That mockup has no such image.");
+      }
+      /* The repo's own file, but read on an administrator's page: no cache
+         anywhere, as the feedback screenshot. The type is the allowlist's, by
+         extension, checked against the first bytes; `sendBinary` adds
+         `nosniff`. No disposition: shown on the page, not downloaded. */
+      res.setHeader("Cache-Control", "private, no-store");
+      sendBinary(res, image);
     },
   },
 

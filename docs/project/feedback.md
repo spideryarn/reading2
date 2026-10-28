@@ -125,6 +125,23 @@ toggle. One reassurance was folded out of the disclosure and rides under the thr
 it went. `KindHint` in [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the whole of it,
 pinned by `tests/feedback-dialog.test.tsx`.
 
+**Since 2026-10-28 an admin has a third kind, *A discussion*** (`spya-zytb0g`). Greg wanted
+somewhere for
+
+> a question or a discussion where I'm going to ramble for a bit, raise some ideas, and I'm going to
+> expect the model to come back with its own responses or proposals that we'll discuss some further,
+> and then eventually go and build them.
+>
+> — Greg, 2026-10-28
+
+Its hint says to think out loud, and that the reply comes back under *Needs a decision* as thoughts
+and proposals, with nothing built until he says so. **It is an admin's alone**, in the dialog and in
+the route, which refuses it from anybody else with the same 400 as any unknown kind: only an admin
+can read a reply, so a kind that promises a conversation is offered only where one can happen.
+Whether readers should get it later is an open question for Greg, not built. A saved draft under it
+comes back unset for anyone without the button.
+[261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md).
+
 The three old columns were backfilled into `body` under their old headings and **dropped**, so there
 is one shape in the table rather than two. The route still accepts the old three from a tab loaded
 before the deploy and folds them into `body` the same way; sending both shapes at once is refused.
@@ -465,8 +482,11 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 - **What a thread shows.** The ids, `q-k3m9qt · about #301 (spya-mdp0em)`, the ones to say to the
   Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
   its title and text, which an agent wrote, in the model's face and as plain text with its line
-  breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
-  *Details*; the report it is about, whole and shut, under *Your report #301*, **or, since
+  breaks ([fonts.md](fonts.md)), and the lines between two lines that are exactly ```` ``` ````
+  in the monospace, unwrapped and scrolling sideways, for an ASCII mockup (since 2026-10-28,
+  [plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md);
+  the compiler refuses an unclosed fence, and a row published with one is drawn as plain text);
+  everything after a line that is exactly `Details`, outside such a block, shut under *Details*; the report it is about, whole and shut, under *Your report #301*, **or, since
   2026-10-20, a reader's** (below); and the admin's replies, in the reader's face: first those **an agent has
   acted on**, each marked *acted on*, with a line saying what happened next is written in the
   question; then those **no agent has acted on yet**. At most the newest five of each, with a count
@@ -632,11 +652,11 @@ review changed, and what was deferred (other readers, `/admin/feedback`).
 >
 > — Greg, 2026-09-05
 
-**Three sentences, not two.** The toggle may be left alone and *"don't default to Problem"* makes
+**Four sentences, not two.** The toggle may be left alone and *"don't default to Problem"* makes
 that the common case, so `THANKS` in [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is
-keyed by problem, suggestion and neither. They carry **no bracketed code** and are not in
-`src/messages.ts`, for the two halves of the same reason: that file is about failures a model call
-can return, and a thank-you is not a failure
+keyed by problem, suggestion, an admin's discussion, and neither. They carry **no bracketed code**
+and are not in `src/messages.ts`, for the two halves of the same reason: that file is about failures
+a model call can return, and a thank-you is not a failure
 ([copy.md § The bracketed code](copy.md#the-bracketed-code)).
 
 **The kind is the one that was sent**, read from the send's own closure rather than from the live
@@ -872,7 +892,7 @@ owner-filtered store, because nobody can consent for somebody else's piece; and 
 sentence promises stays behind. The build and its reasons are in
 [plan 260913a](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md).
 
-`kind` is the second sort: two values and a null, `FEEDBACK_KINDS` in
+`kind` is the second sort: three values and a null, `FEEDBACK_KINDS` in
 [`src/types.ts`](../../src/types.ts). It rides to Sentry as a tag, and **as no tag at all when the
 reader did not say** — a tag whose value is `""` is one Sentry will group by, while "the ones nobody
 classified" is a filter on the tag being missing.

@@ -120,6 +120,7 @@ import { AddendumBox, addendaShown, isAddendum, type ReportAddenda, useReportAdd
 import { FeedbackSendBox } from "./FeedbackSendBox.js";
 import { apiFetch } from "./lib/api.js";
 import { Link } from "./Link.js";
+import { PlainTextBlocks } from "./PlainTextBlocks.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { parseRoute, readHref } from "./router.js";
 
@@ -1055,6 +1056,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
 const KIND_WORD: Record<FeedbackKind, string> = {
   problem: "Problem",
   suggestion: "Suggestion",
+  discussion: "Discussion",
 };
 
 const SHOW_WORD: Record<EarlierFeedbackShow, string> = {
@@ -1785,11 +1787,11 @@ function ThreadView({
           </span>
         </p>
         <h4 className="fb-question-title">{question.title}</h4>
-        <p className="fb-question-text">{summary}</p>
+        <PlainTextBlocks text={summary} className="fb-question-text" linkMockups />
         {details === null ? null : (
           <details className="fb-question-more">
             <summary>Details</summary>
-            <p className="fb-question-text">{details}</p>
+            <PlainTextBlocks text={details} className="fb-question-text" linkMockups />
           </details>
         )}
         {question.report === null || question.report.body === null ? null : (

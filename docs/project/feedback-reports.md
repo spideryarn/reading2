@@ -268,6 +268,25 @@ decides that is the person who filed it. What survives is *how*:
 builds the afternoon-sized version and names the deferred rest in the plan doc. It does not stop to
 ask permission it already has.
 
+**Unless it is a discussion: then reply first, and build only when he says so.** Since 2026-10-28 an
+admin may file a report as *A discussion* ([feedback.md § One box](feedback.md#one-box-since-2026-09-02)),
+which means he is thinking out loud and expects an answer before anything is built:
+
+> a question or a discussion where I'm going to ramble for a bit, raise some ideas, and I'm going to
+> expect the model to come back with its own responses or proposals that we'll discuss some further,
+> and then eventually go and build them.
+>
+> — Greg, 2026-10-28 (`spya-zytb0g`)
+
+So the first pass builds nothing. Do the research a good answer needs, then write a question file
+about the report (§ [Asking Greg a question](#asking-greg-a-question-and-acting-on-his-answer)) that
+holds your own responses and proposals, each with what it costs and gives up, a recommendation, and
+a mockup wherever the shape matters (an ASCII one in a fenced block, or a page under
+`/admin/mockups`). The report ends *Awaiting Greg*, with a note saying so. His replies continue the
+thread; when one says to build something, that is an admin's go-ahead like any other, and the note's
+ending changes when the work lands. A discussion report whose words plainly ask for a fix or a build
+anyway is still answered first: the kind is his signal of what he expects.
+
 **From anyone else, and it's a problem: a bug comes first, so investigate all of them.** Reproduce
 it first — a symptom is a lead, not a diagnosis. Then fix it, if three things hold: you are confident
 it is genuinely a bug, the fix sits with [what this product is for](vision.md), and it doesn't drag
@@ -325,8 +344,9 @@ goes into the Overseer's queue ([overseer-queue.md](overseer-queue.md);
 --source "<report id; Sentry short id when there is one>"
 --text …`), and the dispatch below happens **from the queue, in priority order**. Priority is a
 judgment, but the order of the bands is not: an admin's bug report sits above a reader's bug report,
-which sits above an admin's suggestion, which sits above a reader's suggestion; within a band, what
-it costs the reader who hit it. Two reports that are one bug are one entry; one report that asks for
+which sits above an admin's suggestion or discussion, which sits above a reader's suggestion; within
+a band, what it costs the reader who hit it. A discussion's entry says it is one, so the session
+answers before it builds (§ Who sent it). Two reports that are one bug are one entry; one report that asks for
 three things may be three.
 
 **A report split into several entries stays `unresolved` until every one of them has ended.** The
@@ -558,7 +578,13 @@ What the report asked and when, what was done, what each option means, and what 
 - `refs` is for agents (the queue item, plan, note and Sentry short id) and **is never sent to the
   browser**. `acted` is added later (below).
 - **The body is plain text, at most 6,000 characters, shown exactly as written with its line
-  breaks.** No markdown is rendered, so no `**`, backticks or links. Write it to
+  breaks.** No markdown is rendered, so no `**`, inline backticks or links. Two exceptions, both
+  from [plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md):
+  lines between two lines that are exactly ```` ``` ```` are shown monospaced, line for line and
+  scrolling sideways, for an ASCII mockup or diagram (a `Details` line inside one is content, and a
+  fence left unclosed is refused); and a mockup's id, `m-k3m9qt`, outside such a block is a link to
+  its page on `/admin/mockups` ([admin.md](admin.md)), so make the mockup first and name it in the
+  question. A mockup is seen only after the deploy that carries its file. Write it to
   [ask-me-questions.md](../reusable/ask-me-questions.md): Greg should be able to answer "1A" without
   opening anything else. When `report` is somebody else's, he sees it beside the question, shut and
   marked as a reader's, with the address it came from (since 2026-10-20,

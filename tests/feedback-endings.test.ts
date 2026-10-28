@@ -451,6 +451,18 @@ describe("a question file", () => {
     expect(parse(file(HEADER, `${split}\n Details\nmore`))).toMatchObject({ id: "q-k3m9qt" });
   });
 
+  /* Plan 261028b, Stage 2, Sol's F3: the compiler reads fences with the same
+     line state the dialog draws them by. */
+  it("takes a Details line inside a fence as content, not a second split", () => {
+    const mockup = "Which?\n\n```\n+---------+\nDetails\n+---------+\n```\n\nDetails\n\nWhy.";
+    expect(parse(file(HEADER, mockup))).toMatchObject({ body: mockup });
+  });
+
+  it("refuses a body with an unclosed fence", () => {
+    expect(parse(file(HEADER, "Which?\n\n```\n+---+\n\nDetails\n\nWhy."))).toMatch(/fence|```/);
+    expect(parse(file(HEADER, "Which?\n```\na\n```\nb\n```"))).toMatch(/fence|```/);
+  });
+
   it("names two files that claim one id", () => {
     const { problems } = compileQuestions([
       { name: "q-k3m9qt.md", text: file() },
@@ -503,6 +515,22 @@ describe("the committed questions", () => {
       expect(() => feedbackQuestionsFrom([...rows.slice(1), bad]), JSON.stringify(bad).slice(0, 60)).toThrow(
         MalformedQuestionError,
       );
+    }
+  });
+
+  /* Plan 261028b, Sol's F3: the server's read is no stricter than it was. A
+     row published before the compiler refused an unclosed fence is drawn as
+     plain text, never a 500 for the whole list. */
+  it("still reads a published row whose body has an unclosed fence, or a Details inside a fence", () => {
+    const { questions } = compileQuestions(readQuestionFiles());
+    const rows = questions.map(publishedRow);
+    const first = rows[0];
+    if (first === undefined) throw new Error("no question files");
+    const unclosed = { ...first, body: "Which?\n```\n+---+\n\nDetails\n\nWhy." };
+    const fencedDetails = { ...first, body: "Which?\n```\nDetails\n```\nDetails\nWhy." };
+    for (const row of [unclosed, fencedDetails]) {
+      expect(publishedQuestionProblem(row), row.body).toBeNull();
+      expect(() => feedbackQuestionsFrom([...rows.slice(1), row])).not.toThrow();
     }
   });
 

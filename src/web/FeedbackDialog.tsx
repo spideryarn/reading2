@@ -103,7 +103,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Bug, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
+import { Bug, Copy, Lightbulb, LoaderCircle, Mail, MessagesSquare, X } from "lucide-react";
 
 import { mintId } from "../ids.js";
 import { FEEDBACK_NOT_AVAILABLE, FEEDBACK_SEND_FAILED } from "../messages.js";
@@ -273,9 +273,10 @@ type View = "write" | "earlier";
  * So these are shown in a `Toast` (Toast.tsx), outside the dialog, rather than
  * in a panel inside it — see `send`.
  */
-const THANKS: Record<"problem" | "suggestion" | "none", string> = {
+const THANKS: Record<FeedbackKind | "none", string> = {
   problem: "Sorry to hear you have been having a problem — thank you for telling us. We will look into it.",
   suggestion: "Thank you for the suggestion — we really appreciate it.",
+  discussion: "Thank you — we will come back with thoughts and proposals to discuss.",
   none: "Thank you for the feedback — we really appreciate it.",
 };
 
@@ -316,6 +317,7 @@ const SEND_TIMEOUT_MS = 60_000;
 const KIND_LABEL: Record<FeedbackKind, string> = {
   problem: "A problem",
   suggestion: "A suggestion",
+  discussion: "A discussion",
 };
 
 /**
@@ -368,6 +370,16 @@ function KindHint({ kind }: { kind: FeedbackKind | null }) {
     return (
       <span className="fb-hint">
         What you'd like, and what it would let you do. A rough sketch is plenty.
+      </span>
+    );
+  }
+  /* An admin's only (Greg, 2026-10-28, plan 261028b): a report that asks for a
+     conversation, not a build. */
+  if (kind === "discussion") {
+    return (
+      <span className="fb-hint">
+        Think out loud. The reply comes back under Needs a decision as thoughts and
+        proposals to discuss, and nothing is built until you say so.
       </span>
     );
   }
@@ -441,7 +453,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
      below, which then adds to it as it would to any draft. Plan 261010f. */
   const [restored] = useState(() => (readerId === undefined ? null : readFeedbackDraft(readerId)));
   const [body, setBody] = useState(restored?.body ?? "");
-  const [kind, setKind] = useState<FeedbackKind | null>(restored?.kind ?? null);
+  /* A discussion is an admin's alone, and the server refuses it from anyone
+     else — so a draft saved under that kind (an admin's, on a shared browser,
+     or from before a role changed) comes back unset rather than as a kind this
+     reader has no button for. `admin` is a function of `readerId`, which keys
+     this dialog, so it cannot change after this runs. */
+  const [kind, setKind] = useState<FeedbackKind | null>(
+    restored?.kind === "discussion" && !admin ? null : (restored?.kind ?? null),
+  );
   const [consented, setConsented] = useState(false);
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
@@ -1376,6 +1395,18 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
               onChoose={setKind}
               icon={<Lightbulb size={14} aria-hidden="true" />}
             />
+            {/* **A third, for an admin only** (Greg, 2026-10-28, spya-zytb0g):
+                somewhere to think out loud and get proposals back. Only an
+                admin can read a reply, so only an admin is offered it; the
+                server refuses it from anyone else. Plan 261028b. */}
+            {admin ? (
+              <KindButton
+                kind="discussion"
+                chosen={kind}
+                onChoose={setKind}
+                icon={<MessagesSquare size={14} aria-hidden="true" />}
+              />
+            ) : null}
           </fieldset>
 
           <label className="fb-field">
