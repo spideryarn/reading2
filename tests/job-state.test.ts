@@ -212,6 +212,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   faq: 180_000,
   /* Unmeasured: the fallback. */
   relations: 180_000,
+  /* Unmeasured: the fallback. */
+  explanations: 180_000,
   /* Three minutes: past the worst of the sixteen low-effort draws (101s). */
   sketch: 180_000,
   illustrated: 600_000,

@@ -926,6 +926,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: 150_000,
   /* **NOT MEASURED** — `faq`'s figure, taken because it is the same single
+     Messages call over the same bytes at the same effort, with an answer of
+     at most fifteen short items. Model calls could not be made the night it
+     was built; replace with a measurement from the 1 November comparison.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  explanations: 150_000,
+  /* **NOT MEASURED** — `faq`'s figure, taken because it is the same single
      Messages call over the same bytes at the same effort, with a shorter
      answer (at most eight claims, each a quote and a line). Replace with a
      measurement once it has run on real articles.

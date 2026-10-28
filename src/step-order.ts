@@ -135,6 +135,13 @@ export const STEP_ORDER = [
      press that turns Marginalia on.
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
+  /* Beside `faq` and `relations`, whose article bytes it shares: `high`
+     effort, the `ids` renderer, the body-only evidence, and its own schema.
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: one model call
+     over the whole article, made by the owner's press into the mode, and not
+     on import until Greg answers q-gkrkf5.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  "explanations",
   /* With the other body-only `ids` stages: `high` effort (measured against
      `medium` in stage 1, src/models.ts § STAGE_EFFORT) and its own schema.
      Off `DEFAULT_INGEST_STEPS`

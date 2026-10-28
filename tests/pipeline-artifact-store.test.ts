@@ -116,6 +116,11 @@ import {
   PROMPT_VERSION as RELATIONS_VERSION,
 } from "../src/relations.js";
 import {
+  emptyDropped as emptyExplanationsDropped,
+  inputFingerprint as explanationsFingerprint,
+  PROMPT_VERSION as EXPLANATIONS_VERSION,
+} from "../src/explanations.js";
+import {
   emptyDropped as emptySourcesClaimsDropped,
   inputFingerprint as sourcesClaimsFingerprint,
   PROMPT_VERSION as SOURCES_CLAIMS_VERSION,
@@ -278,6 +283,8 @@ const BIBLIOGRAPHY_SOURCE_HASH = bibliographyFingerprint(BLOCKS, TREE, META);
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
 /* `relations` fingerprints its rendered body/head and eligible paragraph pairs. */
 const RELATIONS_SOURCE_HASH = relationsFingerprint(BLOCKS, TREE, META);
+/* `explanations` is FAQ's fingerprint, through its own module (plan 261028c). */
+const EXPLANATIONS_SOURCE_HASH = explanationsFingerprint(BLOCKS, TREE, META);
 /* `debate-claims` fingerprints the exact rendered body and cited head. */
 const SOURCES_CLAIMS_SOURCE_HASH = sourcesClaimsFingerprint(BLOCKS, TREE, META);
 /* `crossrefs` fingerprints the exact article and skeleton strings it sends. */
@@ -682,6 +689,20 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: RELATIONS_VERSION,
     relations: {},
     dropped: emptyRelationsDropped(),
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* **An EMPTY list**, which `SHAPE.explanations` accepts, as `faq`'s: a clear
+     piece may have nothing worth explaining. `null` profile, as `ideas`', for
+     the context with no profile. */
+  store.plant(SLUG, "explanations", "explanations", {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: EXPLANATIONS_SOURCE_HASH,
+    profileHash: null,
+    version: EXPLANATIONS_VERSION,
+    explanations: [],
+    dropped: emptyExplanationsDropped(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

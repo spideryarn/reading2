@@ -68,6 +68,8 @@ const ROUTES = [
   "quotes",
   "tweets",
   "relations",
+  /* Owner only, with the profile's third fact on it (plan 261028c). */
+  "explanations",
   "skim",
   "sketch",
   "illustrated",

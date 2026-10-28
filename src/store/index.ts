@@ -265,6 +265,7 @@ export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadFaq = reader.loadFaq.bind(reader);
 export const loadSourcesClaims = reader.loadSourcesClaims.bind(reader);
 export const loadRelations = reader.loadRelations.bind(reader);
+export const loadExplanations = reader.loadExplanations.bind(reader);
 export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
 export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);
 export const loadSkim = reader.loadSkim.bind(reader);

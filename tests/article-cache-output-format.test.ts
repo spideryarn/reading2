@@ -28,6 +28,7 @@ import { ARTICLE_OUTPUT_FORMAT } from "../src/pipeline.js";
 import { generateQuiz } from "../src/quiz.js";
 import { generateQuotes } from "../src/quotes.js";
 import { generateRelations } from "../src/relations.js";
+import { generateExplanations } from "../src/explanations.js";
 import { generateSourcesClaims } from "../src/sources-claims.js";
 import { generateSimpleSummary } from "../src/simple-summary.js";
 import { generateSketch } from "../src/sketch.js";
@@ -71,6 +72,7 @@ const RUNNERS = {
   quiz: () => generateQuiz({ article, power: "standard" }),
   faq: () => generateFaq({ article, power: "standard" }),
   relations: () => generateRelations({ article, power: "standard" }),
+  explanations: () => generateExplanations({ article, profile: null, power: "standard" }),
   "sources-claims": () => generateSourcesClaims({ article, power: "standard" }),
   crossrefs: () => generateCrossrefs({ article, power: "standard" }),
   simple: () => generateSimpleSummary({ article, profile: null, guard: false, power: "standard" }),
@@ -85,6 +87,7 @@ const STAGES_GAINING_SCHEMAS = [
   "quiz",
   "faq",
   "relations",
+  "explanations",
   "sources-claims",
   "crossrefs",
   "simple",

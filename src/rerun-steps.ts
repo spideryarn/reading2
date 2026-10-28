@@ -124,6 +124,13 @@ export const METADATA_RERUN_STEPS = [
      mode, so no switch hides it.
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
+  /* **`explanations` is not here yet, deliberately.** It would pass the three
+     questions (one metered call, no prerequisite, safe to publish over a good
+     list), but a row here is shown to every owner whatever the experimental
+     switch says, in Metadata and in the command bar — and until stage 2 of
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md
+     there is no mode to show what it made, and after it the mode is behind
+     the switch until q-gkrkf5. It joins when the feature leaves the switch. */
   "sketch",
   "skim",
   "reception",

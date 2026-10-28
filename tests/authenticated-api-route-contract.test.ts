@@ -753,6 +753,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/relations/w1"],
   },
   {
+    /* Explanations, owner only (plan 261028c). */
+    match: { kind: "regex", source: "^\\/api\\/explanations\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/explanations/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/crossrefs\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/crossrefs/w1"],
@@ -1235,8 +1241,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    with a draft gift's email preview and the lookup's guidance (plan 261024f);
    133 with Situate's owner read (plan 261024o); 134 with the extension's
    owner-scoped already-on-the-shelf lookup (plan 261024y); 137 with the
-   added Skim briefs (plan 261027d). */
-const EXPECTED_MATCHER_COUNT = 137;
+   added Skim briefs (plan 261027d); 138 with Explanations' owner read (plan
+   261028c). */
+const EXPECTED_MATCHER_COUNT = 138;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1262,8 +1269,9 @@ const EXPECTED_MATCHER_COUNT = 137;
    and the guidance's GET and PUT (plan 261024f); 164 with Situate's owner
    read (plan 261024o); 165 with the extension's owner-scoped
    already-on-the-shelf lookup (plan 261024y); 171 with the added Skim
-   briefs' six (plan 261027d). */
-const EXPECTED_GUARD_COUNT = 171;
+   briefs' six (plan 261027d); 172 with Explanations' owner read (plan
+   261028c). */
+const EXPECTED_GUARD_COUNT = 172;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2541,6 +2549,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "POST regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/explanations\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",

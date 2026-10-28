@@ -1048,11 +1048,11 @@ function saving(
 }
 
 /**
- * The eighteen reads that may answer `200 null` for "not made yet" — every
- * artefact read since plan 261007n, and Situate's since plan 261024o — see the
- * note where it is used, above.
+ * The nineteen reads that may answer `200 null` for "not made yet" — every
+ * artefact read since plan 261007n, Situate's since plan 261024o, and
+ * Explanations' since plan 261028c — see the note where it is used, above.
  *
- * **The same eighteen as the routes that call `orNullWhenNotMadeYet`** in
+ * **The same nineteen as the routes that call `orNullWhenNotMadeYet`** in
  * src/routes.ts, and nothing derives one list from the other: a new artefact
  * read is a name here as well as the helper there. Exported for the test that
  * fails when they differ (tests/api-fetch-offline.test.ts).
@@ -1062,7 +1062,7 @@ function saving(
  * a file, and a missing artefact there is a missing plate.
  */
 export const NONE_YET_AS_NULL =
-  /^\/api\/(?:quiz|crossrefs|bibliography|simple|ideas|faq|timeline|reception|sources-claims|situate|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
+  /^\/api\/(?:quiz|crossrefs|bibliography|simple|ideas|faq|timeline|reception|sources-claims|situate|glossary|quotes|tweets|relations|explanations|skim|sketch|illustrated|arc)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {
@@ -1129,6 +1129,8 @@ const CACHEABLE = [
   "/api/quotes/",
   "/api/timeline/",
   "/api/relations/",
+  /* With the route, as `/api/faq/` is: the owner's offline cache. Plan 261028c. */
+  "/api/explanations/",
   "/api/quiz/",
   /* Here with the route rather than with the panel, as `/api/reception/` is: the
      derived test asks for it the moment the route exists. */

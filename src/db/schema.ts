@@ -93,6 +93,7 @@ import type {
   SourcesClaimCheckTarget,
   Faq,
   Relations,
+  Explanations,
   SourcesClaimList,
   CitationBlurbSentence,
   Crossrefs,
@@ -1249,6 +1250,17 @@ export const articleRevisions = spideryarn.table(
      * fingerprint. **Owner only**: it is in no public projection.
      */
     relations: jsonb("relations").$type<Relations>(),
+
+    /**
+     * The places a reader would get stuck, each with the missing piece —
+     * `Explanations`, src/types.ts, written by the `explanations` step.
+     * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     *
+     * The WHOLE artefact, like its neighbours; `sourceHash` is FAQ's
+     * fingerprint and `profileHash` the reader's it was written for. **Owner
+     * only**: it is in no public projection.
+     */
+    explanations: jsonb("explanations").$type<Explanations>(),
 
     /**
      * Links between the article's own blocks — `Crossrefs`, src/types.ts,
@@ -3735,7 +3747,7 @@ export const revisionStepRuns = spideryarn.table(
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','explanations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",

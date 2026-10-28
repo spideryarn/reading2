@@ -130,6 +130,8 @@ describe("the policy", () => {
         "sketch", "illustrated", "skim", "reception", "bibliography", "crossrefs", "simple",
         /* 2026-10-03, a whole column that reads nothing — plan 261003f. */
         "relations",
+        /* 2026-10-28, a whole column that reads nothing — plan 261028c. */
+        "explanations",
         /* 2026-10-08, the same: Debate's claims list — plan 261008i. */
         "sources-claims",
         /* 2026-10-18, a whole column that reads only the blocks: the front

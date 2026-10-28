@@ -184,6 +184,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   quiz: "step-driven",
   faq: "step-driven",
   relations: "step-driven",
+  explanations: "step-driven",
   crossrefs: "step-driven",
   simple: "step-driven",
   /* Simple's fidelity guard, made inside the `simple` step's collector. */

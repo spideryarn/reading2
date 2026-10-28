@@ -127,6 +127,12 @@ import {
   PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
 } from "./relations.js";
 import {
+  EXPLANATIONS_OUTPUT_SCHEMA,
+  generateExplanations,
+  inputFingerprint as explanationsFingerprint,
+  PROMPT_VERSION as EXPLANATIONS_PROMPT_VERSION,
+} from "./explanations.js";
+import {
   CROSSREFS_OUTPUT_SCHEMA,
   generateCrossrefs,
   inputFingerprint as crossrefsFingerprint,
@@ -452,6 +458,7 @@ export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputF
   quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
   faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
   relations: jsonSchemaFormat(RELATIONS_OUTPUT_SCHEMA),
+  explanations: jsonSchemaFormat(EXPLANATIONS_OUTPUT_SCHEMA),
   "sources-claims": jsonSchemaFormat(SOURCES_CLAIMS_OUTPUT_SCHEMA),
   crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
   simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
@@ -684,6 +691,10 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      nothing in the pipeline reads what it writes, and it replaces rather than
      appends. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
+  /* `faq`'s two reasons again: it reads the blocks, the tree and the metadata,
+     nothing in the pipeline reads what it writes, and it replaces rather than
+     appends. Plan 261028c. */
+  "explanations",
   /* The same two reasons: it reads the blocks and tree, and nothing except the
      separately requested `illustrated` stage reads what it writes, so a
      positional cascade would buy a model call the reader did not ask for. At
@@ -5324,6 +5335,71 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         parts: { relations: run.relations },
         detail: `${answered} ${answered === 1 ? "paragraph" : "paragraphs"}`,
+      };
+    },
+  },
+  /* Stage 5s — Explanations: the places a reader would get stuck, each with
+     the missing piece. Off DEFAULT_INGEST_STEPS and AUTO_MODE_STEPS, and in
+     FORCE_ONLY_WHEN_NAMED.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+
+     **No baseline read**, like `faq`: an item's id is a hash of its block and
+     words, so a re-run that finds the same words keeps it without reading the
+     old list. */
+  explanations: {
+    name: "explanations",
+    label: "Finding the places a reader might get stuck",
+    produces: ["explanations"],
+    /**
+     * FAQ's three values — `articleWithIdsFingerprint` over the blocks, the
+     * tree and the real, nullable metadata — **and the profile**, as `ideas`:
+     * who is reading decides what is confusing, so an artefact written for a
+     * different profile answers a different question.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: explanationsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: EXPLANATIONS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateExplanations({
+        article: await readArticle(ctx.slug, store),
+        profile: ctx.profile ?? null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        power: ctx.power,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const kept = run.explanations.explanations.length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "explanations",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          paragraphs: run.paragraphs,
+          explanations: kept,
+          profiled: run.explanations.profileHash !== null,
+          /* Counts only — never a word of the article or of an explanation.
+             `ambiguous` and `unquoted` are the ones to watch: the model
+             pointing at words it cannot quote once. */
+          ...run.dropped,
+        },
+        `explanations ${ctx.slug}: ${kept}`,
+      );
+      return {
+        parts: { explanations: run.explanations },
+        detail: `${kept} ${kept === 1 ? "explanation" : "explanations"}`,
       };
     },
   },

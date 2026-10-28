@@ -32,6 +32,7 @@ export type WholeColumn =
   | "quiz"
   | "faq"
   | "relations"
+  | "explanations"
   | "sourcesClaims"
   | "skim"
   | "sketch"
@@ -143,6 +144,7 @@ export const STORAGE: {
   quiz: { quiz: { at: "column", column: "quiz" } },
   faq: { faq: { at: "column", column: "faq" } },
   relations: { relations: { at: "column", column: "relations" } },
+  explanations: { explanations: { at: "column", column: "explanations" } },
   skim: { skim: { at: "column", column: "skim" } },
   sketch: { sketch: { at: "column", column: "sketch" } },
   illustrated: { illustrated: { at: "column", column: "illustrated" } },

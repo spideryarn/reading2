@@ -90,6 +90,7 @@ export const STEP_SHARING = {
   quiz: { column: "quiz", reads: [] },
   faq: { column: "faq", reads: [] },
   relations: { column: "relations", reads: [] },
+  explanations: { column: "explanations", reads: [] },
   sketch: { column: "sketch", reads: [] },
   /* The Sketch is what it paints, and `inputFingerprint` (src/illustrated.ts)
      hashes it — so a Sketch redrawn mid-run would leave a picture of the old

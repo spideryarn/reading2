@@ -260,6 +260,10 @@ const READS = [
   /* Added 2026-10-03 with the `relations` stage. `CITED_FINGERPRINT_COLUMNS`,
      like `faq`, whose fingerprint it uses. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
+  /* Added 2026-10-28 with the `explanations` stage, owner only.
+     `CITED_FINGERPRINT_COLUMNS`, like `faq`, whose fingerprint it uses.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  "explanations",
   /* Added 2026-10-08 with the `debate-claims` stage. `CITED_FINGERPRINT_COLUMNS`
      supplies its rendered head and tree fallback. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "sourcesClaims",

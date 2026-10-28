@@ -1475,6 +1475,8 @@ export type ChatJob = Exclude<
   | "faq"
   /* Generation, on the Messages wire like `faq`. src/relations.ts. */
   | "relations"
+  /* Generation, on the Messages wire like `faq`. src/explanations.ts. */
+  | "explanations"
   /* Generation, on the Messages wire like `faq`. src/sources-claims.ts. */
   | "sources-claims"
   /* Situate's plan, its triage and its read, on the Messages wire like

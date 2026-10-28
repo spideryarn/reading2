@@ -456,8 +456,9 @@ describe("RESET_ROLE", () => {
        `simple` the same day (plan 260930i); sixteen since `relations`,
        2026-10-03 (plan 261003f); seventeen since `debate-claims`, 2026-10-08
        (plan 261008i); eighteen since `citation-blurbs`, 2026-10-18 (plan
-       261017h); nineteen since `situate`, 2026-10-24 (plan 261024o). */
-    expect(extraSteps()).toHaveLength(19);
+       261017h); nineteen since `situate`, 2026-10-24 (plan 261024o); twenty
+       since `explanations`, 2026-10-28 (plan 261028c). */
+    expect(extraSteps()).toHaveLength(20);
   });
 
   it("finds every extra's column in STORAGE, one whole column each", () => {

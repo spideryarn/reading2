@@ -3798,6 +3798,10 @@ export type StepName =
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      Read only by Marginalia, and by the owner only. */
   | "relations"
+  /* The places a reader would get stuck, each with the missing piece —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     Owner only, and written for the reader's profile. */
+  | "explanations"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
      Nothing reads what it writes except the one below. `low` effort since
      2026-10-01 (src/models.ts § STAGE_EFFORT). */
@@ -6781,6 +6785,83 @@ export interface RelationsResponse {
   /** The article is the same and we would write this differently now. */
   outdated: boolean;
 }
+
+/* ----------------------------------------------------------- explanations --
+   The places a reader would get stuck, each with a short explanation of the
+   missing piece — the `explanations` column on `article_revisions`, written by
+   the `explanations` step (src/explanations.ts), owner only. Greg's report
+   spya-nkq6rj; docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+
+   Here rather than in src/explanations.ts for the reason `Faq` is: the panel
+   will read these and must not import the step. */
+
+/** One place the model expects this reader to get stuck, and what is missing there. */
+export interface Explanation {
+  /** A short hash of `blockId` and `quote` (`explanationId`): stable when a re-run finds the same words. */
+  id: string;
+  blockId: BlockId;
+  /**
+   * The words it is about — the article's characters, checked, at most
+   * `MAX_QUOTE_CHARS`, and occurring **exactly once** in the block, so a later
+   * underline can always find them.
+   */
+  quote: string;
+  /** The missing piece, in the AI's words. At most `MAX_WORDS` words. */
+  text: string;
+  /** False: the model is unsure, and `text` says of what. Drawn as *Not sure*. */
+  sure: boolean;
+  /** True: it relies on something not in the piece. Drawn as *Draws on AI memory, unchecked*. */
+  outside: boolean;
+}
+
+/** What validation threw away. Counts only. */
+export interface ExplanationsDropped {
+  /** Not an object, a missing field, or `sure`/`outside` not a boolean. */
+  malformed: number;
+  /** `blockId` is not a block of the article's body. */
+  unknownIds: number;
+  /** The quote is not in the block it names, spacing and all. */
+  unquoted: number;
+  /** The quote is longer than `MAX_QUOTE_CHARS`; dropped, never cut. */
+  tooLong: number;
+  /** The quote's words occur more than once in the block. */
+  ambiguous: number;
+  /** The text is empty, or longer than `MAX_WORDS` words. */
+  badText: number;
+  /** A second explanation beside a block that already has one; the first wins. */
+  repeated: number;
+  /** Past the cap, after every other rule, in the model's order. */
+  overCap: number;
+}
+
+/** The artefact. The `explanations` column on `article_revisions`. */
+export interface Explanations {
+  version: string;
+  generator: string;
+  slug: string;
+  /** `articleWithIdsFingerprint` over the blocks, the tree and the cited head. */
+  sourceHash: string;
+  /** The reader's profile it was written for, or null for none — and in the freshness stamp, as `ideas`'. */
+  profileHash: string | null;
+  /** In reading order. **An empty list is a real answer**: nothing worth explaining. */
+  explanations: Explanation[];
+  dropped: ExplanationsDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** `GET /api/explanations/:slug`. Three staleness facts: the profile is in this stamp. */
+export interface ExplanationsResponse {
+  explanations: Explanations;
+  /** The article moved underneath this — blocks, sections or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+  /** You are not who you were when we wrote it. */
+  profileChanged: boolean;
+}
+
+export type ExplanationsFound = Omit<ExplanationsResponse, "profileChanged">;
 
 /* ----------------------------------------------------------------- simple --
    A plain-words orientation to the piece — the `simple_summary` column on

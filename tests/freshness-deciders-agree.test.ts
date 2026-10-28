@@ -157,6 +157,8 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   quiz: ["inputHash", "promptVersion", "model"],
   faq: ["inputHash", "promptVersion", "model"],
   relations: ["inputHash", "promptVersion", "model"],
+  /* FAQ's fingerprint, and the profile as `ideas`' (plan 261028c). */
+  explanations: ["inputHash", "promptVersion", "model"],
   simple: ["inputHash", "promptVersion", "model"],
   sketch: ["inputHash", "promptVersion", "model"],
   illustrated: ["inputHash", "promptVersion", "model"],
@@ -354,6 +356,8 @@ function minimal(step: StepName): Artefact {
       return { ...made, questions: [] };
     case "relations":
       return { ...made, relations: {} };
+    case "explanations":
+      return { ...made, profileHash: null, explanations: [] };
     case "sources-claims":
       return { ...made, claims: [] };
     case "bibliography":
@@ -860,6 +864,7 @@ describe("when the article itself moves, every step gets the same answer from bo
     "quiz",
     "faq",
     "relations",
+    "explanations",
     "simple",
     "sketch",
     "reception",

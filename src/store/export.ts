@@ -494,6 +494,8 @@ export async function exportArticle(
   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
   if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
+  if (revision.explanations)
+    await put("article_revisions", "explanations.json", revision.explanations);
   /* Missing until 2026-10-09 (qi-mv7wk6ap): the bundle carried a stored debate
      inside content/revision.json all along, and this rollback silently didn't. */
   if (revision.reception) await put("article_revisions", "reception.json", revision.reception);

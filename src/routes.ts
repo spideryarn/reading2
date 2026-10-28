@@ -69,6 +69,7 @@ import {
   loadSourcesClaims,
   loadSituate,
   loadRelations,
+  loadExplanations,
   loadCrossrefs,
   loadSimpleSummary,
   loadSkim,
@@ -523,6 +524,7 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  ExplanationsResponse,
   SituateResponse,
   QuizFound,
   QuizResponse,
@@ -12893,6 +12895,35 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     viewAs: "read",
     handler: async ({ request: { req, res } }, captures) => {
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadRelations(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /* Explanations —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     GET only, and no DELETE: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["explanations"] }. This route never spends.
+     **Owner-authenticated, with no anonymous twin and nothing in the public
+     article payload**, as `relations` above (plan § The step: owner only).
+     `withProfileChanged` for the third staleness fact, as `ideas`: the
+     profile is in this step's stamp. None yet is `200 null` to a client that
+     asks — `orNullWhenNotMadeYet`, around the read and only the read. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/explanations\/([\w.%-]+)$/,
+    article: "first-capture",
+    viewAs: "read",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<ExplanationsResponse>(
+          at,
+          () => loadExplanations(at),
+          (found) => found.explanations,
+        ),
+      );
       if (!found) return;
       send(res, 200, found);
     },

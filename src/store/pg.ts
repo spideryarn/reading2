@@ -110,6 +110,12 @@ import {
   type RelationFingerprintBlock,
 } from "../relations.js";
 import {
+  inputFingerprint as explanationsFingerprint,
+  isOutdated as explanationsAreOutdated,
+  isStale as explanationsIsStale,
+  PROMPT_VERSION as EXPLANATIONS_PROMPT_VERSION,
+} from "../explanations.js";
+import {
   inputFingerprint as crossrefsFingerprint,
   isStale as crossrefsIsStale,
   PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
@@ -228,6 +234,8 @@ import type {
   Situate,
   SituateFound,
   Relations,
+  Explanations,
+  ExplanationsFound,
   RelationsResponse,
   Crossrefs,
   CrossrefsFound,
@@ -585,6 +593,8 @@ type RevisionReader =
   | "bibliography"
   | "faq"
   | "relations"
+  /** The Explanations, owner only (src/explanations.ts, plan 261028c). */
+  | "explanations"
   | "sourcesClaims"
   /** Situate's dossier, owner only (src/situate.ts, plan 261024o). */
   | "situate"
@@ -638,6 +648,7 @@ const REVISION_READ_POLICY: Record<
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
     illustrated: "value", reception: "value", assets: "value", bibliography: "value", faq: "value",
     relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
+    explanations: "value",
     sourcesClaims: "value",
     situate: "value",
   },
@@ -687,6 +698,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
@@ -715,6 +728,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
@@ -743,6 +758,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
@@ -823,6 +840,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
@@ -885,6 +904,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* FAQ's fingerprint exactly, so the outline too. */
     relations: "value",
+    /* FAQ's fingerprint exactly, so the outline too (plan 261028c). */
+    explanations: "value",
     /* Only for Claims' fallback head when metadata has no title. */
     sourcesClaims: "value",
     situate: "value",
@@ -1041,6 +1062,12 @@ const REVISION_READ_POLICY: Record<
      read**: src/store/public-reader.ts does not select it (Sol P1-4,
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
   relations: { metadata: "value", relations: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `relations` makes. `isCurrent` needs the column for its arm, and
+     `personalisedSteps` because it carries a `profileHash`. **And no public
+     read**: src/store/public-reader.ts does not select it — owner only (plan
+     261028c § The step). */
+  explanations: { metadata: "value", explanations: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. And the public
      read, in src/store/public-reader.ts: generated output is readable by a
@@ -1405,6 +1432,8 @@ export const REVISION_PROJECTIONS = {
     faq: articleRevisions.faq,
     /* For `isCurrent`'s arm, as `debate` above. */
     relations: articleRevisions.relations,
+    /* For `isCurrent`'s arm, and an artefact that carries a `profileHash`. */
+    explanations: articleRevisions.explanations,
     /* For `isCurrent`'s arm, as `debate` above. */
     sourcesClaims: articleRevisions.sourcesClaims,
     /* For `isCurrent`'s arm, as `debate` above. Owner only, and never
@@ -1512,6 +1541,12 @@ export const REVISION_PROJECTIONS = {
   relations: {
     id: articleRevisions.id,
     relations: articleRevisions.relations,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited set, as `faq`: the same bytes and the same fingerprint. */
+  explanations: {
+    id: articleRevisions.id,
+    explanations: articleRevisions.explanations,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree fallback its exact-request fingerprint needs. */
@@ -2190,6 +2225,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   situate: ["article_revisions.situate"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
+  explanations: ["article_revisions.explanations"],
   skim: ["article_revisions.skim"],
   crossrefs: ["article_revisions.crossrefs"],
   matter: ["article_revisions.matter"],
@@ -2834,10 +2870,12 @@ export type ProfileCarrying = Exclude<
  * "your quiz was written for your profile" before they share would describe
  * something no visitor receives. Situate is the second, for the same reason:
  * owner only, read for the owner's profile, and never in the public payload
- * (plan 261024o, S9). Named exceptions rather than a hand list, so every
- * *other* artefact gaining the field still fails the compiler here.
+ * (plan 261024o, S9). Explanations is the third: owner only, written for the
+ * owner's profile, never in the public payload (plan 261028c). Named
+ * exceptions rather than a hand list, so every *other* artefact gaining the
+ * field still fails the compiler here.
  */
-type NeverShared = "quiz" | "situate";
+type NeverShared = "quiz" | "situate" | "explanations";
 
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
@@ -3735,6 +3773,32 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* `faq`'s stamp, and the profile as `ideasAreCurrent` takes it: the
+           artefact's own value on both sides, because this read cannot see the
+           profile a job would stamp with today. A changed profile is reported
+           by `GET /api/explanations/:slug`, and re-run by the step's stamp. */
+        case "explanations": {
+          const explanations = revision.explanations as Explanations | null;
+          if (!explanations || !Array.isArray(explanations.explanations) || !tree || blocks.length === 0) {
+            return false;
+          }
+          const profile =
+            explanations.profileHash !== undefined ? { profileHash: explanations.profileHash } : {};
+          return sameStamp(
+            {
+              inputHash: explanations.sourceHash,
+              promptVersion: explanations.version,
+              model: explanations.generator,
+              ...profile,
+            },
+            {
+              inputHash: explanationsFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: EXPLANATIONS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+              ...profile,
+            },
+          );
+        }
         /* Its exact rendered body and cited head, with the tree as title fallback. */
         case "sources-claims": {
           const list = revision.sourcesClaims as SourcesClaimList | null;
@@ -4384,6 +4448,40 @@ const rawPgArticleReader: ArticleReader = {
         !tree ||
         relationsIsStale(relations, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: relationsAreOutdated(relations),
+    };
+  },
+
+  /**
+   * The Explanations on their own — the Postgres half of `loadExplanations`.
+   *
+   * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
+   * FAQ's. **A 404 is the ordinary case** (the step runs only on the owner's
+   * press); an EMPTY list is a 200 — nothing worth explaining — as
+   * `SHAPE.explanations` decides at the store boundary. The profile half is the
+   * route's (`withProfileChanged`), because a store adapter does not read the
+   * profile. **Owner only**: there is no public twin of this read.
+   * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+   */
+  async loadExplanations(slug: string): Promise<ExplanationsFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "explanations");
+    if (!found) throw notFound(slug);
+    const explanations = found.revision.explanations as Explanations | null;
+    if (!explanations || !Array.isArray(explanations.explanations)) {
+      throw new ArtefactNotMadeYet(
+        `No explanations for "${slug}" yet. Write them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["explanations"] }.`,
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      explanations,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale:
+        !tree ||
+        explanationsIsStale(explanations, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: explanationsAreOutdated(explanations),
     };
   },
 

@@ -241,6 +241,7 @@ import {
   RotateCcw,
   Route,
   ScanLine,
+  Signpost,
   Tag,
   Target,
   Trash2,
@@ -394,6 +395,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* Two arrows, one each way: how a paragraph bears on the one before it.
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: ArrowRightLeft,
+  /* A signpost: where a reader would get stuck, and the way on. Plan 261028c;
+     stage 2's mode may choose its own glyph. */
+  explanations: Signpost,
   sketch: PenLine,
   /* A paintbrush beside the sketch's pen: the same argument, painted rather
      than drawn. docs/project/diagram.md § Illustrated. */

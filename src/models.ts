@@ -800,6 +800,10 @@ export type Task =
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      Article-reading like `ideas`, answering block ids, so `articleWithIds`. */
   | "relations"
+  /* The places a reader would get stuck, each with the missing piece —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     Article-reading like `faq`, naming block ids and quotes, so `articleWithIds`. */
+  | "explanations"
   /* The article's claims, listed for Claims to pick from —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. Article-reading
      like `faq`, naming block ids and quotes, so `articleWithIds`. No web search. */
@@ -1319,6 +1323,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   quiz: "capable",
   faq: "capable",
   relations: "capable",
+  explanations: "capable",
   "sources-claims": "capable",
   /* Capable, both, as the spike measured them (investigation 261024b): Haiku
      read the same evidence for an eighth of the price and lost 3 of 11 quotes
@@ -1628,6 +1633,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quiz: "messages",
   faq: "messages",
   relations: "messages",
+  explanations: "messages",
   "sources-claims": "messages",
   /* A strict schema back on the Messages wire, as `sources-claims`. */
   "situate-plan": "messages",
@@ -1802,6 +1808,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quiz: null,
   faq: null,
   relations: null,
+  explanations: null,
   "sources-claims": null,
   /* The Messages-wire stages hand `CAPABLE_MODEL` straight through. */
   "situate-plan": null,
@@ -2161,6 +2168,7 @@ export type ArticleStage =
   | "quiz"
   | "faq"
   | "relations"
+  | "explanations"
   | "sources-claims"
   | "crossrefs"
   | "simple";
@@ -2306,6 +2314,14 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      evals/results/effort-vs-quality.md; the plan names the quick tier as the
      next thing to measure. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: "low",
+  /* `high`, `faq`'s: what it is paid for is reading the argument as a
+     particular reader would, closely enough to feel where they would stall and
+     to say what is missing there. Its own schema, so it shares no cached
+     article. **NOT MEASURED**, like every effort choice not yet through
+     evals/results/effort-vs-quality.md; the live comparison the plan queues
+     for 1 November is where it gets measured.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  explanations: "high",
   /* `high`, `faq`'s: what it is paid for is reading the argument closely
      enough to tell the claims it rests on from the ones it merely mentions,
      and which of those an outsider could dispute. Its own schema, so it shares
@@ -2396,6 +2412,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      body only, byte-identical to `ideas` and `faq`. `low` effort and its own
      schema, so no share. */
   relations: "ids",
+  /* Every explanation names a block id and quotes it, so the ids have to be on
+     the page — and it sends the body only, byte-identical to `ideas` and
+     `faq`. Its own schema, so no share. */
+  explanations: "ids",
   /* Every claim names a block id and quotes it, so the ids have to be on the
      page — and it sends the body only, byte-identical to `ideas` and `faq`.
      Its own schema, so no share. */

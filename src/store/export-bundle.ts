@@ -436,6 +436,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "quiz",
   "faq",
   "relations",
+  "explanations",
   "sourcesClaims",
   "skim",
   "crossrefs",
@@ -519,6 +520,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("relations.json", revision.relations);
+  at("explanations.json", revision.explanations);
   at("sources-claims.json", revision.sourcesClaims);
   at("skim.json", revision.skim);
   at("crossrefs.json", revision.crossrefs);
@@ -706,6 +708,8 @@ one thing that will make the rest of these files make sense.
       relations.json       How each paragraph bears on the one before it, one word each, and a few margin
                            notes. A note with kind "source" says where a quotation or allusion comes
                            from, from AI memory, unchecked.
+      explanations.json    Places a reader might get stuck, each with a short AI explanation of what
+                           is missing there, and whether it is unsure or draws on AI memory.
       sources-claims.json  The claims the article rests on that someone outside could argue with,
                            each in the article's words and the model's.
       skim.json            A route through the quotes, in the order to read them, at three depths.
@@ -915,6 +919,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
     "Questions a careful reader might put to the article, and the passages that respond.",
   "augmentations/relations.json":
     'How each paragraph bears on the one before it, one word each, and a few margin notes. A note with kind "source" says where a quotation or allusion comes from, from AI memory, unchecked.',
+  "augmentations/explanations.json":
+    "Places a reader might get stuck, each with a short AI explanation of what is missing there, and whether it is unsure or draws on AI memory.",
   "augmentations/sources-claims.json":
     "The claims the article rests on that someone outside could argue with, each in the article's words and the model's.",
   "augmentations/skim.json":
@@ -1034,6 +1040,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works", n: countOf(revision.bibliography, "citations") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
+    { label: "explanations", n: countOf(revision.explanations, "explanations") },
     { label: "Claims' listed claims", n: countOf(revision.sourcesClaims, "claims") },
     { label: "findings from the literature", n: countOf(revision.situate, "findings") },
     { label: "Skim stops", n: countOf(revision.skim, "stops") },

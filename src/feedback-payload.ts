@@ -225,6 +225,7 @@ const STEPS = [
   "quiz",
   "faq",
   "relations",
+  "explanations",
   "sketch",
   "illustrated",
   "reception",
