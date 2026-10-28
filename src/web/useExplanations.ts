@@ -83,7 +83,8 @@ export interface UseExplanations extends Omit<ExplanationsRead, "fresh" | "reloa
   ensure(): Promise<void>;
   /**
    * **Write them again** — forced, for *Write it again* beside a list written
-   * by an older prompt or for an older profile, and for the stale banner. It
+   * for an older profile, and for the stale banner. An older prompt alone is
+   * left quiet, as Ideas and Glossary are. It
    * replaces the list. `explanations` is in FORCE_ONLY_WHEN_NAMED
    * (src/pipeline.ts), so forcing it does not sweep in the steps before it.
    */

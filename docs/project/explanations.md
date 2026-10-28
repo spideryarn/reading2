@@ -69,8 +69,9 @@ In `src/explanations.ts`, each tested in `tests/explanations.test.ts`:
   about marking too much.
 - **An empty list is an answer**; a non-empty one that the checks empty is a failure, as FAQ's.
 - **Freshness is the ordinary stamp** (article fingerprint, prompt version, model, profile hash):
-  *stale* is not drawn in the margin; *outdated* and *written for an older profile* stay, with
-  *Write it again*.
+  *stale* is not drawn in the margin; *outdated* stays quietly visible; *written for an older
+  profile* stays with *Write it again*. As with Ideas and Glossary, an older prompt alone is not
+  worth bugging the reader about (Greg, 2026-09-29).
 - **Owner only**: never in the public read, never in a visitor's margin.
 
 In the margin, a block with a fresh Explanation does not also draw the relations call's `explain`

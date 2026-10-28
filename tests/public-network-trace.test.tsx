@@ -3435,6 +3435,28 @@ describe("when the reader's own session cannot be confirmed", () => {
 });
 
 describe("the same address, as the owner", () => {
+  it("reads but does not start Explanations when an enabled owner merely arrives", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    experimentalSince = "2026-10-28T00:00:00.000Z";
+    notBuilt = "/api/explanations/";
+    await open("?mode=explanations");
+
+    expect(trace.some((r) => r.url.startsWith("/api/explanations/")), "the empty-state GET settled").toBe(true);
+    expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs")).toEqual([]);
+  });
+
+  it("only reads the margin's Explanations feed while the switch is on", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open("?margin=1");
+    expect(trace.some((r) => r.url.startsWith("/api/explanations/")), "off").toBe(false);
+
+    await remount();
+    resetExperimental();
+    experimentalSince = "2026-10-28T00:00:00.000Z";
+    await open("?margin=1");
+    expect(trace.some((r) => r.url.startsWith("/api/explanations/")), "on").toBe(true);
+  });
+
   /**
    * **The control the acceptance criterion was written around**, and **the one
    * assertion in this file that changed on purpose on 2026-09-01.**

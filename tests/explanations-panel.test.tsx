@@ -3,8 +3,8 @@
  * Explanations' band: each row is the article's own words, then the AI's
  * explanation, then the labels that apply and only those, and an *Ask in
  * chat* that hands the row to the anchored passage chat. An empty list is a
- * real answer, said plainly. *Write it again* beside a list written by an
- * older prompt or for an older profile, never beside a current one.
+ * real answer, said plainly. *Write it again* beside a list for an older
+ * profile, never merely because the prompt has changed.
  * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
  */
 import { act, createElement } from "react";
@@ -131,11 +131,11 @@ describe("ExplanationsPanel", () => {
     expect(buttons()).not.toContain("Write it again");
   });
 
-  it("offers Write it again for an older prompt or an older profile, and not for a current list", async () => {
+  it("offers Write it again for an older profile, but not merely for an older prompt", async () => {
     await draw(owner());
     expect(buttons()).not.toContain("Write it again");
     await draw(owner({ outdated: true }));
-    expect(buttons()).toContain("Write it again");
+    expect(buttons()).not.toContain("Write it again");
     await draw(owner({ profiled: true, profileChanged: true }));
     expect(buttons()).toContain("Write it again");
   });

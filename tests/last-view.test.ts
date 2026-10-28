@@ -229,7 +229,18 @@ describe("rememberableSearch", () => {
   });
 
   it("keeps every other mode as it stands", () => {
-    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
+    for (const mode of [
+      "plain",
+      "glossary",
+      "search",
+      "referee",
+      "summary",
+      "ideas",
+      "structure",
+      "quotes",
+      "timeline",
+      "explanations",
+    ]) {
       expect(rememberableSearch(`?mode=${mode}`), mode).toBe(`?mode=${mode}`);
     }
     expect(rememberableSearch("?mode=glossary&term=spya-h4r2wd")).toBe(

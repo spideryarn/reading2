@@ -352,8 +352,11 @@ useful to include/display in Annotations mode."*
 default. Adding one is one new kind in `MarginaliaNote`, one loop in `marginaliaNotes` that places
 it at its earliest surviving block and checks its quote, one small component in
 `MarginaliaColumn.tsx`, and a read half if the mode hook can start a run.
-[mode.md](mode.md) points here from its checklist. Not here yet, and named so they are not
-forgotten: Quotes, glossary terms, cross-references (the few that matter now come as the model's
+[mode.md](mode.md) points here from its checklist. **[Explanations](explanations.md) came in
+this way on 2026-10-28** (spya-nkq6rj): a shut *Explained* line beside the passage, read from the
+mode's own artefact, behind the experimental switch and owner only; a block that has one does not
+also draw the relations call's `explain` note (`explainedBlocks` in `notes.ts`). Not here yet, and
+named so they are not forgotten: Quotes, glossary terms, cross-references (the few that matter now come as the model's
 own notes, [above](#notes-the-model-writes)). The first two already mark
 the prose.
 

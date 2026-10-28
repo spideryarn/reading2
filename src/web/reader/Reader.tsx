@@ -103,6 +103,7 @@ import {
   citingSentences,
   askAboutGlossaryEntry,
   askAboutExplanation,
+  explanationPassage,
   askAboutIdea,
   askAboutTerm,
   itemOrigin,
@@ -111,7 +112,6 @@ import {
   askToCheckClaim,
 } from "../chat-handoff.js";
 import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
-import { findQuote } from "../../quote-match.js";
 import { findingLens, findingLensOrigin, findingOrigin, overviewOrigin, overviewQuestion } from "../situate-dossier.js";
 import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
@@ -1250,20 +1250,23 @@ export function Reader({
      block instead, which the server cannot refuse. */
   const askExplanationInChat = useCallback(
     (explanation: Pick<Explanation, "blockId" | "quote" | "text">) => {
-      const text = article.blocks.find((block) => block.id === explanation.blockId)?.text ?? "";
-      const span = text === "" ? null : findQuote(text, explanation.quote);
+      const block = article.blocks.find((candidate) => candidate.id === explanation.blockId);
+      const passage = explanationPassage(block?.text ?? null, explanation);
+      const question = askAboutExplanation(explanation);
+      /* A stale list can outlive its block. Keep Ask useful, but do not send
+         the vanished id: the route validates every passage anchor. */
+      if (passage === null) {
+        handToChat(question, "send");
+        return;
+      }
       askPassageInChat({
         kind: "draft",
-        anchor:
-          span === null
-            ? { blockId: explanation.blockId }
-            : { blockId: explanation.blockId, quote: explanation.quote, start: span.start },
-        opening: span === null ? text : explanation.quote,
-        question: askAboutExplanation(explanation),
+        ...passage,
+        question,
         sendNow: true,
       });
     },
-    [article.blocks, askPassageInChat],
+    [article.blocks, askPassageInChat, handToChat],
   );
   /* The one sender that waits: the paragraph, quoted, and an empty line for
      the reader's question. There is nothing to ask until they type it. */

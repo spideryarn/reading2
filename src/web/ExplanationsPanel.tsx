@@ -106,17 +106,17 @@ export function ExplanationsPanel({
   /* A forced run has finished and its result is not here yet: the forced
      button gives way to a read, never to a second paid run. rewrite-hold.ts. */
   const waiting = owner.rewriting && !owner.job && !owner.starting && !owner.failed;
-  /* **Write it again**, beside a list written by an older prompt or for an
-     older profile (plan 261028c § States), as well as while a job runs,
-     failed or a rewrite has not loaded. Not while the stale banner shows: it
-     carries the button itself. */
+  /* **Write it again**, beside a list for an older profile, as well as while
+     a job runs, failed or a rewrite has not loaded. A list written by an older
+     prompt stays quietly useful: Ideas and Glossary apply Greg's 2026-09-29
+     ruling that a prompt change is not worth bugging the reader about. Not
+     while the stale banner shows: it carries the button itself. */
   const showFoot =
     ready &&
     !staleShowing &&
     (owner.job !== null ||
       owner.starting ||
       owner.failed !== null ||
-      owner.outdated ||
       owner.profileChanged ||
       (waiting && !owner.error));
 

@@ -126,7 +126,9 @@ Item ids are a short hash of block id and quote: stable when a re-run finds the 
 id otherwise (best effort, Sol's PR-14).
 
 **States** (Sol's PR-5): *stale* (the article changed) is not drawn in the margin; *outdated* (a
-newer prompt) and *written for an older profile* stay visible, the band offering *Write it again*.
+newer prompt) and *written for an older profile* stay visible. Only the older profile offers
+*Write it again*: Ideas and Glossary already apply Greg's 2026-09-29 ruling that an older prompt
+alone is not worth bugging the reader about.
 
 Stored in a new `article_revisions.explanations` column (one migration, widening the step-name
 CHECK). **Owner only** in this version, as the margin's relation notes are: no public projection,
@@ -256,6 +258,17 @@ written; the writer model comes after the comparison), PR-9 and PR-10 (q-sxfwqq'
 (the backfill counted: about $11), PR-14 (ids best effort). Taken as a decision rather than a
 question: PR-4 (owner only for now, said so) and PR-13 (no search in v1, said so in q-gkrkf5 so
 Greg can overrule). PR-12 is the stage 2 checklist.
+
+**Code reviews.** Stage 1: [261028c-stage-1-code-review-sol.md](261028c-stage-1-code-review-sol.md),
+all taken except CR-6 (the cost harness's `PAYING_STEPS` misses several paid modes, this one
+included: wider than the stage). Its CR-1 changed the fingerprint to the exact request, so a renamed
+section no longer looks like a reason to pay again. Stage 2:
+[261028c-stage-2-code-review-sol.md](261028c-stage-2-code-review-sol.md), CR-3 to CR-6 taken.
+**CR-1, CR-2 and CR-7 not taken**: they made `?mode=explanations` fail closed and hid its Help and
+Features entries with the switch off. [experimental-features.md](../project/experimental-features.md)
+says *hidden from the controls, not unreachable*, and every other experimental mode keeps to it.
+Arriving spends nothing, and a visitor gets the owner-only band, so this mode keeps to it as well.
+CR-8 (the Help chatbot's corpus names every mode) is left alone for the same reason.
 
 ## Decisions taken without asking
 

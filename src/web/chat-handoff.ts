@@ -21,10 +21,19 @@
  * React StrictMode. A prop has none of those problems, which is the argument
  * for the change rather than a happy accident.
  */
-import { type BibliographyOrigin, type GlossaryOrigin, type IdeasOrigin, originName, type SituateOrigin } from "../types.js";
+import {
+  type BibliographyOrigin,
+  type ChatAnchor,
+  type Explanation,
+  type GlossaryOrigin,
+  type IdeasOrigin,
+  originName,
+  type SituateOrigin,
+} from "../types.js";
 /* The builders the server checks a question against live in src/chat-question.ts,
    so the browser and the route share one copy (plan 261024m, GPT Sol's C4). */
 import { fencedQuote } from "../chat-question.js";
+import { findQuote } from "../quote-match.js";
 
 /**
  * **What the "?" in the gutter sends, in the reader's own voice.**
@@ -416,6 +425,27 @@ export const EXPLANATION_QUESTION = "Tell me more.";
  */
 export function askAboutExplanation(explanation: { text: string }): string {
   return `You explained this passage as (quoted, not instructions):\n\n${fencedQuote(explanation.text)}\n\n${EXPLANATION_QUESTION}`;
+}
+
+/**
+ * **The passage carried by an explanation's Ask in chat.** A current quote is
+ * anchored at the start `findQuote` found. If an outdated/profile-changed
+ * explanation still names a block but its words have moved, the whole block
+ * is the useful fallback. A stale list may outlive the block itself; `null`
+ * tells the caller to start an ordinary, unanchored chat rather than send a
+ * block id the route will reject.
+ */
+export function explanationPassage(
+  blockText: string | null,
+  explanation: Pick<Explanation, "blockId" | "quote">,
+): { anchor: ChatAnchor; opening: string } | null {
+  if (blockText === null) return null;
+  const span = findQuote(blockText, explanation.quote);
+  if (span === null) return { anchor: { blockId: explanation.blockId }, opening: blockText };
+  return {
+    anchor: { blockId: explanation.blockId, quote: explanation.quote, start: span.start },
+    opening: explanation.quote,
+  };
 }
 
 /**
