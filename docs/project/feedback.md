@@ -125,6 +125,23 @@ toggle. One reassurance was folded out of the disclosure and rides under the thr
 it went. `KindHint` in [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the whole of it,
 pinned by `tests/feedback-dialog.test.tsx`.
 
+**Since 2026-10-28 an admin has a third kind, *A discussion*** (`spya-zytb0g`). Greg wanted
+somewhere for
+
+> a question or a discussion where I'm going to ramble for a bit, raise some ideas, and I'm going to
+> expect the model to come back with its own responses or proposals that we'll discuss some further,
+> and then eventually go and build them.
+>
+> — Greg, 2026-10-28
+
+Its hint says to think out loud, and that the reply comes back under *Needs a decision* as thoughts
+and proposals, with nothing built until he says so. **It is an admin's alone**, in the dialog and in
+the route, which refuses it from anybody else with the same 400 as any unknown kind: only an admin
+can read a reply, so a kind that promises a conversation is offered only where one can happen.
+Whether readers should get it later is an open question for Greg, not built. A saved draft under it
+comes back unset for anyone without the button.
+[261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md).
+
 The three old columns were backfilled into `body` under their old headings and **dropped**, so there
 is one shape in the table rather than two. The route still accepts the old three from a tab loaded
 before the deploy and folds them into `body` the same way; sending both shapes at once is refused.

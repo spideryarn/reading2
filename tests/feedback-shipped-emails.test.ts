@@ -220,7 +220,10 @@ describe("the letter", () => {
     );
     expect(shippedEmail("suggestion", at, NOW).text).toContain("you sent us a suggestion");
     expect(shippedEmail(null, at, NOW).text).toContain("you sent us feedback");
-    for (const kind of ["problem", "suggestion", null] as const) expect(shippedEmail(kind, at, NOW).text).not.toMatch(/fixed/i);
+    /* An admin kind, never mailed (admin-owned rows are skipped), but it has its
+       own words so the fallback cannot hide a regression. Plan 261028b. */
+    expect(shippedEmail("discussion", at, NOW).text).toContain("you started a discussion with us");
+    for (const kind of ["problem", "suggestion", "discussion", null] as const) expect(shippedEmail(kind, at, NOW).text).not.toMatch(/fixed/i);
   });
 
   it("says where to look and how to answer", () => {

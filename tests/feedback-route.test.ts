@@ -1738,6 +1738,35 @@ describe("POST /api/feedback", () => {
     expect(submitted).toHaveLength(0);
   });
 
+  it("takes a discussion from an admin and refuses one from anybody else, as a plain bad kind", async () => {
+    /* An admin's kind only (plan 261028b): only an admin can read a reply, so a
+       kind that promises a conversation is refused from a reader with the same
+       400 any other unknown kind gets — no new error shape. `acceptAny` signs in
+       as the local administrator, so it is the positive control. */
+    const notAdmin: Parameters<typeof handleApi>[2] = async () => ({
+      ok: true,
+      claims: {
+        sub: "0000f5e1-0000-4000-8000-00000000beef",
+        email: "somebody-else@example.test",
+        role: "authenticated",
+        is_anonymous: false,
+      },
+    });
+    const refused = await call(minimal({ kind: "discussion" }), { verify: notAdmin });
+    expect(refused.status).toBe(400);
+    expect(String(refused.body.error)).toMatch(/\[fb-kind\]/);
+    expect(submitted).toHaveLength(0);
+
+    /* The same reader with an ordinary kind is answered, so the 400 above is
+       about the kind and not about who they are. */
+    const ordinary = await call(minimal({ kind: "suggestion" }), { verify: notAdmin });
+    expect(ordinary.status).toBe(201);
+
+    const taken = await call(minimal({ kind: "discussion" }));
+    expect(taken.status).toBe(201);
+    expect(submitted.map((report) => report.kind)).toEqual(["suggestion", "discussion"]);
+  });
+
   it("still takes the old three-box shape, and folds it into one body", async () => {
     /* **A reader whose tab was loaded before the deploy.** `FEEDBACK_FIELDS`
        refuses an unknown key outright, so without the legacy vocabulary this

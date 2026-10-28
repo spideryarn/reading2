@@ -1055,6 +1055,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
 const KIND_WORD: Record<FeedbackKind, string> = {
   problem: "Problem",
   suggestion: "Suggestion",
+  discussion: "Discussion",
 };
 
 const SHOW_WORD: Record<EarlierFeedbackShow, string> = {

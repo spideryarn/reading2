@@ -8985,7 +8985,8 @@ export const FEEDBACK_ENVIRONMENTS = ["production", "preview", "development", "t
 export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
 
 /**
- * **What the reader says this is** — a problem, or a suggestion.
+ * **What the reader says this is** — a problem, a suggestion, or (an admin
+ * only) a discussion.
  *
  * Greg asked for the toggle on 2026-09-02 and then, a message later, for what it
  * starts as: *"don't default to Problem. Default to null/unknown."* So the third
@@ -8997,9 +8998,17 @@ export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
  * nullable column would be two spellings of one fact — the same call `consented`
  * and `comments_body_nonempty` already make.
  *
- * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
+ * **`discussion` is an admin's alone** (Greg, 2026-10-28, `spya-zytb0g`): *"a
+ * question or a discussion where I'm going to ramble for a bit, raise some
+ * ideas, and I'm going to expect the model to come back with its own responses
+ * or proposals"*. Only an admin can read a reply, so a kind that promises a
+ * conversation is offered — and accepted, by src/routes.ts § feedbackKind —
+ * only where one can happen.
+ *
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md,
+ * docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md.
  */
-export const FEEDBACK_KINDS = ["problem", "suggestion"] as const;
+export const FEEDBACK_KINDS = ["problem", "suggestion", "discussion"] as const;
 
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
 

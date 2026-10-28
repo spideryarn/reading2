@@ -9057,8 +9057,8 @@ function feedbackBody(sent: Record<string, unknown>): string {
 }
 
 /**
- * *A problem*, *a suggestion*, or **nothing**, which is a third answer rather
- * than a missing one.
+ * *A problem*, *a suggestion*, *a discussion* (an admin only), or **nothing**,
+ * which is an answer rather than a missing one.
  *
  * Greg asked for the toggle to start unset — *"don't default to Problem. Default
  * to null/unknown"* — so an absent field is valid and an unrecognised one is
@@ -9066,11 +9066,20 @@ function feedbackBody(sent: Record<string, unknown>): string {
  * and the cheap failure is now; the CHECK in src/db/schema.ts is the same
  * refusal for every other writer.
  */
-function feedbackKind(value: unknown): FeedbackKind | null {
+function feedbackKind(value: unknown, user: VerifiedUser): FeedbackKind | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string" || !(FEEDBACK_KINDS as readonly string[]).includes(value)) {
     /* The list is ours and the value is not the reader's prose — but it is still
        a string off the wire, so it does not go in the message. `[fb-kind]`. */
+    throw httpError(400, "kind is not one of ours [fb-kind]");
+  }
+  /* **A discussion is an admin's alone.** Only an admin can read a reply, so a
+     kind that promises a conversation is accepted only from somebody one can be
+     held with. The dialog offers the button only to an admin, so anybody else
+     sending it is a client that is not ours, and gets the same plain 400 as any
+     other value we do not take — no new error shape. Greg, 2026-10-28,
+     docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md. */
+  if (value === "discussion" && !isAdmin(user.id)) {
     throw httpError(400, "kind is not one of ours [fb-kind]");
   }
   return value as FeedbackKind;
@@ -9285,7 +9294,7 @@ function parseFeedback(
   const where = feedbackWhere(sent);
 
   const body = feedbackBody(sent);
-  const kind = feedbackKind(sent.kind);
+  const kind = feedbackKind(sent.kind, user);
 
   if (
     sent.diagnostics !== undefined &&
