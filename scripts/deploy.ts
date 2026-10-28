@@ -923,7 +923,11 @@ function explainBuildFailure(output: string): string {
  * `.vercelignore` is part of what a commit changes.
  *
  * Filtered down to plain names: a pattern (`scratch-*`, `.env*`) and a negation
- * (`!.env.example`) are neither a directory nor safe to guess about. The four
+ * (`!.env.example`) are neither a directory nor safe to guess about. One shape
+ * is read as its directory: `docs/*`, which is how .vercelignore prunes all of
+ * `docs/` but the mockups the deployed function reads at runtime (plan
+ * 261028b). Masking the whole directory is still right for the build, which
+ * reads none of it. The four
  * exclusions are the ones the build itself needs — `node_modules` is symlinked
  * in by the caller, `.git` is what makes the worktree a worktree, and the two
  * `dist` directories are the build's own output rather than its input.
@@ -935,6 +939,7 @@ function prunedRootsIn(dir: string): string[] {
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l !== "" && !l.startsWith("#") && !l.startsWith("!"))
+    .map((l) => (/^[\w.-]+\/\*$/.test(l) ? l.slice(0, -2) : l))
     .filter((l) => !l.includes("*") && !l.includes("/"))
     .filter((l) => !["node_modules", ".git", "dist", "api-dist"].includes(l));
 }

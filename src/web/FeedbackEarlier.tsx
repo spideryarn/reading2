@@ -1787,11 +1787,11 @@ function ThreadView({
           </span>
         </p>
         <h4 className="fb-question-title">{question.title}</h4>
-        <PlainTextBlocks text={summary} className="fb-question-text" />
+        <PlainTextBlocks text={summary} className="fb-question-text" linkMockups />
         {details === null ? null : (
           <details className="fb-question-more">
             <summary>Details</summary>
-            <PlainTextBlocks text={details} className="fb-question-text" />
+            <PlainTextBlocks text={details} className="fb-question-text" linkMockups />
           </details>
         )}
         {question.report === null || question.report.body === null ? null : (

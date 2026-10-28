@@ -534,6 +534,18 @@ const SHARED_WITH_READER = [
      only React, which the reader already has, so the shared edge costs nothing. */
   "src/web/appearance.ts",
   "src/feedback-payload.ts",
+  /* Arrived 2026-10-28 with `/admin/mockups` (plan 261028b, Stage 3). The
+     router (eager) checks a mockup's id with `isMockupId` from src/mockups.ts,
+     the one rule the server and the script use, rather than a second regex;
+     the page draws a mockup's text with the component a question's body uses.
+     src/mockups.ts is new to the reader's startup: a few hundred bytes of
+     rules and types whose imports, the question rules, the fence reader and
+     ids.ts, the Feedback dialog's Earlier tab already brings. The other three
+     were already the reader's. */
+  "src/feedback-question-values.ts",
+  "src/mockups.ts",
+  "src/plain-text-blocks.ts",
+  "src/web/PlainTextBlocks.tsx",
   "src/html.ts",
   "src/ids.ts",
   "src/ingest.ts",
@@ -825,6 +837,7 @@ const ROUTE_PRIVATE = [
   "src/web/AdminPage.tsx",
   "src/web/AdminArticlesPage.tsx",
   "src/web/AdminCostsPage.tsx",
+  "src/web/AdminMockupsPage.tsx",
   "src/web/AdminVouchersPage.tsx",
   "src/web/DesignPage.tsx",
   "src/web/admin-articles-columns.tsx",

@@ -4,8 +4,8 @@ Up: [security-map.md](security-map.md)
 
 **`/admin`, and the pages under it.** One person can see them. `/admin/users` shows who has signed up
 and how much each has read — counts and dates. `/admin/feedback` shows the bug reports readers filed
-with the Feedback button, in their own words. The others are `/admin/vouchers` and
-`/admin/articles` (below), and `/admin/costs`, which has a doc of its own —
+with the Feedback button, in their own words. The others are `/admin/vouchers`,
+`/admin/articles` and `/admin/mockups` (below), and `/admin/costs`, which has a doc of its own —
 [admin-costs.md](admin-costs.md).
 
 Greg, 2026-08-27:
@@ -35,6 +35,7 @@ Built the same day. The plan, the options weighed and the review are in
 - [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
 - [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
 - [§ `/admin/articles`](#adminarticles-moving-an-article-to-another-account) — moving an article to another account
+- [§ `/admin/mockups`](#adminmockups-pictures-for-a-decision) — the mockups agents make for a question, from files in the repo
 - [§ Viewing the app as a reader](#viewing-the-app-as-a-reader-read-only) — *view as*: the second cross-owner read, and everything that keeps it read-only
 - [§ The command bar's admin rows](#the-command-bars-admin-rows) — the author gift without leaving the article, and the admin pages one ⌘K away
 - [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
@@ -1201,6 +1202,66 @@ recorded in the plan with its fix
 The voucher claim moves a gift's starter article the same way, when it safely can
 ([billing.md § Gift vouchers](billing.md#gift-vouchers-extra-free-articles-given-by-email)).
 
+## `/admin/mockups` — pictures for a decision
+
+> It would be to create a /admin/mockups page with a table that can link out to particular
+> mockups. And then the decision process for new ideas could reference these mockups. […] you could
+> even try a few things and you know we'll compare and I'll say which I like.
+>
+> — Greg, 2026-10-28 (`spya-zytb0g`)
+
+A table of mockups (id, title, the day it was made, the question and report it belongs to, newest
+first), each linking to `/admin/mockups/m-xxxxxx`: its text, its ASCII drawn monospaced, and its
+images, in the file's order. Read-only. Built in
+[261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md),
+Stage 3.
+
+**A mockup is a file, `docs/mockups/m-xxxxxx.md`.** A header between `---` lines (`id`, `title`
+of at most 120 characters, `made` as yyyy-mm-dd, `question` as a `q-` id or `none`, `report` as a
+`spya-` id or `none`), then a body of at most 20,000 characters: plain text; lines between two lines
+that are exactly ```` ``` ```` drawn monospaced, as in a question; and a line exactly
+`image: m-xxxxxx-<name>.png` (or `.jpg`, `.jpeg`, `.webp`) showing that image, saved beside the
+file. Each image at most 1.5 MB, every file in the directory together at most 40 MB.
+`npx tsx scripts/mockups.ts --new "<title>"` prints a fresh id and a header and creates nothing;
+with no arguments it checks every file and lists them, exit 1 on any problem, and
+`tests/mockups.test.ts` runs the same check, so a file the page would leave out fails before a
+deploy. The rules are [`src/mockups.ts`](../../src/mockups.ts).
+
+**Files in the repo, so a mockup is on the page after the next deploy, not at once** as a published
+question is. Publishing mockups to the database would make them live at once, but it is a second
+kind of production write, which needs Greg's yes; the plan leaves it as a question for him. No
+HTML mockups are served from our origin: a screenshot of a wireframe carries the same picture with
+nothing to execute.
+
+**How the server finds them.** `includeFiles` in [`vercel.json`](../../vercel.json) is one glob,
+`{certs/**,docs/mockups/**}` (the brace form Vercel's own docs use for `excludeFiles`), which copies the directory into the API function, and every file in it
+counts toward the function's size limit (hence the 40 MB cap). The routes find it from
+`process.cwd()`, because the bundle moves `import.meta.dirname`
+([`src/vercel.ts`](../../src/vercel.ts)), and only when a route runs, never at import, so a missing
+directory is an empty list rather than a function that fails to load. **And `.vercelignore` has
+to let the directory be uploaded at all**: it pruned all of `docs/`, which would have left the page
+empty in production with every other check green, so it says `docs/*` and `!docs/mockups` (a
+child of an ignored directory cannot be re-included). `tests/vercel-include-files.test.ts` pins
+both, the second through git's own gitignore matcher.
+[`src/mockups-dir.ts`](../../src/mockups-dir.ts).
+
+**The routes**, all under `/api/admin/`, so the namespace gate refuses everybody else
+(`tests/admin-mockups-route.test.ts` asks all three as a reader):
+
+| Route | Answers |
+|---|---|
+| `GET /api/admin/mockups` | `{ mockups: [{ id, title, made, question, report, images }] }`, `images` a count. A file that fails the rules is left out with a log line, not a 500 |
+| `GET /api/admin/mockups/:id` | `{ mockup: { id, title, made, question, report, body, images } }`: `body` is the text and images in order, an image named by its index; `images` is `[{ index, contentType }]`. 404 for a missing or failing file |
+| `GET /api/admin/mockups/:id/images/:n` | the bytes, `private, no-store`, `nosniff`, the type from an allowlist by extension and checked against the first bytes |
+
+The URL names only a checked mockup id and an index; the file name comes from a mockup that passed
+the rules, which allow only a bare name starting with its own id, and nothing follows a symlink.
+
+**Images go through `apiFetch` into a blob URL**, not `<img src="/api/admin/…">`: requests are
+authenticated with a bearer header, which an `<img>` does not send, so it would get a 401. The same
+two effects as the feedback screenshot, the URL revoked when the page goes
+([`AdminMockupsPage.tsx`](../../src/web/AdminMockupsPage.tsx)).
+
 ## Viewing the app as a reader, read-only
 
 **Since 2026-10-20**, Greg's answer A to question q-kyhvkm:
@@ -1268,8 +1329,8 @@ All typed-only — `admin`, `gift`, `author`, `users`, `costs` bring them up —
   gift's card on Drafts, in a new tab. Nothing is emailed from it; Send stays on the card. The
   dialog's code and its first read are fetched on the first press, not before.
 - **What it cost** opens Metadata's administrator-only section (`?section=what-it-cost`).
-- **Admin**, **Admin › Users**, **› Feedback**, **› Gift vouchers**, **› Articles**, **› Costs**
-  and **Design reference** go to those pages.
+- **Admin**, **Admin › Users**, **› Feedback**, **› Gift vouchers**, **› Articles**, **› Costs**,
+  **› Mockups** and **Design reference** go to those pages.
 
 **They are a courtesy, like the Admin link.** `CommandBar` builds them only for `isAdmin` and never
 under *view as*; every private read or write they reach is in the `/api/admin` namespace, which the

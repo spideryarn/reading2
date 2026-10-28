@@ -506,6 +506,22 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/articles/w1/cost"],
   },
+  /* The mockups, for /admin/mockups, 261028b Stage 3: the list, one, and one image. */
+  {
+    match: { kind: "literal", path: "/api/admin/mockups" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/mockups"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/mockups\\/([^/]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/mockups/w1"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/mockups\\/([^/]+)\\/images\\/([^/]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/mockups/w1/images/w2"],
+  },
   /* The cost cube, for /admin/costs, 261005a. */
   {
     match: { kind: "literal", path: "/api/admin/costs" },
@@ -1235,8 +1251,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    with a draft gift's email preview and the lookup's guidance (plan 261024f);
    133 with Situate's owner read (plan 261024o); 134 with the extension's
    owner-scoped already-on-the-shelf lookup (plan 261024y); 137 with the
-   added Skim briefs (plan 261027d). */
-const EXPECTED_MATCHER_COUNT = 137;
+   added Skim briefs (plan 261027d); 140 with the mockups' list, one and
+   image (plan 261028b). */
+const EXPECTED_MATCHER_COUNT = 140;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1262,8 +1279,9 @@ const EXPECTED_MATCHER_COUNT = 137;
    and the guidance's GET and PUT (plan 261024f); 164 with Situate's owner
    read (plan 261024o); 165 with the extension's owner-scoped
    already-on-the-shelf lookup (plan 261024y); 171 with the added Skim
-   briefs' six (plan 261027d). */
-const EXPECTED_GUARD_COUNT = 171;
+   briefs' six (plan 261027d); 174 with the mockups' three GETs (plan
+   261028b). */
+const EXPECTED_GUARD_COUNT = 174;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2469,6 +2487,10 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/access$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
+        // the mockups for /admin/mockups, 261028b — before the cost cube
+        "GET literal /api/admin/mockups",
+        "GET regex /^\\/api\\/admin\\/mockups\\/([^/]+)$/",
+        "GET regex /^\\/api\\/admin\\/mockups\\/([^/]+)\\/images\\/([^/]+)$/",
         // the cost cube, for /admin/costs, 261005a — beside the article's cost
         "GET literal /api/admin/costs",
         "GET literal /api/library",

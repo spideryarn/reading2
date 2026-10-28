@@ -78,10 +78,12 @@ import {
   type ArticleView,
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
+import { isMockupId } from "../mockups.js";
 import {
   ADMIN_ARTICLES_PATH,
   ADMIN_COSTS_PATH,
   ADMIN_FEEDBACK_PATH,
+  ADMIN_MOCKUPS_PATH,
   ADMIN_USERS_PATH,
   ADMIN_VOUCHERS_PATH,
 } from "../urls.js";
@@ -101,8 +103,20 @@ import {
 } from "./jump-history.js";
 export type { ArticleView };
 
-/** Which admin page. `home` is `/admin` itself — the index of the others. */
-export type AdminPage = "home" | "users" | "feedback" | "vouchers" | "costs" | "articles";
+/**
+ * Which admin page. `home` is `/admin` itself — the index of the others.
+ * `mockup` is one mockup, `/admin/mockups/m-xxxxxx`, and the only one with an
+ * argument: its route carries the id (below).
+ */
+export type AdminPage =
+  | "home"
+  | "users"
+  | "feedback"
+  | "vouchers"
+  | "costs"
+  | "articles"
+  | "mockups"
+  | "mockup";
 
 export type Route =
   | { kind: "library" }
@@ -224,7 +238,14 @@ export type Route =
    * rather than in everyone's first download (LazyPage.tsx) — a change to
    * startup cost, not to who may have it.
    */
-  | { kind: "admin"; page: AdminPage }
+  | { kind: "admin"; page: Exclude<AdminPage, "mockup"> }
+  /**
+   * One mockup, `/admin/mockups/m-xxxxxx` — plan 261028b, Stage 3. Still
+   * `kind: "admin"`, so `ADMIN_ONLY` and everything else keyed by kind
+   * answers for it with no second entry; the id is checked here, so the page
+   * is never drawn for a string that is not one.
+   */
+  | { kind: "admin"; page: "mockup"; id: string }
   /**
    * What we do with a reader's data — `/privacy`. See PrivacyPage.tsx and
    * docs/project/website-text.md.
@@ -585,7 +606,7 @@ export function parseRoute(pathname: string): Route {
      matches nothing here and falls through to `not-found`, which is what every
      unrecognised address does. Greg wrote both of these with a trailing slash,
      so both spellings work at both lengths. */
-  const adminPath = /^\/admin(?:\/(users|feedback|vouchers|costs|articles))?\/?$/.exec(pathname);
+  const adminPath = /^\/admin(?:\/(users|feedback|vouchers|costs|articles|mockups))?\/?$/.exec(pathname);
   if (adminPath) {
     /* The captured segment *is* the page name for every page but the index,
        which has no segment. Written as a lookup rather than a chain of
@@ -596,10 +617,21 @@ export function parseRoute(pathname: string): Route {
     return {
       kind: "admin",
       page:
-        page === "users" || page === "feedback" || page === "vouchers" || page === "costs" || page === "articles"
+        page === "users" ||
+        page === "feedback" ||
+        page === "vouchers" ||
+        page === "costs" ||
+        page === "articles" ||
+        page === "mockups"
           ? page
           : "home",
     };
+  }
+  /* One mockup. The id is the validation, as the alternation is above: a
+     segment that is not a mockup id falls through to `not-found`. */
+  const mockupPath = /^\/admin\/mockups\/([^/]+)\/?$/.exec(pathname);
+  if (mockupPath?.[1] !== undefined && isMockupId(mockupPath[1])) {
+    return { kind: "admin", page: "mockup", id: mockupPath[1] };
   }
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
   // whole other URL, slashes and all. A bare /add — nothing to add — falls
@@ -738,6 +770,11 @@ export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
 export const ADMIN_COSTS_HREF = ADMIN_COSTS_PATH;
 /* Every article, and moving one to another account — plan 261011n § D4. */
 export const ADMIN_ARTICLES_HREF = ADMIN_ARTICLES_PATH;
+/* The mockups made for Greg's decisions, and one of them — plan 261028b, Stage 3. */
+export const ADMIN_MOCKUPS_HREF = ADMIN_MOCKUPS_PATH;
+export function adminMockupHref(id: string): string {
+  return `${ADMIN_MOCKUPS_HREF}/${id}`;
+}
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /** The consent page for an AI app's sign-in — the `oauth-consent` variant. */

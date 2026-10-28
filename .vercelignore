@@ -41,7 +41,14 @@ api-dist
 #
 # (The local dev server is a deliberate exception — vite.config.ts reads
 # supabase/config.toml in an `apply: "serve"` plugin, which never ships.)
-docs
+#
+# `docs/*` and not `docs`, for one exception: the deployed function reads
+# docs/mockups/ at runtime (/admin/mockups, vercel.json's includeFiles, plan
+# 261028b). A child of an ignored *directory* cannot be re-included, only a
+# child of `docs/*`. The build gate still renames all of docs/ aside, which is
+# right: the build reads none of it. tests/vercel-include-files.test.ts.
+docs/*
+!docs/mockups
 evals
 tests
 example

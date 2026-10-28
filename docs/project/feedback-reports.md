@@ -578,12 +578,13 @@ What the report asked and when, what was done, what each option means, and what 
 - `refs` is for agents (the queue item, plan, note and Sentry short id) and **is never sent to the
   browser**. `acted` is added later (below).
 - **The body is plain text, at most 6,000 characters, shown exactly as written with its line
-  breaks.** No markdown is rendered, so no `**`, inline backticks or links. The one exception:
+  breaks.** No markdown is rendered, so no `**`, inline backticks or links. Two exceptions, both
+  from [plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md):
   lines between two lines that are exactly ```` ``` ```` are shown monospaced, line for line and
-  scrolling sideways, for an ASCII mockup or diagram; a `Details` line inside one is content, and a
-  fence left unclosed is refused
-  ([plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md),
-  Stage 2). Write it to
+  scrolling sideways, for an ASCII mockup or diagram (a `Details` line inside one is content, and a
+  fence left unclosed is refused); and a mockup's id, `m-k3m9qt`, outside such a block is a link to
+  its page on `/admin/mockups` ([admin.md](admin.md)), so make the mockup first and name it in the
+  question. A mockup is seen only after the deploy that carries its file. Write it to
   [ask-me-questions.md](../reusable/ask-me-questions.md): Greg should be able to answer "1A" without
   opening anything else. When `report` is somebody else's, he sees it beside the question, shut and
   marked as a reader's, with the address it came from (since 2026-10-20,
