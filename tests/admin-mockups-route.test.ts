@@ -102,6 +102,14 @@ function seed(): void {
   writeFileSync(path.join(dir, "m-aaaaaa.md"), mockup("m-aaaaaa", "2026-10-01", "Older."));
   /* Bad: an unclosed fence. Left out of the list, not a 500. */
   writeFileSync(path.join(dir, "m-bbbbbb.md"), mockup("m-bbbbbb", "2026-10-29", "```\nnever closed"));
+  /* Bad: its name says PNG but its bytes do not. The list must apply the same
+     first-bytes check as the image route, rather than advertising a mockup whose
+     picture can only answer 404. */
+  writeFileSync(
+    path.join(dir, "m-cccccc.md"),
+    mockup("m-cccccc", "2026-10-30", "image: m-cccccc-not-really.png"),
+  );
+  writeFileSync(path.join(dir, "m-cccccc-not-really.png"), "<html>not a png</html>");
 }
 
 describe("the mockups routes", () => {
@@ -159,7 +167,7 @@ describe("the mockups routes", () => {
 
   it("404 a mockup that is not there, and one that does not validate", async () => {
     seed();
-    expect((await request("/api/admin/mockups/m-cccccc")).status).toBe(404);
+    expect((await request("/api/admin/mockups/m-dddddd")).status).toBe(404);
     expect((await request("/api/admin/mockups/m-bbbbbb")).status).toBe(404);
   });
 

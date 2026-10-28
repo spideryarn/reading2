@@ -2975,9 +2975,10 @@ export interface NewFeedback {
    */
   body: string;
   /**
-   * *A problem* or *a suggestion*, or **null for a reader who did not say**.
-   * Greg asked for the toggle to start unset, so absence is an answer here
-   * rather than a missing one — src/types.ts § `FEEDBACK_KINDS`.
+   * *A problem*, *a suggestion*, an admin's *discussion*, or **null for a
+   * reader who did not say**. Greg asked for the toggle to start unset, so
+   * absence is an answer here rather than a missing one — src/types.ts §
+   * `FEEDBACK_KINDS`.
    */
   kind: FeedbackKind | null;
   /**

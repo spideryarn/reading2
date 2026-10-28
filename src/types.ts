@@ -9552,7 +9552,8 @@ export interface AdminFeedbackReport {
    */
   body: string;
   /**
-   * *A problem* or *a suggestion*, or **`null` for "they did not say"**.
+   * *A problem*, *a suggestion*, an admin's *discussion*, or **`null` for
+   * "they did not say"**.
    *
    * Null is a real answer and not a missing one — Greg, 2026-09-02: *"don't
    * default to Problem. Default to null/unknown."* It is also every report

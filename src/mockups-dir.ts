@@ -100,8 +100,9 @@ const mockupName = (name: string) => name.endsWith(".md") && isMockupId(name.sli
  * The server shows `mockups` and logs `problems`; the script and the test fail
  * on any problem — including a file that is neither a mockup nor an image one
  * shows, and every file together being over the total cap, neither of which
- * hides a mockup. `checkContent` reads every image's first bytes, which the
- * list route does not need to do on every request; `totalCap` is for the test.
+ * hides a mockup. `checkContent` reads every image's first bytes; the list route
+ * asks for it so it never advertises a mockup whose image route can only refuse
+ * the bytes. `totalCap` is for the test.
  */
 export async function readMockupDirectory(
   dir: string,

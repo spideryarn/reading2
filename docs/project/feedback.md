@@ -652,11 +652,11 @@ review changed, and what was deferred (other readers, `/admin/feedback`).
 >
 > — Greg, 2026-09-05
 
-**Three sentences, not two.** The toggle may be left alone and *"don't default to Problem"* makes
+**Four sentences, not two.** The toggle may be left alone and *"don't default to Problem"* makes
 that the common case, so `THANKS` in [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is
-keyed by problem, suggestion and neither. They carry **no bracketed code** and are not in
-`src/messages.ts`, for the two halves of the same reason: that file is about failures a model call
-can return, and a thank-you is not a failure
+keyed by problem, suggestion, an admin's discussion, and neither. They carry **no bracketed code**
+and are not in `src/messages.ts`, for the two halves of the same reason: that file is about failures
+a model call can return, and a thank-you is not a failure
 ([copy.md § The bracketed code](copy.md#the-bracketed-code)).
 
 **The kind is the one that was sent**, read from the send's own closure rather than from the live
@@ -892,7 +892,7 @@ owner-filtered store, because nobody can consent for somebody else's piece; and 
 sentence promises stays behind. The build and its reasons are in
 [plan 260913a](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md).
 
-`kind` is the second sort: two values and a null, `FEEDBACK_KINDS` in
+`kind` is the second sort: three values and a null, `FEEDBACK_KINDS` in
 [`src/types.ts`](../../src/types.ts). It rides to Sentry as a tag, and **as no tag at all when the
 reader did not say** — a tag whose value is `""` is one Sentry will group by, while "the ones nobody
 classified" is a filter on the tag being missing.

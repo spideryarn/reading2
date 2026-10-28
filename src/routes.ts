@@ -11615,7 +11615,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     path: "/api/admin/mockups",
     article: "none",
     handler: async ({ request: { res } }) => {
-      const { mockups, problems } = await readMockupDirectory(mockupsDir(), { checkContent: false });
+      /* Validate the signatures here too. Otherwise a file named `.png` whose
+         bytes are HTML appears as a good row and fails only after it is opened;
+         the list's promise is that a bad mockup is left out, not deferred. */
+      const { mockups, problems } = await readMockupDirectory(mockupsDir(), { checkContent: true });
       for (const { file, problem } of problems) {
         log("http").warn({ file, problem }, "admin mockups: a file was left out of the list");
       }

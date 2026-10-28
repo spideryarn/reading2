@@ -4,7 +4,7 @@ Report `spya-zytb0g` (#723), Greg, admin, filed as a suggestion on 2026-10-28; p
 `feedback-reporter.ts` (exit 0). No addenda at the start of the run. Session
 `fbzytb0g-feedback-discussions-mockups`.
 
-Status: **plan reviewed by GPT Sol (no P0; four P1s, all taken, below); Stage 1 building.**
+Status: **Stages 1–3 built and on `dev`; Stage 4 investigated and asked; Stage 5's questions written, to be published once the deploy carrying the mockups is checked.**
 
 ## What Greg asked for
 
@@ -187,4 +187,19 @@ dialog scan says, for each session at a dialog, whether an open question names i
 
 ## Log
 
-- 2026-10-28: plan written.
+- 2026-10-28: plan written; GPT Sol's plan review taken (above).
+- 2026-10-28: Stage 1 (Discussion kind), Stage 2 (fenced monospace) and Stage 3 (`/admin/mockups`)
+  built by Opus subagents, each red first. Stage 3's builder found that `.vercelignore` pruned all of
+  `docs/`, so the mockups would never have been uploaded and the page would have been empty in
+  production with every test green: it now says `docs/*` and `!docs/mockups`, and deploy.ts reads
+  that line as before. `includeFiles` uses the brace form Vercel's docs show, `{certs/**,docs/mockups/**}`;
+  after the deploy, `/api/health` (the CA certificate) and a signed-in `GET /api/admin/mockups` are
+  the check. The mockup-id link in question text was added by the orchestrator.
+- 2026-10-28: [GPT Sol's code review](261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page-code-review-sol.md):
+  no P0 or P1. It fixed two itself (the list now checks image signatures as the image route does;
+  stale prose about two kinds). Postgres-backed suites run by the orchestrator: 188 passed.
+- 2026-10-28: three comparison mockups made (`m-tn6vxn` ASCII, `m-mxyef8` wireframe in our CSS,
+  `m-tsy26a` the real app's Discussion button, which doubles as the browser check of Stage 1).
+  Questions `q-c8h4zg` (mockup style; live publishing) and `q-cgpett` (the Overseer's rule wording,
+  a notice kind, approving prompts from the phone). An image-model style is queued for after
+  1 November.
