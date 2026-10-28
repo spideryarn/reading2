@@ -220,8 +220,8 @@ existing question already answers it.
 | **iOS**, by `navigator.userAgent` | `install-hint.ts`, `InstallHint.tsx` | the Add to Home Screen hint; other engine checks use different signals (`userAgentData` or `navigator.vendor`) |
 | size for a finger | `@media (pointer: coarse)` in `narrow-window.css` § a coarse pointer, and in `footnotes`, `glossary`, `bibliography`, `quotes`, `referee` | primary pointer only |
 | rules a touchscreen laptop needs too | `@media (any-pointer: coarse)` in `narrow-window.css` (the 16px field, `touch-action` on the prose), `close.css`, `summary.css`, `gutter.css` | |
-| hover-only styling and touch fallbacks | `@media (hover: hover)` / `(hover: none)` in `gutter`, `prose`, `quotes`, `glossary`, `reception`, `chat-actions` | the glossary, Quotes and gutter guards also stop iOS's post-tap `:hover` from looking selected |
-| tap against hover, in JS | `useHoverCard.ts`, `useTapReveal.ts`, `Spine.tsx`, `BlockGutter.tsx` | `pointerType`, with `detail` as the fallback: since iOS 18.2 a finger's click can say `mouse` |
+| hover-only styling and touch fallbacks | `@media (hover: hover)` / `(hover: none)` in `gutter`, `prose`, `quotes`, `glossary`, `skim`, `reception`, `chat-actions` | the glossary, Quotes, Skim chip and gutter guards also stop iOS's post-tap `:hover` from looking selected |
+| tap against hover, in JS | `useHoverCard.ts`, `useTapReveal.ts`, `Spine.tsx`, `BlockGutter.tsx`; `Tooltip.tsx` § `byTouch` (a card a finger opened is not closed by hover) | `pointerType`, with `detail` as the fallback: since iOS 18.2 a finger's click can say `mouse` |
 | a finger's selection | `TouchSelectionChip.tsx` | |
 | the on-screen keyboard | `useVisualViewport.ts` (`--kb-inset`, `putKeyboardAway`); `index.html` (`interactive-widget`) | [feedback.md](feedback.md) has the `dvh` story |
 | the notch and the clock | `styles/tokens.css` (`--safe-*`), `safe-area.ts`, `index.html` (`viewport-fit=cover`) | |

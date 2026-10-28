@@ -137,6 +137,7 @@ const VIEW: SkimView = {
     },
   ],
   position: 1,
+  wholeWords: false,
   card: null,
   termActions: null,
   onAskTerm: null,

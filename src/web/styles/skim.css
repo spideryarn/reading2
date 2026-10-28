@@ -516,8 +516,12 @@
   text-align: left;
   cursor: pointer;
 }
-.skim-chip:hover,
 .skim-chip.on { border-color: var(--highlight); color: var(--ink); }
+/* Behind `(hover: hover)`, as glossary.css's are: iOS keeps `:hover` on a
+   tapped chip, which then looked pressed after its card had closed. */
+@media (hover: hover) {
+  .skim-chip:hover { border-color: var(--highlight); color: var(--ink); }
+}
 /* **A term chip's card** — the glossary's own (`TermCard`, styled by
    prose-hover-card.css), inside the shared tooltip (SkimPanel.tsx § TermChip).
    Only its height is ours. An entry with a web answer is long, and the row of

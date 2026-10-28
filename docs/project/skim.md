@@ -156,8 +156,9 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 
 - **A flash on every arrival** — ‹ ›, ← →, the door, and a depth change that
   moves you all go through one helper that scrolls to the stop and flashes it with
-  [`flashBlock`](../../src/web/flash.ts) once the scroll settles, and on a narrow window steps the
-  band aside. A row press is a jump and flashes through `beginJump`, once. A `?stop=` link scrolls
+  [`flashBlock`](../../src/web/flash.ts) once the scroll settles. On a narrow window it stepped the
+  band aside until 2026-10-03; now only a row press does, and the rest keep Skim up (§ On a phone,
+  the head's controls stay in Skim, below). A row press is a jump and flashes through `beginJump`, once. A `?stop=` link scrolls
   to its stop and flashes it once when the band opens, leaving the band open. A depth change that
   keeps your stop does nothing. This is the named exception to flash.ts's "stepping does not
   flash": the route is out of paper order, so each step is a jump across the article.
@@ -262,7 +263,11 @@ written under `trajectory/7` and unchanged in `skim/8` (whose request adds a str
 on 2026-09-28: *"include summarised and/or truncated version (with tooltip for full version) of the
 quote itself in the left-hand column, not just the double-quotes symbol"*. The words are the Quote's
 own, cut at about 100 characters with the whole of them in a tooltip; the current row shows them
-whole, which is also what a tap reaches on touch. The `〃` that stood for a repeated section path is
+whole. **Where the band covers the prose, every row is whole and none has a tooltip** (Greg, an
+iPhone, 2026-10-28, spya-r246pf, plan
+[261028a](../plans/261028a-skim-on-a-phone-shows-whole-quotes-and-a-tapped-term-card-stays-open.md)):
+there a tap on a row goes to the article, so a cut quote's rest could not be read from Skim at
+all. `SkimView.wholeWords`, set from `covers`. The `〃` that stood for a repeated section path is
 gone — beside a quotation it read as another quotation mark — and a repeated path is now said to a
 screen reader only. A model-written summary per stop is deferred, with the reason, in the plan.
 

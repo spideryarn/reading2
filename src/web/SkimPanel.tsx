@@ -134,7 +134,8 @@ export interface SkimRow {
   /**
    * The quote's own words — `Quote.text`, the article's characters, never a
    * model's. `null` when its quote has gone. Drawn cut short on every row but
-   * the current one, the whole of it in a tooltip (plan 260928e).
+   * the current one, the whole of it in a tooltip (plan 260928e) — except
+   * where the band covers the prose, where every row is whole (`wholeWords`).
    */
   words: string | null;
   /**
@@ -196,7 +197,8 @@ function OpenIn({ label, icon, onOpen }: { label: string; icon: ReactNode; onOpe
 
 /**
  * **How much of a quote a row shows** before it is cut, in characters — about
- * two lines at the band's width. The current row shows all of it.
+ * two lines at the band's width. The current row shows all of it, and so does
+ * every row where the band covers the prose (`SkimView.wholeWords`).
  */
 export const WORDS_ON_A_ROW = 100;
 
@@ -206,17 +208,19 @@ export const WORDS_ON_A_ROW = 100;
  * on hover, and on focus since the row is a button. A quote that fits gets no
  * tooltip, which would only repeat it. Touch has no hover, so what a finger
  * gets is the tap: that makes the row current, and the current row is whole.
+ * Except where the band covers the prose, where the tap goes to the article
+ * instead — so there every row is whole (`wholeWords`, spya-r246pf).
  *
  * Why a character cut and not CSS `line-clamp`: the clamp cannot say whether
  * it cut, and this decides whether there is a tooltip at all.
  */
-function rowWords(row: SkimRow): { shown: string; whole: string | null } | null {
+function rowWords(row: SkimRow, wholeWords: boolean): { shown: string; whole: string | null } | null {
   /* A figure's label is cut the same way: a caption can run to a paragraph. */
   const text = row.figure?.text ?? row.words;
   if (text === null) return null;
   const clean = text.replace(/\s+/g, " ").trim();
   if (clean === "") return null;
-  if (row.current) return { shown: clean, whole: null };
+  if (row.current || wholeWords) return { shown: clean, whole: null };
   const cut = snippet(clean, WORDS_ON_A_ROW);
   return { shown: cut, whole: cut === clean ? null : clean };
 }
@@ -843,7 +847,9 @@ export function SkimPanel({ access, view, away }: Props) {
   /* The depth and the card reflow the list without changing the current row.
      `away` is there because a band that stepped aside is `display: none`: a
      step made from the prose's door measures nothing, so the list is measured
-     again when the band comes back (GPT Sol, plan review F1). */
+     again when the band comes back (GPT Sol, plan review F1). `wholeWords`
+     because a rotation across `covers` draws every other row whole or cut
+     again (spya-r246pf). */
   /* Only a snippet on the current stop counts as open — see `OpenSnippet`. */
   const snippet = snippetOpen !== null && snippetOpen.stop === currentId ? snippetOpen : null;
   const toggle = (kind: OpenSnippet["kind"], id: string) =>
@@ -873,15 +879,15 @@ export function SkimPanel({ access, view, away }: Props) {
       ?.querySelector<HTMLButtonElement>('.skim-go[aria-current="step"]')
       ?.focus({ preventScroll: true });
   };
-  useFollow(scroller, currentId, [view.depth, view.card, away, snippet?.kind, snippet?.id]);
+  useFollow(scroller, currentId, [view.depth, view.card, away, view.wholeWords, snippet?.kind, snippet?.id]);
   /* A depth or route refresh can remove an open row, so its Tooltip unmounts
      before it can report that it closed. Do not let that stale id reopen if
      the row later returns. The enabled check also covers words disappearing. */
   useEffect(() => {
     if (tipFor === null) return;
     const row = ready ? view.rows.find((candidate) => candidate.key === tipFor) : undefined;
-    if (row === undefined || !(row.missing || rowWords(row)?.whole)) setTipFor(null);
-  }, [ready, tipFor, view.rows]);
+    if (row === undefined || !(row.missing || rowWords(row, view.wholeWords)?.whole)) setTipFor(null);
+  }, [ready, tipFor, view.rows, view.wholeWords]);
   /* A controlled tooltip can unmount before reporting that it closed. Do not
      let its stale id reopen if a shallower pass removes the row and a later
      pass brings it back. This is the where-card equivalent of `tipFor` above. */
@@ -1070,7 +1076,7 @@ export function SkimPanel({ access, view, away }: Props) {
                     const place = row.place === null ? null : placeText(row.place);
                     const above = view.rows[index - 1]?.place;
                     const repeatedPlace = place !== null && above != null && place === placeText(above);
-                    const words = rowWords(row);
+                    const words = rowWords(row, view.wholeWords);
                     const go = (
                       <button
                         type="button"

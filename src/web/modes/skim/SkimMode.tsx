@@ -693,6 +693,13 @@ export interface SkimView {
   rows: SkimRow[];
   /** 1-based position of the current stop on this pass, or 0 for none. */
   position: number;
+  /**
+   * **Every row's words whole, not only the current one's** — where the band
+   * covers the prose (`covers`). There a row press goes to the article, so the
+   * tooltip that holds the rest of a cut quote cannot be reached from Skim.
+   * Greg, an iPhone, 2026-10-28 (spya-r246pf).
+   */
+  wholeWords: boolean;
   /** What sits under the current stop — src/web/stop-card.ts. `null` without a current stop. */
   card: StopCard | null;
   /** *Hide* on a term chip's card, or `null` for a visitor (SkimPanel.tsx § `TermChip`, plan 261006e). */
@@ -1109,6 +1116,7 @@ function useSkimMode({
     depths,
     rows,
     position: current ? route.indexOf(current) + 1 : 0,
+    wholeWords: covers,
     card,
     termActions,
     onAskTerm,

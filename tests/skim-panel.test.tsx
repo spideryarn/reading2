@@ -506,6 +506,7 @@ function view(over: Partial<SkimView> = {}): SkimView {
       { key: Q[3]!, figure: null, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
     ],
     position: 2,
+    wholeWords: false,
     card: null,
     figures: 0,
     onFigures: () => void calls.push("figures"),
@@ -783,6 +784,17 @@ describe("the panel", () => {
       await draw(owner(), withWords([null, LONG, null]));
       expect(words(rowsOf()[1])).toBe(`“${LONG}”`);
       await hover(rowsOf()[1]!.querySelector(".skim-go")!);
+      expect(tips()).toHaveLength(0);
+    });
+
+    /* Greg, an iPhone, 2026-10-28 (spya-r246pf): where the band covers the
+       article a tap on a row goes to the article, so the tooltip that held
+       the rest of a cut quote could not be reached from Skim at all. */
+    it("shows every row's quote whole, with no tooltip, where the band covers the article", async () => {
+      await draw(owner(), { ...withWords([LONG, null, "Short and whole."]), wholeWords: true });
+      expect(words(rowsOf()[0])).toBe(`“${LONG}”`);
+      expect(words(rowsOf()[2])).toBe("“Short and whole.”");
+      await hover(rowsOf()[0]!.querySelector(".skim-go")!);
       expect(tips()).toHaveLength(0);
     });
 
@@ -1094,6 +1106,30 @@ describe("the panel", () => {
     await act(async () => touchDown());
     await act(async () => termChip().click());
     expect(termChip().getAttribute("aria-expanded"), "focus must not hold a dismissed tap open").toBe("false");
+  });
+
+  /* Greg, an iPhone, 2026-10-28 (spya-r246pf): a tapped term did not show its
+     entry. The touch guard kept off a "hover" close but not a "safe-polygon"
+     one, which a compatibility mouseleave and a mousemove away from the chip
+     produce — and the card a finger had pinned went with it. */
+  it("keeps a tapped card open through a mouseleave and a move away, until a press elsewhere", async () => {
+    vi.useFakeTimers();
+    await draw(owner(), view({ card: CARD }));
+    const touchDown = new Event("pointerdown", { bubbles: true });
+    Object.defineProperty(touchDown, "pointerType", { value: "touch" });
+    await act(async () => termChip().dispatchEvent(touchDown));
+    await act(async () => termChip().click());
+    expect(termChip().getAttribute("aria-expanded")).toBe("true");
+    await act(async () => {
+      termChip().dispatchEvent(new MouseEvent("mouseleave", { clientX: 5, clientY: 5 }));
+      termChip().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+      document.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 300, clientY: 700 }));
+    });
+    for (const _ of [0, 1]) await act(async () => { vi.advanceTimersByTime(500); });
+    expect(termChip().getAttribute("aria-expanded"), "a finger's card outlives a synthetic leave").toBe("true");
+    expect(termCard()).not.toBeNull();
+    await act(async () => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(termChip().getAttribute("aria-expanded"), "a press elsewhere still closes it").toBe("false");
   });
 
   it("preserves unrelated keyboard focus when Hide is pressed from a hovered card", async () => {
