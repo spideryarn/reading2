@@ -115,6 +115,8 @@ const PINNED_ANCHORS = [
   /* 2026-10-09, later: Peer review became Sources (plan 261009w).
      `mode-peer-review` above is an alias now (RETIRED_MODES). */
   "mode-sources",
+  /* 2026-10-28: Explanations, behind the experimental switch (plan 261028c). */
+  "mode-explanations",
 ];
 
 const LIVE = new Set<string>(HELP_ANCHORS);

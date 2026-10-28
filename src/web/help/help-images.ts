@@ -45,6 +45,7 @@ import modeBibliographyPng from "./pages/images/mode-bibliography.png";
 import modeChatPng from "./pages/images/mode-chat.png";
 import modeSourcesClaimsPng from "./pages/images/mode-sources-claims.png";
 import modeFaqPng from "./pages/images/mode-faq.png";
+import modeExplanationsPng from "./pages/images/mode-explanations.png";
 import modeIllustratedPng from "./pages/images/mode-illustrated.png";
 import modeLearnPng from "./pages/images/mode-learn.png";
 import modeMarginaliaPng from "./pages/images/mode-marginalia.png";
@@ -327,6 +328,21 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     article: "Cargo Cult Science (cargocult-spya-rz663q)",
     window: "1440×900 at 2×",
     taken: "2026-10-07",
+  },
+  /* **Retake after the first live run** (plan 261028c § What waits for 1
+     November): model calls failed when this was shot, so the three
+     explanations are hand-written stand-ins served by Playwright route
+     interception of `GET /api/explanations/<slug>`, each quote real and
+     unique in its block. Nothing was written to any database. */
+  "mode-explanations.png": {
+    src: modeExplanationsPng,
+    w: 1088,
+    h: 724,
+    shows:
+      "?mode=explanations, the band alone, with a canned GET /api/explanations answer (three explanations on spya-fd2muf, spya-bpyx8n — sure: false — and spya-s9msxy — outside: true); clip x12 y44 w544 h362 CSS, cropped after the second row.",
+    article: "Cargo Cult Science (cargocult-spya-rz663q)",
+    window: "1440×900 at 2×",
+    taken: "2026-10-28",
   },
   "mode-learn.png": {
     src: modeLearnPng,

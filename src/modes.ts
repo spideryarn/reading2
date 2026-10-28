@@ -220,6 +220,12 @@ export const MODES = [
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
      docs/project/skim.md. */
   "skim",
+  /* 2026-10-28: the places a reader is likely to get stuck, each with a short
+     explanation of the missing piece beside the author's words, never in place
+     of them. Greg's report spya-nkq6rj. Owner only (no visitor copy), behind the
+     experimental switch, and made only when the owner presses into it.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  "explanations",
   /* `tweets` stood here from 2026-09-29 to 2026-10-03 — the article as a
      numbered thread. It is Summary's Thread view now (`?summary=thread`), and
      the word is in `RETIRED_MODES` below.

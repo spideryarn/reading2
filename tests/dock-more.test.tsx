@@ -40,7 +40,7 @@ import {
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON, EXPERIMENTAL_SIGNED_OUT } from "./helpers/experimental-fixtures.js";
 
 /** The five, by name and in the bar's order: an independent copy of D2. */
-const GATHERED: readonly Mode[] = ["quotes", "glossary", "faq", "ideas", "timeline"];
+const GATHERED: readonly Mode[] = ["quotes", "glossary", "explanations", "faq", "ideas", "timeline"];
 
 const names = (rows: readonly { mode: Mode }[]) => rows.map((m) => m.mode);
 

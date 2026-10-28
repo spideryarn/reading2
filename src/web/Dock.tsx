@@ -936,6 +936,17 @@ const MODES_UI = [
     group: "guides",
     more: true,
   },
+  /* **Straight after Glossary, under More, since 2026-10-28** — the places a
+     reader is likely to get stuck, each with the missing piece. Glossary's
+     neighbour because it is the same help pointed at a different unit: a term
+     you look up, against a step or an assumption you trip on. Behind the
+     experimental switch. `Puzzle`: the missing piece.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  {
+    mode: "explanations",
+    group: "guides",
+    more: true,
+  },
   /* **In the guides run since 2026-09-29** — Greg: *"Move FAQ
      and Search a little bit further left"* (SPIDERYARN-READING2-4E) — and
      after Glossary since 2026-10-04, when Glossary moved one place left past

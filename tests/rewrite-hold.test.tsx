@@ -262,6 +262,7 @@ const { useQuiz, useQuizRead } = await import("../src/web/useQuiz.js");
 const { QuizPanel } = await import("../src/web/QuizPanel.js");
 const { SummaryBand } = await import("../src/web/modes/summary/SummaryMode.js");
 const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
+const { ExplanationsBand } = await import("../src/web/modes/explanations/ExplanationsMode.js");
 const { GlossaryBand } = await import("../src/web/modes/glossary/GlossaryMode.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { SketchView } = await import("../src/web/SketchView.js");
@@ -476,6 +477,38 @@ const ROWS: Row[] = [
     forced: ["Find them again"],
     direct: [{ label: "Find them again", stale: true }],
     waiting: "The new ideas haven't loaded yet.",
+    readAgain: "Try again",
+  },
+  /* Ideas' shape (plan 261028c): the badge's Regenerate, and *Write it again*
+     on the stale banner — and beside a list written for an older profile. */
+  {
+    name: "Explanations",
+    hook: "useExplanations.ts",
+    step: "explanations",
+    path: "/api/explanations/",
+    body: (which, { stale, profiled }) => ({
+      explanations: {
+        ...stamp(which, profiled),
+        explanations: [
+          {
+            id: "expl-1",
+            blockId: "spya-bbbbbb",
+            quote: "The instrument was built",
+            text: `${SAYS[which]}: the missing piece.`,
+            sure: true,
+            outside: false,
+          },
+        ],
+        dropped: { malformed: 0, unknownIds: 0, unquoted: 0, tooLong: 0, ambiguous: 0, badText: 0, repeated: 0, overCap: 0 },
+      },
+      stale,
+      outdated: false,
+      profileChanged: profiled,
+    }),
+    mount: (show) => (show ? createElement(ExplanationsBand, { slug: SLUG, onJump: noop, onAsk: noop }) : null),
+    forced: ["Write it again"],
+    direct: [{ label: "Write it again", stale: true }],
+    waiting: "The new explanations haven't loaded yet.",
     readAgain: "Try again",
   },
   {

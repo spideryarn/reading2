@@ -122,9 +122,10 @@
     .simple-text,
     /* glossary, and the shared part text Ideas, Timeline and FAQ reuse */
     .gloss-gloss,
-    /* not FAQ's passages (the author's words, under the same class) and not
-       Timeline's (a quoted phrase and our own note in one paragraph) */
-    .gloss-part-text:not(.faq-quote, .tl-detail *),
+    /* not FAQ's or Explanations' passages (the author's words, under the
+       same class) and not Timeline's (a quoted phrase and our own note in one
+       paragraph) */
+    .gloss-part-text:not(.faq-quote, .expl-quote, .tl-detail *),
     .prose-card-part-relation .prose-card-text,
     .prose-card-part-why .prose-card-text,
     .prose-card-part-senseHere .prose-card-text,
@@ -133,6 +134,10 @@
     .ideas-name,
     .ideas-reason,
     .faq-question,
+    /* Explanations: the explanation itself (plan 261028c), in the band and
+       opened in the margin */
+    .expl-text,
+    .marg-expl-text,
     .quiz-premise,
     .quiz-question,
     .quiz-list-q,

@@ -52,7 +52,7 @@ import { groupStarts, splitForMore, visibleModes } from "../src/web/Dock.js";
 import type { BandMode } from "../src/modes.js";
 
 /** The five under More, in the bar's order — by hand, like `RUNS`. */
-const UNDER_MORE = ["quotes", "glossary", "faq", "ideas", "timeline"] as const;
+const UNDER_MORE = ["quotes", "glossary", "explanations", "faq", "ideas", "timeline"] as const;
 
 /** What the bar draws as buttons for a reader in `current`, Marginalia's toggle left out. */
 const drawnBands = (on: boolean, current?: BandMode) =>
@@ -67,7 +67,7 @@ const RUNS = [
   /* Diagram after Skim since 2026-10-26, so it stands after More and More
      keeps its place with the switch on (spya-d0pyzt, plan 261026d). */
   ["structure", "summary", "skim", "diagram"],
-  ["quotes", "glossary", "faq", "ideas", "timeline"],
+  ["quotes", "glossary", "explanations", "faq", "ideas", "timeline"],
   /* Citations, Referee, Debate until 2026-10-09, when Citations and Debate
      became Sources, in Debate's place (plan 261009l); Sources first since
      2026-10-10 (spya-eyaf3n, plan 261011a). */

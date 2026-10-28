@@ -75,6 +75,7 @@ import modeSourcesMd from "./pages/modes/sources.md?raw";
 import modeStructureMd from "./pages/modes/structure.md?raw";
 import modeFaqMd from "./pages/modes/faq.md?raw";
 import modeSkimMd from "./pages/modes/skim.md?raw";
+import modeExplanationsMd from "./pages/modes/explanations.md?raw";
 import modeMarginaliaMd from "./pages/modes/marginalia.md?raw";
 import faqIsTheAiReadingForMeMd from "./pages/questions/faq-is-the-ai-reading-for-me.md?raw";
 import faqWhySlowFirstTimeMd from "./pages/questions/faq-why-slow-first-time.md?raw";
@@ -131,6 +132,7 @@ export const HELP_MODE_FILES: Record<Mode, string> = {
   structure: modeStructureMd,
   faq: modeFaqMd,
   skim: modeSkimMd,
+  explanations: modeExplanationsMd,
   marginalia: modeMarginaliaMd,
 };
 

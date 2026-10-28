@@ -30,7 +30,7 @@ import {
 } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
-import type { BlockId, CitedWork, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
+import type { BlockId, CitedWork, Explanation, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
 import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
 import { useSituateRead } from "../useSituate.js";
@@ -39,6 +39,10 @@ import { dayOf } from "../relative-time.js";
 import { isWebUrl } from "../../urls.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
+import { useExplanationsRead } from "../useExplanations.js";
+import { useExperimental } from "../useExperimental.js";
+import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "../explanation-labels.js";
+import { AskInChatButton } from "../OriginChat.js";
 import { byLineOf, CiteBlurb } from "../BibliographyPanel.js";
 import { rowWork } from "../ReceptionAndClaimsPanel.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
@@ -95,6 +99,20 @@ export type MarginCiteSenders = {
   onJump(id: BlockId, aim?: JumpAim): void;
 };
 export const MarginCiteActions = createContext<MarginCiteSenders | null>(null);
+
+/**
+ * **What an *Explained* line can do** (plan 261028c): ask about it in the
+ * anchored passage chat, as the band's row does (Reader.tsx §
+ * `askExplanationInChat`), or open it in its band. A context for
+ * `MarginCiteActions`' reason: Reader's `marginNotes` memo must not hear about
+ * them. The column draws explanations for the owner only; null draws neither
+ * button.
+ */
+export type MarginExplanationSenders = {
+  onAsk(explanation: Explanation): void;
+  onOpen(explanationId: string): void;
+};
+export const MarginExplanationActions = createContext<MarginExplanationSenders | null>(null);
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
@@ -332,6 +350,8 @@ function MarginNotes({
             return <RelationWord key="relation" relation={note.relation} />;
           case "aside":
             return <AsideNote key="aside" note={note.note} onJump={onJump} />;
+          case "explanation":
+            return <ExplanationNote key="explanation" explanation={note.explanation} />;
           case "question":
             return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
           case "idea":
@@ -585,6 +605,45 @@ function FaqNote({
           )}
         </div>
       ))}
+    </ShutNote>
+  );
+}
+
+/**
+ * **A place the reader is likely to get stuck, explained** (plan 261028c) —
+ * shut, as every other mode's item is: *Explained* and the start of the
+ * passage's own words. Opened, the explanation in the AI's face, the labels it
+ * set for itself (only those that apply), *Ask in chat* and *Open in
+ * Explanations*. Every word is text, never markup: the explanation is the
+ * model's.
+ */
+function ExplanationNote({ explanation }: { explanation: Explanation }) {
+  const acts = useContext(MarginExplanationActions);
+  const labels = explanationLabels(explanation);
+  return (
+    <ShutNote
+      kind="explanation"
+      stamp="Explained"
+      tip="explanation"
+      line={`“${explanation.quote}”`}
+      lineVoice="author"
+    >
+      <div className="marg-open-item" data-explanation={explanation.id}>
+        <p className="marg-expl-text">{explanation.text}</p>
+        {labels.length > 0 && <p className="marg-expl-labels">{labels.join(" · ")}</p>}
+        {acts && (
+          <p className="marg-expl-foot">
+            <AskInChatButton
+              label={ASK_EXPLANATION_IN_CHAT}
+              className="marg-expl-ask"
+              onAsk={() => acts.onAsk(explanation)}
+            />{" "}
+            <button type="button" className="linky marg-expl-open" onClick={() => acts.onOpen(explanation.id)}>
+              Open in Explanations
+            </button>
+          </p>
+        )}
+      </div>
     </ShutNote>
   );
 }
@@ -1173,6 +1232,8 @@ export type MarginFeed = {
   notes: MarginNotesList;
   /** Situate's findings (plan 261024o): the owner's, whatever the experimental switch says since spya-pkpqch. */
   literature: MarginLiterature | null;
+  /** The explanations (plan 261028c): the owner's, with the experimental switch on, and never a stale list. */
+  explanations: readonly Explanation[] | null;
 };
 
 export const NO_OWNER_FEED: MarginFeed = {
@@ -1183,6 +1244,7 @@ export const NO_OWNER_FEED: MarginFeed = {
   relations: null,
   notes: null,
   literature: null,
+  explanations: null,
 };
 
 /**
@@ -1242,11 +1304,47 @@ export function OwnerMarginFeed({
      sits found to be beside the passage as he reads (spya-pkpqch). The read
      is a component of its own, so it can hand back none when unmounted. */
   const [literature, setLiterature] = useState<MarginLiterature | null>(null);
+  /* **The explanations, only with the experimental switch on** (plan
+     261028c), as the literature findings were until spya-pkpqch: the mode is
+     behind the switch, so its lines are too. A component of its own, mounted
+     only then, so with the switch off nothing asks `/api/explanations`. */
+  const { on: experimental } = useExperimental();
+  const [explanations, setExplanations] = useState<readonly Explanation[] | null>(null);
   useEffect(() => {
-    onFeed({ ideas, faq, timeline, claims, relations, notes, literature });
-  }, [ideas, faq, timeline, claims, relations, notes, literature, onFeed]);
+    onFeed({ ideas, faq, timeline, claims, relations, notes, literature, explanations });
+  }, [ideas, faq, timeline, claims, relations, notes, literature, explanations, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
-  return <SituateMarginFeed slug={slug} onLiterature={setLiterature} />;
+  return (
+    <>
+      <SituateMarginFeed slug={slug} onLiterature={setLiterature} />
+      {experimental && <ExplanationsMarginFeed slug={slug} onExplanations={setExplanations} />}
+    </>
+  );
+}
+
+/**
+ * **The explanations, read and never made** — `useExplanationsRead`, the read
+ * half with no job under it, and `useStepFinished` for a run finished while the
+ * column is open. **A stale list is not drawn** (the article moved under it);
+ * one written by an older prompt or for an older profile still is, its words
+ * checked against each block before drawing (notes.ts § `explainedBlocks`).
+ * Unmounted, it hands back none.
+ */
+function ExplanationsMarginFeed({
+  slug,
+  onExplanations,
+}: {
+  slug: string;
+  onExplanations(explanations: readonly Explanation[] | null): void;
+}) {
+  const read = useExplanationsRead(slug);
+  useStepFinished(slug, "explanations", read.refresh);
+  const list = read.status === "ready" && !read.stale ? (read.explanations?.explanations ?? null) : null;
+  useEffect(() => {
+    onExplanations(list);
+  }, [list, onExplanations]);
+  useEffect(() => () => onExplanations(null), [onExplanations]);
+  return null;
 }
 
 /**

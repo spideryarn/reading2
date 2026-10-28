@@ -655,6 +655,36 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        owners-only (`POLICY.skim`, src/web/visitor.ts). */
     experimental: false,
   },
+  explanations: {
+    description: "The places in this piece you are likely to get stuck, each with what is missing there",
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
+       The card on the button):
+       - "one model call over the whole article, written for your profile if you
+         have one": the `explanations` step, one capable messages-wire call
+         over `articleWithIds` with `profileSection(profile)` after it
+         (src/explanations.ts), `profileHash` in its stamp (src/pipeline.ts §
+         STEPS.explanations).
+       - "written once and stored": the `explanations` column, replaced on a
+         forced re-run (`FORCE_ONLY_WHEN_NAMED`).
+       - "the missing piece, not a retelling" and "not a single term's
+         meaning, which is Glossary's": the prompt's own two rules
+         (src/explanations.ts § 3).
+       - "the quoted words are checked": `findQuote(…, "spaced")` against the
+         block, and dropped when they occur twice (src/explanations.ts § 2).
+       - "says when it is unsure or relies on what it knows from outside the
+         piece": `sure` and `outside` on `Explanation` (src/types.ts), drawn as
+         labels by the band.
+       About the mode, not the press, and no price. */
+    how: "One model call over the whole article, written for your profile if you have one, and stored. Each explanation is the missing piece, a skipped step or assumed background, not a retelling of the passage and not a single term's meaning, which is Glossary's. The quoted words are checked against the article; the AI says when it is unsure, or when it relies on what it knows from outside the piece.",
+    /* Not `explain`: the gutter's ? and Chat both explain a passage on
+       request, and a reader typing it may mean either. Not `notes`, which is
+       the Comments row's. */
+    aliases: ["explained", "confusing", "confusing passages", "stuck", "hard parts", "difficult passages", "missing steps"],
+    /* A new mode on an unmeasured prompt, whose model calls have not been
+       read yet (plan 261028c § What waits for 1 November) —
+       docs/project/experimental-features.md. */
+    experimental: true,
+  },
   marginalia: {
     description: "Notes in a column right of the text, each level with the passage it is about",
     /* **Checked against the source** (docs/project/mode.md § The card on

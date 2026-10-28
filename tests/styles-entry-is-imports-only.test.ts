@@ -193,6 +193,10 @@ const MANIFEST = [
      beside it, borrowing glossary.css and timeline.css, and setting nothing they
      set on the same element — faq.css's header. */
   "faq.css",
+  /* After faq.css, and for its reason: `.expl` is `.gloss` with a class
+     beside it, borrowing glossary.css, timeline.css and faq.css's shapes, and
+     setting nothing they set on the same element — explanations.css's header. */
+  "explanations.css",
   /* After faq.css, and for its reason: `.skim` is `.gloss` with a class
      beside it, and sets nothing the sheets it borrows from set on the same
      element — skim.css's header. */

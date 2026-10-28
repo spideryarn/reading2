@@ -499,7 +499,7 @@ function reply(url: string, method: string): Response {
      Tweets, Relations, Skim, Sketch and Illustrated since 261007n, and
      Situate since 261024o (the owner's margin reads it whatever the switch
      says since 261026g). */
-  if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|reception|sources-claims|tweets|relations|skim|sketch|illustrated|situate)\//.test(url)) {
+  if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|reception|sources-claims|tweets|relations|explanations|skim|sketch|illustrated|situate)\//.test(url)) {
     return new Response(null, { status: 404 });
   }
   /* **Arc too since 261007n, but as one that is there**: a missing arc starts
@@ -1507,6 +1507,11 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
   ],
   faq: [
     { label: "FaqBand", as: "owner" },
+    { label: "VisitorBand", as: "visitor" },
+  ],
+  /* Owner only (plan 261028c): a visitor's band is always `VisitorBand`. */
+  explanations: [
+    { label: "ExplanationsBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
   structure: [

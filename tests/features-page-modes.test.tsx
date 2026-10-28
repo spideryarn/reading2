@@ -61,6 +61,7 @@ const TITLES = {
   "A chat that cites.": "chat",
   "Or say it out loud.": "chat",
   "FAQ.": "faq",
+  "Explanations.": "explanations",
   "Reception.": "sources",
   "Learn.": "learn",
   "Quiz.": "learn",

@@ -173,6 +173,28 @@
   ]
  },
  {
+  "id": "mode:explanations",
+  "label": "Explanations",
+  "description": "The places in this piece you are likely to get stuck, each with what is missing there",
+  "aliases": [
+   "explained",
+   "confusing",
+   "confusing passages",
+   "stuck",
+   "hard parts",
+   "difficult passages",
+   "missing steps"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "mode:faq",
   "label": "FAQ",
   "description": "The questions a careful reader would ask this piece, and where it responds",

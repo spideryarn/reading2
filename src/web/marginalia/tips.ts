@@ -29,6 +29,7 @@ export type MargTipKey =
   | "timeline"
   | "reception"
   | "literature"
+  | "explanation"
   | "comment-own"
   | "comment-owner";
 
@@ -70,6 +71,12 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "From the literature",
     what: "Later work that bears on this passage: work that challenges or supports it, what has happened since, or a citation or an omission worth checking. Press this line to open it; its sources are links, and Open in Sources shows it in Where it sits.",
     how: "From the literature search in Sources › Where it sits. AI searched the web and the papers that cite this piece, and wrote each note from what it found; every source's quote was checked against that source's own text, but the judgement is the AI's.",
+  },
+  /* Explanations (plan 261028c): the owner's alone, written for their profile. */
+  explanation: {
+    head: "Explained",
+    what: "A place in this passage you are likely to get stuck, and what is missing there. Press this line to open the explanation; Open in Explanations shows it with the rest.",
+    how: "From Explanations mode. The AI read the whole article with your profile in mind and wrote a short explanation of the missing piece: a skipped step, or background the author assumes. The quoted words are the article's own, checked against it; the explanation is the AI's, and says when it is unsure or relies on what it knows from outside the piece.",
   },
   "comment-own": {
     head: "Yours",

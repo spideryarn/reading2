@@ -93,6 +93,7 @@ import type {
   ChatThread,
   Bibliography,
   Reception,
+  Explanations,
   Faq,
   SourcesClaimList,
   ReceptionCounts,
@@ -303,6 +304,9 @@ const RELATED_WORK = {
 /* A question — the row's own content, not the (i) card's promise, which is a
    constant a panel with no rows would still be free to draw. */
 const FAQ_QUESTION = "Why trust a rig nobody could yet explain?";
+/* An explanation's own words — the row's content, not the (i) card's promise
+   or the labels, which are constants. */
+const EXPLANATION_TEXT = "The rig was trusted before anyone could say why it worked.";
 /* The current stop's role — drawn on the current row only, so a panel that
    drew the stepper and no rows would not satisfy it. */
 const SKIM_ROLE = "Where the chapter turns";
@@ -493,6 +497,27 @@ const FAQ: Faq = {
     overCap: 0,
     malformed: 0,
   },
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+};
+
+const EXPLANATIONS: Explanations = {
+  version: "test",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  profileHash: null,
+  explanations: [
+    {
+      id: "expl-1",
+      blockId: "spya-bbbbbb" as BlockId,
+      quote: "The instrument was built",
+      text: EXPLANATION_TEXT,
+      sure: false,
+      outside: false,
+    },
+  ],
+  dropped: { malformed: 0, unknownIds: 0, unquoted: 0, tooLong: 0, ambiguous: 0, badText: 0, repeated: 0, overCap: 0 },
   generatedAt: "2026-09-01T09:00:00.000Z",
   elapsedMs: 1,
 };
@@ -810,6 +835,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   "sources-where": true,
   bibliography: true,
   faq: true,
+  explanations: true,
   relations: true,
   skim: true,
   sketch: true,
@@ -857,6 +883,10 @@ function artefact(url: string): Response | null {
     return has ? json({ claimList: CLAIM_LIST, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
+  if (url.startsWith("/api/explanations/"))
+    return has
+      ? json({ explanations: stamped(EXPLANATIONS), stale: false, outdated: false, profileChanged: false })
+      : GONE();
   /* Marginalia's relation words. */
   if (url.startsWith("/api/relations/"))
     return has
@@ -1313,6 +1343,8 @@ const SPENDS: Record<Mode, Spend> = {
   },
   /* One model call over the article, like Ideas. */
   faq: { kind: "posts", steps: ["faq"] },
+  /* One model call over the article, like FAQ (plan 261028c). */
+  explanations: { kind: "posts", steps: ["explanations"] },
   /* **Three steps, and the first two are the point**: with no Quotes the
      route has nothing to order, and since stage 6 of plan 260928a it plans
      around the Ideas, so the one press asks for both first in the same job
@@ -1591,6 +1623,7 @@ const DRAWS: Record<Mode, Draws> = {
      view only (GPT Sol's F4 on plan 261009l). */
   sources: { kind: "band", where: ".mode-band.sources", says: CITATION_TITLE, about: "corner" },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION, about: "corner" },
+  explanations: { kind: "band", where: ".mode-band.expl", says: EXPLANATION_TEXT, about: "corner" },
   skim: { kind: "band", where: ".mode-band.skim", says: SKIM_ROLE, about: "corner" },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
@@ -1787,7 +1820,7 @@ describe("phase B — Summary's Thread view", () => {
    whose artefact can be written for the reader's profile and that show it in
    the band. Sketch is the named exception — its badge is in its picture's own
    toolbar, plan 261002e § Deferred. */
-const PROFILED = ["summary", "glossary", "ideas", "quotes"] as const satisfies readonly Mode[];
+const PROFILED = ["summary", "glossary", "ideas", "quotes", "explanations"] as const satisfies readonly Mode[];
 
 /** Each profiled band: a mode's, by its `DRAWS` row — and Summary's thread, which has no row. */
 const PROFILED_BANDS: readonly { name: string; search: string; where: string; says: string }[] = [

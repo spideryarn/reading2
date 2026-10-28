@@ -66,7 +66,8 @@ listed here; the names under each are files in `docs/project/`.
   `column-context.md` (history: the gist columns' fisheye) ·
   `structure.md` (the tree in the band: two columns or a nested list) ·
   `reading-time.md` (where you have spent time, down the spine) ·
-  `maths.md` (TeX in the prose, drawn as maths) · `glossary.md` · `summaries.md` ·
+  `maths.md` (TeX in the prose, drawn as maths) · `glossary.md` ·
+  `explanations.md` (the places a reader would get stuck, explained in the margin) · `summaries.md` ·
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·
   `timeline.md` (when the piece says these things happened) ·

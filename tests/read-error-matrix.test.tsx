@@ -178,6 +178,7 @@ const SAYS = {
   illustrated: "The rig, painted",
   sketch: "The calibrated rig",
   situate: SAYS_SITUATE,
+  explanations: "The rig was trusted before anyone could say why it worked.",
 } as const;
 
 const NO_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
@@ -197,6 +198,19 @@ const BODIES: Record<string, unknown> = {
     },
     stale: false,
     outdated: false,
+  },
+  explanations: {
+    explanations: {
+      ...STAMP,
+      profileHash: null,
+      explanations: [
+        { id: "expl-1", blockId: AT.blockId, quote: AT.quote, text: SAYS.explanations, sure: true, outside: false },
+      ],
+      dropped: { malformed: 0, unknownIds: 0, unquoted: 0, tooLong: 0, ambiguous: 0, badText: 0, repeated: 0, overCap: 0 },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
   },
   faq: {
     faq: {
@@ -594,6 +608,7 @@ const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { useFaqRead } = await import("../src/web/useFaq.js");
+const { useExplanationsRead } = await import("../src/web/useExplanations.js");
 const { useTimelineRead } = await import("../src/web/useTimeline.js");
 const { useReceptionRead } = await import("../src/web/useReception.js");
 const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
@@ -708,6 +723,8 @@ interface Row {
 
 const ROWS: readonly Row[] = [
   { hook: "useFaq.ts", kind: "faq", search: "?mode=faq", where: ".mode-band.faq" },
+  /* Owner only, behind the experimental switch (plan 261028c). */
+  { hook: "useExplanations.ts", kind: "explanations", search: "?mode=explanations", where: ".mode-band.expl" },
   { hook: "useSimple.ts", kind: "simple", search: "?mode=summary", where: ".mode-band.summ" },
   { hook: "useSkim.ts", kind: "skim", search: "?mode=skim", where: ".mode-band.skim", needs: ["quotes"] },
   { hook: "useTweets.ts", kind: "tweets", search: "?mode=summary&summary=thread", where: ".mode-band.summ.tweets" },
@@ -1454,6 +1471,7 @@ interface ArtefactReadState {
 /** The same twelve reads, alone: the control and the change of article. */
 const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => ArtefactReadState }[] = [
   { kind: "faq", use: useFaqRead },
+  { kind: "explanations", use: useExplanationsRead },
   { kind: "simple", use: useSimple },
   { kind: "skim", use: (slug) => useSkim(slug, useQuotesRead(slug), useIdeasRead(slug)) },
   { kind: "ideas", use: useIdeasRead },

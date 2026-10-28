@@ -143,6 +143,13 @@ const OWNERS_ONLY: Partial<Record<Mode, string>> = {
   learn:
     "Recall is the owner's own answers, built with their profile; Quiz was excluded by Greg on 2026-09-29 as not small (plan 260929c § Decided)",
   referee: "the owner's own criteria, poles and marks on an unpublished paper — a reviewer's private working",
+  /* **The one generated artefact here, and a decision rather than a staging
+     default** (plan 261028c, GPT Sol's PR-4): written for the owner's profile,
+     about where *they* would get stuck, and nothing of it is published — there
+     is no public projection to refuse. A visitor's copy is the plan's named
+     follow-up if Greg wants one. */
+  explanations:
+    "where the owner, by their profile, is likely to get stuck — written for them and never published (plan 261028c § Not built: a visitor's copy)",
 };
 
 describe("the modes a visitor may not see", () => {
@@ -364,8 +371,10 @@ describe("what a visitor is told, mode by mode", () => {
        public payload now, with a `PublicArtefacts` flag to drop out on
        (SPIDERYARN-READING2-56, src/web/visitor.ts § POLICY.skim,
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md). */
+    /* `explanations` joined on 2026-10-28, owner only by decision: its
+       artefact is never published (plan 261028c; `OWNERS_ONLY` above). */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "referee", "learn"].sort(),
+      ["chat", "referee", "learn", "explanations"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. Bibliography'
        and Debate's flags both open Sources since 2026-10-09. */

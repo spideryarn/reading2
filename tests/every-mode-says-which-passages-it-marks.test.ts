@@ -121,6 +121,10 @@ const SILENT: BandMode[] = [
      docs/plans/260916d-faq-mode.md § Deferred. When it lands, this entry moves
      to PRODUCERS. */
   "faq",
+  /* Earned for FAQ's reason: each explanation's quote is a jump, and the
+     prose underline is the deferred stage 3 of plan 261028c. When it lands,
+     this entry moves to PRODUCERS. */
+  "explanations",
   /* Marginalia is not here since 2026-10-01: its column is a switch beside the
      band, not a value of `?mode=` (`BandMode`) —
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */

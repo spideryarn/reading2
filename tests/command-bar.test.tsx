@@ -652,6 +652,7 @@ const GENERATES: Record<Mode, boolean> = {
   sources: true,
   diagram: true,
   faq: true,
+  explanations: true,
   skim: true,
 };
 

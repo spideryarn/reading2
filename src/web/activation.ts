@@ -272,6 +272,9 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
     why: "the sub-mode a press lands on is whatever `?sources=` says: Where it sits arms its composite, Bibliography its own list, and the rest nothing (plans 261025h and 261026g)",
   },
   faq: { kind: "fixed", target: "faq" },
+  /* Owner only, and behind the experimental switch: a press is the only thing
+     that makes them, never arrival and never import (plan 261028c). */
+  explanations: { kind: "fixed", target: "explanations" },
   /* The target is the route even when the job it starts writes the Quotes
      first (`precededBy`, src/web/useSkim.ts): the press is for this
      mode's artefact, and the token is keyed on it. */

@@ -32,6 +32,7 @@ import {
   type BlockId,
   type CitedWork,
   type ClaimOrigin,
+  type Explanation,
   type QuizOrigin,
   type GlossaryEntry,
   type Idea,
@@ -44,6 +45,8 @@ import {
   MarginaliaHead,
   MarginCiteActions,
   type MarginCiteSenders,
+  MarginExplanationActions,
+  type MarginExplanationSenders,
   MarginNotesSlot,
   type MarginFeed,
   NO_OWNER_FEED,
@@ -66,6 +69,7 @@ import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
 import { SourcesBand, VisitorSourcesBand } from "../modes/sources/SourcesMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
+import { ExplanationsBand } from "../modes/explanations/ExplanationsMode.js";
 import {
   armSkimOpening,
   firstSkimArrival,
@@ -98,6 +102,7 @@ import {
   askAboutCitedWork,
   citingSentences,
   askAboutGlossaryEntry,
+  askAboutExplanation,
   askAboutIdea,
   askAboutTerm,
   itemOrigin,
@@ -106,6 +111,7 @@ import {
   askToCheckClaim,
 } from "../chat-handoff.js";
 import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
+import { findQuote } from "../../quote-match.js";
 import { findingLens, findingLensOrigin, findingOrigin, overviewOrigin, overviewQuestion } from "../situate-dossier.js";
 import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
@@ -1234,6 +1240,31 @@ export function Reader({
       handToChat(askAboutIdea(idea), "send", itemOrigin("ideas", idea.id, idea.name)),
     [handToChat],
   );
+  /* **An explanation's *Ask in chat*** (plan 261028c), from the band and from
+     the margin: the ordinary chat about a passage, anchored on the
+     explanation's words, its first question carrying the explanation. No
+     origin, so no mark on the item and no way back from Chat's list — the
+     plan's § Not built. The words occur exactly once in their block (the step
+     drops any that do not, src/explanations.ts § 2), so `start` is where
+     they are; a block whose words have since moved anchors on the whole
+     block instead, which the server cannot refuse. */
+  const askExplanationInChat = useCallback(
+    (explanation: Pick<Explanation, "blockId" | "quote" | "text">) => {
+      const text = article.blocks.find((block) => block.id === explanation.blockId)?.text ?? "";
+      const span = text === "" ? null : findQuote(text, explanation.quote);
+      askPassageInChat({
+        kind: "draft",
+        anchor:
+          span === null
+            ? { blockId: explanation.blockId }
+            : { blockId: explanation.blockId, quote: explanation.quote, start: span.start },
+        opening: span === null ? text : explanation.quote,
+        question: askAboutExplanation(explanation),
+        sendNow: true,
+      });
+    },
+    [article.blocks, askPassageInChat],
+  );
   /* The one sender that waits: the paragraph, quoted, and an empty line for
      the reader's question. There is nothing to ask until they type it. */
   const askAboutSummary = useCallback(
@@ -1805,6 +1836,13 @@ export function Reader({
      *literature* line's *Open in Sources*, or a finding/overview chat's way back. */
   const [findingFocus, setFindingFocus] = useState<ItemFocus | null>(null);
   const findingFocusTaken = useCallback((taken: ItemFocus) => setFindingFocus(focusTaken(taken)), []);
+  /* An explanation in its band: a margin *Explained* line's *Open in
+     Explanations* (plan 261028c). */
+  const [explanationFocus, setExplanationFocus] = useState<ItemFocus | null>(null);
+  const explanationFocusTaken = useCallback(
+    (taken: ItemFocus) => setExplanationFocus(focusTaken(taken)),
+    [],
+  );
   /**
    * **Open Glossary on one term and bring its row into view** — the prose
    * card's *Open in Glossary* and its second tap, and a chat's way back to a
@@ -1852,6 +1890,9 @@ export function Reader({
           break;
         case "finding":
           setFindingFocus(null);
+          break;
+        case "explanation":
+          setExplanationFocus(null);
           break;
         default: {
           const unhandled: never = slot;
@@ -2809,6 +2850,9 @@ export function Reader({
       /* The owner's only: the feed reads it whatever the experimental switch says
          since 2026-10-26 (spya-pkpqch, plan 261026g). */
       literature: isOwner ? ownerFeed.literature : null,
+      /* The owner's only, and the feed reads them only with the experimental
+         switch on: the mode is behind it (plan 261028c). */
+      explanations: isOwner ? ownerFeed.explanations : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2870,6 +2914,7 @@ export function Reader({
     ownerFeed.relations,
     ownerFeed.notes,
     ownerFeed.literature,
+    ownerFeed.explanations,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
@@ -3235,6 +3280,20 @@ export function Reader({
    * on every scroll (GPT Sol F5 on plan 261020g). Null for a visitor, whose
    * column draws no citations anyway. MarginaliaColumn.tsx § MarginCiteSenders.
    */
+  /* **An *Explained* line's two buttons** (plan 261028c): the anchored chat the
+     band's row sends, and the band itself, landing on the row. Owner only, as
+     the lines are. */
+  const openExplanationInBand = useCallback(
+    (explanationId: string) => {
+      setExplanationFocus(focusOn(explanationId));
+      showBand("explanations");
+    },
+    [showBand],
+  );
+  const marginExplanationActions = useMemo<MarginExplanationSenders | null>(
+    () => (isOwner ? { onAsk: askExplanationInChat, onOpen: openExplanationInBand } : null),
+    [isOwner, askExplanationInChat, openExplanationInBand],
+  );
   const marginCiteActions = useMemo<MarginCiteSenders | null>(
     () =>
       isOwner
@@ -4257,6 +4316,20 @@ export function Reader({
       case "faq":
         if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={bandJump} /> : null;
         return <FaqBand slug={slug} onJump={bandJump} />;
+      /* **The owner's alone** (plan 261028c): no public projection, so a
+         visitor's band is `VisitorBand`, which `visitorGap` puts in the slot
+         before this switch is asked (POLICY.explanations, visitor.ts). Each
+         quote is a jump, and *Ask in chat* is the anchored passage chat. */
+      case "explanations":
+        return owner ? (
+          <ExplanationsBand
+            slug={slug}
+            onJump={bandJump}
+            onAsk={askExplanationInChat}
+            focus={explanationFocus}
+            onFocusTaken={explanationFocusTaken}
+          />
+        ) : null;
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
@@ -4863,6 +4936,7 @@ export function Reader({
         </div>
       )}
       <MarginCiteActions.Provider value={marginCiteActions}>
+      <MarginExplanationActions.Provider value={marginExplanationActions}>
       <TableView
         article={article}
         /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
@@ -4945,6 +5019,7 @@ export function Reader({
         onSelect={selectProse}
         onOpenComment={openCommentDialog}
       />
+      </MarginExplanationActions.Provider>
       </MarginCiteActions.Provider>
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and

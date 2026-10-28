@@ -40,6 +40,7 @@ export const MODE_WHEN: Record<Mode, string> = {
   structure: "you want to see how the piece is built, and where you are in it",
   faq: "you want the questions a careful reader would ask, and where the piece answers them",
   skim: "you want to go round a paper more than once, a little deeper each time",
+  explanations: "you expect to get stuck, and want the missing step or background beside the passage that needs it",
   marginalia: "you want a few quiet notes beside the text while you read",
 };
 

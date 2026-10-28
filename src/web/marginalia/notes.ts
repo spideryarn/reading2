@@ -22,6 +22,7 @@ import type {
   BlockId,
   CitedWork,
   Comment,
+  Explanation,
   FaqQuestion,
   Idea,
   IdeaProvenance,
@@ -69,6 +70,10 @@ export type MarginaliaNote =
   /** A note the relations call chose to write here (plan 261011o): open, not
       shut, since there are at most eight and the line is the whole of it. */
   | { kind: "aside"; note: MarginNote }
+  /** A place the reader is likely to get stuck, explained (Explanations,
+      plan 261028c). Drawn shut. One per block, which the step enforces.
+      Owner only — the caller's rule. */
+  | { kind: "explanation"; explanation: Explanation }
   /** The question a part — or, at `depth` 0, the whole article — answers. */
   | { kind: "question"; depth: number; text: string }
   /** An idea the piece assumes or introduces, occurring in this block. */
@@ -136,7 +141,33 @@ export type MarginSources = {
   notes?: readonly MarginNote[] | null;
   /** Situate's findings — the owner's only (plan 261024o). */
   literature?: MarginLiterature | null;
+  /** The explanations of the places a reader is likely to get stuck — the
+      owner's only, and never a stale list (plan 261028c). */
+  explanations?: readonly Explanation[] | null;
 };
+
+/**
+ * **The blocks an explanation still speaks for**: each explanation whose block
+ * this article has and whose quoted words are still in it (the forgiving
+ * match, as every browser-side check against a block uses — quote-match.ts §
+ * `findQuote`). The one answer to two questions, so they cannot disagree:
+ * which explanations the margin draws, and beside which blocks the relations
+ * call's own `explain` note gives way to one (plan 261028c § The margin's
+ * `explain` notes stay). Pure.
+ */
+export function explainedBlocks(
+  index: ReadonlyMap<string, number>,
+  blocks: readonly Block[],
+  explanations: readonly Explanation[] | null | undefined,
+): Set<BlockId> {
+  const out = new Set<BlockId>();
+  for (const e of explanations ?? []) {
+    const at = index.get(e.blockId);
+    const block = at === undefined ? undefined : blocks[at];
+    if (block !== undefined && e.quote.trim() !== "" && findQuote(block.text, e.quote) !== null) out.add(e.blockId);
+  }
+  return out;
+}
 
 type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
 type GroupedItems = Partial<{
@@ -223,10 +254,32 @@ export function marginaliaNotes(
      at a passage this article no longer has is left out rather than drawn
      with a dead link (a stale list is never handed here, but a fresh one is
      checked anyway: it costs one lookup). */
-  const placed = (more.notes ?? []).filter((note) => note.to === null || index.has(note.to));
+  /* **An explanation outranks the relations call's `explain` note beside the
+     same block** (plan 261028c): the two say the same kind of thing, and the
+     explanation is the one written for it, shaped by the reader's profile and
+     with *Ask in chat*. Only one whose words still hold: otherwise the note is
+     all the reader has. The other kinds of note stay. */
+  const explained = explainedBlocks(index, blocks, more.explanations);
+  const placed = (more.notes ?? []).filter(
+    (note) => (note.to === null || index.has(note.to)) && !(note.kind === "explain" && explained.has(note.blockId)),
+  );
   /* In article order, as the words are, whatever order the model wrote them. */
   placed.sort((a, b) => (index.get(a.blockId) ?? 0) - (index.get(b.blockId) ?? 0));
   for (const note of placed) add(note.blockId, { kind: "aside", note });
+
+  /* **Then the explanation**, under the model's own note and above the part's
+     question: like that note it is about this passage's words, and it is shut,
+     so it costs one line. In article order; the first for a block wins, which
+     the step already guarantees. */
+  const explanationsHere = (more.explanations ?? [])
+    .filter((e) => explained.has(e.blockId))
+    .sort((a, b) => (index.get(a.blockId) ?? 0) - (index.get(b.blockId) ?? 0));
+  const seen = new Set<BlockId>();
+  for (const explanation of explanationsHere) {
+    if (seen.has(explanation.blockId)) continue;
+    seen.add(explanation.blockId);
+    add(explanation.blockId, { kind: "explanation", explanation });
+  }
 
   /* **Beside the part's first paragraph, not its first block.** A part's range
      starts at its heading, or at the date line under the title, and a question

@@ -257,5 +257,6 @@ export const MODE_LABEL: Record<Mode, string> = {
   structure: "Structure",
   faq: "FAQ",
   skim: "Skim",
+  explanations: "Explanations",
   marginalia: "Marginalia",
 };

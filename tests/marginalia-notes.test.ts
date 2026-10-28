@@ -6,11 +6,12 @@
 import { describe, expect, it } from "vitest";
 import { blockIndex } from "../src/section-path.js";
 import { checkTree } from "../src/tree-invariants.js";
-import type { Arc, Block, BlockId, CitedWork, FaqQuestion, Idea, MarginNote, TimelineEvent, Tree, TreeNode } from "../src/types.js";
+import type { Arc, Block, BlockId, CitedWork, Explanation, FaqQuestion, Idea, MarginNote, TimelineEvent, Tree, TreeNode } from "../src/types.js";
 import {
   type MarginClaim,
   type MarginComment,
   DRAWN_RELATIONS,
+  explainedBlocks,
   marginaliaNotes,
   arcAt,
   headBlock,
@@ -743,5 +744,80 @@ describe("marginaliaNotes, the model's own notes (plan 261011o)", () => {
       notes: [note("spya-zzzzzz"), note("spya-aaaaa2", "spya-zzzzzz")],
     });
     expect(notes.size).toBe(0);
+  });
+});
+
+/* Explanations in the margin, and the one rule between them and the relations
+   call's own `explain` notes — plan 261028c § Stage 2. */
+describe("marginaliaNotes, explanations (plan 261028c)", () => {
+  const explanation = (blockId: string, quote: string, id = `e-${blockId}`): Explanation => ({
+    id,
+    blockId: blockId as BlockId,
+    quote,
+    text: `the missing piece in ${blockId}`,
+    sure: true,
+    outside: false,
+  });
+  const note = (blockId: string, kind: MarginNote["kind"] = "explain"): MarginNote => ({
+    blockId: blockId as BlockId,
+    kind,
+    text: `about ${blockId}`,
+    quote: "q",
+    to: kind === "tension" ? ("spya-aaaaa5" as BlockId) : null,
+    toQuote: kind === "tension" ? "t" : null,
+  });
+  const kindsAt = (notes: ReturnType<typeof marginaliaNotes>, blockId: string) =>
+    (notes.get(blockId as BlockId) ?? []).map((n) => n.kind);
+
+  it("draws an explanation beside its block, after the model's own note and before the part's question", () => {
+    const tree2 = {
+      ...tree,
+      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
+    } as Tree;
+    const notes = marginaliaNotes(tree2, quoted, null, {
+      relations: { "spya-aaaaa2": "but" },
+      notes: [note("spya-aaaaa2", "tension")],
+      explanations: [explanation("spya-aaaaa2", say(1))],
+    });
+    expect(kindsAt(notes, "spya-aaaaa2")).toEqual(["relation", "aside", "explanation", "question"]);
+  });
+
+  it("does not draw an explanation whose words are no longer in its block, or whose block is gone", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      explanations: [explanation("spya-aaaaa3", "words this paragraph never said"), explanation("spya-zzzzzz", say(1))],
+    });
+    expect(notes.size).toBe(0);
+  });
+
+  it("leaves out the relations call's explain note beside a block an explanation covers", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      notes: [note("spya-aaaaa2"), note("spya-aaaaa4")],
+      explanations: [explanation("spya-aaaaa2", say(1))],
+    });
+    expect(kindsAt(notes, "spya-aaaaa2")).toEqual(["explanation"]);
+    /* The control: the other block's explain note still draws. */
+    expect(kindsAt(notes, "spya-aaaaa4")).toEqual(["aside"]);
+  });
+
+  it("keeps the explain note when the explanation's words no longer hold", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      notes: [note("spya-aaaaa2")],
+      explanations: [explanation("spya-aaaaa2", "words this paragraph never said")],
+    });
+    expect(kindsAt(notes, "spya-aaaaa2")).toEqual(["aside"]);
+  });
+
+  it("keeps the other kinds of note the relations call wrote beside an explained block", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      notes: [note("spya-aaaaa2", "source")],
+      explanations: [explanation("spya-aaaaa2", say(1))],
+    });
+    expect(kindsAt(notes, "spya-aaaaa2")).toEqual(["aside", "explanation"]);
+  });
+
+  it("is a pure rule of its own: the blocks whose explanation still holds", () => {
+    expect(
+      [...explainedBlocks(index, quoted, [explanation("spya-aaaaa2", say(1)), explanation("spya-aaaaa3", "nope")])],
+    ).toEqual(["spya-aaaaa2"]);
   });
 });

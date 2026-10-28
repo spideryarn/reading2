@@ -210,6 +210,9 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
   faq: [".faq-question"],
+  /* The explanation itself; the quoted passage is the author's (`.expl-quote`,
+     left out of the shared part-text rule) and the labels are ours. */
+  explanations: [".expl-text"],
   skim: [".skim-cue", ".skim-intro", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
   marginalia: [
     ".marg-question",

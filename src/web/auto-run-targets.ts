@@ -63,6 +63,9 @@ type StepAutoRunTarget = StepTarget<
   /* The questions a careful reader would put to the piece —
      docs/plans/260916d-faq-mode.md. */
   | "faq"
+  /* The places a reader is likely to get stuck, each explained —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  | "explanations"
   /* The route through the Quotes, which asks for the Quotes first when there
      are none — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
   | "skim"

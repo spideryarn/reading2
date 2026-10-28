@@ -174,6 +174,9 @@ asked for less motion gets the bar at once. Which mount plays it is
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around,
   and for the **Ask in chat** button on an entry (§ Asking about an entry in chat — the pattern for
   any other mode that wants one).
+- **[explanations.md](explanations.md)** — the few places a reader would get stuck, each with a
+  short explanation of the missing piece, for the margin first and a mode under *More* second.
+  Experimental and owner-only; open it for what waits on the first live run and on q-gkrkf5.
 - **[summaries.md](summaries.md)** — the piece in plain words, at two lengths (Brief, Fuller), each
   paragraph linked to its passages and checked against them, or as a thread: one three-way control.
   Its Parts and Sections outline went on 2026-10-01; Structure draws that tree.

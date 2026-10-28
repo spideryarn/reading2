@@ -5596,6 +5596,11 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      line are the model's reading (src/skim.ts). */
   skim:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
+  /* "The model expected", because which passages would trip the reader up is
+     its reading; the explanations are its words (src/explanations.ts). Owner
+     only: nothing of it reaches a visitor (no public projection). */
+  explanations:
+    "The places the model expected you to get stuck, each with a short explanation of what is missing there.",
   /* What the column draws is all built elsewhere: the tree's question for each
      part, the arc, and the ideas where they have been made. So the row names
      those, and says they sit beside the text — the one thing this mode adds is

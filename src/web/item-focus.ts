@@ -195,8 +195,9 @@ export function claimFocusKey(claim: { blockId: string; quote: string }): string
 /** The lists a focus can bring a row into view in, one piece of state each (Reader.tsx).
     `finding` is the literature search's dossier (plan 261024o), in *Where it
     sits* since plan 261025h (in Investigate before): a margin *literature*
-    line's *Open in Sources*, and a finding or overview chat's way back. */
-export type FocusSlot = "term" | "cite" | "idea" | "claim" | "finding";
+    line's *Open in Sources*, and a finding or overview chat's way back.
+    `explanation` is a margin *Explained* line's *Open in Explanations* (plan 261028c). */
+export type FocusSlot = "term" | "cite" | "idea" | "claim" | "finding" | "explanation";
 
 /** Where the reader is, as far as a focus cares: the mode, and Sources' sub-mode. */
 export interface FocusPlace {
@@ -211,6 +212,8 @@ function slotAt(place: FocusPlace): FocusSlot | null {
       return "term";
     case "ideas":
       return "idea";
+    case "explanations":
+      return "explanation";
     case "sources":
       return place.sources === "bibliography"
         ? "cite"

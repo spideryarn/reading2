@@ -326,6 +326,20 @@ p.marg-shut {
 .marg-literature-open {
   margin-left: 0.25rem;
 }
+/* An explanation, opened (plan 261028c): the AI's words, then the labels it
+   set for itself, quiet like the origin note's *AI memory, unchecked*, then
+   the chat button and the press into the band, on one line. */
+.marg-expl-text {
+  color: var(--ink);
+}
+.marg-expl-labels {
+  color: var(--ink-faint);
+}
+.marg-expl-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .marg-open a {
   color: inherit;
   text-decoration: underline 1px var(--rule-strong);

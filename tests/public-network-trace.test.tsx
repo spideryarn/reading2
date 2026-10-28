@@ -999,6 +999,9 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   search: { where: ".mode-band.srch", says: PUBLIC_CRITERION },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   learn: { where: VISITOR_BAND, says: "Learn is for whoever added this article" },
+  /* Owner only, as a decision (plan 261028c): no public projection, so the
+     boundary names the mode and says whose it is. */
+  explanations: { where: VISITOR_BAND, says: "Explanations is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -2312,6 +2315,9 @@ describe("a signed-out browser on a shared document", () => {
       "timeline",
       "skim",
       "faq",
+      /* Owner only: a visitor gets the boundary, and nothing reads
+         `/api/explanations` (plan 261028c). */
+      "explanations",
       /* Sources in each of its sub-modes, and the two old words. Links
          (plan 261011d) is read off the blocks and must ask nothing at all;
          Not cited (plan 261011ac) is the owner's, and a visitor's band reads
@@ -3224,7 +3230,14 @@ describe("a signed-in reader who does not own it", () => {
     /* **Five of those presses went through More**: with the switch on, every
        gathered mode is offered there and nowhere else until it is open. */
     expect([...viaMore].sort()).toEqual(
-      [MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.faq, MODE_LABEL.ideas, MODE_LABEL.timeline].sort(),
+      [
+        MODE_LABEL.quotes,
+        MODE_LABEL.glossary,
+        MODE_LABEL.explanations,
+        MODE_LABEL.faq,
+        MODE_LABEL.ideas,
+        MODE_LABEL.timeline,
+      ].sort(),
     );
 
     /* **And Marginalia's toggle after the radios** (261001i): the notes on and
