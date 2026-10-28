@@ -2,7 +2,7 @@
  * **The artefact read and the profile read overlap — and the artefact's error
  * still wins, at the moment it always did.**
  *
- * Four artefact routes answer "here it is, and here is whether you have changed
+ * These artefact routes answer "here it is, and here is whether you have changed
  * since it was written". The second half is `resolveProfile`, two queries of its
  * own, and it used to start only after the artefact read had finished:
  *
@@ -35,7 +35,7 @@
  * 4. **A profile failure gets swallowed** into `profileChanged: false`, which
  *    would be a wrong answer nobody could see.
  *
- * **Every one of these runs against all four routes**, not just the one. Sol's
+ * **Every one of these runs against every route in the table**, not just one. Sol's
  * second finding: a test of the glossary alone would stay green while `tweets`,
  * `summary` or `ideas` went back to awaiting first.
  *
@@ -68,6 +68,7 @@ const ROUTES = [
   { name: "glossary", url: "/api/glossary/anything", stamp: "glossary" },
   { name: "ideas", url: "/api/ideas/anything", stamp: "ideas" },
   { name: "quotes", url: "/api/quotes/anything", stamp: "quotes" },
+  { name: "explanations", url: "/api/explanations/anything", stamp: "explanations" },
   /* Since 2026-10-02: the quiz records the profile it was written for, so the
      panel can offer to write it again (plan 261002f). */
   { name: "quiz", url: "/api/quiz/anything", stamp: "quiz" },
@@ -123,6 +124,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
     loadGlossary: "glossary",
     loadIdeas: "ideas",
     loadQuotes: "quotes",
+    loadExplanations: "explanations",
     loadQuiz: "quiz",
   } as const;
   const mocked: Record<string, unknown> = {};

@@ -16,11 +16,12 @@ import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
+import { AUTO_MODE_STEPS } from "../src/auto-mode-steps.js";
 import { cascadeForce } from "../src/jobs.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { FORCE_ONLY_WHEN_NAMED, STEP_ORDER, sharesArticleCache } from "../src/pipeline.js";
 import { hashProfile, PROFILE_RULES } from "../src/profile.js";
-import { articleWithIdsFingerprint } from "../src/source-hash.js";
+import { METADATA_RERUN_STEPS } from "../src/rerun-steps.js";
 import { SHAPE } from "../src/store/artifacts.js";
 import type { Block } from "../src/types.js";
 import {
@@ -29,11 +30,14 @@ import {
   MAX_QUOTE_CHARS,
   MAX_WORDS,
   PROMPT_VERSION,
+  bodyParagraphs,
   buildExplanations,
   emptyDropped,
   explanationCap,
   explanationId,
   generateExplanations,
+  inputFingerprint,
+  renderPrompt,
   toExplanations,
 } from "../src/explanations.js";
 import { paperwork } from "../src/paperwork.js";
@@ -128,6 +132,12 @@ describe("explanationCap", () => {
     expect(explanationCap(25)).toBe(5);
     expect(explanationCap(1_000)).toBe(15);
   });
+
+  it("counts text in the body, not headings or supplements", () => {
+    const heading = block("spya-hhhhhh", "A heading", "heading");
+    const supplement = { ...block("spya-ssssss", "A note"), treatment: "supplement" as const };
+    expect(bodyParagraphs([A, heading, supplement, B])).toBe(2);
+  });
 });
 
 describe("explanationId", () => {
@@ -187,6 +197,13 @@ describe("an explanation is kept only if the article backs it up", () => {
     expect(d.unquoted).toBe(1);
   });
 
+  it("uses the spaced verifier, so a word split in two is not a quotation", () => {
+    const falling = block("spya-ffffff", "The argument will fall apart under its own weight.");
+    const d = emptyDropped();
+    expect(toExplanations([item(falling.id, "fall a part")], [falling], 15, d)).toEqual([]);
+    expect(d.unquoted).toBe(1);
+  });
+
   it("drops a quote that occurs more than once in its block", () => {
     const d = emptyDropped();
     expect(toExplanations([item(C.id, "The cost is high")], body, 15, d)).toEqual([]);
@@ -240,19 +257,30 @@ describe("an explanation is kept only if the article backs it up", () => {
     const d = emptyDropped();
     const kept = toExplanations(
       [
+        null,
         item("spya-zzzzzz", "nothing"),
+        item(A.id, "words not in A"),
+        item(C.id, "The cost is high"),
+        item(A.id, "latent variable", ""),
         item(C.id, "the author does not say why", "C."),
         item(B.id, "local entropy", "B."),
         item(A.id, "latent variable", "A."),
+        item(A.id, "never sees z directly", "A again."),
       ],
       body,
       2,
       d,
     );
-    /* The invented id did not use a slot; A was third valid and is over the cap. */
+    /* No invalid row uses a slot. A's first valid row is over the cap, but it
+       still owns the block, so its second valid row is repeated, not overCap. */
     expect(kept.map((e) => e.text)).toEqual(["B.", "C."]);
+    expect(d.malformed).toBe(1);
     expect(d.unknownIds).toBe(1);
+    expect(d.unquoted).toBe(1);
+    expect(d.ambiguous).toBe(1);
+    expect(d.badText).toBe(1);
     expect(d.overCap).toBe(1);
+    expect(d.repeated).toBe(1);
   });
 });
 
@@ -361,11 +389,33 @@ describe("the request", () => {
     expect(system(call)[0]).toMatchObject({ cache_control: { type: "ephemeral" } });
     expect(system(call)[1]).toEqual({ type: "text", text: EXPLANATIONS_SYSTEM });
 
-    expect(run.explanations.sourceHash).toBe(articleWithIdsFingerprint(article.blocks, article.tree, null));
+    expect(run.explanations.sourceHash).toBe(inputFingerprint(article.blocks, article.tree, null));
     expect(run.explanations.profileHash).toBeNull();
     expect(run.explanations.explanations).toHaveLength(1);
     expect(run.explanations.explanations[0]?.quote).toBe(words);
-    expect(JSON.stringify((call.body as { messages: unknown }).messages)).not.toContain("WHO IS READING");
+    const messages = (call.body as { messages: { content: string }[] }).messages;
+    expect(messages).toEqual([
+      { role: "user", content: renderPrompt({ count: explanationCap(run.paragraphs), profile: null }) },
+    ]);
+    expect(JSON.stringify(messages)).not.toContain("=== ITS SHAPE ===");
+  });
+
+  it("does not go stale for tree details the request never sends", () => {
+    const changedTree = structuredClone(example.tree);
+    const root = changedTree.nodes[changedTree.rootId];
+    if (!root) throw new Error("the fixture tree has no root");
+    root.title = "A title only Structure sees";
+    root.gist = "A gist only Structure sees.";
+    expect(inputFingerprint(example.blocks, changedTree, example.meta)).toBe(
+      inputFingerprint(example.blocks, example.tree, example.meta),
+    );
+
+    /* Without metadata, the slug is the rendered fallback title and therefore
+       is a real request input rather than an ignored tree detail. */
+    changedTree.slug = `${example.tree.slug}-changed`;
+    expect(inputFingerprint(example.blocks, changedTree, null)).not.toBe(
+      inputFingerprint(example.blocks, example.tree, null),
+    );
   });
 
   it("puts the profile in the user message, never the system, and its hash in the stamp", async () => {
@@ -389,6 +439,8 @@ describe("the request", () => {
 describe("forcing", () => {
   it("is not swept in by an earlier forced step", () => {
     expect(FORCE_ONLY_WHEN_NAMED.has("explanations")).toBe(true);
+    expect(AUTO_MODE_STEPS).not.toContain("explanations");
+    expect(METADATA_RERUN_STEPS).not.toContain("explanations");
     expect(cascadeForce([...STEP_ORDER], new Set(["fetch"])).has("explanations")).toBe(false);
     expect(cascadeForce(["faq", "explanations"], new Set(["explanations"])).has("explanations")).toBe(true);
   });

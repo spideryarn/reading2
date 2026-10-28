@@ -6839,7 +6839,7 @@ export interface Explanations {
   version: string;
   generator: string;
   slug: string;
-  /** `articleWithIdsFingerprint` over the blocks, the tree and the cited head. */
+  /** The exact rendered body, cited head and ceiling; the tree only supplies a fallback title. */
   sourceHash: string;
   /** The reader's profile it was written for, or null for none — and in the freshness stamp, as `ideas`'. */
   profileHash: string | null;

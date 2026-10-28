@@ -376,8 +376,8 @@ export interface ArticleReader {
 
   /**
    * The places a reader would get stuck, plus whether they still describe the
-   * article — FAQ's two staleness facts over FAQ's fingerprint. The third,
-   * `profileChanged`, is the route's (`withProfileChanged`), as `loadIdeas`'.
+   * rendered body, cited head and ceiling. The third, `profileChanged`, is the
+   * route's (`withProfileChanged`), as `loadIdeas`'.
    * **Owner-only, and there is no public twin.**
    * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
    */

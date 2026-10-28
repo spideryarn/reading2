@@ -5351,10 +5351,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     label: "Finding the places a reader might get stuck",
     produces: ["explanations"],
     /**
-     * FAQ's three values — `articleWithIdsFingerprint` over the blocks, the
-     * tree and the real, nullable metadata — **and the profile**, as `ideas`:
-     * who is reading decides what is confusing, so an artefact written for a
-     * different profile answers a different question.
+     * The exact rendered article and ceiling the request sends — the tree is
+     * only the absent-metadata title fallback — **and the profile**, as
+     * `ideas`: who is reading decides what is confusing, so an artefact
+     * written for a different profile answers a different question.
      */
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);

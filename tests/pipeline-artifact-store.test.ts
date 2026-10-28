@@ -283,7 +283,7 @@ const BIBLIOGRAPHY_SOURCE_HASH = bibliographyFingerprint(BLOCKS, TREE, META);
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
 /* `relations` fingerprints its rendered body/head and eligible paragraph pairs. */
 const RELATIONS_SOURCE_HASH = relationsFingerprint(BLOCKS, TREE, META);
-/* `explanations` is FAQ's fingerprint, through its own module (plan 261028c). */
+/* `explanations` fingerprints its exact dynamic request (plan 261028c). */
 const EXPLANATIONS_SOURCE_HASH = explanationsFingerprint(BLOCKS, TREE, META);
 /* `debate-claims` fingerprints the exact rendered body and cited head. */
 const SOURCES_CLAIMS_SOURCE_HASH = sourcesClaimsFingerprint(BLOCKS, TREE, META);

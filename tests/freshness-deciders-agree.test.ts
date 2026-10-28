@@ -157,7 +157,7 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   quiz: ["inputHash", "promptVersion", "model"],
   faq: ["inputHash", "promptVersion", "model"],
   relations: ["inputHash", "promptVersion", "model"],
-  /* FAQ's fingerprint, and the profile as `ideas`' (plan 261028c). */
+  /* Exact request fingerprint, and the profile as `ideas`' (plan 261028c). */
   explanations: ["inputHash", "promptVersion", "model"],
   simple: ["inputHash", "promptVersion", "model"],
   sketch: ["inputHash", "promptVersion", "model"],
@@ -934,10 +934,10 @@ describe("when the article itself moves, every step gets the same answer from bo
         const { stale, disagree } = read(await askAll());
         expect(disagree).toEqual({});
         /* `relations`, `simple`, `debate-claims` and `situate` send the
-           paragraphs without the section titles; `skim` lays its route over
+           paragraphs without the section titles, as does `explanations`; `skim` lays its route over
            them. `labels` and `assets` hash the blocks alone. */
         expect(stale).toEqual(
-          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims", "situate"), "skim"]),
+          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims", "situate", "explanations"), "skim"]),
         );
       },
     );

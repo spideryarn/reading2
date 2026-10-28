@@ -67,8 +67,6 @@ import { plainWords } from "./plain-words.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { findOnlyQuote, findQuote } from "./quote-match.js";
 import {
-  articleWithIdsFingerprint,
-  type BlockFingerprint,
   checkpointKey,
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
@@ -107,7 +105,9 @@ export function explanationCap(paragraphs: number): number {
 }
 
 /** The body paragraphs the cap counts: body evidence of kind `text`. */
-export function bodyParagraphs(blocks: readonly Pick<Block, "kind" | "treatment">[]): number {
+export function bodyParagraphs(
+  blocks: readonly { kind: Block["kind"]; treatment?: Block["treatment"] | null }[],
+): number {
   return blocks.filter((b) => isBodyEvidence(b) && b.kind === "text").length;
 }
 
@@ -128,23 +128,39 @@ export function explanationId(blockId: string, quote: string): string {
   return checkpointKey(["explanation-id/1", blockId, quote]);
 }
 
+/** The block fields that can change either dynamic message sent to the model. */
+export type ExplanationFingerprintBlock = Pick<Block, "id" | "text" | "kind"> & {
+  treatment?: Block["treatment"] | null;
+};
+
 /**
- * What this artefact was written from: the blocks, the tree (the fallback
- * title) and the cited head — `articleWithIdsFingerprint`, FAQ's. The profile
- * is a fourth value in the stamp, beside this, as `ideas`'.
+ * What this artefact was written from: the exact dynamic request bytes — the
+ * rendered body and cited head, plus the user message without its separately
+ * hashed profile. The tree matters only when it supplies the fallback title.
  */
 export function inputFingerprint(
-  blocks: readonly BlockFingerprint[],
+  blocks: readonly ExplanationFingerprintBlock[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): string {
-  return articleWithIdsFingerprint(blocks, tree, meta);
+  const promptMeta = (meta ?? { title: fallbackHeadTitle(tree) }) as Meta;
+  /* Postgres supplies a nullable treatment while Block omits the body case;
+     the database CHECK permits the same values, and body evidence here is
+     precisely every block that is not a supplement. */
+  const evidence = blocks.filter((block) => block.treatment !== "supplement");
+  return checkpointKey([
+    "explanations-input/1",
+    articleWithIds(promptMeta, evidence),
+    /* The profile has its own stamp field. The count does not, so keep the
+       rest of the exact user message in the source hash. */
+    renderPrompt({ count: explanationCap(bodyParagraphs(evidence)), profile: null }),
+  ]);
 }
 
-/** Does this artefact still describe the article, tree and metadata? */
+/** Does this artefact still describe the request's rendered article and ceiling? */
 export function isStale(
   explanations: Explanations,
-  blocks: readonly BlockFingerprint[],
+  blocks: readonly ExplanationFingerprintBlock[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): boolean {
@@ -235,11 +251,14 @@ export function toExplanations(
       dropped.repeated++;
       continue;
     }
+    /* A valid first candidate owns the block even when the cap drops it. This
+       keeps the one-per-block rule ahead of the cap for every later row, not
+       only for rows before the ceiling is reached. */
+    taken.add(blockId);
     if (kept.length >= cap) {
       dropped.overCap++;
       continue;
     }
-    taken.add(blockId);
     const quote = block.text.slice(span.start, span.end);
     kept.push({
       id: explanationId(block.id, quote),

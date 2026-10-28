@@ -1256,9 +1256,9 @@ export const articleRevisions = spideryarn.table(
      * `Explanations`, src/types.ts, written by the `explanations` step.
      * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
      *
-     * The WHOLE artefact, like its neighbours; `sourceHash` is FAQ's
-     * fingerprint and `profileHash` the reader's it was written for. **Owner
-     * only**: it is in no public projection.
+     * The WHOLE artefact, like its neighbours; `sourceHash` covers the exact
+     * rendered body, cited head and ceiling, while `profileHash` records the
+     * reader it was written for. **Owner only**: it is in no public projection.
      */
     explanations: jsonb("explanations").$type<Explanations>(),
 

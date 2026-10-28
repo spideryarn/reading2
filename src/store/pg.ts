@@ -114,6 +114,7 @@ import {
   isOutdated as explanationsAreOutdated,
   isStale as explanationsIsStale,
   PROMPT_VERSION as EXPLANATIONS_PROMPT_VERSION,
+  type ExplanationFingerprintBlock,
 } from "../explanations.js";
 import {
   inputFingerprint as crossrefsFingerprint,
@@ -904,7 +905,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* FAQ's fingerprint exactly, so the outline too. */
     relations: "value",
-    /* FAQ's fingerprint exactly, so the outline too (plan 261028c). */
+    /* Exact rendered body and head; tree only for the fallback title (plan 261028c). */
     explanations: "value",
     /* Only for Claims' fallback head when metadata has no title. */
     sourcesClaims: "value",
@@ -1537,7 +1538,7 @@ export const REVISION_PROJECTIONS = {
     faq: articleRevisions.faq,
     ...CITED_FINGERPRINT_COLUMNS,
   },
-  /* The cited set, as `faq`: the same bytes and the same fingerprint. */
+  /* The cited head, body and tree fallback used by its exact-request fingerprint. */
   relations: {
     id: articleRevisions.id,
     relations: articleRevisions.relations,
@@ -1883,6 +1884,19 @@ async function relationsFingerprintInputs(
     text: row.text,
     kind: row.kind,
     words: row.words,
+    ...(row.treatment === null ? {} : { treatment: row.treatment }),
+  }));
+}
+
+/** The narrow block read for Explanations' article rendering and paragraph ceiling. */
+async function explanationsFingerprintInputs(
+  revisionId: string,
+): Promise<ExplanationFingerprintBlock[]> {
+  const rows = await relationsFingerprintQuery(getDb(), revisionId);
+  return rows.map((row) => ({
+    id: row.id as Block["id"],
+    text: row.text,
+    kind: row.kind,
     ...(row.treatment === null ? {} : { treatment: row.treatment }),
   }));
 }
@@ -4454,9 +4468,10 @@ const rawPgArticleReader: ArticleReader = {
   /**
    * The Explanations on their own — the Postgres half of `loadExplanations`.
    *
-   * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
-   * FAQ's. **A 404 is the ordinary case** (the step runs only on the owner's
-   * press); an EMPTY list is a 200 — nothing worth explaining — as
+   * The cited head and body make the exact rendered request; the tree is read
+   * only for the absent-metadata title fallback. **A 404 is the ordinary case**
+   * (the step runs only on the owner's press); an EMPTY list is a 200 — nothing
+   * worth explaining — as
    * `SHAPE.explanations` decides at the store boundary. The profile half is the
    * route's (`withProfileChanged`), because a store adapter does not read the
    * profile. **Owner only**: there is no public twin of this read.
@@ -4473,7 +4488,7 @@ const rawPgArticleReader: ArticleReader = {
           `POST /api/jobs { "slug": "${slug}", "steps": ["explanations"] }.`,
       );
     }
-    const blocks = await blockHashInputs(found.revision.id);
+    const blocks = await explanationsFingerprintInputs(found.revision.id);
     const tree = found.revision.tree as Tree | null;
     return {
       explanations,
