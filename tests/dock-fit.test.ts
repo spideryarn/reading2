@@ -63,8 +63,9 @@ import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtur
 import { readerCss } from "./helpers/stylesheets.js";
 import { moreItems, moreLabels, openMore } from "./helpers/dock-more.js";
 
-/** Quotes, Glossary, FAQ, Ideas and Timeline: a literal, on purpose (plan 261007c, D2). */
-const GATHERED_UNDER_MORE = 5;
+/** Quotes, Glossary, FAQ, Ideas and Timeline, and Explanations with the switch on (spya-nkq6rj):
+    a literal, on purpose (plan 261007c, D2). Every use below has the switch on. */
+const GATHERED_UNDER_MORE = 6;
 import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
 
 /**
@@ -636,7 +637,8 @@ describe("Dock gives the ladder something to work with", () => {
   it("the reading view with the switch on: every mode, one segment", () => {
     render({ mode: "plain", onMode: () => {}, experimental: EXPERIMENTAL_ON });
     /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i).
-       Five modes are under More since 2026-10-07 (plan 261007c), so the bar's
+       Five modes are under More since 2026-10-07 (plan 261007c), six with the
+       switch on since Explanations (2026-10-28), so the bar's
        buttons and the menu's items together are every mode. */
     const buttons = host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]');
     const listed = moreLabels(host);
