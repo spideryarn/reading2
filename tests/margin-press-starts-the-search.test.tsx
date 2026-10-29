@@ -31,6 +31,8 @@ const SLUG = "margin-search";
 const posted: { steps?: string[]; force?: unknown }[] = [];
 /** The queue `GET /api/jobs` answers: every job posted, still queued. */
 const jobs: Job[] = [];
+/** Holds a search POST before its job can appear in the queue, for the two-door race. */
+let searchPostGate: Promise<void> | null = null;
 /** What `GET /api/situate/:slug` answers. */
 let dossier: "none" | "current" | "stale" | "outdated" = "none";
 
@@ -41,6 +43,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     if (url === "/api/jobs" && method === "POST") {
       const body = JSON.parse(String(init?.body)) as { steps?: string[] };
       posted.push(body);
+      if (body.steps?.includes("situate")) await searchPostGate;
       const queued = {
         id: `j-${posted.length}`,
         slug: SLUG,
@@ -125,6 +128,7 @@ beforeEach(async () => {
   jobs.length = 0;
   bibliographyRereads = 0;
   dossier = "none";
+  searchPostGate = null;
   jobEngine.reset();
   resetActivations();
   host = document.createElement("div");
@@ -214,6 +218,79 @@ describe("the press that turns the margin on", () => {
 });
 
 describe("two doors, one search (GPT Sol's MARGIN-1)", () => {
+  it("does not post through both doors while the first door's POST has not reached the queue", async () => {
+    let release = () => {};
+    searchPostGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    armActivation(SLUG, "sources-where");
+    await act(async () => root.render(createElement(WhereDoor)));
+    await settle();
+    expect(searches(), "Where it sits has sent its POST").toHaveLength(1);
+
+    pressMargin();
+    const both = createElement(
+      "div",
+      null,
+      createElement(WhereDoor),
+      createElement(OwnerMarginFeed, {
+        slug: SLUG,
+        shown: true,
+        bibliography: { status: "ready", retryRead: bibliographyRetry },
+        onFeed: () => {},
+      }),
+    );
+    await act(async () => root.render(both));
+    await settle();
+    expect(searches(), "the in-flight POST is one search even before its job is visible").toHaveLength(1);
+
+    release();
+    searchPostGate = null;
+    await settle();
+  });
+
+  it("refreshes the quiet queue before spending, so it sees a search another tab just started", async () => {
+    jobs.push({
+      id: "other-tab",
+      slug: SLUG,
+      status: "queued",
+      steps: [
+        { name: "bibliography", status: "pending" },
+        { name: "situate", status: "pending" },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+    } as unknown as Job);
+
+    pressMargin();
+    await mountFeed({ bibliography: "ready" });
+    expect(searches(), "the other tab's queued search is the answer").toHaveLength(0);
+  });
+
+  it("uses a held press after the search it was waiting behind fails", async () => {
+    jobs.push({
+      id: "failing-search",
+      slug: SLUG,
+      status: "queued",
+      steps: [{ name: "situate", status: "pending" }],
+      createdAt: 1,
+      updatedAt: 1,
+    } as unknown as Job);
+    pressMargin();
+    await mountFeed();
+    expect(searches(), "the active job owns the search for now").toHaveLength(0);
+
+    jobs[0] = {
+      ...jobs[0],
+      status: "error",
+      error: "The search failed.",
+      steps: [{ name: "situate", status: "error" }],
+    } as unknown as Job;
+    await act(async () => jobEngine.poke());
+    await settle();
+    expect(searches(), "failure releases the press to make its own attempt").toHaveLength(1);
+  });
+
   it("Where it sits, pressed while the margin's search is under way, waits for it rather than posting another", async () => {
     pressMargin();
     await mountFeed({ bibliography: "none" });

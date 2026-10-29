@@ -27,7 +27,7 @@
  * must read and never start — Sources' experiments: the same split as
  * `useReceptionRead`. The margin's notes used it until plan 261029h.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Situate, SituateResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -89,6 +89,52 @@ export interface UseSituate extends Omit<SituateRead, "reload" | "fresh"> {
   /** The forced run has neither replaced the dossier nor failed. rewrite-hold.ts. */
   rewriting: boolean;
   cancel(id: string): void;
+}
+
+/**
+ * **One unforced Situate POST at a time per article in this tab.** Sources and
+ * Marginalia own separate activation tokens and separate `useSituate` mounts.
+ * `StepJob.starting` belongs to one mount, so the other cannot see the interval
+ * after its POST left and before the job list contains the returned row. Keep
+ * that interval here, at the operation both mounts share.
+ *
+ * The promise carries success so a second press waiting behind a failed POST
+ * still gets its own try. Calls arriving together after that failure contend
+ * here again; one retries and the rest join it. A successful first POST is the
+ * whole operation, regardless of which prelude its caller chose.
+ */
+const situateStarts = new Map<string, Promise<boolean>>();
+const situateStartListeners = new Set<() => void>();
+
+function announceSituateStarts(): void {
+  for (const listener of situateStartListeners) listener();
+}
+
+function subscribeSituateStarts(listener: () => void): () => void {
+  situateStartListeners.add(listener);
+  return () => situateStartListeners.delete(listener);
+}
+
+async function startSituateOnce(slug: string, start: () => Promise<string | null>): Promise<void> {
+  const existing = situateStarts.get(slug);
+  if (existing) {
+    if (await existing) return;
+    /* The first POST failed. This caller's press still deserves its own try,
+       through the same atomic map in case more than one caller was waiting. */
+    return startSituateOnce(slug, start);
+  }
+
+  const mine = start().then((id) => id !== null);
+  situateStarts.set(slug, mine);
+  announceSituateStarts();
+  try {
+    await mine;
+  } finally {
+    if (situateStarts.get(slug) === mine) {
+      situateStarts.delete(slug);
+      announceSituateStarts();
+    }
+  }
 }
 
 export function useSituateRead(slug: string): SituateRead {
@@ -189,11 +235,16 @@ export function useSituate(slug: string, cadence: QueueCadence = "watches-queue"
   }, [refresh]);
   const queue = useStepJob(slug, "situate", finished, cadence);
 
+  const readSharedStart = useCallback(() => situateStarts.has(slug), [slug]);
+  const sharedStarting = useSyncExternalStore(subscribeSituateStarts, readSharedStart, readSharedStart);
+
   const ensure = useCallback(
     async (options: { withBibliography?: boolean } = {}) => {
-      await queue.start(options.withBibliography ? { precededBy: ["bibliography"] } : {});
+      await startSituateOnce(slug, () =>
+        queue.start(options.withBibliography ? { precededBy: ["bibliography"] } : {}),
+      );
     },
-    [queue],
+    [queue, slug],
   );
   /* The forced verb holds the dossier it was pressed on (rewrite-hold.ts); its
      clock, `generatedAt`, is its identity. */
@@ -221,7 +272,7 @@ export function useSituate(slug: string, cadence: QueueCadence = "watches-queue"
     job: queue.job,
     failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
-    starting: queue.starting || landing?.read === refresh,
+    starting: queue.starting || sharedStarting || landing?.read === refresh,
     rewriting: hold.rewriting,
     refresh,
     retryRead: read.retryRead,

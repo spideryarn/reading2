@@ -7,7 +7,8 @@ related: mode-referee, faq-beyond-the-article
 
 A piece sits among other people’s work: the works it builds on, and what others have said about it
 since. Sources shows both. **Where it sits** opens first: the papers that have cited the piece since,
-the works it leans on most, and a search of the wider literature, which starts when you open Sources. **Bibliography**
+the works it leans on most, and a search of the wider literature, which starts when you press Sources
+into this view, or press Marginalia to turn its notes on where they fit. **Bibliography**
 lists everything this piece cites, with a link for each, and **Links** every web address the piece
 itself links to. Under Where it sits are four tools: **Pages about it** (what others say about the
 piece itself), **Check a claim** (the claims it rests on, to check against the web), **Close to it,
@@ -44,7 +45,7 @@ for that.
   what has been said since; for a recent one, where it sits now.
 - **Search the literature** starts by itself when you open Where it sits with the Sources button
   or its tab, the first time, or when you press [Marginalia](/help/mode-marginalia) to turn the
-  notes on, and is a button otherwise (after a link, say). Over a few minutes an
+  notes on where they fit, and is a button otherwise (after a link, say). Over a few minutes an
   AI plans a dozen or so web searches
   from the piece, reads what they find and the later papers that cite it, and lists the passages
   later work challenges, supports or has moved on from, each with its sources and what they say,

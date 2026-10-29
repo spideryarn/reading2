@@ -1,7 +1,7 @@
 ---
 reports: spya-nkq6rj
-ending: awaiting
-comment: Explanations of confusing passages are built behind the experimental switch, untried until the AI key resets on 1 Nov. Two questions for you: run them on every import (~10-15¢), and should Sources' search start by itself?
+ending: shipped
+comment: Explanations are built behind the experimental switch; they join imports after the first live run (1 Nov). The margin button now starts Sources' literature search, first press only.
 ---
 # Explanations of confusing passages in the margin, and Sources feeding it
 
@@ -30,7 +30,7 @@ addenda when re-read before acting and before this note.
 
 (Full text: `npx tsx scripts/feedback-unswept.ts --show spya-nkq6rj`.)
 
-**Ending: Awaiting Greg**, on two questions, with the clear-cut half built and on `dev`. Plan
+**First ending (2026-10-28): Awaiting Greg**, on two questions, with the clear-cut half built and on `dev`. Plan
 [261028c](../plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md),
 with GPT Sol's plan review and both code reviews beside it.
 
@@ -59,3 +59,10 @@ asks when it should start; the recommendation is the press that turns the margin
 
 Questions: **q-gkrkf5** (Explanations on every import?) and **q-sxfwqq** (Sources' search by
 itself?).
+
+**Both answered; ending: Shipped** (2026-10-29). q-gkrkf5: *"A"*, the build waiting on the first
+live run (`qi-k738ybv4`). q-sxfwqq: *"D for now"*, then *"Change my mind. Let's go for A."* — built
+as [261029h](../plans/261029h-the-margin-button-starts-the-literature-search.md): the first press of
+the margin button on an article starts the literature search if none is stored; a reload, a pasted
+link or a margin already on spends nothing. Tested against mocked answers only: seeing a real search
+land in the margin waits for the key to reset on 1 November.

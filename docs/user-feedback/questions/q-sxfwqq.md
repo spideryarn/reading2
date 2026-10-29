@@ -1,7 +1,8 @@
 ---
 id: q-sxfwqq
 report: spya-nkq6rj
-status: open
+status: answered
+acted: spya-bcc0y8, spya-nq5ec9
 asked: 2026-10-28
 title: Should Sources' literature search start by itself when you turn the margin on, so its findings fill the margin?
 refs: docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md § Idea 1 · docs/user-feedback/261028_1024-explanations-of-confusing-passages-in-the-margin.md · q-vg2b69 (the cost rule this would change)
@@ -31,3 +32,9 @@ What a press means here. The app already treats "you pressed something" differen
 "Fewer options from the user." Partly done on 25 and 26 Oct: Sources became three chips, and opening Where it sits starts the search. Two buttons still ask: Reception's "Search the web" (what others have written about the piece) and Claims' "List its claims". And checking a claim does not yet put anything in the margin. These are the next candidates if you want them folded into one automatic run; I have not touched them. Say if you want them in the same answer.
 
 Nothing has been built for this yet. The other half of your report, explanations of confusing passages, is the separate question q-gkrkf5.
+
+Greg replied, 2026-10-28 (spya-bcc0y8): "D for now"
+
+Greg replied, 2026-10-28 (spya-nq5ec9): "Change my mind. Let's go for A."
+
+Built 2026-10-29, on dev (not yet deployed): A. The first press of the margin button on an article starts the literature search if none is stored, listing the works the piece cites first when they are missing, as opening Where it sits does. A reload, a pasted link, Back and Forward, or arriving with the margin already on spends nothing; nor does a press on a window too narrow to show the notes, nor the press that turns the margin off. If a search is already running from Where it sits, the margin waits for it rather than starting a second, and the other way round. The cost rule's change is written into the Sources doc. Tested against canned answers only: seeing a real search land in the margin waits for the AI key to reset on 1 November. Reception's "Search the web" and Claims' "List its claims" still wait for their buttons, as you did not ask for them. Plan 261029h.

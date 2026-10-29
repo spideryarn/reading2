@@ -30,6 +30,10 @@
  * search already under way, from either door, is waited on rather than asked
  * for again.
  */
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { pendingActivation, subscribeActivations } from "./activation.js";
+import type { AutoRunTarget } from "./auto-run-targets.js";
+import { jobEngine } from "./jobEngine.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 
 /** What this needs of each hook: its read's answer, its unforced run, and a second read after a failed one. */
@@ -63,6 +67,57 @@ function searching(situate: WhereSearch): boolean {
 }
 
 /**
+ * **Judge an automatic search against a job list newer than its press.** The
+ * margin deliberately subscribes quietly, and even *Where it sits* can be up
+ * to eight seconds behind another tab. `situate.job === null` in that snapshot
+ * therefore does not yet mean nobody is searching. Both doors wait for a list
+ * asked for after their token was minted, then `useStepJob`'s ordinary queue
+ * selection answers whether one is active.
+ *
+ * Register before `poke`: a list already in flight was asked before the press
+ * and is followed by another. StrictMode's cleanup removes its first waiter;
+ * the second setup asks again and is the one allowed to release the token.
+ * `find-more-handoff.ts` uses the same engine seam for the same cross-tab race.
+ */
+const FRESH_QUEUE_CEILING_MS = 10_000;
+
+function useFreshQueueForActivation(slug: string, target: AutoRunTarget, enabled = true): boolean {
+  const read = useCallback(() => pendingActivation(slug, target), [slug, target]);
+  const nonce = useSyncExternalStore(subscribeActivations, read, read);
+  const activation = nonce === null ? null : `${slug}\u0000${target}\u0000${nonce}`;
+  const [freshFor, setFreshFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activation === null || !enabled) return;
+    /* An engine with no session polls nothing, so no fresh list is coming:
+       its snapshot is all there is to judge by. */
+    if (jobEngine.reader() === null) {
+      setFreshFor(activation);
+      return;
+    }
+    let live = true;
+    const stop = jobEngine.afterFreshList(() => {
+      if (live) setFreshFor(activation);
+    });
+    /* An unavailable queue must not hold an invisible margin press for the
+       rest of the mount. After the same ceiling Find more gives its hand-off,
+       honour the explicit press against the last snapshot; enqueue's durable
+       work key remains the final same-request dedupe. */
+    const ceiling = setTimeout(() => {
+      if (live) setFreshFor(activation);
+    }, FRESH_QUEUE_CEILING_MS);
+    jobEngine.poke();
+    return () => {
+      live = false;
+      clearTimeout(ceiling);
+      stop();
+    };
+  }, [activation, enabled]);
+
+  return activation === null || !enabled || freshFor === activation;
+}
+
+/**
  * **The two reads as one answer**, for `useAutoRun`: wait while either is
  * loading, read again while either failed, and say *none* when either is
  * missing — the one state in which the press is spent on a run.
@@ -76,10 +131,11 @@ export function whereStatus(bibliography: ArtefactStatus, situate: ArtefactStatu
 
 /** Returns whether this mount started a run automatically. */
 export function useWhereAutoRun(slug: string, bibliography: WhereRunnable, situate: WhereSearch): boolean {
+  const freshQueue = useFreshQueueForActivation(slug, "sources-where");
   return useAutoRun(
     slug,
     "sources-where",
-    searching(situate) ? "loading" : whereStatus(bibliography.status, situate.status),
+    !freshQueue || searching(situate) ? "loading" : whereStatus(bibliography.status, situate.status),
     async () => {
       /* One request: the search with the works cited before it when both
          are missing, else whichever one is. */
@@ -121,10 +177,11 @@ export function useMarginLiteratureAutoRun(
   situate: WhereSearch,
   enabled: boolean,
 ): boolean {
+  const freshQueue = useFreshQueueForActivation(slug, "margin-literature", enabled);
   return useAutoRun(
     slug,
     "margin-literature",
-    searching(situate) ? "loading" : marginLiteratureStatus(bibliography.status, situate.status),
+    !freshQueue || searching(situate) ? "loading" : marginLiteratureStatus(bibliography.status, situate.status),
     () => situate.ensure({ withBibliography: bibliography.status === "none" }),
     async () => {
       if (situate.status === "error") await situate.retryRead();

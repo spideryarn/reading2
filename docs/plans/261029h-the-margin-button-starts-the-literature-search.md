@@ -21,7 +21,8 @@ change is recorded where that rule lives, [sources.md § Where it sits](../proje
 **Constraint:** the box's OpenRouter key is over its monthly limit until 1 November. Nothing here
 needs a model call to build or test: the change is in the client's press-and-token machinery, and
 the tests run on a mocked network, as `tests/marginalia-relations-on-open.test.tsx` does. What waits
-for the reset: seeing a real search land in the margin after a press, in a browser on the box.
+for the reset: seeing a real search land in the margin after a press, in a browser on the box —
+queue item `qi-wwdnrywn`.
 
 ## What exists
 
@@ -86,6 +87,23 @@ press that turns it on).
   `also` job: the relation words the shown column asks for) were updated. The integrated cases for
   the press that turns the margin off and the command bar naming it while on already existed in
   `a-second-press-closes-the-mode.test.tsx` and still hold.
+
+## What GPT Sol's code review changed
+
+[261029h-code-review-sol.md](261029h-code-review-sol.md), on commit `1d3f1317c`. Sol fixed both
+P1s, each with a failing test first:
+
+- **MARGIN-CR1, `starting` belonged to one mount.** The other door could post while the first
+  door's POST was still in flight. One unforced start per article is now shared across this tab's
+  `useSituate` mounts (`startSituateOnce`). A caller waiting behind a POST that fails still gets its
+  own try.
+- **MARGIN-CR2, a quiet snapshot could be older than the press.** Each door now waits for a job list
+  fetched after its token was minted (`useFreshQueueForActivation`, using `jobEngine.afterFreshList`).
+  That wait has a 10-second ceiling so a failed queue read cannot hold a press forever, and it is
+  skipped when the engine has no session: no list is coming, so the snapshot is all there is. The
+  no-session case was added after the review, because without it every press in an engine-less
+  harness waited out the ceiling (five probes in `modes-that-start-themselves.test.tsx`).
+- **MARGIN-CR3**: marginalia.md and the Sources help page brought into line.
 
 ## The simpler option passed over
 

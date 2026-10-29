@@ -22,12 +22,13 @@ because the two pads only swapped sides.
 
 **It has one call of its own**, which generates relation words ([below](#relation-words)) and,
 since 2026-10-11, may add **a few notes of its own** ([§ Notes the model
-writes](#notes-the-model-writes)). Every other note
-comes from something another mode has already stored, and opening the column never runs another
-mode. The owner's lists are read through each mode's *read half*
-(`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`, `useSituateRead`), never the full mode hook, because the full hook
-can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
-read. A visitor's lists come in their payload.
+writes](#notes-the-model-writes)). Every other note comes from something another mode has already
+stored, with one exception: the owner's press that turns the margin on may start Sources' literature
+search, whose findings are notes here (the Literature row below). The other lists use each mode's
+*read half* (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`); Situate uses its
+full hook only to see a search already in the queue and to spend that press, and mounting it alone
+still starts nothing. `tests/artefact-read-hooks.test.tsx` checks that the read halves only read. A
+visitor's lists come in their payload.
 
 **So a FAQ, Timeline or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
 Reception also feeds its legacy claim-source rows to the margin; the current Claims list and its
