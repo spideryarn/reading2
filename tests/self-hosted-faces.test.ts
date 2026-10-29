@@ -76,7 +76,9 @@ describe("self-hosted faces", () => {
 
   it.each([
     ["--font-ai", ["normal", "italic"], [400, 700]],
-    ["--font-reader", ["normal", "italic"], [400, 500, 600, 700]],
+    /* Kalam has 400 and 700 upright only: an italic is the browser's slant and
+       a 600 resolves to 700, both decided in docs/project/fonts.md. */
+    ["--font-reader", ["normal"], [400, 700]],
   ] as const)("%s has every style it is drawn in", (token, styles, weights) => {
     const family = primaryFamily(TOKENS, token);
     for (const style of styles) {
@@ -91,7 +93,7 @@ describe("self-hosted faces", () => {
 
   it.each([
     ["--font-ai", "iA Writer Quattro", "iA Writer Quatro"],
-    ["--font-reader", "Shantell Sans Variable", "Shantell Sans"],
+    ["--font-reader", "Kalam", "Kalm"],
   ])("would catch a wrong family for %s", (token, family, wrong) => {
     const misspelt = TOKENS.replace(`'${family}'`, `'${wrong}'`);
     expect(misspelt).not.toBe(TOKENS);
