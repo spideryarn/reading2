@@ -58,6 +58,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRootFlag } from "./root-flags.js";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from "lucide-react";
 
@@ -1214,6 +1215,10 @@ export function ChatDialog({
 
   const line = collapsed ? cardLine(thread, streaming) : null;
   const placeClass = place.kind === "card" ? " in-column" : place.kind === "dock" ? " docked" : "";
+  /* While this box is drawn — in any of its places — the narrow window's bar stays home, since the box
+     is anchored to the bar's resting room (narrow-window.css § the guard).
+     `side-dialog` is counted, so the other two dialogs can hold it too. */
+  useRootFlag("side-dialog", true);
 
   const aside = (
     <aside

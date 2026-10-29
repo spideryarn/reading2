@@ -145,10 +145,11 @@ describe("Marginalia's narrow-window line", () => {
     expect(line()?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  /* The element stays: `.reader.band-covers:has(.mode-band, .marg-narrow)`
-     keeps the small-screen banner out of the flow while Marginalia is in its
-     narrow state (styles/narrow-window.css), and a banner arriving at the top
-     of the article five seconds into reading it would move the text.
+  /* The element stays: `[data-marg-narrow]` — `.reader.band-covers:has(.mode-band,
+     .marg-narrow)` until 2026-10-29 — keeps the small-screen banner out of the
+     flow while Marginalia is in its narrow state (styles/narrow-window.css),
+     and a banner arriving at the top of the article five seconds into reading
+     it would move the text.
 
      **Invisible, not hidden**: the sentence is still there for a screen
      reader, which had it before the line could fade (GPT Sol's F6); only the
@@ -169,6 +170,18 @@ describe("Marginalia's narrow-window line", () => {
     expect(box, "the sentence was taken from a screen reader").not.toMatch(/visibility|display/);
     const button = /\.marg-narrow\.is-gone \.marg-narrow-close\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     expect(button, "the button is still a tab stop").toMatch(/visibility:\s*hidden/);
+  });
+
+  it("holds data-marg-narrow on <html> while drawn, faded or not (root-flags.ts)", () => {
+    const flag = () => document.documentElement.hasAttribute("data-marg-narrow");
+    draw();
+    expect(flag()).toBe(true);
+    act(() => vi.advanceTimersByTime(TOAST_MS));
+    expect(gone()).toBe(true);
+    expect(flag(), "a faded line still holds the banner back").toBe(true);
+    draw({ room: true });
+    expect(line()).toBeNull();
+    expect(flag()).toBe(false);
   });
 
   it("comes back when the room returns and is lost again", () => {

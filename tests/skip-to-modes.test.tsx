@@ -10,7 +10,7 @@
  * `role="radiogroup"`). That the real bar still carries them is the browser
  * check's, and `SKIP_TARGET` is the one place the selector is written.
  */
-import { act } from "react";
+import { act, createElement, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -139,6 +139,56 @@ describe("Skip to modes", () => {
       expect(getComputedStyle(hint).visibility).toBe("visible");
       radio.blur();
       expect(getComputedStyle(radio).visibility).toBe("visible");
+    } finally {
+      bar.remove();
+    }
+  });
+
+  /* The hint's half of that is `data-dock-skip-arrived` on `<html>`, a lease
+     the link takes as it marks the dock (dock.css; it was
+     `:root:has(.dock[data-skip-arrived])` until 2026-10-29, plan 261029k). The
+     computed-style witness above is what shows the rule reads it; this is the
+     lease's lifetime: one per mount, however many presses, gone with Reader. */
+  it("holds the hint's flag from the first press until the reader goes", async () => {
+    drawDock(1);
+    const bar = document.createElement("div");
+    bar.className = "dock";
+    dock.replaceWith(bar);
+    bar.append(dock);
+    try {
+      const flag = () => document.documentElement.hasAttribute("data-dock-skip-arrived");
+      await act(async () => root.render(readingHarnessView(readingHarnessOwner(), false)));
+      expect(flag()).toBe(false);
+      await act(async () => skipLink()!.click());
+      await act(async () => skipLink()!.click());
+      expect(bar.hasAttribute("data-skip-arrived")).toBe(true);
+      expect(flag()).toBe(true);
+      act(() => root.render(null));
+      expect(flag(), "the reader went and the lease stayed").toBe(false);
+    } finally {
+      bar.remove();
+    }
+  });
+
+  it("releases the hint's flag before the next screen measures layout", async () => {
+    drawDock(1);
+    const bar = document.createElement("div");
+    bar.className = "dock";
+    dock.replaceWith(bar);
+    bar.append(dock);
+    let seen = true;
+    function NextScreen() {
+      useLayoutEffect(() => {
+        seen = document.documentElement.hasAttribute("data-dock-skip-arrived");
+      }, []);
+      return null;
+    }
+    try {
+      await act(async () => root.render(readingHarnessView(readingHarnessOwner(), false)));
+      await act(async () => skipLink()!.click());
+      expect(document.documentElement.hasAttribute("data-dock-skip-arrived")).toBe(true);
+      act(() => root.render(createElement(NextScreen)));
+      expect(seen, "the old Dock's lease survived into the next screen's layout effect").toBe(false);
     } finally {
       bar.remove();
     }

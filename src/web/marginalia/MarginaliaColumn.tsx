@@ -30,6 +30,7 @@ import {
 } from "react";
 import { ChevronRight, MessageCircleQuestionMark, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
+import { useRootFlag } from "../root-flags.js";
 import type {
   BlockId,
   CitedWork,
@@ -1187,7 +1188,7 @@ export function MarginaliaHead({
  *
  * **Gone is a class, not an unmount**, for two reasons. The stylesheet hides
  * the small-screen banner while this element exists
- * (styles/narrow-window.css § `:has(.mode-band, .marg-narrow)`), and removing
+ * (styles/narrow-window.css § `[data-marg-narrow]`, which this sets), and removing
  * it would drop that banner into the top of the article mid-read. And the
  * sentence is only made invisible, not hidden, when the clock runs out, so a
  * screen reader still finds why there are no notes, as it did before this
@@ -1199,6 +1200,9 @@ function NarrowLine({ beside }: { beside: boolean }) {
   const [gone, setGone] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const reading = useGoesByItself(TOAST_MS, () => setGone(true));
+  /* For the banner rule above: `data-marg-narrow` on `<html>` for as long as
+     this element exists, faded or not (root-flags.ts). */
+  useRootFlag("marg-narrow", true);
   return (
     <aside
       className={`marg-narrow${gone ? " is-gone" : ""}`}

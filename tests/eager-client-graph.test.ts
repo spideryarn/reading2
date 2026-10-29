@@ -638,6 +638,12 @@ const SHARED_WITH_READER = [
      and `LogoGlyphs`, which the reader already has. */
   "src/web/LogoLoader.tsx",
   "src/web/ModeSurface.tsx",
+  /* Arrived 2026-10-29 with ModeSurface's flags on <html> (plan 261029k):
+     `ModeSurface` holds them, and `/design` draws a real `ModeSurface`, so
+     both routes reach them. Two small hook modules the reader needs anyway;
+     outside a reader the context is null and they set nothing. */
+  "src/web/band-root-flags.ts",
+  "src/web/root-flags.ts",
   "src/web/SettingsSection.tsx",
   "src/web/ShelfEntry.tsx",
   /* Arrived 2026-10-20 with /admin/users' Columns menu (plan 261020c), by the

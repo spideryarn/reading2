@@ -201,6 +201,8 @@ import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import { useDockEntrance } from "./dock-entrance.js";
 import { SkipToModes } from "./SkipToModes.js";
+import { useFocusWithinFlag, useRootFlag } from "../root-flags.js";
+import { BandCoversContext } from "../band-root-flags.js";
 import {
   bandCoversProse,
   bandShapeFor,
@@ -782,13 +784,19 @@ export function Reader({
    * a narrow mode view the chip is the only thing telling a visitor they are
    * read-only, so the bar stays for it.
    *
-   * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
+   * The CSS half is `:root:not([data-bar-drawn])` in shell.css § the bar that
    * leaves while you read, which lets `--bar-bottom` fall to the status-bar
-   * inset when this is false. Nothing in `scroll.ts` needs telling: both
-   * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
-   * absent bar, and measure a present one.
+   * inset when this is false — the flag is set here, from this, since
+   * 2026-10-29 (it was `:root:not(:has(.controls))`, a walk of the whole
+   * article on every change: plan 261029k, root-flags.ts). Nothing in
+   * `scroll.ts` needs telling: both `stickyOffset` and `stickyDestination`
+   * already answer `--safe-top` for an absent bar, and measure a present one.
    */
   const showBar = owner === null || showCrumbs;
+  useRootFlag("bar-drawn", showBar);
+  /* And focus inside it, for the guard that will not slide away a bar a
+     keyboard reader is standing in (shell.css). */
+  const barFocusRef = useFocusWithinFlag("bar-focus");
 
   // A string, so it compares by value: a fresh object every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
@@ -4834,6 +4842,10 @@ export function Reader({
        portal — reads its card and its "is this block real" answer from here.
        BlockLinkCard.tsx. */
     <BlockLinkProvider index={blockLinks} resolveXref={resolveXref} readingTimeFor={owner?.readingTime.timeFor}>
+    {/* Whether `.reader` below carries `band-covers`, for the bands drawn
+        inside it to say on `<html>` (band-root-flags.ts). The same expression
+        as the class, so the two cannot disagree. */}
+    <BandCoversContext.Provider value={fit.modeW === 0}>
     <div
       /* `text-alone` says the prose has no mode band beside it, so the
          stylesheet can centre the reading column and put the masthead over it
@@ -4856,10 +4868,11 @@ export function Reader({
          beside the `--mode-w` it is derived from. **`fit.modeW === 0`, not
          `bandCovers`**: it is also true when no band is open at all, and one
          rule wants exactly that — narrow Marginalia in Plain hides the
-         small-screen banner with `.band-covers:has(.mode-band, .marg-narrow)`
+         small-screen banner with `.reader.band-covers` and a flag on `<html>`
          (styles/narrow-window.css). So every rule keyed off this class also
-         names what is lying over the prose: `.mode-band`, or there
-         `.marg-narrow` — narrow-window.css § a band with no room,
+         names what is lying over the prose: `data-band-covers` (a band, said
+         by the band — band-root-flags.ts, from `BandCoversContext` above), or
+         there `data-marg-narrow` — narrow-window.css § a band with no room,
          tests/spine-width.test.ts, tests/layout-margin.test.ts. */
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
@@ -5003,7 +5016,7 @@ export function Reader({
           BarStuckSentinel.tsx. */}
       {showCrumbs && <BarStuckSentinel />}
       {showBar && (
-        <div className="controls">
+        <div className="controls" ref={barFocusRef}>
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
           {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />}
@@ -5724,6 +5737,7 @@ export function Reader({
           is over the bars it is measuring. ViewportProbe.tsx. */}
       <ViewportProbe laidOutWidth={windowWidth} />
     </div>
+    </BandCoversContext.Provider>
     </BlockLinkProvider>
   );
 }

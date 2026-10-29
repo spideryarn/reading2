@@ -52,9 +52,14 @@ const CSS = readerCss();
  * both spine states; `Reader.tsx` writes the fact as a class on `.reader` now and
  * these key off that (narrow-window.css § a band with no room). Nothing about the
  * pairing changed, which is what this file is really about.
+ *
+ * **`[data-band-covers]` on `<html>` since 2026-10-29**, for "a band is drawn
+ * in that reader": the band's renderer says it (src/web/band-root-flags.ts)
+ * rather than the stylesheet walking the article for it (plan 261029k). The
+ * pairing, again, is unchanged.
  */
-const HIDES_MASTHEAD = ".reader.band-covers:has(.mode-band) .masthead { display: none; }";
-const HIDES_NOTICE = ".reader.band-covers:has(.mode-band) .shared-notice { display: none; }";
+const HIDES_MASTHEAD = "[data-band-covers] .reader.band-covers .masthead { display: none; }";
+const HIDES_NOTICE = "[data-band-covers] .reader.band-covers .shared-notice { display: none; }";
 
 describe("a visitor's notice, in the strip the band takes over", () => {
   it("carries the class the stylesheet reaches it by", () => {

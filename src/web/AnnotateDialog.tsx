@@ -156,6 +156,7 @@
  * killed browser fires no event at all.
  */
 import { useEffect, useRef, useState } from "react";
+import { useRootFlag } from "./root-flags.js";
 import { ClipboardCheck, Copy, MessageSquarePlus, TriangleAlert, X } from "lucide-react";
 
 import type { ChatAnchor, HighlightColour } from "../types.js";
@@ -577,6 +578,10 @@ export function AnnotateDialog({
   };
 
   useEscapeToClose(close, escapeEnabled);
+  /* While this box is drawn the narrow window's bar stays home, since the box
+     is anchored to the bar's resting room (narrow-window.css § the guard).
+     `side-dialog` is counted, so the other two dialogs can hold it too. */
+  useRootFlag("side-dialog", true);
 
   /* Mounted means on screen: the selection opens this and closing it unmounts. */
   const visible = useVisualViewport(true);

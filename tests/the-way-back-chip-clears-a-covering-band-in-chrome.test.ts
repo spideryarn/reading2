@@ -37,7 +37,20 @@ const CSS = `${readFileSync(new URL("../styles/tokens.css", import.meta.url), "u
 function page(windowWidth: number, chip: boolean, safeBottom = 0, installHint = false, hiddenBars = false): string {
   const fit = fitView({ windowWidth, modeBand: true });
   const classes = `reader spine-${fit.spine}${fit.modeW === 0 ? " band-covers" : ""}`;
-  return `<!doctype html><html${hiddenBars ? ' data-bars="hidden"' : ""} style="--safe-bottom:${safeBottom}px"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style>
+  /* What the components drawing this markup say on <html> (src/web/root-flags.ts,
+     band-root-flags.ts): the bar is drawn, the band covers the reader when it
+     does, the chip and the hint are drawn when they are. The stylesheet reads
+     these, not the markup, since 2026-10-29 (plan 261029k). */
+  const flags = [
+    "data-bar-drawn",
+    fit.modeW === 0 ? "data-band-covers" : "",
+    chip ? "data-return-chip" : "",
+    installHint ? "data-install-hint" : "",
+  ]
+    .filter(Boolean)
+    .map((f) => ` ${f}`)
+    .join("");
+  return `<!doctype html><html${flags}${hiddenBars ? ' data-bars="hidden"' : ""} style="--safe-bottom:${safeBottom}px"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style>
 <div id="root"><div class="${classes}" style="--mode-w:${fit.modeW}px;--page-w:${windowWidth}px">
   <div class="controls"></div>
   <p>${"word ".repeat(400)}</p>

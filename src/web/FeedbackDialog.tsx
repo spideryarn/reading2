@@ -78,6 +78,13 @@
  * button that opened it, top-layer painting that joins no z-index budget, and
  * Escape.
  *
+ * **The inert background is not free, and on a long article it is the whole
+ * cost.** Both engines compute inertness as style, so `showModal()` and
+ * `close()` each restyle every element in the page: 13–19 s and 13–15 s on an
+ * 87k-node book at 6× CPU throttle, against 0.8 s and 0 ms for a non-modal
+ * `show()` (spya-bewb4q, spya-k3g78t; docs/investigations/261029a-…). A modal
+ * that inerts nothing is question q-f7xm4h; postmortem 261029d names the class.
+ *
  * **AnnotateDialog would have been the wrong precedent for a second reason**, and
  * it is the one that would have hurt: its first Escape *clears the box*. Here
  * there is a populated box to lose, and a reader who has just typed out what
@@ -96,6 +103,7 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -436,6 +444,24 @@ function useDraftHeld(...held: boolean[]): void {
     return () => noteFeedbackDraft(false);
   }, [any]);
 }
+
+/**
+ * **The Earlier tab is not drawn again while nobody can see it.** It is hidden,
+ * not unmounted, on Write (so a half-written reply survives), and every render
+ * of this dialog used to render it too: for an admin, every question thread and
+ * waiting report, on every keystroke in the Write box and on the press of Send —
+ * about 126ms a key at 6× throttle (spya-bewb4q, plan 261029k). Its props are
+ * rebuilt each render, so a plain `memo` would never hold; this skips a render
+ * only when it was hidden and still is. The render that hides it, and the one
+ * that shows it, both go through with the current props. State inside it, and
+ * the hooks that feed it, update as before.
+ */
+const StillWhileHidden = memo(
+  function StillWhileHidden({ children }: { hidden: boolean; children: ReactNode }) {
+    return <>{children}</>;
+  },
+  (before, after) => before.hidden && after.hidden,
+);
 
 export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false, readerId, onWaitingCount }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -1573,6 +1599,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
           tabIndex={0}
           hidden={view !== "earlier"}
         >
+          <StillWhileHidden hidden={view !== "earlier"}>
           {/* The pills go while one thread shows: on a phone with the keyboard
               up they cost three lines (plan 261008i, decision 4). */}
           {threadOpen ? null : (
@@ -1599,6 +1626,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
             addenda={addenda}
             active={open && view === "earlier"}
           />
+          </StillWhileHidden>
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

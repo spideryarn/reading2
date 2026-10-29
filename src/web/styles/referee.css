@@ -63,7 +63,7 @@
      with 616px of content in 254px looks exactly like one that ends where it
      stops. A trailing fade is the answer these stylesheets already give for
      the table that runs off the right edge
-     (`.reader:has(table.zoom.overflowing)::after`), and gave a second time in
+     (`.reader:has(> table.zoom.overflowing)::after`), and gave a second time in
      `.ctx-panel`'s own mask until the fisheye panels went on 2026-09-29.
      It is drawn whether or not there is anything below it, which is the price
      of a rule that cannot ask. */

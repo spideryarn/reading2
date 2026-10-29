@@ -171,12 +171,14 @@ import {
   type CSSProperties,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useId,
   useState,
   type ReactNode,
 } from "react";
+import { trackFocusWithin, useRootFlag } from "./root-flags.js";
 import {
   Check,
   Command,
@@ -1968,6 +1970,10 @@ export function Dock({
 }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
+  /* The drawer rises out of the bar, so a narrow window's bar stays home while
+     it is drawn (narrow-window.css § the guard; root-flags.ts). The same
+     condition that draws `.dock-drawer` below. */
+  useRootFlag("dock-drawer", open);
   /* Narrowed once, so the four reads below are the compiler checking one fact
      rather than four independent tests that could drift apart. */
   const own = drawer && drawer.visitor !== true ? drawer : null;
@@ -2121,6 +2127,14 @@ export function Dock({
       hasQuickSearch(view, isVisitor ? null : own, onMode),
     ),
   );
+  /* **Focus inside the bar holds it home** on a narrow window, so a keyboard
+     reader is not left on a button that slid away (narrow-window.css § the
+     guard). `.dock` is drawn for the whole life of this component, so its ref
+     is set once and this follows it until unmount — root-flags.ts. */
+  useLayoutEffect(() => {
+    const el = dockRef.current;
+    return el ? trackFocusWithin(el, "dock-focus") : undefined;
+  }, [dockRef]);
 
   /**
    * Escape closes the drawer, and the drawer wins.
@@ -2177,8 +2191,9 @@ export function Dock({
          and the first Escape must close the menu and leave the drawer for the
          second. Radix's own listener is on `document`, after this one, so
          standing aside is all it needs (GPT Sol, PR-2 of plan 261007c;
-         tests/dock-more.test.tsx). The same attribute narrow-window.css reads
-         to hold the bar home under an open menu. */
+         tests/dock-more.test.tsx). The same state, as `data-dock-more-open`
+         on `<html>`, is what narrow-window.css reads to hold the bar home
+         under an open menu (`DockMore`). */
       if (document.querySelector(MORE_OPEN) !== null) return;
       e.stopImmediatePropagation();
       if (isImeComposing(e)) {
@@ -3473,11 +3488,13 @@ const MORE_LABEL = "More";
 
 /**
  * **An open More menu, as a selector** — Radix writes `data-state` on the
- * trigger. The drawer's Escape handler asks this (`Dock`), and
- * narrow-window.css § the guard spells the same selector to hold the bar home
- * on a phone, because the menu is portalled out of `.dock` and takes focus
- * with it. tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds the
- * stylesheet's copy to this one.
+ * trigger. The drawer's Escape handler asks this (`Dock`). narrow-window.css §
+ * the guard asked the same selector from `:root` until 2026-10-29 to hold the
+ * bar home on a phone, because the menu is portalled out of `.dock` and takes
+ * focus with it; it reads `data-dock-more-open` now, which `DockMore` sets
+ * from the `open` state that drives this attribute (root-flags.ts, plan
+ * 261029k). tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds
+ * the two together.
  */
 export const MORE_OPEN = '.dock-more-trigger[data-state="open"]';
 
@@ -3549,6 +3566,11 @@ function DockMore({
   pick: MorePick;
 }) {
   const [open, setOpen] = useState(false);
+  /* An open menu holds a narrow window's bar home: the menu is portalled out of
+     `.dock` and takes focus with it, so `dock-focus` goes false the moment it
+     opens (narrow-window.css § the guard). From this state, which is what puts
+     `data-state="open"` on the trigger — and only while there is a trigger. */
+  useRootFlag("dock-more-open", open && menu.length > 0);
   /* A finger that lands here at the start of a sideways scroll of the bar must
      not open the menu — menu.ts § `useFingerPressMenu`. */
   const finger = useFingerPressMenu(open, setOpen);

@@ -158,7 +158,7 @@ describe("the reading column is centred in its cell", () => {
        Geist they put the title ~80px off the first line of the article at 1440
        (261003c code review). Every visible child names its own face. */
     expect(rule(".reader.text-alone .masthead-inner")).toContain(`font-family: ${proseFace}`);
-    expect(rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner")).toContain(
+    expect(rule(".reader:has(> table.only-prose):not(.text-alone) .masthead-inner")).toContain(
       `font-family: ${proseFace}`,
     );
   });
@@ -221,7 +221,7 @@ describe("the reading column is centred in its cell", () => {
   });
 
   it("the masthead follows the prose wherever the two share a box", () => {
-    const r = rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner");
+    const r = rule(".reader:has(> table.only-prose):not(.text-alone) .masthead-inner");
     expect(r).toContain("max-width: var(--reading-measure)");
     /* Stated rather than `auto`, and it still has to be: auto margins would
        centre this box in the bar, while the prose is half the reading cell's
@@ -264,7 +264,7 @@ describe("the reading column is centred in its cell", () => {
        accident — the masthead's left padding was derived from `--logo-w` and
        landed within about two pixels of the prose's inset — so taking the
        reservation away is what exposed it. GPT Sol, T1. */
-    const r = rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner");
+    const r = rule(".reader:has(> table.only-prose):not(.text-alone) .masthead-inner");
     expect(r).toContain("max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l)))");
   });
 

@@ -154,8 +154,12 @@
    `--dock-bottom`, so it does not chase the bar down the screen when the bar
    slides away. It is one sentence the reader is meant to read or dismiss; a
    sentence that slid about while they scrolled would be harder to do either
-   with. */
-:root:has(.install-hint) { --hint-h: 3.5rem; }
+   with.
+
+   `data-install-hint` is set by `InstallHint` while it draws the strip
+   (root-flags.ts) — `:root:has(.install-hint)` until 2026-10-29, which walked
+   the article to find it (plan 261029k). (0,2,0) either way. */
+:root[data-install-hint] { --hint-h: 3.5rem; }
 
 /* ------------------------------------------------------ the offline strip --
    The connection has gone — OfflineStrip.tsx, which carries the words and the
@@ -329,10 +333,12 @@
 /* 2.5rem of chip — 2rem of button, plus 0.15rem of padding and a 1px border
    either side, measured at 38.78px rather than guessed — and then the 0.75rem
    it stands off the edge below, because what the strip above needs is the room
-   the chip occupies rather than its height. `:root:has()`, the install hint's
-   arrangement, so that the strip can read it. Pinned by the browser check at
-   390px and 1280px: the two rectangles must not intersect. */
-:root:has(.return-chip) { --return-chip-h: 3.25rem; }
+   the chip occupies rather than its height. On `:root`, the install hint's
+   arrangement, so that the strip can read it — `data-return-chip`, held by
+   whichever of `ReturnChip` and `BandBackChip` is drawn (root-flags.ts; it was
+   `:root:has(.return-chip)` until 2026-10-29, plan 261029k). Pinned by the
+   browser check at 390px and 1280px: the two rectangles must not intersect. */
+:root[data-return-chip] { --return-chip-h: 3.25rem; }
 
 .return-chip {
   position: fixed;
@@ -1077,9 +1083,15 @@
   outline-offset: 2px;
 }
 /* An explicit skip takes priority over the decorative entrance. The marker
-   stays on this mount, so blurring a radio cannot restart the delay. */
+   stays on this mount, so blurring a radio cannot restart the delay.
+
+   The hint's half reads `data-dock-skip-arrived` on `<html>`, which
+   SkipToModes.tsx takes as it marks the dock — `:root:has(.dock[data-skip-arrived])`
+   until 2026-10-29 (plan 261029k). The attribute is written twice to keep the
+   old weight: `:has()` carried `.dock` and the attribute, (0,2,0), so the
+   selector was (0,5,0), and one attribute would leave it at (0,4,0). */
 .dock.dock-enter[data-skip-arrived],
-:root:has(.dock[data-skip-arrived]) .install-hint.dock-enter {
+:root[data-dock-skip-arrived][data-dock-skip-arrived] .install-hint.dock-enter {
   animation: none;
   visibility: visible;
 }
