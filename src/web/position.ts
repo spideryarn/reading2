@@ -41,8 +41,8 @@
  * next run. Block ids are minted once and preserved. Hence: the id of the first
  * *block* of the section, never the id of the node.
  */
-import type { Block, BlockId, NodeId } from "../types.js";
-import { navigableItems, titleVoice, type Geometry } from "./tree.js";
+import type { Block, BlockId, NodeId, TreeNode } from "../types.js";
+import { navigableItems, titleVoice, type Cell, type Geometry } from "./tree.js";
 import type { Voice } from "./voice.js";
 
 export interface Section {
@@ -60,18 +60,29 @@ export interface Section {
 
 /**
  * The depth we treat as "a section": the deepest level that still has titles
- * and gists, i.e. one above the leaves.
+ * and gists, i.e. one above the leaves — **and never below depth 2**.
  *
  * The leaves are one node per block, so using them would be storing the exact
  * position under another name. Depth 1 ("Parts") is far too coarse — nine of
  * them across the example article. `leafDepth - 1` is depth 2 for a normal
- * three-deep tree — what the reader sees called "Sections" — and it
- * follows the article if a deeper or shallower tree gets generated. Clamped at
- * 1 so a pathologically shallow tree can never select the root, which spans
+ * three-deep tree — what the reader sees called "Sections". Clamped at 1 so a
+ * pathologically shallow tree can never select the root, which spans
  * everything and would never change.
+ *
+ * **Capped at 2 since 2026-10-29**, because a tree may be ragged: some
+ * sections divided into sub-sections (leaves at depth 4), their neighbours not
+ * (leaves at depth 3). One deepened section would otherwise make this 3 for the
+ * whole article, and depth 3 everywhere else is the paragraphs — `?at=` would
+ * go paragraph-granular, Quiz's "where to look again" would drop questions,
+ * and the return chip and block-link card would lose their section. A
+ * sub-section is inside its section, never a section of its own; Structure,
+ * which does go one level deeper, has its own finer list (§
+ * `structureFrontier`). Identical to `leafDepth - 1` on every tree production
+ * can hold today; it differs only on a uniformly deeper tree, which exists in
+ * tests alone. docs/plans/261029a-structure-one-level-deeper.md § Stage 1.
  */
 export function sectionDepth(geometry: Geometry): number {
-  return Math.max(1, geometry.leafDepth - 1);
+  return Math.max(1, Math.min(geometry.leafDepth - 1, 2));
 }
 
 /**
@@ -83,7 +94,69 @@ export function sectionDepth(geometry: Geometry): number {
  * screen.
  */
 export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
-  const column = geometry.cells[sectionDepth(geometry)] ?? [];
+  return sectionsFromCells(geometry.cells[sectionDepth(geometry)] ?? [], geometry, blocks);
+}
+
+/**
+ * **Structure's own list: for each block, the deepest internal node containing
+ * it** — never the root, and a leaf only where the tree has nothing between
+ * the root and its leaves. The same item shape as `buildSections`, with the
+ * apparatus collapsed the same way.
+ *
+ * Why a second list: `buildSections` stops at depth 2 for everything outside
+ * Structure (§ `sectionDepth`), but Structure draws the sub-sections a ragged
+ * tree has, and its "you are here" and its ← / → have to be able to stand in
+ * one. A reader inside "2.4.3 Midbrain Theory" is in 2.4.3 here and in "2.4
+ * Other Theories and Conditions" everywhere else. Plan 261029a § Stage 1,
+ * item 2.
+ *
+ * **On a uniform three-level tree it is exactly the section list**
+ * (tests/structure-ragged-tree.test.ts). The one place it differs on today's
+ * trees is a part with leaves directly under it: the deepest internal node
+ * there is the part, so the frontier names the part once rather than one
+ * nameless entry per paragraph, which is intended.
+ *
+ * Read off the geometry's columns rather than a second walk of the tree, for
+ * the reason `buildSections` gives. A row the tree does not cover gets no
+ * entry, as in every column (tree.ts § `buildGeometry`).
+ */
+export function structureFrontier(geometry: Geometry, blocks: Block[]): Section[] {
+  /* row → the node each column holds there. A column's cells tile the rows it
+     covers, in order, so running its spans up is the whole lookup. */
+  const byColumn = geometry.cells.map((column) => {
+    const at: (TreeNode | undefined)[] = new Array(blocks.length);
+    let row = 0;
+    for (const cell of column) {
+      for (let k = 0; k < cell.rowSpan; k++) at[row + k] = cell.node;
+      row += cell.rowSpan;
+    }
+    return at;
+  });
+  const frontierAt = (row: number): TreeNode | undefined => {
+    for (let depth = geometry.leafDepth; depth >= 1; depth--) {
+      const node = byColumn[depth]?.[row];
+      if (node && node.children.length > 0) return node;
+    }
+    /* Nothing internal below the root — a tree of a root and its leaves, whose
+       leaves are its sections (`sectionDepth`'s clamp at 1, the same answer). */
+    return byColumn[1]?.[row];
+  };
+  /* Runs of one node become cells, so `navigableItems` collapses the
+     apparatus exactly as it does for a real column. */
+  const cells: Cell[] = [];
+  let row = 0;
+  while (row < blocks.length) {
+    const node = frontierAt(row);
+    let end = row + 1;
+    while (end < blocks.length && frontierAt(end)?.id === node?.id) end++;
+    if (node) cells.push({ node, rowSpan: end - row, continuation: false });
+    row = end;
+  }
+  return sectionsFromCells(cells, geometry, blocks);
+}
+
+/** A column's cells as `Section`s — the half `buildSections` and `structureFrontier` share. */
+function sectionsFromCells(column: readonly Cell[], geometry: Geometry, blocks: Block[]): Section[] {
   const sections: Section[] = [];
   /* `navigableItems`, not the raw cells. At the section depth the apparatus is
      one leaf cell per endnote, each with an empty title, so a reader who stops

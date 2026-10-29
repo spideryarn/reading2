@@ -15,7 +15,7 @@ Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.t
 - [§ ← / → in Quiz](#-in-quiz) — Previous/Next, and the refusals that keep a draft
 - [§ ← / → in Quotes](#-in-quotes) — `stepQuote` and the band's order
 - [§ ← / → in Search](#-in-search) — the results list, and what a step shares with a press on a row
-- [§ ← / → in Structure](#-in-structure) — `acrossDepth`, and why ↑ / ↓ left the list
+- [§ ← / → in Structure](#-in-structure) — `acrossStarts`, and why ↑ / ↓ left the list
 - [§ The aim is visible before you press anything](#the-aim-is-visible-before-you-press-anything) — column tinting (history)
 - [§ Five rules, each with a reason](#five-rules-each-with-a-reason) — auto-repeat, a widget that handled the key, rapid presses, a keypress's URL
 - [§ The one chord that is not an arrow](#the-one-chord-that-is-not-an-arrow) — ⌘-K, ⌘-Enter (Metadata), ⌘⌥T (fold all), Enter in a text box
@@ -345,11 +345,12 @@ and the search box; `tests/list-step.test.ts` the order and the follow. The plan
 >
 > — Greg, 2026-10-01, spya-b2wzjf
 
-**While Structure is the mode, ← / → step the lowest-level sections** — `sectionDepth`, the unit
-`?at=` stores and that ↓ stepped over the band until that day. Not a handler like Skim's and
-Quiz's but a second stride inside `useArrowNav` (`acrossDepth`), so it is ↑ / ↓'s own step: the same
-`stepTarget`, the same chain for rapid presses, every guard above, and the key back to the browser at
-either end. A handler, when a mode hands one in, wins; no mode does both.
+**While Structure is the mode, ← / → step the lowest-level sections** — Structure's frontier
+(`structureFrontier`: the sections, or a section's sub-sections where the article has them, plan
+[261029a](../plans/261029a-structure-one-level-deeper.md)), which ↓ stepped over the band until that
+day. Not a handler like Skim's and Quiz's but a second stride inside `useArrowNav`
+(`acrossStarts`), so it is ↑ / ↓'s own step: the same `stepTarget`, the same chain for rapid
+presses, every guard above, and the key back to the browser at either end. A handler, when a mode hands one in, wins; no mode does both.
 
 **← in the middle of a section goes to that section's start**, as ↑ does and as ← on Skim's
 first stop does: the heading you are under is the previous heading in reading order. A second press

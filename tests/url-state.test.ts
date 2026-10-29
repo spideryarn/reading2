@@ -159,7 +159,12 @@ describe("buildSections", () => {
   const sections = buildSections(geometry, blocks);
 
   it("uses the deepest level that still has titles, not the leaves", () => {
+    /* A three-level tree, where that is one above the leaves. On a deeper tree
+       it stops at 2, so a sub-section is never a section of its own — plan
+       261029a, tests/structure-ragged-tree.test.ts. */
+    expect(geometry.leafDepth).toBe(3);
     expect(sectionDepth(geometry)).toBe(geometry.leafDepth - 1);
+    expect(sectionDepth({ ...geometry, leafDepth: 4 })).toBe(2);
   });
 
   // The whole point of storing a section rather than a position: there are

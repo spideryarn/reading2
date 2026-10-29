@@ -262,6 +262,10 @@ function rowText(node: SummaryNode): { text: string; voice: Voice } | null {
     exclusive comparison would leave the reader unmarked exactly there. */
 const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.endRow;
 
+/** A node with children — a section rather than a paragraph by shape. The projected list:
+    StructureBand builds its tree at full depth, so nothing is cut. */
+const hasChildren = (n: SummaryNode) => n.children.length > 0;
+
 function makeRow(
   entry: SummaryNode,
   kind: RowKind,
@@ -558,8 +562,18 @@ export function structureProjection({
    * it is `null` when the part cannot be shown.
    */
   const currentPart = selectedPart !== null && rowText(selectedPart) !== null ? selectedPart : null;
+  /**
+   * **Only a section with children of its own can be current.** `focusRow` is
+   * the first row of Structure's frontier item (position.ts §
+   * `structureFrontier`) — the deepest node with children around the reader.
+   * Under a part whose children include paragraphs, that item is the part, and
+   * its first row is the first paragraph's: marking the child that contains it
+   * would light that paragraph wherever in the part the reader was. Identical
+   * on a tree whose sections all have children, which is every ordinary one.
+   * Plan 261029a.
+   */
   const currentSection =
-    currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
+    currentPart?.children.find((s) => contains(s, focusRow) && hasChildren(s)) ?? null;
 
   /* ---- column A: every part ---- */
   /**
@@ -650,7 +664,14 @@ export function structureProjection({
      screen after the window and if the whole run fits in what is left. */
   if (rungB >= 3 && currentSection !== null) {
     const at = columnB.rows.findIndex((r) => r.here);
-    const kids = currentSection.children;
+    /* **Only ever leaves.** A section divided into sub-sections (a ragged tree,
+       plan 261029a) has children that are not paragraphs, and splicing them in
+       here would draw each as a paragraph row, never current and with no gist.
+       Opening sub-sections under column B's current section waits on Greg's
+       layout answer (q-vrnbyj) and needs the section and its sub-sections
+       windowed as one unit (Sol's PR-4), so until then such a section gets no
+       detail rung at all. Not reached at the shipped rung. */
+    const kids = currentSection.children.every((k) => !hasChildren(k)) ? currentSection.children : [];
     if (at !== -1 && kids.length > 0) {
       const paraRows = kids
         .map((p) => makeRow(p, "paragraph", PARAGRAPH_IS_NEVER_CURRENT, focusRow, undefined, matter))

@@ -193,7 +193,7 @@ import { arrivalTarget, endCentredArrival, isBlockOnScreen, scrollToBlock } from
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
-import { buildSections, sectionDepth } from "../position.js";
+import { buildSections, sectionDepth, structureFrontier } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import { useDockEntrance } from "./dock-entrance.js";
@@ -396,6 +396,15 @@ export function Reader({
     () => buildSections(geometry, article.blocks),
     [geometry, article.blocks],
   );
+  /* **Structure's own, finer list** — a sub-section where the article has
+     them, the section everywhere else (position.ts § `structureFrontier`).
+     Its "you are here" and its ← / → read this; everything else, `?at=`
+     included, keeps `sections`. Plan 261029a. */
+  const frontier = useMemo(
+    () => structureFrontier(geometry, article.blocks),
+    [geometry, article.blocks],
+  );
+  const frontierStarts = useMemo(() => frontier.map((s) => s.row), [frontier]);
   const windowWidth = useWindowWidth();
   const rootFontPx = useRootFontPx();
 
@@ -2354,10 +2363,11 @@ export function Reader({
     geometry.leafDepth,
     !drawerOpen,
     skimKeys ?? quizStepKeys ?? quoteStepKeys ?? searchStepKeys,
-    /* …and the lowest-level sections while Structure is the mode — the unit
-       `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
-       keyboard.md § ← / → in Structure. */
-    mode === "structure" ? sectionDepth(geometry) : null,
+    /* …and the lowest-level sections while Structure is the mode — the
+       stride ↓ took over the band until 2026-10-01 — or sub-sections where the
+       article has them: Structure's frontier, the rows its "you are here" is
+       measured over (plan 261029a). keyboard.md § ← / → in Structure. */
+    mode === "structure" ? frontierStarts : null,
   );
 
   /* **The door after the current stop's block** — SkimPanel.tsx §
@@ -4101,7 +4111,7 @@ export function Reader({
             owner={isOwner}
             article={article}
             leafDepth={geometry.leafDepth}
-            sections={sections}
+            frontier={frontier}
             layoutKey={layoutKey}
             supplementOf={geometry.supplementOf}
             arcByRow={arcCells}

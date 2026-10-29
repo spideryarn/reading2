@@ -22,7 +22,10 @@ import type { Voice } from "./voice.js";
 export interface Cell {
   node: TreeNode;
   rowSpan: number;
-  /** True when the branch bottomed out above this column, so the node repeats. */
+  /**
+   * True when the branch bottomed out above this column, so the node repeats —
+   * and for a leaf in any column but the leaf column (§ `buildGeometry`).
+   */
   continuation: boolean;
 }
 
@@ -156,14 +159,27 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
     const column: Cell[] = [];
     // A block whose branch is shallower than this column reuses its deepest
     // node; we mark that as a continuation so the text isn't repeated.
+    /* **A leaf is real only in the leaf column.** On a ragged tree — one
+       section divided into sub-sections, its neighbours not — an undeepened
+       branch's leaf is shallower than `leafDepth`, and the rule above put it
+       into the sub-sections' column as real content, with the leaf column its
+       continuation: a paragraph standing as a sub-section. So between its
+       parent and the leaf column a leaf is the continuation, and the leaf
+       column holds it for real. A chain that stops at a node with children (a
+       tree that does not cover the block) keeps the old rule. GPT Sol's PR-3,
+       plan 261029a. */
     const nodeFor = (row: number): { node: TreeNode | undefined; continuation: boolean } => {
       // A row with no chain means the tree does not cover that block. The
       // caller already skips a missing node (it draws nothing rather than
       // guessing), and validate-tree.ts is what complains about it properly.
       const chain = chains[row];
       if (!chain?.length) return { node: undefined, continuation: false };
-      const id = chain[Math.min(depth, chain.length - 1)]!;
-      return { node: tree.nodes[id], continuation: depth > chain.length - 1 };
+      const last = chain.length - 1;
+      const id = chain[Math.min(depth, last)]!;
+      const node = tree.nodes[id];
+      const shortLeaf = depth >= last && (tree.nodes[chain[last]!]?.children?.length ?? 0) === 0;
+      const continuation = shortLeaf ? depth < maxDepth : depth > last;
+      return { node, continuation };
     };
 
     let row = 0;

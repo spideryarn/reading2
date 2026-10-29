@@ -59,7 +59,10 @@ function note(i: number, role: NonNullable<Block["role"]> = "footnote"): Block {
 
 /**
  * A copy of the body tree one level deeper — every leaf gains a single child,
- * so `leafDepth` goes 3 → 4 and the sections column moves to depth 3.
+ * so `leafDepth` goes 3 → 4. The sections column moved to depth 3 with it
+ * until 2026-10-29, when `sectionDepth` was capped at 2 (plan 261029a); the
+ * shape is still worth the tests below, because the apparatus's leaves are
+ * now continuations in two columns rather than one.
  *
  * **Why a test needs this shape at all.** A supplement is always depth 1 with
  * its leaves at depth 2, so a note's chain is three nodes long however deep the

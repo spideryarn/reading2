@@ -1,6 +1,9 @@
 /**
  * **Which section the reader is in**, sampled live at the focus line —
- * Structure's "you are here" (StructureMode.tsx), in both faces.
+ * Structure's "you are here" (StructureMode.tsx), in both faces. "Section" is
+ * whatever list it is handed: Structure hands it its frontier, which goes down
+ * to a sub-section where the article has them (position.ts §
+ * `structureFrontier`, plan 261029a).
  *
  * The name is the gist columns': this was the live half of column context,
  * which also measured where each gist column sat on screen so a fisheye panel

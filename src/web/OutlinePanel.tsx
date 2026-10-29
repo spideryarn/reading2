@@ -731,6 +731,9 @@ function rowClass(row: OutlineRow, focused: boolean): string {
   return [
     "outln-row",
     `lvl-${row.level}`,
+    /* A paragraph is a flag, not a depth: a sub-section and a section's
+       paragraph are both level 3 (outline.ts § `OutlineRow.paragraph`). */
+    row.paragraph ? "paragraph" : "",
     `tier-${row.tier}`,
     row.here ? "here" : "",
     row.now ? "now" : "",

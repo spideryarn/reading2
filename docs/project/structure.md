@@ -60,6 +60,27 @@ asked to see are the gists. The plan, and GPT Sol's review of it, is
 [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
 it are [keyboard.md § ← / → in Structure](keyboard.md).
 
+## Sub-sections, where the article has them
+
+> I'm in the section of other theories of consciousness, and I'd quite like to see, at the very
+> least, each of them have their own section. Maybe even more detail than that.
+>
+> — Greg, 2026-10-29, `spya-pn7gvw`, in [261029a](../plans/261029a-structure-one-level-deeper.md)
+
+The tree may go one level deeper inside a section the article divides, and not elsewhere
+([granularity-zoom.md § The tree](granularity-zoom.md#the-tree)). Nothing makes such a tree yet —
+the structure step's half is 261029a's stage 2 — but the reading view already draws one:
+
+- **The list's fisheye** draws, at its floor, the sub-sections of the section the reader is in;
+  the gist goes on the sub-section they are in, and the paragraphs, when drawn, hang off it.
+- **Expanded** draws every sub-section one indent further in, with its gist, as a section rather
+  than a paragraph (`OutlineRow.paragraph` is a flag, not a depth).
+- **"You are here" and ← / →** use Structure's own list, the frontier, so they can stand in a
+  sub-section; everything outside Structure stays at the section level.
+- **The two columns are unchanged** but for a guard: column B's paragraph rung lists only leaves.
+  Opening sub-sections under column B's current section waits on Greg's answer to
+  [q-vrnbyj](../user-feedback/questions/q-vrnbyj.md).
+
 ## While the reader scrolls
 
 > I think it's nice that the structure mode updates as we scroll. It probably only needs to update
