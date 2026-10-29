@@ -39,6 +39,8 @@ import { searchWithout } from "./router.js";
 /* Type-only: a value import would put faq-order.ts on the reader's startup
    path (tests/eager-client-graph.test.ts). faq-order.ts § FaqOrder. */
 import type { FaqOrder } from "./faq-order.js";
+/* The same, for Explanations' orders: a type-only import, erased. */
+import type { ExplanationOrder } from "./explanations-order.js";
 /* Type-only, for the same reason: reception-order.ts § ReceptionOrder. */
 import type { ReceptionOrder } from "./reception-order.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
@@ -774,6 +776,47 @@ export const faqOrderParam = createParser<FaqOrder>({
  * resolves to `FAQ_BAR_DEFAULT` (faq-order.ts). `replace` and debounced.
  */
 export const faqBarParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+  },
+  serialize: (v) => v.toFixed(2),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
+/**
+ * **How Explanations is ordered** — `?explby=`, since 2026-10-29, the FAQ's
+ * pattern. `prioritised` is the default: what survives the bar, in reading
+ * order; `document` is reading order; `difficulty` (*hardest*) and
+ * `centrality` (*most central*) are each score, highest first.
+ * src/web/explanations-order.ts; plan 261029e § 2b. `push`, and an unknown
+ * value falls back to the default.
+ */
+export const EXPLANATION_ORDERS = [
+  "prioritised",
+  "document",
+  "difficulty",
+  "centrality",
+] as const satisfies readonly ExplanationOrder[];
+/* And the other way: every `ExplanationOrder` is in the list, or this stops compiling. */
+const _everyExplanationOrderListed: Exclude<ExplanationOrder, (typeof EXPLANATION_ORDERS)[number]> extends never
+  ? true
+  : never = true;
+void _everyExplanationOrderListed;
+
+export const explanationOrderParam = createParser<ExplanationOrder>({
+  parse: (v) => (EXPLANATION_ORDERS.includes(v as ExplanationOrder) ? (v as ExplanationOrder) : null),
+  serialize: (v) => v,
+})
+  .withDefault("prioritised")
+  .withOptions({ history: "push" });
+
+/**
+ * How high an explanation has to score to stay on screen in the prioritised
+ * order — `?explbar=`, `difficulty × centrality` on 0–1. No default, for
+ * `gateParam`'s reason: absent is *nobody has touched it*, which the panel
+ * resolves to `EXPLANATIONS_BAR_DEFAULT`. `replace` and debounced.
+ */
+export const explanationBarParam = createParser<number>({
   parse: (v) => {
     const n = Number.parseFloat(v);
     return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;

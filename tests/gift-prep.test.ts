@@ -91,14 +91,14 @@ const PURPOSE = "To see whether the gift's modes are written for this.";
  * src/auto-mode-steps.ts, so a change there is made twice.
  */
 const EXPECTED: StepName[][] = [
-  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b). */
+  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b).
+     Not `ideas`, since 2026-10-29, nor inside Skim's job: opened, not imported (plan 261029c). */
   ["glossary"],
   ["quotes"],
-  ["ideas"],
   ["simple"],
   ["bibliography"],
   ["crossrefs"],
-  ["quotes", "ideas", "skim"],
+  ["quotes", "skim"],
 ];
 
 interface Seeded {

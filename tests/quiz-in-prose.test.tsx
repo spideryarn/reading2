@@ -401,6 +401,11 @@ const allLines = (): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>(".quiz-in-prose .quiz-in-prose-q"),
 ];
 
+/** The same questions, drawn in Marginalia instead while it is on screen (261029c). */
+const marginLines = (): HTMLButtonElement[] => [
+  ...host.querySelectorAll<HTMLButtonElement>(".marg-quiz .marg-quiz-q"),
+];
+
 const lineFor = (q: QuizQuestion): HTMLButtonElement => {
   const found = allLines().find((b) => (b.textContent ?? "").trim() === q.question);
   expect(found, `a line for ${q.id}`).toBeDefined();
@@ -599,7 +604,10 @@ describe("memo(TableView) and the quiz lines", () => {
     /* Marginalia is open too: this is the callback added to its memo in 261002j,
        so an `?at=`-only render has to prove that map stays stable. */
     await open("?mode=learn&learn=recall&margin=1");
-    expect(allLines()).toHaveLength(4);
+    /* With Marginalia on screen the questions are its notes, not prose lines
+       (261029c): one place, never both. */
+    expect(allLines(), "the prose drew the questions beside Marginalia").toHaveLength(0);
+    expect(marginLines()).toHaveLength(4);
     const reader = host.querySelector<HTMLElement>(".reader");
     expect(param("margin"), "the render-budget case never asked for Marginalia").toBe("1");
     expect(
@@ -624,7 +632,9 @@ describe("memo(TableView) and the quiz lines", () => {
       new Promise<Response>((go) => {
         release = go;
       });
-    await act(async () => lineFor(Q1).click());
+    const q1 = marginLines().find((b) => (b.textContent ?? "").trim() === Q1.question);
+    expect(q1, "a margin line for Q1").toBeDefined();
+    await act(async () => q1?.click());
     await until(() => param("learn") === "quiz");
     await settle();
     expect(
@@ -641,14 +651,14 @@ describe("memo(TableView) and the quiz lines", () => {
     expect(param("at")).toBe(C);
     expect(renders.get("Reader") ?? 0, "the at change never reached Reader").toBeGreaterThan(0);
     expect(renders.get("TableView") ?? 0, "an ?at=-only change rendered TableView").toBe(0);
-    expect(allLines(), "and the lines are still drawn").toHaveLength(4);
+    expect(marginLines(), "and the lines are still drawn").toHaveLength(4);
 
     /* The control: a new batch does re-render it, and the lines follow. */
     renders.clear();
     await act(async () => release(quizBody(quizOf("batch-b", [Q5]))));
     await settle();
     expect(renders.get("TableView") ?? 0, "a new batch must re-render TableView").toBeGreaterThan(0);
-    expect(allLines().map((b) => (b.textContent ?? "").trim())).toEqual([Q5.question]);
-    expect(linesAfter(B)).toEqual([Q5.question]);
+    expect(marginLines().map((b) => (b.textContent ?? "").trim())).toEqual([Q5.question]);
+    expect(allLines()).toHaveLength(0);
   });
 });

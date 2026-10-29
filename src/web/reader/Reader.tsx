@@ -2407,7 +2407,12 @@ export function Reader({
   const quizRead = owner?.quiz ?? null;
   const drawnQuiz = quizRead?.status === "ready" && !quizRead.stale ? quizRead.quiz : null;
   const quizAfter = useMemo(() => {
-    if (!drawnQuiz || drawnQuiz.questions.length === 0) return null;
+    /* **Not while the margin is on screen**: there the questions are among its
+       notes (Greg, spya-fytjtf; plan 261029c), and drawn in both they would
+       say the same sentence twice, side by side. `marginRoom` is the very
+       condition the margin's notes are drawn on (`marginNotes` below), so a
+       question is always in exactly one of the two. */
+    if (marginRoom || !drawnQuiz || drawnQuiz.questions.length === 0) return null;
     const byBlock = questionsByAnchor(
       drawnQuiz.questions,
       article.blocks.map((b) => b.id),
@@ -2420,7 +2425,7 @@ export function Reader({
       );
     }
     return out;
-  }, [drawnQuiz, article.blocks, openQuizAt]);
+  }, [marginRoom, drawnQuiz, article.blocks, openQuizAt]);
 
   /**
    * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx.
@@ -2866,6 +2871,9 @@ export function Reader({
       /* The owner's only, and the feed reads them only with the experimental
          switch on: the mode is behind it (plan 261028c). */
       explanations: isOwner ? ownerFeed.explanations : null,
+      /* The owner's quiz, from the read the prose and the band share — never a
+         stale one, the prose's rule (plan 261029c). */
+      quiz: isOwner && drawnQuiz ? drawnQuiz : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2894,6 +2902,7 @@ export function Reader({
             onOpenAsked={openAskedFromMargin}
             onJump={jumpTo}
             onOpenFinding={openFindingFromMargin}
+            onOpenQuiz={openQuizAt}
           />
         </>,
       );
@@ -2928,6 +2937,8 @@ export function Reader({
     ownerFeed.notes,
     ownerFeed.literature,
     ownerFeed.explanations,
+    drawnQuiz,
+    openQuizAt,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
@@ -4567,6 +4578,7 @@ export function Reader({
             slug={slug}
             shown={marginRoom}
             awaitingStructure={awaitingStructure(article.tree)}
+            quiz={owner.quiz}
             onFeed={setOwnerFeed}
           />
         )}

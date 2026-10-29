@@ -569,6 +569,30 @@ describe("the hash a stage writes is the hash its stamp expects", () => {
     expect(artefact?.sourceHash).toBe(stamp?.inputHash);
   }, 30_000);
 
+  it("the explanations stage reads its stored list before a forced second pass", async () => {
+    const store = await memoryArtefactsFrom(path.join(root, "with-meta"), SLUG);
+    answers.length = 0;
+    answers.push(...scriptFor("explanations", withMeta.article));
+    const first = await STEPS.explanations.run(ctxFor(), store, nullCheckpointStore());
+    expect(answers).toEqual([]);
+    const baseline = first.parts?.explanations;
+    if (!baseline) throw new Error("the first explanations run returned no artefact");
+    store.plant(SLUG, "explanations", "explanations", baseline);
+
+    /* The same candidate is deliberately repeated. Reading the baseline makes
+       this a valid zero-add append: pass two, old row untouched. If the
+       pipeline stops passing the stored artefact to the generator, this
+       quietly becomes a new one-pass list and the assertions go red. */
+    answers.push(...scriptFor("explanations", withMeta.article));
+    const second = await STEPS.explanations.run(ctxFor(), store, nullCheckpointStore());
+    expect(answers).toEqual([]);
+    expect(second.parts?.explanations).toMatchObject({
+      passes: 2,
+      lastAdded: 0,
+      explanations: baseline.explanations,
+    });
+  }, 30_000);
+
   /**
    * **The negative control, without which the agreement cases prove much less.**
    *

@@ -477,6 +477,7 @@ import { currentStepName, previousClientStepName } from "./step-order.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
+import { panelRunKind as explanationsPanelRun } from "./explanations.js";
 import { profileNoticeKey, routeProfileIsStale, skimResponseFor } from "./skim.js";
 import { prepareMode } from "./prepare-mode.js";
 import { MODE_PREPARATION_ALREADY_CLAIMED, preparable } from "./preparable-modes.js";
@@ -13019,13 +13020,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
 
   /* Explanations —
      docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
-     GET only, and no DELETE: the step replaces, so asking again is
-     POST /api/jobs { slug, steps: ["explanations"] }. This route never spends.
+     GET only, and no DELETE: asking again is a forced
+     POST /api/jobs { slug, steps: ["explanations"] }, which appends (*Find
+     more*) or rewrites as `existingFor` decides. This route never spends.
      **Owner-authenticated, with no anonymous twin and nothing in the public
      article payload**, as `relations` above (plan § The step: owner only).
      `withProfileChanged` for the third staleness fact, as `ideas`: the
-     profile is in this step's stamp. None yet is `200 null` to a client that
-     asks — `orNullWhenNotMadeYet`, around the read and only the read. */
+     profile is in this step's stamp — and for `panelRun`, the run button's
+     label, from the same `existingFor` the step asks (plan 261029e, Sol F1).
+     None yet is `200 null` to a client that asks — `orNullWhenNotMadeYet`,
+     around the read and only the read. */
   {
     kind: "pattern",
     method: "GET",
@@ -13039,6 +13043,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           at,
           () => loadExplanations(at),
           (found) => found.explanations,
+          false,
+          (found, nowHash) => ({ panelRun: explanationsPanelRun(found, nowHash) }),
         ),
       );
       if (!found) return;

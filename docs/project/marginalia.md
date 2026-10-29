@@ -22,9 +22,10 @@ because the two pads only swapped sides.
 
 **It has one call of its own**, which generates relation words ([below](#relation-words)) and,
 since 2026-10-11, may add **a few notes of its own** ([§ Notes the model
-writes](#notes-the-model-writes)). Every other note
-comes from something another mode has already stored, and opening the column never runs another
-mode. The owner's lists are read through each mode's *read half*
+writes](#notes-the-model-writes)). **And one other mode's, since 2026-10-29: Quiz**, which
+writes its questions the first time the owner has the notes on screen and there are none
+([§ Quiz's questions](#quizs-questions-since-2026-10-29)). Every other note comes from something
+another mode has already stored, and opening the column runs nothing else. The owner's lists are read through each mode's *read half*
 (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`, `useSituateRead`), never the full mode hook, because the full hook
 can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
 read. A visitor's lists come in their payload.
@@ -57,6 +58,8 @@ one would otherwise be missed; it would not be, so it is not
   ([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
+- **Quiz's questions, open**, after the passage each asks about —
+  [§ Quiz's questions](#quizs-questions-since-2026-10-29).
 - **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Sources' Claims rows, Bibliography works and comments
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
@@ -297,6 +300,34 @@ quotes, alludes to or names something the article leaves bare, where it comes fr
 **Cross-references are something else.** [cross-references.md](cross-references.md) links a phrase
 to the passage that backs it, many to an article and unranked, in the prose. A *Recall* or
 *Tension* note is the few the model judged worth a sentence. Neither reads the other.
+
+## Quiz's questions, since 2026-10-29
+
+> let's say the quiz mode does run as one of the default modes whenever you open marginalia mode,
+> for example, because I think we include the quiz questions in the marginalia annotations. If
+> not, we should, to really encourage the user to reflect on what they're reading.
+>
+> — Greg, 2026-10-29 (spya-fytjtf)
+
+Plan [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md).
+
+- **Written on show, on the relation words' terms**: `useQuizOnShow`
+  ([`useQuiz.ts`](../../src/web/useQuiz.ts)), called by `OwnerMarginFeed` with the owner's quiz read
+  (`useQuizRead`, shared with the prose and the band). One unforced attempt per article per page
+  load, only while the notes are on screen and the real structure is in, nothing while viewing as
+  another reader. **Only an article with no quiz**: a stale or outdated one is left for the band,
+  because a rewrite mints a new batch and the reader's kept answers stop showing. About $0.17
+  median, $0.24 mean an article on production's ledger, plus about $0.08 per answer marked.
+- **Drawn here instead of in the prose.** While the column is on screen (`marginRoom` in
+  `Reader.tsx`, the condition the notes are drawn on) the prose draws no quiz line; otherwise it
+  does, as [quiz.md § In the prose](quiz.md#in-the-prose-in-every-mode) says. A question is
+  always in exactly one of the two.
+- **Placed by the prose's rule** (`questionsByAnchor`, after the block holding its last evidence
+  passage), last in the block's note, in path order. **Open, not shut**: the question is the whole
+  of it, and it is there to make the reader stop; a shut *2 questions* would hide it. Each is a
+  button in the model's face, and a press is the prose line's (`openQuizAt`): Learn › Quiz at that
+  question. Its card is `quiz` in `tips.ts`. Owner only; never a stale quiz.
+  `tests/marginalia-quiz.test.tsx`.
 
 ## Every note says where it came from
 

@@ -6812,6 +6812,22 @@ export interface Explanation {
   sure: boolean;
   /** True: it relies on something not in the piece. Drawn as *Draws on AI memory, unchecked*. */
   outside: boolean;
+  /**
+   * 0–1: how likely this reader is to get stuck here. Required by
+   * `explanations/2`'s prompt and schema, **optional here** because every
+   * `explanations/1` list has none, and a score the model got wrong is dropped
+   * (the field, never the explanation). Glossary's name and range, so the
+   * shared threshold helpers carry over (src/web/explanations-order.ts).
+   */
+  difficulty?: number;
+  /** 0–1: how much of the piece's argument depends on getting past this place. As `difficulty`. */
+  centrality?: number;
+  /**
+   * When the pass that found it finished — stamped once, never re-stamped by a
+   * later *Find more*. Absent on lists written before 2026-10-29. Display and
+   * provenance only: in no hash and no freshness test.
+   */
+  addedAt?: string;
 }
 
 /** What validation threw away. Counts only. */
@@ -6845,8 +6861,19 @@ export interface Explanations {
   profileHash: string | null;
   /** In reading order. **An empty list is a real answer**: nothing worth explaining. */
   explanations: Explanation[];
+  /** What validation threw away — **cumulative across passes**, as Quotes' `discarded`. */
   dropped: ExplanationsDropped;
+  /**
+   * How many passes wrote this list: 1 for a first pass, one more for each
+   * *Find more* that appended. Optional on read (lists before 2026-10-29 have
+   * none, and are one pass); always written.
+   */
+  passes?: number;
+  /** How many the last pass added. 0 after a *Find more* that found nothing — a real answer. */
+  lastAdded?: number;
+  /** When the last pass finished. A *Find more* re-stamps it, even one that added nothing. */
   generatedAt: string;
+  /** Model time across every pass. */
   elapsedMs: number;
 }
 
@@ -6859,9 +6886,21 @@ export interface ExplanationsResponse {
   outdated: boolean;
   /** You are not who you were when we wrote it. */
   profileChanged: boolean;
+  /**
+   * **What the panel's one run button will do with this list** —
+   * `panelRunKind` in src/explanations.ts, the same `existingFor` the step
+   * asks: *Find more* when it appends, *Write a new list* when it rewrites.
+   * The route adds it beside `profileChanged`, because the profile half needs
+   * the reader's current profile (plan 261029e, Sol F1).
+   *
+   * Optional so a hand-built response in a test need not carry it; the route
+   * always sends it. The panel reads absent conservatively as `rewrite` when
+   * the list is stale, outdated or for a changed profile.
+   */
+  panelRun?: "append" | "rewrite";
 }
 
-export type ExplanationsFound = Omit<ExplanationsResponse, "profileChanged">;
+export type ExplanationsFound = Omit<ExplanationsResponse, "profileChanged" | "panelRun">;
 
 /* ----------------------------------------------------------------- simple --
    A plain-words orientation to the piece — the `simple_summary` column on

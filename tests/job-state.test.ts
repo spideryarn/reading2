@@ -339,7 +339,9 @@ it("a failed automatic-extra job says the article is unchanged; an import or lab
   );
   expect(importing.sentence, "told a reader whose import failed that their article is fine").toBeNull();
 
-  /* Skim's job carries what it reads, and every one of them is a main mode. */
+  /* Skim's old/import-independent job carries what it reads. Ideas leaving
+     today's import list must not change what a queued historical job did to
+     the article: every step here still publishes only on success. */
   const skim = displayJob(
     job("error", {
       failureKind: "retry",

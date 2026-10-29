@@ -24,6 +24,19 @@ Built 2026-08-27. Greg asked for it on 2026-08-26:
 > I'm thinking this could be a way to pull out new ideas that the text introduces and/or key ideas
 > that the text requires the user to understand.
 
+**Not made on import since 2026-10-29**; opening Ideas writes it.
+
+> I don't think the ideas mode is that helpful, and from memory, I think it's quite expensive. I'm
+> not sure if that's true, but if it is, I'd be inclined to say that we shouldn't run it by default.
+>
+> — Greg, 2026-10-29 (`spya-shwpw5`)
+
+It was: a median $0.19 an article on production's ledger, the dearest import step after Summary.
+So a new article has no Ideas until somebody opens the mode: Skim plans its route without them
+([skim.md](skim.md)), the margin draws no *assumes / introduces* stamps, and an author gift is
+prepared without them too. Plan
+[261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md).
+
 The design, the alternatives weighed, and the cross-family review that rewrote half of it before a
 line was written are in [260826ac-ideas-mode.md](../plans/260826ac-ideas-mode.md). **Read that before changing
 anything here** — several things this feature does look like fussiness until you know what they are
