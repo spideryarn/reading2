@@ -769,7 +769,79 @@
      the only way to say that without knowing the number. */
   .masthead { padding-top: calc(0.6rem + var(--safe-top)); padding-bottom: 0.55rem; }
   .root-gist { margin-top: 0.35rem; }
+
+  /* **The reminder bar comes and goes with the bottom bar** — ReminderBar.tsx,
+     Greg, 2026-10-28 (spya-ga6m76): *"when I scroll in the opposite direction,
+     it would disappear just like the bottom bar does."* Here, and only here,
+     because here is where the bottom bar slides; wider, it would be the one
+     thing that comes and goes (docs/user-feedback/questions/q-t2p2s7.md asks Greg).
+
+     - **Shown on `data-scrolled-back`**, which a reader's scroll back sets and
+       reading on, or any jump of ours, takes away (scroll.ts) — so it is never
+       over a passage a jump has just landed on — and only once the masthead
+       has gone (`data-masthead-gone`). Not the Dock's own state, which dialogs
+       and focus also hold up.
+     - **Fixed, reserving nothing**: under any controls bar (`--bar-bottom`),
+       over the reading column only — from the spine to Marginalia's column,
+       the stuck breadcrumb's geometry (crumbs.css) less `--marg-reserve` —
+       and under Marginalia's head (30) and the bars (40). No row moves when
+       it comes or goes, so no measurement needed telling.
+     - **Slid off by its own height plus whatever is above it**, and
+       `visibility` waits for the slide so a hidden bar is not in the
+       accessibility tree's way either (it is `inert` regardless). */
+  .reminder-bar {
+    display: block;
+    position: fixed;
+    top: var(--bar-bottom);
+    left: calc(var(--spine-w) + var(--safe-left));
+    width: calc(var(--page-w) - var(--spine-w) - var(--marg-reserve));
+    z-index: 29;
+    box-sizing: border-box;
+    padding: 0.3rem 1rem 0.35rem;
+    background: var(--page);
+    border-bottom: 1px solid var(--rule-strong);
+    font-family: var(--font-ui);
+    pointer-events: none;
+    transform: translateY(calc(-100% - var(--bar-bottom)));
+    visibility: hidden;
+    transition: transform 0.18s ease, visibility 0s linear 0.18s;
+  }
+  :root[data-scrolled-back] .reminder-bar[data-masthead-gone] {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.18s ease, visibility 0s;
+  }
 }
+
+/* Drawn only inside § a small device, above: `:where()` so that rule wins
+   whatever the order. */
+:where(.reminder-bar) { display: none; }
+.reminder-bar p {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.reminder-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.reminder-facts {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: max(var(--text-min), 0.8rem);
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+.reminder-facts-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reminder-pie { flex: none; display: inline-flex; color: var(--ink-soft); }
 
 
 /* ================================================================ § a coarse
@@ -1167,6 +1239,7 @@
      (see the `.controls` rule for why the two differ), so both have to be named
      here or half the chrome would still slide. */
   .controls,
+  .reminder-bar,
   .dock,
   .install-hint,
   .spine,

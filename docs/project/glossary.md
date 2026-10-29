@@ -1137,6 +1137,17 @@ glossary read has settled with a glossary in it:
 `tests/glossary-ask-from-the-command-bar.test.tsx` (one ask, no job).
 [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar).
 
+**So can a selection, since 2026-10-29**: *Add to glossary* on a finger's chip and in a mouse's
+fresh comment box sends the selected words down the same road
+(`glossaryProposalFor` in [`command-proposal.ts`](../../src/web/command-proposal.ts), run through
+the reading view's executor). It is offered only when that road leads somewhere: the owner, a
+settled glossary, a term-sized selection, and **exactly one** matching entry or none — two entries
+sharing an alias get no button, where the bar would list both. Greg asked for it on 2026-10-28
+(`spya-turkg3`): *"Can we also have the option to add it to the glossary?"* The added term's
+explanation is this box's answer, not a new two-field entry from the glossary step's prompt.
+`tests/selection-adds-to-glossary.test.tsx`;
+[261029d](../plans/261029d-a-reminder-bar-at-the-top-and-add-a-selection-to-the-glossary.md).
+
 **The article's own words are what the model is told about**, not the reader's — type *attention
 head* at a piece that says *Attention Heads* and the quote is the plural, because that is the text
 that is there. A side effect worth having: the reader's own string never reaches the model at all.

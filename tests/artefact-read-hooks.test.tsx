@@ -21,6 +21,10 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -169,7 +173,7 @@ describe("the read hooks start no job", () => {
        (spya-pkpqch). */
     present = new Set(["relations"]);
     await act(async () => {
-      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", bibliography: { status: "ready", retryRead: async () => {} }, shown: true, onFeed: vi.fn() }));
+      root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, slug: "read-hooks", bibliography: { status: "ready", retryRead: async () => {} }, shown: true, onFeed: vi.fn() }));
     });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));

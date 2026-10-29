@@ -24,8 +24,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "../src/types.js";
 import type { ArtefactStatus } from "../src/web/useAutoRun.js";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const QUIZ_STUB = quizReadStub();
 
 const SLUG = "margin-search";
 const posted: { steps?: string[]; force?: unknown }[] = [];
@@ -108,6 +111,7 @@ async function mountFeed({
   bibliography = "ready" as ArtefactStatus,
 } = {}): Promise<void> {
   const feed = createElement(OwnerMarginFeed, {
+    quiz: QUIZ_STUB,
     slug: SLUG,
     shown,
     bibliography: { status: bibliography, retryRead: bibliographyRetry },
@@ -234,6 +238,7 @@ describe("two doors, one search (GPT Sol's MARGIN-1)", () => {
       null,
       createElement(WhereDoor),
       createElement(OwnerMarginFeed, {
+        quiz: QUIZ_STUB,
         slug: SLUG,
         shown: true,
         bibliography: { status: "ready", retryRead: bibliographyRetry },
@@ -301,6 +306,7 @@ describe("two doors, one search (GPT Sol's MARGIN-1)", () => {
       "div",
       null,
       createElement(OwnerMarginFeed, {
+        quiz: QUIZ_STUB,
         slug: SLUG,
         shown: true,
         bibliography: { status: "ready", retryRead: bibliographyRetry },
@@ -325,6 +331,7 @@ describe("two doors, one search (GPT Sol's MARGIN-1)", () => {
       null,
       createElement(WhereDoor),
       createElement(OwnerMarginFeed, {
+        quiz: QUIZ_STUB,
         slug: SLUG,
         shown: true,
         bibliography: { status: "ready", retryRead: bibliographyRetry },

@@ -27,6 +27,10 @@ import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId, Job } from "../src/types.js";
 import { PAGE_FAULT } from "../src/messages.js";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -289,7 +293,7 @@ async function mount(parts: Part[], slug = SLUG) {
   }
   if (parts.includes("margin")) {
     /* `shown: false`: the relation words are the one thing this feed can buy. */
-    children.push(createElement(OwnerMarginFeed, { key: "margin", slug, bibliography: { status: "ready", retryRead: async () => {} }, shown: false, onFeed }));
+    children.push(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, bibliography: { status: "ready", retryRead: async () => {} }, key: "margin", slug, shown: false, onFeed }));
   }
   await act(async () =>
     root.render(

@@ -56,6 +56,10 @@ import {
   sameAnchor,
   type SelectionAnchor,
 } from "./selection.js";
+import { MODE_ICON } from "./mode-icons.js";
+
+/* A control that takes you into a mode wears that mode's icon (icons.md). */
+const GlossaryIcon = MODE_ICON.glossary;
 
 /** How long the selection must sit still before the chip appears. */
 export const SETTLE_MS = 300;
@@ -141,6 +145,19 @@ function isFinger(e: Event): boolean {
   return type === "touch" || type === "pen";
 }
 
+/**
+ * **The chip's second button, *Add to glossary*** — Greg, 2026-10-28
+ * (spya-turkg3): *"Can we also have the option to add it to the glossary?"*
+ * `offers` is asked when the chip appears, so words the glossary cannot take
+ * (too long for a term, or no glossary yet) get no button rather than a button
+ * that refuses; `add` is the press, and highlights nothing.
+ * Reader.tsx § `selectionGlossary`; plan 261029d, Part 2.
+ */
+export interface ChipGlossary {
+  offers(quote: string): boolean;
+  add(anchor: SelectionAnchor): void;
+}
+
 export interface TouchSelectionChipProps {
   /**
    * A box is already open on a passage (Annotate, Comment or Chat). The chip
@@ -149,20 +166,23 @@ export interface TouchSelectionChipProps {
   suppressed: boolean;
   /** The same call a mouseup makes — Reader.tsx § `selectProse`. */
   onSelect(anchor: SelectionAnchor): void;
+  /** Absent: no *Add to glossary* button at all — not the owner, or no Glossary to add to. */
+  glossary?: ChipGlossary | undefined;
 }
 
-export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipProps) {
+export function TouchSelectionChip({ suppressed, onSelect, glossary }: TouchSelectionChipProps) {
   /* A suppressed chip is an unmounted chip, not merely hidden. That makes an
      open box a synchronous reset of its listeners, timers and kept anchor,
      without a cleanup function setting React state after unmount. */
-  return suppressed ? null : <ActiveTouchSelectionChip onSelect={onSelect} />;
+  return suppressed ? null : <ActiveTouchSelectionChip onSelect={onSelect} glossary={glossary} />;
 }
 
-function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "onSelect">) {
+function ActiveTouchSelectionChip({ onSelect, glossary }: Omit<TouchSelectionChipProps, "suppressed">) {
   const [shown, setShown] = useState<Shown | null>(null);
   /** The same value, readable from listeners without re-subscribing them. */
   const shownRef = useRef<Shown | null>(null);
-  const chip = useRef<HTMLButtonElement | null>(null);
+  /** The group the buttons sit in: a press anywhere inside it is a press on the chip. */
+  const chip = useRef<HTMLDivElement | null>(null);
   /** Did a finger make the last press? Null until anything has been pressed. */
   const finger = useRef<boolean | null>(null);
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -323,7 +343,8 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
       : null;
   };
 
-  const press = () => {
+  /** Either button's press: the same checks, then that button's action. */
+  const press = (act: (anchor: SelectionAnchor) => void) => {
     const held = shownRef.current;
     const armed = armedPress.current;
     armedPress.current = null;
@@ -336,7 +357,7 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
       /* The chip belongs to the words it was drawn beside. A changed live
          selection which omitted `selectionchange` must settle and earn its
          own chip rather than borrowing this one. */
-      if (sameAnchor(read.anchor, held.anchor)) onSelect(read.anchor);
+      if (sameAnchor(read.anchor, held.anchor)) act(read.anchor);
       return;
     }
     /* `too-short` is a selection the reader has since changed, not one the tap
@@ -345,37 +366,54 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
        never means unlimited grace for a silently stale selection. */
     if (read.kind !== "none" || armed?.shown !== held) return;
     if (Date.now() >= armed.fallbackUntil) return;
-    onSelect(held.anchor);
+    act(held.anchor);
   };
+  /* Decided when the chip appears, for the words it appeared beside. */
+  const addToGlossary = glossary?.offers(shown.anchor.quote) ? glossary.add : null;
+  /** Both buttons' handlers: pressed without clearing the words they are for. */
+  const pressProps = (act: (anchor: SelectionAnchor) => void) => ({
+    type: "button" as const,
+    /* Out of the tab order: it exists only for a selection a finger made,
+       and focus moving to it would be a second thing happening to the
+       selection it is about. */
+    tabIndex: -1,
+    /* Neither press may move focus or start a selection of its own: either
+       can clear the words this is for. The action itself is on pointerup, so
+       it does not depend on a cancelled pointerdown producing a click. */
+    onPointerDown: armPress,
+    /* Commit at the pointer's own end. WebKit is not required to synthesize
+       a click after a cancelled pointerdown; `onClick` is only the
+       compatibility/accessibility fallback. `show(null)` makes a following
+       click a no-op. */
+    onPointerUp: () => press(act),
+    onPointerCancel: () => {
+      armedPress.current = null;
+    },
+    onMouseDown: (e: { preventDefault(): void }) => e.preventDefault(),
+    onClick: () => press(act),
+  });
 
   return (
-    <button
+    /* **A group of one button or two, stacked** (plan 261029d): side by side
+       the pair is wider than a phone in portrait. The group carries the
+       placement; each button carries the look. */
+    <div
       ref={chip}
-      type="button"
-      className="touch-select-chip"
-      /* Out of the tab order: it exists only for a selection a finger made,
-         and focus moving to it would be a second thing happening to the
-         selection it is about. */
-      tabIndex={-1}
+      className="touch-select-chips"
       data-edge={shown.edge}
+      data-count={addToGlossary ? 2 : 1}
       style={{ "--chip-x": `${shown.left}px`, "--chip-room": `${shown.room}px` } as CSSProperties}
-      /* Neither press may move focus or start a selection of its own: either
-         can clear the words this is for. The action itself is on pointerup, so
-         it does not depend on a cancelled pointerdown producing a click. */
-      onPointerDown={armPress}
-      /* Commit at the pointer's own end. WebKit is not required to synthesize
-         a click after a cancelled pointerdown; `onClick` below is only the
-         compatibility/accessibility fallback. `show(null)` makes a following
-         click a no-op. */
-      onPointerUp={press}
-      onPointerCancel={() => {
-        armedPress.current = null;
-      }}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={press}
     >
-      <Highlighter size={16} aria-hidden="true" />
-      Highlight or comment
-    </button>
+      <button className="touch-select-chip" {...pressProps(onSelect)}>
+        <Highlighter size={16} aria-hidden="true" />
+        Highlight or comment
+      </button>
+      {addToGlossary && (
+        <button className="touch-select-chip touch-select-glossary" {...pressProps(addToGlossary)}>
+          <GlossaryIcon size={16} aria-hidden="true" />
+          Add to glossary
+        </button>
+      )}
+    </div>
   );
 }

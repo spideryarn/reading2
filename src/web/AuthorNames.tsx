@@ -32,6 +32,30 @@ import { TipNote, Tooltip } from "./Tooltip.js";
 export const AUTHORS_SHOWN = 3;
 
 /**
+ * **The author names the collapsed masthead actually shows.** Four names fit
+ * without a disclosure; five or more show the first three and `+ N more`.
+ * Kept here with `AuthorNames`, so a plain-text echo of the masthead (the
+ * reminder bar) cannot invent a second folding rule.
+ */
+export function collapsedAuthorNames(authors: readonly Author[]): {
+  shown: readonly Author[];
+  hidden: number;
+} {
+  const folds = authors.length > AUTHORS_SHOWN + 1;
+  return {
+    shown: folds ? authors.slice(0, AUTHORS_SHOWN) : authors,
+    hidden: folds ? authors.length - AUTHORS_SHOWN : 0,
+  };
+}
+
+/** The collapsed masthead's author list as plain words, for non-interactive echoes. */
+export function collapsedAuthorNamesText(authors: readonly Author[]): string {
+  const { shown, hidden } = collapsedAuthorNames(authors);
+  const names = shown.map((author) => author.name).join(", ");
+  return hidden > 0 ? `${names} + ${hidden} more` : names;
+}
+
+/**
  * The shelf, searched for one author's name — **its words, without the
  * punctuation or the initials.**
  *
@@ -150,9 +174,10 @@ interface Props {
 /** The names, comma-separated, each with its card. */
 export function AuthorNames({ authors, linkToShelf, all = false }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const canFold = !all && authors.length > AUTHORS_SHOWN + 1;
-  const shown = canFold && !expanded ? authors.slice(0, AUTHORS_SHOWN) : authors;
-  const hidden = authors.length - AUTHORS_SHOWN;
+  const collapsed = collapsedAuthorNames(authors);
+  const canFold = !all && collapsed.hidden > 0;
+  const shown = canFold && !expanded ? collapsed.shown : authors;
+  const hidden = collapsed.hidden;
   return (
     <span className="author-names" data-testid="author-names">
       {shown.map((author, i) => (

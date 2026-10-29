@@ -73,7 +73,7 @@ vi.mock("../src/web/useJobs.js", async () => {
 const { StructureBand } = await import("../src/web/modes/structure/StructureMode.js");
 const { StructureNotice } = await import("../src/web/StructureNotice.js");
 const { structureColumnsBand } = await import("../src/web/layout.js");
-const { buildSections } = await import("../src/web/position.js");
+const { structureFrontier } = await import("../src/web/position.js");
 const { buildGeometry } = await import("../src/web/tree.js");
 
 /* One part with two sections: enough for either face to have rows. */
@@ -163,7 +163,7 @@ function mount({ provisional, owner }: { provisional: boolean; owner: boolean })
           owner={owner}
           article={article}
           leafDepth={geometry.leafDepth}
-          sections={buildSections(geometry, blocks)}
+          frontier={structureFrontier(geometry, blocks)}
           layoutKey="k"
           supplementOf={geometry.supplementOf}
           arcByRow={null}

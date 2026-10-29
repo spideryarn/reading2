@@ -895,6 +895,14 @@ room between it and the selected words: "Highlight or comment".** The code is
 [`TouchSelectionChip.tsx`](../../src/web/TouchSelectionChip.tsx), mounted in `Reader.tsx` beside the
 boxes it opens; the tests are `tests/touch-selection-chip.test.tsx`.
 
+**And a second button under it, *Add to glossary*, since 2026-10-29** — Greg (`spya-turkg3`):
+*"Can we also have the option to add it to the glossary?"* It highlights nothing: it does what the
+command bar's *Look up "X"* does with the selected words, opening the entry that names them or
+asking the Glossary band to look them up, and is drawn only when that can work (the owner, a
+glossary to add to, words short enough for a term). The two are stacked, because side by side they
+are wider than a phone in portrait. [glossary.md § Looking a term up](glossary.md#looking-a-term-up);
+[261029d](../plans/261029d-a-reminder-bar-at-the-top-and-add-a-selection-to-the-glossary.md).
+
 **The button applies the highlight, since 2026-10-04.** Greg:
 
 > how about if selecting text automatically applies the highlight and also pops up the fuller box to

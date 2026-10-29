@@ -20,6 +20,10 @@ const FIRST = [
   { row: 5, blockId: B, nodeId: "n0002", title: "Second", titleVoice: "ai" },
 ] as Section[];
 const REFLOWED = [FIRST[0] as Section];
+const PARTIAL = [
+  { row: 3, blockId: A, nodeId: "n0001", title: "First covered", titleVoice: "ai" },
+  { row: 8, blockId: B, nodeId: "n0002", title: "Second covered", titleVoice: "ai" },
+] as Section[];
 
 let host: HTMLDivElement;
 let root: Root;
@@ -94,6 +98,17 @@ describe("Structure's current-row measurement", () => {
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("5");
 
     act(() => root.render(<Harness sections={REFLOWED} layoutKey="after" />));
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
+  });
+
+  it("stays unmarked above a partial projection instead of clamping to its first later row", () => {
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const top = this.dataset.block === A ? 120 : 180;
+      return { top, bottom: top + 20, height: 20 } as DOMRect;
+    });
+    act(() => root.render(<Harness sections={PARTIAL} layoutKey="partial" />));
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
   });
 

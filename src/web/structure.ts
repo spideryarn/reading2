@@ -76,10 +76,10 @@ export const PARAGRAPH_CAP = 8;
  * **There is no centre to window a paragraph list around, so it is never
  * windowed and never counted from.**
  *
- * `focusRow` is section-granular — it is `sections[…].row`, the first row of the
- * section under the focus line (useColumnContext.ts) — and `?at=` is the same
- * (position.ts § sectionDepth). So nothing on this page knows which paragraph
- * the reader is on.
+ * `focusRow` is frontier-granular — the first row of the section or sub-section
+ * under the focus line (position.ts § `structureFrontier`) — while `?at=` stays
+ * at the section level. So nothing on this page knows which paragraph inside
+ * that item the reader is on.
  *
  * `outline.ts` § `PARAGRAPHS_ARE_NEVER_CURRENT` draws the consequence for the
  * *mark*. This is the consequence for the *window*: a centred paragraph window
@@ -261,6 +261,10 @@ function rowText(node: SummaryNode): { text: string; voice: Voice } | null {
     and the first row of a node is the row a jump into it lands on, so an
     exclusive comparison would leave the reader unmarked exactly there. */
 const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.endRow;
+
+/** A node with children — a section rather than a paragraph by shape. The projected list:
+    StructureBand builds its tree at full depth, so nothing is cut. */
+const hasChildren = (n: SummaryNode) => n.children.length > 0;
 
 function makeRow(
   entry: SummaryNode,
@@ -504,7 +508,7 @@ export interface StructureInput {
   /**
    * Which row the reader is at — `LiveContext.focusRow`.
    *
-   * **Section-granular, and every consumer here has to know that**; see
+   * **Frontier-granular, and every consumer here has to know that**; see
    * `PARAGRAPH_IS_NEVER_CURRENT`.
    */
   focusRow: number;
@@ -558,8 +562,10 @@ export function structureProjection({
    * it is `null` when the part cannot be shown.
    */
   const currentPart = selectedPart !== null && rowText(selectedPart) !== null ? selectedPart : null;
-  const currentSection =
-    currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
+  /* A deepened branch supplies an internal frontier start; a shallow branch
+     supplies the same section-level start it did before this change, including
+     a leaf directly under a part. */
+  const currentSection = currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
 
   /* ---- column A: every part ---- */
   /**
@@ -650,7 +656,14 @@ export function structureProjection({
      screen after the window and if the whole run fits in what is left. */
   if (rungB >= 3 && currentSection !== null) {
     const at = columnB.rows.findIndex((r) => r.here);
-    const kids = currentSection.children;
+    /* **Only ever leaves.** A section divided into sub-sections (a ragged tree,
+       plan 261029a) has children that are not paragraphs, and splicing them in
+       here would draw each as a paragraph row, never current and with no gist.
+       Opening sub-sections under column B's current section waits on Greg's
+       layout answer (q-vrnbyj) and needs the section and its sub-sections
+       windowed as one unit (Sol's PR-4), so until then such a section gets no
+       detail rung at all. Not reached at the shipped rung. */
+    const kids = currentSection.children.every((k) => !hasChildren(k)) ? currentSection.children : [];
     if (at !== -1 && kids.length > 0) {
       const paraRows = kids
         .map((p) => makeRow(p, "paragraph", PARAGRAPH_IS_NEVER_CURRENT, focusRow, undefined, matter))

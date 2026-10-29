@@ -209,6 +209,8 @@ function wait(ms: number): void {
 }
 
 const chip = () => document.querySelector<HTMLButtonElement>("button.touch-select-chip");
+/** The group the button sits in, which carries the placement (plan 261029d). */
+const chips = () => document.querySelector<HTMLDivElement>("div.touch-select-chips");
 const boxQuote = () => document.querySelector(".annotate-dialog .annotate-quote")?.textContent ?? null;
 
 /** A finger's tap: the pointer goes down on it, and the click follows. */
@@ -418,7 +420,7 @@ it("Reader.tsx mounts the chip for an owner only, off the same selectProse, and 
    § docks at the bottom … below. */
 it("the fixed chip is clamped inside the side safe areas", () => {
   const source = readFileSync("src/web/styles/annotations.css", "utf8");
-  const at = source.indexOf(".touch-select-chip {");
+  const at = source.indexOf(".touch-select-chips {");
   expect(at, "the chip's CSS rule has gone").toBeGreaterThan(-1);
   const rule = source.slice(at, source.indexOf("}\n", at));
   expect(rule).toContain("position: fixed");
@@ -500,7 +502,7 @@ it("uses the bottom side for words in the top half, and the top side for the bot
       pointerDown(text.parentElement!, "touch");
       select(text, 20);
       wait(SETTLE_MS);
-      expect(chip()?.getAttribute("data-edge"), `words at y=${top}`).toBe(edge);
+      expect(chips()?.getAttribute("data-edge"), `words at y=${top}`).toBe(edge);
     });
   }
 });
@@ -533,7 +535,7 @@ it("a tall selection uses the side with more room, counting only what is on scre
       pointerDown(text.parentElement!, "touch");
       select(text, 20);
       wait(SETTLE_MS);
-      expect(chip()?.getAttribute("data-edge"), what).toBe(edge);
+      expect(chips()?.getAttribute("data-edge"), what).toBe(edge);
     });
   }
 });
@@ -558,8 +560,8 @@ it("tells the CSS how much room lies between the words and the edge it chose", a
       pointerDown(text.parentElement!, "touch");
       select(text, 20);
       wait(SETTLE_MS);
-      expect(chip()?.getAttribute("data-edge"), `words at y=${top}`).toBe(edge);
-      expect(chip()?.style.getPropertyValue("--chip-room"), `words at y=${top}`).toBe(`${room}px`);
+      expect(chips()?.getAttribute("data-edge"), `words at y=${top}`).toBe(edge);
+      expect(chips()?.style.getPropertyValue("--chip-room"), `words at y=${top}`).toBe(`${room}px`);
     });
   }
 });
@@ -570,13 +572,18 @@ it("each edge keeps its old docked offset as the floor, and otherwise sits a fix
   expect(source, "the subtracted height is the chip's actual outer height").toMatch(
     /\.touch-select-chip\s*\{[^}]*box-sizing:\s*border-box;[^}]*block-size:\s*var\(--control-h-lg\);/,
   );
-  const near = String.raw`calc\(var\(--chip-room, 0px\) - var\(--chip-clear\) - var\(--control-h-lg\)\)`;
+  /* One button or two (plan 261029d): `--chip-h` is the group's height. */
+  expect(source).toMatch(/\.touch-select-chips\s*\{[^}]*--chip-h:\s*var\(--control-h-lg\);/);
   expect(source).toMatch(
-    new RegExp(String.raw`\.touch-select-chip\[data-edge="top"\]\s*\{[^}]*top:\s*max\(\s*calc\(var\(--bar-bottom\) \+ 0\.5rem\),\s*` + near),
+    /\.touch-select-chips\[data-count="2"\]\s*\{[^}]*--chip-h:\s*calc\(2 \* var\(--control-h-lg\) \+ var\(--chip-gap\)\);/,
+  );
+  const near = String.raw`calc\(var\(--chip-room, 0px\) - var\(--chip-clear\) - var\(--chip-h\)\)`;
+  expect(source).toMatch(
+    new RegExp(String.raw`\.touch-select-chips\[data-edge="top"\]\s*\{[^}]*top:\s*max\(\s*calc\(var\(--bar-bottom\) \+ 0\.5rem\),\s*` + near),
   );
   expect(source).toMatch(
     new RegExp(
-      String.raw`\.touch-select-chip\[data-edge="bottom"\]\s*\{[^}]*bottom:\s*max\(\s*calc\(max\(var\(--dock-bottom\), var\(--safe-bottom\)\) \+ var\(--hint-now\) \+ 0\.5rem\),\s*` + near,
+      String.raw`\.touch-select-chips\[data-edge="bottom"\]\s*\{[^}]*bottom:\s*max\(\s*calc\(max\(var\(--dock-bottom\), var\(--safe-bottom\)\) \+ var\(--hint-now\) \+ 0\.5rem\),\s*` + near,
     ),
   );
   expect(source).toContain("var(--chip-x, 0px)");
@@ -660,6 +667,6 @@ it("with no range geometry the room is 0, which docks at the bottom edge", async
   pointerDown(text.parentElement!, "touch");
   select(text, 20);
   wait(SETTLE_MS);
-  expect(chip()?.getAttribute("data-edge")).toBe("bottom");
-  expect(chip()?.style.getPropertyValue("--chip-room")).toBe("0px");
+  expect(chips()?.getAttribute("data-edge")).toBe("bottom");
+  expect(chips()?.style.getPropertyValue("--chip-room")).toBe("0px");
 });

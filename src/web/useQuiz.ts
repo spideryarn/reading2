@@ -59,7 +59,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useAutoRun } from "./useAutoRun.js";
+import { useAutoRun, useAutoRunOnArrival } from "./useAutoRun.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -270,8 +270,9 @@ export interface UseQuiz {
 
 /**
  * **The opening quiz read, and nothing else** — the GET, its ordering, and the
- * four facts the prose needs. Since 2026-09-30 the questions are drawn in the
- * prose in **every** mode (SPIDERYARN-READING2-6V), so this runs in
+ * four facts the prose needs. Since 2026-09-30 the questions are drawn beside
+ * the prose in **every** mode (SPIDERYARN-READING2-6V) — in Marginalia's column
+ * while that column is on screen, and in the prose otherwise — so this runs in
  * `OwnedReader` (ArticlePage.tsx) and the band layers `useQuiz` on top of it —
  * the split `useQuotesRead` / `useQuotes` made for the same reason. No job
  * subscription and no activation up here, for the reasons `QuotesRead` gives:
@@ -532,7 +533,32 @@ export function useQuizRead(slug: string): QuizRead {
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with
      every other artefact reader — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
-  const { reload, refresh } = useOrderedRead(load);
+  const { reload, refresh: orderedRefresh } = useOrderedRead(load);
+  /**
+   * **Two listeners, one read when they hear the same completion.** The
+   * always-mounted read hears every announced Quiz completion, while the
+   * mounted Quiz band or margin hook also owns the exact job it started. The
+   * latter is what catches a very fast job already `done` on the engine's first
+   * list; the former is what still hears it after that surface unmounts.
+   *
+   * Both callbacks run in the same React effect turn for an ordinary
+   * completion. Passing `orderedRefresh` to both would make its second call arm
+   * a trailing GET. Coalesce only that turn: clear the latch before the real
+   * refresh starts, so a genuinely later completion while its GET is in flight
+   * still asks `useOrderedRead` for the required trailing read.
+   */
+  const queuedRefresh = useRef<Promise<void> | null>(null);
+  const refresh = useCallback((): Promise<void> => {
+    if (queuedRefresh.current) return queuedRefresh.current;
+    const next = new Promise<void>((resolve, reject) => {
+      queueMicrotask(() => {
+        queuedRefresh.current = null;
+        void orderedRefresh().then(resolve, reject);
+      });
+    });
+    queuedRefresh.current = next;
+    return next;
+  }, [orderedRefresh]);
   /* A run that finishes after the reader left the Learn band still reaches the
      questions in the prose. This read was hoisted two days before its three
      siblings were given the line (e039d2acd) and was missed until 2026-10-06.
@@ -594,6 +620,36 @@ export function useQuizRead(slug: string): QuizRead {
  * The band's half: the job, the verbs and the marks. `read` comes from
  * `useQuizRead` in `OwnedReader` — see `QuizRead` for why the fetch moved up.
  */
+/**
+ * **Write the questions when the margin is shown and there are none** —
+ * Greg, 2026-10-29 (spya-fytjtf): *"let's say the quiz mode does run as one
+ * of the default modes whenever you open marginalia mode"*. The relation
+ * words' rule (useRelations.ts): `useAutoRunOnArrival`, one unforced attempt
+ * per article per page load, whatever put the column there, and only while
+ * the notes are on screen (`shown`), so a window too narrow for them buys
+ * nothing.
+ *
+ * **Only `none` runs.** A stale quiz is the band's to rewrite, as it is
+ * today, and an outdated one stays: a rewrite mints a new batch, and the
+ * answers the reader has given stop showing (quiz.md § Answers are kept).
+ * About $0.17–0.24 an article, measured on production's ledger on
+ * 2026-10-29 (plan 261029c). Owner only: the one caller is `OwnerMarginFeed`.
+ * Quiet, as the relations job is: the column stays open as long as somebody
+ * reads, and the read's `refresh` brings the questions in when it finishes.
+ */
+export function useQuizOnShow(slug: string, read: QuizRead, shown: boolean): void {
+  const { status, reload, refresh } = read;
+  /* The job hook must refresh too: unlike `useStepFinished`, it reconciles the
+     exact job it started even when that job is already done on the engine's
+     first list. `useQuizRead.refresh` coalesces the ordinary case where both
+     listeners hear the same completion, so this does not add a trailing GET. */
+  const queue = useStepJob(slug, "quiz", refresh, "quiet");
+  const ensure = useCallback(async () => {
+    await queue.start();
+  }, [queue]);
+  useAutoRunOnArrival(slug, "quiz", shown ? status : "loading", ensure, reload);
+}
+
 export function useQuiz(slug: string, read: QuizRead): UseQuiz {
   const { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
   const { kept, noteMark } = read;

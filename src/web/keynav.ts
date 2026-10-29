@@ -12,7 +12,7 @@
  * the spine, ↓ is "next part"; anywhere else it is "next paragraph" — the
  * fallback was "next section", the unit `?at=` stores, until 2026-10-01, when
  * Greg asked for ↑ / ↓ to "always do the same thing" and the section stride
- * moved to ← / → in Structure (`acrossDepth` below). Left and right were the
+ * moved to ← / → in Structure (`acrossStarts` below). Left and right were the
  * step keys on the first try and were the wrong axis — moving through the piece
  * is a downward motion at every level — Greg, same day, "let's switch to using
  * up/down instead of left/right".
@@ -22,7 +22,7 @@
  * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md), and so did
  * that. ← / → are now the browser's, except in a mode that claims them —
  * Skim and Quiz, whose stops and questions they step (`horizontal`
- * below), and Structure, whose sections they step (`acrossDepth`).
+ * below), and Structure, whose sections they step (`acrossStarts`).
  *
  * The table is deliberately not the source of the pointer's aim. Every zone
  * that means a granularity level tags itself with `data-nav-depth`, and this
@@ -647,15 +647,18 @@ export function useArrowNav(
    */
   horizontal: ((dir: -1 | 1) => boolean) | null = null,
   /**
-   * **← / → as a stride of their own** — the depth they step at, or `null`.
-   * Structure passes the section depth, so ← / → move to the previous or next
-   * lowest-level section (docs/project/keyboard.md § ← / → in Structure). The
-   * step is ↑ / ↓'s own — the same `stepTarget`, the same chain — so ← in the
-   * middle of a section goes to its start, exactly as ↑ does. A `horizontal`
-   * handler, when one is given, wins; the two are never both set today, since
-   * each belongs to one mode.
+   * **← / → as a stride of their own** — the rows they step between, or
+   * `null`. Structure passes its frontier's start rows (position.ts §
+   * `structureFrontier`), so ← / → move to the previous or next lowest-level
+   * section, or sub-section where the article has them
+   * (docs/project/keyboard.md § ← / → in Structure). Explicit rows rather than
+   * a depth since 2026-10-29: on a ragged tree no one depth is "the lowest
+   * level", plan 261029a. The step is ↑ / ↓'s own — the same `stepTarget`, the
+   * same chain — so ← in the middle of a section goes to its start, exactly as
+   * ↑ does. A `horizontal` handler, when one is given, wins; the two are never
+   * both set today, since each belongs to one mode. Memoise it, as `plan`.
    */
-  acrossDepth: number | null = null,
+  acrossStarts: readonly number[] | null = null,
 ): void {
   const sideways = useRef(horizontal);
   sideways.current = horizontal;
@@ -760,17 +763,17 @@ export function useArrowNav(
           if (mine(across)) e.preventDefault();
           return;
         }
-        if (acrossDepth !== null && plan.starts[acrossDepth]) step(acrossDepth, across, e);
+        if (acrossStarts !== null) step(acrossStarts, across, e);
         return;
       }
 
       const d = currentAim();
       aim.current = d;
-      step(d, e.key === "ArrowUp" ? -1 : 1, e);
+      step(plan.starts[d] ?? [], e.key === "ArrowUp" ? -1 : 1, e);
     };
 
-    /** One step at depth `d`, chained from our own last target. */
-    const step = (d: number, dir: -1 | 1, e: KeyboardEvent) => {
+    /** One step through `all` (a level's start rows), chained from our own last target. */
+    const step = (all: readonly number[], dir: -1 | 1, e: KeyboardEvent) => {
       /* **Over a folded section, never into it.** `scrollToBlock` unfolds
          whatever it is sent to, so a folded row left in the list would make ↓
          open every section it met (fold.ts). Filtered here, at the press,
@@ -780,7 +783,7 @@ export function useArrowNav(
          stays a start, because block 0 is where the first section begins.
          ↑ to it goes to the top of the page (scroll.ts § `scrollToBlock`);
          filtered out, ↑ from inside the first section had nowhere to go. */
-      const starts = steppableStarts(plan.starts[d] ?? [], blocks);
+      const starts = steppableStarts(all, blocks);
       /* The aim this press steps from, if one still stands — kept so a ↓ that
          moves nothing can put it back, below. */
       const before = chainedRow(chain.current, true) === null ? null : chain.current;
@@ -831,10 +834,10 @@ export function useArrowNav(
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("wheel", drop);
       window.removeEventListener("pointerdown", drop);
-      /* A mode change mid-chain changes `acrossDepth`, and with it which rows
+      /* A mode change mid-chain changes `acrossStarts`, and with it which rows
          the chain's number means. Nothing else would drop an aim whose jump is
          still unfinished, so drop it here. GPT Sol's plan review, 261001q. */
       drop();
     };
-  }, [plan, blocks, fallbackDepth, enabled, acrossDepth]);
+  }, [plan, blocks, fallbackDepth, enabled, acrossStarts]);
 }

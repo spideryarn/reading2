@@ -3,10 +3,13 @@
  * expected this reader to get stuck, each with the missing piece; whether they
  * still describe the article and the reader; and the things you can ask for.
  *
- * `useIdeas`' shape exactly, because the artefact's contract is the same: one
- * model pass over the article, stored once, **replaced** on a re-run, and three
- * staleness facts — the reader's profile is in this stage's stamp, so there is
- * a `profileChanged` as well as `stale` and `outdated`.
+ * `useIdeas`' shape, with Quotes' and Glossary's second verb: one model pass
+ * over the article, stored once, and three staleness facts — the reader's
+ * profile is in this stage's stamp, so there is a `profileChanged` as well as
+ * `stale` and `outdated`. A forced run **appends** (*Find more*) when the list
+ * is current and for the same profile, and **rewrites** otherwise; the server
+ * says which, as `panelRun` (src/explanations.ts § `existingFor`, plan
+ * 261029e).
  *
  * The read half is `GET /api/explanations/:slug` (owner only — there is no
  * public projection); the write half is a **job**, `steps: ["explanations"]`.
@@ -48,6 +51,12 @@ export interface ExplanationsRead {
   profiled: boolean;
   /** ...and that profile is no longer the reader's. Who is reading decides what is confusing. */
   profileChanged: boolean;
+  /**
+   * What the band's run button will do — the server's `panelRun`, from the
+   * same `existingFor` the step asks. Null before a list, or from a server
+   * that did not say (the panel then reads it conservatively).
+   */
+  panelRun: "append" | "rewrite" | null;
   /** Which reads the server itself answered — rewrite-hold.ts § `FreshReads`. */
   fresh: FreshReads;
   error: string | null;
@@ -70,6 +79,8 @@ export interface UseExplanations extends Omit<ExplanationsRead, "fresh" | "reloa
   stalled: boolean;
   /** `StepJob.starting`: the POST has gone and the queue has not seen it yet. */
   starting: boolean;
+  /** `StepJob.loaded`: false until the first job poll, while whether a run exists is unknown. */
+  loaded: boolean;
   /**
    * A forced run was pressed on the list still on screen, and has neither
    * replaced it nor failed — every forced control waits. rewrite-hold.ts.
@@ -82,13 +93,18 @@ export interface UseExplanations extends Omit<ExplanationsRead, "fresh" | "reloa
    */
   ensure(): Promise<void>;
   /**
-   * **Write them again** — forced, for *Write it again* beside a list written
-   * for an older profile, and for the stale banner. An older prompt alone is
-   * left quiet, as Ideas and Glossary are. It
-   * replaces the list. `explanations` is in FORCE_ONLY_WHEN_NAMED
-   * (src/pipeline.ts), so forcing it does not sweep in the steps before it.
+   * **The forced run** — the band's one run button, *Find more* or *Write a
+   * new list*, and the profile panel's Regenerate. It **appends** when the
+   * server's `existingFor` accepts the list and **rewrites** otherwise.
+   * `explanations` is in FORCE_ONLY_WHEN_NAMED (src/pipeline.ts), so forcing
+   * it does not sweep in the steps before it.
+   *
+   * @param useProfile defaults to true. **Find more passes the list's own
+   *   `profiled`** (useGlossary.ts § `more`), so a plain list is extended
+   *   plainly rather than rewritten for the profile — `existingFor` refuses to
+   *   merge across a profile difference.
    */
-  regenerate(): Promise<void>;
+  more(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -102,6 +118,7 @@ interface ExplanationsAnswer {
   outdated: boolean;
   profiled: boolean;
   profileChanged: boolean;
+  panelRun: "append" | "rewrite" | null;
 }
 
 export function useExplanationsRead(slug: string): ExplanationsRead {
@@ -156,6 +173,7 @@ export function useExplanationsRead(slug: string): ExplanationsRead {
           /* `!= null`: only `null` and absent mean "written without one". */
           profiled: loaded.explanations.profileHash != null,
           profileChanged: loaded.profileChanged,
+          panelRun: loaded.panelRun ?? null,
         });
         landed(started, res, loaded.explanations.generatedAt);
         setError(null);
@@ -192,6 +210,7 @@ export function useExplanationsRead(slug: string): ExplanationsRead {
     outdated: answer?.outdated ?? false,
     profiled: answer?.profiled ?? false,
     profileChanged: answer?.profileChanged ?? false,
+    panelRun: answer?.panelRun ?? null,
     fresh,
     error,
     retryRead,
@@ -211,7 +230,9 @@ export function useExplanations(slug: string): UseExplanations {
   const ensure = useCallback(async () => {
     await queue.start();
   }, [queue]);
-  /* The list's clock is its identity: a forced run replaces it and re-stamps it. */
+  /* The list's clock is its identity: a forced run re-stamps it, whether it
+     rewrote or appended — even a *Find more* that found nothing
+     (src/explanations.ts § `buildExplanations`). */
   const hold = useRewriteHold({
     slug,
     step: "explanations",
@@ -221,9 +242,12 @@ export function useExplanations(slug: string): UseExplanations {
     refresh,
   });
   const held = hold.run;
-  const regenerate = useCallback(async () => {
-    await held(() => queue.start({ force: true }));
-  }, [queue, held]);
+  const more = useCallback(
+    async (useProfile = true) => {
+      await held(() => queue.start({ force: true, useProfile }));
+    },
+    [queue, held],
+  );
 
   /* A press, never arrival, spends. `reload` is the way out of a failed read —
      useAutoRun.ts § A failed read is not an answer. */
@@ -236,15 +260,17 @@ export function useExplanations(slug: string): UseExplanations {
     outdated: read.outdated,
     profiled: read.profiled,
     profileChanged: read.profileChanged,
+    panelRun: read.panelRun,
     slug,
     error: read.error,
     job: queue.job,
     failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    loaded: queue.loaded,
     rewriting: hold.rewriting,
     ensure,
-    regenerate,
+    more,
     refresh,
     retryRead: read.retryRead,
     cancel: queue.cancel,

@@ -78,15 +78,15 @@ const SLUG_RUBBLE = `${SLUG_PREFIX}%`;
 
 /** The main-mode jobs, written out again so the test does not read the code's list. */
 const MODES: StepName[][] = [
-  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b). */
+  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b).
+     Not `ideas`, since 2026-10-29, nor inside Skim's job: opened, not imported (plan 261029c). */
   ["glossary"],
   ["quotes"],
-  ["ideas"],
   ["simple"],
   /* Sources' Bibliography, queued since 2026-10-09 (plan 261009l § On import). */
   ["bibliography"],
   ["crossrefs"],
-  ["quotes", "ideas", "skim"],
+  ["quotes", "skim"],
 ];
 
 let runLock: HeldRunLock | undefined;

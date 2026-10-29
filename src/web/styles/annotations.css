@@ -1449,10 +1449,16 @@ td.text.has-hit[data-hues="8"] {
    - **44px tall at every pointer**, not only a coarse one: nothing but a finger
      ever draws it, and a hybrid's primary pointer may be the trackpad.
    - **z-index 50**: over the bars (40), the spine (45) and the mode bands
-     (44–46); under every dialog (70) and the bottom bar (96). */
-.touch-select-chip {
+     (44–46); under every dialog (70) and the bottom bar (96).
+   - **One button or two, stacked** (`data-count`), since 2026-10-29: *Add to
+     glossary* joined it (plan 261029d). Side by side the pair is wider than a
+     phone in portrait, so it grows downwards and `--chip-h` is the group's
+     height in every offset below. The group is placed; the buttons are drawn. */
+.touch-select-chips {
   --chip-w: 13rem;
   --chip-clear: 80px;
+  --chip-gap: 0.35rem;
+  --chip-h: var(--control-h-lg);
   position: fixed;
   z-index: 50;
   left: clamp(
@@ -1460,8 +1466,17 @@ td.text.has-hit[data-hues="8"] {
     var(--chip-x, 0px),
     calc(100vw - var(--safe-right) - var(--chip-w) - 0.5rem)
   );
-  box-sizing: border-box;
   inline-size: var(--chip-w);
+  display: flex;
+  flex-direction: column;
+  gap: var(--chip-gap);
+}
+.touch-select-chips[data-count="2"] {
+  --chip-h: calc(2 * var(--control-h-lg) + var(--chip-gap));
+}
+.touch-select-chip {
+  box-sizing: border-box;
+  inline-size: 100%;
   block-size: var(--control-h-lg);
   display: inline-flex;
   align-items: center;
@@ -1490,17 +1505,18 @@ td.text.has-hit[data-hues="8"] {
    (TouchSelectionChip.tsx § placeFor; docs/plans/261019b-…). Px, not rem: the
    system draws that menu, and it does not grow with our root size. A guess
    until seen on an iPad. */
-.touch-select-chip[data-edge="top"] {
+.touch-select-chips[data-edge="top"] {
   top: max(
     calc(var(--bar-bottom) + 0.5rem),
-    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--control-h-lg))
+    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--chip-h))
   );
 }
-.touch-select-chip[data-edge="bottom"] {
+.touch-select-chips[data-edge="bottom"] {
   bottom: max(
     calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now) + 0.5rem),
-    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--control-h-lg))
+    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--chip-h))
   );
 }
 .touch-select-chip svg { flex: none; color: var(--highlight-text); }
+.touch-select-glossary svg { color: var(--ink-soft); }
 .touch-select-chip:active { background: var(--highlight-wash); }

@@ -26,7 +26,7 @@ import { STRUCTURE_ARRIVING } from "../src/messages.js";
 import type { StructureArrival } from "../src/web/modes/structure/StructureArriving.js";
 import { StructureBand } from "../src/web/modes/structure/StructureMode.js";
 import { modeParam } from "../src/web/params.js";
-import { buildSections } from "../src/web/position.js";
+import { structureFrontier } from "../src/web/position.js";
 import { buildGeometry } from "../src/web/tree.js";
 import type { Article, Block, BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
 
@@ -219,7 +219,7 @@ function mount(proseBeside = true, rootFontPx = 16) {
           owner={false}
           article={article}
           leafDepth={geometry.leafDepth}
-          sections={buildSections(geometry, blocks)}
+          frontier={structureFrontier(geometry, blocks)}
           layoutKey="k"
           supplementOf={geometry.supplementOf}
           arcByRow={null}
@@ -419,7 +419,7 @@ describe("the structure-arriving line", () => {
             owner
             article={article}
             leafDepth={geometry.leafDepth}
-            sections={buildSections(geometry, blocks)}
+            frontier={structureFrontier(geometry, blocks)}
             layoutKey="k"
             supplementOf={geometry.supplementOf}
             arcByRow={null}

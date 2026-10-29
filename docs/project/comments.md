@@ -125,6 +125,11 @@ later from its mark, the drawer or a link is an ordinary box. Only a fresh box h
   neighbour.
 - **A hint**: *Highlighted. Click away to keep it.*
 - **Copy** ([§ Copying the passage](#copying-the-passage)).
+- **Add to glossary**, since 2026-10-29, the finger's chip's second button for a mouse: the words go
+  to the glossary as the command bar's *Look up "X"* would send them, the box closes, and an
+  untouched highlight is taken off as Copy takes it off. Offered only where the glossary can take
+  the words ([glossary.md § Looking a term up](glossary.md#looking-a-term-up),
+  [261029d](../plans/261029d-a-reminder-bar-at-the-top-and-add-a-selection-to-the-glossary.md)).
 
 **Pristine** is the word for a row that is still exactly what the selection wrote: yellow, no
 words, no conversation, no answer, no placement (`isPristineHighlight` in

@@ -30,6 +30,7 @@ export type MargTipKey =
   | "reception"
   | "literature"
   | "explanation"
+  | "quiz"
   | "comment-own"
   | "comment-owner";
 
@@ -77,6 +78,11 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "Explained",
     what: "A place in this passage you are likely to get stuck, and what is missing there. Press this line to open the explanation; Open in Explanations shows it with the rest.",
     how: "From Explanations mode. The AI read the whole article with your profile in mind and wrote a short explanation of the missing piece: a skipped step, or background the author assumes. The quoted words are the article's own, checked against it; the explanation is the AI's, and says when it is unsure or relies on what it knows from outside the piece.",
+  },
+  quiz: {
+    head: "Quiz",
+    what: "A question about what you have just read, to answer in your own words. Press this line to answer it in Learn mode, where your answer is marked against the article.",
+    how: "From Quiz mode. The question was written by AI from the whole article. It sits after the passage that finishes what it asks about, and the questions build on one another in order.",
   },
   "comment-own": {
     head: "Yours",

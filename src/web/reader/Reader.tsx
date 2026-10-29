@@ -82,6 +82,7 @@ import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
 import type { ChatAnchor, Quote, Situate, SituateFinding } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
+import type { GlossarySelectionFocus } from "../GlossaryPanel.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
 import { visitorArrival } from "../modes/structure/StructureArriving.js";
@@ -127,6 +128,7 @@ import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
 import { AnnotateDialog, annotateKey } from "../AnnotateDialog.js";
+import { ReminderBar } from "../ReminderBar.js";
 import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
 import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-highlight.js";
@@ -143,6 +145,7 @@ import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from 
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl, withModeDoor } from "../command-runners.js";
+import { glossaryProposalFor, runProposal } from "../command-proposal.js";
 import { chipDoorRows, guideDoorRows } from "../chip-door.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
@@ -193,7 +196,7 @@ import { arrivalTarget, endCentredArrival, isBlockOnScreen, scrollToBlock } from
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
-import { buildSections, sectionDepth } from "../position.js";
+import { buildSections, sectionDepth, structureFrontier } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import { useDockEntrance } from "./dock-entrance.js";
@@ -396,6 +399,15 @@ export function Reader({
     () => buildSections(geometry, article.blocks),
     [geometry, article.blocks],
   );
+  /* **Structure's own, finer list** — a sub-section where the article has
+     them, the section everywhere else (position.ts § `structureFrontier`).
+     Its "you are here" and its ← / → read this; everything else, `?at=`
+     included, keeps `sections`. Plan 261029a. */
+  const frontier = useMemo(
+    () => structureFrontier(geometry, article.blocks),
+    [geometry, article.blocks],
+  );
+  const frontierStarts = useMemo(() => frontier.map((s) => s.row), [frontier]);
   const windowWidth = useWindowWidth();
   const rootFontPx = useRootFontPx();
 
@@ -1831,6 +1843,21 @@ export function Reader({
    */
   const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
   const termFocusTaken = useCallback((taken: ItemFocus) => setTermFocus(focusTaken(taken)), []);
+  /* The fresh selection box closes as Glossary opens. Its focused Add button
+     disappears, so the band takes focus once it (or the selected term's row)
+     exists; this request is separate from the visual scroll-and-flash focus. */
+  const [glossarySelectionFocus, setGlossarySelectionFocus] =
+    useState<GlossarySelectionFocus | null>(null);
+  const glossarySelectionFocusNumber = useRef(0);
+  const glossarySelectionFocusTaken = useCallback(
+    (taken: GlossarySelectionFocus) =>
+      setGlossarySelectionFocus((now) => {
+        if (!now || now.kind !== taken.kind || now.n !== taken.n) return now;
+        if (now.kind === "term" && (taken.kind !== "term" || now.id !== taken.id)) return now;
+        return null;
+      }),
+    [],
+  );
   const [ideaFocus, setIdeaFocus] = useState<ItemFocus | null>(null);
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
@@ -1881,6 +1908,7 @@ export function Reader({
       switch (slot) {
         case "term":
           setTermFocus(null);
+          setGlossarySelectionFocus(null);
           break;
         case "cite":
           setCiteFocus(null);
@@ -2354,10 +2382,11 @@ export function Reader({
     geometry.leafDepth,
     !drawerOpen,
     skimKeys ?? quizStepKeys ?? quoteStepKeys ?? searchStepKeys,
-    /* …and the lowest-level sections while Structure is the mode — the unit
-       `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
-       keyboard.md § ← / → in Structure. */
-    mode === "structure" ? sectionDepth(geometry) : null,
+    /* …and the lowest-level sections while Structure is the mode — the
+       stride ↓ took over the band until 2026-10-01 — or sub-sections where the
+       article has them: Structure's frontier, the rows its "you are here" is
+       measured over (plan 261029a). keyboard.md § ← / → in Structure. */
+    mode === "structure" ? frontierStarts : null,
   );
 
   /* **The door after the current stop's block** — SkimPanel.tsx §
@@ -2397,7 +2426,12 @@ export function Reader({
   const quizRead = owner?.quiz ?? null;
   const drawnQuiz = quizRead?.status === "ready" && !quizRead.stale ? quizRead.quiz : null;
   const quizAfter = useMemo(() => {
-    if (!drawnQuiz || drawnQuiz.questions.length === 0) return null;
+    /* **Not while the margin is on screen**: there the questions are among its
+       notes (Greg, spya-fytjtf; plan 261029c), and drawn in both they would
+       say the same sentence twice, side by side. `marginRoom` is the very
+       condition the margin's notes are drawn on (`marginNotes` below), so a
+       question is always in exactly one of the two. */
+    if (marginRoom || !drawnQuiz || drawnQuiz.questions.length === 0) return null;
     const byBlock = questionsByAnchor(
       drawnQuiz.questions,
       article.blocks.map((b) => b.id),
@@ -2410,7 +2444,7 @@ export function Reader({
       );
     }
     return out;
-  }, [drawnQuiz, article.blocks, openQuizAt]);
+  }, [marginRoom, drawnQuiz, article.blocks, openQuizAt]);
 
   /**
    * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx.
@@ -2856,6 +2890,9 @@ export function Reader({
       /* The owner's only, and the feed reads them only with the experimental
          switch on: the mode is behind it (plan 261028c). */
       explanations: isOwner ? ownerFeed.explanations : null,
+      /* The owner's quiz, from the read the prose and the band share — never a
+         stale one, the prose's rule (plan 261029c). */
+      quiz: isOwner && drawnQuiz ? drawnQuiz : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2884,6 +2921,7 @@ export function Reader({
             onOpenAsked={openAskedFromMargin}
             onJump={jumpTo}
             onOpenFinding={openFindingFromMargin}
+            onOpenQuiz={openQuizAt}
           />
         </>,
       );
@@ -2918,6 +2956,8 @@ export function Reader({
     ownerFeed.notes,
     ownerFeed.literature,
     ownerFeed.explanations,
+    drawnQuiz,
+    openQuizAt,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
@@ -3589,6 +3629,62 @@ export function Reader({
     ],
   );
   /**
+   * **_Add to glossary_ on a selection** — Greg, 2026-10-28 (spya-turkg3):
+   * *"When I highlight a piece of text, it gives me the option to highlight or
+   * comment it. Okay, great. Can we also have the option to add it to the
+   * glossary?"* Plan 261029d, Part 2.
+   *
+   * **Exactly the bar's *Look up “X”* for the selected words**, through the
+   * same `executor`: an entry that already names them is opened, and anything
+   * else is handed to the Glossary band's *Look up a term* box, whose finished
+   * answer adds the term for the owner (glossary.md § A finished answer adds
+   * the term). So the gates are the bar's: the owner, a settled glossary for
+   * an ask (`glossaryReady`, so nothing generates on open), and term-sized
+   * words (`parseAskedTerm`). Plus the Dock drawing Glossary, as `moreTerms`
+   * asks. `undefined` means no button anywhere.
+   */
+  const glossaryDrawn = dockDraws("glossary");
+  const selectionGlossary = useMemo(() => {
+    if (!isOwner || !glossaryDrawn) return undefined;
+    const proposalFor = (words: string) => glossaryProposalFor(words, { ready: glossaryReady, terms });
+    return {
+      offers: (words: string) => proposalFor(words) !== null,
+      /**
+       * **Whether it went**: decided again at the press, and `true` only for
+       * the runner's `close`. A `stay` (the entry was hidden since the chip
+       * appeared) or no runner leaves the selection and the highlight as they
+       * were, rather than throwing them away for nothing (GPT Sol, plan
+       * review F6). Both glossary runners answer synchronously.
+       */
+      add: (words: string, takeFocus = false): boolean => {
+        const proposal = proposalFor(words);
+        if (!proposal) return false;
+        const outcome = runProposal(executor.runners, proposal);
+        const went = outcome !== null && !(outcome instanceof Promise) && outcome.kind === "close";
+        if (went && takeFocus) {
+          setGlossarySelectionFocus({
+            ...(proposal.id === "glossary-open"
+              ? { kind: "term" as const, id: proposal.termId }
+              : { kind: "band" as const }),
+            n: ++glossarySelectionFocusNumber.current,
+          });
+        }
+        return went;
+      },
+    };
+  }, [isOwner, glossaryDrawn, glossaryReady, terms, executor]);
+  /** The chip's *Add to glossary*: a finger's words, put away as its other press puts them away. */
+  const chipGlossary = useMemo(
+    () =>
+      selectionGlossary && {
+        offers: selectionGlossary.offers,
+        add: (anchor: SelectionAnchor) => {
+          if (selectionGlossary.add(anchor.quote)) window.getSelection()?.removeAllRanges();
+        },
+      },
+    [selectionGlossary],
+  );
+  /**
    * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
    * reading view draws no tag editor, so there is nothing on screen to keep in
    * step and a plain `editArticleTags` is the whole controller; the Metadata
@@ -4068,6 +4164,8 @@ export function Reader({
               chats={entryChats}
               focus={termFocus}
               onFocusTaken={termFocusTaken}
+              selectionFocus={glossarySelectionFocus}
+              onSelectionFocusTaken={glossarySelectionFocusTaken}
             />
           );
         return artefacts?.glossary ? (
@@ -4101,7 +4199,7 @@ export function Reader({
             owner={isOwner}
             article={article}
             leafDepth={geometry.leafDepth}
-            sections={sections}
+            frontier={frontier}
             layoutKey={layoutKey}
             supplementOf={geometry.supplementOf}
             arcByRow={arcCells}
@@ -4558,6 +4656,7 @@ export function Reader({
             shown={marginRoom}
             awaitingStructure={awaitingStructure(article.tree)}
             bibliography={owner.bibliography}
+            quiz={owner.quiz}
             onFeed={setOwnerFeed}
           />
         )}
@@ -4824,6 +4923,10 @@ export function Reader({
           constant is the word that decides it belongs here and not in a
           column. */}
       <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} readBand={readSoFarBand} />
+      {/* The masthead again, in brief, while the reader scrolls back on a small
+          device — ReminderBar.tsx says when. Not while a band is open: it
+          would lie over the band's own head (plan 261029d). */}
+      {!bandOpen && <ReminderBar article={article} readBand={readSoFarBand} />}
       {/* The statement, where a visitor's eye already is on arrival. The
           *persistent* half of it is the chip in the bar below, which is sticky;
           this is the sentence and the ask, which belong with the title. Not
@@ -5044,6 +5147,7 @@ export function Reader({
           key={`${slug}:${mode}`}
           suppressed={Boolean(annotating || overlay || openComment)}
           onSelect={selectProseByTouch}
+          glossary={chipGlossary}
         />
       )}
       {owner && annotating && (
@@ -5272,6 +5376,27 @@ export function Reader({
                     api.remove(id);
                     void setNote((current) => (current === id ? null : current));
                   },
+                  /* **_Add to glossary_, the chip's second press on a mouse's
+                     words** (plan 261029d). The reader selected to look a term
+                     up, not to mark it, so an untouched highlight goes as
+                     Copy's does; a touched one stays. The box closes either
+                     way, because the reader has gone to the glossary. */
+                  onAddToGlossary:
+                    selectionGlossary && openComment.quote !== undefined && selectionGlossary.offers(openComment.quote)
+                      ? () => {
+                          const id = openComment.id;
+                          const quote = openComment.quote;
+                          if (quote === undefined || !selectionGlossary.add(quote, true)) return false;
+                          const api = commentsNow.current;
+                          const row = api?.comments.find((comment) => comment.id === id);
+                          if (api && row && isPristineHighlight(row) && !copyOnlyProtected.current.has(id)) {
+                            copyOnlyProtected.current.add(id);
+                            api.remove(id);
+                          }
+                          void setNote((current) => (current === id ? null : current));
+                          return true;
+                        }
+                      : undefined,
                 }
               : undefined
           }

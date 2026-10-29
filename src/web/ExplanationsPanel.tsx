@@ -1,10 +1,20 @@
 /**
  * **Explanations, in the band**: the places the model expected this reader to
- * get stuck, in reading order, each with the passage's own words, a short
- * explanation of what is missing there, and a way to ask about it in chat.
- * Greg's report spya-nkq6rj; the design is
+ * get stuck, each with the passage's own words, a short explanation of what is
+ * missing there, and a way to ask about it in chat. Greg's report spya-nkq6rj;
+ * the design is
  * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md
  * § Idea 2.
+ *
+ * **Glossary's controls since 2026-10-29** — Greg, spya-ay3u4w: *"I was
+ * expecting different orderings and a prioritized default with thresholding
+ * and an option to find more"*. So, top to bottom, Glossary's pieces rather
+ * than new ones (controls.md § Controls that do the same job look the same):
+ * the run row (*Find more* or *Write a new list*, the band's one run button),
+ * the order row (`OrderGroup` and its shared chips), and in the prioritised
+ * order the threshold (`ThresholdSlider`). The rule behind the orders is
+ * src/web/explanations-order.ts. Plan
+ * docs/plans/261029e-explanations-borrow-glossary-controls-full-width-and-a-calmer-reader-face.md § 2.
  *
  * Three things to keep true, all about honesty rather than layout:
  *
@@ -18,7 +28,9 @@
  *   apply: *Not sure* when `sure` is false, *Draws on AI memory, unchecked*
  *   when `outside` is true. Nothing in code checks either.
  * - **An empty list is a real answer**: nothing in the piece looked likely to
- *   trip this reader up. It is said plainly, with no retry.
+ *   trip this reader up. It is said plainly, with no retry — no *Find more* on
+ *   it either (Sol F7), only *Write a new list* when the list no longer fits
+ *   the article, the prompt or the reader.
  *
  * **Owner only.** There is no visitor arm: a visitor's band is `VisitorBand`
  * saying the mode is the owner's (src/web/visitor.ts § POLICY.explanations).
@@ -27,27 +39,51 @@
  * deferred stage 3), so `selectPassages` answers `NOTHING` and each quote is a
  * jump.
  */
-import { useRef, useState } from "react";
-import { Puzzle } from "lucide-react";
-import type { BlockId, Explanation, ExplanationsDropped } from "../types.js";
+import { useEffect, useRef, useState } from "react";
+import { Puzzle, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { BlockId, Explanation, ExplanationsDropped, Job } from "../types.js";
 import type { UseExplanations } from "./useExplanations.js";
 import { AboutMade } from "./BandAbout.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { BlockRef } from "./BlockRef.js";
 import { Excerpt } from "./Excerpt.js";
+import {
+  EXPLANATIONS_BAR_DEFAULT,
+  type ExplanationOrder,
+  type ExplanationOrderOption,
+  availableOrders,
+  barMax,
+  barStops,
+  barToReveal,
+  effectiveOrder,
+  explanationsNote,
+  orderExplanations,
+  priorityOf,
+  rowScores,
+  visibleExplanations,
+} from "./explanations-order.js";
+import { freshRunOffered } from "./find-more.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { OrderGroup } from "./OrderGroup.js";
 import { AskInChatButton } from "./OriginChat.js";
 import { useRenderCount } from "./perf.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
+import { ScoreBars } from "./ScoreBars.js";
+import { ThresholdSlider } from "./ThresholdSlider.js";
 import { type ItemFocus, useLandOnItem } from "./item-focus.js";
 import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "./explanation-labels.js";
 import { DismissibleNotice, STALE_NOTICE_LABEL, STALE_NOTICE_TOOLTIP } from "./StaleNotice.js";
+import type { StepFailure } from "./useStepJob.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 
 /** What a deliberate `explanations: []` is drawn as — a real answer, with no retry. */
 export const EXPLANATIONS_NONE = "Nothing in this piece looked likely to trip you up, so there is nothing to explain.";
+
+/** Said under *Find more* after a pass that added nothing — the button did something. */
+export const EXPLANATIONS_NO_MORE = "No more places found.";
 
 /** How many explanations the model offered that checking left out. */
 export function droppedCount(dropped: ExplanationsDropped): number {
@@ -63,14 +99,36 @@ export function droppedCount(dropped: ExplanationsDropped): number {
   );
 }
 
+/**
+ * **Does the band's run button rewrite?** The server's `panelRun` when it gave
+ * one — `existingFor`, which also sees a cleared profile. Absent (a response
+ * from before the field), read conservatively: any of the three facts that can
+ * make the step refuse to append says rewrite.
+ */
+export function runRewrites(
+  owner: Pick<UseExplanations, "panelRun" | "stale" | "outdated" | "profileChanged">,
+): boolean {
+  return owner.panelRun ? owner.panelRun === "rewrite" : owner.stale || owner.outdated || owner.profileChanged;
+}
+
 export function ExplanationsPanel({
   owner,
+  order: chosenOrder,
+  onOrder,
+  bar: chosenBar,
+  onBar,
   onJump,
   onAsk,
   focus = null,
   onFocusTaken,
 }: {
   owner: UseExplanations;
+  /** `?explby=` — the parser's default is `prioritised`. */
+  order: ExplanationOrder;
+  onOrder(order: ExplanationOrder): void;
+  /** `?explbar=` — null is "nobody has touched it", resolved to `EXPLANATIONS_BAR_DEFAULT`. */
+  bar: number | null;
+  onBar(bar: number | null): void;
   onJump(id: BlockId): void;
   /** Ask about one explanation in a chat anchored on its passage (Reader.tsx § `askExplanationInChat`). */
   onAsk(explanation: Explanation): void;
@@ -82,15 +140,32 @@ export function ExplanationsPanel({
   const made = owner.explanations;
   const list = made?.explanations ?? [];
   const ready = made !== null && owner.status === "ready";
-  /* **Land on the focused explanation** (item-focus.ts): every row of a
-     ready list is drawn, so known is drawn. */
+  /* `effectiveOrder`, not the URL's: `prioritised` is the default, so it
+     arrives on lists that cannot support it (every `explanations/1` list), and
+     the list, the pressed button and the scores on each row must agree about
+     the order actually in force. */
+  const order = effectiveOrder(list, chosenOrder);
+  const bar = chosenBar ?? EXPLANATIONS_BAR_DEFAULT;
+  const shown = orderExplanations(list, order, bar);
+  const orders = ready ? availableOrders(list) : [];
+
+  /* **Land on the focused explanation** (item-focus.ts) — and first, if the
+     bar is hiding it, lower the bar just enough to draw it (Sol F4), as
+     Bibliography does: the margin's *Open in Explanations* is a request to see
+     that one. The landing waits for the render that draws it. */
   const surface = useRef<HTMLElement>(null);
   const known = focus !== null && list.some((e) => e.id === focus.id);
+  const drawn = focus !== null && shown.some((e) => e.id === focus.id);
+  useEffect(() => {
+    if (focus === null || !ready || !known) return;
+    const lowered = barToReveal(list, focus.id, chosenOrder, bar);
+    if (lowered !== null) onBar(lowered);
+  }, [focus, ready, known, list, chosenOrder, bar, onBar]);
   useLandOnItem({
     focus,
     ready,
     known,
-    drawn: known,
+    drawn,
     scope: surface,
     attribute: "data-explanation-id",
     onTaken: onFocusTaken,
@@ -103,50 +178,32 @@ export function ExplanationsPanel({
      rewrite that is stale again shows it again. */
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
   const staleShowing = ready && owner.stale && dismissedFor !== made.generatedAt;
-  /* A forced run has finished and its result is not here yet: the forced
-     button gives way to a read, never to a second paid run. rewrite-hold.ts. */
+  /* A forced run has finished and its result is not here yet: the run button
+     gives way to a read, never to a second paid run. rewrite-hold.ts. */
   const waiting = owner.rewriting && !owner.job && !owner.starting && !owner.failed;
-  /* **Write it again**, beside a list for an older profile, as well as while
-     a job runs, failed or a rewrite has not loaded. A list written by an older
-     prompt stays quietly useful: Ideas and Glossary apply Greg's 2026-09-29
-     ruling that a prompt change is not worth bugging the reader about. Not
-     while the stale banner shows: it carries the button itself. */
+  const rewrites = runRewrites(owner);
+  /* **The run row, first in the column, on a finished list** — Glossary's
+     (GlossaryPanel.tsx § MoreRow). Not on an empty list that would append
+     (Sol F7): *Find more* with nothing to extend is the same question asked
+     again, and the empty answer is a real one. On an empty list that no
+     longer fits — stale, outdated, another profile — it says *Write a new
+     list*, which is then the only way to ask again. */
+  const runRow = ready && (list.length > 0 || rewrites);
+  /* **Only a running job's progress, below an empty list**, where there is no
+     run row to carry it (a run started from another tab, or the profile
+     panel's Regenerate). */
   const showFoot =
     ready &&
-    !staleShowing &&
-    (owner.job !== null ||
-      owner.starting ||
-      owner.failed !== null ||
-      owner.profileChanged ||
-      (waiting && !owner.error));
-
-  /**
-   * @param again whether this is the button beside a list that is already
-   *   there. The empty state's button must be `ensure` — the identical,
-   *   unforced request the automatic run makes — or it buys a second model
-   *   call. useIdeas.ts § `ensure`.
-   */
-  const run = (label: string, again = false) =>
-    again && waiting && !owner.error ? (
-      <RewriteWaiting line="The new explanations haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
-    ) : (
-      <JobProgress
-        job={owner.job}
-        starting={owner.starting}
-        failed={owner.failed}
-        stalled={owner.stalled}
-        onRun={() => (again ? owner.regenerate() : owner.ensure())}
-        /* With `error` set the retry is `ReadError`'s; the button stays held. */
-        runDisabled={again && owner.rewriting}
-        onCancel={owner.cancel}
-        label={label}
-        step="explanations"
-        icon={<Puzzle size={13} />}
-        runningLabel="Finding…"
-      />
-    );
+    !runRow &&
+    (owner.job !== null || owner.starting || owner.failed !== null || (waiting && !owner.error));
+  /* **Find more in the list's own recorded setting**, not the current
+     profile's (useGlossary.ts § `more`): `existingFor` refuses to merge across
+     a profile difference, so asking a plain list for the profile would
+     rewrite it under a button that says "more". */
+  const findMore = () => owner.more(owner.profiled);
 
   const dropped = made && ready ? droppedCount(made.dropped) : 0;
+  const passes = made?.passes ?? 1;
 
   return (
     <ModeSurface
@@ -161,8 +218,9 @@ export function ExplanationsPanel({
               {list.length === 0
                 ? "No explanations."
                 : list.length === 1
-                  ? "One explanation."
-                  : `${list.length} explanations.`}
+                  ? "One explanation"
+                  : `${list.length} explanations`}
+              {list.length > 0 && passes > 1 ? `, found in ${passes} passes.` : list.length > 0 ? "." : ""}
             </p>
           )}
           {ready && list.length > 0 && (
@@ -185,26 +243,71 @@ export function ExplanationsPanel({
           )}
         </>
       }
-      /* Written for the reader's profile, so the corner badge, as Ideas has
-         it; its panel offers the forced run when the profile has changed. */
+      /* Written for the reader's profile, so the corner badge, as Ideas and
+         Glossary have it. **Its Regenerate is the forced run with today's
+         profile**, as Glossary's is (`more(true)`): the panel offers it only
+         when the profile has changed, and then `existingFor` refuses to append,
+         so it rewrites. It sits inside the profile panel, beside the profile
+         it is about — Greg's 2026-10-01 request (WrittenForYou.tsx) — not as a
+         second button in the band. */
       profile={
         ready ? (
           <WrittenForYou
             written={owner.profiled}
             changed={owner.profileChanged}
             slug={owner.slug}
-            /* The forced run replaces the list. */
             regenerate={{
-              run: () => void owner.regenerate(),
+              run: () => void owner.more(true),
               busy: owner.job !== null || owner.starting || owner.rewriting,
               refresh: () => owner.refresh(),
             }}
           />
         ) : null
       }
-      /* **No head**, as FAQ: nothing needs a row of its own. */
-      foot={showFoot ? <div className="expl-foot">{run("Write it again", true)}</div> : null}
+      foot={
+        showFoot ? (
+          <div className="expl-foot">
+            {waiting && !owner.error ? (
+              <RewriteWaiting line="The new explanations haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+            ) : (
+              <ExplanationsProgress
+                job={owner.job}
+                starting={owner.starting}
+                failed={owner.failed}
+                stalled={owner.stalled}
+                onRun={findMore}
+                onCancel={owner.cancel}
+                label="Write a new list"
+              />
+            )}
+          </div>
+        ) : null
+      }
     >
+      {runRow && made && (
+        <RunRow
+          job={owner.job}
+          loaded={owner.loaded}
+          starting={owner.starting}
+          failed={owner.failed}
+          stalled={owner.stalled}
+          rewrites={rewrites}
+          foundNothing={passes > 1 && made.lastAdded === 0}
+          waiting={owner.rewriting ? (owner.error ? "held" : "read") : null}
+          onRead={owner.refresh}
+          onMore={findMore}
+          onCancel={owner.cancel}
+        />
+      )}
+
+      {orders.length > 0 && <OrderBar options={orders} order={order} onOrder={onOrder} />}
+
+      {/* Only in the order it belongs to: a number that means nothing in the
+          other three orders would be furniture (GlossaryPanel.tsx). */}
+      {ready && order === "prioritised" && (
+        <ExplanationsBarSlider explanations={list} bar={bar} moved={chosenBar !== null} onBar={onBar} />
+      )}
+
       {owner.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner.status === "loading" && (
@@ -220,19 +323,30 @@ export function ExplanationsPanel({
             One model call over the whole article, and it takes tens of seconds. Written once and kept — you
             will not be asked again unless the article changes.
           </p>
-          {run("Find them")}
+          {/* `ensure`, the identical unforced request the automatic run makes,
+              or it buys a second model call. useIdeas.ts § `ensure`. */}
+          <ExplanationsProgress
+            job={owner.job}
+            starting={owner.starting}
+            failed={owner.failed}
+            stalled={owner.stalled}
+            onRun={() => owner.ensure()}
+            onCancel={owner.cancel}
+            label="Find them"
+          />
         </div>
       )}
 
       {ready && (
         <>
+          {/* **No run button of its own**: *Write a new list* at the top of the
+              column is the same rewrite (Sol F10), as Glossary's notice. */}
           {staleShowing && (
             <DismissibleNotice
               onDismiss={() => setDismissedFor(made.generatedAt)}
               tooltip={STALE_NOTICE_TOOLTIP}
               label={STALE_NOTICE_LABEL}
               failed={null}
-              action={run("Write it again", true)}
               mode="explanations"
             >
               These describe an older version of the article.
@@ -244,8 +358,8 @@ export function ExplanationsPanel({
           {list.length > 0 && (
             <div className="tl-scroll">
               <ol className="tl-list expl-list">
-                {list.map((e) => (
-                  <ExplanationRow key={e.id} explanation={e} onJump={onJump} onAsk={onAsk} />
+                {shown.map((e) => (
+                  <ExplanationRow key={e.id} explanation={e} order={order} onJump={onJump} onAsk={onAsk} />
                 ))}
               </ol>
             </div>
@@ -256,24 +370,200 @@ export function ExplanationsPanel({
   );
 }
 
+/** The band's run, through the shared `JobProgress` with this mode's icon and words. */
+function ExplanationsProgress(props: {
+  job: Job | null;
+  starting: boolean;
+  failed: StepFailure | null;
+  stalled: boolean;
+  onRun(): Promise<void>;
+  onCancel(id: string): void;
+  label: string;
+}) {
+  return (
+    <JobProgress {...props} step="explanations" icon={<Puzzle size={13} />} runningLabel="Finding…" />
+  );
+}
+
+/**
+ * **The run row** — Glossary's `MoreRow` (GlossaryPanel.tsx), with this
+ * mode's words, its classes (`.gloss-more`, `.gloss-more-go`,
+ * `.gloss-more-note`) and the shared `JobProgress`. It says what its run will
+ * do: *Find more* when it appends, *Write a new list* when it rewrites. A run
+ * starting, going or failed draws the progress in the button's place; a
+ * finished rewrite whose list has not loaded draws the read.
+ *
+ * **Held, not hidden, before the first job poll** (`loaded`), where Glossary
+ * draws nothing: this row owns the corner's clearance (§ 3 of the plan), and
+ * a row that arrived a poll late would drop the list under the (i) meanwhile.
+ */
+function RunRow({
+  job,
+  loaded,
+  starting,
+  failed,
+  stalled,
+  rewrites,
+  foundNothing,
+  waiting,
+  onRead,
+  onMore,
+  onCancel,
+}: {
+  job: Job | null;
+  loaded: boolean;
+  starting: boolean;
+  failed: StepFailure | null;
+  stalled: boolean;
+  rewrites: boolean;
+  /** The last pass was a *Find more* and added nothing. */
+  foundNothing: boolean;
+  /** `"read"` draws the read in the button's place; `"held"` only disables it. */
+  waiting: "read" | "held" | null;
+  onRead(): Promise<void>;
+  onMore(): Promise<void>;
+  onCancel(id: string): void;
+}) {
+  const label = rewrites ? "Write a new list" : "Find more";
+  const title = rewrites
+    ? "Writes a fresh list rather than adding to this one, so some places here may not come back"
+    : "Another model call, told the places it has already explained, looking for more";
+
+  if (loaded && !freshRunOffered({ job, loaded, starting, failed })) {
+    return (
+      <div className="gloss-more">
+        <ExplanationsProgress
+          job={job}
+          starting={starting}
+          failed={failed}
+          stalled={stalled}
+          onRun={onMore}
+          onCancel={onCancel}
+          label={label}
+        />
+      </div>
+    );
+  }
+
+  if (waiting === "read") {
+    return (
+      <div className="gloss-more">
+        <RewriteWaiting line="The new explanations haven't loaded yet." onRead={onRead} className="tw:m-0" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="gloss-more">
+      <div className="gloss-actions">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gloss-btn gloss-more-go"
+          data-tip={title}
+          disabled={!loaded || waiting === "held"}
+          onClick={() => void onMore()}
+        >
+          <Search size={12} />
+          {label}
+        </Button>
+      </div>
+      {!rewrites && foundNothing ? <p className="gloss-more-note">{EXPLANATIONS_NO_MORE}</p> : null}
+    </div>
+  );
+}
+
+/** The order buttons — Glossary's `SortBar`, FAQ's `OrderBar`. */
+function OrderBar({
+  options,
+  order,
+  onOrder,
+}: {
+  options: readonly ExplanationOrderOption[];
+  order: ExplanationOrder;
+  onOrder(order: ExplanationOrder): void;
+}) {
+  return (
+    <div className="gloss-sort">
+      <OrderGroup label="Order the explanations by" selected={order}>
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
+            aria-pressed={order === option.key}
+            data-tip={option.title}
+            onClick={() => onOrder(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </OrderGroup>
+    </div>
+  );
+}
+
+/** The threshold — the shared `ThresholdSlider`, one pass for every number on it. */
+function ExplanationsBarSlider({
+  explanations,
+  bar,
+  moved,
+  onBar,
+}: {
+  explanations: readonly Explanation[];
+  bar: number;
+  moved: boolean;
+  onBar(bar: number | null): void;
+}) {
+  const { visible, hiddenCount } = visibleExplanations(explanations, bar);
+  return (
+    <ThresholdSlider
+      id="expl-bar"
+      value={bar}
+      max={barMax(explanations, bar)}
+      stops={barStops(explanations)}
+      defaultValue={EXPLANATIONS_BAR_DEFAULT}
+      moved={moved}
+      visible={visible.length}
+      total={explanations.length}
+      noun="explanations"
+      tip="How high an explanation has to score to stay on screen: how likely you are to get stuck there × how much of the argument depends on getting past it. Left shows more, right fewer."
+      note={explanationsNote(hiddenCount, explanations.length)}
+      onChange={onBar}
+    />
+  );
+}
+
 function ExplanationRow({
   explanation,
+  order,
   onJump,
   onAsk,
 }: {
   explanation: Explanation;
+  /** The order in force: a row draws the scores it was placed by (explanations-order.ts § rowScores). */
+  order: ExplanationOrder;
   onJump(id: BlockId): void;
   onAsk(explanation: Explanation): void;
 }) {
   const labels = explanationLabels(explanation);
+  const scores = rowScores(explanation, order);
+  const unscored = order === "prioritised" && priorityOf(explanation) === undefined;
   return (
-    <li className="tl-item expl-item" data-explanation-id={explanation.id}>
+    <li
+      className="tl-item expl-item"
+      data-explanation-id={explanation.id}
+      data-tip={unscored ? "Not scored for prioritising — shown regardless of the threshold" : undefined}
+    >
       {/* The article's own words first, with the solid rule FAQ and the
-          Glossary draw for exactly that, and the jump beside them. */}
+          Glossary draw for exactly that, the scores it was placed by, and the
+          jump beside them. */}
       <div className="gloss-part gloss-part-senseHere expl-passage">
         <blockquote className="gloss-part-text expl-quote">
           <Excerpt blockId={explanation.blockId} words={explanation.quote} />
         </blockquote>
+        {scores.length > 0 && <ScoreBars className="expl-scores" scores={scores} />}
         <BlockRef id={explanation.blockId} onJump={onJump} className="expl-jump" />
       </div>
       {/* The model's words, in its face (fonts.md; voices.css § `.expl-text`). */}

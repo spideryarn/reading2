@@ -20,6 +20,10 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, SituateFinding } from "../src/types.js";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -316,7 +320,7 @@ const onFeed = (next: MarginFeed) => {
   feed = next;
 };
 async function openMargin(): Promise<void> {
-  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, bibliography: { status: "ready", retryRead: async () => {} }, shown: true, onFeed })));
+  await act(async () => root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, bibliography: { status: "ready", retryRead: async () => {} }, slug: SLUG, shown: true, onFeed })));
   await settle();
 }
 const situateReads = () => trace.filter((l) => l === `GET /api/situate/${SLUG}`).length;

@@ -42,6 +42,7 @@ const RUN_BUTTONS = [
      Button (OriginChat.tsx). */
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-ask-go", size: "sm" },
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-more-go", size: "sm" },
+  { file: "src/web/ExplanationsPanel.tsx", hook: "gloss-more-go", size: "sm" },
 ] as const;
 
 /** The whole opening tag that starts at `start`, braces and quotes respected. */
