@@ -1351,12 +1351,22 @@ function objectBody(body: unknown): Record<string, unknown> {
  * or not at all. An id that is well-formed but not this article's is **not**
  * refused here — the store drops it, so one stale id cannot fail the rest.
  */
-function readingTimeBatch(body: unknown): Record<string, number> {
+/**
+ * The body of `POST /api/reading-time/:slug`: `seconds`, always (empty when
+ * only the place moved), and `place`, the paragraph the owner is on, or `null`
+ * for the top — absent when it has not changed since the last send. Plan
+ * 261029f § As built.
+ */
+function readingTimeBatch(body: unknown): { seconds: Record<string, number>; place: string | null | undefined } {
   const sent = objectBody(body);
   for (const key of Object.keys(sent)) {
-    if (key !== "seconds") {
+    if (key !== "seconds" && key !== "place") {
       throw httpError(400, "That request has a field this endpoint does not take");
     }
+  }
+  const { place } = sent;
+  if (place !== undefined && place !== null && !(typeof place === "string" && isSpideryarnId(place))) {
+    throw httpError(400, "The place must be a block id, or null for the top");
   }
   const { seconds } = sent;
   if (typeof seconds !== "object" || seconds === null || Array.isArray(seconds)) {
@@ -1374,7 +1384,7 @@ function readingTimeBatch(body: unknown): Record<string, number> {
     }
     out[id] = value;
   }
-  return out;
+  return { seconds: out, place };
 }
 
 /**
@@ -12233,7 +12243,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
-      send(res, 200, await loadArticle(slugPart(captures, 1)));
+      const slug = slugPart(captures, 1);
+      /* **And where the owner last was in it, on any device** (plan 261029f):
+         here rather than on reading time's GET, which runs only once the
+         reading view has mounted, too late to choose where it opens. */
+      const [article, readingPlace] = await Promise.all([loadArticle(slug), readingTimeStore.readPlace(slug)]);
+      send(res, 200, { ...article, readingPlace });
     },
   },
 
@@ -13626,7 +13641,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { req, res } }, captures) => {
       const slug = slugPart(captures, 1);
       const batch = readingTimeBatch(await readBody(req, MAX_READING_TIME_BODY_BYTES));
-      await readingTimeStore.add(slug, batch);
+      /* Two statements, not one transaction: a place is replaced, so the
+         client resending it after a half-success costs nothing (plan 261029f). */
+      if (batch.place !== undefined) await readingTimeStore.setPlace(slug, batch.place);
+      await readingTimeStore.add(slug, batch.seconds);
       /* The shelf's pie reads a cached denominator, kept true here, the one
          place the owner's reading moves (plan 261025l). Not the shelf's GET,
          which the unauthenticated health check also calls. A failure costs

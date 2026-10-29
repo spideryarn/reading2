@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "26 October 2026";
+const LAST_UPDATED = "29 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -255,6 +255,17 @@ export function PrivacyPage() {
             about one of your articles, the AI model is told roughly how much of it you have read —
             “about a quarter”, say — and nothing about which parts. It is not shown to anybody
             reading an article you have shared, and it goes when the article does.
+          </li>
+          {/* **Since 2026-10-29**: `reading_place`, one row per article —
+              Greg's answer A to q-mpq9dp (report spya-e23tee). One place and
+              its time, replaced as you move, so it is not a history either.
+              docs/project/privacy.md § Your place in an article; plan 261029f. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">Where you were in each of your articles</strong> —
+            the paragraph you last read, and when, so that another of your devices can open the
+            article there. Only the latest is kept; each update replaces the last. It is not shown to
+            anybody reading an article you have shared, and it goes when the article does, or when
+            the article is given to somebody else.
           </li>
           {/* **Since 2026-10-20**: `article_open_times`, so that Active days on
               /admin/users counts a day spent only reading — Greg's answer to

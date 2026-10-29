@@ -53,8 +53,9 @@ browsers, and reading time made the server the place that does know.
 **The right long-term fix** is to answer the per-person questions from a per-person store: keep the
 reader's place on the server beside reading time, and let "first open" mean no place anywhere. That
 is plan [261029f](../plans/261029f-your-place-in-an-article-follows-you-to-another-device.md),
-**awaiting Greg** as [q-mpq9dp](../user-feedback/questions/q-mpq9dp.md), because it adds a table, a
-late arrival and a line on `/privacy`. Until he answers, nothing is changed.
+which Greg chose as option A of [q-mpq9dp](../user-feedback/questions/q-mpq9dp.md) on 2026-10-29
+(reply `spya-hfufq8`) and which was built that day: the test for this report is
+`tests/last-view-server-place.test.tsx`, red on the code before it.
 
 **What would have caught the class.** A review question, asked of any per-browser store: *what does
 this answer when the same person arrives on another device, and is that answer worse than saying

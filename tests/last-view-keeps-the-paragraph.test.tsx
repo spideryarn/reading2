@@ -15,7 +15,7 @@
  * tests/reading-position-holds-across-a-reflow.test.tsx: rows `ROW` pixels
  * tall, `top` is `row * ROW - scrollY`, and `window.scrollTo` moves `scrollY`.
  */
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, type ReactNode, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +27,7 @@ vi.mock("../src/web/useExperimental.js", () => ({
   useExperimental: () => ({ on: false, loaded: true, signedIn: true }),
 }));
 
-const { lastViewKey, useLastView } = await import("../src/web/last-view.js");
+const { lastViewKey, settleSavedPlace, useLastView } = await import("../src/web/last-view.js");
 const { watchHistoryWrites } = await import("../src/web/router.js");
 const { abandonScroll, clearArrivalAnchor } = await import("../src/web/scroll.js");
 const { useReadingPosition } = await import("../src/web/reader/useReadingPosition.js");
@@ -74,6 +74,9 @@ let root: Root;
 
 function Page(): ReactNode {
   useLastView("x", "article", READER);
+  /* The owner's article read answering "never opened anywhere", as ArticlePage's
+     does before it draws (last-view.ts § The server's place, plan 261029f). */
+  useLayoutEffect(() => settleSavedPlace("x", READER, null), []);
   useReadingPosition(SECTIONS, BLOCKS, "k");
   return null;
 }

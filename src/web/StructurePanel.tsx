@@ -106,9 +106,15 @@ const STAGE_ONE_RUNG_B = 2 as const;
 interface Capacity {
   a: number | null;
   b: number | null;
+  /**
+   * Whether column B draws the current section opened, its sub-sections
+   * under it (structure.ts § `StructureRow.subs`), or closed with a count.
+   * Open until a measurement says the open unit cannot fit (§ `unitFits`).
+   */
+  open: boolean;
 }
 
-const UNMEASURED: Capacity = { a: null, b: null };
+const UNMEASURED: Capacity = { a: null, b: null, open: true };
 
 /**
  * Room for the two `Elided` counters a windowed column may draw.
@@ -237,6 +243,37 @@ function capacityFrom(
 }
 
 /**
+ * **Does the opened section, sub-sections and all, fit in column B beside the
+ * two counters a window may draw?** (plan 261029a § Stage 1b.)
+ *
+ * Not `capacityFrom(...) === 0`, which was the plan's first answer and could
+ * never be true: its budget is at least the centre row's own height, so the
+ * reader's row always "fits" there and a too-tall unit would be drawn and
+ * clipped (Sol's plan review, finding 1). This asks the strict question: the
+ * whole column if it fits as it is, or else the unit plus both counters.
+ */
+export function unitFits(
+  heights: readonly number[],
+  rows: readonly StructureRow[],
+  available: number,
+  gap: number,
+  counterH: number,
+): boolean {
+  /* Nothing measured (jsdom, the first frame): draw the unit, as an
+     unmeasured column draws the whole level. */
+  if (heights.length === 0 || heights.length !== rows.length) return true;
+  const total = heights.reduce((a, b) => a + b, 0) + Math.max(0, heights.length - 1) * gap;
+  if (total <= available) return true;
+  const unit = rows.findIndex((r) => r.subs !== undefined);
+  if (unit === -1) return true;
+  return (heights[unit] ?? 0) + COUNTER_ROWS * (counterH + gap) <= available;
+}
+
+function subsTotalText(n: number): string {
+  return `${n} sub-section${n === 1 ? "" : "s"}`;
+}
+
+/**
  * **What hovering a row says** — and the projection has already decided that,
  * which is the whole of why this component is four lines of JSX. `structure.ts`
  * § `StructureCard` holds the argument: the card is defined as what these two
@@ -305,6 +342,7 @@ function Row({
    */
   tip,
   glance,
+  subs,
 }: {
   row: StructureRow;
   /** The article's figures, for the mark after the title (FigureMark.tsx). */
@@ -313,11 +351,20 @@ function Row({
   tip: boolean;
   /** Hover view only: a mouse resting on the row goes there (useHoverGlance.ts). */
   glance?: GlanceHandlers | undefined;
+  /**
+   * The row's sub-sections, already drawn (`subRows`), **inside this `<li>`**:
+   * that is what makes the section and its sub-sections one row to every
+   * measure and window (structure.ts § `StructureRow.subs`).
+   */
+  subs?: ReactNode;
 }) {
   /* A matter row always has a card, if only to say why it is faint
      (MatterMark.tsx); a row with nothing else to say gets an empty one. */
   const card = tip ? (row.card ?? (row.matter ? NO_CARD : null)) : null;
   const classes = ["struct-row", `struct-${row.kind}`];
+  /* On the reader's path but not the deepest row: one of its sub-sections is.
+     structure-mode.css keeps the wash and the thumb off it. */
+  if (row.subs?.some((s) => s.here)) classes.push("struct-ancestor");
   if (row.supplement) classes.push("struct-supp");
   if (row.matter) classes.push("struct-matter");
   if (row.before) classes.push("struct-read");
@@ -383,7 +430,37 @@ function Row({
       ) : (
         <CardRow row={row} card={card} button={button} onJump={onJump} />
       )}
+      {subs}
     </li>
+  );
+}
+
+/**
+ * A row's sub-sections as a nested list, each drawn by `draw` — the visible
+ * column's `Row` with its card and dwell, or the measuring copy's plain one —
+ * so the two cannot differ in markup, which would make the measurement a
+ * measurement of something else.
+ */
+function subRows(row: StructureRow, draw: (sub: StructureRow) => ReactNode): ReactNode {
+  if (row.subs === undefined) return undefined;
+  return (
+    <ol className="struct-subs" aria-label={`Sub-sections of ${row.text}`}>
+      {row.subs.map(draw)}
+    </ol>
+  );
+}
+
+/** A row as the measuring copies draw it: no card, no jump, its sub-sections too. */
+function measuredRow(row: StructureRow, figures: readonly Figure[]): ReactNode {
+  return (
+    <Row
+      key={row.id}
+      row={row}
+      figures={figures}
+      onJump={NO_JUMP}
+      tip={false}
+      subs={subRows(row, (sub) => measuredRow(sub, figures))}
+    />
   );
 }
 
@@ -538,24 +615,29 @@ function Column({
   /** The panel's one dwell controller, shared by both columns (useHoverGlance.ts). */
   glanceAt: GlanceAt;
 }) {
+  /* Recursive, so a sub-section row gets its own card and its own dwell,
+     aimed at itself rather than at its section (Sol's plan review of 261029a
+     § Stage 1b, finding 5). */
+  const draw = (row: StructureRow): ReactNode => (
+    <Row
+      key={row.id}
+      row={row}
+      figures={figures}
+      onJump={onJump}
+      /* No card in Hover: resting on a row already shows what it holds,
+         in column B and in the prose, so a card would only cover them.
+         Greg: "in hover mode, we don't need the tooltip". */
+      tip={onGlance === undefined}
+      glance={
+        onGlance === undefined ? undefined : glanceAt(row.id, row.here, () => jumpToRow(row, onGlance))
+      }
+      subs={subRows(row, draw)}
+    />
+  );
   return (
     <ol className="struct-col" aria-label={label}>
       <Elided n={column.earlier} where="earlier" />
-      {column.rows.map((row) => (
-        <Row
-          key={row.id}
-          row={row}
-          figures={figures}
-          onJump={onJump}
-          /* No card in Hover: resting on a row already shows what it holds,
-             in column B and in the prose, so a card would only cover them.
-             Greg: "in hover mode, we don't need the tooltip". */
-          tip={onGlance === undefined}
-          glance={
-            onGlance === undefined ? undefined : glanceAt(row.id, row.here, () => jumpToRow(row, onGlance))
-          }
-        />
-      ))}
+      {column.rows.map(draw)}
       <Elided n={column.later} where="later" />
     </ol>
   );
@@ -619,7 +701,7 @@ export function StructurePanel({
    * measured and the list that is drawn cannot be different lists — which is
    * what re-running the projection with a limit would risk.
    */
-  const proj: StructureProjection = structureProjection({
+  const projOpen: StructureProjection = structureProjection({
     root,
     focusRow,
     rungA: STAGE_ONE_RUNG_A,
@@ -627,8 +709,27 @@ export function StructurePanel({
     allowParagraphs,
     matter,
   });
+  /**
+   * **The same column B with the current section closed**, built only when
+   * there is a section to open (plan 261029a § Stage 1b). Both are measured,
+   * hidden, on every pass, so which one is drawn never changes what was
+   * measured: the discipline below, applied to a choice instead of a count.
+   */
+  const hasUnit = projOpen.columnB.rows.some((r) => r.subs !== undefined);
+  const projClosed: StructureProjection = hasUnit
+    ? structureProjection({
+        root,
+        focusRow,
+        rungA: STAGE_ONE_RUNG_A,
+        rungB: STAGE_ONE_RUNG_B,
+        allowParagraphs,
+        matter,
+        openSubs: false,
+      })
+    : projOpen;
 
   const [cap, setCap] = useState<Capacity>(UNMEASURED);
+  const proj = cap.open ? projOpen : projClosed;
   /* Hover view's dwell, one for both columns. Called in Fisheye too (a hook
      cannot be conditional); with no `onGlance` no row is handed its handlers. */
   const glanceAt = useHoverGlance(onGlance !== undefined, focusRow);
@@ -698,6 +799,7 @@ export function StructurePanel({
       const headH = ofRef.current?.offsetHeight ?? 0;
       const hA = heights("a");
       const hB = heights("b");
+      const hBClosed = heights("b-closed");
 
       /**
        * **Always side by side, so each column gets the whole height.** Until
@@ -735,11 +837,27 @@ export function StructurePanel({
       const availA = roomBelow(visible[0]) ?? available;
       const availB = roomBelow(visible[1]) ?? Math.max(0, available - headH);
 
+      /* Open when the open unit fits beside its counters; otherwise closed,
+         with the "N sub-sections" line under it charged to the column too, at
+         its measured height (Sol's plan review, findings 1 and 4). */
+      const open =
+        !hasUnit || unitFits(hB, projOpen.columnB.rows, availB, gapFor("b"), counterHeight("b"));
+      const totalEl = box.querySelector<HTMLElement>("[data-struct-measure-total]");
+      const totalH = totalEl ? totalEl.offsetHeight + Number.parseFloat(getComputedStyle(totalEl).marginTop || "0") : 0;
       const next: Capacity = {
-        a: capacityFrom(hA, proj.columnA.rows, availA, gapFor("a"), counterHeight("a")),
-        b: capacityFrom(hB, proj.columnB.rows, availB, gapFor("b"), counterHeight("b")),
+        a: capacityFrom(hA, projOpen.columnA.rows, availA, gapFor("a"), counterHeight("a")),
+        b: open
+          ? capacityFrom(hB, projOpen.columnB.rows, availB, gapFor("b"), counterHeight("b"))
+          : capacityFrom(
+              hBClosed,
+              projClosed.columnB.rows,
+              Math.max(0, availB - totalH),
+              gapFor("b-closed"),
+              counterHeight("b-closed"),
+            ),
+        open,
       };
-      setCap((prev) => (prev.a === next.a && prev.b === next.b ? prev : next));
+      setCap((prev) => (prev.a === next.a && prev.b === next.b && prev.open === next.open ? prev : next));
     };
 
     measure();
@@ -758,9 +876,9 @@ export function StructurePanel({
       ro.disconnect();
       offFonts();
     };
-  }, [proj.columnA.rows, proj.columnB.rows]);
+  }, [projOpen.columnA.rows, projOpen.columnB.rows, projClosed.columnB.rows, hasUnit]);
 
-  const columnA = windowed(proj.columnA.rows, cap.a);
+  const columnA = windowed(projOpen.columnA.rows, cap.a);
   const columnB = windowed(proj.columnB.rows, cap.b);
 
   /**
@@ -865,19 +983,30 @@ export function StructurePanel({
           <div className="struct-measure" ref={measureRef} aria-hidden="true">
             <div className="struct-side">
               <ol className="struct-col" data-struct-measure="a">
-                {proj.columnA.rows.map((row) => (
-                  <Row key={row.id} row={row} figures={figures} onJump={NO_JUMP} tip={false} />
-                ))}
+                {projOpen.columnA.rows.map((row) => measuredRow(row, figures))}
                 <MeasuredCounter />
               </ol>
             </div>
             <div className="struct-side struct-inner">
               <ol className="struct-col" data-struct-measure="b">
-                {proj.columnB.rows.map((row) => (
-                  <Row key={row.id} row={row} figures={figures} onJump={NO_JUMP} tip={false} />
-                ))}
+                {projOpen.columnB.rows.map((row) => measuredRow(row, figures))}
                 <MeasuredCounter />
               </ol>
+              {/* The closed candidate, and the line it would draw under itself,
+                  only while there is a section to open. Out of flow like the
+                  rest of this copy, so stacking it under the open one changes
+                  no width and no visible row. */}
+              {hasUnit ? (
+                <>
+                  <ol className="struct-col" data-struct-measure="b-closed">
+                    {projClosed.columnB.rows.map((row) => measuredRow(row, figures))}
+                    <MeasuredCounter />
+                  </ol>
+                  <p className="struct-total" data-struct-measure-total="">
+                    {subsTotalText(projClosed.subsTotal ?? 0)}
+                  </p>
+                </>
+              ) : null}
             </div>
           </div>
           {/* **One group for the whole grid, not one per column.** Once a card
@@ -941,6 +1070,9 @@ export function StructurePanel({
               {proj.paragraphTotal !== null ? (
                 <p className="struct-total">{proj.paragraphTotal} paragraphs</p>
               ) : null}
+              {/* The open unit did not fit: the section is drawn closed, and
+                  this says what it holds (plan 261029a § Stage 1b). */}
+              {proj.subsTotal !== null ? <p className="struct-total">{subsTotalText(proj.subsTotal)}</p> : null}
             </div>
           </TooltipGroup>
         </div>

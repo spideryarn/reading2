@@ -606,13 +606,24 @@ export function buildSummaryTree(
        advances only on the parts that are the argument, so appending an
        apparatus cannot renumber part 1 or invent a part 3. */
     let n = 0;
+    /* **A section's opening paragraph is not a sub-section, and does not take
+       one's number.** A section divided into sub-sections (plan 261029a) can
+       open with a paragraph of its own before the first; counted, it made the
+       sub-sections 2.5.2 to 2.5.7 under a 2.5 with no 2.5.1 anywhere on screen,
+       since a paragraph row is drawn without a number. Below the parts only:
+       a part's numbering is what every tree in production already shows, and
+       renumbering it is a different change. */
+    const mixed =
+      node.depth >= 2 &&
+      node.children.some((id) => (tree.nodes[id]?.children.length ?? 0) > 0) &&
+      node.children.some((id) => (tree.nodes[id]?.children.length ?? 0) === 0);
     const children =
       node.depth < depthLimit && !apparatus
         ? node.children
             .map((id) => {
               const child = tree.nodes[id];
               const childNumber =
-                child && isSupplementNode(child)
+                (child && isSupplementNode(child)) || (mixed && child?.children.length === 0)
                   ? ""
                   : number
                     ? `${number}.${++n}`

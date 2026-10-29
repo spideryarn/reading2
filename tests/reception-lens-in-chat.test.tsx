@@ -1208,8 +1208,10 @@ describe("Where it sits", () => {
      address still draws the experiment (hidden, not unreachable). */
   describe("the experiments", () => {
     const experimentBand = () => host.querySelector<HTMLElement>(".mode-band.sources.experiment");
-    /* Every POST but the shelf's record that the article was opened, which any visit makes. */
-    const sent = () => posts().filter((r) => !/^\/api\/library\/[^/]+\/open$/.test(r.url));
+    /* Every POST but the two any visit makes: the shelf's record that the
+       article was opened, and reading time's, which carries your place in it. */
+    const sent = () =>
+      posts().filter((r) => !/^\/api\/library\/[^/]+\/open$/.test(r.url) && !r.url.startsWith("/api/reading-time/"));
     const checked = () =>
       [...host.querySelectorAll('.mode-band [role="radiogroup"][aria-label="Sources view"] [aria-checked="true"]')].map(
         (b) => (b.getAttribute("aria-label") ?? "").split(",")[0],

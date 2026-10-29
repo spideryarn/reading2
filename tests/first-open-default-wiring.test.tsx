@@ -12,7 +12,7 @@
  * a band. The widths themselves are the other file's. Marginalia's notes came
  * too until 2026-10-11 (spya-mw08mv).
  */
-import { act, StrictMode } from "react";
+import { act, StrictMode, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,7 +23,7 @@ vi.mock("../src/web/useExperimental.js", () => ({
   useExperimental: () => ({ ...setting }),
 }));
 
-const { lastViewKey, legacyLastViewKey, useLastView } = await import("../src/web/last-view.js");
+const { lastViewKey, legacyLastViewKey, settleSavedPlace, useLastView } = await import("../src/web/last-view.js");
 const { navigate, parseRoute } = await import("../src/web/router.js");
 
 /** Two readers who share one browser profile. */
@@ -34,6 +34,9 @@ const KEY = lastViewKey("x", A);
 function Page({ slug, readerId = A }: { slug: string; readerId?: string | null }) {
   const route = parseRoute(location.pathname);
   useLastView(slug, route.kind === "read" ? route.view : "article", readerId);
+  /* The owner's article read answering "never opened anywhere", as ArticlePage's
+     does before it draws (last-view.ts § The server's place, plan 261029f). */
+  useLayoutEffect(() => settleSavedPlace(slug, readerId, null), [slug, readerId]);
   return null;
 }
 

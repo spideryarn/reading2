@@ -187,7 +187,7 @@ function columns(band: Element) {
    selector that chooses two rows, or chooses a different row in the copy whose
    height drives the rung ladder. */
 const DEEPEST_CURRENT =
-  ".struct-inner .struct-row[aria-current], " +
+  ".struct-inner .struct-row[aria-current]:not(.struct-ancestor), " +
   ":is(.struct-grid, .struct-measure):not(:has(> .struct-inner .struct-row[aria-current])) " +
   "> .struct-side:not(.struct-inner) .struct-row[aria-current]";
 const compact = (text: string) => text.replace(/\s+/g, " ").trim();
