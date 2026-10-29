@@ -49,7 +49,10 @@ vi.mock("../../src/web/lib/supabase.js", () => ({
     auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
   },
 }));
-vi.mock("../../src/web/Masthead.js", () => ({ Masthead: () => null }));
+vi.mock("../../src/web/Masthead.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/web/Masthead.js")>()),
+  Masthead: () => null,
+}));
 /* The component only: Reader also calls the Dock's mode activators and
    `visibleModes` for chat's `mode` chips (plan 261007j). Its props are
    recorded, so a test can press a mode through the `onMode` Reader hands it. */

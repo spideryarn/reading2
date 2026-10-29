@@ -1747,9 +1747,16 @@ const SUMMARY: BandShape = {
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "div.summ-scroll.simple-scroll"],
 };
 
+/* **Edited on purpose, 2026-10-29**: the Glossary band takes `tabindex="-1"`,
+   so focus has somewhere to land when "Add to glossary" closes the selection's
+   box and the term has no row yet (plan 261029d, GPT Sol's code review). It
+   is never in the tab order. */
+const GLOSSARY_BAND_ATTRS = ["aria-label", "class", "tabindex"];
+
 const GLOSSARY_SHAPE: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
+  attrs: GLOSSARY_BAND_ATTRS,
   head: true,
   /* The run row is the first thing in the column, not the foot, since
      2026-10-03 (plan 261003c). */
@@ -1783,6 +1790,7 @@ const GLOSSARY_SHAPE: BandShape = {
 const GLOSSARY_LOADING: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
+  attrs: GLOSSARY_BAND_ATTRS,
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
@@ -1796,6 +1804,7 @@ const GLOSSARY_LOADING: BandShape = {
 const GLOSSARY_VISITOR: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
+  attrs: GLOSSARY_BAND_ATTRS,
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-list"],
   headChildren: [],

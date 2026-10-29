@@ -382,7 +382,11 @@ describe("the headings breadcrumb", () => {
     const bar = host.querySelector(".reader > .controls");
     const sentinel = bar?.previousElementSibling;
     expect(sentinel?.className).toBe("bar-sentinel");
-    const live = seen.filter((o) => o.live);
+    /* The reminder bar watches the masthead with its own observer (plan
+       261029d); these count the sentinel's. */
+    const watchesSentinel = (o: (typeof seen)[number]) =>
+      o.observed.some((el) => el.classList.contains("bar-sentinel"));
+    const live = seen.filter((o) => o.live && watchesSentinel(o));
     expect(live.length, "one live watcher (StrictMode's first is torn down)").toBe(1);
     expect(live[0]?.observed).toEqual([sentinel]);
 
@@ -395,14 +399,14 @@ describe("the headings breadcrumb", () => {
     root = createRoot(host);
 
     /* A chip-only bar: nothing reads the answer, so nothing asks. */
-    const before = seen.length;
+    const before = seen.filter(watchesSentinel).length;
     owns = false;
     resetExperimental();
     experimentalSince = null;
     await open();
     expect(host.querySelector(".reader > .controls"), "the View-only chip's bar").not.toBeNull();
     expect(host.querySelector(".bar-sentinel")).toBeNull();
-    expect(seen.length).toBe(before);
+    expect(seen.filter(watchesSentinel).length).toBe(before);
   });
 
   it("a press on a crumb is wired to the reader's jump", async () => {
