@@ -13,31 +13,36 @@
  *
  * What the plan settled, so it is not re-litigated a row at a time:
  *
- *  - **`structure` is out.** A forced run writes an empty pending-label manifest
- *    (src/structure.ts § the merge), which deletes the carried `labels` receipt,
- *    so the press strips every paragraph label the reader had and the article
- *    goes back to saying *"Paragraph labels are still arriving"*.
+ *  - **`structure` was out until 2026-10-29, and is in now.** The objection
+ *    was a second paid call hiding behind the press: a forced run writes an
+ *    empty pending-label manifest (src/structure.ts § the merge), so the
+ *    article loses its paragraph labels and the free-of-quota but dear `labels`
+ *    successor is queued to write them again (682 s measured).
  *
- *    **The door back exists** — since stage 2b of
- *    docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md, a
- *    publication whose revision says `pending` queues a free `labels` successor
- *    in the same transaction, and the browser drives it. This comment said the
- *    opposite until 2026-09-07, and it was true when it was written: 2b landed
- *    in a worktree after it. **The reason survives the correction, and it is the
- *    first of the three questions above.** The successor is free of *quota* and
- *    is not free: it is the slowest and dearest pass in the pipeline — 682 s
- *    measured — so a press here would buy one silently, on top of the
- *    `structure` call it names, and the labels would be gone for the eleven
- *    minutes in between. A control whose whole design is *how many metered
- *    calls does one press buy* may not have a second one hiding behind it.
+ *    Greg asked for it by name (`spya-cqg70c`, 2026-10-29: *"I can't see a way
+ *    to rerun just the structure mode"*), to see a newer Structure on an
+ *    article that already had one. Two things answer the objection rather than
+ *    overrule it. **The cost is said on the row** (`RERUN_COST_NOTE` in
+ *    src/web/rerun-commands.ts): the labels follow and are missing until they
+ *    land. **And it is usually cheap when nothing is new**: the structure
+ *    answer and each labels batch are checkpointed on the exact request, model
+ *    and prompt version (docs/project/structure-step.md), so a press over an
+ *    unchanged article replays them. It buys a new tree when how Structure is
+ *    made has changed, which is the case it is for, or when a checkpoint is
+ *    missing. The arc is not left truncated: `loadArticle` leaves out an arc
+ *    that no longer fits the tree, so the owner's `useArc` makes it again
+ *    (src/arc.ts § `fitsTree`). The other modes made from the old tree may
+ *    say they are out of date, as after a reset; none remakes itself.
+ *    docs/plans/261029l-re-run-structure-from-metadata-and-start-again-from-the-command-bar.md.
  *
- *    **It is offered in one other place since 2026-10-05, and that is the same
- *    rule rather than an exception**: Structure mode's *Try again*, only on a
- *    tree built from the author's headings because the model's could not be
- *    made (src/web/StructureNotice.tsx). The objection above is to stripping
- *    good labels from every article; that tree's labels were written against
- *    sections its replacement does away with, so the label pass is owed anyway.
- *    docs/project/structure.md § When it is only the headings.
+ *    **Its one known gap**: the row is free again once the Structure job
+ *    publishes, before the labels successor has finished. A second press then
+ *    replays the tree and queues the labels again: wasted, not wrong (plan
+ *    261029l, GPT Sol's finding 5).
+ *
+ *    Structure mode's *Try again*, on a tree built from the author's headings
+ *    (src/web/StructureNotice.tsx), is the same forced run, offered where the
+ *    reader sees the stand-in.
  *  - **`illustrated` is out.** It refuses without a usable Sketch and does not
  *    pull the prerequisite in, and a run whose every plate failed returns
  *    *successfully* — so it can replace a good picture with an empty one.
@@ -105,6 +110,9 @@ import type { StepName } from "./types.js";
  * somebody adds one.
  */
 export const METADATA_RERUN_STEPS = [
+  /* **Joined on 2026-10-29**, Greg's `spya-cqg70c`; why it was out and what
+     changed is the first bullet of this file's header. */
+  "structure",
   "arc",
   "tweets",
   "glossary",

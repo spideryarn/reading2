@@ -112,6 +112,7 @@ describe("the command bar's Chrome extension row", () => {
       openFeedback: () => {},
       queue: { run: async () => null, lastFailure: () => null },
       extensionStore,
+      experimentalOn: false,
     });
   const labels = (extensionStore: string | null) => rows(extensionStore).map((row) => ("label" in row ? row.label : ""));
 

@@ -197,7 +197,7 @@ import {
 } from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LABEL, RERUN_LANDS_IN, type MetadataRerunStep, rerunCommand } from "./rerun-commands.js";
 import { rewriteHeld } from "./rewrite-hold.js";
-import { SECTION_ROWS, archiveCommand, exportCommand, originalCommand, sectionCommand } from "./article-commands.js";
+import { RESET_SECTION_ROW, SECTION_ROWS, archiveCommand, exportCommand, originalCommand, sectionCommand } from "./article-commands.js";
 import { openUploadedOriginal, type Original } from "./SourceLink.js";
 import { downloadExport } from "./export-download.js";
 import type { ArchiveControl } from "./useArchive.js";
@@ -420,6 +420,7 @@ export function besideTheModes({
   openFeedback,
   queue,
   extensionStore,
+  experimentalOn,
 }: {
   article: CommandBarArticle | undefined;
   /** The Dock drawer's `onPanel`, already bound to `"questions"`, or absent. */
@@ -431,6 +432,10 @@ export function besideTheModes({
   /** `EXTENSION_STORE_URL`, or `null` on a device the extension is not for
    *  (§ `extensionRow`). Tests that mean every row the bar can draw pass one. */
   extensionStore: string | null;
+  /** The reader's experimental switch: *Start this article again* leads to a
+   *  row drawn only while it is on (article-commands.ts § `RESET_SECTION_ROW`).
+   *  Tests that mean every row the bar can draw pass `true`. */
+  experimentalOn: boolean;
 }): readonly Command[] {
   return [
     ...(article === undefined ? [] : articleRows(article)),
@@ -440,7 +445,7 @@ export function besideTheModes({
        (command-match.ts § `CommandWords.typedOnly`). The Metadata rows first —
        a section, Archive, Export — then the fourteen *Run again*: on a tie the
        one-of-a-kind row is the likelier meaning. */
-    ...(article === undefined ? [] : metadataRows(article)),
+    ...(article === undefined ? [] : metadataRows(article, experimentalOn)),
     /* Before the *Run again* rows: for `glossary`, adding to the list is the
        likelier and the gentler meaning than writing it again. */
     ...(article === undefined ? [] : findMoreRows(article)),
@@ -813,11 +818,16 @@ function goToSection(article: CommandBarArticle, section: MetadataSection): Acti
  * `shelfRow` says which pages hand one in), and Archive only while the
  * controller knows which way round the article is.
  */
-function metadataRows(article: CommandBarArticle): readonly Command[] {
+function metadataRows(article: CommandBarArticle, experimentalOn: boolean): readonly Command[] {
   const own = article.shelfRow;
   const original = article.original;
   return [
     ...SECTION_ROWS.map((row) => sectionCommand(row, () => goToSection(article, row.section))),
+    /* Only while the reset it leads to is drawn: Metadata.tsx § `RerunSection`'s
+       `reset`, the same switch. */
+    ...(experimentalOn
+      ? [sectionCommand(RESET_SECTION_ROW, () => goToSection(article, RESET_SECTION_ROW.section))]
+      : []),
     ...(original === undefined ? [] : [originalRow(article.slug, original)]),
     ...(own === undefined ? [] : [...archiveRows(own.archive), exportRow(article.slug)]),
   ];
@@ -2133,7 +2143,7 @@ export function CommandBar({
           ? structureInSearch(article?.search ?? "")
           : undefined,
       }),
-      ...besideTheModes({ article, openComments, openFeedback, queue, extensionStore }),
+      ...besideTheModes({ article, openComments, openFeedback, queue, extensionStore, experimentalOn: experimental.on }),
       /* Typed-only, so where it sits matters only on a tie — and there the
          page's own rows should win. */
       ...experimentalRows(experimental),

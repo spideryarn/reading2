@@ -62,7 +62,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
-import { isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
+import { fitsTree, isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
 import { glossaryRunKind, isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
   isOutdated as quotesAreOutdated,
@@ -3171,7 +3171,14 @@ const rawPgArticleReader: ArticleReader = {
     // src/api.ts set by requiring both blocks.json and tree.json.
     if (!tree || !blocks.length) throw notFound(slug);
 
-    const arc = found.revision.arc;
+    /* **Only an arc that still fits this tree.** An embedded arc is one
+       `useArc` trusts without asking `/api/arc`, so after a Structure re-run
+       re-cut the parts, the stored one stayed on screen with its unmatched
+       sentences dropped, for good. Left out, the owner's `useArc` reads the
+       route, finds it stale and makes it again (src/arc.ts § `fitsTree`, plan
+       261029l). */
+    const storedArc = found.revision.arc as Arc | null;
+    const arc = storedArc && fitsTree(storedArc, tree as Tree) ? storedArc : null;
     /* **Named, and never spread in from the row.** The key is required on
        `Article` precisely so that leaving this line out is a type error rather
        than an article that quietly hot-links every image (src/types.ts). `??
@@ -4919,6 +4926,13 @@ const rawPgArticleReader: ArticleReader = {
     const tree = found.revision.tree as Tree | null;
     return {
       arc,
+      /* **Not `fitsTree` here**, though `loadArticle` asks it. Staleness is the
+         stamp's question, and the queue's (tests/freshness-deciders-agree.test.ts):
+         a re-cut tree changes the arc's input hash, so it is already stale on
+         this route. Only a hand-damaged arc with a current stamp is left out of
+         the payload and still served here as ready. A route saying stale while
+         the runner says current would have `useArc` post jobs that skip
+         (plan 261029l, code review). */
       stale: !tree || arcIsStale(arc, blocks, tree, metaFingerprintOf(found.revision)),
       outdated: arc.version !== ARC_PROMPT_VERSION,
     };

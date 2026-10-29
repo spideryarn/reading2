@@ -1836,6 +1836,7 @@ it("the command bar's Run again refuses while the mode's rewrite is held (C4)", 
     openFeedback: null,
     queue: useJobs("quiet"),
     extensionStore: null,
+    experimentalOn: false,
   }).find((command) => command.kind === "action" && command.id === "rerun-faq");
   expect(again?.kind).toBe("action");
   if (again?.kind !== "action") return;

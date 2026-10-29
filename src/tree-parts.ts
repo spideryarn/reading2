@@ -7,7 +7,7 @@
  */
 import { stageFailure } from "./job-failure.js";
 import { isSupplementNode } from "./supplement.js";
-import type { Tree, TreeNode } from "./types.js";
+import type { Arc, Tree, TreeNode } from "./types.js";
 
 /**
  * The parts — depth-1 nodes in document order, per the tree's own child list.
@@ -45,4 +45,40 @@ export function partsOf(tree: Tree): TreeNode[] {
   return root.children
     .map((id) => tree.nodes[id])
     .filter((n): n is TreeNode => !!n && !isSupplementNode(n));
+}
+
+/**
+ * **Does this arc have exactly one sentence for every part of this tree?**
+ *
+ * The reading view's own join (`buildArcColumn`, src/web/tree.ts) is by exact
+ * block range. An embedded arc is one `useArc` trusts, so both owner and public
+ * payloads ask this before sending one: an incomplete arc looks complete when
+ * an unmatched sentence or an unfilled part is silently left blank.
+ *
+ * **A bijection, not `entries.every(knownRange)`.** That one-way check accepts
+ * an old arc when the current tree has gained a part, and accepts duplicate
+ * entries for one part. It also has to use `partsOf`, rather than the root's
+ * children directly, because a depth-one supplement is apparatus, not a part
+ * the arc generator ever writes about.
+ *
+ * Structural on purpose. Prompt/model freshness is a different question:
+ * applying it to the hot article payload would hide and re-buy every arc when
+ * a prompt version moved. A tree with no parts fits its one valid arc, the
+ * empty one, and a single-part tree follows the same exact-range rule as any
+ * other. Plan 261029l code review.
+ */
+export function fitsTree(arc: Arc, tree: Tree): boolean {
+  const expected = partsOf(tree).map((part) => `${part.range[0]}|${part.range[1]}`);
+  if (arc.entries.length !== expected.length) return false;
+
+  /* Duplicate sibling ranges are not a usable mapping either: `buildArcColumn`
+     indexes entries by range, so one sentence would otherwise overwrite the
+     other and be shown beside both parts. */
+  const partRanges = new Set(expected);
+  if (partRanges.size !== expected.length) return false;
+  const entryRanges = new Set(arc.entries.map((entry) => `${entry.range[0]}|${entry.range[1]}`));
+  return (
+    entryRanges.size === arc.entries.length &&
+    [...entryRanges].every((range) => partRanges.has(range))
+  );
 }

@@ -95,6 +95,7 @@ function rows(archived: boolean): readonly Command[] {
       queue: { run: async () => null, lastFailure: () => null },
       /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
       extensionStore: extensionStoreUrl("a".repeat(32)),
+      experimentalOn: true,
     }),
     ...experimentalRows({
       on: true,

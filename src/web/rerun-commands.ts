@@ -49,7 +49,7 @@ export const RERUN_LABEL: Readonly<Record<MetadataRerunStep, string>> = Object.f
 ) as Record<MetadataRerunStep, string>;
 
 /**
- * **The four rows for which "another model call" is not the whole story**,
+ * **The rows for which "another model call" is not the whole story**,
  * said under the step's reader-facing name, before the press, because nothing else on the
  * page says it. Metadata.tsx § `RERUN_COST_NOTE`'s old home carried the long
  * version — the confirm these replaced, why the glossary's says both outcomes,
@@ -60,6 +60,11 @@ export const RERUN_LABEL: Readonly<Record<MetadataRerunStep, string>> = Object.f
  * tests/no-ai-cost-for-readers.test.ts fails on a figure here.
  */
 export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
+  /* Two facts the section's intro would otherwise contradict: the labels are
+     gone until their follow-up lands, and "usually" because a missing
+     checkpoint buys the whole call (src/rerun-steps.ts § `structure`). */
+  structure:
+    "Builds the outline again with today's Structure, usually reusing saved answers if nothing has changed. Paragraph labels are rewritten after it and are missing until then",
   glossary:
     /* *Up to date* is doing the work: `existingFor` refuses the old list when
        there is none, or the source, the prompt version or the reader profile
@@ -93,6 +98,7 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
  * something the reader did not name.
  */
 const RERUN_MODE: Partial<Record<MetadataRerunStep, Mode>> = {
+  structure: "structure",
   glossary: "glossary",
   quotes: "quotes",
   ideas: "ideas",

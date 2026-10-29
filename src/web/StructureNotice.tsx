@@ -117,7 +117,8 @@ const NOTHING = () => {};
  * **What else one press buys**, said here because nothing on screen will: the
  * new tree is published without paragraph labels, which queues the free
  * `labels` job after it (src/store/pg-revisions.ts § `publishRevisionIn`) —
- * the reason `structure` is not on Metadata (src/rerun-steps.ts), and no cost
+ * the reason `structure` was kept off Metadata until 2026-10-29, when it joined
+ * with that cost said on its row (src/rerun-steps.ts) — and no cost
  * here, because the labels of a headings tree were written against sections
  * the new tree replaces. And the arc, below.
  *

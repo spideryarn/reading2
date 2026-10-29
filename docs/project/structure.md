@@ -242,14 +242,17 @@ One press runs the `structure` step again, forced by name. What it buys:
 
 - **The structure call**, but only the slices that failed: the ones that answered are checkpointed
   ([structure-step.md § When one answer will not fit](structure-step.md#when-one-answer-will-not-fit)).
-- **The paragraph labels again**, as the free job every new tree queues. This is why `structure`
-  is not on Metadata's re-run list ([`src/rerun-steps.ts`](../../src/rerun-steps.ts)); here the old
-  labels were written for sections the new tree replaces, so nothing good is lost.
+- **The paragraph labels again**, as the free job every new tree queues. Here the old labels were
+  written for sections the new tree replaces, so nothing good is lost.
 - **The arc again, if the tree changed.** The tab that pressed asks for it, once and unforced, when the run finishes,
   because arc sentences are matched to parts by block range and a re-cut tree would otherwise drop
-  them without a word.
+  them without a word. Every other path gets the same from the article load since 2026-10-29: an
+  arc that no longer fits the tree's parts is left out of the payload, and the owner's `useArc`
+  makes it again ([`src/arc.ts`](../../src/arc.ts) § `fitsTree`).
 
-It costs no import slot. The other things made from the old tree (Glossary, Quotes, Ideas and the
+It costs no import slot. The same forced run is on the Metadata page for every article, not only a
+stand-in, as *Structure* under *AI processing*, and in the command bar as *Structure › Run again*
+([261029l](../plans/261029l-re-run-structure-from-metadata-and-start-again-from-the-command-bar.md)). The other things made from the old tree (Glossary, Quotes, Ideas and the
 rest) are kept and read as out of date in their own modes, as after any change to the article;
 nothing remakes them.
 

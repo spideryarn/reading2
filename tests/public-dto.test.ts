@@ -240,10 +240,18 @@ const TREE: Tree = {
       id: "n0",
       depth: 0,
       parent: null,
-      children: ["n1"],
+      children: ["n-body", "n1"],
       range: ["spya-h1aaaa", "spya-k3m9qt"],
       title: "The whole piece",
       gist: "It argues one thing and demonstrates another.",
+    },
+    "n-body": {
+      id: "n-body",
+      depth: 1,
+      parent: "n0",
+      children: [],
+      range: ["spya-h1aaaa", "spya-h1aaaa"],
+      title: "The argument",
     },
     n1: FULL_NODE,
   },
@@ -253,7 +261,9 @@ const ARC: Arc = {
   version: "1",
   generator: "test",
   slug: "noema",
-  entries: [{ range: ["spya-h1aaaa", "spya-k3m9qt"], text: "Where the argument stands here." }],
+  /* An arc is one sentence per argument part. The other depth-one node is the
+     supplement fixture and deliberately gets no sentence. */
+  entries: [{ range: ["spya-h1aaaa", "spya-h1aaaa"], text: "Where the argument stands here." }],
 };
 
 /**
@@ -485,6 +495,13 @@ describe("the public article payload", () => {
         "tree.nodes.n0.parent",
         "tree.nodes.n0.range",
         "tree.nodes.n0.title",
+        "tree.nodes.n-body",
+        "tree.nodes.n-body.children",
+        "tree.nodes.n-body.depth",
+        "tree.nodes.n-body.id",
+        "tree.nodes.n-body.parent",
+        "tree.nodes.n-body.range",
+        "tree.nodes.n-body.title",
         "tree.nodes.n1",
         "tree.nodes.n1.children",
         "tree.nodes.n1.depth",
@@ -530,7 +547,7 @@ describe("the public article payload", () => {
     expect(built.blocks).toHaveLength(2);
     expect(built.blocks[1]?.html).toContain("does not survive");
     expect(built.meta.title).toBe("The mythology of conscious AI");
-    expect(Object.keys(built.tree.nodes)).toEqual(["n0", "n1"]);
+    expect(Object.keys(built.tree.nodes)).toEqual(["n0", "n-body", "n1"]);
     expect(built.arc?.entries[0]?.text).toContain("Where the argument stands");
   });
 
@@ -879,6 +896,35 @@ describe("the public article payload", () => {
     expect(Object.keys(bare.meta)).toEqual(["slug", "title"]);
     expect(bare.meta.title).toBe("From the article's own h1");
     expect("arc" in bare).toBe(false);
+  });
+
+  it("leaves out an arc that no longer fits, without giving a visitor a partial one", () => {
+    const stale = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [HEADING, BLOCK],
+      tree: TREE,
+      arc: {
+        ...ARC,
+        /* The root's range: a sentence written against the wrong level. */
+        entries: [{ range: ["spya-h1aaaa", "spya-k3m9qt"], text: "Old." }],
+      },
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect(stale).not.toHaveProperty("arc");
   });
 
   /** And the last resort, when there is no h1 either. */

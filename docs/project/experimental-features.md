@@ -334,7 +334,10 @@ AI processing* — on 2026-09-29. It re-reads the article with today's pipeline,
 paragraph whose text comes out different — mostly maths in articles added before maths was drawn —
 detaches any comment on it, and pressing it with the extras ticked spends a model call per mode. That
 earns a trial before everybody has the button; the route itself is not gated.
-[260928a](../plans/260928a-reset-and-regenerate-article.md).
+[260928a](../plans/260928a-reset-and-regenerate-article.md). Since 2026-10-29 the command bar has a
+*Start this article again* row (*re-import*, *reset*, *start over*) that opens that section. It
+follows the same switch, because without the switch the section has no reset in it to land on
+([261029l](../plans/261029l-re-run-structure-from-metadata-and-start-again-from-the-command-bar.md)).
 
 **Everything else is what everybody sees**, a signed-out visitor included.
 

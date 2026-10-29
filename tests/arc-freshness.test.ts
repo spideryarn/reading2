@@ -23,7 +23,7 @@
  * docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
  */
 import { describe, expect, it } from "vitest";
-import { inputFingerprint, isStale, PROMPT_VERSION } from "../src/arc.js";
+import { fitsTree, inputFingerprint, isStale, PROMPT_VERSION } from "../src/arc.js";
 import { CAPABLE_MODEL, HIGH_POWER_MODEL } from "../src/models.js";
 import type { Arc, Block, Meta, Tree, TreeNode } from "../src/types.js";
 
@@ -202,5 +202,100 @@ describe("isStale", () => {
     /* docs/plans/260930f-high-powered-ai-per-article.md decision 6: Sonnet and
        Opus are one generation for freshness, in both directions. */
     expect(isStale({ ...arc(), generator: HIGH_POWER_MODEL }, BLOCKS, tree(), META)).toBe(false);
+  });
+});
+
+/**
+ * **Does the arc still fit the tree it is drawn against?** — the check
+ * `loadArticle` makes before it embeds an arc in the article payload (plan
+ * 261029l, GPT Sol's finding 1). Embedded, `useArc` trusts it and never asks
+ * `/api/arc`, so a tree re-cut by a Structure re-run left the arc truncated for
+ * good. Left out, the owner's `useArc` reads the route, finds it stale and
+ * makes it again. Structural on purpose: the same rule `buildArcColumn` uses to
+ * drop a sentence, and nothing about prompt versions, which would quietly
+ * re-buy every arc on the shelf the day the prompt changes.
+ */
+describe("fitsTree", () => {
+  it("is true when every sentence matches a part", () => {
+    expect(fitsTree(arc(), tree())).toBe(true);
+  });
+
+  it("is false when the parts have been re-cut beneath it", () => {
+    const recut = tree([
+      node({ id: "n1", range: ["spya-aaaaaa", "spya-bbbbbb"] }),
+      node({ id: "n2", range: ["spya-cccccc", "spya-cccccc"] }),
+    ]);
+    expect(fitsTree(arc(), recut)).toBe(false);
+  });
+
+  it("is false when every old sentence still lands but the tree has gained a part", () => {
+    /* The one-way `entries.every(partRanges.has)` check this test replaced
+       called this fit: the old sentence still matched `n1`, while `n2` had no
+       sentence at all. `buildArcColumn` then drew an honest-looking empty cell
+       and `useArc` trusted the payload for ever. Fit is a bijection, not a
+       subset test. Plan 261029l code review. */
+    const expanded = tree([
+      node({ id: "n1", range: ["spya-aaaaaa", "spya-bbbbbb"] }),
+      node({ id: "n2", range: ["spya-cccccc", "spya-cccccc"] }),
+    ]);
+    const partial = arc({
+      entries: [{ range: ["spya-aaaaaa", "spya-bbbbbb"], text: "One." }],
+    });
+    expect(fitsTree(partial, expanded)).toBe(false);
+  });
+
+  it("is false when two sentences claim the same part", () => {
+    const duplicate = arc({
+      entries: [
+        { range: ["spya-aaaaaa", "spya-cccccc"], text: "One." },
+        { range: ["spya-aaaaaa", "spya-cccccc"], text: "Two." },
+      ],
+    });
+    expect(fitsTree(duplicate, tree())).toBe(false);
+  });
+
+  it("does not count a depth-one supplement as an argument part", () => {
+    const withNotes = tree([
+      node({ id: "n1", range: ["spya-aaaaaa", "spya-bbbbbb"] }),
+      node({
+        id: "n-notes",
+        range: ["spya-cccccc", "spya-cccccc"],
+        title: "Notes",
+        treatment: "supplement",
+      }),
+    ]);
+    const complete = arc({
+      entries: [{ range: ["spya-aaaaaa", "spya-bbbbbb"], text: "One." }],
+    });
+    expect(fitsTree(complete, withNotes)).toBe(true);
+  });
+
+  it("accepts the only complete arc for a tree with no parts", () => {
+    const none = tree([]);
+    expect(fitsTree(arc({ entries: [] }), none)).toBe(true);
+    expect(fitsTree(arc(), none)).toBe(false);
+  });
+
+  /** One part, `n1`, divided into the sub-sections given. */
+  function deeperTree(subs: TreeNode[]): Tree {
+    const t = tree([node({ id: "n1", children: subs.map((s) => s.id) })]);
+    for (const s of subs) t.nodes[s.id] = s;
+    return t;
+  }
+
+  it("is true when only a part's insides changed — Structure going one level deeper", () => {
+    const deeper = deeperTree([
+      node({ id: "n2", depth: 2, parent: "n1", range: ["spya-aaaaaa", "spya-bbbbbb"] }),
+      node({ id: "n3", depth: 2, parent: "n1", range: ["spya-cccccc", "spya-cccccc"] }),
+    ]);
+    expect(fitsTree(arc(), deeper)).toBe(true);
+  });
+
+  it("does not count a sub-section's range as a part", () => {
+    const deeper = deeperTree([
+      node({ id: "n2", depth: 2, parent: "n1", range: ["spya-aaaaaa", "spya-bbbbbb"] }),
+    ]);
+    const onTheSubSection = arc({ entries: [{ range: ["spya-aaaaaa", "spya-bbbbbb"], text: "One." }] });
+    expect(fitsTree(onTheSubSection, deeper)).toBe(false);
   });
 });

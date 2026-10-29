@@ -29,6 +29,7 @@ function rows(openGuide?: () => { kind: "close" }): readonly Command[] {
     openFeedback: null,
     queue,
     extensionStore: null,
+    experimentalOn: false,
   });
 }
 

@@ -53,7 +53,7 @@ import { isBodyEvidence } from "./block-policy.js";
 /* Moved to a pure leaf on 2026-10-01 (plan 261001b); re-exported so every stage
    that imports it from here is unchanged. */
 import { partsOf } from "./tree-parts.js";
-export { partsOf };
+export { fitsTree, partsOf } from "./tree-parts.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";

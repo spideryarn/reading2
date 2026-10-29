@@ -113,6 +113,7 @@ import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
 import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../reception-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
 import { shownBlurb, storedBlurbEntries, storedBlurbEntry } from "../citation-blurbs-identity.js";
+import { fitsTree } from "../tree-parts.js";
 import type {
   PublicArticle,
   PublicBlock,
@@ -1415,13 +1416,20 @@ export function publicArticle(row: {
     row.crossrefs === null
       ? undefined
       : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, blocksById);
+  /* **The public twin of the owner's `loadArticle` check.** A visitor cannot
+     repair an arc — `useArc` is mounted only in `OwnedReader`, because it may
+     POST a paid job — so the honest public answer is to omit an arc that no
+     longer has exactly one sentence per part. This starts no request and gives
+     public-shelf and private-link readers the same structural bar as the owner.
+     Plan 261029l code review. */
+  const arc = row.arc && fitsTree(row.arc, row.tree) ? row.arc : null;
   return {
     /* One of two words, and nothing about the key that was or was not sent. */
     sharedBy: row.sharedBy,
     meta: publicMeta(row),
     blocks,
     tree: publicTree(row.tree),
-    ...(row.arc ? { arc: publicArc(row.arc) } : {}),
+    ...(arc ? { arc: publicArc(arc) } : {}),
     /* **Named, not spread**, and passed through whole rather than rebuilt field
        by field like the tree and the arc beside it. Nothing in an `Assets` is
        about a person: the URLs are the publisher's own and are already in the

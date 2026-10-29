@@ -361,7 +361,6 @@ describe("the AI processing section", () => {
       "blocks",
       "assets",
       "labels",
-      "structure",
       "illustrated",
     ]) {
       expect(row(step), `${step} should have no control here`).toBeNull();
@@ -588,9 +587,11 @@ describe("the AI processing section", () => {
     );
   });
 
-  it("puts a note on the glossary, sketch, debate and skim rows and on no other", async () => {
+  /* Structure's note joined on 2026-10-29: its press rewrites the paragraph
+     labels after it (plan 261029l). */
+  it("puts a note on the structure, glossary, sketch, debate and skim rows and on no other", async () => {
     await open();
-    const noted = new Set(["glossary", "sketch", "reception", "skim"]);
+    const noted = new Set(["structure", "glossary", "sketch", "reception", "skim"]);
     for (const step of METADATA_RERUN_STEPS) {
       expect(
         host.querySelector(`#rerun-note-${step}`) !== null,

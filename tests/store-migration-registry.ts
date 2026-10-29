@@ -2838,6 +2838,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-costs-store.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
+  /* Plan 261029l. Its own throwaway article; sets the arc column and loads it. */
+  "tests/arc-fits-tree-pg.test.ts": "private-postgres",
   /* Plan 261006i. Claims jobs through the real `claimSession` and reads
      `articles.asked_url` straight back; two cases assert a null stayed null. */
   "tests/asked-url-claim-session.test.ts": "private-postgres",

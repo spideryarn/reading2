@@ -1149,7 +1149,7 @@ export function orderSteps(names: StepName[]): StepName[] {
  * src/pipeline.ts holds the steps position cannot speak for, and that note is
  * the one to read: taking a step out of the cascade is only safe when the step
  * can tell for itself whether it is current, which is why `tweets` is in there
- * and `arc` is not.
+ * and `arc` joined it when the arc gained its own freshness stamp.
  */
 export function cascadeForce(steps: StepName[], forced: Set<StepName>): Set<StepName> {
   // Only ever names from `steps`. A force naming a step this job is not running
