@@ -142,6 +142,38 @@ describe("a work cited in the text that the model did not list", () => {
     expect(rows.filter((r) => r.listedBy === "text").map((r) => r.title)).toEqual(["Yu et al. (2020)", "Hafner et al. (2020)"]);
   });
 
+  /* arXiv 2308.08708's paragraph spya-bwe935, which separates a list's items
+     with commas (report spya-d5e2jk, plan 261029b). */
+  it("reads every item of a comma-separated list, and the model's row for the first still covers it", () => {
+    const text =
+      "Higher-order theories have long been advocated by philosophers (Carruthers & Gennaro 2020, Rosenthal 2005). One of the main motivations for the view is the so-called “simple argument” (Lycan 2001): if a mental state is conscious";
+    const { rows } = build(
+      [row("Higher-order theories of consciousness", "Carruthers, Gennaro", "2020", "spya-p00001", "Carruthers & Gennaro 2020")],
+      [block("spya-p00001", text)],
+    );
+    expect(rows.map((r) => `${r.title}:${r.listedBy ?? "model"}`)).toEqual([
+      "Higher-order theories of consciousness:model",
+      "Rosenthal (2005):text",
+      "Lycan (2001):text",
+    ]);
+    expect(rows[1]!.mentions).toEqual([{ blockId: "spya-p00001", quote: "Rosenthal 2005", start: text.indexOf("Rosenthal 2005") }]);
+  });
+
+  it("does not let a model row with no names of its own stand for a whole comma-separated list", () => {
+    const text = "Long advocated (Carruthers & Gennaro 2020, Rosenthal 2005), and (Lycan 2001).";
+    const { rows } = build(
+      [
+        CRAIK,
+        { ...row("Higher-order theories", "", "", "spya-p00001", "Carruthers & Gennaro 2020, Rosenthal 2005"), authors: undefined, year: undefined },
+      ],
+      [block("spya-p00001", `${text} (Craik, 1943).`)],
+    );
+    /* The same rule as a semicolon list (Chua and Yu above): a mention over
+       two cites proves neither, so both get code's rows, on the safe side of a
+       missing work. */
+    expect(rows.filter((r) => r.listedBy === "text").map((r) => r.title)).toEqual(["Carruthers & Gennaro (2020)", "Rosenthal (2005)", "Lycan (2001)"]);
+  });
+
   it("is listed when another row's compound footnote happens to name it", () => {
     const text = "Advances came from robotics (Chua et al., 2018; Yu et al., 2020; Hafner et al., 2018).";
     const footnote = "Chua et al. (2018), Deep reinforcement learning; Yu et al. (2020), Meta-learning.";
