@@ -316,7 +316,7 @@ const onFeed = (next: MarginFeed) => {
   feed = next;
 };
 async function openMargin(): Promise<void> {
-  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, bibliography: { status: "ready", retryRead: async () => {} }, shown: true, onFeed })));
   await settle();
 }
 const situateReads = () => trace.filter((l) => l === `GET /api/situate/${SLUG}`).length;

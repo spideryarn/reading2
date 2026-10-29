@@ -316,6 +316,8 @@ function WhereAutoRunProbe({
     },
     {
       status: situateStatus,
+      job: null,
+      starting: false,
       ensure: async ({ withBibliography = false } = {}) => {
         whereRuns.push({ step: "situate", withBibliography });
       },

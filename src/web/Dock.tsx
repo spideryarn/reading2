@@ -1876,8 +1876,10 @@ export function useActivateMode(
       /* **Nor does a Marginalia press while the column is on**, from either
          door: the bar's press turns it off, with its feed still mounted for
          that instant, and naming it in the command bar leaves it where it is.
-         Only the press that turns the column on can ask from the browser for
-         relation words missing after import (plans 261003f and 261005d). */
+         Only the press that turns the column on arms anything: the
+         literature search, where none has run (Greg's answer to q-sxfwqq,
+         plan 261029h). The relation words are asked for when the column is
+         shown, whatever showed it (plan 261005d). */
       const marginOn = next === "marginalia" && margin;
       if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, sources });
       onMode(next, undefined, toggles);

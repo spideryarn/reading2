@@ -833,6 +833,8 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   "sources-claims": true,
   /* Where it sits: the works cited and the search of the literature, behind one press (plan 261026g). */
   "sources-where": true,
+  /* The press that turns the margin on: the same search, from the margin (plan 261029h). */
+  "margin-literature": true,
   bibliography: true,
   faq: true,
   explanations: true,
@@ -1240,6 +1242,13 @@ interface Press {
   /** The `steps` of the one `POST /api/jobs` the press must make, or `[]`. */
   steps: readonly string[];
   /**
+   * **Any other job the page posts as it settles**, each one's `steps`. One
+   * row has these: Marginalia, whose press buys the literature search and whose
+   * column, once shown, asks for its relation words on arrival (plan 261029h).
+   * Compared with `steps` as one list, in no particular order.
+   */
+  also?: readonly (readonly string[])[];
+  /**
    * **Every paid request the press makes directly**, as `METHOD /path` —
    * everything the job queue is not, minus `FREE_MUTATIONS`. `[]` for a press
    * that buys nothing outside the queue, which is most of them.
@@ -1265,7 +1274,7 @@ type AtLeastOne<T> = readonly [T, ...T[]];
  */
 type Spend =
   /** One press, one job. The steps it must ask the queue for. */
-  | { kind: "posts"; steps: AtLeastOne<string> }
+  | { kind: "posts"; steps: AtLeastOne<string>; also?: readonly (readonly string[])[] }
   /**
    * The press arms something, but *which* thing depends on what the address bar
    * says — so the row lists the presses, one per picture, and every one of them
@@ -1299,11 +1308,14 @@ const SPENDS: Record<Mode, Spend> = {
     ],
   },
   /* The tree's questions, the arc and other modes' lists are read, never
-     generated: a press that started the Ideas job here would be the bug. Its
-     own relation words are the one thing it asks for, when the column is
-     shown — which a press does, so the post is seen here; the press itself
-     arms nothing (tests/marginalia-relations-on-open.test.tsx). */
-  marginalia: { kind: "posts", steps: ["relations"] },
+     generated: a press that started the Ideas job here would be the bug. **The
+     press buys the literature search** where none is stored, with the works
+     cited first when they are missing too (Greg's answer to q-sxfwqq, plan
+     261029h; tests/margin-press-starts-the-search.test.tsx). Its own relation
+     words are asked for when the column is shown, which the press does, so
+     that post is seen here too; the press does not arm them
+     (tests/marginalia-relations-on-open.test.tsx). */
+  marginalia: { kind: "posts", steps: ["bibliography", "situate"], also: [["relations"]] },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
   ideas: { kind: "posts", steps: ["ideas"] },
@@ -1399,7 +1411,8 @@ const SPENDS: Record<Mode, Spend> = {
  */
 function pressesFor(spend: Spend): Press[] {
   if (spend.kind === "delegated") return [...spend.presses];
-  return [{ search: "", steps: spend.kind === "posts" ? spend.steps : [], spends: [] }];
+  if (spend.kind === "posts") return [{ search: "", steps: spend.steps, ...(spend.also ? { also: spend.also } : {}), spends: [] }];
+  return [{ search: "", steps: [], spends: [] }];
 }
 
 const PHASE_MS = 30_000;
@@ -1441,10 +1454,13 @@ for (const trigger of TRIGGERS) {
             await settle();
 
             expect(modeInUrl(), `${mode}: the ${trigger.name} did not change mode`).toBe(mode);
+            const byJson = (a: readonly string[], b: readonly string[]) =>
+              JSON.stringify(a).localeCompare(JSON.stringify(b));
+            const wanted = [...(want.steps.length === 0 ? [] : [want.steps]), ...(want.also ?? [])];
             expect(
-              posts.map((p) => p.steps),
+              posts.map((p) => p.steps).sort(byJson),
               `${mode}${want.search}: what the ${trigger.name} asked the queue for`,
-            ).toEqual(want.steps.length === 0 ? [] : [[...want.steps]]);
+            ).toEqual(wanted.map((j) => [...j]).sort(byJson));
             /* The other half of the money, and the half nothing watched until
                2026-09-06: a paid request the press made for itself. */
             expect(

@@ -17,12 +17,15 @@
  * **Nothing here spends on arrival.** There is no `useAutoRun` in this hook,
  * which Investigate mounts too. Since plan 261026g a press that lands on
  * *Where it sits* is the request (useWhereAutoRun.ts, the composite
- * `sources-where` target, owned by that band alone); otherwise the way in is
- * the section's own button, *Search the literature*, which calls `ensure`.
+ * `sources-where` target, owned by that band alone), and since plan 261029h
+ * so is the press that turns the margin on (`useMarginLiteratureAutoRun`, the
+ * `margin-literature` target, owned by the margin's feed alone); otherwise the
+ * way in is the section's own button, *Search the literature*, which calls
+ * `ensure`.
  *
- * The read half is exported alone (`useSituateRead`) for the margin's notes
- * (plan § Marginalia), which must read and never start: the same split as
- * `useReceptionRead`.
+ * The read half is exported alone (`useSituateRead`) for the surfaces that
+ * must read and never start — Sources' experiments: the same split as
+ * `useReceptionRead`. The margin's notes used it until plan 261029h.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
@@ -30,6 +33,7 @@ import type { Job, Situate, SituateResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
+import type { QueueCadence } from "./useJobs.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -159,7 +163,13 @@ export function useSituateRead(slug: string): SituateRead {
   return { status, situate, stale, outdated, profileChanged, error, retryRead, reload, refresh, fresh };
 }
 
-export function useSituate(slug: string): UseSituate {
+/**
+ * `cadence` is `useStepJob`'s: the band's default watches the queue; the
+ * margin's feed passes `"quiet"`, so a margin left open does not poll every
+ * eight seconds (GPT Sol's MARGIN-3 on plan 261029h). A job it starts still
+ * wakes the engine, so its progress and completion are heard either way.
+ */
+export function useSituate(slug: string, cadence: QueueCadence = "watches-queue"): UseSituate {
   const read = useSituateRead(slug);
   const { refresh } = read;
 
@@ -177,7 +187,7 @@ export function useSituate(slug: string): UseSituate {
     setLanding(mine);
     void refresh().finally(() => setLanding((current) => (current === mine ? null : current)));
   }, [refresh]);
-  const queue = useStepJob(slug, "situate", finished, "watches-queue");
+  const queue = useStepJob(slug, "situate", finished, cadence);
 
   const ensure = useCallback(
     async (options: { withBibliography?: boolean } = {}) => {

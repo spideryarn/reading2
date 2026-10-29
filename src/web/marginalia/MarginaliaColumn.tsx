@@ -33,7 +33,11 @@ import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { BlockId, CitedWork, Explanation, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
 import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
-import { useSituateRead } from "../useSituate.js";
+import { useSituate } from "../useSituate.js";
+import { useMarginLiteratureAutoRun, type WhereRunnable } from "../useWhereAutoRun.js";
+
+/** The Reader's Bibliography read, as much of it as the margin's press needs. */
+export type MarginBibliography = Omit<WhereRunnable, "ensure">;
 import { SITUATE_FINDING_LABEL, sourceHost } from "../situate-dossier.js";
 import { dayOf } from "../relative-time.js";
 import { isWebUrl } from "../../urls.js";
@@ -1248,11 +1252,12 @@ export const NO_OWNER_FEED: MarginFeed = {
 };
 
 /**
- * **The owner's ideas, FAQ, Timeline, Reception and literature findings, read and
- * never made** — and Marginalia's own relation words and notes, which are made
- * here. A component of its own so the reads happen only while Marginalia is
- * open — the read halves (`useIdeasRead`, `useFaqRead`, `useTimelineRead`,
- * `useReceptionRead`, `useSituateRead`), never the full hooks, which arm the
+ * **The owner's ideas, FAQ, Timeline, Reception and literature findings, read**
+ * — and Marginalia's own relation words and notes, which are made here, and the
+ * literature search, which the press that turned the column on may start
+ * (`SituateMarginFeed`). A component of its own so the reads happen only while
+ * Marginalia is open — the read halves (`useIdeasRead`, `useFaqRead`,
+ * `useTimelineRead`, `useReceptionRead`), never the full hooks, which arm the
  * automatic run and could spend (Reception is the dearest step in the app). A
  * stale list (the article moved under it) is not drawn: its blocks may not be
  * these. Owner only: a visitor's lists are in their payload. Bibliography and
@@ -1262,6 +1267,7 @@ export function OwnerMarginFeed({
   slug,
   shown,
   awaitingStructure = false,
+  bibliography,
   onFeed,
 }: {
   slug: string;
@@ -1274,6 +1280,12 @@ export function OwnerMarginFeed({
    * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
    */
   awaitingStructure?: boolean;
+  /**
+   * The Reader's read of the works the piece cites (it holds Bibliography in
+   * every mode), so the search a press starts can list them first when they
+   * are missing — `SituateMarginFeed`.
+   */
+  bibliography: MarginBibliography;
   onFeed(feed: MarginFeed): void;
 }) {
   const ideasRead = useIdeasRead(slug);
@@ -1316,7 +1328,7 @@ export function OwnerMarginFeed({
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
   return (
     <>
-      <SituateMarginFeed slug={slug} onLiterature={setLiterature} />
+      <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />
       {experimental && <ExplanationsMarginFeed slug={slug} onExplanations={setExplanations} />}
     </>
   );
@@ -1348,21 +1360,45 @@ function ExplanationsMarginFeed({
 }
 
 /**
- * **Situate's findings, read and never made** — `useSituateRead`, the read
- * half with no job under it, and `useStepFinished` for a search finished while
- * the column is open. A stale dossier (the article moved under it) is not
- * drawn, as no stale list is. Unmounted, it hands back none.
+ * **Situate's findings, and the one press that may make them.** The dossier's
+ * read (`useSituate`, which spends nothing by mounting) and `useStepFinished`
+ * for a search finished while the column is open. A stale dossier (the article
+ * moved under it) is not drawn, as no stale list is. Unmounted, it hands back
+ * none.
+ *
+ * **The press that turned the column on starts the search, if none has run**
+ * (Greg, 2026-10-28, answering q-sxfwqq: *"Let's go for A"*). This mount is
+ * the one owner of the `margin-literature` token the Dock arms on that press
+ * (activation.ts § Marginalia's row), so a reload, a pasted `?margin=1`, Back
+ * and Forward and a restored view spend nothing: none of them mints a token.
+ * A stored dossier, stale or outdated included, is never re-run here, as on
+ * *Where it sits*; the step's own allowance still applies. **Nothing shown,
+ * nothing spent**: a press on a window too narrow for the notes is dropped
+ * (`enabled`), not kept for a later widening. The works the piece cites are
+ * listed first in the same job when they are missing too, as *Where it sits*'
+ * press does, so the two doors make the same search; the press waits for the
+ * Reader's Bibliography read to answer to know which, and reads it again if
+ * it failed (useWhereAutoRun.ts § `marginLiteratureStatus`). A search already
+ * under way from either door is waited on, not asked for twice.
+ * docs/plans/261029h-the-margin-button-starts-the-literature-search.md.
  */
 function SituateMarginFeed({
   slug,
+  shown,
+  bibliography,
   onLiterature,
 }: {
   slug: string;
+  shown: boolean;
+  bibliography: MarginBibliography;
   onLiterature(literature: MarginLiterature | null): void;
 }) {
-  const read = useSituateRead(slug);
-  useStepFinished(slug, "situate", read.refresh);
-  const made = read.status === "ready" && !read.stale ? read.situate : null;
+  /* `"quiet"`: no idle poll for a margin left open. `useSituate`'s own job
+     watch refreshes the read when any search for this article finishes, so
+     no `useStepFinished` here as well (GPT Sol's MARGIN-3). */
+  const situate = useSituate(slug, "quiet");
+  useMarginLiteratureAutoRun(slug, bibliography, situate, shown);
+  const made = situate.status === "ready" && !situate.stale ? situate.situate : null;
   const findings = made?.findings ?? null;
   const searchedAt = made?.generatedAt ?? null;
   useEffect(() => {

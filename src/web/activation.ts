@@ -315,21 +315,28 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      already there by the time the article is on screen. */
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
-  /* Everything else the column shows is read and never made; the relation
-     words are its own, and **the column asks for them when it is shown**, not
-     when it is pressed (src/web/useRelations.ts § `useAutoRunOnArrival`). Greg,
-     2026-10-05: *"generate linking words when Marginalia mode is opened"*. A
-     press could not carry it: a pasted link, a reload or a restored view turns
-     the column on with nobody pressing anything. So the press arms nothing, as a Summary press
-     that lands on the thread arms nothing, and the row is `delegated` rather
-     than `none` so the command bar still says the row may start work. Not
-     `fixed`: that would mint a `relations` token no hook is mounted to claim,
-     and put the step back on the import's list (auto-modes.ts).
-     docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
+  /* The relation words are the column's own, and **the column asks for them
+     when it is shown**, not when it is pressed (src/web/useRelations.ts §
+     `useAutoRunOnArrival`). Greg, 2026-10-05: *"generate linking words when
+     Marginalia mode is opened"*. A press could not carry it: a pasted link, a
+     reload or a restored view turns the column on with nobody pressing
+     anything.
+
+     **The press arms the literature search** (since 2026-10-29; Greg's answer
+     to q-sxfwqq, *"Let's go for A"*): the dearest thing the margin draws, so
+     it is the press that buys it and never the arrival. Dock.tsx §
+     `useActivateMode` arms this row only on the press that turns the column
+     on; `SituateMarginFeed` (MarginaliaColumn.tsx) is the one mount that
+     claims it, and spends it only where no dossier is stored and the notes
+     are on screen. **`delegated`, not `fixed`**: a fixed row's target is a
+     step `modeStep` would put on the import's list, and the search is not to
+     run on import (option C, not chosen). Everything else the column shows is
+     read and never made.
+     docs/plans/261029h-the-margin-button-starts-the-literature-search.md. */
   marginalia: {
     kind: "delegated",
-    target: () => null,
-    why: "the column writes its relation words when it is shown, whatever showed it; a press has nothing left to arm",
+    target: () => "margin-literature",
+    why: "the press that turns the column on asks for the literature search where none has run; the relation words are made when the column is shown, whatever showed it",
   },
   /* Nothing exists to fill until the reader has typed. */
   search: { kind: "none", reason: "stores nothing until the reader types a query" },
@@ -416,8 +423,8 @@ export function modeGenerates(mode: Mode): boolean {
  *
  * `delegated` is `null` because the step is the press's, not the mode's
  * (Diagram's picture comes from `?diagram=`, Summary's view from `?summary=`);
- * the two stream targets and the composite `sources-where` are `null` because
- * they have no one job row of their own. **So a
+ * the two stream targets, the composite `sources-where` and the margin's
+ * `margin-literature` are `null` because they have no one job row of their own. **So a
  * delegated mode drops out of the add page's list unless that file names its
  * steps itself**, which it does for Summary (auto-modes.ts §
  * `DELEGATED_MODE_STEPS`; GPT Sol, F2 of the 261003l review).
@@ -426,7 +433,12 @@ export function modeGenerates(mode: Mode): boolean {
 export function modeStep(mode: Mode): StepName | null {
   const row = MODE_TARGET[mode];
   if (row.kind !== "fixed") return null;
-  return row.target === "promises" || row.target === "candidates" || row.target === "sources-where" ? null : row.target;
+  return row.target === "promises" ||
+    row.target === "candidates" ||
+    row.target === "sources-where" ||
+    row.target === "margin-literature"
+    ? null
+    : row.target;
 }
 
 /**

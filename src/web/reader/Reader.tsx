@@ -4557,6 +4557,7 @@ export function Reader({
             slug={slug}
             shown={marginRoom}
             awaitingStructure={awaitingStructure(article.tree)}
+            bibliography={owner.bibliography}
             onFeed={setOwnerFeed}
           />
         )}

@@ -128,6 +128,22 @@ The owner's default since 2026-10-25, acting on Greg's answer about cost:
 >
 > — Greg, 2026-10-25 (answer to q-vg2b69)
 
+**Loosened once, for the literature search, on 2026-10-28**: the press that turns the margin on
+starts it too, because its findings are what fill the margin. Asked as
+[q-sxfwqq](../user-feedback/questions/q-sxfwqq.md), option A:
+
+> D for now
+>
+> — Greg, 2026-10-28 (spya-bcc0y8)
+
+> Change my mind. Let's go for A.
+>
+> — Greg, 2026-10-28 (spya-nq5ec9)
+
+So the search still costs only on a press — *Where it sits*' or the margin button's — and never on
+an arrival or an import ([§ Opening it is the request](#opening-it-is-the-request)). Every other
+costly thing in Sources still waits for Sources to be opened, or for its own button.
+
 Top to bottom:
 
 - **A head line** from the piece's year: *A piece from 1998: what has been said since*, or for a
@@ -192,6 +208,19 @@ alone and the search was its button's.
 
 Greg's cost rule puts the ~$0.30 search *"upon user request"* (q-vg2b69, above). The press that
 opens the sub-mode is taken as that request, and only the press; said so in the report's note.
+
+**The margin button is the second door** (since 2026-10-29, Greg's option A on q-sxfwqq, above;
+[261029h](../plans/261029h-the-margin-button-starts-the-literature-search.md)). The press that turns
+the margin on arms `margin-literature`, which the margin's feed alone claims
+(`useMarginLiteratureAutoRun` in src/web/useWhereAutoRun.ts): the same search, with the works cited
+first in the same job when they are missing. It differs from *Where it sits*' press in three ways: a
+stored dossier is the whole answer (missing Bibliography beside it buys nothing, since the press is
+for the findings); a press on a window too narrow for the notes is dropped, as the relation words
+wait for the notes to be on screen; and the press that turns the margin off, or the command bar
+naming a margin already on, arms nothing (Dock.tsx § `useActivateMode`). **A search under way from
+either door is waited on, not asked for twice** (`searching`, GPT Sol's MARGIN-1): without it, the
+margin's `[bibliography, situate]` job writing Bibliography first would let *Where it sits* read the
+works as present and the search as missing, and post a second job.
 *Papers that cite it* is a free OpenAlex read, asked whenever Sources opens on it
 ([privacy.md](privacy.md#crossref-datacite-and-openalex-are-sent-a-doi)). The plan's cost ladder
 has the rest. **Owner only**: a visitor reads the bare address as Bibliography,

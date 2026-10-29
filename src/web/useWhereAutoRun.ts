@@ -23,6 +23,12 @@
  * works the piece cites. **A stored dossier, stale
  * or outdated included, is never re-run here** — *Search again* is the
  * dossier's own button — and the step's own allowance still applies.
+ *
+ * **The margin's press is the second door to the same search** (since
+ * 2026-10-29, plan 261029h): `useMarginLiteratureAutoRun` below, the same
+ * request with its own token and its own owner, and the same rule that a
+ * search already under way, from either door, is waited on rather than asked
+ * for again.
  */
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 
@@ -35,6 +41,25 @@ export interface WhereRunnable {
 /** The search's own: it can ask for the works cited first, in the same job. */
 export interface WhereSearch extends Omit<WhereRunnable, "ensure"> {
   ensure(options?: { withBibliography?: boolean }): Promise<void>;
+  /** The job searching for this article, whichever door started it (`useSituate`). */
+  job: unknown;
+  /** This door's POST is not in the queue yet. */
+  starting: boolean;
+}
+
+/**
+ * **A search already under way is not an answer yet**, at either door. The
+ * margin's press and *Where it sits*' are two tokens with two owners, so each
+ * has its own automatic try; without this, the margin's
+ * `[bibliography, situate]` job publishing the works cited first lets *Where
+ * it sits* read Bibliography `ready`, the search still `none`, and post a
+ * second job, `[situate]` (GPT Sol's MARGIN-1 on plan 261029h). Held at
+ * `loading`, the press waits; when the job lands the dossier reads `ready` and
+ * the press is retired unspent. A job that fails leaves `none` again, and a
+ * press still waiting may then try.
+ */
+function searching(situate: WhereSearch): boolean {
+  return situate.job !== null || situate.starting;
 }
 
 /**
@@ -54,7 +79,7 @@ export function useWhereAutoRun(slug: string, bibliography: WhereRunnable, situa
   return useAutoRun(
     slug,
     "sources-where",
-    whereStatus(bibliography.status, situate.status),
+    searching(situate) ? "loading" : whereStatus(bibliography.status, situate.status),
     async () => {
       /* One request: the search with the works cited before it when both
          are missing, else whichever one is. */
@@ -65,5 +90,46 @@ export function useWhereAutoRun(slug: string, bibliography: WhereRunnable, situa
       if (bibliography.status === "error") await bibliography.retryRead();
       if (situate.status === "error") await situate.retryRead();
     },
+  );
+}
+
+/**
+ * **The margin's press: the search, and the works cited only as its
+ * prelude.** The press that turns the margin on (activation.ts § Marginalia's
+ * row, Greg's answer to q-sxfwqq) asks for the search where none is stored.
+ * Unlike *Where it sits*, a stored dossier is the whole answer: Bibliography
+ * missing beside it buys nothing here, because the margin's press is for the
+ * findings. With the search missing, Bibliography's read must have answered
+ * — `none` puts it first in the same job, `ready` leaves it out, and `error`
+ * is read again rather than guessed at, since a search run without the works
+ * cited is stored and not re-run (GPT Sol's MARGIN-2 on plan 261029h).
+ */
+export function marginLiteratureStatus(bibliography: ArtefactStatus, situate: ArtefactStatus): ArtefactStatus {
+  if (situate !== "none") return situate;
+  if (bibliography === "loading" || bibliography === "error") return bibliography;
+  return "none";
+}
+
+/**
+ * Returns whether this mount started a run automatically. `enabled` is the
+ * margin's notes being on screen: a press on a window too narrow for them is
+ * dropped, not kept for a later widening.
+ */
+export function useMarginLiteratureAutoRun(
+  slug: string,
+  bibliography: Omit<WhereRunnable, "ensure">,
+  situate: WhereSearch,
+  enabled: boolean,
+): boolean {
+  return useAutoRun(
+    slug,
+    "margin-literature",
+    searching(situate) ? "loading" : marginLiteratureStatus(bibliography.status, situate.status),
+    () => situate.ensure({ withBibliography: bibliography.status === "none" }),
+    async () => {
+      if (situate.status === "error") await situate.retryRead();
+      else if (bibliography.status === "error") await bibliography.retryRead();
+    },
+    enabled,
   );
 }

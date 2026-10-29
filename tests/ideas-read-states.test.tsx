@@ -289,7 +289,7 @@ async function mount(parts: Part[], slug = SLUG) {
   }
   if (parts.includes("margin")) {
     /* `shown: false`: the relation words are the one thing this feed can buy. */
-    children.push(createElement(OwnerMarginFeed, { key: "margin", slug, shown: false, onFeed }));
+    children.push(createElement(OwnerMarginFeed, { key: "margin", slug, bibliography: { status: "ready", retryRead: async () => {} }, shown: false, onFeed }));
   }
   await act(async () =>
     root.render(

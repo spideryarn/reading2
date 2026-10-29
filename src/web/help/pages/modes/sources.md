@@ -43,7 +43,8 @@ for that.
 - A line at the top says how old the piece is, when its details give a year: for an older piece,
   what has been said since; for a recent one, where it sits now.
 - **Search the literature** starts by itself when you open Where it sits with the Sources button
-  or its tab, the first time, and is a button otherwise (after a link, say). Over a few minutes an
+  or its tab, the first time, or when you press [Marginalia](/help/mode-marginalia) to turn the
+  notes on, and is a button otherwise (after a link, say). Over a few minutes an
   AI plans a dozen or so web searches
   from the piece, reads what they find and the later papers that cite it, and lists the passages
   later work challenges, supports or has moved on from, each with its sources and what they say,

@@ -103,5 +103,16 @@ type StreamAutoRunTarget = "promises" | "candidates";
  */
 type CompositeAutoRunTarget = "sources-where";
 
+/**
+ * **The press that turns the margin on: the same search, from the margin.**
+ * The literature search (`situate`), with the works cited listed first in the
+ * same job when they are missing too, as *Where it sits*' press does — but a
+ * token of its own, because a token has one owner: `WhereBand` owns
+ * `sources-where`, and the margin's feed (`SituateMarginFeed`) owns this.
+ * Greg, 2026-10-28, answering q-sxfwqq: *"Let's go for A"*.
+ * docs/plans/261029h-the-margin-button-starts-the-literature-search.md.
+ */
+type MarginAutoRunTarget = "margin-literature";
+
 /** Every target that may receive one automatic attempt in this tab session. */
-export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget | CompositeAutoRunTarget;
+export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget | CompositeAutoRunTarget | MarginAutoRunTarget;

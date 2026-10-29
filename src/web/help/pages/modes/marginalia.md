@@ -42,7 +42,9 @@ pressing **Marginalia** again swaps the notes in for it.
   against it.
 - **Challenged, Supported, Since, Citation?, Not cited? or Reception** is what a search of the
   literature found about the passage, once it has run in [Sources](/help/mode-sources) › Where it
-  sits.
+  sits. The first time you press **Marginalia** to turn the notes on for an article, that search
+  starts by itself if it has never run; its findings appear in the margin a few minutes later. A
+  reload or a link that opens the article with the notes already on does not start it.
   Opened, it shows the AI's note on each finding and the pages it rests on; **Open in Sources**
   shows the finding in Where it sits.
 - Point at a line that is cut short to read the whole of it.

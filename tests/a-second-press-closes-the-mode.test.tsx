@@ -442,9 +442,10 @@ describe("Plain closes both columns", () => {
     expect(modeInUrl()).toBe("summary");
   });
 
-  /* The column's relation words are asked for when it is shown (plan 261005d),
-     so no press of the toggle arms anything, and the one that turns it off
-     starts nothing either. */
+  /* The press that turns the notes on arms the literature search (plan
+     261029h); the column's relation words are asked for when it is shown
+     (plan 261005d). The press that turns it off arms nothing, because the feed
+     is still mounted for that instant and would claim it. */
   it("the press that turns the notes off arms nothing", async () => {
     await open("?mode=summary&margin=1");
     armed.length = 0;
@@ -453,8 +454,8 @@ describe("Plain closes both columns", () => {
     await until(() => !marginInUrl());
     expect(armed).toEqual([]);
     expect(posts).toEqual([]);
-    /* That the on-press does arm, and starts the one job, is
-       every-mode-draws-its-surface.test.tsx § marginalia. */
+    /* What the on-press posts is every-mode-draws-its-surface.test.tsx §
+       marginalia, and tests/margin-press-starts-the-search.test.tsx. */
   });
 
   it.each(["missing", "outdated"] as const)(

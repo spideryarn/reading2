@@ -169,7 +169,7 @@ describe("the read hooks start no job", () => {
        (spya-pkpqch). */
     present = new Set(["relations"]);
     await act(async () => {
-      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", shown: true, onFeed: vi.fn() }));
+      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", bibliography: { status: "ready", retryRead: async () => {} }, shown: true, onFeed: vi.fn() }));
     });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
