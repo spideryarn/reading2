@@ -24,6 +24,9 @@ import {
   diagramAxisParam,
   diagramHueParam,
   diagramParam,
+  EXPLANATION_ORDERS,
+  explanationBarParam,
+  explanationOrderParam,
   FAQ_ORDERS,
   faqOrderParam,
   modeParam,
@@ -253,6 +256,26 @@ describe("faq mode parameters", () => {
     }
     expect(faqOrderParam.defaultValue).toBe("prioritised");
     expect(faqOrderParam.parse("hardest")).toBeNull();
+  });
+});
+
+describe("explanations mode parameters", () => {
+  /* Plan 261029e § 2b: `?explby=` and `?explbar=`, the FAQ's pattern. */
+  it("reads and writes every order, defaults to prioritised, and drops an unknown one", () => {
+    for (const order of ["prioritised", "document", "difficulty", "centrality"] as const) {
+      expect(EXPLANATION_ORDERS).toContain(order);
+      expect(explanationOrderParam.parse(explanationOrderParam.serialize(order))).toBe(order);
+    }
+    expect(explanationOrderParam.defaultValue).toBe("prioritised");
+    expect(explanationOrderParam.parse("hardest")).toBeNull();
+  });
+
+  it("reads a bar on 0–1 to two places, and refuses one outside it", () => {
+    expect(explanationBarParam.parse("0.25")).toBe(0.25);
+    expect(explanationBarParam.parse("0.123")).toBe(0.12);
+    expect(explanationBarParam.serialize(0.1)).toBe("0.10");
+    expect(explanationBarParam.parse("1.5")).toBeNull();
+    expect(explanationBarParam.parse("x")).toBeNull();
   });
 });
 

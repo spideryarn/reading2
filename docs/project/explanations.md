@@ -29,15 +29,30 @@ The plan, with GPT Sol's review that reshaped it, is
 [261028c](../plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md).
 It is step 7 of [explain-this-vision.md](explain-this-vision.md), built smaller than that sketch.
 
-## Where it stands (2026-10-28)
+The next day Greg looked at the band and asked for what "model the UI on the glossary" had meant
+(report spya-ay3u4w, 2026-10-28):
+
+> For the explanations mode, I suggested that you borrow from the glossary UI. So I was expecting
+> different orderings and a prioritized default with thresholding and an option to find more. And
+> also, it's not using the full width of the sidebar, so it's wasting a bunch of space on the
+> right-hand side. Take screenshots and you'll see.
+
+That is [261029e](../plans/261029e-explanations-borrow-glossary-controls-full-width-and-a-calmer-reader-face.md),
+§ 2 and § 3, and it is what [The band](#the-band-glossarys-controls) below describes.
+
+## Where it stands (2026-10-29)
 
 **Behind the [experimental switch](experimental-features.md), owner only, and run only when the
 owner presses into the mode** — not on import, not when the margin opens. Two things move it:
 Greg's answer to **q-gkrkf5** (on import, at about 10–15 cents an article, or later), and one live
 run read by a person. Model calls could not be made when it was built (the key was over its monthly
 limit until 1 November), so **nothing here has met a real answer yet**; the tests run on canned
-ones. What waits for that is in the plan's § What waits for 1 November, and on the
-[Overseer's queue](overseer-queue.md).
+ones. What waits for that is in each plan's § What waits for 1 November, and on the
+[Overseer's queue](overseer-queue.md). For the scores and *Find more* that is: whether a real
+`explanations/2` run returns both scores and spreads them enough for the bar to do anything (when
+they do not, the order row simply is not offered, so a failure is invisible to the reader and has
+to be looked for in the step's log — `difficultyAbsent` and the rest); calibrating the bar's
+`0.10`; and whether a second pass finds places worth having or pads.
 
 ## What it is, and what it is not
 
@@ -64,15 +79,67 @@ In `src/explanations.ts`, each tested in `tests/explanations.test.ts`:
   passages), the article's own characters stored, and **dropped if the words occur twice in the
   block**, so the underline still to come can always find the one meant. Overlong is dropped,
   never cut.
-- **One per block; at most `clamp(ceil(paragraphs / 6), 3, 15)`**, applied after every other rule.
-  The cap is what keeps a mark beside a passage worth trusting — explain-this-vision.md's worry
-  about marking too much.
-- **An empty list is an answer**; a non-empty one that the checks empty is a failure, as FAQ's.
+- **One per block; at most `clamp(ceil(paragraphs / 6), 3, 15)` a pass**, applied after every
+  other rule. One per block holds across passes: a *Find more* is told the places already
+  explained, and a second place in a used block is dropped (`repeated`). The cap is what keeps a
+  mark beside a passage worth trusting — explain-this-vision.md's worry about marking too much.
+- **Two scores on every explanation** since `explanations/2`: `difficulty` (how likely this reader
+  is to get stuck here) and `centrality` (how much of the argument depends on getting past it),
+  0–1, Glossary's names and range. A score that is missing or out of range drops the field, not
+  the explanation, and is counted in the log only (`ExplanationScoreDrops`). Every
+  `explanations/1` list has none, and still reads.
+- **The scores are in the system block and the schema only.** The first pass's user message is in
+  the fingerprint, so it has not changed by a byte (a test pins it): an `explanations/1` list reads
+  as *outdated*, which is true, not *stale*, which would say the article moved.
+- **An empty list is an answer**; on a first pass, a non-empty one that the checks empty is a
+  failure, as FAQ's. **A *Find more* that adds nothing is an answer too** (`lastAdded: 0`), as
+  Quotes': the band says *No more places found*.
 - **Freshness is the ordinary stamp** (article fingerprint, prompt version, model, profile hash):
-  *stale* is not drawn in the margin; *outdated* stays quietly visible; *written for an older
-  profile* stays with *Write it again*. As with Ideas and Glossary, an older prompt alone is not
-  worth bugging the reader about (Greg, 2026-09-29).
+  *stale* is not drawn in the margin; *outdated* stays quietly visible. As with Ideas and Glossary,
+  an older prompt alone is not worth bugging the reader about (Greg, 2026-09-29). **Only an older
+  prompt is outdated**, Quotes' rule: a version a newer build wrote is current, so a rollback never
+  rewrites it.
+- **A forced run appends or rewrites, and one predicate decides** — `existingFor`: it appends
+  (*Find more*) to a list from the same article, not outdated, written for exactly the profile the
+  run uses; anything else is rewritten. The step reads the previous list from the store
+  (`previousExplanationsFrom`, which fails rather than read an unreadable list as none). The GET
+  response's `panelRun` comes from the same predicate with the reader's current profile, so the
+  button cannot say *Find more* over a run that rewrites — the client's own flags could not tell a
+  cleared profile from an unchanged one.
+- **On an append**, old items keep their ids, scores and `addedAt`; new ones are stamped once; the
+  list is re-sorted into reading order; `passes` counts up; the stored `dropped` is cumulative,
+  and this pass's counts go to the log.
 - **Owner only**: never in the public read, never in a visitor's margin.
+
+## The band: Glossary's controls
+
+Top to bottom, each Glossary's own piece
+([controls.md § Controls that do the same job look the same](controls.md#controls-that-do-the-same-job-look-the-same)):
+
+- **The run row**, the band's one run button, on a finished list: *Find more* when `panelRun` is
+  `append`, *Write a new list* when it is `rewrite`. Find more runs in the list's own profile
+  setting, as Glossary's does. Not on an empty list that would append (an empty answer is a real
+  one); on an empty list that no longer fits, *Write a new list*. The stale notice explains and
+  carries no second button. The profile badge's panel keeps its Regenerate, as Glossary's does.
+- **The order row**: *prioritised* (the default), *reading order*, *hardest*, *most central* —
+  `?explby=`. Prioritised is Glossary's rule, not the FAQ's: `difficulty × centrality` decides
+  shown or hidden, and reading order orders what is shown. Offered only when the bar could hide
+  something; a score order only when some explanation has that score. So an `explanations/1` list
+  has no order row and looks as it did.
+- **The threshold** in the prioritised order — `?explbar=`, starting at Glossary's `0.10`,
+  borrowed rather than measured. An unscored explanation survives every position, and the line
+  under it says how many are hidden. The rule is
+  [`explanations-order.ts`](../../src/web/explanations-order.ts).
+- **Each row draws the scores it was placed by** as bars (`ScoreBars`, numbers in the tooltip):
+  both under prioritised, one under a score order, none in reading order. Never the product.
+- **The margin's *Open in Explanations*** lowers the bar just enough to draw a row it was hiding,
+  then lands on it. The margin itself shows every fresh explanation whatever the bar says; whether
+  it should follow the threshold waits for the live runs.
+- **The list uses the band's full width.** The corner (i)'s clearance is on the top row, not on
+  every row of a list that scrolls.
+
+Not in this change: the command bar's *Explanations › Find more* (`FIND_MORE_MODES`,
+[find-more.ts](../../src/web/find-more.ts)) — the mode is experimental and owner-only.
 
 In the margin, a block with a fresh Explanation does not also draw the relations call's `explain`
 note ([marginalia.md](marginalia.md)); whether those notes are now redundant is one of the things

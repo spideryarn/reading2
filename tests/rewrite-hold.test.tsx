@@ -479,8 +479,9 @@ const ROWS: Row[] = [
     waiting: "The new ideas haven't loaded yet.",
     readAgain: "Try again",
   },
-  /* Ideas' shape (plan 261028c): the badge's Regenerate, and *Write it again*
-     on the stale banner — and beside a list written for an older profile. */
+  /* Glossary's shape since plan 261029e: the badge's Regenerate, and one run
+     row at the top — *Find more* on a current list, *Write a new list* on a
+     stale one, each in the list's own profile setting. */
   {
     name: "Explanations",
     hook: "useExplanations.ts",
@@ -506,8 +507,11 @@ const ROWS: Row[] = [
       profileChanged: profiled,
     }),
     mount: (show) => (show ? createElement(ExplanationsBand, { slug: SLUG, onJump: noop, onAsk: noop }) : null),
-    forced: ["Write it again"],
-    direct: [{ label: "Write it again", stale: true }],
+    forced: ["Find more", "Write a new list"],
+    direct: [
+      { label: "Write a new list", stale: true, posts: { useProfile: false } },
+      { label: "Find more", stale: false, posts: { useProfile: false } },
+    ],
     waiting: "The new explanations haven't loaded yet.",
     readAgain: "Try again",
   },

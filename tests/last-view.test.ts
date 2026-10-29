@@ -101,6 +101,12 @@ describe("rememberableSearch", () => {
     expect(restoredHref("/read/x", "?deep=2", "?mode=quotes")).toBe(null);
   });
 
+  it("keeps Explanations' order and bar, as the FAQ's are (plan 261029e, Sol F3)", () => {
+    /* How the list is arranged is a place you were; nothing here can spend. */
+    expect(rememberableSearch("?explby=difficulty&explbar=0.25")).toBe("?explby=difficulty&explbar=0.25");
+    expect(hasArticleState("?explby=centrality")).toBe(true);
+  });
+
   it("keeps Summary's sub-mode, which only a press can spend on", () => {
     /* `?summary=simple` restored mounts Simple's read and nothing else: the run
        is armed by a press — the bar's Summary, or the slider (SummaryMode.tsx) —
