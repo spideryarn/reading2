@@ -120,7 +120,7 @@ import { AddendumBox, addendaShown, isAddendum, type ReportAddenda, useReportAdd
 import { FeedbackSendBox } from "./FeedbackSendBox.js";
 import { apiFetch } from "./lib/api.js";
 import { Link } from "./Link.js";
-import { PlainTextBlocks } from "./PlainTextBlocks.js";
+import { TextWithMockups } from "./MockupsInText.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { parseRoute, readHref } from "./router.js";
 
@@ -1787,11 +1787,19 @@ function ThreadView({
           </span>
         </p>
         <h4 className="fb-question-title">{question.title}</h4>
-        <PlainTextBlocks text={summary} className="fb-question-text" linkMockups />
+        <TextWithMockups
+          text={summary}
+          className="fb-question-text"
+          stateKey={`${question.id}:summary`}
+        />
         {details === null ? null : (
           <details className="fb-question-more">
             <summary>Details</summary>
-            <PlainTextBlocks text={details} className="fb-question-text" linkMockups />
+            <TextWithMockups
+              text={details}
+              className="fb-question-text"
+              stateKey={`${question.id}:details`}
+            />
           </details>
         )}
         {question.report === null || question.report.body === null ? null : (

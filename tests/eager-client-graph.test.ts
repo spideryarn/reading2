@@ -546,6 +546,13 @@ const SHARED_WITH_READER = [
   "src/mockups.ts",
   "src/plain-text-blocks.ts",
   "src/web/PlainTextBlocks.tsx",
+  /* Arrived 2026-10-29 with mockups opened inside the Feedback dialog (plan
+     261029g). The dialog's question text (MockupsInText.tsx, reader side) and
+     `/admin/mockups/m-…` draw one mockup with the same renderer. It is a few
+     hundred lines of JSX whose imports, `apiFetch`, the failure wording and
+     PlainTextBlocks, the reader already has, and it fetches nothing until an
+     admin taps a mockup's id. */
+  "src/web/MockupView.tsx",
   "src/html.ts",
   "src/ids.ts",
   "src/ingest.ts",

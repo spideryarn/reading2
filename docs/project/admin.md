@@ -1214,7 +1214,21 @@ A table of mockups (id, title, the day it was made, the question and report it b
 first), each linking to `/admin/mockups/m-xxxxxx`: its text, its ASCII drawn monospaced, and its
 images, in the file's order. Read-only. Built in
 [261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md),
-Stage 3.
+Stage 3. **Since 2026-10-29 the dialog draws a mockup itself**: its id in a question opens it in
+place, with the same renderer ([`src/web/MockupView.tsx`](../../src/web/MockupView.tsx)), so Greg
+need never come here to see one
+([261029g](../plans/261029g-mockups-shown-inside-the-feedback-dialog-ascii-by-default.md)).
+
+> I'm not even convinced the mockups table is going to be that useful, because I'd really rather
+> just look at them, you know, in situ here while giving, you know, while having a discussion. […]
+> Let's try it with ASCII diagrams for a while.
+>
+> — Greg, 2026-10-28 (`spya-rrvwca`)
+
+So **the default is ASCII in the question itself**, and a file here is for when the look matters
+(feedback-reports.md § [Asking Greg a question](feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
+The table is left as it is during that trial, ungrouped; whether to group it or remove it is for
+when the trial says whether files are needed at all.
 
 **A mockup is a file, `docs/mockups/m-xxxxxx.md`.** A header between `---` lines (`id`, `title`
 of at most 120 characters, `made` as yyyy-mm-dd, `question` as a `q-` id or `none`, `report` as a
@@ -1229,7 +1243,9 @@ deploy. The rules are [`src/mockups.ts`](../../src/mockups.ts).
 
 **Files in the repo, so a mockup is on the page after the next deploy, not at once** as a published
 question is. Publishing mockups to the database would make them live at once, but it is a second
-kind of production write, which needs Greg's yes; the plan leaves it as a question for him. No
+kind of production write, which needs Greg's yes, and he chose not to for now: *"I guess life is
+simpler if we stick with ASCII diagrams. Then you don't need to worry about database tables."*
+(`spya-rrvwca`, 2026-10-28). No
 HTML mockups are served from our origin: a screenshot of a wireframe carries the same picture with
 nothing to execute.
 

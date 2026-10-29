@@ -281,8 +281,8 @@ which means he is thinking out loud and expects an answer before anything is bui
 So the first pass builds nothing. Do the research a good answer needs, then write a question file
 about the report (§ [Asking Greg a question](#asking-greg-a-question-and-acting-on-his-answer)) that
 holds your own responses and proposals, each with what it costs and gives up, a recommendation, and
-a mockup wherever the shape matters (an ASCII one in a fenced block, or a page under
-`/admin/mockups`). The report ends *Awaiting Greg*, with a note saying so. His replies continue the
+a mockup wherever the shape matters (an ASCII one in a fenced block by default; see
+§ [Asking Greg a question](#asking-greg-a-question-and-acting-on-his-answer)). The report ends *Awaiting Greg*, with a note saying so. His replies continue the
 thread; when one says to build something, that is an admin's go-ahead like any other, and the note's
 ending changes when the work lands. A discussion report whose words plainly ask for a fix or a build
 anyway is still answered first: the kind is his signal of what he expects.
@@ -582,14 +582,29 @@ What the report asked and when, what was done, what each option means, and what 
   from [plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md):
   lines between two lines that are exactly ```` ``` ```` are shown monospaced, line for line and
   scrolling sideways, for an ASCII mockup or diagram (a `Details` line inside one is content, and a
-  fence left unclosed is refused); and a mockup's id, `m-k3m9qt`, outside such a block is a link to
-  its page on `/admin/mockups` ([admin.md](admin.md)), so make the mockup first and name it in the
-  question. A mockup is seen only after the deploy that carries its file. Write it to
+  fence left unclosed is refused); and a mockup's id, `m-k3m9qt`, outside such a block is a button
+  that opens that mockup file (`docs/mockups/`, [admin.md § `/admin/mockups`](admin.md#adminmockups-pictures-for-a-decision))
+  in place, inside the dialog, so make the file first and name it in the question. A mockup file is
+  seen only after the deploy that carries it. Write it to
   [ask-me-questions.md](../reusable/ask-me-questions.md): Greg should be able to answer "1A" without
   opening anything else. When `report` is somebody else's, he sees it beside the question, shut and
   marked as a reader's, with the address it came from (since 2026-10-20,
   [feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
   but the body should still say what they asked, and when, in a sentence: he may not open it.
+- **A mockup is ASCII in the question by default.**
+
+  > I guess the only thing about the ASCII thing is that it does need to be a monospace font […]
+  > And it's sort of maybe you use a more sophisticated markup style when it matters. Otherwise
+  > ASCII is fine. […] Let's try it with ASCII diagrams for a while.
+  >
+  > — Greg, 2026-10-28 (`spya-rrvwca`)
+
+  So draw the shape in a fenced block in the body, where he sees it without opening anything. Make
+  a mockup file with an image (a wireframe in our CSS, screenshotted) only when the look itself is
+  the question, and **open the image and look at it before you name it**: a picture you have not
+  seen may not show what the question claims. A screenshot of the real app is for choosing between
+  things already built. No image models for now: that idea is parked (queue item `qi-2fs87mnx`)
+  until the ASCII trial says it is needed.
 - **The short version first, then a line that is exactly `Details`, then the rest.**
 
   > just make sure that it explains really plainly, provides a bit more of the context of what
