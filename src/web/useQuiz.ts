@@ -59,7 +59,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useAutoRun } from "./useAutoRun.js";
+import { useAutoRun, useAutoRunOnArrival } from "./useAutoRun.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -594,6 +594,38 @@ export function useQuizRead(slug: string): QuizRead {
  * The band's half: the job, the verbs and the marks. `read` comes from
  * `useQuizRead` in `OwnedReader` — see `QuizRead` for why the fetch moved up.
  */
+/**
+ * **Write the questions when the margin is shown and there are none** —
+ * Greg, 2026-10-29 (spya-fytjtf): *"let's say the quiz mode does run as one
+ * of the default modes whenever you open marginalia mode"*. The relation
+ * words' rule (useRelations.ts): `useAutoRunOnArrival`, one unforced attempt
+ * per article per page load, whatever put the column there, and only while
+ * the notes are on screen (`shown`), so a window too narrow for them buys
+ * nothing.
+ *
+ * **Only `none` runs.** A stale quiz is the band's to rewrite, as it is
+ * today, and an outdated one stays: a rewrite mints a new batch, and the
+ * answers the reader has given stop showing (quiz.md § Answers are kept).
+ * About $0.17–0.24 an article, measured on production's ledger on
+ * 2026-10-29 (plan 261029c). Owner only: the one caller is `OwnerMarginFeed`.
+ * Quiet, as the relations job is: the column stays open as long as somebody
+ * reads, and the read's `refresh` brings the questions in when it finishes.
+ */
+const NOTHING_TO_REFRESH = async (): Promise<void> => {};
+
+export function useQuizOnShow(slug: string, read: QuizRead, shown: boolean): void {
+  const { status, reload } = read;
+  /* **No refresh of its own on completion**: `useQuizRead` already hears the
+     step finish (`useStepFinished`) and refreshes, and a second callback here
+     would arm a trailing second GET (useOrderedRead.ts § `refresh`; GPT Sol,
+     F3 on plan 261029c). */
+  const queue = useStepJob(slug, "quiz", NOTHING_TO_REFRESH, "quiet");
+  const ensure = useCallback(async () => {
+    await queue.start();
+  }, [queue]);
+  useAutoRunOnArrival(slug, "quiz", shown ? status : "loading", ensure, reload);
+}
+
 export function useQuiz(slug: string, read: QuizRead): UseQuiz {
   const { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
   const { kept, noteMark } = read;

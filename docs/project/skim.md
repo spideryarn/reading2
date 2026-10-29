@@ -242,8 +242,14 @@ written under `trajectory/7` and unchanged in `skim/8` (whose request adds a str
   as data. Which Ideas each quote *carries* (same block) or sits *beside* (the nearest body
   paragraph either side, same top-level section) is worked out in code, never by the model. It is
   asked to cover as many Ideas as the quotes allow at each pass. Stops are still quotes only.
-- **It waits for the Ideas.** The automatic run and *Plan it again* find the Ideas first, in the
-  same job, when they are missing or stale; the empty state says so before the press, and that
+- **It waits for the Ideas, except on import.** Since 2026-10-29 an import no longer makes the
+  Ideas (Greg, `spya-shwpw5`; plan
+  [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md)), and its Skim job is
+  `["quotes", "skim"]`, so a new article's route is planned without them: the stop cards have no
+  *Ideas it bears on*, and the Gist covered about two fewer of 21 key ideas when last measured
+  (§ Stage 6 of plan 260928a). Ideas made later mark the route stale, which offers *Plan it again*
+  rather than re-planning by itself. The band's automatic run and *Plan it again* find the Ideas
+  first, in the same job, when they are missing or stale; the empty state says so before the press, and that
   finding them is the long part. The job's end refreshes the stop card's Ideas.
 - **One input hash** (`skimInputHash`) over exactly what the prompt renders is both the stamp
   and the read's freshness check, so regenerated Ideas, or Ideas arriving after a route planned
