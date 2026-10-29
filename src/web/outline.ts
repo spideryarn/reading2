@@ -70,10 +70,12 @@ export const PARAGRAPH_CAP = 8;
  * A paragraph row is never marked as the one the reader is in.
  *
  * Not a style choice — nothing on the page knows. Both available answers to
- * "where is the reader" are section-granular: `?at=` stores a section's first
- * block (position.ts § sectionDepth), and `LiveContext.focusRow` returns
- * `sections[...].row` (useColumnContext.ts). Marking the deepest row that
- * *contains* `focusRow` would therefore light the section's **first** paragraph
+ * "where is the reader" stop above the paragraphs: `?at=` stores a section's
+ * first block (position.ts § sectionDepth), and `LiveContext.focusRow` returns
+ * the first row of the section, or sub-section where the article has them, under
+ * the focus line (position.ts § structureFrontier, useColumnContext.ts). Marking
+ * the deepest row that *contains* `focusRow` would therefore light the item's
+ * **first** paragraph
  * every time, on every article, for ever — a mark that is wrong far more often
  * than it is right and looks entirely plausible while being so.
  *
@@ -183,8 +185,8 @@ interface Input {
    * paragraph.
    *
    * GPT Sol's review of the plan found this about `?at=`; I answered that
-   * `focusRow` was exact and it is not. Both routes are section-granular and
-   * the review's own second option — stop at the section — is what is built.
+   * `focusRow` was exact and it is not. Neither route reaches a paragraph, and
+   * the review's own second option — stop above the paragraphs — is what is built.
    */
   focusRow: number;
   rung: Rung;
