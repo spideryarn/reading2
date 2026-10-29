@@ -5,7 +5,7 @@ Started 2026-10-29, for feedback `spya-pn7gvw` (Greg, admin, suggestion). Worktr
 
 **Status: stage 1 (the reading view copes with a deeper tree) is the work for tonight. Stage 2 (the
 structure step makes one) waits on two things: Greg's answer to
-[q-pn7gvw](../user-feedback/questions/q-pn7gvw.md), and the box's OpenRouter key, which is over its
+[q-vrnbyj](../user-feedback/questions/q-vrnbyj.md), and the box's OpenRouter key, which is over its
 monthly limit until 1 November, so no prompt can be measured before then.**
 
 ## What Greg asked
@@ -77,8 +77,8 @@ contents is ragged, and a reader reads "this chapter has sub-sections" as inform
 
 ## Product choices, and where they went
 
-Two are Greg's, in [q-pn7gvw](../user-feedback/questions/q-pn7gvw.md) with mockup
-[m-pn7gvw](../mockups/m-pn7gvw.md). Recommendations, both agreed with Opus while thinking:
+Two are Greg's, in [q-vrnbyj](../user-feedback/questions/q-vrnbyj.md) with mockup
+[m-pe3zds](../mockups/m-pe3zds.md). Recommendations, both agreed with Opus while thinking:
 
 1. **When the extra level is made.** Recommended: **automatically, in the one structure call**, and
    only where the article earns it — first where the author's own sub-headings divide a section,
@@ -116,44 +116,54 @@ What breaks on a ragged tree (a read-only survey of the code, 2026-10-29):
   never current, with no gist, and their paragraphs unreachable.
 - **Expanded recurses correctly** but clamps rows at `lvl-3`, which the stylesheet draws as a
   paragraph.
+- **`buildGeometry` is not fine** (Sol, PR-3): on an undeepened branch of a globally deeper tree,
+  the leaf lands in an intermediate column with `continuation: false`.
 - Fine already: the tree invariants and validation (per node, no depth cap), `labels.ts`'s sibling
-  sets, `buildGeometry`'s continuation rule, the arc, crumbs, the spine (L1/L2 only), Diagram
-  (`MAX_DRAWN_DEPTH = 2`, deeper is simply not drawn), counts, questions, Marginalia.
+  sets, the arc, the spine (L1/L2 only), Diagram (`MAX_DRAWN_DEPTH = 2`, deeper is simply not
+  drawn), counts, questions, Marginalia.
 
-The changes:
+The changes, as revised after Sol's plan review
+([261029a-plan-review-sol.md](261029a-plan-review-sol.md)):
 
-1. **A section is the frontier, not a depth.** `buildSections` lists, for each block, the deepest
-   internal node containing it — a sub-section where there is one, a section otherwise — with
-   supplements collapsed as now (`navigableItems`) and the root never chosen. `sectionDepth` goes or
-   becomes a per-branch answer; every caller (`useArrowNav`'s stride, `Reader.tsx`'s crumb cut,
-   `useColumnContext`) reads the frontier. On a tree whose every branch is root → part → section →
-   leaf this must be identical to today; a test runs both rules over every tree fixture to prove it.
-   A part with no sections (184 of 882 chapters measured in 261001s) is the one existing shallow
-   case: keep what it does today unless it is plainly a bug, and say which in the commit.
-2. **Two columns: the current section opens to its sub-sections.** Column A and the windowing of
-   column B's sections are unchanged. Under the current section, when it has sub-sections, their
-   rows are spliced in whole (title; the current sub-section's gist; one can be current and marked
-   "here"), or, if they do not fit what the window left, a count in their place — the same atomic
-   rule the paragraph rung follows today. A new row kind, `subsection`, drawn indented like the
-   list's third level and never as a paragraph. The ribbon is unchanged (it is part → column B).
-   ⟨Built ahead of Greg's answer because both his idea A-with-fallback and the recommendation need
-   it; only his option C would remove it, and removing is one condition.⟩
-3. **The list (Fisheye).** The floor grows by one rung: every part, the current part's sections,
+1. **"Section" keeps today's meaning everywhere outside Structure** (PR-1, PR-2). The reading
+   position (`?at=`), Quiz's "where to look again", the return chip, block-link cards and the crumbs
+   go on using the section level: `sectionDepth` becomes `max(1, min(leafDepth - 1, 2))`, so a
+   sub-section is inside its section, never a section of its own. Identical to today on every tree
+   production can hold (the prompt cannot go past depth 2 and the deepening wave is off); it differs
+   only on a uniformly deeper tree, which exists in tests alone, and the commit says so. So a saved
+   `?at=` URL means what it meant, and the URL does not start churning inside a deepened section.
+2. **Structure gets its own, finer list: the frontier.** `structureFrontier` — for each block the
+   deepest internal node containing it, never the root, supplements collapsed as `navigableItems`
+   does — feeds Structure's "you are here" (`useColumnContext` while Structure is open) and
+   Structure's ← / →, passed as explicit start rows rather than a depth. On a uniform three-level
+   tree it equals the section list (a test proves it over every fixture). Five shapes tested:
+   ordinary, root-only, a part with leaves directly under it, supplement, provisional. The one place
+   it differs from the section list on today's trees is a part with leaves directly under it: the
+   frontier names the part rather than one nameless entry per paragraph, which is intended.
+3. **`buildGeometry`: a leaf is real only in the leaf column** (PR-3); in any column between its
+   parent and the leaf column it is a continuation. Mixed-depth and supplement geometry tests.
+4. **The list (Fisheye).** The floor grows by one rung: every part, the current part's sections,
    **the current section's sub-sections**, and the gist of the deepest current node. 261003k
    deferred exactly this ([§ Not in this change](261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md#not-in-this-change)).
    The paragraph rung, where it is drawn, hangs off the deepest current node.
-4. **Expanded** draws sub-sections at a fourth level with their gists, styled as sections, not
+5. **Expanded** draws sub-sections at a fourth level with their gists, styled as sections, not
    paragraphs (a new indent level in `outline-mode.css` and `structure-mode.css`; `paragraph` is
-   a flag on the row, not a depth).
-5. **Tests**: one ragged fixture with this paper's shape (titles only, made-up gists — no prose),
-   through `buildSections`, keynav, quiz-sections, both faces' projections and their panels; and
-   the identity test in 1.
+   a flag on the row, not a depth). This is the view Greg was in.
+6. **Two columns: unchanged in this stage, except that the paragraph rung only ever lists leaves**
+   (a guard; it is not reached at the shipped rung). Opening sub-sections under column B's current
+   section is the part that depends on Greg's layout answer, and Sol's PR-4 shows it is not a small
+   splice: the panel measures and windows one flat list, so a sub-section run could be cut in half
+   or take rows from the sections. When it is built, the current section and its sub-sections are
+   one measured unit, windowed as a unit, with a count in its place when it does not fit, and the
+   section's card withheld only when the whole unit is drawn.
+7. **Tests**: one ragged fixture with this paper's shape (titles only, made-up gists — no prose),
+   through `buildSections`, the frontier, `buildGeometry`, keynav, quiz-sections, the list and
+   Expanded projections and their panel; and the identity tests in 1 and 2, each seen red first.
 
-**Done**: `npm test`, `npm run typecheck` green; the identity test red first against a deliberately
-wrong frontier; a Sol code review; a Sonnet browser check on a local article whose tree a scratch
-script deepens by its own headings (local database only), at 1,280 and 1,500 px and on a 390 px
-phone, light and dark. Docs: structure.md, granularity-zoom.md § the tree (ragged depth is allowed),
-url-state.md if `?at=` granularity changes.
+**Done**: `npm test`, `npm run typecheck` green; a Sol code review; a Sonnet browser check on a
+local article whose tree a scratch script deepens by its own headings (local database only), at
+1,280 px and on a 390 px phone, light and dark, in Fisheye and Expanded. Docs: structure.md,
+granularity-zoom.md § the tree (ragged depth is allowed).
 
 ## Stage 2 — the structure step makes the level (after 1 November, after Greg's answer)
 
@@ -165,13 +175,19 @@ If Greg picks "automatically" (recommended):
 - **Prompt** (`PROMPT_VERSION` bump; `tests/structure-whole-document-request-parity.test.ts` pins the
   string): *go a fourth level (sub-sections) only inside a section the author's own sub-headings
   divide, or one longer than ~10 blocks with clear topic shifts; never split a short section*; gist
-  length for depth 3 the same as depth 2's band; no questions below depth 1 (unchanged). And restate
-  the hard-boundary rule with the heading tags, aimed at the swallowed-2.5 shape.
-- **The headings fallback** ([`src/heading-tree.ts`](../../src/heading-tree.ts), `section.depth < 2`)
-  takes the author's sub-headings one level further, so a fallback tree is ragged the same way.
+  length for depth 3 the same as depth 2's band; no questions below depth 1 (unchanged).
+- **Heading precedence, stated outright** (Sol PR-6, PR-7): an author heading at the same level as
+  the headings that start a section's siblings starts a sibling section; a deeper one starts a
+  sub-section; an author heading beats the 5–9 fan-out target and the short-section floor. "Never
+  split a short section" applies only to joins the model invents. A post-build count of swallowed
+  same-or-shallower headings goes on the run and in the eval.
+- **The headings fallback stays three levels** (Sol PR-5: production's fallback is
+  `buildBoundedHeadingTree`, whose batching guarantee depends on its shape). A fallback tree is
+  provisional and rare; deepening it is a later change if ever.
 - **Measure before shipping**: this paper, the 13 articles of 260904d's corpus or a fresh sample of
   production articles' blocks, and one book; per article cost, latency, how many sections deepened,
-  and how many short sections were split that should not have been (target: none under 10 blocks).
+  how many short sections were split at model-invented joins (target: none under 10 blocks), and
+  heading-driven splits counted separately; and the swallowed-heading count before and after.
   Two runs each for stability. Ship only if the median article's `structure` call grows by less than
   ~20% in cost and time.
 - Then, with Greg's yes, re-run this paper's structure in production (≈ $0.65 with labels).
