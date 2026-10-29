@@ -545,7 +545,7 @@ p.marg-shut {
   align-items: baseline;
   gap: 0.35rem;
   width: 100%;
-  /* A finger's height on a touch screen, as a shut line's. */
+  /* The compact pointer height; the coarse-pointer floor is below. */
   min-height: 1.5rem;
   border-radius: 2px;
   color: var(--ink-soft);
@@ -562,4 +562,9 @@ p.marg-shut {
   flex: none;
   position: relative;
   top: 0.15em;
+}
+/* The margin fits on an iPad, so these are finger controls there even though
+   the column never fits on a phone. docs/project/controls.md § Minimum. */
+@media (any-pointer: coarse) {
+  .marg-quiz-q { min-height: 40px; }
 }

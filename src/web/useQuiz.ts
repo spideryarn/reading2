@@ -270,8 +270,9 @@ export interface UseQuiz {
 
 /**
  * **The opening quiz read, and nothing else** — the GET, its ordering, and the
- * four facts the prose needs. Since 2026-09-30 the questions are drawn in the
- * prose in **every** mode (SPIDERYARN-READING2-6V), so this runs in
+ * four facts the prose needs. Since 2026-09-30 the questions are drawn beside
+ * the prose in **every** mode (SPIDERYARN-READING2-6V) — in Marginalia's column
+ * while that column is on screen, and in the prose otherwise — so this runs in
  * `OwnedReader` (ArticlePage.tsx) and the band layers `useQuiz` on top of it —
  * the split `useQuotesRead` / `useQuotes` made for the same reason. No job
  * subscription and no activation up here, for the reasons `QuotesRead` gives:
@@ -532,7 +533,32 @@ export function useQuizRead(slug: string): QuizRead {
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with
      every other artefact reader — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
-  const { reload, refresh } = useOrderedRead(load);
+  const { reload, refresh: orderedRefresh } = useOrderedRead(load);
+  /**
+   * **Two listeners, one read when they hear the same completion.** The
+   * always-mounted read hears every announced Quiz completion, while the
+   * mounted Quiz band or margin hook also owns the exact job it started. The
+   * latter is what catches a very fast job already `done` on the engine's first
+   * list; the former is what still hears it after that surface unmounts.
+   *
+   * Both callbacks run in the same React effect turn for an ordinary
+   * completion. Passing `orderedRefresh` to both would make its second call arm
+   * a trailing GET. Coalesce only that turn: clear the latch before the real
+   * refresh starts, so a genuinely later completion while its GET is in flight
+   * still asks `useOrderedRead` for the required trailing read.
+   */
+  const queuedRefresh = useRef<Promise<void> | null>(null);
+  const refresh = useCallback((): Promise<void> => {
+    if (queuedRefresh.current) return queuedRefresh.current;
+    const next = new Promise<void>((resolve, reject) => {
+      queueMicrotask(() => {
+        queuedRefresh.current = null;
+        void orderedRefresh().then(resolve, reject);
+      });
+    });
+    queuedRefresh.current = next;
+    return next;
+  }, [orderedRefresh]);
   /* A run that finishes after the reader left the Learn band still reaches the
      questions in the prose. This read was hoisted two days before its three
      siblings were given the line (e039d2acd) and was missed until 2026-10-06.
@@ -611,15 +637,13 @@ export function useQuizRead(slug: string): QuizRead {
  * Quiet, as the relations job is: the column stays open as long as somebody
  * reads, and the read's `refresh` brings the questions in when it finishes.
  */
-const NOTHING_TO_REFRESH = async (): Promise<void> => {};
-
 export function useQuizOnShow(slug: string, read: QuizRead, shown: boolean): void {
-  const { status, reload } = read;
-  /* **No refresh of its own on completion**: `useQuizRead` already hears the
-     step finish (`useStepFinished`) and refreshes, and a second callback here
-     would arm a trailing second GET (useOrderedRead.ts § `refresh`; GPT Sol,
-     F3 on plan 261029c). */
-  const queue = useStepJob(slug, "quiz", NOTHING_TO_REFRESH, "quiet");
+  const { status, reload, refresh } = read;
+  /* The job hook must refresh too: unlike `useStepFinished`, it reconciles the
+     exact job it started even when that job is already done on the engine's
+     first list. `useQuizRead.refresh` coalesces the ordinary case where both
+     listeners hear the same completion, so this does not add a trailing GET. */
+  const queue = useStepJob(slug, "quiz", refresh, "quiet");
   const ensure = useCallback(async () => {
     await queue.start();
   }, [queue]);

@@ -95,9 +95,11 @@ about what it did before.
 are on screen (`shown`), not while the article is still showing its opening outline, nothing while
 viewing as another reader, one unforced attempt per article per page load. Only `none` runs: a
 stale or outdated quiz is left for the band, because a rewrite mints a new batch and the reader's
-kept answers stop showing. The job is followed quietly (`useStepJob(…, "quiet")`) with no refresh
-of its own: `useQuizRead` already hears the step finish and refreshes, and a second callback would
-arm a trailing second GET (Sol F3).
+kept answers stop showing. The job is followed quietly (`useStepJob(…, "quiet")`) and its exact-job
+completion shares a same-turn-coalesced refresh with `useQuizRead`'s always-mounted listener. The
+job hook is needed when a fast job is already done on the engine's first list; the listener is
+needed after the margin or band has unmounted. Coalescing them avoids the trailing second GET (Sol
+F3; corrected in code review).
 
 **The questions move from the prose into the margin while the margin is on screen.** Today each
 question is a muted line in the prose after the block holding its last evidence passage, in every
@@ -110,8 +112,9 @@ it, the prose has them as now.
   block's note, after the shut lines: it is the question to ask yourself having read the passage.
 - **Open, not shut.** The question is the whole of it, and a shut *2 questions* line hides the
   thing meant to make the reader reflect. Each question is a button, with the prose line's icon,
-  in the model's face; pressing it opens Quiz at that question, the prose line's press
-  (`openQuizAt`), through a context so the margin's memo does not hear about the handler.
+  in the model's face; pressing it opens Quiz at that question, the prose line's press,
+  through the stable `openQuizAt` callback. The margin memo may depend on that callback: its
+  identity does not change on scroll, so it does not make `TableView` redraw.
 - A *Quiz* stamp with a house card (`tips.ts`): what it is, that the AI wrote it, and that pressing
   it opens the question in Learn › Quiz to answer.
 - Owner only, as the prose lines are; never a stale quiz.

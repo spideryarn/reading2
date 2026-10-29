@@ -56,9 +56,10 @@ vi.mock("../src/web/lib/api.js", async () => {
   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
 });
 
-const { OwnerMarginFeed } = await import("../src/web/marginalia/MarginaliaColumn.js");
+const { MarginNotesSlot, OwnerMarginFeed } = await import("../src/web/marginalia/MarginaliaColumn.js");
+const { useQuiz } = await import("../src/web/useQuiz.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
-const { resetActivations } = await import("../src/web/activation.js");
+const { armActivation, resetActivations } = await import("../src/web/activation.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -113,6 +114,24 @@ describe("the margin shown on an article with no quiz", () => {
     root = createRoot(host);
     await openMargin(quizReadStub({ status: "none" }));
     expect(quizPosts()).toHaveLength(1);
+  });
+
+  it("asks once when the reader's Quiz press and the margin arrive together", async () => {
+    const read = quizReadStub({ status: "none" });
+    function BandAndMargin() {
+      useQuiz(SLUG, read);
+      return createElement(OwnerMarginFeed, {
+        slug: SLUG,
+        shown: true,
+        awaitingStructure: false,
+        quiz: read,
+        onFeed: () => {},
+      });
+    }
+    armActivation(SLUG, "quiz");
+    await act(async () => root.render(createElement(BandAndMargin)));
+    await settle();
+    expect(quizPosts(), "the press-armed band and the arrival run each bought a quiz").toHaveLength(1);
   });
 
   it("asks for nothing while the notes are not on screen, and asks when they are", async () => {
@@ -183,5 +202,37 @@ describe("where the margin puts the questions", () => {
   it("draws none without a quiz", () => {
     const notes = marginaliaNotes(null, blocks, null, { quiz: null });
     expect([...notes.values()].flat().some((n) => n.kind === "quiz")).toBe(false);
+  });
+
+  it("makes every question a voiced, keyboard-described button with a finger-sized CSS target", async () => {
+    const questions = [
+      question("spya-qzq001", "What does the first passage claim?", ["spya-qza111"]),
+      question("spya-qzq002", "And what follows from it?", ["spya-qza111"]),
+    ];
+    const onOpenQuiz = vi.fn();
+    await act(async () =>
+      root.render(
+        createElement(MarginNotesSlot, {
+          blockId: blocks[0]!.id,
+          notes: [{ kind: "quiz", batchId: "b-1", questions }],
+          viewer: "owner",
+          onOpenQuiz,
+        }),
+      ),
+    );
+
+    const box = host.querySelector<HTMLElement>(".marg-quiz");
+    expect(box?.hasAttribute("data-marg-tip"), "the unfocusable group swallowed the delegated card").toBe(false);
+    expect(box?.querySelector(".marg-stamp")?.getAttribute("data-marg-tip")).toBe("quiz");
+    const buttons = [...(box?.querySelectorAll<HTMLButtonElement>("button.marg-quiz-q") ?? [])];
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons) {
+      expect(button.type).toBe("button");
+      expect(button.getAttribute("data-marg-tip"), "keyboard focus could not reach the house card").toBe("quiz");
+      expect(button.getAttribute("data-marg-voice")).toBe("ai");
+      expect(button.querySelector(".marg-quiz-text")?.classList.contains("voice-ai")).toBe(true);
+    }
+    await act(async () => buttons[1]?.click());
+    expect(onOpenQuiz).toHaveBeenCalledWith("b-1", "spya-qzq002");
   });
 });

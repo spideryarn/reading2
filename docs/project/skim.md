@@ -413,13 +413,14 @@ lost is checked against what is stored before the box says whether it was saved
 ([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
 [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
-**Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
-SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are now
-drawn in the prose in every mode ([quiz.md § In the prose](quiz.md)), after their passage, so at a
-stop with one it sits between the passage and **Next stop ›** — the cue asks what to look for before
-you read, the question what you took after. Nothing was added to the card or the route: on the card
-the question repeated the cue, and a question as its own stop would braid a second ordered path into
-the route. Both, and the pass's questions at the end of a pass, are deferred in
+**Quiz questions at a stop belong beside the article, not to the card** — Greg, 2026-09-30,
+SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are
+drawn after their passage in every mode ([quiz.md § In the prose](quiz.md)): normally in the prose,
+and among the margin's notes instead while that column is on screen. At a stop with one and no
+margin, it sits between the passage and **Next stop ›** — the cue asks what to look for before you
+read, the question what you took after. Nothing was added to the card or the route: on the card the
+question repeated the cue, and a question as its own stop would braid a second ordered path into the
+route. Both, and the pass's questions at the end of a pass, are deferred in
 [260930i](../plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md).
 
 **The FAQ question at a stop is gone** — Greg, 2026-10-01, SPIDERYARN-READING2-8Z (report

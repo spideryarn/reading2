@@ -420,13 +420,15 @@ function QuizNote({
   onOpen?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
 }) {
   return (
-    <div className="marg-quiz" data-marg-tip="quiz" data-marg-voice="ai">
-      <span className="marg-stamp">Quiz</span>
+    <div className="marg-quiz">
+      <span className="marg-stamp" data-marg-tip="quiz">Quiz</span>
       {questions.map((q) => (
         <button
           key={q.id}
           type="button"
           className="marg-quiz-q"
+          data-marg-tip="quiz"
+          data-marg-voice="ai"
           disabled={onOpen === undefined}
           onClick={() => onOpen?.(batchId, q.id)}
         >
