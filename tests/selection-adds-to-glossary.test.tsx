@@ -419,8 +419,13 @@ async function open(search = ""): Promise<void> {
 const param = (name: string): string | null => new URLSearchParams(location.search).get(name);
 
 /** `?note=` is written behind nuqs' throttle, so a single read is a race. */
-async function until(check: () => boolean): Promise<void> {
-  for (let i = 0; i < 60 && !check(); i++) {
+/** Waits on the clock, not a count of turns, so a loaded box (the full suite) gets
+ * the time it needs; and says so when it gives up, rather than letting the next
+ * assertion fail on a half-settled page. */
+async function until(check: () => boolean, ms = 5000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(`until: still false after ${ms}ms — ${check}`);
     await act(async () => {
       await new Promise((go) => setTimeout(go, 10));
     });
