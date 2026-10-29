@@ -1,7 +1,7 @@
 ---
 reports: spya-zytb0g
-ending: awaiting
-comment: Built: a Discussion kind for you, monospaced ASCII in questions, and /admin/mockups. Two questions wait on you: which mockup style, and the Overseer's rule wording.
+ending: shipped
+comment: Built: a Discussion kind for you, monospaced ASCII in questions, and mockups that open inside this dialog. ASCII is the default for now, as you chose; the Overseer's rules reworded (1A).
 ---
 # Discussions, monospaced mockups, /admin/mockups, and the Overseer reaching Greg
 
@@ -43,7 +43,7 @@ from `/read/10356-a-path-towards-autonomous-mach-spya-jwqnrf`. Sentry: confirmed
 >
 > So I guess there's a bunch of valuable things here!
 
-**Ending: awaiting Greg**, with most of it shipped to `dev`. Plan:
+**Ending: shipped** (since 2026-10-29; it was *awaiting Greg* until both questions were answered). Plan:
 [261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md).
 
 - Built: an admin-only third kind, *A discussion*, which agents answer with proposals before
@@ -56,3 +56,9 @@ from `/read/10356-a-path-towards-autonomous-mach-spya-jwqnrf`. Sentry: confirmed
   the phone).
 - Deferred until 1 November: an image-model mockup through OpenRouter, which is over its monthly
   limit.
+- Answered 2026-10-28. q-cgpett: 1A, done. q-c8h4zg (`spya-rrvwca`): ASCII in the question by
+  default, a richer mockup only when the look matters and looked at first; a mockup id now opens
+  the mockup inside the dialog instead of leaving it
+  ([261029g](../plans/261029g-mockups-shown-inside-the-feedback-dialog-ascii-by-default.md)); no
+  database publishing of mockups; the image-model mockup is parked in the queue (`qi-2fs87mnx`)
+  rather than waiting for 1 November.

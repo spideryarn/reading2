@@ -486,6 +486,9 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   in the monospace, unwrapped and scrolling sideways, for an ASCII mockup (since 2026-10-28,
   [plan 261028b](../plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md);
   the compiler refuses an unclosed fence, and a row published with one is drawn as plain text);
+  a mockup's id (`m-k3m9qt`) outside such a block, a button that opens the mockup after its
+  surrounding plain-text run, inside the dialog, since 2026-10-29: a link to its page stranded Greg's home-screen web
+  app outside the dialog ([plan 261029g](../plans/261029g-mockups-shown-inside-the-feedback-dialog-ascii-by-default.md));
   everything after a line that is exactly `Details`, outside such a block, shut under *Details*; the report it is about, whole and shut, under *Your report #301*, **or, since
   2026-10-20, a reader's** (below); and the admin's replies, in the reader's face: first those **an agent has
   acted on**, each marked *acted on*, with a line saying what happened next is written in the
