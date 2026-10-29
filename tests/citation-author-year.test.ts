@@ -96,6 +96,7 @@ describe("authorYearCites", () => {
       "James, Peter; Thorpe, Nick (1995). Ancient Inventions. Ballantine.",
       "Ptolemy (1998). Ptolemy's Almagest. Translated by Toomer, G. J.",
       "Russo, Lucio (2004). The Forgotten Revolution: How Science Was Born in 300 BC.",
+      "OECD (2020). A review of competing accounts (Smith 2019, Jones 2018).",
       "李 (2020). 一项研究的标题。",
     ]) {
       expect(keys(text), text).toEqual([]);
@@ -174,5 +175,41 @@ describe("the citation signals before the names", () => {
         "a (e.g., Miller & Cohen, 2001) b (see also Banich, 2009) c (see e.g. Block, 1995) d (but see Tye, 1995) e (for recent reviews, see Seth, 2022) f (i.e., Lamme, 2006) g (cf. Baars, 1988)",
       ),
     ).toEqual(["miller 2001", "banich 2009", "block 1995", "tye 1995", "seth 2022", "lamme 2006", "baars 1988"]);
+  });
+});
+
+/* Butlin et al., *Consciousness in Artificial Intelligence* (arXiv 2308.08708,
+   `arxiv-2308-08708-spya-xax6v4`), which separates the items of a list with a
+   comma rather than a semicolon. Only the first item was read, so Rosenthal
+   2005 was never marked in the paragraph Greg reported (spya-d5e2jk, plan
+   261029b). */
+describe("a list whose items are separated by commas", () => {
+  const HOT =
+    "Higher-order theories have long been advocated by philosophers (Carruthers & Gennaro 2020, Rosenthal 2005). One of the main motivations for the view is the so-called “simple argument” (Lycan 2001): if a mental state is conscious, the subject is aware that they are in that state";
+  const GWT =
+    "a neural version of the theory (Dehaene et al. 1998, 2003, Dehaene & Naccache 2001, Dehaene & Changeux 2011, Mashour et al. 2020). P";
+
+  it("reads every item, not only the first", () => {
+    expect(keys(HOT)).toEqual(["carruthers 2020", "rosenthal 2005", "lycan 2001"]);
+    expect(quotes(HOT)).toEqual(["Carruthers & Gennaro 2020", "Rosenthal 2005", "Lycan 2001"]);
+  });
+
+  it("reads past an author's second year to the next author", () => {
+    expect(keys(GWT)).toEqual(["dehaene 1998", "dehaene 2003", "dehaene 2001", "dehaene 2011", "mashour 2020"]);
+    expect(keys("(e.g. Franklin & Graesser 1999, Shanahan 2006, Bao et al. 2020).")).toEqual([
+      "franklin 1999",
+      "shanahan 2006",
+      "bao 2020",
+    ]);
+  });
+
+  it("does not start a list from a year that was not itself a citation", () => {
+    expect(keys("(founded in 2019, Kenya 2021, and Peru 2022)")).toEqual([]);
+    expect(keys("In 2019, Smith 2020, and so on")).toEqual([]);
+  });
+
+  it("stops at a word that is not a surname", () => {
+    expect(keys("(Lycan 2001, Table 2)")).toEqual(["lycan 2001"]);
+    expect(keys("(Lycan 2001, p. 5)")).toEqual(["lycan 2001"]);
   });
 });

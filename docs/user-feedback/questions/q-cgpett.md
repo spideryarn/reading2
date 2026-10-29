@@ -1,10 +1,11 @@
 ---
 id: q-cgpett
 report: spya-zytb0g
-status: open
+status: answered
 asked: 2026-10-28
 title: Things the Overseer says only in the terminal: change its rules so they reach you here?
 refs: docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md § Stage 4's evidence · scripts/overseer-tools/tick.sh · docs/project/overseer.md lines 48-56 · scripts/overseer-tools/standing-jobs.md § 1
+acted: spya-s7n3yv
 ---
 You asked that anything the Overseer needs to say to you can be said here. Last week it said 14 things that needed you; 8 reached Needs a decision and 6 stayed in the terminal. May I change its rules as below?
 
@@ -42,3 +43,7 @@ What 1B would add. A notice row beside the questions, published the same way, sh
 What 1C would add. When you reply "approve" to a question about a session's prompt, the Overseer would press option 1 in that session for you. Two things make this a real decision rather than a convenience. First, the Overseer's rules list "no keystrokes at a pane with a dialog open" as one of the things it may never do; the only exception is one kind of dialog you pre-approved on 10 September. Second, between your reply and the keypress the prompt can change, so it would need to check that the dialog is still the one you approved. It is worth doing if prompts keep being the main thing you are asked about after 1A.
 
 What would decide it: whether you would rather read a few more questions here (1A) or get more machinery (1B, 1C). Reply "1A", or "1A and 1B", and so on.
+
+Greg replied, 2026-10-28 (spya-s7n3yv): "1A"
+
+Done 2026-10-29 by the feedback sweep: both sentences changed to the wording above, in docs/project/overseer.md and scripts/overseer-tools/standing-jobs.md. 1B and 1C wait, as recommended, to be reconsidered after a week of 1A.
