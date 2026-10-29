@@ -167,6 +167,54 @@ corner's clearance (`.gloss-more`'s rule in glossary.css), and the list goes bac
 own `0.7rem`. The non-list states (loading, empty, error, stale banner) keep theirs. Verified in a
 browser locally against a canned list, measured before and after.
 
+## GPT Sol's plan review, and what it changed
+
+[…-plan-review-sol.md](261029e-explanations-borrow-glossary-controls-full-width-and-a-calmer-reader-face-plan-review-sol.md),
+2026-10-29: four P1s, seven P2s, two P3s. Where this list and the sections above disagree, this
+list wins.
+
+- **F1 (taken): the server says Find more or Write a new list.** The client's three flags do not
+  match an exact profile comparison: `profileIsStale` answers false for a reader with no profile
+  even when the list recorded one. So the GET response gains `panelRun: "append" | "rewrite"`,
+  computed from the **same** `existingFor` the step uses, with the reader's current profile hash —
+  Glossary's `panelRunKind`. Not taken: carrying the expected list's identity in the run request
+  so a profile change between the read and the press cannot turn *Find more* into a rewrite.
+  Glossary does not, and the window is one press.
+- **F2 (taken): only an older version is outdated**, Quotes' `isOutdated` (ordered `explanations/<n>`,
+  newer or unparseable counts as current). The build in production today compares with `!==`, so
+  a rollback to it would offer a rewrite of an `explanations/2` list; accepted for an experimental,
+  owner-only mode.
+- **F3 (taken): URL state is wired, not just declared** — `ExplanationsMode.tsx` reads `?explby=` and
+  `?explbar=` through `useQueryState` as `FaqMode.tsx` does, both classified in `last-view.ts` like
+  `faqby`/`faqbar`, with URL-state and last-view tests.
+- **F4 (taken): the margin's *Open in Explanations* still lands** when the bar hides that row:
+  lower the bar just enough to reveal it before `useLandOnItem` runs, Glossary's `gateToReveal`.
+  Tested.
+- **F5 (taken):** `passes`, `lastAdded` and `addedAt` optional on read, always written; a
+  `previousExplanationsFrom` mirroring Quotes', which refuses an unreadable baseline rather than
+  treating it as none.
+- **F6 (taken): the stored `dropped` stays cumulative** across passes; this pass's counts, and a named
+  `ExplanationScoreDrops` type, go to the log only.
+- **F7 (taken): no run row on an empty finished list.** *Nothing to explain* stays a real answer with
+  no retry, as `EXPLANATIONS_NONE` says. So the list's corner clearance (§ 3) is on the run row
+  when there is one and on the first visible row of the band otherwise, as now for the other states.
+- **F8 (taken):** `ANSWER_TOKENS` counts the two new fields; a test at the full cap.
+- **F9 (taken, as a decision):** the face test keeps the styles reader text is drawn in — 500 and
+  600 (`mode-band.css`), and italic (`.prof-interim`) — and names Kalam's gaps as accepted
+  (nearest weight, synthetic italic) rather than dropping them from the list.
+- **F10 (taken): one run action.** The top row is the band's only run button; the stale notice and
+  *Written for you* explain and do not repeat it, as Glossary's do.
+- **F11 (taken):** the comments that say Explanations has no baseline read or replaces on a forced
+  run (`pipeline.ts` § `explanations:` and the force-only list, `useExplanations.ts`,
+  `ExplanationsMode.tsx`, `ExplanationsPanel.tsx`) are rewritten with the code.
+- **F12 (taken): the numbers in § 3 were wrong.** The clearance is `1.9rem` with the (i) alone and
+  `3.6rem` with the profile badge, which shows only when the list was written for a profile or the
+  profile changed. The diagnosis and the fix stand.
+- **F13 (not taken):** Sol suggested *most likely to trip you up* over *hardest*, since the score is
+  this reader's likelihood of getting stuck. Kept *hardest*: the button that does the same job in
+  Glossary says *hardest*, Glossary's difficulty is also judged for a reader, and a chip has to be
+  short.
+
 ## Stages
 
 1. **The face** — §1. Small; done by me. Gates: `npm test` (self-hosted-faces, voices-css),
@@ -199,8 +247,8 @@ capped list can only ever show fewer — the opposite of what he asked to be abl
 
 ## Progress
 
-- [ ] Plan reviewed by GPT Sol
-- [ ] Stage 1 — the face
+- [x] Plan reviewed by GPT Sol (all taken but F13 and half of F1)
+- [x] Stage 1 — the face (98cde90e8; F9 in a follow-up)
 - [ ] Stage 2 — server
 - [ ] Stage 3 — client
 - [ ] Code reviewed by GPT Sol
