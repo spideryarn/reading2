@@ -3,10 +3,11 @@
 Started 2026-10-29, for feedback `spya-pn7gvw` (Greg, admin, suggestion). Worktree
 `fbpn7gvw-structure-one-level-deeper`. Up: [structure.md](../project/structure.md).
 
-**Status: stage 1 (the reading view copes with a deeper tree) is the work for tonight. Stage 2 (the
+**Status: stage 1 (the reading view copes with a deeper tree) is done and on `dev` (7cc28dc53, Sol's
+code-review fixes f44c9da8e; browser-checked on a locally deepened copy of the paper). Stage 2 (the
 structure step makes one) waits on two things: Greg's answer to
 [q-vrnbyj](../user-feedback/questions/q-vrnbyj.md), and the box's OpenRouter key, which is over its
-monthly limit until 1 November, so no prompt can be measured before then.**
+monthly limit until 1 November, so no prompt can be measured before then. Queued as `qi-negzd289`.**
 
 ## What Greg asked
 
