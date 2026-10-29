@@ -248,15 +248,10 @@ export function outlineProjection({
 
   const parts = root.children;
   const currentPart = parts.find((p) => contains(p, focusRow)) ?? null;
-  /* **Only a node with children of its own can be current below the parts**
-     (`hasChildren`): `focusRow` is the first row of Structure's frontier item
-     (position.ts § `structureFrontier`), the deepest node with children around
-     the reader. Where that is a part with paragraphs directly under it, its
-     first row is the first paragraph's, and the child containing it is not
-     where the reader is. Identical on every tree whose sections all have
-     children. Plan 261029a. */
-  const currentSection =
-    currentPart?.children.find((s) => contains(s, focusRow) && hasChildren(s)) ?? null;
+  /* `focusRow` is a frontier start. On a deepened branch that is the start of
+     the deepest internal node; on today's shallow branches it is exactly the
+     old section-level start, including a leaf directly under a part. */
+  const currentSection = currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
   const currentSub =
     currentSection?.children.find((s) => contains(s, focusRow) && hasChildren(s)) ?? null;
   /** The node the sentence and the paragraphs hang off: the sub-section the reader is in, else the section. */
@@ -301,12 +296,7 @@ export function outlineProjection({
       ...(extra.arc !== undefined && { arc: extra.arc }),
       supplement,
       matter: coveredByStretches(entry.startRow, entry.endRow, matter),
-      /* A childless node below the parts is a paragraph by shape, whichever
-         row it is drawn as — the part-with-paragraphs case above. */
-      here:
-        (paragraph || (level > 1 && !hasChildren(entry))) && PARAGRAPHS_ARE_NEVER_CURRENT
-          ? false
-          : contains(entry, focusRow),
+      here: paragraph && PARAGRAPHS_ARE_NEVER_CURRENT ? false : contains(entry, focusRow),
       now: false,
       before: entry.endRow < focusRow,
       tier: "far",

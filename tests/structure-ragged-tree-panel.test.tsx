@@ -88,5 +88,18 @@ describe.each([
     expect(current[0]!.classList.contains("lvl-3")).toBe(true);
     /* Its gist reaches the screen, which a sub-section drawn as a paragraph never had. */
     expect(current[0]!.querySelector(".outln-gist")?.textContent).toBe(MIDBRAIN.gist);
+
+    const paragraphs = rows.filter((li) => li.classList.contains("paragraph"));
+    if (expanded) {
+      expect(paragraphs).toEqual([]);
+    } else {
+      /* jsdom has no height, so the visible list stays on its rung-3 floor.
+         Inspect the real rung-5 measuring markup: it shares `rowClass` and
+         `RowBody` with the visible list specifically so this is not a mock. */
+      const candidate = host.querySelector<HTMLElement>('.outln-measure [data-rung="5"]');
+      const candidateParagraphs = [...(candidate?.querySelectorAll<HTMLElement>(".paragraph") ?? [])];
+      expect(candidateParagraphs).toHaveLength(MIDBRAIN.children.length);
+      expect(candidateParagraphs.every((li) => li.classList.contains("lvl-4"))).toBe(true);
+    }
   });
 });

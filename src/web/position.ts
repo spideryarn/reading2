@@ -42,7 +42,7 @@
  * *block* of the section, never the id of the node.
  */
 import type { Block, BlockId, NodeId, TreeNode } from "../types.js";
-import { navigableItems, titleVoice, type Cell, type Geometry } from "./tree.js";
+import { navigableItems, titleVoice, type Cell, type Geometry, type NavItem } from "./tree.js";
 import type { Voice } from "./voice.js";
 
 export interface Section {
@@ -98,10 +98,10 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
 }
 
 /**
- * **Structure's own list: for each block, the deepest internal node containing
- * it** — never the root, and a leaf only where the tree has nothing between
- * the root and its leaves. The same item shape as `buildSections`, with the
- * apparatus collapsed the same way.
+ * **Structure's own list: the section-level item for each block, replaced by
+ * the deepest internal node below it where one exists.** Never the root. The
+ * same item shape as `buildSections`, with the apparatus collapsed the same
+ * way.
  *
  * Why a second list: `buildSections` stops at depth 2 for everything outside
  * Structure (§ `sectionDepth`), but Structure draws the sub-sections a ragged
@@ -110,11 +110,10 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
  * Other Theories and Conditions" everywhere else. Plan 261029a § Stage 1,
  * item 2.
  *
- * **On a uniform three-level tree it is exactly the section list**
- * (tests/structure-ragged-tree.test.ts). The one place it differs on today's
- * trees is a part with leaves directly under it: the deepest internal node
- * there is the part, so the frontier names the part once rather than one
- * nameless entry per paragraph, which is intended.
+ * **On today's trees it is exactly the section list**
+ * (tests/structure-ragged-tree.test.ts), including a part with leaves directly
+ * under it: there is no deeper internal node on that branch, so its
+ * section-level leaves stay as they were.
  *
  * Read off the geometry's columns rather than a second walk of the tree, for
  * the reason `buildSections` gives. A row the tree does not cover gets no
@@ -132,40 +131,69 @@ export function structureFrontier(geometry: Geometry, blocks: Block[]): Section[
     }
     return at;
   });
+  const rootId = geometry.cells[0]?.[0]?.node.id;
+  const baseDepth = sectionDepth(geometry);
   const frontierAt = (row: number): TreeNode | undefined => {
-    for (let depth = geometry.leafDepth; depth >= 1; depth--) {
+    /* Start with the old section-level answer, then replace it only with a
+       genuinely deeper internal node. This is what keeps today's shallow
+       branches byte-for-byte while a divided section reaches its sub-section. */
+    for (let depth = geometry.leafDepth; depth > baseDepth; depth--) {
       const node = byColumn[depth]?.[row];
-      if (node && node.children.length > 0) return node;
+      if (node && node.id !== rootId && node.children.length > 0) return node;
     }
-    /* Nothing internal below the root — a tree of a root and its leaves, whose
-       leaves are its sections (`sectionDepth`'s clamp at 1, the same answer). */
-    return byColumn[1]?.[row];
+    const base = byColumn[baseDepth]?.[row];
+    return base?.id === rootId ? undefined : base;
   };
-  /* Runs of one node become cells, so `navigableItems` collapses the
-     apparatus exactly as it does for a real column. */
-  const cells: Cell[] = [];
+  /* Runs become navigation items directly, retaining their real row. Going
+     through a synthetic `Cell[]` would lose an uncovered run: `navigableItems`
+     derives starts by summing spans because real geometry columns tile the
+     article, whereas this projection deliberately omits the root-only gaps. */
+  const items: NavItem[] = [];
   let row = 0;
   while (row < blocks.length) {
     const node = frontierAt(row);
     let end = row + 1;
     while (end < blocks.length && frontierAt(end)?.id === node?.id) end++;
-    if (node) cells.push({ node, rowSpan: end - row, continuation: false });
+    if (node) {
+      const supplement = geometry.supplementOf.get(node.id);
+      const last = items.at(-1);
+      if (
+        supplement &&
+        last?.supplement &&
+        last.node.id === supplement.id &&
+        last.startRow + last.rowSpan === row
+      ) {
+        last.rowSpan += end - row;
+      } else {
+        items.push({
+          node: supplement ?? node,
+          startRow: row,
+          rowSpan: end - row,
+          continuation: false,
+          supplement: supplement !== undefined,
+        });
+      }
+    }
     row = end;
   }
-  return sectionsFromCells(cells, geometry, blocks);
+  return sectionsFromItems(items, blocks);
 }
 
 /** A column's cells as `Section`s — the half `buildSections` and `structureFrontier` share. */
 function sectionsFromCells(column: readonly Cell[], geometry: Geometry, blocks: Block[]): Section[] {
+  return sectionsFromItems(navigableItems(column, geometry.supplementOf), blocks);
+}
+
+/** Navigation items as `Section`s — shared after each projection has fixed its true starts. */
+function sectionsFromItems(items: readonly NavItem[], blocks: Block[]): Section[] {
   const sections: Section[] = [];
-  /* `navigableItems`, not the raw cells. At the section depth the apparatus is
-     one leaf cell per endnote, each with an empty title, so a reader who stops
-     in the notes would have `?at=` stepping through forty nameless sections and
-     the panel naming none of them. Collapsed, the notes are one section called
-     "Notes" whose id is its first block — and that is the same item keynav
-     steps to and the fisheye marks current, which is the agreement this
-     projection exists to guarantee. src/web/tree.ts § navigableItems. */
-  for (const item of navigableItems(column, geometry.supplementOf)) {
+  /* Items, not raw cells. At the section depth the apparatus begins as one leaf
+     per endnote, each with an empty title, so a reader who stops in the notes
+     would otherwise have `?at=` stepping through forty nameless sections and
+     the panel naming none of them. Both callers collapse it to one "Notes"
+     item first — the same item keynav steps to and the fisheye marks current.
+     src/web/tree.ts § navigableItems. */
+  for (const item of items) {
     const block = blocks[item.startRow];
     if (!block) continue;
     sections.push({

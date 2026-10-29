@@ -61,14 +61,13 @@ interface Props {
   /** The arc, keyed by the row each part starts on. Null until stage 5b has run. */
   arcByRow: Map<number, ArcCell> | null;
   /**
-   * Where the reader is — `LiveContext.focusRow`, **section-granular**.
+   * Where the reader is — `LiveContext.focusRow`, **frontier-granular**.
    *
-   * Worth knowing before you use it for anything finer: both of the page's
-   * answers to "where is the reader" stop at the section. `?at=` stores a
-   * section's first block (position.ts § sectionDepth), and `focusRow` is
-   * `sections[activeSectionIndex(...)].row` (useColumnContext.ts). So no
-   * paragraph is ever marked current here — see `PARAGRAPHS_ARE_NEVER_CURRENT`
-   * in outline.ts for why that is honesty rather than a missing feature.
+   * Structure supplies its frontier, so this is a sub-section's first row where
+   * one exists and the old section-level row elsewhere (position.ts §
+   * `structureFrontier`). It is still never an exact paragraph position, so a
+   * paragraph detail row is never marked current — see
+   * `PARAGRAPHS_ARE_NEVER_CURRENT` in outline.ts.
    */
   focusRow: number;
   /**

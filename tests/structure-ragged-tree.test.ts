@@ -173,13 +173,13 @@ describe("structureFrontier (item 2)", () => {
     expect(frontier.at(-1)?.title).toBe("Notes");
   });
 
-  it("names a part with paragraphs directly under it once, where the sections name each paragraph (shape: part with leaves)", () => {
+  it("keeps the section-level leaves under a shallow part (shape: part with leaves)", () => {
     const { tree, blocks } = partWithLeaves();
     expect(checkTree(blocks, tree).problems).toEqual([]);
     const geo = buildGeometry(tree, blocks);
-    /* The one intended difference on today's trees. */
-    expect(buildSections(geo, blocks).map((s) => s.nodeId)).toEqual(["l0", "l1", "l2", "s1", "s2"]);
-    expect(structureFrontier(geo, blocks).map((s) => s.nodeId)).toEqual(["pA", "s1", "s2"]);
+    const sections = buildSections(geo, blocks);
+    expect(sections.map((s) => s.nodeId)).toEqual(["l0", "l1", "l2", "s1", "s2"]);
+    expect(structureFrontier(geo, blocks)).toEqual(sections);
   });
 
   it("is the leaves on a tree of a root and its leaves, never the root (shape: root-only)", () => {
@@ -195,6 +195,25 @@ describe("structureFrontier (item 2)", () => {
     const frontier = structureFrontier(geo, blocks);
     expect(frontier.length).toBeGreaterThan(1);
     expect(frontier).toEqual(buildSections(geo, blocks));
+  });
+
+  it("omits uncovered rows without returning the root or shifting later starts", () => {
+    const { tree, blocks } = partWithLeaves();
+    const partial: Tree = {
+      ...tree,
+      nodes: {
+        ...tree.nodes,
+        /* The root still spans the article, but its only child starts at row 3.
+           Malformed stored trees render visibly short rather than inventing an
+           answer for the uncovered rows (tree.ts § buildChains). */
+        r: { ...tree.nodes.r!, children: ["pB"] },
+      },
+    };
+    const frontier = structureFrontier(buildGeometry(partial, blocks), blocks);
+    expect(frontier.map((s) => [s.row, s.nodeId])).toEqual([
+      [3, "s1"],
+      [5, "s2"],
+    ]);
   });
 });
 
@@ -369,10 +388,11 @@ describe("a part with paragraphs directly under it, in both faces", () => {
   const { tree, blocks } = partWithLeaves();
   const geo = buildGeometry(tree, blocks);
   const root = buildSummaryTree(tree, blocks, geo.leafDepth);
-  /* The frontier's start for part A: its first row, which is also its first paragraph's. */
-  const focusRow = structureFrontier(geo, blocks)[0]!.row;
+  /* Its second leaf distinguishes a real leaf-granular answer from merely
+     marking the part because both begin on row zero. */
+  const focusRow = structureFrontier(geo, blocks)[1]!.row;
 
-  it("marks the part, never the paragraph that happens to share its first row", () => {
+  it("marks the same leaf row the old section list supplied", () => {
     const list = outlineProjection({
       root,
       supplementOf: geo.supplementOf,
@@ -381,11 +401,11 @@ describe("a part with paragraphs directly under it, in both faces", () => {
       rung: 3,
       allowParagraphs: true,
     });
-    expect(list.rows.filter((r) => r.here).map((r) => r.node.id)).toEqual(["pA"]);
-    expect(list.currentId).toBe("pA");
+    expect(list.rows.filter((r) => r.here).map((r) => r.node.id)).toEqual(["pA", "l1"]);
+    expect(list.currentId).toBe("l1");
     const columns = structureProjection({ root, focusRow, rungA: 4, rungB: 5, allowParagraphs: true });
     expect(columns.columnA.rows.filter((r) => r.here).map((r) => r.id)).toEqual(["pA"]);
-    expect(columns.columnB.rows.some((r) => r.here)).toBe(false);
+    expect(columns.columnB.rows.filter((r) => r.here).map((r) => r.id)).toEqual(["l1"]);
   });
 });
 

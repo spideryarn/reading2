@@ -133,9 +133,10 @@ a tree, and they are not the same thing ([261029a](../plans/261029a-structure-on
   the leaves and never deeper than 2. `?at=`, Quiz's "where to look again", the return chip, the
   block-link card and the crumbs use it, so a sub-section is inside its section, never a section of
   its own.
-- **Structure's frontier** (`structureFrontier`, same file) is, for each block, the deepest node
-  with children containing it. Structure's "you are here" and its ← / → read it. On a uniform
-  three-level tree it is exactly the section list.
+- **Structure's frontier** (`structureFrontier`, same file) starts with the section-level node for
+  each block and uses the deepest internal node below it where one exists. Structure's "you are
+  here" and its ← / → read it. On every tree shape production held before ragged trees, including a
+  part with leaves directly under it, it is exactly the section list.
 
 In the geometry, a leaf shallower than the deepest is real only in the leaf column and a
 continuation in the columns above it (tree.ts § `buildGeometry`).

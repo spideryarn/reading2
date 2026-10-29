@@ -132,14 +132,14 @@ The changes, as revised after Sol's plan review
    production can hold (the prompt cannot go past depth 2 and the deepening wave is off); it differs
    only on a uniformly deeper tree, which exists in tests alone, and the commit says so. So a saved
    `?at=` URL means what it meant, and the URL does not start churning inside a deepened section.
-2. **Structure gets its own, finer list: the frontier.** `structureFrontier` — for each block the
-   deepest internal node containing it, never the root, supplements collapsed as `navigableItems`
-   does — feeds Structure's "you are here" (`useColumnContext` while Structure is open) and
+2. **Structure gets its own, finer list: the frontier.** `structureFrontier` starts with the section
+   level and replaces it with the deepest internal node below it where one exists, never the root;
+   supplements are collapsed as `navigableItems` does. It feeds Structure's "you are here"
+   (`useColumnContext` while Structure is open) and
    Structure's ← / →, passed as explicit start rows rather than a depth. On a uniform three-level
    tree it equals the section list (a test proves it over every fixture). Five shapes tested:
-   ordinary, root-only, a part with leaves directly under it, supplement, provisional. The one place
-   it differs from the section list on today's trees is a part with leaves directly under it: the
-   frontier names the part rather than one nameless entry per paragraph, which is intended.
+   ordinary, root-only, a part with leaves directly under it, supplement, provisional. It is the
+   section list on every one of today's shapes, including the shallow part's section-level leaves.
 3. **`buildGeometry`: a leaf is real only in the leaf column** (PR-3); in any column between its
    parent and the leaf column it is a continuation. Mixed-depth and supplement geometry tests.
 4. **The list (Fisheye).** The floor grows by one rung: every part, the current part's sections,

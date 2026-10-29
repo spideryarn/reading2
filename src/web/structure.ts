@@ -76,10 +76,10 @@ export const PARAGRAPH_CAP = 8;
  * **There is no centre to window a paragraph list around, so it is never
  * windowed and never counted from.**
  *
- * `focusRow` is section-granular — it is `sections[…].row`, the first row of the
- * section under the focus line (useColumnContext.ts) — and `?at=` is the same
- * (position.ts § sectionDepth). So nothing on this page knows which paragraph
- * the reader is on.
+ * `focusRow` is frontier-granular — the first row of the section or sub-section
+ * under the focus line (position.ts § `structureFrontier`) — while `?at=` stays
+ * at the section level. So nothing on this page knows which paragraph inside
+ * that item the reader is on.
  *
  * `outline.ts` § `PARAGRAPHS_ARE_NEVER_CURRENT` draws the consequence for the
  * *mark*. This is the consequence for the *window*: a centred paragraph window
@@ -508,7 +508,7 @@ export interface StructureInput {
   /**
    * Which row the reader is at — `LiveContext.focusRow`.
    *
-   * **Section-granular, and every consumer here has to know that**; see
+   * **Frontier-granular, and every consumer here has to know that**; see
    * `PARAGRAPH_IS_NEVER_CURRENT`.
    */
   focusRow: number;
@@ -562,18 +562,10 @@ export function structureProjection({
    * it is `null` when the part cannot be shown.
    */
   const currentPart = selectedPart !== null && rowText(selectedPart) !== null ? selectedPart : null;
-  /**
-   * **Only a section with children of its own can be current.** `focusRow` is
-   * the first row of Structure's frontier item (position.ts §
-   * `structureFrontier`) — the deepest node with children around the reader.
-   * Under a part whose children include paragraphs, that item is the part, and
-   * its first row is the first paragraph's: marking the child that contains it
-   * would light that paragraph wherever in the part the reader was. Identical
-   * on a tree whose sections all have children, which is every ordinary one.
-   * Plan 261029a.
-   */
-  const currentSection =
-    currentPart?.children.find((s) => contains(s, focusRow) && hasChildren(s)) ?? null;
+  /* A deepened branch supplies an internal frontier start; a shallow branch
+     supplies the same section-level start it did before this change, including
+     a leaf directly under a part. */
+  const currentSection = currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
 
   /* ---- column A: every part ---- */
   /**
