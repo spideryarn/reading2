@@ -38,6 +38,20 @@
  * also contain however long the opening read took. GPT Sol's finding 2 on the
  * plan, 2026-09-16.
  *
+ * ## And the paragraph you are on, which is replaced
+ *
+ * The flush also carries `place`, the paragraph the position spy last noted
+ * (last-view.ts § `onReadingPlace`), so another device can open there (plan
+ * docs/plans/261029f-your-place-in-an-article-follows-you-to-another-device.md).
+ * A place is the opposite of a second: the server **replaces** it, so a place
+ * is kept until a send of it answers 2xx and retried otherwise, while its
+ * seconds go once as always. It is sent only when it changed, numbered so an
+ * older send's answer cannot mark a newer place sent, and one at a time so two
+ * sends cannot land out of order (GPT Sol's build review, F2). It starts as the
+ * address's `?at=` at mount and dirty, so every open records one, the top
+ * included: a row of any kind is what tells another browser this is not a
+ * first open (Sol's F3: the spy's first note can come before this subscribes).
+ *
  * The opening GET is ordered before this mount's first ordinary flush, and
  * after any cleanup POST from the preceding mount of the same article. Without
  * both halves, the snapshot can include seconds still held in `local` (drawn
@@ -61,6 +75,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
+import { onReadingPlace } from "./last-view.js";
+import { currentAt } from "./params.js";
+import { isSpideryarnId } from "../ids.js";
 import { viewAsNonce } from "./lib/view-as.js";
 import { useMadeFor } from "./lib/made-for.js";
 import { rowCache, rowsOnScreen } from "./on-screen.js";
@@ -97,22 +114,25 @@ const ACTIVITY_EVENTS = ["scroll", "wheel", "keydown", "pointerdown", "pointermo
  */
 const writesInFlight = new Map<string, Set<Promise<void>>>();
 
-function sendReadingTime(path: string, init: RequestInit, madeFor: string | null): void {
+/** Sends one batch; resolves `true` when the server answered 2xx. Never rejects. */
+function sendReadingTime(path: string, init: RequestInit, madeFor: string | null): Promise<boolean> {
   let writes = writesInFlight.get(path);
   if (!writes) {
     writes = new Set();
     writesInFlight.set(path, writes);
   }
   /* Both arms swallow, a refusal for another reader (`NotThisReader`) included. */
-  const request = apiFetch(path, init, madeFor).then(
-    () => undefined,
-    () => undefined,
+  const answered = apiFetch(path, init, madeFor).then(
+    (res) => res.ok,
+    () => false,
   );
+  const request = answered.then(() => undefined);
   writes.add(request);
   void request.finally(() => {
     writes.delete(request);
     if (writes.size === 0 && writesInFlight.get(path) === writes) writesInFlight.delete(path);
   });
+  return answered;
 }
 
 async function waitForReadingTimeWrites(path: string): Promise<void> {
@@ -322,6 +342,22 @@ export function useReadingTime(
     let gone = false;
     let opening = true;
     let flushAfterOpening = false;
+    /* The paragraph, numbered (§ And the paragraph you are on). `version` moves
+       with each new place; `sent` is the newest the server has confirmed. It
+       starts from the address only for a current block: a malformed id would
+       make every batch a 400, and a retired or foreign one would be dropped by
+       the store, leaving this opening unrecorded until the reader moved. */
+    const arrivedAt = currentAt();
+    let place: BlockId | null =
+      arrivedAt !== null && isSpideryarnId(arrivedAt) && wordsRef.current.has(arrivedAt) ? arrivedAt : null;
+    let version = 1;
+    let sent = 0;
+    let placeInFlight = false;
+    const unhear = onReadingPlace((note) => {
+      if (note.block === place) return;
+      place = note.block;
+      version += 1;
+    });
 
     const recompute = (ids: Iterable<BlockId>) => {
       let next: Map<BlockId, ReadLevel> | null = null;
@@ -377,7 +413,12 @@ export function useReadingTime(
         flushAfterOpening = true;
         return;
       }
-      if (pending.size === 0) return;
+      /* A place goes when it changed and no earlier place is still on its way —
+         except on the way out, when this is the last chance. A mount removed
+         before its opening GET settled (StrictMode's simulated one, above all)
+         has no place to report; the mount after it does. */
+      const withPlace = version !== sent && (leaving || !placeInFlight) && !(gone && opening);
+      if (pending.size === 0 && !withPlace) return;
       const batch = pending;
       pending = new Map();
       const seconds: Record<BlockId, number> = {};
@@ -385,21 +426,34 @@ export function useReadingTime(
         const rounded = Math.round(s * 1000) / 1000;
         if (rounded > 0) seconds[id] = rounded;
       }
-      if (Object.keys(seconds).length === 0) return;
+      if (Object.keys(seconds).length === 0 && !withPlace) return;
       const init = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seconds }),
+        body: JSON.stringify(withPlace ? { seconds, place } : { seconds }),
       };
+      const sending = version;
       if (leaving) {
         // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
         void leavingFetch(path, init, madeFor);
         return;
       }
-      /* Dropped on failure, never re-queued — see the file header. `apiFetch`
-         records the failure in the client log buffer, which is what a bug
-         report carries. */
-      sendReadingTime(path, init, madeFor);
+      /* The seconds are dropped on failure, never re-queued — see the file
+         header. `apiFetch` records the failure in the client log buffer, which
+         is what a bug report carries. The place stays unsent, for the next. */
+      if (withPlace) placeInFlight = true;
+      void sendReadingTime(path, init, madeFor).then((ok) => {
+        if (!withPlace) return;
+        const newerPlace = version !== sending;
+        placeInFlight = false;
+        if (ok) sent = sending;
+        /* Cleanup cannot send a newer place while this request is in flight,
+           or the two replacements could land backwards. Once the older one
+           settles, give the latest place one final, serialized send even
+           though the reading view has gone. A failure of the latest send is
+           not retried here; only a genuinely newer version triggers this. */
+        if (gone && newerPlace) flush(false);
+      });
     };
 
     const active = () => {
@@ -458,6 +512,7 @@ export function useReadingTime(
 
     return () => {
       gone = true;
+      unhear();
       if (lookup.current === ownLookup) lookup.current = null;
       for (const name of ACTIVITY_EVENTS) window.removeEventListener(name, active, { capture: true });
       window.removeEventListener("pageshow", active);

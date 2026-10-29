@@ -1,10 +1,11 @@
 ---
 id: q-mpq9dp
 report: spya-e23tee
-status: open
+status: answered
 asked: 2026-10-29
 title: Should your place in an article follow you to your other devices?
 refs: SPIDERYARN-READING2-Q3 · docs/plans/261029f-your-place-in-an-article-follows-you-to-another-device.md · docs/plans/261029f-plan-review-sol.md · docs/postmortems/261029a-a-place-kept-per-browser-read-as-the-readers-own.md · docs/user-feedback/261029_0019-reopened-at-the-top-on-a-browser-that-had-never-seen-the-article.md
+acted: spya-hfufq8
 ---
 Your place in an article is remembered only by the browser you read it in, and the one you reopened Consciousness in AI in had no record of it. Should the place be kept on the server too, so any of your devices can pick it up?
 
@@ -29,3 +30,9 @@ Why this is a question and not a fix. When you first asked for this (5 September
 How A works. The reading-time update that already goes to the server every minute (and when you switch away or close the tab) also carries the paragraph you are on. When you open one of your articles in a browser that has never seen it, the server's paragraph is used, unless the link you followed named a place of its own or you have already started scrolling. Only you, on your own articles; someone reading a shared article keeps today's per-browser memory. It is deleted with the article, deleted if the article changes owner, and included in the export.
 
 What would decide it. If you mostly finish an article on one device, A is plenty. If you regularly move back and forth between devices mid-article, B is what you actually want, and A is the first half of it.
+
+Greg's reply, 2026-10-29 (spya-hfufq8, in the Feedback dialog):
+
+> A
+
+Acted on, 2026-10-29 (plan 261029f, built as option A): the server now keeps the paragraph you last read in each of your articles, sent with the reading-time update. A browser with no memory of an article opens at that paragraph, and the new-article guide appears only when no device has ever opened it. The browser you were reading on still uses its own memory. The privacy page says so. It reaches the site with the next deploy.

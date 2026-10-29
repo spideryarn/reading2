@@ -309,6 +309,7 @@ describe("declaredTables", () => {
       "read_so_far_words",
       "reader_arrivals",
       "reader_profiles",
+      "reading_place",
       "reading_time",
       "realtime_sessions",
       "referee_criteria",
@@ -434,8 +435,9 @@ describe("against a real database", () => {
          `author_lookup_candidates`, the same day (plan 261024j); seventy
          since `article_revision_parts`, the same day (plan 261024p);
          seventy-one since `read_so_far_words`, 2026-10-25 (plan 261025l); seventy-two
-         since `skim_briefs`, 2026-10-27 (plan 261027d). */
-      expect(report.declaredTables).toBe(72);
+         since `skim_briefs`, 2026-10-27 (plan 261027d); seventy-three since
+         `reading_place`, 2026-10-29 (plan 261029f). */
+      expect(report.declaredTables).toBe(73);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

@@ -1,7 +1,7 @@
 ---
 reports: spya-e23tee
-ending: awaiting
-comment: The browser you reopened it in had no memory of the article (your place is kept per browser). Asking whether it should be kept on the server so other devices pick it up.
+ending: shipped
+comment: Your place in each of your articles is now kept on the server too, so a browser that has never seen the article opens at the paragraph you reached elsewhere, not at the top with the guide.
 ---
 # Reopened at the top, on a browser that had never seen the article
 
@@ -14,7 +14,17 @@ Report #732, `spya-e23tee`, Greg (admin, `feedback-reporter.ts` exit 0), problem
 > it, it hasn't seemed to remember where I was, and it's opened it again at the top, whereas it's
 > supposed to scroll down to where I was last at.
 
-**Ending: awaiting Greg**, question [q-mpq9dp](questions/q-mpq9dp.md). Nothing built.
+**Ending: shipped**, 2026-10-29, after Greg answered [q-mpq9dp](questions/q-mpq9dp.md) with *"A"*
+(reply `spya-hfufq8`). Built as
+[plan 261029f](../plans/261029f-your-place-in-an-article-follows-you-to-another-device.md) § As built:
+a new table `reading_place` (migration `20261029093800_reading_place`, additive, applied by the next
+deploy), the paragraph sent with reading time's flush, and a browser with no key waiting for the
+owner's article read before it calls an open a first one. GPT Sol reviewed the design
+([261029f-build-review-sol.md](../plans/261029f-build-review-sol.md)) and the code
+([261029f-code-review-sol.md](../plans/261029f-code-review-sol.md)). Not built, by his choice of A
+over B: full sync, so a device with its own memory still trusts it.
+
+What follows is the diagnosis written before he answered.
 
 - **What it was.** The address it was filed from is exactly the first-open default, which the app
   applies only when the browser holds no memory at all of this reader and article. His six earlier

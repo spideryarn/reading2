@@ -751,7 +751,7 @@ two readers can share a browser:
 [auth.md § Browser storage that is a reader's is keyed by that reader](auth.md#browser-storage-that-is-a-readers-is-keyed-by-that-reader).) [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
 [`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `App` above its auth branches
 ([`src/web/App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
-fine.
+fine, until 2026-10-29: [§ A browser that has never seen it asks the server](#a-browser-that-has-never-seen-it-asks-the-server).
 
 **This does not make `localStorage` a second source of truth**, which is what the rule at the top of
 this file is protecting. What is stored is a copy of an address the reader has already left, read
@@ -814,6 +814,24 @@ Two changes since then, both in
   rewraps every row above, and the spy used to write down where that left the page. Each reopen
   started a section further back:
   [postmortem 261019a](../postmortems/261019a-a-reopen-drifted-back-a-section-each-time.md).
+
+### A browser that has never seen it asks the server
+
+> I just reloaded this article, and even though I've read it before and I was like halfway through
+> it, it hasn't seemed to remember where I was, and it's opened it again at the top
+>
+> — Greg, 2026-10-29 (spya-e23tee)
+
+His place was in another browser's storage ([postmortem 261029a](../postmortems/261029a-a-place-kept-per-browser-read-as-the-readers-own.md)).
+Since then the owner's paragraph is **also kept on the server**, sent with reading time's flush
+([reading-time.md](reading-time.md)), and an arrival with **no key** in this browser, signed in, at a
+bare address, waits for the owner's article read, which carries it. A paragraph arrives as a restore
+does; a row at the top, or reading time with no row, opens plain; nothing anywhere is a first open,
+below. A browser with a key trusts its own copy, so laptop, iPad, laptop takes the laptop back to its
+own last place — the trade Greg chose (option A of
+[q-mpq9dp](../user-feedback/questions/q-mpq9dp.md)). Only the paragraph travels, not the mode.
+`settleSavedPlace` and `savedPlaceHref`, [`last-view.ts`](../../src/web/last-view.ts) § The
+server's place; plan [261029f](../plans/261029f-your-place-in-an-article-follows-you-to-another-device.md).
 
 ### An article never opened here arrives at a default
 

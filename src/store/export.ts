@@ -1055,6 +1055,12 @@ export async function exportArticle(
     for (const row of rows.readingTime) seconds[row.blockId] = row.seconds;
     await put("reading_time", "reading-time.json", { seconds });
   }
+  /* Where the owner last was, on any device — plan 261029f. */
+  if (rows.readingPlace.length) {
+    await put("reading_place", "reading-place.json", {
+      places: rows.readingPlace.map((row) => ({ blockId: row.blockId, savedAt: row.savedAt.toISOString() })),
+    });
+  }
 
   /* The owner's added Skim briefs, oldest first, with each route as stored —
      plan 261027d. */

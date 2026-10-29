@@ -2184,6 +2184,19 @@ export interface ProjectionResponse {
   points: ProjectionPoint[];
 }
 
+/**
+ * **Where the owner last was in an article, as the server keeps it** — on
+ * `GET /api/article/:slug`'s owned answer as `readingPlace`, and sent with
+ * reading time's flush as `place`.
+ * docs/plans/261029f-your-place-in-an-article-follows-you-to-another-device.md.
+ *
+ * `{ block }` is "opened before": the paragraph, or `null` for the top (and
+ * for an article read before places were kept, whose place nobody knows).
+ * `null` on its own is "never opened, on any device", which is what lets a
+ * browser with no memory of its own call it a first open.
+ */
+export type SavedPlace = { block: BlockId | null } | null;
+
 export interface Article {
   meta: Meta;
   blocks: Block[];
