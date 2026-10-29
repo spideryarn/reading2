@@ -38,4 +38,4 @@ on one card.
 
 **What waits**: how a dozen clause-long underlines reads on a real article (the first live run,
 `qi-k738ybv4`), a pressed state when a row is chosen in the band, and a keyboard road like
-Glossary's G.
+Glossary's G — all queued as `qi-bqem62fs` (a proposal; the last two were not asked for).
