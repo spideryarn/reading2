@@ -242,8 +242,8 @@ export const STOP_CAME_TOO_LATE =
  * idea what that error means, and the article seemed to work, so it's just a
  * very confusing message."*
  *
- * **Only a job made of `AUTO_MODE_STEPS`** (`onlyAutoModeSteps`), because only
- * for those is it provably true: each writes its own artefact into the claim's
+ * **Only a job made of harmless extra steps** (`onlyUnaffectingExtraSteps`),
+ * because only for those is it provably true: each writes its own artefact into the claim's
  * draft, and a job publishes that draft only on a `done` ending (src/jobs.ts §
  * the session one claim runs on). The list is the main modes plus
  * cross-references, which is an automatic extra but not a mode. Not every
@@ -258,12 +258,16 @@ export const STOP_CAME_TOO_LATE =
 export const ARTICLE_UNAFFECTED = "The article itself is unchanged. Only this extra did not finish.";
 
 /**
- * Whether every step of this job is one of the automatic extras a first
- * publication queues — `AUTO_MODE_STEPS`, which already holds what each of
- * them reads first.
+ * The harmless extras a current first publication queues, plus Ideas. Ideas
+ * left that queue on 2026-10-29, but an Ideas run (and a Skim run that reads it)
+ * still has the same transactional publication rule, and jobs queued before
+ * that deploy still carry it. Deriving this predicate from today's import list
+ * made those existing jobs lose the reassuring sentence when the list changed.
  */
-function onlyAutoModeSteps(job: Pick<Job, "steps">): boolean {
-  return job.steps.length > 0 && job.steps.every((s) => AUTO_MODE_STEPS.includes(s.name));
+const UNAFFECTING_EXTRA_STEPS: ReadonlySet<StepName> = new Set([...AUTO_MODE_STEPS, "ideas"]);
+
+function onlyUnaffectingExtraSteps(job: Pick<Job, "steps">): boolean {
+  return job.steps.length > 0 && job.steps.every((s) => UNAFFECTING_EXTRA_STEPS.has(s.name));
 }
 
 /**
@@ -641,7 +645,7 @@ export function displayJob(job: Job, now: number): JobDisplay {
     sentence:
       state === "slow"
         ? slowSentence(timing)
-        : (state === "failed" || state === "interrupted") && onlyAutoModeSteps(job)
+        : (state === "failed" || state === "interrupted") && onlyUnaffectingExtraSteps(job)
           ? ARTICLE_UNAFFECTED
           : SENTENCES[state],
   };

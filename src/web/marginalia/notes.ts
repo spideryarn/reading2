@@ -27,6 +27,7 @@ import type {
   Idea,
   IdeaProvenance,
   MarginNote,
+  QuizQuestion,
   Relation,
   SituateFinding,
   TimelineEvent,
@@ -37,6 +38,7 @@ import type { PublicClaimReceptionRow, PublicComment } from "../../public-types.
 import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
 import { isSupplementNode } from "../../supplement.js";
+import { questionsByAnchor } from "../quiz-anchors.js";
 import { titleVoice } from "../tree.js";
 import { type AskedQuestion, type CommentKind, commentKind } from "../comment-nav.js";
 import type { Voice } from "../voice.js";
@@ -105,7 +107,13 @@ export type MarginaliaNote =
   | { kind: "citation"; items: CitedWork[] }
   /** The reader's own comments on this block, and the questions they asked
       from it — each with its kind (SPIDERYARN-READING2-9H, plan 261002j). */
-  | { kind: "comment"; items: MarginEntry[] };
+  | { kind: "comment"; items: MarginEntry[] }
+  /** The quiz's questions that hang after this block, in path order — the
+      prose's own placement (quiz-anchors.ts). Open, not shut: the question is
+      the whole of it, and it is there to make the reader stop and think
+      (Greg, spya-fytjtf; plan 261029c). Last in the note. Owner only — the
+      caller's rule. `questions` is never empty. */
+  | { kind: "quiz"; batchId: string; questions: QuizQuestion[] };
 
 /**
  * **One of the reader's marks, with which of three it is** — a comment, a
@@ -144,6 +152,9 @@ export type MarginSources = {
   /** The explanations of the places a reader is likely to get stuck — the
       owner's only, and never a stale list (plan 261028c). */
   explanations?: readonly Explanation[] | null;
+  /** The owner's quiz, never a stale one — the batch is what a press opens
+      Quiz at (plan 261029c). */
+  quiz?: { batchId: string; questions: readonly QuizQuestion[] } | null;
 };
 
 /**
@@ -348,6 +359,17 @@ export function marginaliaNotes(
 
   for (const [blockId, notes] of groupedNotes(index, blocks, more)) {
     for (const note of notes) add(blockId, note);
+  }
+
+  /* **The quiz's questions last**, after the passage that finishes what each
+     asks about: having read it, this is the thing to ask yourself. The
+     prose's rule, so a question sits in the same place whichever of the two
+     draws it (Reader.tsx § `quizAfter`). */
+  if (more.quiz) {
+    const order = blocks.map((b) => b.id);
+    for (const [blockId, questions] of questionsByAnchor(more.quiz.questions, order)) {
+      add(blockId, { kind: "quiz", batchId: more.quiz.batchId, questions });
+    }
   }
   return out;
 }

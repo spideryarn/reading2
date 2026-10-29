@@ -237,7 +237,8 @@ prompt.
 ## The artefact, and the batch every mark binds to
 
 `quiz` is a pipeline step like `ideas` or `timeline` — off the default list, run on demand by a
-button in the band — and, since 2026-09-06, by pressing the **Quiz** chip itself,
+button in the band, by the margin being shown on an article with none (since 2026-10-29,
+[marginalia.md](marginalia.md#quizs-questions-since-2026-10-29)) — and, since 2026-09-06, by pressing the **Quiz** chip itself,
 which is Greg's rule that opening a mode is the reader asking for it
 ([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md);
 [`activation.ts`](../../src/web/activation.ts)). The chip arms whether or not the
@@ -434,6 +435,11 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-6V):
 
 > Actually, let's just go one step further and say if you've generated quiz questions, it should
 > always show them in situ in the text, whether you're in quiz mode or not.
+
+**Except while the margin is on screen** (since 2026-10-29, Greg's `spya-fytjtf`): then the
+questions are among the margin's notes instead, beside the same block, and opening the margin on
+an article with no quiz writes one ([marginalia.md § Quiz's
+questions](marginalia.md#quizs-questions-since-2026-10-29)).
 
 So once an owner has questions, each one is also a muted line in the prose, after the block holding
 its **last** evidence passage — only there has the reader met all of what it asks about. Pressing it

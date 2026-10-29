@@ -28,9 +28,19 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight, MessageCircleQuestionMark, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
-import type { BlockId, CitedWork, Explanation, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
+import type {
+  BlockId,
+  CitedWork,
+  Explanation,
+  Faq,
+  Ideas,
+  MarginNote,
+  QuizQuestion,
+  QuizQuestionId,
+  TimelineEvent,
+} from "../../types.js";
 import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
 import { useSituateRead } from "../useSituate.js";
@@ -50,6 +60,7 @@ import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
+import { useQuizOnShow, type QuizRead } from "../useQuiz.js";
 import { useTimelineRead } from "../useTimeline.js";
 import { datingWords } from "../TimelinePanel.js";
 import {
@@ -143,6 +154,7 @@ export function MarginNotesSlot({
   onOpenAsked,
   onJump,
   onOpenFinding,
+  onOpenQuiz,
 }: {
   /** The block these notes sit beside — whose markup a note's quote is drawn from (plan 261009k). */
   blockId: BlockId;
@@ -155,6 +167,8 @@ export function MarginNotesSlot({
   onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
   /** Open Sources › Where it sits on one Situate finding (plan 261024o; Investigate until plan 261025h). Owner only. */
   onOpenFinding?: ((findingId: string) => void) | undefined;
+  /** Open Learn › Quiz at one question — the prose line's press (Reader.tsx § `openQuizAt`). Owner only. */
+  onOpenQuiz?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
 }) {
   return (
     <NoteBoundary>
@@ -165,6 +179,7 @@ export function MarginNotesSlot({
         onOpenAsked={onOpenAsked}
         onJump={onJump}
         onOpenFinding={onOpenFinding}
+        onOpenQuiz={onOpenQuiz}
       />
     </NoteBoundary>
   );
@@ -333,6 +348,7 @@ function MarginNotes({
   onOpenAsked,
   onJump,
   onOpenFinding,
+  onOpenQuiz,
 }: {
   blockId: BlockId;
   notes: readonly MarginaliaNote[];
@@ -340,6 +356,7 @@ function MarginNotes({
   onOpenAsked?: ((id: string) => void) | undefined;
   onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
   onOpenFinding?: ((findingId: string) => void) | undefined;
+  onOpenQuiz?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
 }) {
   useRenderCount("MarginNotes");
   return (
@@ -368,12 +385,57 @@ function MarginNotes({
             return <CitationNote key="citation" blockId={blockId} items={note.items} />;
           case "comment":
             return <CommentNote key="comment" items={note.items} viewer={viewer} onOpenAsked={onOpenAsked} />;
+          case "quiz":
+            return <QuizNote key="quiz" batchId={note.batchId} questions={note.questions} onOpen={onOpenQuiz} />;
           default: {
             const never: never = note;
             return never;
           }
         }
       })}
+    </div>
+  );
+}
+
+/**
+ * **The quiz's questions, beside the passage they ask about** — Greg,
+ * 2026-10-29 (spya-fytjtf): *"let's say the quiz mode does run as one of the
+ * default modes whenever you open marginalia mode … because I think we include
+ * the quiz questions in the marginalia annotations. If not, we should, to
+ * really encourage the user to reflect on what they're reading."* While the
+ * column is on screen these replace the prose's lines (`QuizInProse`), so a
+ * question is drawn once. Open, not shut, for that reason: a shut *2
+ * questions* would hide the thing meant to make the reader stop. The words
+ * are the model's; only the question, never its premise (quiz.md § It
+ * adapts). Pressing one is the prose line's press: Learn › Quiz at that
+ * question. Plan 261029c.
+ */
+function QuizNote({
+  batchId,
+  questions,
+  onOpen,
+}: {
+  batchId: string;
+  questions: readonly QuizQuestion[];
+  onOpen?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
+}) {
+  return (
+    <div className="marg-quiz">
+      <span className="marg-stamp" data-marg-tip="quiz">Quiz</span>
+      {questions.map((q) => (
+        <button
+          key={q.id}
+          type="button"
+          className="marg-quiz-q"
+          data-marg-tip="quiz"
+          data-marg-voice="ai"
+          disabled={onOpen === undefined}
+          onClick={() => onOpen?.(batchId, q.id)}
+        >
+          <MessageCircleQuestionMark size={12} aria-hidden="true" className="marg-quiz-icon" />
+          <span className={withVoice("marg-quiz-text", "ai")}>{q.question}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -1262,6 +1324,7 @@ export function OwnerMarginFeed({
   slug,
   shown,
   awaitingStructure = false,
+  quiz,
   onFeed,
 }: {
   slug: string;
@@ -1274,6 +1337,8 @@ export function OwnerMarginFeed({
    * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
    */
   awaitingStructure?: boolean;
+  /** The owner's quiz read, shared with the prose and the band (`useQuizRead` in `OwnedArticle`). */
+  quiz: QuizRead;
   onFeed(feed: MarginFeed): void;
 }) {
   const ideasRead = useIdeasRead(slug);
@@ -1285,6 +1350,11 @@ export function OwnerMarginFeed({
      article per page load, whatever opened the column, and only while the
      notes are on screen (useRelations.ts). */
   const { relations, notes } = useRelations(slug, shown && !awaitingStructure);
+  /* **And the quiz**, on the same terms (Greg, spya-fytjtf; plan 261029c):
+     an article with none gets one the first time its owner has the notes on
+     screen. Its questions are drawn from the shared read, not handed through
+     the feed (Reader.tsx § `marginNotes`). */
+  useQuizOnShow(slug, quiz, shown && !awaitingStructure);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own
      read when its job finishes; this hears the same completion for the margin's

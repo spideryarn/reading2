@@ -1,10 +1,11 @@
 ---
 id: q-gkrkf5
 report: spya-nkq6rj
-status: open
+status: answered
 asked: 2026-10-28
 title: Should Explanations of confusing passages be written for every new article, at about 10 to 15 cents each?
 refs: docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md § What it would cost on every import, § What waits for 1 November · docs/user-feedback/261028_1024-explanations-of-confusing-passages-in-the-margin.md
+acted: spya-m40cz2
 ---
 Once the first real explanations have been read and look right (after 1 November, when the AI key works again), when should they be written?
 
@@ -27,3 +28,7 @@ Not built yet, deliberately. The underline in the article text itself: it has to
 About the cost figure. It is an estimate: nothing can be measured until the key works. It is built from what comparable steps really cost in production over the last month (the glossary's median is 11 cents, quotes 12), because a pure token count misses the AI's thinking and came out at a third of that. Today's import, adding up those steps' medians, is about $1.15. Imports have run at 2 to 15 a week. The real figure will come from the ledger after the first runs, and I will update this if it is far off.
 
 Does a reader's automatic-modes setting apply? Yes: with A it would join the list that the "make the modes on import" tick box already controls.
+
+Greg replied, 2026-10-28 (spya-m40cz2): "A"
+
+Recorded 2026-10-29. Nothing changes until the first live run after 1 November has been read: queue item qi-k738ybv4 does that run and then moves Explanations onto the import list (AUTO_MODE_STEPS), so readers who tick "make the modes on import" get them too.

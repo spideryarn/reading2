@@ -25,7 +25,7 @@ import type { StepName } from "./types.js";
  * The steps queued, in `STEP_ORDER`.
  *
  * `simple` is Summary's plain-words levels (Brief and Fuller); `glossary`,
- * `quotes`, `ideas` and `skim` are their own modes'; `bibliography` is Sources'
+ * `quotes` and `skim` are their own modes'; `bibliography` is Sources'
  * Bibliography since 2026-10-09 (not its
  * Reception search or its Claims list, which wait for their own chips — plan
  * 261009l § On import); `crossrefs` belongs to no mode — the links from a phrase in one
@@ -43,11 +43,17 @@ import type { StepName } from "./types.js";
  * submode by default. I think we should generate that if someone presses on
  * it". Opening the Thread view writes it (src/web/useTweets.ts;
  * docs/plans/261022b-summary-thread-writes-only-when-pressed.md).
+ *
+ * **Not `ideas`**, since 2026-10-29. Greg (`spya-shwpw5`): "I don't think the
+ * ideas mode is that helpful, and from memory, I think it's quite expensive …
+ * if it is, I'd be inclined to say that we shouldn't run it by default." It
+ * was: a median $0.19 an article, the dearest step here after Summary.
+ * Opening Ideas writes it. Skim, which reads it, plans without it on import
+ * (`autoModeRequests` below); docs/plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md.
  */
 export const AUTO_MODE_STEPS: readonly StepName[] = [
   "glossary",
   "quotes",
-  "ideas",
   "simple",
   "skim",
   "bibliography",
@@ -75,23 +81,27 @@ export const STEP_READS: Partial<Record<StepName, readonly StepName[]>> = {
 
 /**
  * **What each job asks for**: the step, with the steps it reads in front of it
- * (`STEP_READS` above), in `STEP_ORDER`.
+ * (`STEP_READS` above) **that an import queues too**, in `STEP_ORDER`.
  *
- * So Skim's job is `["quotes", "ideas", "skim"]` — the same steps the Skim
- * panel posts when it has neither (`precededBy`, src/web/useSkim.ts). If one
- * of those reads has become ready by the time the panel opens, the panel posts
- * a narrower, differently keyed job; the article's line keeps it behind this
- * one and its Skim step then skips as current, so it is a redundant row rather
- * than a second paid run.
+ * So Skim's job is `["quotes", "skim"]`, and its route is planned without the
+ * Ideas, which the step accepts (`ideas: null` in src/skim.ts § `skimInput`,
+ * hashed, so Ideas made later mark the route stale). A read the import does
+ * not queue is left out on purpose: carrying `ideas` here bought it on every
+ * import, inside Skim's job, after Greg took it off the list (plan 261029c).
+ * If the panel opens with no Quotes yet it posts the same steps
+ * (`precededBy`, src/web/useSkim.ts); if they have become ready it posts a
+ * narrower, differently keyed job, which the article's line keeps behind this
+ * one and whose Skim step then skips as current — a redundant row rather than
+ * a second paid run.
  *
  * Carrying its reads is what makes this job correct whatever its place in the
- * line: normally the Quotes and Ideas jobs are ahead of it, it waits for them
- * (it writes what they write), and its first two steps skip as current. If the
- * Quotes job failed, this job tries Quotes once more itself.
+ * line: normally the Quotes job is ahead of it, it waits for it (it writes
+ * what that writes), and its first step skips as current. If the Quotes job
+ * failed, this job tries Quotes once more itself.
  */
 export function autoModeRequests(): StepName[][] {
   return AUTO_MODE_STEPS.map((step) => {
-    const reads = STEP_READS[step] ?? [];
+    const reads = (STEP_READS[step] ?? []).filter((read) => AUTO_MODE_STEPS.includes(read));
     return STEP_ORDER.filter((s) => s === step || reads.includes(s));
   });
 }

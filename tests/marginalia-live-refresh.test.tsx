@@ -23,6 +23,10 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "../src/types.js";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -111,7 +115,7 @@ async function settle(): Promise<void> {
 }
 
 async function openMargin(): Promise<void> {
-  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+  await act(async () => root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, slug: SLUG, shown: true, onFeed })));
   await settle();
 }
 
@@ -240,7 +244,7 @@ describe("the open margin, at rest", () => {
       });
       expect(trace.filter((l) => l === "GET /api/jobs").length, "the session's first poll").toBe(1);
 
-      await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+      await act(async () => root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, slug: SLUG, shown: true, onFeed })));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60_000);
       });

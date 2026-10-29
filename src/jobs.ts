@@ -870,9 +870,10 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      `deadlineFor` turns into **587 s**; transport waits add up to ~2.5 s,
      excluding failed-request time. **600 s**, 13 s over that, 140 s under the claim's 740 s.
 
-     **This one decides something today**: Skim's job is
-     `["quotes", "ideas", "skim"]` (src/auto-mode-steps.ts), so `ideas` follows
-     `quotes` in one claim. The count is `suggestedIdeas` of the body word
+     **This one decides something today**: the Skim band's press posts
+     `["quotes", "ideas", "skim"]` when both are missing (src/web/useSkim.ts §
+     `precededBy`; the import's Skim job has carried no `ideas` since plan
+     261029c), so `ideas` follows `quotes` in one claim. The count is `suggestedIdeas` of the body word
      count, capped at `MAX_IDEAS` (10), not a count supplied by the model or
      reader. Measured the same day, production `revision_step_runs`, rows this
      step ran: 37 runs, median 95.7 s, p90 159.0 s, max **357.8 s** — almost

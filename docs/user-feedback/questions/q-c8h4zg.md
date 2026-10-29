@@ -1,10 +1,11 @@
 ---
 id: q-c8h4zg
 report: spya-zytb0g
-status: open
+status: answered
 asked: 2026-10-28
 title: Mockups: which way of drawing them do you like, and should they go live without a deploy?
-refs: docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md § Stage 3, § Stage 5 · docs/project/admin.md § /admin/mockups · docs/mockups/
+refs: docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md § Stage 3, § Stage 5 · docs/project/admin.md § /admin/mockups · docs/mockups/ · docs/plans/261029g-mockups-shown-inside-the-feedback-dialog-ascii-by-default.md · qi-5qmsr8nb · qi-2fs87mnx
+acted: spya-rrvwca
 ---
 /admin/mockups now exists. Below are the same idea drawn three ways. Tap each id to open its mockup:
 
@@ -45,3 +46,12 @@ The styles in a little more detail.
 - Not tried: Claude's own design artifacts (pages hosted on claude.ai). They are quick to make, but they live outside Spideryarn, need a claude.ai sign-in, and would split the record across two places.
 
 Reply with something like "1A 2A".
+
+Greg replied, 2026-10-28 (spya-rrvwca; the whole reply is in production, shortened here to fit): "A few things. The first is that right now this is very cumbersome. I have to click the link, and then it opens in a separate page, and then the back button, because I'm in—it's like shared as a web app on my home screen on the iPad. So then the left arrow takes me back to the mockups page, but not to this feedback dialog. […] So whatever we do, I think we want to be able to embed them within this feedback dialog so I can see them. Second thing is that mockups table, they need to be grouped. I'm not even convinced the mockups table is going to be that useful, because I'd really rather just look at them, you know, in situ here while giving, you know, while having a discussion. I guess the only thing about the ASCII thing is that it does need to be a monospace font for it to work […] Wireframe is fine. It depends what's easiest for you. And I assume that whatever you generate, you can look at as an image. I think that's important so that you can double-check before you submit it to me […] Did you look for libraries? […] It may be worth making this feedback dialogue slightly wider if there's room on the screen if we're going to do this. I don't know. […] And it's sort of maybe you use a more sophisticated markup style when it matters. Otherwise ASCII is fine. […] I guess life is simpler if we stick with ASCII diagrams. Then you don't need to worry about database tables. Let's try it with ASCII diagrams for a while. I think the key thing was to try the discussion flow first, and then with some kind of notion of mockups, which could be ASCII diagrams, and then see if that would help us."
+
+Done 2026-10-29 (plan 261029g):
+- A mockup id in a question no longer opens a new page. Tap it and the mockup opens right here, after the surrounding text; tap again to close it.
+- ASCII in the question itself is now the written default for agents. ASCII blocks were already monospaced. A picture is made only when the look matters, and the agent looks at it before sending.
+- Mockups stay files, with no database table (2A). The /admin/mockups table is left as it is, ungrouped, while we try ASCII. It can be grouped or removed if the trial says files are needed at all.
+- The image-model style D is parked, not dropped. No mockup library was searched for, since ASCII needs none. If the trial shows we want pictures, that search comes first.
+- The dialog's width is unchanged. You were unsure, and a wide ASCII block scrolls sideways.

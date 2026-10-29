@@ -46,8 +46,12 @@ question for it. Greg, 2026-09-09: *"reject unclear questions/interpret them for
 require you to get tooooo involved in the details of all the other agents."*
 
 **Anything blocked on Greg goes out as a published question, not only in the terminal** — a
-migration that will not apply, a deploy held up, a decision a stage is waiting on. Write it as a
-file and publish it (`npx tsx scripts/feedback-questions.ts --new "<title>"`, then `--publish
+migration that will not apply, a deploy held up, a decision a stage is waiting on, a prompt in a
+session's window that only he may answer, a command you were refused that he must run, and a
+decision mentioned in passing ("one for you later"). Put the session's name in the question so the
+tick can see it is asked. A line in the terminal is extra, never instead: anything you have told
+him twice there is already a question (Greg chose this wording, 2026-10-28, reply `spya-s7n3yv` to
+`q-cgpett`). Write it as a file and publish it (`npx tsx scripts/feedback-questions.ts --new "<title>"`, then `--publish
 q-xxxxxx`), so it is in *Needs a decision* the next time he opens Feedback, on his phone, with no
 deploy; read his reply with `--answers`. Greg, 2026-10-21: *"anything that's blocking, like if
 there's a migration issue or something else, you can just surface it in the needs input section

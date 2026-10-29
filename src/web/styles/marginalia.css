@@ -525,3 +525,46 @@ p.marg-shut {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+/* ------------------------------------------------------------ § the quiz --
+   The quiz's questions, beside the passage each asks about, while the column
+   is on screen; the prose draws them otherwise (quiz.css § in the prose).
+   Open, each question its own full-width button, as the prose line is, in
+   the AI's face (`withVoice`). Greg, spya-fytjtf; plan 261029c. */
+.marg-quiz {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: max(var(--text-min), 0.8125rem);
+  line-height: 1.4;
+}
+.marg-quiz-q {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  width: 100%;
+  /* The compact pointer height; the coarse-pointer floor is below. */
+  min-height: 1.5rem;
+  border-radius: 2px;
+  color: var(--ink-soft);
+  font-style: italic;
+  cursor: pointer;
+}
+.marg-quiz-q:hover,
+.marg-quiz-q:focus-visible { color: var(--ink); }
+.marg-quiz-q:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 2px;
+}
+.marg-quiz-icon {
+  flex: none;
+  position: relative;
+  top: 0.15em;
+}
+/* The margin fits on an iPad, so these are finger controls there even though
+   the column never fits on a phone. docs/project/controls.md § Minimum. */
+@media (any-pointer: coarse) {
+  .marg-quiz-q { min-height: 40px; }
+}
