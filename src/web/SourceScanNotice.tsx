@@ -590,7 +590,7 @@ function Finding({
        where a labelled finding sits, and a test that could only count them
        would pass on a UI that hid them. */
     <li
-      className={`ref-scan-item${finding.ordinary === undefined ? "" : " explained"}`}
+      className={`ref-scan-item${finding.ordinary === undefined ? "" : " ref-scan-ordinary"}`}
       data-kind={finding.kind}
       data-ordinary={finding.ordinary ?? "none"}
       data-count={count}

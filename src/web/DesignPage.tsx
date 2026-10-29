@@ -2001,6 +2001,21 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
       { id: "design-0", start: 25, end: 65, kind: "xref", label: "mind is software running on wet hardware" },
     ],
   },
+  {
+    /* The seventh kind, 2026-10-29 (spya-njkskc, plan 261029j): a passage one
+       of the owner's Explanations is about. Glossary's dotted rule in a teal. */
+    label: "A passage the AI explains — Glossary's dotted rule, in teal",
+    marks: [{ id: "e", start: 25, end: 65, kind: "explained" }],
+  },
+  {
+    /* The overlap the plan was decided on: a glossary term inside an explained
+       passage keeps its orange rule, and the teal runs either side. */
+    label: "A glossary term inside an explained passage — the term keeps its orange rule",
+    marks: [
+      { id: "e", start: 25, end: 65, kind: "explained" },
+      { id: "t", start: 33, end: 41, kind: "term" },
+    ],
+  },
 ];
 
 /** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
@@ -2017,4 +2032,6 @@ export const SPECIMEN_OUT: string[] = [
   '<p>He rejects the idea that <mark class="cmt" data-comment="spya-cmt001">mind is </mark><em><mark class="cmt" data-comment="spya-cmt001">software</mark></em><mark class="cmt" data-comment="spya-cmt001" data-mark-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="chat" data-chat="spya-chat01">mind is </mark><em><mark class="chat" data-chat="spya-chat01">software</mark></em><mark class="chat" data-chat="spya-chat01" data-chat-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="xref" data-xref="design-0" tabindex="0" role="link" aria-label="mind is software running on wet hardware">mind is </mark><em><mark class="xref" data-xref="design-0">software</mark></em><mark class="xref" data-xref="design-0"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="explained" data-explained="e">mind is </mark><em><mark class="explained" data-explained="e">software</mark></em><mark class="explained" data-explained="e"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="explained" data-explained="e">mind is </mark><em><mark class="term explained" data-term="t" data-explained="e">software</mark></em><mark class="explained" data-explained="e"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
 ];

@@ -207,6 +207,46 @@ mark.cmt.term {
   border-bottom-width: 1px;
 }
 
+/* ---- an explained passage ------------------------------------------
+   The seventh `MarkKind` (annotate.ts § `explainedMarks`): the words one of
+   the owner's Explanations is about, standing and in every mode while the
+   experimental switch is on. Greg, 2026-10-29 (spya-njkskc): *"an underline
+   quite similar to the glossary"*.
+
+   **Glossary's shape and weight, its own hue.** The same 2px dotted
+   `border-bottom` as `mark.term`, in `--explained` (a teal, tokens.css), so a
+   reader who has learnt the orange line learns this one for free and can
+   still tell them apart. No fade: there is at most one per block.
+
+   **Where a term shares the words, the term keeps its line** — one `<mark>`
+   carries both classes, and `border-bottom` can be only one colour. A term is
+   a word or two inside a clause, so the clause still reads as underlined,
+   broken by an orange stretch: this clause is explained, and this word in it
+   is a glossary term. The card on those words draws both. A comment or chat
+   keeps its solid line for `mark.cmt.term`'s reason (it is the clickable one).
+   A citation and a cross-reference draw on `text-decoration`, so both show.
+   docs/plans/261029j-explained-passages-underlined-in-the-prose.md § 3. */
+/* `:where()`, so this rule weighs nothing: every other mark's own rule —
+   `mark.term`, `mark.cmt`, `mark.chat`, a quote's fill, a highlight's wash —
+   wins on the words it shares, whatever order the stylesheets load in
+   (dialogs.css, where `mark.chat` lives, loads after this one and
+   annotations.css's `mark.cmt` before it). One rule instead of a pairwise
+   override for each kind, and a new kind is covered without an edit. */
+:where(mark.explained) {
+  background: none;
+  color: inherit;
+  border-bottom: 2px dotted color-mix(in oklab, var(--explained) 70%, transparent);
+  /* `help` for `mark.term`'s reason: a click does nothing; the card is it. */
+  cursor: help;
+  transition: background 0.12s, border-color 0.12s;
+}
+:where(mark.explained:hover),
+/* The words a finger has armed — useHoverCard.ts § TAP_ATTR. */
+:where(mark.explained[data-hover-tap]) {
+  background: color-mix(in oklab, var(--explained) 7%, transparent);
+  border-bottom-color: var(--explained);
+}
+
 /* ---- a work the piece cites -----------------------------------------
    The fifth `MarkKind` (annotate.ts § `citeMarks`), drawn on every phrase the
    article cites a work at, standing and in every mode. Greg, 2026-09-12

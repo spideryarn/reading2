@@ -17,6 +17,7 @@
  *
  * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
  */
+import { useEffect } from "react";
 import { useQueryState } from "nuqs";
 import type { BlockId, Explanation } from "../../../types.js";
 import type { ItemFocus } from "../../item-focus.js";
@@ -36,18 +37,34 @@ export function ExplanationsBand({
   slug,
   onJump,
   onAsk,
+  onExplanations = null,
   focus = null,
   onFocusTaken,
 }: {
   slug: string;
   onJump(id: BlockId): void;
   onAsk(explanation: Explanation): void;
+  /** Publish the band's revalidated list to the prose and margin. */
+  onExplanations?: ((explanations: readonly Explanation[] | null) => void) | null;
   /** One explanation to bring into view once — the margin's *Open in Explanations*. */
   focus?: ItemFocus | null;
   onFocusTaken?: (focus: ItemFocus) => void;
 }) {
   useRenderCount("ExplanationsBand");
   const owner = useExplanations(slug);
+  /* The always-mounted feed owns the list while this band is closed. Once the
+     band opens, this is the one revalidation GET; hand its answer back instead
+     of making the feed race it with a second request (plan 261029j review). A
+     failed opening read leaves the feed's last good answer standing. */
+  const list =
+    owner.status === "ready" && !owner.stale
+      ? (owner.explanations?.explanations ?? null)
+      : null;
+  useEffect(() => {
+    if (onExplanations && (owner.status === "ready" || owner.status === "none")) {
+      onExplanations(list);
+    }
+  }, [owner.status, list, onExplanations]);
   const [order, setOrder] = useQueryState("explby", explanationOrderParam);
   /* Null is "nobody has touched the bar", which the panel resolves to
      `EXPLANATIONS_BAR_DEFAULT` — kept null here so the default is one number

@@ -145,9 +145,43 @@ In the margin, a block with a fresh Explanation does not also draw the relations
 note ([marginalia.md](marginalia.md)); whether those notes are now redundant is one of the things
 the live runs decide.
 
+## The underline in the prose
+
+> New Explanations mode: Can we indicate when, in the text, when something's being explained,
+> perhaps using something, an underline quite similar to the glossary.
+>
+> — Greg, 2026-10-29 (spya-njkskc)
+
+Since 2026-10-29 every explanation in a fresh list is underlined where its quoted words are, **in
+every mode**, for the owner with the experimental switch on: Glossary's 2px dotted rule, in a teal
+(`--explained`) so it can be told from a term's orange. Resting on it opens the prose card's
+*explained* section — the explanation, its labels, *Ask in chat · Open in Explanations* — and a
+finger's first tap does, its second opening the band on that row. Plan
+[261029j](../plans/261029j-explained-passages-underlined-in-the-prose.md); the survey of every mark
+and its card is [tooltips.md § Every card on a mode's mark](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode).
+
+- **Placed as a citation is** (`explainedMarks`, which shares `citeMarks`' finder in
+  [annotate.ts](../../src/web/annotate.ts)): the only occurrence of the quote in the block's
+  rendered text, or no mark — never the whole block.
+- **Who keeps the line where marks share words.** A glossary term inside the passage keeps its
+  orange rule on its own words and the teal runs either side; the card draws the term, then the
+  explanation. A comment or chat keeps its solid line, and a tap on it still opens it — for a term
+  or a citation over a comment too, since this change (a finger could not open the comment there
+  before; the postmortem is linked from the plan). A citation, a cross-reference (both
+  `text-decoration`), a quote's fill and a search's outline all show alongside. **A
+  cross-reference wins the hover on its own words**, as it does over a term: the teal still draws
+  there, and the explanation's card is on the rest of the passage (seen in the browser check). The CSS rule is in `:where()`, weighing nothing, so every other mark wins the border
+  without a pairwise override ([annotations.css](../../src/web/styles/annotations.css) § an
+  explained passage).
+- **One read for the prose and the margin**: `ExplanationsFeed`
+  ([MarginaliaColumn.tsx](../../src/web/marginalia/MarginaliaColumn.tsx)), mounted by Reader for an
+  owner with the switch on, in every mode. When the band opens, its own revalidation publishes into
+  that same state rather than racing a second feed GET; while open, its job-completion refresh does
+  the same. A stale list draws neither.
+- **Not built**: a pressed state when a row is chosen in the band, a keyboard letter like
+  Glossary's G, and whether the underline should follow the band's threshold (the margin does not
+  either). How a dozen clause-long underlines reads on a real article waits for the first live run.
+
 ## Not built yet
 
-- **The underline in the prose** Greg asked for. It has to share the text with glossary underlines,
-  citation marks, cross-references and comments, so it needs a design for who wins where, drawn
-  against real explanations. Queued.
 - A copy for visitors to a shared article; a chat thread of its own per explanation.

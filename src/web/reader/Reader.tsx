@@ -51,6 +51,7 @@ import {
   type MarginFeed,
   NO_OWNER_FEED,
   OwnerMarginFeed,
+  ExplanationsFeed,
   useMarginLayout,
 } from "../marginalia/MarginaliaColumn.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
@@ -2456,6 +2457,16 @@ export function Reader({
    * not re-render `TableView`.
    */
   const [ownerFeed, setOwnerFeed] = useState<MarginFeed>(NO_OWNER_FEED);
+  /* **The owner's explanations, for the margin and the prose both** (plan
+     261029j § 5): read by `ExplanationsFeed`, mounted below for an owner with
+     the experimental switch on, in every mode — the prose underlines them
+     whether or not the margin is open. Null otherwise, and for a stale list. */
+  const [ownerExplanations, setOwnerExplanations] = useState<readonly Explanation[] | null>(null);
+  /* Gate the value at the render boundary too. `ExplanationsFeed` clears its
+     parent on unmount, but passive-effect cleanup is after the switch-off
+     render; relying on it leaves one paint in which the hidden experiment's
+     marks and margin notes are still present. */
+  const drawnExplanations = isOwner && experimental.on ? ownerExplanations : null;
   const marginaliaIdeas = owner ? ownerFeed.ideas : (artefacts?.ideas?.ideas ?? null);
   /* **Other modes' items, already stored** (report 82, plan 261002b): the
      owner's FAQ and Reception from the feed's read-only reads, a visitor's from
@@ -2889,7 +2900,7 @@ export function Reader({
       literature: isOwner ? ownerFeed.literature : null,
       /* The owner's only, and the feed reads them only with the experimental
          switch on: the mode is behind it (plan 261028c). */
-      explanations: isOwner ? ownerFeed.explanations : null,
+      explanations: drawnExplanations,
       /* The owner's quiz, from the read the prose and the band share — never a
          stale one, the prose's rule (plan 261029c). */
       quiz: isOwner && drawnQuiz ? drawnQuiz : null,
@@ -2955,7 +2966,7 @@ export function Reader({
     ownerFeed.relations,
     ownerFeed.notes,
     ownerFeed.literature,
-    ownerFeed.explanations,
+    drawnExplanations,
     drawnQuiz,
     openQuizAt,
     marginaliaClaims,
@@ -4427,6 +4438,7 @@ export function Reader({
             slug={slug}
             onJump={bandJump}
             onAsk={askExplanationInChat}
+            onExplanations={setOwnerExplanations}
             focus={explanationFocus}
             onFocusTaken={explanationFocusTaken}
           />
@@ -5119,6 +5131,8 @@ export function Reader({
         terms={termSelections}
         cites={citeSelections}
         xrefs={xrefs}
+        /* The owner's explanations, underlined in every mode (plan 261029j). */
+        explained={drawnExplanations}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}
         hitHues={hitHues}
@@ -5560,6 +5574,11 @@ export function Reader({
            view (plan 261010e). Owner only, as the marks are. On a row with
            no note it also starts the one web search (plan 261018o). */
         onOpenCitedWork={owner ? openCitedWorkFromCard : null}
+        /* **An explained passage's card** (plan 261029j § 4): the list the
+           prose underlines, and the margin note's own two senders, so a chat
+           started from the card records the same origin as one from the band. */
+        explanations={drawnExplanations}
+        explanationActions={marginExplanationActions}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}
@@ -5567,6 +5586,7 @@ export function Reader({
         onJump={jumpTo}
         onFollowNote={followNote}
       />
+      {owner && experimental.on && <ExplanationsFeed slug={slug} bandOpen={mode === "explanations"} onExplanations={setOwnerExplanations} />}
 
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —

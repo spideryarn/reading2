@@ -137,6 +137,14 @@
      side. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md. */
   --read-time: oklch(0.82 0.11 200);
 
+  /* **An explained passage's dotted rule** — annotations.css § an explained
+     passage. Glossary's shape in a teal, so the two read as one family and
+     can be told apart: orange is the glossary's, and a fainter orange would
+     pass for a term faded on repeat. Between the reader's green highlight
+     (150) and `--read-time` (200), and drawn as a rule where both of those
+     are fills. docs/plans/261029j-explained-passages-underlined-in-the-prose.md. */
+  --explained: oklch(0.76 0.11 175);
+
   /* **A highlight's four washes** — the reader's own colours, stored by name on
      the comment (`HighlightColour`, src/types.ts) so they can be retuned here
      without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
@@ -522,6 +530,7 @@
   --chat-mark: oklch(0.52 0.13 235);
   /* The same cyan, darkened: on the light rail the edge has to be a dark line. */
   --read-time: oklch(0.5 0.1 200);
+  --explained: oklch(0.52 0.1 175);
 
   /* The reader's four highlighter washes (span highlights, plan 261003e-span-highlights): the
      same bases, mixed into the light page a little harder, because a share

@@ -1206,6 +1206,7 @@ describe("annotateHtml — a quote is filled and a search hit is outlined", () =
       hit: true,
       cite: true,
       xref: true,
+      explained: true,
     } satisfies Record<MarkKind, true>;
     const drawn = new Set(SPECIMEN_MARKS.flatMap((s) => s.marks.map((m) => m.kind ?? "cmt")));
     expect([...drawn].sort()).toEqual(Object.keys(every).sort());

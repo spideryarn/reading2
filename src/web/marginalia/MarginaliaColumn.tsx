@@ -21,6 +21,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useId,
@@ -54,7 +55,6 @@ import { isWebUrl } from "../../urls.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
 import { useExplanationsRead } from "../useExplanations.js";
-import { useExperimental } from "../useExperimental.js";
 import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "../explanation-labels.js";
 import { AskInChatButton } from "../OriginChat.js";
 import { byLineOf, CiteBlurb } from "../BibliographyPanel.js";
@@ -1298,8 +1298,6 @@ export type MarginFeed = {
   notes: MarginNotesList;
   /** Situate's findings (plan 261024o): the owner's, whatever the experimental switch says since spya-pkpqch. */
   literature: MarginLiterature | null;
-  /** The explanations (plan 261028c): the owner's, with the experimental switch on, and never a stale list. */
-  explanations: readonly Explanation[] | null;
 };
 
 export const NO_OWNER_FEED: MarginFeed = {
@@ -1310,7 +1308,6 @@ export const NO_OWNER_FEED: MarginFeed = {
   relations: null,
   notes: null,
   literature: null,
-  explanations: null,
 };
 
 /**
@@ -1386,41 +1383,49 @@ export function OwnerMarginFeed({
      sits found to be beside the passage as he reads (spya-pkpqch). The read
      is a component of its own, so it can hand back none when unmounted. */
   const [literature, setLiterature] = useState<MarginLiterature | null>(null);
-  /* **The explanations, only with the experimental switch on** (plan
-     261028c), as the literature findings were until spya-pkpqch: the mode is
-     behind the switch, so its lines are too. A component of its own, mounted
-     only then, so with the switch off nothing asks `/api/explanations`. */
-  const { on: experimental } = useExperimental();
-  const [explanations, setExplanations] = useState<readonly Explanation[] | null>(null);
+  /* The explanations are not read here: the prose underlines them in every
+     mode, so Reader reads them once for both (`ExplanationsFeed` below; plan
+     261029j § 5). */
   useEffect(() => {
-    onFeed({ ideas, faq, timeline, claims, relations, notes, literature, explanations });
-  }, [ideas, faq, timeline, claims, relations, notes, literature, explanations, onFeed]);
+    onFeed({ ideas, faq, timeline, claims, relations, notes, literature });
+  }, [ideas, faq, timeline, claims, relations, notes, literature, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
-  return (
-    <>
-      <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />
-      {experimental && <ExplanationsMarginFeed slug={slug} onExplanations={setExplanations} />}
-    </>
-  );
+  return <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />;
 }
 
 /**
- * **The explanations, read and never made** — `useExplanationsRead`, the read
- * half with no job under it, and `useStepFinished` for a run finished while the
- * column is open. **A stale list is not drawn** (the article moved under it);
- * one written by an older prompt or for an older profile still is, its words
- * checked against each block before drawing (notes.ts § `explainedBlocks`).
- * Unmounted, it hands back none.
+ * **The owner's explanations, read and never made** — for the margin's notes
+ * and the prose's underline both (plan 261029j § 5), so Reader mounts it in
+ * every mode, for an owner with the experimental switch on, and nowhere else:
+ * with the switch off nothing asks `/api/explanations` (plan 261028c).
+ * `useExplanationsRead`, the read half with no job under it, and
+ * `useStepFinished` for a run finished while the page is open. **A stale list
+ * is not drawn** (the article moved under it); one written by an older prompt
+ * or for an older profile still is, its words checked against each block
+ * before drawing (notes.ts § `explainedBlocks`; annotate.ts §
+ * `explainedMarks`). Unmounted, it hands back none.
  */
-function ExplanationsMarginFeed({
+export function ExplanationsFeed({
   slug,
+  bandOpen,
   onExplanations,
 }: {
   slug: string;
+  /**
+   * Explanations is the mode. While it is open, its own read owns both
+   * revalidation and job completion and publishes the answer back to Reader;
+   * this feed must not issue the same GET independently (code review of
+   * 261029j). Closed, this feed hears completions for the prose and margin.
+   */
+  bandOpen: boolean;
   onExplanations(explanations: readonly Explanation[] | null): void;
 }) {
   const read = useExplanationsRead(slug);
-  useStepFinished(slug, "explanations", read.refresh);
+  const { refresh } = read;
+  const refreshWhileBandClosed = useCallback(() => {
+    if (!bandOpen) void refresh();
+  }, [bandOpen, refresh]);
+  useStepFinished(slug, "explanations", refreshWhileBandClosed);
   const list = read.status === "ready" && !read.stale ? (read.explanations?.explanations ?? null) : null;
   useEffect(() => {
     onExplanations(list);
