@@ -191,9 +191,9 @@ Three things worth carrying to whatever is built next:
   with the switch on, so on every other reading view it was 44px of
   nothing — held on screen in a band mode by the guard below, which is how a reader came to report
   it. `Reader` draws it only when `showBar` ([`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx))
-  says there is something to put in it, and `:root:not(:has(:where(.reader) > .controls))` in
+  says there is something to put in it, and `:root:not([data-bar-drawn])` in
   [`styles/shell.css`](../../src/web/styles/shell.css) then lets `--bar-bottom` fall to the status-bar
-  inset. Two things follow that will catch you out: **`.controls` is not a safe thing to
+  inset (`Reader` sets the attribute from `showBar`; [`src/web/root-flags.ts`](../../src/web/root-flags.ts)). Two things follow that will catch you out: **`.controls` is not a safe thing to
   `querySelector`** — an author's prose may contain one and the sanitiser keeps it, so ask
   `controlsBar()` in [`src/web/scroll.ts`](../../src/web/scroll.ts) — and every rule keyed on the
   bar's *presence* now has a state where it is absent.
@@ -216,7 +216,7 @@ Three things worth carrying to whatever is built next:
   that must clear the bar permanently (`.reader`'s bottom padding, the dialogs) reads `--dock-space`
   instead. **Do not tie the document's height to the moving one** — a page that grows and shrinks
   under the finger scrolling it is worse than a bar in the way. One rule holds the bar home whatever
-  the scroll says (`styles/narrow-window.css` § a small device, the `:root:has(...)` guard): while
+  the scroll says (`styles/narrow-window.css` § a small device, the guard on `<html>`'s flags): while
   its drawer is open, while focus is in it, while a dialog or a band that covers the article is up,
   and — since 2026-10-07 — while its own **More menu** is open, which is portalled out of the bar and
   takes focus with it, so *focus is in the bar* stops being true the moment the list appears.

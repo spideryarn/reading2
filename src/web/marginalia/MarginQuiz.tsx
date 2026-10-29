@@ -15,10 +15,11 @@
  * Quiz* is one line in that box, for the walk, the premise and the reference
  * answer. A microphone on the question line opens the box and starts listening
  * in the same press. **An answered question turns a quiet green**, and stays
- * green: answered is what the green says, never right or wrong, so the hidden
- * verdict is still not drawn (quiz.md § Whether the reader got it right is
- * asked somewhere else; whether green should mean "right" instead is Greg's
- * question q-cj0fv8).
+ * green. Since plan 261029m (Greg's spya-v2aehw, his answer to q-cj0fv8) a
+ * question the hidden check judged right *this visit* turns a deeper green, and
+ * one answered more than a few days ago drains to a faint wash with a clock:
+ * time to recall it again. Its box then opens **empty**, so the second try is
+ * from memory, with the earlier answer one press away (`quiz-recall.ts`).
  *
  * The marking is `useQuizMark`, the band's own, so the mark's terminal
  * contract, its kept answer and the page-wide one-mark-per-question claim are
@@ -27,9 +28,9 @@
  */
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Check, LoaderCircle, MessageCircleQuestionMark, Mic, SendHorizontal } from "lucide-react";
+import { Check, CircleCheck, History, LoaderCircle, MessageCircleQuestionMark, Mic, SendHorizontal } from "lucide-react";
 import { type BlockId, MAX_QUIZ_ANSWER_CHARS, type QuizQuestion, type QuizQuestionId } from "../../types.js";
-import { QuizMarkText } from "../QuizPanel.js";
+import { QuizMarkText, RecallLine, showEarlierAnswer } from "../QuizPanel.js";
 import { DictationButton, DictationStrip, TalkLabel } from "../DictationStrip.js";
 import { keepDictation } from "../dictation-keep.js";
 import { useReaderTranscriber } from "../dictation-upload.js";
@@ -37,6 +38,7 @@ import { dictationReporter } from "../dictation-report.js";
 import { useDictationField } from "../useDictationField.js";
 import { useFitTextarea } from "../useFitTextarea.js";
 import { type QuizMarkSource, useQuizMark } from "../useQuiz.js";
+import { daysSince, type QuizLook, quizLook, quizLookClass, quizLookFor, quizLookSpoken } from "../quiz-recall.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { withVoice } from "../voice.js";
 
@@ -124,6 +126,10 @@ function Answerable({
   const boxId = useId();
 
   const open = openId ? questions.find((q) => q.id === openId) : undefined;
+  /* Read once a render: a line that turns due while the page sits open waits
+     for the next render, which is soon enough for a three-day rule. */
+  const now = Date.now();
+  const openLook = open ? quizLook(kept.get(open.id), now) : "none";
   const mine = open && attempt?.questionId === open.id ? attempt : null;
   const marking = mine?.status === "marking";
   const tooLong = typed.length > MAX_QUIZ_ANSWER_CHARS;
@@ -172,10 +178,26 @@ function Answerable({
     if (id === openId) return;
     clearAttempt();
     const earlier = id ? kept.get(id) : undefined;
-    setTyped(earlier?.answer ?? "");
+    /* **A due question opens empty** (plan 261029m): putting the old answer
+       back would turn a recall into a re-read. `showEarlier` is the press that
+       brings it. */
+    const recall = earlier !== undefined && quizLook(earlier, Date.now()) === "due";
+    setTyped(recall ? "" : (earlier?.answer ?? ""));
     setOpenId(id);
-    if (id && earlier) showKept(id);
+    if (id && earlier && !recall) showKept(id);
     focusBox.current = id !== null;
+  };
+
+  /** *Show my earlier answer*, on a due question — `showEarlierAnswer`'s rule. */
+  const showEarlier = () => {
+    if (!open || dictate.busy || marking) return;
+    showEarlierAnswer(open.id, kept, typed, setTyped, showKept);
+    queueMicrotask(() => {
+      const el = box.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
   };
 
   /* **The box takes the focus when it opens**, so a reader who opened it with
@@ -206,6 +228,9 @@ function Answerable({
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the open question's kept answer changes, or when dictation ends and a refused restore may now go ahead; the guards read the rest
   useEffect(() => {
     if (!open || !keptHere || dictate.busy) return;
+    /* A due row stays hidden until the reader asks, even if this surface is
+       waiting on another surface. The fresh winner will rerun the effect. */
+    if (quizLook(keptHere, Date.now()) === "due") return;
     /* A collision is a temporary explanation, not a competing mark. Replace
        it when the winning surface publishes the kept answer, while leaving
        this surface's draft alone so the reader can still compare or edit it. */
@@ -244,12 +269,14 @@ function Answerable({
   return (
     <>
       {questions.map((q) => {
-        const answered = kept.has(q.id);
+        const one = kept.get(q.id);
         const isOpen = q.id === openId;
+        const look = quizLookFor(one, now, isOpen ? typed : "");
+        const lookClass = quizLookClass(look);
         return (
           <div
             key={q.id}
-            className={`marg-quiz-item${answered ? " quiz-answered" : ""}${isOpen ? " marg-quiz-open" : ""}`}
+            className={`marg-quiz-item${lookClass ? ` ${lookClass}` : ""}${isOpen ? " marg-quiz-open" : ""}`}
           >
             <div className="marg-quiz-row">
               <button
@@ -262,15 +289,13 @@ function Answerable({
                 aria-controls={isOpen ? `${boxId}-${q.id}` : undefined}
                 onClick={() => show(isOpen ? null : q.id)}
               >
-                {answered ? (
-                  <Check size={12} aria-hidden="true" className="marg-quiz-icon marg-quiz-tick" />
-                ) : (
-                  <MessageCircleQuestionMark size={12} aria-hidden="true" className="marg-quiz-icon" />
-                )}
+                <LookIcon look={look} />
                 <span id={`${boxId}-text-${q.id}`} className={withVoice("marg-quiz-text", "ai")}>
                   {q.question}
                 </span>
-                {answered && <span className="sr-only"> (answered)</span>}
+                {look !== "none" && (
+                  <span className="sr-only">{quizLookSpoken(look, one ? daysSince(one.answeredAt, now) : 0)}</span>
+                )}
               </button>
               {dictate.dictation.supported && !isOpen && !stale && (
                 <Tooltip
@@ -367,6 +392,9 @@ function Answerable({
                   )}
                 </div>
                 {tooLong && <p className="gloss-error">That is longer than {MAX_QUIZ_ANSWER_CHARS} characters.</p>}
+                {openLook === "due" && !mine && one && (
+                  <RecallLine answeredAt={one.answeredAt} disabled={dictate.busy || marking} onShow={showEarlier} />
+                )}
                 <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
                 {mine && (
                   <QuizMarkText
@@ -375,6 +403,7 @@ function Answerable({
                     emptied={typed.trim() === ""}
                     blocks={ctx.blocks}
                     onJump={ctx.onJump}
+                    quoteAnswer={mine.restored === true && openLook === "due"}
                   />
                 )}
               </div>
@@ -384,4 +413,25 @@ function Answerable({
       })}
     </>
   );
+}
+
+/**
+ * The line's mark: a question mark, a tick, a ringed tick for *right*, a clock
+ * for *due*. `quiz-recall.ts` says which; quiz.css colours them.
+ */
+function LookIcon({ look }: { look: QuizLook }) {
+  switch (look) {
+    case "none":
+      return <MessageCircleQuestionMark size={12} aria-hidden="true" className="marg-quiz-icon" />;
+    case "answered":
+      return <Check size={12} aria-hidden="true" className="marg-quiz-icon marg-quiz-tick" />;
+    case "right":
+      return <CircleCheck size={12} aria-hidden="true" className="marg-quiz-icon marg-quiz-tick" />;
+    case "due":
+      return <History size={12} aria-hidden="true" className="marg-quiz-icon marg-quiz-due" />;
+    default: {
+      const never: never = look;
+      return never;
+    }
+  }
 }

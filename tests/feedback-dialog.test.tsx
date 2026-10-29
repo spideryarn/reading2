@@ -3412,9 +3412,12 @@ describe("the Earlier tab", () => {
           const hiddenFoot = host.querySelector<HTMLElement>('.fb-actions[hidden] .fb-foot-pager');
           if (!hiddenFoot) throw new Error("no hidden footer pager");
           click(button(hiddenFoot, "Next ›"));
-          expect(showing()).toBe("q-bbbbbb");
+          /* Not `showing()` here: the hidden tab is not drawn again until it is
+             shown (FeedbackDialog.tsx § StillWhileHidden, plan 261029k), so the
+             hidden copy still holds the old thread. It is the new one once shown. */
           expect(top).toBe(400);
           click(tab("Earlier"));
+          expect(showing()).toBe("q-bbbbbb");
           expect(top).toBe(0);
 
           /* F1 was declined deliberately: hiding or reopening the same thread

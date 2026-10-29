@@ -143,6 +143,12 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   ([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
   The lower-level `readEvents` is what most older hooks loop over by hand —
   [comments.md § streaming](comments.md#streaming).
+- **`src/web/root-flags.ts` § `useRootFlag`, `useFocusWithinFlag`, `acquireRootFlag`** — a fact the
+  stylesheet needs to ask from `:root` ("the bar is drawn", "a side dialog is open"), said as a
+  counted `data-*` attribute on `<html>` by the component that draws the thing. Never a
+  `:root:has(…)`, which walks the whole article on every change —
+  [performance.md § Style recalculation scales with the article](performance.md#style-recalculation-scales-with-the-article-2026-10-29).
+  A band's two flags are `src/web/band-root-flags.ts`.
 - **`src/web/useOrderedRead.ts`, `useStepJob.ts`, `useAutoRun.ts`; `JobProgress.tsx`** — a mode's
   artefact read, its job, running on arrival, and the progress card. The state glue around them is
   still copied hook to hook — [mode.md](mode.md).

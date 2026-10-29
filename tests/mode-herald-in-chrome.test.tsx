@@ -53,7 +53,11 @@ const HERALD = renderToStaticMarkup(
  * the way-back chip, which is drawn only after a jump: its left edge is the
  * band's right edge, so where the band covers the window it lands in the
  * band's bottom-left corner — the herald's corner (GPT Sol, 2026-09-28).
- * `:root:has(.return-chip)` is what reserves its room.
+ * `:root[data-return-chip]` is what reserves its room — the chip's component
+ * sets it (src/web/root-flags.ts), so this fixture sets it by hand below, with
+ * `data-band-covers` for a covering band (band-root-flags.ts), as the
+ * components would for this markup. It was `:root:has(.return-chip)` until
+ * 2026-10-29 (plan 261029k).
  */
 const markup = (covers: boolean, foot: number) => `
   <div class="reader${covers ? " band-covers" : ""}" style="--mode-w: ${covers ? "0px" : "380px"}">
@@ -99,7 +103,10 @@ async function look(width: number, height: number, covers: boolean, foot: number
     const p = await browser.newPage({ viewport: { width, height } });
     await p.setContent(`<style>${css}</style>${markup(covers, foot)}`);
     return await p.evaluate(
-      (kb) => {
+      ({ kb, covers }) => {
+      /* What the chip and the band say on `<html>` when they are drawn. */
+      document.documentElement.setAttribute("data-return-chip", "");
+      if (covers) document.documentElement.setAttribute("data-band-covers", "");
       /* The room the component writes, from what it measures — and, with iOS's
          keyboard up, how much of the layout viewport the keyboard hides. */
       const slot = document.querySelector<HTMLElement>(".mode-herald-slot");
@@ -123,7 +130,7 @@ async function look(width: number, height: number, covers: boolean, foot: number
         viewport: window.innerHeight,
       };
       },
-      keyboard,
+      { kb: keyboard, covers },
     );
   } finally {
     await browser.close();

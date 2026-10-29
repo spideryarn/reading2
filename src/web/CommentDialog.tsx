@@ -17,6 +17,7 @@
  * are not looking at. Reading order, not ask order — see comment-nav.ts.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRootFlag } from "./root-flags.js";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import { isImeComposing } from "./key-chord.js";
@@ -587,6 +588,11 @@ export function CommentDialog({
       window.removeEventListener("pointercancel", up);
     };
   }, []);
+
+  /* While this box is drawn the narrow window's bar stays home, since the box
+     is anchored to the bar's resting room (narrow-window.css § the guard).
+     `side-dialog` is counted, so the other two dialogs can hold it too. */
+  useRootFlag("side-dialog", true);
 
   return (
     <aside

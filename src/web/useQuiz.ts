@@ -118,13 +118,13 @@ export interface Attempt {
   /** Why it stopped badly, if it did. */
   error: string | null;
   /**
-   * **Whether they got it right — and it is never rendered.**
+   * **Whether the hidden check thought the answer looked right.**
    *
    * The walk reads this to decide whether the next step carries its premise
    * (src/web/quiz-ladder.ts), and "Where to look again" to decide which sections
-   * it names (src/web/quiz-sections.ts). It may select scaffolding and
-   * navigation like that; `QuizPanel` must never print the word, a count or a
-   * score, or change a line of copy to say how the reader did:
+   * it names (src/web/quiz-sections.ts), and both Quiz surfaces use it for a
+   * deeper green. `QuizPanel` never prints the verdict as a word, count or
+   * score:
    * docs/project/quiz.md is explicit that quoting a difficulty at a reader
    * hands them a token with nothing behind it, and a verdict is worse — it is
    * the grade the whole marking prompt refuses to give.
@@ -138,12 +138,11 @@ export interface Attempt {
   /**
    * **Put back from a kept answer, not marked just now** — `showKept`.
    *
-   * It looks like any other finished mark, and that is the point; the one
-   * thing that must tell them apart is the panel's verdict effect, which reads
-   * a `done` attempt with no verdict as *a new mark that could not be judged*
-   * and forgets the old verdict. A restored attempt never has one — verdicts
-   * are not stored — so without this flag, Next then Previous would un-learn a
-   * verdict earned a minute ago. GPT Sol's plan review of 261005b, F4.
+   * It looks like any other finished mark, and that is the point. The flag is
+   * for the one place the distinction matters on screen: after a due answer is
+   * revealed beside a new draft, quote the earlier words that the restored
+   * mark is about. Verdicts live on `kept`, not restored attempts, and are not
+   * stored.
    */
   restored?: true;
   /**
@@ -180,6 +179,14 @@ export interface KeptAnswer {
   saved: boolean;
   /** The row's id, `Attempt.attemptId`; `null` when there is no row to name. */
   attemptId: string | null;
+  /**
+   * **The hidden check's word, for a mark given this visit only** — never from
+   * the server, which does not store it (privacy.md § Quiz answers). Here so
+   * the band and the margin draw the same deeper green for *right* from one
+   * place (plan 261029m; 261029i's F1). Absent for a kept answer from an
+   * earlier visit, and whenever the check failed or declined.
+   */
+  verdict?: QuizVerdict;
 }
 
 export interface UseQuiz {
@@ -329,7 +336,7 @@ export interface QuizRead {
   noteMark(
     batchId: string,
     questionId: QuizQuestionId,
-    mark: { answer: string; reply: string; answeredAt: string | null; attemptId: string | null },
+    mark: { answer: string; reply: string; answeredAt: string | null; attemptId: string | null; verdict?: QuizVerdict },
   ): void;
   /**
    * **Claim the right to mark one question**, or `null` when a mark of it is
@@ -459,6 +466,7 @@ export function useQuizRead(slug: string): QuizRead {
           answeredAt,
           saved: mark.answeredAt !== null,
           attemptId: mark.answeredAt !== null ? mark.attemptId : null,
+          ...(mark.verdict ? { verdict: mark.verdict } : {}),
         });
         return { key, byQuestion, known: true };
       });
@@ -881,7 +889,7 @@ export function useQuizMark(slug: string, read: QuizMarkSource): QuizMark {
         });
         /* **The tick, and what Next → Previous puts back** — stored or not: a
            mark the reader watched finish is theirs for this visit either way. */
-        noteMark(batchId, questionId, { answer, reply, answeredAt, attemptId });
+        noteMark(batchId, questionId, { answer, reply, answeredAt, attemptId, ...(verdict ? { verdict } : {}) });
         if (answeredAt !== null) {
           /* **Read the quiz again, behind the screen, because the offline copy
              of it is now out of date.** `apiFetch` deliberately does not throw

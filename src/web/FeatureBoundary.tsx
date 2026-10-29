@@ -74,6 +74,7 @@ import {
   type ActivationIdentity,
   type AutoRunTarget,
 } from "./activation.js";
+import { BandRootFlags } from "./band-root-flags.js";
 import { nameOfThrown, recordLog } from "./log-buffer.js";
 import { captureClientFailure } from "./monitoring.js";
 
@@ -319,6 +320,10 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
             </button>
           </p>
         </div>
+        {/* This is a band too, so it says so on `<html>` as `ModeSurface` does
+            (band-root-flags.ts). A hook in its own module, not `ModeSurface`,
+            for the reason above; it renders nothing. */}
+        <BandRootFlags />
       </aside>
     );
   }

@@ -39,6 +39,7 @@ sections are the ones to use; the last two are the code map and the habits.
 - [§ The annotation pipeline, 2026-09-06](#the-annotation-pipeline-2026-09-06-measured-cut-and-it-did-not-fix-the-click) — cost of marks on the click (history)
 - [§ At rest again, 2026-09-12](#at-rest-again-2026-09-12-the-cost-was-requests-not-cpu) — an idle tab's cost was requests (history)
 - [§ Scrolling again, 2026-10-03](#scrolling-again-2026-10-03-most-of-the-unattributed-bucket-was-the-spines-band) — the spine's band (history)
+- [§ Style recalculation scales with the article, 2026-10-29](#style-recalculation-scales-with-the-article-2026-10-29) — `:has()` on `:root`, and a modal's inert background
 - [§ Where the pieces are](#where-the-pieces-are) — instruments, the tests that hold fixes down, the hot code
 - [§ If you are about to work on this](#if-you-are-about-to-work-on-this) — read this first before touching it
 
@@ -1450,6 +1451,29 @@ builds included, is the `before-v2/README.md` beside the investigation. Two thin
 way: `Input.synthesizeScrollGesture` does not move the page under headless mobile emulation (it prints
 `movedPx` for that reason), and Chrome 152 reports no paint damage, so "what repainted" is layer
 repaint counts, not area.
+
+## Style recalculation scales with the article, 2026-10-29
+
+On a book (87k DOM nodes) at 6× CPU throttle, a keystroke in the Feedback box took over a second to
+paint and opening or closing the dialog over thirteen. None of it was React. Two rules came out of
+it, both because **on the reading view the document is the article, so anything the browser does
+per element in the document is paid per element of the article**:
+
+- **No `:has()` whose subject is `:root`, `html`, `body`, `#root` or `.reader` unless every arm of
+  its argument starts with `>`, `+` or `~` and has no descendant combinator anywhere** —
+  `:has(> .x, .deep)` and `:has(> body .deep)` both start with `>` and both walk. Such a selector is answered by walking the subtree, and re-asked after almost any
+  DOM change. Say the fact from the state that renders it, as an attribute on `<html>`
+  (`src/web/root-flags.ts`); keep `:has()` for an element's own children. A test over the
+  stylesheet holds the rule (`tests/no-document-wide-has.test.ts`).
+- **A switch that changes a computed style for every element costs the article.** `inert`, a modal
+  `<dialog>`'s inert background (which is the same thing), `pointer-events: none` on `body`. Measure
+  open and close on the longest article before reaching for one.
+
+The numbers, the A/Bs and how they were taken:
+[261029a](../investigations/261029a-feedback-dialog-cost-on-a-long-article-measured-at-six-times-throttle.md).
+The classes:
+[261029c](../postmortems/261029c-a-has-selector-anchored-above-the-article-walks-the-whole-document-on-every-change.md),
+[261029d](../postmortems/261029d-a-modal-dialog-inerts-every-element-so-opening-and-closing-cost-the-whole-article.md).
 
 ## Where the pieces are
 

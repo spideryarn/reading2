@@ -1,10 +1,11 @@
 ---
 id: q-cj0fv8
 report: spya-fytjtf
-status: open
+status: answered
 asked: 2026-10-29
 title: In the margin's Quiz, should a question turn green when you answer it, or only when the AI judges it right?
-refs: q-ejp09q (reply spya-jzgrua) · qi-msd5tmda · docs/plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md · docs/plans/261029i-plan-review-sol.md · docs/user-feedback/261029_0037-quiz-runs-with-the-margin-and-its-questions-sit-there.md
+refs: q-ejp09q (reply spya-jzgrua) · qi-msd5tmda · docs/plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md · docs/plans/261029i-plan-review-sol.md · docs/user-feedback/261029_0037-quiz-runs-with-the-margin-and-its-questions-sit-there.md · docs/plans/261029m-quiz-green-for-right-and-a-quiet-time-to-recall-again.md · qi-pc9ekn26 · q-m9zkx3
+acted: spya-v2aehw
 ---
 You asked for "a subtle green" when you answer a Quiz question, not gamification. Built (on dev, not yet deployed): a question turns a pale green, with a tick, as soon as your answer has been marked, whether you got it right or not. Should green mean "you got it right" instead?
 
@@ -34,3 +35,9 @@ Why A was built first: the plan's first draft was B. GPT Sol's review argued tha
 What would decide it: if, reading with A, the green feels empty because it comes whatever you write, B. If it feels right as a sign of progress through the piece, keep A.
 
 The other half of your reply, Haiku and Sonnet evals for Quiz, is written and waits for the OpenRouter key to reset on 1 November (about $8 to run). "Smaller and more often" is built into that eval as a second prompt, to be shipped only if it reads better.
+
+## Greg's answer, 2026-10-29 (in the Feedback dialog, reply `spya-v2aehw`)
+
+> Yeah, find a way to give positive feedback for them answering, and even more positive feedback if they got it right, and maybe some other indication if it's sort of stale or previous and you think that it's time that they reminded themselves. So if you want to build in a kind of basic version of the spacing effect somehow, that could be good. So use your judgment on the v1. Have a look at some screenshots to make sure that you can sort of evaluate it. This sounds exciting!
+
+Done, on dev, not yet deployed (plan 261029m). Both, in the margin and the band: answered stays a pale green with a tick; judged right this visit is a deeper green with a ringed tick; an answer three days old fades, gets a small clock, and opens with an empty box ("You answered this 5 days ago. Try it from memory first.", with Show my earlier answer beside it). No red, no score. Nothing new is stored, so the deeper green lasts only until a reload. Whether to store right/wrong, so it lasts and the spacing can adapt, is the follow-up, q-m9zkx3.

@@ -290,7 +290,7 @@ export function stickyOffset(): number {
  * because there the two boundaries are the same number. GPT Sol F7.
  *
  * **The rect, and deliberately not `data-bars`.** The attribute is not the same
- * question: the two `:has()` guards in shell.css hold the bar down —
+ * question: the two guards in shell.css hold the bar down —
  * `--bar-hide: 0px` — while the attribute is still set, so a reader in a band
  * mode, or tabbing along the pills, would have had every jump land under a bar
  * that is plainly there. Asking the element is what makes those guards free.
@@ -584,7 +584,9 @@ export function watchBarVisibility(): () => void {
    * The rationale below describes the fisheye panels and granularity pills
    * before they went on 2026-09-29; the focus listener is still here.
    *
-   * `:root:has(.controls:focus-within, .mode-band)` in shell.css puts
+   * The guard in shell.css (`:root:has(.controls:focus-within, .mode-band)`
+   * then; `data-bar-focus` and `data-band-covers` on `<html>` since
+   * 2026-10-29, root-flags.ts) puts
    * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still
    * `"hidden"`** — that is the guard that stops the bar sliding out from under
    * a keyboard reader tabbing the granularity pills. So focus alone moves the

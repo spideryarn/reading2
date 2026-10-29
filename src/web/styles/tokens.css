@@ -395,7 +395,8 @@
    * A `.mode-band` that stops at the bar is not enough when there is a sentence
    * sitting on top of the bar. GPT Sol, second pass, 2026-08-28.
    *
-   * Set by `:root:has(.install-hint)` below, so it costs nothing on the page
+   * Set by `:root[data-install-hint]` in dock.css (InstallHint.tsx sets the
+   * attribute; it was `:root:has(.install-hint)` until 2026-10-29), so it costs nothing on the page
    * where the strip is not rendered — which is every page, for every reader who
    * is not on an uninstalled iPhone or has dismissed it once.
    *

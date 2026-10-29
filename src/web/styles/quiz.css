@@ -137,14 +137,71 @@
 }
 .quiz-answered .marg-quiz-tick,
 .quiz-answered .quiz-tick { color: var(--positive); }
+/* The band's tick, ringed tick or clock, a space before the words (the margin's
+   row has its own gap). */
+.quiz-question > svg {
+  margin-right: 0.35rem;
+  vertical-align: -2px;
+}
 .quiz-question.quiz-answered {
   padding: 0.15rem 0.4rem;
   margin-left: -0.4rem;
   margin-right: -0.4rem;
   border-radius: var(--radius);
 }
+/* **Deeper for right, a faint wash for due** — Greg, 2026-10-29
+   (spya-v2aehw): *"even more positive feedback if they got it right, and maybe
+   some other indication if it's sort of stale"*. Both ride on `.quiz-answered`
+   (quiz-recall.ts § `quizLookClass`), so only the ground and the mark change.
+   *Right* is this visit's hidden check, never stored; a failed check is plain
+   answered green, never less. *Due* is an answer older than RECALL_AFTER_DAYS:
+   the green has faded, and the clock says come back to it. No red anywhere.
+   Plan 261029m. */
+.quiz-answered.quiz-right {
+  background: color-mix(in oklab, var(--positive) 26%, transparent);
+}
+.quiz-answered.quiz-due {
+  background: color-mix(in oklab, var(--positive) 5%, transparent);
+  /* The green drained to its outline. The wash alone vanished against the dark
+     page, leaving only the clock to tell due from unanswered (browser check of
+     plan 261029m). */
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--positive) 40%, transparent);
+}
+.quiz-due .marg-quiz-due,
+.quiz-due .quiz-due { color: var(--ink-faint); }
 @media (prefers-reduced-motion: reduce) {
   .quiz-answered { transition: none; }
+}
+
+/* A due question's box opens empty; `RecallLine` says why and brings the
+   earlier answer back on a press, beside a draft rather than over it. Band and
+   margin alike (plan 261029m). */
+.quiz-recall,
+.quiz-earlier {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: max(var(--text-min), 0.8rem);
+}
+.quiz-earlier-words { color: var(--ink); }
+.quiz-recall-show {
+  all: unset;
+  color: var(--ink-faint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.quiz-recall-show:hover,
+.quiz-recall-show:focus-visible { color: var(--ink); }
+.quiz-recall-show:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.quiz-recall-show:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 2px;
+}
+@media (any-pointer: coarse) {
+  .quiz-recall-show { min-height: 40px; display: inline-flex; align-items: center; }
 }
 
 .quiz-premise + .quiz-question {

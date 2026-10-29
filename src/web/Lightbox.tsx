@@ -21,7 +21,10 @@
  *   drawer's or CommentDialog's (Dock.tsx § Escape closes the drawer has the
  *   story of two of those fighting).
  * - **The background goes `inert`** — not reachable by Tab, not clickable, not
- *   read by a screen reader.
+ *   read by a screen reader. **Free to write, not free to run**: inertness is
+ *   computed style, so opening and closing restyle every element of the
+ *   article, which is seconds on a book on an old iPad (postmortem 261029d,
+ *   question q-f7xm4h).
  * - **Focus is trapped, and restored to the button that opened it** when the
  *   dialog closes. Both by spec, neither by us.
  * - **It is in the top layer**, so it paints above the spine (45), the dock

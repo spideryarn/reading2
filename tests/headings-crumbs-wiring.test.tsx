@@ -295,6 +295,10 @@ async function open(search = ""): Promise<void> {
 }
 
 const crumbs = () => host.querySelector<HTMLElement>(".reader > .controls > nav.crumbs");
+/* What `Reader` and `HeadingsCrumbs` say on `<html>` about the bar, which
+   shell.css's ladder and crumbs.css read since 2026-10-29 instead of
+   `:root:has(… > .controls …)` (src/web/root-flags.ts, plan 261029k). */
+const rootFlag = (f: string) => document.documentElement.hasAttribute(`data-${f}`);
 
 describe("the headings breadcrumb", () => {
   it("an owner with the switch off has no controls bar at all", async () => {
@@ -302,6 +306,8 @@ describe("the headings breadcrumb", () => {
     expect(host.textContent, "the article is up").toContain(PARAGRAPH);
     expect(host.querySelector(".reader > .controls")).toBeNull();
     expect(host.querySelector("nav.crumbs")).toBeNull();
+    expect(rootFlag("bar-drawn"), "no bar, and <html> says there is one").toBe(false);
+    expect(rootFlag("bar-crumbs")).toBe(false);
   });
 
   it("does not give a signed-out visitor breadcrumbs, while preserving their existing bar", async () => {
@@ -312,6 +318,8 @@ describe("the headings breadcrumb", () => {
     await open();
     expect(host.querySelector(".reader > .controls"), "the read-only chip still has its bar").not.toBeNull();
     expect(host.querySelector("nav.crumbs")).toBeNull();
+    expect(rootFlag("bar-drawn")).toBe(true);
+    expect(rootFlag("bar-crumbs")).toBe(false);
   });
 
   it("a tree containing only labelled block leaves has no empty controls bar", async () => {
@@ -349,6 +357,15 @@ describe("the headings breadcrumb", () => {
     expect(buttons[0]?.hasAttribute("aria-current"), "only the leaf is current").toBe(false);
     expect(buttons.at(-1)?.getAttribute("aria-current")).toBe("location");
     expect(nav?.closest("[aria-live]"), "never announced on scroll").toBeNull();
+    expect(rootFlag("bar-drawn")).toBe(true);
+    expect(rootFlag("bar-crumbs")).toBe(true);
+    /* Focus in the bar is the guard's other half (shell.css). */
+    expect(rootFlag("bar-focus")).toBe(false);
+    act(() => buttons[0]!.focus());
+    expect(rootFlag("bar-focus")).toBe(true);
+    act(() => buttons[0]!.blur());
+    await act(async () => {});
+    expect(rootFlag("bar-focus")).toBe(false);
   });
 
   /**

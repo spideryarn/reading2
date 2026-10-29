@@ -117,7 +117,7 @@ td.pin-right, thead th.pin-right {
    ends there — the probe agent checked, and there is no persistent scrollbar to
    see. A fade at the trailing edge says "this continues" without claiming a
    row of chrome. Only drawn while there is actually something out there. */
-.reader:has(table.zoom.overflowing)::after {
+.reader:has(> table.zoom.overflowing)::after {
   content: "";
   position: fixed;
   top: var(--bar-bottom);

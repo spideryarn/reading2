@@ -19,7 +19,7 @@ with the margin open on *Consciousness in Artificial Intelligence*
 > recollection and internalization. And if you have ideas for other ways in which we could be
 > encouraging active learning, let's discuss those separately.
 
-**Ending: awaiting Greg**, on what the green means ([q-cj0fv8](questions/q-cj0fv8.md)); everything else is built or queued.
+**Ending: awaiting Greg**, on whether to store right/wrong ([q-m9zkx3](questions/q-m9zkx3.md)); everything else is built or queued.
 
 - **Built, on `dev`** (plan [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md)
   § Stage 2). The questions were not in the margin: they were lines in the prose. Now, with the
@@ -36,7 +36,14 @@ with the margin open on *Consciousness in Artificial Intelligence*
   question in the margin opens an answer box there instead of Learn, a microphone beside it starts
   listening in one press, and an answered question turns a pale green with a tick, there and in
   the band. **Asked**: should green mean answered (built) or judged right —
-  [q-cj0fv8](questions/q-cj0fv8.md).
+  [q-cj0fv8](questions/q-cj0fv8.md). **Answered** 2026-10-29 (`spya-v2aehw`): both, and a basic
+  spacing effect.
+- **Built, on `dev`** (plan
+  [261029m](../plans/261029m-quiz-green-for-right-and-a-quiet-time-to-recall-again.md)): a deeper
+  green for an answer judged right this visit, and an answer three days old fades with a clock and
+  opens with an empty box, to be recalled from memory, in the margin and the band. Nothing new
+  stored. **Asked**: store right/wrong so the green lasts and spacing adapts —
+  [q-m9zkx3](questions/q-m9zkx3.md).
 - **Queued**: the Haiku 5.5 / Sonnet 5.5 and smaller-quiz evals, written but waiting for the key
   (`qi-msd5tmda`); the parked ideas B, D, E (`qi-b73v82tb`); C stays `qi-nm7427wf`.
 

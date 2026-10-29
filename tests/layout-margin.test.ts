@@ -64,7 +64,7 @@ describe("the marginalia column", () => {
 
   it("hides the panel-only small-screen advice when Marginalia keeps the prose visible", () => {
     expect(NARROW_CSS).toContain(
-      ".reader.band-covers:has(.mode-band, .marg-narrow) .small-screen-hint { display: none; }",
+      ":is([data-band-covers], [data-marg-narrow]) .reader.band-covers .small-screen-hint { display: none; }",
     );
   });
 

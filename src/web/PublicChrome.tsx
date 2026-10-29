@@ -213,7 +213,7 @@ export function SharedNotice({
   return (
     /* **`shared-notice` is a hook for one rule and not styling.** In the reading
        view this box sits between the masthead and the controls bar. With a
-       covering band `.reader.band-covers:has(.mode-band) .masthead` is
+       covering band `[data-band-covers] .reader.band-covers .masthead` is
        `display: none` — the band goes full width and the article's identity
        goes with it (narrow-window.css § a band with no room). Without the same rule here
        the notice became the first element on the page, at `y: 0`, underneath

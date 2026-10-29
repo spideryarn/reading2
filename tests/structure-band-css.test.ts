@@ -57,18 +57,22 @@ describe("Structure's band while the top bar would slide (GPT Sol, plan review F
   /* The band's top is `--bar-bottom`; a present bar sliding away grows the
      band. The guard that holds the bar home names Structure's band. */
   it("holds a present top bar home while Structure's band is open", () => {
-    const guard = /:root:has\(:where\(\.reader\) > \.controls\):has\(([^{]*)\)\s*\{([^}]*)\}/.exec(BARE);
+    /* `data-band-fitted` is held by the band itself while it is Outline's or
+       Structure's (src/web/band-root-flags.ts); it was
+       `:where(.reader) .mode-band:is(.outln, .struct)` in a `:has()` until
+       2026-10-29 (plan 261029k). */
+    const guard = /:root\[data-bar-drawn\]\[data-bar-drawn\]:is\(([^{]*)\)\s*\{([^}]*)\}/.exec(BARE);
     expect(guard, "the top bar's guard").not.toBeNull();
-    expect(guard![1]).toContain(":where(.reader) .mode-band:is(.outln, .struct)");
+    expect(guard![1]).toContain("[data-band-fitted]");
     expect(decl(guard![2]!, "--bar-bottom")).toBe("calc(var(--bar-h) + var(--safe-top))");
   });
 
   it("brings that held bar home without animating it over the band", () => {
-    const arrival = /:root:has\(([^{}]*)\)\s*\.controls\s*\{([^}]*)\}/g;
+    const arrival = /:root:is\(([^{}]*)\)\s*\.controls\s*\{([^}]*)\}/g;
     const rules = [...BARE.matchAll(arrival)];
-    const rule = rules.find((m) => m[1]?.includes(":where(.reader.band-covers) .mode-band"));
+    const rule = rules.find((m) => m[1]?.includes("[data-band-covers]"));
     expect(rule, "the mode-opening transition guard").toBeDefined();
-    expect(rule![1]).toContain(":where(.reader) .mode-band:where(.outln, .struct)");
+    expect(rule![1]).toContain("[data-band-fitted]");
     expect(decl(rule![2]!, "transition")).toBe("none");
   });
 });
