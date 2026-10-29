@@ -275,11 +275,24 @@ describe("the orders and the threshold (plan 261029e § 2b)", () => {
     expect(row("e-hard").querySelector(".score-bars")).toBeNull();
   });
 
-  it("hands a press on an order, and a bar, to the URL's setters", async () => {
+  it("hands a press on an order, and a moved bar, to the URL's setters", async () => {
     const onOrder = vi.fn();
-    await draw(scored(), { onOrder });
+    const onBar = vi.fn();
+    await draw(scored(), { onOrder, onBar });
     await act(async () => button("hardest").click());
     expect(onOrder).toHaveBeenCalledWith("difficulty");
+
+    const slider = host.querySelector<HTMLInputElement>("#expl-bar");
+    if (!slider) throw new Error("the prioritised explanations bar was not drawn");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setter) throw new Error("the native range value setter is unavailable");
+    await act(async () => {
+      slider.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      setter.call(slider, "0.3");
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      slider.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    });
+    expect(onBar).toHaveBeenCalledWith(0.3);
   });
 });
 
@@ -306,6 +319,7 @@ describe("Open in Explanations from the margin (Sol F4)", () => {
     await render();
     expect(rowIds()).toContain("e-easy");
     expect(rowIds()).toEqual(["e-hard", "e-easy", "e-mid"]);
+    expect(taken).toEqual([focus]);
   });
 
   it("leaves the bar alone when the row is already drawn", async () => {

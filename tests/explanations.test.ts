@@ -679,15 +679,24 @@ describe("Find more appends (plan 261029e § 2c)", () => {
   /** Another quote from a block, still once in it: its first six words. */
   const opening = (b: Block) => b.text.split(/\s+/).slice(0, 6).join(" ");
 
-  const firstPass = async (profile: string | null = null) => {
+  const firstPass = async (profile: string | null = null, cacheArticle = false) => {
     const [x] = places(1);
     answer = JSON.stringify({ explanations: [scored(x!.block.id, x!.words, "First pass.")] });
-    const run = await generateExplanations({ power: "standard", article: example, profile, previous: null });
+    const run = await generateExplanations({
+      power: "standard",
+      article: example,
+      profile,
+      previous: null,
+      cacheArticle,
+    });
     return run.explanations;
   };
 
   it("sends the places already explained, keeps the old ones unchanged, and merges in reading order", async () => {
-    const before = await firstPass();
+    const before = await firstPass(null, true);
+    const firstCall = sent[0];
+    if (!firstCall) throw new Error("the first pass made no call");
+    const firstSystem = (firstCall.body as { system: unknown[] }).system;
     const [x, y, z] = places(3);
     sent.length = 0;
     /* Out of reading order, one in a used block, and one new pair. */
@@ -698,7 +707,13 @@ describe("Find more appends (plan 261029e § 2c)", () => {
         scored(y!.block.id, y!.words, "Second block."),
       ],
     });
-    const run = await generateExplanations({ power: "standard", article: example, profile: null, previous: before });
+    const run = await generateExplanations({
+      power: "standard",
+      article: example,
+      profile: null,
+      previous: before,
+      cacheArticle: true,
+    });
 
     const message = userMessage(0);
     expect(message).toBe(
@@ -710,6 +725,14 @@ describe("Find more appends (plan 261029e § 2c)", () => {
     );
     expect(message).toContain(`${x!.block.id}: ${JSON.stringify(x!.words)}`);
     expect(message).not.toBe(renderPrompt({ count: explanationCap(run.paragraphs), profile: null }));
+    const appendCall = sent[0];
+    if (!appendCall) throw new Error("the append made no call");
+    const appendSystem = (appendCall.body as { system: unknown[] }).system;
+    /* Only the dynamic user message changes. The cached article segment stays
+       byte-for-byte reusable, and the first-pass fingerprint remains the
+       artefact's source hash. */
+    expect(appendSystem[0]).toEqual(firstSystem[0]);
+    expect(appendSystem[0]).toMatchObject({ cache_control: { type: "ephemeral" } });
 
     const after = run.explanations;
     expect(after.explanations.map((e) => e.text)).toEqual(["First pass.", "Second block.", "Third block."]);
@@ -725,6 +748,26 @@ describe("Find more appends (plan 261029e § 2c)", () => {
     expect(after.dropped.repeated).toBe(1);
     expect(after.version).toBe(before.version);
     expect(after.sourceHash).toBe(before.sourceHash);
+  });
+
+  it("applies the cap to each append pass, not to the accumulated list", async () => {
+    const before = await firstPass();
+    const cap = explanationCap(bodyParagraphs(example.blocks));
+    const candidates = places(cap + 2).slice(1);
+    answer = JSON.stringify({
+      explanations: candidates.map(({ block, words }, i) =>
+        scored(block.id, words, `Append candidate ${i + 1}.`),
+      ),
+    });
+    const run = await generateExplanations({
+      power: "standard",
+      article: example,
+      profile: null,
+      previous: before,
+    });
+    expect(run.explanations.explanations).toHaveLength(before.explanations.length + cap);
+    expect(run.explanations.lastAdded).toBe(cap);
+    expect(run.dropped.overCap).toBe(1);
   });
 
   it("keeps `dropped` cumulative on the artefact and this pass's on the run", async () => {
