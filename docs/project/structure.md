@@ -77,9 +77,16 @@ the structure step's half is 261029a's stage 2 — but the reading view already 
   than a paragraph (`OutlineRow.paragraph` is a flag, not a depth).
 - **"You are here" and ← / →** use Structure's own list, the frontier, so they can stand in a
   sub-section; everything outside Structure stays at the section level.
-- **The two columns are unchanged** but for a guard: column B's paragraph rung lists only leaves.
-  Opening sub-sections under column B's current section waits on Greg's answer to
-  [q-vrnbyj](../user-feedback/questions/q-vrnbyj.md).
+- **The two columns: column B opens the section the reader is in**, listing its sub-sections under
+  it, indented, with a hairline down the run; the sub-section they are in is the one orange row
+  and carries the sentence, and the section keeps only the weight, its sentence moving to its hover
+  card. No third column: the band hardly widens with the window, so three columns would be ~230px
+  each. Greg asked for the layout to be tried out and judged, and all three judges picked this one
+  ([q-vrnbyj](../user-feedback/questions/q-vrnbyj.md), mockup `m-fq095c`). The section and its
+  sub-sections are drawn inside one `<li>`, so the panel measures and windows them as one row and
+  can never cut the run in half. When the run is taller than the column, the section is drawn
+  closed, as before, with "N sub-sections" under the column (`unitFits` in `StructurePanel.tsx`).
+  Column B's paragraph rung lists only leaves.
 
 ## While the reader scrolls
 

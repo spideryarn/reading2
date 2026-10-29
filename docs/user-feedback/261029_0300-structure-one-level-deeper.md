@@ -1,7 +1,7 @@
 ---
 reports: spya-pn7gvw
 ending: awaiting
-comment: Structure can now draw a fourth level, but no article has one yet: that needs a prompt change, waiting on the 1 Nov AI key reset and your answer to q-vrnbyj (automatic or on request; column B or a third column?).
+comment: Done as you chose: the level is made automatically, and column B opens the section you are in to show its sub-sections (all three judges picked it). No article has it until after the 1 Nov key reset. Open: re-run this paper then?
 ---
 # Structure one level deeper
 
@@ -33,11 +33,21 @@ the extra level is a cent or three and a few seconds, only on articles that get 
 sub-sections, their neighbours not. Before this, one deepened section would have quietly changed
 what `?at=`, Quiz's "where to look again", the return chip and both Structure layouts meant by "a
 section". Now `?at=` and the rest stay at sections; Structure's "you are here" and ← / → step
-sub-sections where there are any; the nested list and Expanded draw them one indent deeper. The two
-columns are unchanged until Greg picks a layout. Nothing a reader sees changes yet, because no
-article has the extra level.
+sub-sections where there are any; the nested list and Expanded draw them one indent deeper.
+
+**Greg's answer** (reply `spya-b2ceuy`, 2026-10-29), quoted in q-vrnbyj: automatically (1A), and
+for the layout *"Go with your recommendation. Perhaps try a few different ways [...] ask a couple of
+sub-agents to play the roles of being product managers or naive users, and then make a decision."*
+Three layouts were mocked up on the real panel (mockup `m-fq095c`): opening the section in column B,
+a third column, and the columns sliding down a level. Judged blind by an Opus product manager and
+two Sonnet first-time readers, all three chose column B. **Built (stage 1b)**: column B opens the
+section the reader is in, its sub-sections indented under it, the current one orange with its
+sentence; the section and its run are one row to the panel's measure and window, and a run too
+tall for the column falls back to the closed section with "N sub-sections". Sub-sections now count
+from .1 when a section opens with a paragraph of its own. Still nothing a reader sees changes,
+because no article has the extra level.
 
 **What waits** (queue item `qi-negzd289`): the prompt change that makes the fourth level, which
 cannot be measured until the box's OpenRouter key resets on 1 November and ships only if the median
-structure call grows by less than about a fifth; the column-B or third-column layout, per Greg's
-answer; and, if he says yes, re-running this one paper in production (about 65¢). No backfill.
+structure call grows by less than about a fifth; and, if he says yes to the one question still open
+in q-vrnbyj, re-running this one paper in production (about 65¢). No backfill.

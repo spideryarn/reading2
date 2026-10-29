@@ -3,9 +3,27 @@ id: q-vrnbyj
 report: spya-pn7gvw
 status: open
 asked: 2026-10-29
-title: Structure one level deeper: made automatically or on request, and nested in column B or a third column?
-refs: docs/plans/261029a-structure-one-level-deeper.md · docs/user-feedback/261029_0300-structure-one-level-deeper.md · m-pe3zds · spya-pn7gvw
+title: Structure one level deeper: once it is built, re-run this one paper in production so you can see it (about 65 cents)?
+refs: docs/plans/261029a-structure-one-level-deeper.md · docs/user-feedback/261029_0300-structure-one-level-deeper.md · m-pe3zds · m-fq095c · qi-negzd289 · spya-pn7gvw
+acted: spya-b2ceuy
 ---
+Done as you said: 1A, the extra level is made automatically. For the layout I built three ways on the real page, and three judges (a product manager and two first-time readers) all picked B, the section you are in opening its sub-sections in column B. That is now built; m-fq095c has the screenshots and what they said.
+
+One question left from before: once the prompt change lands (after 1 November, when the dev box's AI key resets), shall I re-run this one paper's structure in production so you can see it? About 65 cents. Yes / no.
+Recommendation: yes. It is the only way you will see the new level before new articles start getting it.
+
+Details
+
+Your reply, 29 Oct (spya-b2ceuy): "Okay, I'm not sure, but I'm inclined to say number one, yes, let's try and do this automatically. So that's A. And how should structures show it? Go with your recommendation. Perhaps try a few different ways if you can. Maybe in a mock-up, take screenshots, experiment, ask a couple of sub-agents to play the roles of being product managers or naive users, and then make a decision."
+
+What I did. Three layouts, mocked up on the real Structure panel with this paper: X, the section opens in column B (my recommendation); Y, a third column; Z, the two columns slide down a level inside a divided section. The judges saw them as X, Y and Z with no recommendation. All three chose X. Y was "busy" and cramped, because the band is about 700px wide even on a 1,520px window, so three columns are about 230px each. Z hid the rest of the paper behind a small "All 8 parts" link. X is built with the product manager's tweaks: the section you are in stays bold and its summary moves to its hover card; a hairline runs down its sub-sections; and if the run is too tall for the column, the section is drawn closed as today with "6 sub-sections" under it, so later sections never drop off.
+
+What still waits. Nothing you see changes yet, because no article has the extra level. Making it needs the prompt change, which needs a model call, and the dev box's OpenRouter key is over its limit until 1 November. It is queued (qi-negzd289) and ships only if the median article's structure call grows by less than about a fifth in cost and time.
+
+Both readers also noticed that the panel numbers the sub-section 5.5.2 while the article's heading says 2.4.2. That is Structure's own numbering, unchanged here.
+
+The original question, for reference:
+
 You asked for Structure to go one level deeper, e.g. each theory in "2.4 Other Theories" as its own row. Two choices.
 
 1. When should the extra level be made?
@@ -31,21 +49,3 @@ Recommendation: B. Simplest, and it shows the new level on a laptop. Add a third
 (Option 2B. All three options are drawn out in m-pe3zds.)
 
 Also: once it is built (after 1 November), shall I re-run this one paper's structure in production so you can see it? About 65 cents. Yes / no.
-
-Details
-
-What you said (29 Oct, reading Consciousness in AI, arXiv 2308.08708, in Structure's Expanded view): Structure should perhaps go one more level deep; you worried it would be slower and dearer, might not fit, might need a third column, and asked how we would decide when it is needed, perhaps by letting the reader ask. You'd like each of the "other theories" to have its own section at least.
-
-What I found. Today the tree is always parts, then sections, then paragraphs. The prompt asks for exactly three levels and the answer's format cannot hold a fourth. On this paper, "2.4 Other Theories and Conditions" is one section of 76 paragraphs and 7,100 words, although the author gave it six sub-headings. 2.1, 2.2, 2.3, 1.2 and 3.1 are the same, with three to five sub-headings each. Across the 67 articles made in production in the last 60 days, 141 sections hide two or more of the author's sub-headings, in 30 of the 67 articles. So it is common, not this paper's quirk.
-
-Speed and cost. This paper's structure call cost 22 cents and took 22 seconds; the median article's is 15 cents and 31 seconds. Almost all of that is reading the article in, which does not change. The extra level is a few hundred to about 1,500 more words written out, so a few seconds and a cent or three, and only on articles that get it. The article already opens before its structure is ready, so you would not wait longer to start reading.
-
-How it decides. Option 1A puts the rule in the prompt: follow the author's sub-headings first, and split a long section at clear topic shifts only when it has none. An earlier experiment (September) found this works on articles in a single call. Option 1B leaves the decision to you, at a cost each time.
-
-Old articles are not changed (our "no backfill" rule), apart from this one paper if you say yes above.
-
-What I have done tonight, which does not depend on your answer. Made the reading view cope with a tree where some sections have sub-sections and others do not; before this, one deeper section would have quietly broken the "you are here" position, ← / →, Quiz's "where to look again" and both Structure layouts. Nothing you see changes yet, because no article has the extra level yet.
-
-What waits. The prompt change can't be tested until 1 November, when the dev box's OpenRouter key resets; production's own calls are unaffected. It ships only if the median article's structure call grows by less than about a fifth in cost and time.
-
-One more thing I noticed, separate from depth: the author's "2.5 Indicators of Consciousness" was folded into 2.4 instead of being its own section, although the prompt says the author's headings are hard boundaries. Up to 150 headings in 26 recent articles may be folded in this way (some may be deliberate merges of very short stretches). The prompt change in 1A will restate the rule, and the same test will measure it.

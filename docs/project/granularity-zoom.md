@@ -139,7 +139,9 @@ a tree, and they are not the same thing ([261029a](../plans/261029a-structure-on
   part with leaves directly under it, it is exactly the section list.
 
 In the geometry, a leaf shallower than the deepest is real only in the leaf column and a
-continuation in the columns above it (tree.ts § `buildGeometry`).
+continuation in the columns above it (tree.ts § `buildGeometry`). In the numbering, a paragraph a
+section opens with, before its first sub-section, takes no number, so the sub-sections count from
+.1 (tree.ts § `buildSummaryTree`; below the parts only, so no number production shows today moved).
 
 ### Node shape
 

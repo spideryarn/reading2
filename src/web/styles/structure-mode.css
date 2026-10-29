@@ -156,7 +156,7 @@
 }
 /* The orange thumb moves with the bracket, onto the ribbon's edge 4px left of
    the rows — `RIBBON_EDGE_INSET_PX` in structure-ribbon.ts; change both. */
-.struct-grid[data-ribbon] > .struct-inner .struct-row[aria-current]::before {
+.struct-grid[data-ribbon] > .struct-inner .struct-row[aria-current]:not(.struct-ancestor)::before {
   left: -4px;
 }
 /* **The marked part is the ribbon's source, so it wears the ribbon's ground**:
@@ -322,8 +322,13 @@
 /* **The deepest marked row.** Column B's, when it has one; column A's
    otherwise — `:has` asks the grid, not the row, because which row is deepest
    is a fact about both columns. `.struct-measure` too, so the measuring copies
-   wrap at the weight the real rows are drawn at. */
-.struct-inner .struct-row[aria-current],
+   wrap at the weight the real rows are drawn at.
+
+   **`:not(.struct-ancestor)`: an opened section is on the path, not the end of
+   it.** While the reader is in one of its sub-sections (plan 261029a § Stage
+   1b), that sub-section is the deepest row and the section above it keeps only
+   the weight, as the part in column A does — two washes would be two "now"s. */
+.struct-inner .struct-row[aria-current]:not(.struct-ancestor),
 :is(.struct-grid, .struct-measure):not(:has(> .struct-inner .struct-row[aria-current]))
   > .struct-side:not(.struct-inner)
   .struct-row[aria-current] {
@@ -335,7 +340,7 @@
    list face's `.outln-row.now.lvl-2::before`, a 2px `--highlight` thumb on the
    rail the eye runs down. The bracket is `.struct-inner`'s left border, 0.6rem
    of padding to the row's left, so the thumb sits that far out and covers it. */
-.struct-inner .struct-row[aria-current]::before {
+.struct-inner .struct-row[aria-current]:not(.struct-ancestor)::before {
   content: "";
   position: absolute;
   top: 0;
@@ -356,6 +361,43 @@
    the columns and cannot be clipped by the band's `overflow: hidden`. */
 .struct-side:not(.struct-inner) .struct-row[aria-current] {
   box-shadow: inset -2px 0 0 0 var(--rule-strong);
+}
+
+/* **An opened section and its sub-sections** (plan 261029a § Stage 1b; the
+   layout chosen in mockup m-fq095c). The section keeps the deepest row's
+   weight so part → section → sub-section reads as one path; its sub-sections
+   hang under it in a nested list inside its own `<li>`, which is what makes
+   the pair one row to the panel's measure and window.
+
+   The indent is on the title line and not on the list, so each sub-section's
+   button still spans the column and its thumb still lands on the bracket. A
+   hairline down the run, in the bracket's tint, says these rows belong to the
+   one above them; 1rem, so "Unlimited Associative Learning" stays on one line
+   in a 330px column. */
+.struct-ancestor {
+  font-weight: 650;
+}
+.struct-subs {
+  list-style: none;
+  margin: 0.125rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  position: relative;
+}
+.struct-subs::before {
+  content: "";
+  position: absolute;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  left: 0.55rem;
+  width: 1px;
+  background: var(--rule-strong);
+  pointer-events: none;
+}
+.struct-subsection .struct-line {
+  padding-left: 1rem;
 }
 
 /* The number is an address, so it is tabular and it does not wrap: "10" and "9"
