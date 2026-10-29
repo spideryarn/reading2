@@ -22,6 +22,7 @@ import {
   PROPOSAL_IDS,
   RISK,
   formatProposalToken,
+  glossaryProposalFor,
   proposalRisk,
   parseProposalToken,
   proposalWords,
@@ -228,6 +229,30 @@ describe("resolveArgument — the glossary", () => {
     );
     expect(row?.kind).toBe("refused");
     if (row?.kind === "refused") expect(row.reason).toContain("80 characters");
+  });
+});
+
+/* Plan 261029d, Part 2: what *Add to glossary* on a selection does. */
+describe("glossaryProposalFor — a selection's words", () => {
+  const terms = [entry(TERM_A, "Free energy", ["fe", "surprise"]), entry(TERM_B, "Surprise", ["fe"])];
+  const glossary = { ready: true, terms };
+
+  it("opens the one entry that names them", () => {
+    expect(glossaryProposalFor("free  energy", glossary)).toEqual({ id: "glossary-open", termId: TERM_A });
+  });
+
+  it("asks for words no entry names", () => {
+    expect(glossaryProposalFor("attention head", glossary)).toEqual({ id: "glossary-ask", term: "attention head" });
+  });
+
+  it("offers nothing when two entries could be meant: there is no list to pick from (GPT Sol F5)", () => {
+    expect(glossaryProposalFor("FE", glossary)).toBeNull();
+    expect(glossaryProposalFor("surprise", glossary), "a name and another's alias").toBeNull();
+  });
+
+  it("offers nothing the server would refuse, or with no settled glossary to ask into", () => {
+    expect(glossaryProposalFor("x".repeat(81), glossary)).toBeNull();
+    expect(glossaryProposalFor("attention head", { ready: false, terms })).toBeNull();
   });
 });
 

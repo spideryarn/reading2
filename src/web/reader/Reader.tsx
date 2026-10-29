@@ -143,6 +143,7 @@ import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from 
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl, withModeDoor } from "../command-runners.js";
+import { glossaryProposalFor, runProposal } from "../command-proposal.js";
 import { chipDoorRows, guideDoorRows } from "../chip-door.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
@@ -3589,6 +3590,53 @@ export function Reader({
     ],
   );
   /**
+   * **_Add to glossary_ on a selection** — Greg, 2026-10-28 (spya-turkg3):
+   * *"When I highlight a piece of text, it gives me the option to highlight or
+   * comment it. Okay, great. Can we also have the option to add it to the
+   * glossary?"* Plan 261029d, Part 2.
+   *
+   * **Exactly the bar's *Look up “X”* for the selected words**, through the
+   * same `executor`: an entry that already names them is opened, and anything
+   * else is handed to the Glossary band's *Look up a term* box, whose finished
+   * answer adds the term for the owner (glossary.md § A finished answer adds
+   * the term). So the gates are the bar's: the owner, a settled glossary for
+   * an ask (`glossaryReady`, so nothing generates on open), and term-sized
+   * words (`parseAskedTerm`). Plus the Dock drawing Glossary, as `moreTerms`
+   * asks. `undefined` means no button anywhere.
+   */
+  const glossaryDrawn = dockDraws("glossary");
+  const selectionGlossary = useMemo(() => {
+    if (!isOwner || !glossaryDrawn) return undefined;
+    const proposalFor = (words: string) => glossaryProposalFor(words, { ready: glossaryReady, terms });
+    return {
+      offers: (words: string) => proposalFor(words) !== null,
+      /**
+       * **Whether it went**: decided again at the press, and `true` only for
+       * the runner's `close`. A `stay` (the entry was hidden since the chip
+       * appeared) or no runner leaves the selection and the highlight as they
+       * were, rather than throwing them away for nothing (GPT Sol, plan
+       * review F6). Both glossary runners answer synchronously.
+       */
+      add: (words: string): boolean => {
+        const proposal = proposalFor(words);
+        if (!proposal) return false;
+        const outcome = runProposal(executor.runners, proposal);
+        return outcome !== null && !(outcome instanceof Promise) && outcome.kind === "close";
+      },
+    };
+  }, [isOwner, glossaryDrawn, glossaryReady, terms, executor]);
+  /** The chip's *Add to glossary*: a finger's words, put away as its other press puts them away. */
+  const chipGlossary = useMemo(
+    () =>
+      selectionGlossary && {
+        offers: selectionGlossary.offers,
+        add: (anchor: SelectionAnchor) => {
+          if (selectionGlossary.add(anchor.quote)) window.getSelection()?.removeAllRanges();
+        },
+      },
+    [selectionGlossary],
+  );
+  /**
    * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
    * reading view draws no tag editor, so there is nothing on screen to keep in
    * step and a plain `editArticleTags` is the whole controller; the Metadata
@@ -5043,6 +5091,7 @@ export function Reader({
           key={`${slug}:${mode}`}
           suppressed={Boolean(annotating || overlay || openComment)}
           onSelect={selectProseByTouch}
+          glossary={chipGlossary}
         />
       )}
       {owner && annotating && (
@@ -5271,6 +5320,27 @@ export function Reader({
                     api.remove(id);
                     void setNote((current) => (current === id ? null : current));
                   },
+                  /* **_Add to glossary_, the chip's second press on a mouse's
+                     words** (plan 261029d). The reader selected to look a term
+                     up, not to mark it, so an untouched highlight goes as
+                     Copy's does; a touched one stays. The box closes either
+                     way, because the reader has gone to the glossary. */
+                  onAddToGlossary:
+                    selectionGlossary && openComment.quote !== undefined && selectionGlossary.offers(openComment.quote)
+                      ? () => {
+                          const id = openComment.id;
+                          const quote = openComment.quote;
+                          if (quote === undefined || !selectionGlossary.add(quote)) return false;
+                          const api = commentsNow.current;
+                          const row = api?.comments.find((comment) => comment.id === id);
+                          if (api && row && isPristineHighlight(row) && !copyOnlyProtected.current.has(id)) {
+                            copyOnlyProtected.current.add(id);
+                            api.remove(id);
+                          }
+                          void setNote((current) => (current === id ? null : current));
+                          return true;
+                        }
+                      : undefined,
                 }
               : undefined
           }
