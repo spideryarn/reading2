@@ -974,8 +974,11 @@ is gone; `LAST_UPDATED` moved to 5 October 2026. The plan is
 What the code has to keep true for the page to stay honest:
 
 - **Whether an answer was judged right or wrong is still not stored**, and not logged. The table has
-  no column for it; the hidden verdict lives in the panel for the length of a visit, as before
-  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)).
+  no column for it; the hidden verdict lives in the page's memory, on the kept answer it was judged
+  with, for the length of a visit. Since 2026-10-29 a *right* is drawn as a deeper green on the
+  question (plan 261029m), which needs no storage and is gone after a reload
+  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)). Storing it would
+  need the public page to say so: that is asked of Greg in q-m9zkx3.
 - **Neither the answer nor the reply is logged** — the route reports a failed save with the slug
   and nothing else, and the store is guarded so a failed query's parameters do not reach an error.
 - **Owner-only.** The owner's read returns them; the public page has no quiz and its queries never

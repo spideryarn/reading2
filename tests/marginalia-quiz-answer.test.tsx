@@ -56,13 +56,24 @@ vi.mock("../src/web/useJobs.js", () => ({
 }));
 vi.mock("../src/web/useAutoRun.js", () => ({ useAutoRun: () => {} }));
 let dictationBusy = false;
+let dictationSupported = false;
+/** The field the last render asked for, and every `toggle` with the box it was bound to then. */
+let lastField: { keep?: { box: string }; onChange(text: string): void } | null = null;
+const toggled: { box: string; onChange(text: string): void }[] = [];
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({
-    dictation: { supported: false },
-    readOnly: dictationBusy,
-    busy: dictationBusy,
-    toggle: () => {},
-  }),
+  useDictationField: (opts: { keep?: { box: string }; onChange(text: string): void }) => {
+    lastField = opts;
+    return {
+      dictation: { supported: dictationSupported },
+      readOnly: dictationBusy,
+      busy: dictationBusy,
+      /* Read at the press, as the real one binds the keeper's box at the
+         press (useDictation.ts § `elsewhere`). */
+      toggle: () => {
+        if (lastField) toggled.push({ box: lastField.keep?.box ?? "", onChange: lastField.onChange });
+      },
+    };
+  },
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null, DictationStrip: () => null, TalkLabel: () => null,
@@ -104,8 +115,13 @@ const server = {
   /** Hold every mark's stream open until released, to have two in flight at once. */
   hold: false,
   release: [] as (() => void)[],
-  clock: Date.parse("2026-10-29T12:00:00.000Z"),
+  /* Real time, not a fixed date: the looks are judged against `Date.now()`, and
+     a fixed date would turn every answer here "due" three days after it was
+     written (plan 261029m). */
+  clock: Date.now(),
 };
+const DAY = 24 * 60 * 60 * 1000;
+const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 const enc = new TextEncoder();
@@ -152,6 +168,7 @@ function stubFetch(): void {
 
 const opened: [string, string][] = [];
 let withBand = false;
+let latestRead: QuizRead | null = null;
 
 function Margin({ read }: { read: QuizRead }) {
   const { quiz, kept, noteMark, refresh, claimMark } = read;
@@ -179,6 +196,7 @@ function Band({ read }: { read: QuizRead }) {
 }
 function Probe() {
   const read = useQuizRead(SLUG);
+  latestRead = read;
   return createElement("div", null, createElement(Margin, { read }), withBand ? createElement(Band, { read }) : null);
 }
 
@@ -214,17 +232,33 @@ function type(el: HTMLTextAreaElement, text: string): void {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+function showEarlier(scope: Element): HTMLButtonElement {
+  const b = [...scope.querySelectorAll("button")].find((x) => x.textContent === "Show my earlier answer");
+  if (!b) throw new Error("no Show my earlier answer");
+  return b as HTMLButtonElement;
+}
 function answerButton(scope: Element): HTMLButtonElement {
   const b = [...scope.querySelectorAll("button")].find((x) => x.getAttribute("aria-label") === "Answer");
   if (!b) throw new Error("no Answer button");
   return b as HTMLButtonElement;
 }
+function visibleText(scope: Element): string {
+  const visible = scope.cloneNode(true) as Element;
+  visible.querySelectorAll(".sr-only").forEach((node) => {
+    node.remove();
+  });
+  return visible.textContent ?? "";
+}
 
 beforeEach(() => {
-  Object.assign(server, { batchId: "spya-batch1", attempts: [], verdict: undefined, marks: [], hold: false, release: [], clock: Date.parse("2026-10-29T12:00:00.000Z") });
+  Object.assign(server, { batchId: "spya-batch1", attempts: [], verdict: undefined, marks: [], hold: false, release: [], clock: Date.now() });
   opened.length = 0;
   withBand = false;
   dictationBusy = false;
+  dictationSupported = false;
+  lastField = null;
+  toggled.length = 0;
+  latestRead = null;
   stubFetch();
   host = document.createElement("div");
   document.body.append(host);
@@ -294,7 +328,7 @@ describe("a Quiz question in the margin", () => {
 
   it("is green, ticked and put back when it was answered on an earlier visit", async () => {
     server.attempts = [
-      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Kept words.", reply: "A mark of “Kept words.”.", answeredAt: "2026-10-28T09:00:00.000Z" },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Kept words.", reply: "A mark of “Kept words.”.", answeredAt: daysAgo(1) },
     ];
     await paint();
     expect(item(2).classList.contains("quiz-answered")).toBe(true);
@@ -390,4 +424,246 @@ describe("a Quiz question in the margin", () => {
     expect(reply()).toBe("A mark of “From the band.”.");
     expect(box()?.value, "the losing draft is still the reader's words").toBe("From the margin.");
   });
+});
+
+/**
+ * **Deeper for right, a faint wash and an empty box once due** — plan 261029m,
+ * Greg's spya-v2aehw: *"even more positive feedback if they got it right, and
+ * maybe some other indication if it's sort of stale … a kind of basic version
+ * of the spacing effect"*.
+ */
+describe("right, and time to recall it again", () => {
+  it("turns a deeper green when this visit's check says right, and only then", async () => {
+    server.verdict = "right";
+    await paint();
+    await click(line(1));
+    type(box()!, "Spot on.");
+    await click(answerButton(margin()));
+    expect(item(1).classList.contains("quiz-answered")).toBe(true);
+    expect(item(1).classList.contains("quiz-right")).toBe(true);
+
+    server.verdict = "wrong";
+    await click(line(2));
+    type(box()!, "Not quite.");
+    await click(answerButton(margin()));
+    expect(item(2).classList.contains("quiz-answered")).toBe(true);
+    expect(item(2).classList.contains("quiz-right"), "wrong must look like plain answered").toBe(false);
+  });
+
+  it("is plain answered when the check failed or declined (no verdict)", async () => {
+    await paint();
+    await click(line(1));
+    type(box()!, "Whatever.");
+    await click(answerButton(margin()));
+    expect(item(1).classList.contains("quiz-answered")).toBe(true);
+    expect(item(1).classList.contains("quiz-right")).toBe(false);
+  });
+
+  it("shows the band's right in the margin, and the margin's in the band: one kept verdict", async () => {
+    withBand = true;
+    server.verdict = "right";
+    await paint();
+    const band = host.querySelector(".band")!;
+    type(band.querySelector<HTMLTextAreaElement>("textarea")!, "From the band.");
+    await click(answerButton(band));
+    expect(band.querySelector(".quiz-question")!.classList.contains("quiz-right")).toBe(true);
+    expect(band.querySelector(".quiz-question .sr-only")?.textContent).toBe(
+      " (answered; the check thought it looked right)",
+    );
+    expect(item(1).classList.contains("quiz-right")).toBe(true);
+
+    type(band.querySelector<HTMLTextAreaElement>("textarea")!, "Different words in the band.");
+    expect(band.querySelector(".quiz-question")!.classList.contains("quiz-right")).toBe(false);
+    expect(
+      band.querySelector(".quiz-question")!.classList.contains("quiz-answered"),
+      "right should step down to answered when the box no longer holds the judged words",
+    ).toBe(true);
+  });
+
+  it("is not right after a reload: the verdict is never stored", async () => {
+    server.attempts = [
+      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Kept.", reply: "A mark.", answeredAt: daysAgo(1) },
+    ];
+    server.verdict = "right";
+    await paint();
+    expect(item(1).classList.contains("quiz-answered")).toBe(true);
+    expect(item(1).classList.contains("quiz-right")).toBe(false);
+  });
+
+  it("drains to due after three days, and opens empty, for recall, with the earlier answer one press away", async () => {
+    server.attempts = [
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark of “Old words.”.", answeredAt: daysAgo(4) },
+    ];
+    await paint();
+    expect(item(2).classList.contains("quiz-due")).toBe(true);
+    expect(item(2).querySelector(".marg-quiz-due")).not.toBeNull();
+    expect(item(2).textContent).toContain("answered 4 days ago: worth trying again from memory");
+    expect(item(1).classList.contains("quiz-due")).toBe(false);
+
+    await click(line(2));
+    expect(box()?.value, "the old answer would make it a re-read").toBe("");
+    expect(reply()).toBeNull();
+    expect(visibleText(margin().querySelector(".quiz-recall")!)).toContain(
+      "You answered this 4 days ago. Try it from memory first.",
+    );
+
+    const reveal = showEarlier(margin());
+    const when = margin().querySelector("time");
+    expect(when?.getAttribute("datetime")).toBe(server.attempts[0]!.answeredAt);
+    expect(when?.getAttribute("data-tip")).toBeTruthy();
+    act(() => reveal.focus());
+    await click(reveal);
+    expect(box()?.value).toBe("Old words.");
+    expect(reply()).toBe("A mark of “Old words.”.");
+    expect(margin().textContent).not.toContain("Try it from memory first.");
+    expect(document.activeElement).toBe(box());
+    expect(server.marks).toEqual([]);
+  });
+
+  it("disables Show my earlier answer while dictation owns the box", async () => {
+    server.attempts = [
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(4) },
+    ];
+    await paint();
+    await click(line(2));
+    dictationBusy = true;
+    await paint();
+    expect(showEarlier(margin()).disabled).toBe(true);
+  });
+
+  it("is no longer due once answered again", async () => {
+    server.attempts = [
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(5) },
+    ];
+    await paint();
+    await click(line(2));
+    type(box()!, "From memory, again.");
+    await click(answerButton(margin()));
+    expect(item(2).classList.contains("quiz-due")).toBe(false);
+    expect(item(2).classList.contains("quiz-answered")).toBe(true);
+    expect(reply()).toBe("A mark of “From memory, again.”.");
+  });
+
+  it("shows the earlier answer beside a draft written from memory, never over it", async () => {
+    server.attempts = [
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark of “Old words.”.", answeredAt: daysAgo(4) },
+    ];
+    await paint();
+    await click(line(2));
+    type(box()!, "Recalled just now.");
+    await click(showEarlier(margin()));
+    expect(box()?.value, "the recall was overwritten").toBe("Recalled just now.");
+    expect(margin().textContent).toContain("Your earlier answer: Old words.");
+    expect(margin().textContent).toContain(
+      "The mark below is about that earlier answer. Press Answer to have your answer from memory marked.",
+    );
+    expect(reply()).toBe("A mark of “Old words.”.");
+  });
+
+  it("binds a one-press dictation on a due question to that question's empty box", async () => {
+    dictationSupported = true;
+    server.attempts = [
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(4) },
+    ];
+    await paint();
+    const mic = item(2).querySelector<HTMLButtonElement>('button[aria-label="Answer out loud"]')!;
+    await click(mic);
+    expect(toggled.map((t) => t.box)).toEqual([`quiz:${SLUG}:${Q2}`]);
+    expect(box()?.value).toBe("");
+    act(() => toggled[0]!.onChange("Spoken from memory."));
+    expect(box()?.value).toBe("Spoken from memory.");
+  });
+
+  it("steps right down to answered while the margin's box holds other words", async () => {
+    withBand = true;
+    server.verdict = "right";
+    await paint();
+    const band = host.querySelector(".band")!;
+    type(band.querySelector<HTMLTextAreaElement>("textarea")!, "From the band.");
+    await click(answerButton(band));
+    await click(line(1));
+    expect(box()?.value).toBe("From the band.");
+    expect(item(1).classList.contains("quiz-right")).toBe(true);
+    type(box()!, "Different words in the margin.");
+    expect(item(1).classList.contains("quiz-right"), "right vouched for words nobody judged").toBe(false);
+    expect(item(1).classList.contains("quiz-answered")).toBe(true);
+  });
+
+  it("shows the band's question as due too", async () => {
+    withBand = true;
+    server.attempts = [
+      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Old words.", reply: "A mark.", answeredAt: daysAgo(6) },
+      /* Q2 answered too, so the band, which opens at the first unanswered
+         question, opens at the first. */
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a2", answer: "New.", reply: "A mark.", answeredAt: daysAgo(0) },
+    ];
+    await paint();
+    const band = host.querySelector(".band")!;
+    const asked = band.querySelector(".quiz-question")!;
+    expect(asked.classList.contains("quiz-due")).toBe(true);
+    expect(asked.querySelector(".sr-only")?.textContent).toContain("worth trying again from memory");
+    /* …and behaves the same: empty for recall, the earlier answer one press away. */
+    expect(band.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("");
+    expect(visibleText(band.querySelector(".quiz-recall")!)).toContain(
+      "You answered this 6 days ago. Try it from memory first.",
+    );
+    const reveal = showEarlier(band);
+    act(() => reveal.focus());
+    await click(reveal);
+    expect(band.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Old words.");
+    expect(document.activeElement).toBe(band.querySelector<HTMLTextAreaElement>("textarea"));
+  });
+
+  it("opens the band at a due question, as at an unanswered one", async () => {
+    withBand = true;
+    server.attempts = [
+      { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a1", answer: "Fresh.", reply: "A mark.", answeredAt: daysAgo(0) },
+      { questionId: Q2, attemptId: "00000000-0000-4000-8000-00000062f0a2", answer: "Old.", reply: "A mark.", answeredAt: daysAgo(4) },
+    ];
+    await paint();
+    expect(host.querySelector(".band .quiz-question")!.textContent).toContain("Question number 2?");
+  });
+
+  it.each(["margin", "band"] as const)(
+    "does not reveal a due answer that arrives late over a claimed-elsewhere collision in the %s",
+    async (loser) => {
+      withBand = true;
+      server.hold = true;
+      await paint();
+      const band = host.querySelector(".band")!;
+
+      if (loser === "margin") {
+        type(band.querySelector<HTMLTextAreaElement>("textarea")!, "Winning band answer.");
+        await click(answerButton(band));
+        await click(line(1));
+        type(box()!, "Margin draft from memory.");
+        await click(answerButton(margin()));
+      } else {
+        await click(line(1));
+        type(box()!, "Winning margin answer.");
+        await click(answerButton(margin()));
+        type(band.querySelector<HTMLTextAreaElement>("textarea")!, "Band draft from memory.");
+        await click(answerButton(band));
+      }
+
+      server.attempts = [
+        { questionId: Q1, attemptId: "00000000-0000-4000-8000-00000062f0a9", answer: "Late old words.", reply: "Late old mark.", answeredAt: daysAgo(4) },
+      ];
+      await act(async () => latestRead!.refresh());
+      await settle();
+
+      const scope = loser === "margin" ? margin() : band;
+      expect(scope.querySelector(".quiz-reply"), "the due mark was disclosed without the reader asking").toBeNull();
+      expect(scope.textContent).not.toContain("Late old words.");
+
+      await act(async () => {
+        for (const go of server.release) go();
+      });
+      await settle();
+      expect(scope.textContent).toContain(`A mark of “Winning ${loser === "margin" ? "band" : "margin"} answer.”.`);
+      expect(scope.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(
+        loser === "margin" ? "Margin draft from memory." : "Band draft from memory.",
+      );
+    },
+  );
 });

@@ -162,10 +162,13 @@ list again), and the plan names the trigger for doing more.
 The mark [may not say how the reader did](#what-a-mark-says-and-what-it-may-not), and the walk has
 to know. So the judgement is made by a **separate, small call that reads the finished mark** —
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) — and its one-word answer rides the terminal `done`
-frame. The word is never rendered, never logged and never stored; the panel holds it in React state
-for the length of the visit. It may choose scaffolding and navigation — whether a premise is shown,
-and which sections [Where to look again](#where-to-look-again) names — but never a count, a score or
-a line of copy about how the reader did.
+frame. The word is never logged and never stored; the shared quiz read holds it in memory, on the
+kept answer it was judged with (`KeptAnswer.verdict`), for the length of the visit. It may choose
+scaffolding and navigation — whether a premise is shown, and which sections
+[Where to look again](#where-to-look-again) names — and, **since 2026-10-29 at Greg's request, a
+deeper green** on the question ([§ Answered in the margin](#answered-in-the-margin-and-a-quiet-green)).
+Never a word on screen, a count, a score, red, or a line of copy about how the reader did; to a
+screen reader it is "the check thought it looked right", qualified because the check is fallible.
 
 **`QUIZ_MARK_SYSTEM` is deliberately untouched by this.** The obvious design was to have the marking
 prompt emit a hidden verdict of its own, one call instead of two; it was rejected because that prompt
@@ -504,11 +507,40 @@ Plan [261029i](../plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-qui
   `useQuizRead.claimMark` lets only one of them mark a given question at a time, so a reader with
   both open cannot pay twice.
 - **An answered question turns a quiet green** (`quiz-answered`, quiz.css), with a tick, in the
-  margin and on the band's question alike, and stays green on later visits. **It says answered, not
-  right**: the verdict is still never drawn (§ Whether the reader got it right is asked somewhere
-  else). In the band the green goes while the box holds words the mark is not about. No red, no
-  count, no score. Whether Greg wants it to mean *right* instead is asked in
-  q-cj0fv8, and the plan says what that would take (a shared, unstored verdict map).
+  margin and on the band's question alike, and stays green on later visits. In the band the green
+  goes while the box holds words the mark is not about. No red, no count, no score.
+
+### Deeper for right, and time to recall it again (since 2026-10-29)
+
+> Yeah, find a way to give positive feedback for them answering, and even more positive feedback if
+> they got it right, and maybe some other indication if it's sort of stale or previous and you think
+> that it's time that they reminded themselves. So if you want to build in a kind of basic version of
+> the spacing effect somehow, that could be good.
+>
+> — Greg, 2026-10-29 (`spya-v2aehw`, his answer to q-cj0fv8)
+
+Plan [261029m](../plans/261029m-quiz-green-for-right-and-a-quiet-time-to-recall-again.md). One
+look per question, from [`quiz-recall.ts`](../../src/web/quiz-recall.ts), the same in the margin and
+the band:
+
+| Look | When | Drawn as |
+|---|---|---|
+| answered | a kept answer | tick, pale green |
+| right | answered **this visit** and the hidden check said right | ringed tick, deeper green |
+| due | the latest answer is 72 hours old or more | clock, the green faded to a wash |
+
+- **Right is this visit only**, because the verdict is not stored: after a reload it is plain
+  answered again. A failed or declined check is plain answered, never less, and there is no look for
+  wrong. *Right* belongs to the words that were judged: with other words in the box it steps down to
+  answered (`quizLookFor`).
+- **Due is a basic spacing effect**: a fixed three days, read from the kept answer's own time, so
+  nothing new is stored and nothing schedules it. Fixed rather than expanding because expanding needs
+  each try's history and how well it went. Three days is a product heuristic, not a number the
+  research picks.
+- **A due question opens with an empty box**, in the margin and the band, under *You answered this
+  N days ago. Try it from memory first.* and *Show my earlier answer*. That puts the earlier answer
+  in an empty box, or beside a draft, never over it. The band opens at the first question that is
+  unanswered **or due**. Answering again makes it not due.
 
 ## Only what you have read
 

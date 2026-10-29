@@ -90,15 +90,18 @@
  * already open goes round `move` altogether, so a restore inside `move` could
  * leave one question's answer in another's box. It fills an empty box under a
  * question with no attempt, and nothing else — never a draft, never a live
- * mark. The restored attempt is marked `restored`, which the verdict effect
- * skips. docs/plans/261005b-quiz-answers-are-kept-and-restored.md, GPT Sol's
- * plan review F3 and F4.
+ * mark. The restored attempt is marked `restored`, so a due answer revealed
+ * beside a draft can quote the earlier words its mark describes.
+ * docs/plans/261005b-quiz-answers-are-kept-and-restored.md, GPT Sol's plan
+ * review F3 and F4.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleCheck,
+  History,
   List,
   LoaderCircle,
   MessageCircleQuestionMark,
@@ -110,6 +113,8 @@ import {
 import type { BlockId, Quiz, QuizOrigin, QuizQuestion, QuizQuestionId, QuizVerdict, ThreadSummary } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS, originName } from "../types.js";
 import { discussQuizMark } from "./chat-handoff.js";
+import { agoWords, daysSince, quizLook, quizLookClass, quizLookFor, quizLookSpoken } from "./quiz-recall.js";
+import { exactly } from "./relative-time.js";
 import { OPEN_QUIZ_MARK_CHAT, OriginChatMark } from "./OriginChat.js";
 import { threadForOrigin } from "./useChatAnchors.js";
 import { showPremise } from "./quiz-ladder.js";
@@ -466,30 +471,26 @@ export function QuizPanel({
    */
   const [arrivedByNext, setArrivedByNext] = useState(false);
   /**
-   * **How each answered question was judged, this session** — by question id,
-   * the latest finished mark's verdict.
+   * **How each answered question was judged, this visit** — by question id, the
+   * latest finished mark's verdict, read from the shared `kept`.
    *
-   * Needed as state because the attempt is not enough: `move` clears it, so
-   * by the time step 5 is on screen step 4's attempt is gone, and so is the
-   * verdict it carried. **Never rendered, logged or stored**, for the reason
-   * `Attempt.verdict` in useQuiz.ts gives: it is the grade the marking prompt
-   * refuses to give. It may select scaffolding and navigation — whether a
-   * premise is shown, and which sections "Where to look again" names — but the
-   * word itself, a count or a score never reaches the page.
-   */
-  const [verdicts, setVerdicts] = useState<ReadonlyMap<QuizQuestionId, QuizVerdict>>(
-    () => new Map(),
-  );
-  /**
-   * Which batch the verdict-recording effect has seen.
+   * Since plan 261029m this is derived, not state of its own. It was a map this
+   * panel filled from its own attempts, which meant an answer given in the
+   * margin turned the margin a deeper green while the band still showed the
+   * next premise as if it were unjudged (GPT Sol's plan review, F1). `kept`
+   * already has every property the old map was built to have: the latest mark
+   * wins, a mark with no verdict leaves none, a restored answer is not a new
+   * mark (it changes nothing in `kept`), and a new batch is a new `kept`.
    *
-   * The reset effect and the recording effect run from the same render. On a
-   * replacement batch, that render can still carry the old completed attempt;
-   * if question ids were reused, clearing the map and then recording that
-   * attempt would put the old verdict straight back. This ref makes the first
-   * effect pass for a new batch a reset-only pass.
+   * **Never stored or logged.** It selects scaffolding — whether a premise is
+   * shown, which sections "Where to look again" names — and, since 261029m, a
+   * deeper green on the question; never words, a count or a score.
    */
-  const verdictBatch = useRef(quiz?.batchId);
+  const verdicts = useMemo(() => {
+    const out = new Map<QuizQuestionId, QuizVerdict>();
+    for (const [id, one] of owner.kept) if (one.verdict) out.set(id, one.verdict);
+    return out;
+  }, [owner.kept]);
   const [typed, setTyped] = useState("");
   /** The whole ordered batch, open. Closes again as soon as one is picked. */
   const [listing, setListing] = useState(false);
@@ -544,7 +545,6 @@ export function QuizPanel({
        kept the ids, the same ones with a different path around them. */
     setAt(0);
     setArrivedByNext(false);
-    setVerdicts(new Map());
     setTyped("");
     setListing(false);
     setShowAnswer(false);
@@ -653,7 +653,11 @@ export function QuizPanel({
     const to =
       includedAt.find((i) => {
         const q = questions[i];
-        return q !== undefined && !owner.kept.has(q.id);
+        /* A due answer counts as unanswered here (plan 261029m): the walk
+           opens where there is something to recall. */
+        if (q === undefined) return false;
+        const look = quizLook(owner.kept.get(q.id), Date.now());
+        return look === "none" || look === "due";
       }) ?? includedAt[0];
     if (to === undefined) return;
     /* Not `move`: there is no draft or mark to take away — the batch reset has
@@ -887,57 +891,11 @@ export function QuizPanel({
   };
 
   /**
-   * **Remember how each finished mark was judged**, before `move` clears it.
-   *
-   * Only a mark that reached `done` carries a verdict, so skipping, a failed
-   * mark and an abandoned stream record nothing — and nothing reads as *show
-   * the premise*. That is the designed outcome rather than an error path, and
-   * it is why nothing here needs a fallback.
-   *
-   * **The latest mark wins, including one with no verdict.** A reader who goes
-   * back and answers a step again has told us something newer than the first
-   * verdict; a classifier that failed on the second try leaves no evidence
-   * either way, and absence errs towards help. So `undefined` deletes.
-   *
-   * **`superseded` is deliberately not consulted.** A reader who edits the box
-   * after their mark arrives stops the question counting as answered — the mark
-   * on screen is about words they have changed — but they did answer it, and it
-   * was judged. Un-learning that would mean a keystroke deciding whether the
-   * next step carries its premise.
-   *
-   * Guarded on the question being in this batch, because the attempt can
-   * outlive a batch by one render — the reset effect clears it, but the prop
-   * arrives before the clear lands.
-   *
-   * **A restored attempt is not a new mark, and is skipped.** It is `done`
-   * with no verdict — verdicts are not stored — which is exactly the shape
-   * "the latest mark could not be judged" has, so recording it would delete a
-   * verdict earned this visit every time the reader pressed Previous. GPT
-   * Sol's plan review of 261005b, F4.
-   */
-  useEffect(() => {
-    if (verdictBatch.current !== quiz?.batchId) {
-      verdictBatch.current = quiz?.batchId;
-      return;
-    }
-    if (attempt?.status !== "done" || attempt.restored) return;
-    const { questionId, verdict } = attempt;
-    if (!questions.some((q) => q.id === questionId)) return;
-    setVerdicts((was) => {
-      if (was.get(questionId) === verdict) return was;
-      const next = new Map(was);
-      if (verdict) next.set(questionId, verdict);
-      else next.delete(questionId);
-      return next;
-    });
-  }, [attempt, questions, quiz?.batchId]);
-
-  /**
    * **Put a kept answer back** — the box and the mark together, for the
    * question actually on screen.
    *
-   * **Declared after the batch reset, the filter, the arrival and the verdict
-   * effects, on purpose**, so their scheduled moves take precedence. State
+   * **Declared after the batch reset, the filter and the arrival effects, on
+   * purpose**, so their scheduled moves take precedence. State
    * writes do not change this effect's captured values: a valid arrival to a
    * different question must wait for its destination to render before we
    * restore. It is keyed on the batch, the id of
@@ -968,6 +926,10 @@ export function QuizPanel({
       arrival.questionId !== shownId &&
       questions.some((q) => q.id === arrival.questionId)
     ) return;
+    /* A due row stays hidden until the reader asks, including when this
+       surface is waiting for another surface's mark. A fresh winning row will
+       run this effect again and replace the collision below. */
+    if (quizLook(keptHere, Date.now()) === "due") return;
     if (owner.attempt?.claimedElsewhere) {
       owner.showKept(shownId);
       return;
@@ -1290,13 +1252,32 @@ export function QuizPanel({
                     below; see `QuestionList`. */}
                 {premised && <p className="quiz-premise">{question.premise}</p>}
                 {/* **Green once answered** (plan 261029i, Greg's spya-jzgrua),
-                    the margin's line's class: answered, never right or wrong.
-                    Not while the box holds words the mark is not about —
-                    those are an answer nobody has marked yet. */}
-                <p className={answered.has(question.id) && !superseded ? "quiz-question quiz-answered" : "quiz-question"}>
-                  {answered.has(question.id) && !superseded && <Check size={14} aria-hidden="true" className="quiz-tick" />}
-                  {question.question}
-                </p>
+                    deeper when this visit's hidden check said right, and a
+                    faint wash with a clock once it is due to be recalled
+                    (plan 261029m, spya-v2aehw) — the margin's line's classes,
+                    from the same `quiz-recall.ts`. A right look steps down to
+                    answered when the box holds other words; every other
+                    superseded local mark loses its answered look. Due opens
+                    empty, with the earlier answer behind the recall line. */}
+                {(() => {
+                  const kept = owner.kept.get(question.id);
+                  const now = Date.now();
+                  const keptLook = quizLook(kept, now);
+                  const draftLook = quizLookFor(kept, now, typed);
+                  const look = superseded && keptLook !== "right" ? "none" : draftLook;
+                  const lookClass = quizLookClass(look);
+                  return (
+                    <p className={lookClass ? `quiz-question ${lookClass}` : "quiz-question"}>
+                      {look === "answered" && <Check size={14} aria-hidden="true" className="quiz-tick" />}
+                      {look === "right" && <CircleCheck size={14} aria-hidden="true" className="quiz-tick" />}
+                      {look === "due" && <History size={14} aria-hidden="true" className="quiz-due" />}
+                      {question.question}
+                      {look !== "none" && (
+                        <span className="sr-only">{quizLookSpoken(look, kept ? daysSince(kept.answeredAt, now) : 0)}</span>
+                      )}
+                    </p>
+                  );
+                })()}
 
                 <textarea
                   ref={box}
@@ -1373,6 +1354,26 @@ export function QuizPanel({
                   )}
                 </div>
                 <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+                {(() => {
+                  const earlier = owner.kept.get(question.id);
+                  if (mine || !earlier || quizLook(earlier, Date.now()) !== "due") return null;
+                  return (
+                    <RecallLine
+                      answeredAt={earlier.answeredAt}
+                      disabled={dictate.busy || marking}
+                      onShow={() => {
+                        if (dictate.busy || marking) return;
+                        showEarlierAnswer(question.id, owner.kept, typed, setTyped, owner.showKept);
+                        queueMicrotask(() => {
+                          const el = box.current;
+                          if (!el) return;
+                          el.focus();
+                          el.setSelectionRange(el.value.length, el.value.length);
+                        });
+                      }}
+                    />
+                  );
+                })()}
 
                 {mine && (
                   <Mark
@@ -1381,6 +1382,9 @@ export function QuizPanel({
                     emptied={typed.trim() === ""}
                     blocks={blocks}
                     onJump={onJump}
+                    quoteAnswer={
+                      mine.restored === true && quizLook(owner.kept.get(question.id), Date.now()) === "due"
+                    }
                   />
                 )}
 
@@ -1668,12 +1672,60 @@ function sentenceCase(text: string): string {
 /** The band's mark, for the margin's answer box (marginalia/MarginQuiz.tsx, plan 261029i). */
 export { Mark as QuizMarkText };
 
+/**
+ * **Time to recall it again** — under a due question's empty box, in the band
+ * and the margin alike (plan 261029m, Greg's spya-v2aehw). Says when, asks for
+ * a try from memory, and offers the earlier answer and its mark.
+ */
+export function RecallLine({
+  answeredAt,
+  onShow,
+  disabled = false,
+}: {
+  answeredAt: string;
+  onShow(): void;
+  disabled?: boolean;
+}) {
+  const exact = exactly(answeredAt);
+  const ago = agoWords(daysSince(answeredAt, Date.now()));
+  return (
+    <p className="quiz-recall">
+      You answered this{" "}
+      <time dateTime={answeredAt} data-tip={exact}>{ago}</time>
+      {exact && <span className="sr-only"> ({exact})</span>}
+      . Try it from memory first.{" "}
+      <button type="button" className="quiz-recall-show" disabled={disabled} onClick={onShow}>
+        Show my earlier answer
+      </button>
+    </p>
+  );
+}
+
+/**
+ * *Show my earlier answer*: into the box when it is empty, as any kept answer
+ * goes back; beside a draft when there is one, never over it — the draft is
+ * the reader's recall, and comparing is the point (GPT Sol's F3).
+ */
+export function showEarlierAnswer(
+  questionId: QuizQuestionId,
+  kept: ReadonlyMap<QuizQuestionId, { answer: string }>,
+  typed: string,
+  setTyped: (s: string) => void,
+  showKept: (id: QuizQuestionId) => void,
+): void {
+  const earlier = kept.get(questionId);
+  if (!earlier) return;
+  if (typed.trim() === "") setTyped(earlier.answer);
+  showKept(questionId);
+}
+
 function Mark({
   attempt,
   superseded,
   emptied,
   blocks,
   onJump,
+  quoteAnswer = false,
 }: {
   attempt: Attempt;
   /** The box has been edited since this mark was computed. */
@@ -1682,9 +1734,20 @@ function Mark({
   emptied: boolean;
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
+  /**
+   * Show the words this mark is about when they are not in the box: a due
+   * question's earlier answer, shown beside a draft written from memory rather
+   * than over it (`RecallLine`; GPT Sol's plan review of 261029m, F3).
+   */
+  quoteAnswer?: boolean;
 }) {
   return (
     <>
+      {quoteAnswer && superseded && attempt.answer && (
+        <p className="quiz-earlier">
+          Your earlier answer: <span className="quiz-earlier-words">{attempt.answer}</span>
+        </p>
+      )}
       {superseded && attempt.reply && (
         <p className="gloss-count">
           {/* Two sentences for one rule, and the split is about what the reader
@@ -1695,7 +1758,9 @@ function Mark({
               be pressed. */}
           {emptied
             ? "This mark is about an answer you have since deleted."
-            : "This mark is about your previous answer. Press Answer to have the new one marked."}
+            : quoteAnswer
+              ? "The mark below is about that earlier answer. Press Answer to have your answer from memory marked."
+              : "This mark is about your previous answer. Press Answer to have the new one marked."}
         </p>
       )}
       {attempt.reply && (
