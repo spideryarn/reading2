@@ -11,8 +11,20 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/** Every POST body, parsed, and how it was sent. */
+/** Every POST body that carried seconds, parsed, and how it was sent — without its `place`, which is `places`'. */
 let posts: { via: "apiFetch" | "leavingFetch"; seconds: Record<string, number> }[] = [];
+/** Every `place` sent (plan 261029f), in order, whether or not seconds came with it. */
+let places: { via: "apiFetch" | "leavingFetch"; place: string | null }[] = [];
+/** When set, the next POST through `apiFetch` answers this status rather than 204. */
+let nextPostStatus: number | null = null;
+
+/** Split one POST body into the two lists. Returns its seconds. */
+function record(via: "apiFetch" | "leavingFetch", init: RequestInit): Record<string, number> {
+  const { place, seconds } = JSON.parse(String(init.body)) as { place?: string | null; seconds: Record<string, number> };
+  if (place !== undefined) places.push({ via, place });
+  if (Object.keys(seconds).length > 0) posts.push({ via, seconds });
+  return seconds;
+}
 /** What the opening GET answers. */
 let serverSeconds: Record<string, number> = {};
 /** When set, the next POST through `apiFetch` rejects, as a lost connection does. */
@@ -32,9 +44,9 @@ let postCommitsToServer = false;
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (_url: string, init?: RequestInit) => {
     if (init?.method === "POST") {
-      posts.push({ via: "apiFetch", ...JSON.parse(String(init.body)) });
+      const batch = record("apiFetch", init);
       if (postCommitsToServer) {
-        for (const [id, seconds] of Object.entries(posts.at(-1)?.seconds ?? {})) {
+        for (const [id, seconds] of Object.entries(batch)) {
           serverSeconds[id] = (serverSeconds[id] ?? 0) + seconds;
         }
       }
@@ -48,7 +60,9 @@ vi.mock("../src/web/lib/api.js", () => ({
           releasePost = resolve;
         });
       }
-      return new Response(null, { status: 204 });
+      const status = nextPostStatus ?? 204;
+      nextPostStatus = null;
+      return new Response(status === 204 ? null : "{}", { status });
     }
     gets += 1;
     if (failGet) throw new TypeError("Failed to fetch");
@@ -64,13 +78,14 @@ vi.mock("../src/web/lib/api.js", () => ({
     return r.json();
   },
   leavingFetch: (_url: string, init: RequestInit) => {
-    posts.push({ via: "leavingFetch", ...JSON.parse(String(init.body)) });
+    record("leavingFetch", init);
   },
 }));
 
 vi.mock("../src/web/scroll.js", () => ({ stickyOffset: () => 0 }));
 
 const { useReadingTime, FLUSH_MS, IDLE_MS } = await import("../src/web/useReadingTime.js");
+const { noteReadingPlace } = await import("../src/web/last-view.js");
 type ReadingTime = ReturnType<typeof useReadingTime>;
 
 const A = "spya-aaaaaa";
@@ -139,6 +154,9 @@ function sent(): Map<string, number> {
 beforeEach(() => {
   vi.useFakeTimers();
   posts = [];
+  places = [];
+  nextPostStatus = null;
+  history.replaceState(null, "", "/read/my-article");
   serverSeconds = {};
   failNextPost = false;
   holdGet = false;
@@ -547,5 +565,135 @@ describe("useReadingTime's timeFor — the seconds behind the card (261002e)", (
     /* Give afterEach a live root; React roots cannot be rendered again after
        unmounting, and the shared teardown owns the ordinary cleanup. */
     root = createRoot(host);
+  });
+});
+
+/* **The paragraph you are on, to the server** — useReadingTime.ts § And the
+   paragraph you are on; plan 261029f. A place is replaced, not added, so it is
+   retried where seconds are not. */
+describe("useReadingTime's place", () => {
+  it("sends the address's place once on opening, alone, and nothing more while it does not move", async () => {
+    history.replaceState(null, "", `/read/my-article?at=${B}`);
+    mountRows([[A, 0, 800]]);
+    await render();
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([{ via: "apiFetch", place: B }]);
+    expect(posts).toHaveLength(0);
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toHaveLength(1);
+  });
+
+  it("sends the top as null, so the opening is on record", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([{ via: "apiFetch", place: null }]);
+  });
+
+  it("does not take a malformed `?at=` for a place", async () => {
+    history.replaceState(null, "", "/read/my-article?at=nonsense");
+    mountRows([[A, 0, 800]]);
+    await render();
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([{ via: "apiFetch", place: null }]);
+  });
+
+  it("sends the top when a well-formed `?at=` is not a block in this article", async () => {
+    history.replaceState(null, "", "/read/my-article?at=spya-zzzz99");
+    mountRows([[A, 0, 800]]);
+    await render();
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([{ via: "apiFetch", place: null }]);
+  });
+
+  it("sends the spy's newer paragraph with the next flush's seconds", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    latest.setCounting(true);
+    noteReadingPlace({ at: A, block: C });
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([{ via: "apiFetch", place: C }]);
+    expect(posts).toHaveLength(1);
+  });
+
+  it("keeps a place whose send failed, and sends it again without its seconds", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    latest.setCounting(true);
+    noteReadingPlace({ at: A, block: C });
+    nextPostStatus = 500;
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([{ via: "apiFetch", place: C }]);
+    const firstSeconds = posts[0]?.seconds[A] ?? 0;
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([
+      { via: "apiFetch", place: C },
+      { via: "apiFetch", place: C },
+    ]);
+    /* The seconds of the failed minute are not in the second batch. */
+    expect(posts[1]?.seconds[A]).toBeLessThanOrEqual(FLUSH_MS / 1000 + 1);
+    expect(firstSeconds).toBeGreaterThan(50);
+  });
+
+  it("does not let an older send's answer mark a newer place sent, nor send two at once", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    noteReadingPlace({ at: A, block: B });
+    holdNextPost = true;
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([{ via: "apiFetch", place: B }]);
+    /* The reader moves while B is still on its way: C waits for it. */
+    noteReadingPlace({ at: A, block: C });
+    visibility = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(places).toHaveLength(1);
+    visibility = "visible";
+    releasePost?.();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await seconds(FLUSH_MS / 1000);
+    expect(places).toEqual([
+      { via: "apiFetch", place: B },
+      { via: "apiFetch", place: C },
+    ]);
+  });
+
+  it("sends a newer place after the in-flight one when the reading view unmounts", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    noteReadingPlace({ at: A, block: B });
+    holdNextPost = true;
+    await seconds(FLUSH_MS / 1000);
+    noteReadingPlace({ at: A, block: C });
+
+    /* An in-app move to Metadata unmounts this recorder but keeps the page
+       alive. Cleanup must not lose C merely because B is still on its way. */
+    await render(false);
+    expect(places).toEqual([{ via: "apiFetch", place: B }]);
+    releasePost?.();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(places).toEqual([
+      { via: "apiFetch", place: B },
+      { via: "apiFetch", place: C },
+    ]);
+  });
+
+  it("puts the place on pagehide's keepalive send even while another is in flight", async () => {
+    mountRows([[A, 0, 800]]);
+    await render();
+    noteReadingPlace({ at: A, block: B });
+    holdNextPost = true;
+    await seconds(FLUSH_MS / 1000);
+    noteReadingPlace({ at: A, block: C });
+    window.dispatchEvent(new Event("pagehide"));
+    expect(places.at(-1)).toEqual({ via: "leavingFetch", place: C });
+    releasePost?.();
   });
 });

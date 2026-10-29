@@ -247,6 +247,7 @@ export type Dropped = QuizDropped;
 
 export function emptyDropped(): QuizDropped {
   return {
+    questions: 0,
     unknownIds: 0,
     unquoted: 0,
     truncated: 0,
@@ -402,6 +403,8 @@ export function toQuestions(
   blocks: readonly Block[],
   taken: Set<string>,
   dropped: QuizDropped,
+  /** `MAX_QUESTIONS`, unless an eval asks for more (`generateQuiz`'s `experiment`). */
+  maxQuestions: number = MAX_QUESTIONS,
 ): QuizQuestion[] {
   const out: QuizQuestion[] = [];
   const seen = new Set<string>();
@@ -414,6 +417,7 @@ export function toQuestions(
   let pending = 0;
   const drop = (reason: "malformed" | "duplicate" | "unanchored") => {
     dropped[reason]++;
+    dropped.questions = (dropped.questions ?? 0) + 1;
     pending++;
   };
   for (const [i, item] of raws.entries()) {
@@ -465,8 +469,10 @@ export function toQuestions(
        which is where the takeaways are. Worth watching for that reason. Read it as "how much of the
        answer went unread", and if you want to know whether a usable question
        was in there, look at the raw answer. */
-    if (out.length === MAX_QUESTIONS) {
-      dropped.overCap += Math.max(0, raws.length - i - 1);
+    if (out.length === maxQuestions) {
+      const overCap = Math.max(0, raws.length - i - 1);
+      dropped.overCap += overCap;
+      dropped.questions = (dropped.questions ?? 0) + overCap;
       break;
     }
   }
@@ -484,6 +490,8 @@ export function buildQuiz(
     power: ModelPower;
     elapsedMs: number;
     dropped: QuizDropped;
+    /** An eval's cap — `generateQuiz`'s `experiment`. */
+    maxQuestions?: number;
   },
 ): Quiz {
   /* **The shape of the answer, before the shape of anything in it.**
@@ -504,7 +512,7 @@ export function buildQuiz(
      same id as the batch it is in. Both are `spya-` ids by construction. */
   const taken = new Set<string>();
   const batchId = mintUniqueId(taken);
-  const fresh = toQuestions(parsed.questions, opts.blocks, taken, opts.dropped);
+  const fresh = toQuestions(parsed.questions, opts.blocks, taken, opts.dropped, opts.maxQuestions);
   const d = opts.dropped;
 
   if (fresh.length === 0) {
@@ -954,12 +962,12 @@ piece you ask about, what kind of question you set, and how you pitch it.
  * whole request: the reader rules are a system block of their own
  * (`QUIZ_READER_RULES`), sent only with a profile.
  */
-export function renderPrompt(opts: { tree: Tree; profile: string | null }): string {
+export function renderPrompt(opts: { tree: Tree; profile: string | null; maxQuestions?: number }): string {
   const skeleton = partsOf(opts.tree)
     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
     .join("\n\n");
 
-  return `Set the quiz for this article — up to ${MAX_QUESTIONS} questions.
+  return `Set the quiz for this article — up to ${opts.maxQuestions ?? MAX_QUESTIONS} questions.
 
 === ITS SHAPE ===
 
@@ -1083,6 +1091,19 @@ export async function generateQuiz(opts: {
    * `null`. Frozen on the job when it was posted; see the header.
    */
   profile?: string | null;
+  /**
+   * **An eval's arm, never production's.** A different model, and the
+   * instructions in place of `QUIZ_SYSTEM` — evals/quiz-models.ts compares
+   * Haiku with Sonnet and a smaller-questions prompt with this one (plan
+   * 261029i, Greg's spya-jzgrua). The run's `model` then names what was sent;
+   * nothing that stores a quiz passes it, since its stamp would be untrue.
+   */
+  experiment?: {
+    model?: string;
+    instructions?: string;
+    /** Asked for in the request and kept by the validator, in place of `MAX_QUESTIONS` (Sol's F6 on plan 261029i). */
+    maxQuestions?: number;
+  };
 }): Promise<QuizRun> {
   const { blocks, tree, meta: articleMeta } = opts.article;
 
@@ -1133,12 +1154,25 @@ export async function generateQuiz(opts: {
             text: articleWithIds(meta, evidence),
             ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
           },
-          { type: "text" as const, text: QUIZ_SYSTEM },
+          { type: "text" as const, text: opts.experiment?.instructions ?? QUIZ_SYSTEM },
           ...(opts.profile ? [{ type: "text" as const, text: QUIZ_READER_RULES }] : []),
         ],
-        messages: [{ role: "user", content: renderPrompt({ tree, profile: opts.profile ?? null }) }],
+        messages: [
+          {
+            role: "user",
+            content: renderPrompt({
+              tree,
+              profile: opts.profile ?? null,
+              ...(opts.experiment?.maxQuestions ? { maxQuestions: opts.experiment.maxQuestions } : {}),
+            }),
+          },
+        ],
       }, QUIZ_OUTPUT_SCHEMA),
-      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
+      {
+        power: opts.power,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+        ...(opts.experiment?.model ? { model: opts.experiment.model } : {}),
+      },
     );
 
     if (opts.onProgress) {
@@ -1174,6 +1208,7 @@ export async function generateQuiz(opts: {
       sourceHash,
       elapsedMs: Date.now() - started,
       dropped,
+      ...(opts.experiment?.maxQuestions ? { maxQuestions: opts.experiment.maxQuestions } : {}),
     }),
     /* Recorded for the badge, never compared by the step — see the header. */
     profileHash: opts.profile ? hashProfile(opts.profile) : null,
@@ -1188,7 +1223,7 @@ export async function generateQuiz(opts: {
     blocks: blocks.length,
     words,
     dropped,
-    model: generatorFor(opts.power),
+    model: opts.experiment?.model ?? generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

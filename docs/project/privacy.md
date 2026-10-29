@@ -16,6 +16,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
 - [§ Import records](#import-records) — the record of each import, and when it goes
 - [§ Reading time](#reading-time) — the bullet and what it must keep true
+- [§ Your place in an article](#your-place-in-an-article) — one paragraph per article, replaced, for your other devices
 - [§ Article open times](#article-open-times) — the durable record and the short-lived request log
 - [§ Shelf topics](#shelf-topics) — what the topic model is shown
 - [§ Quick search](#quick-search) — what a quick search sends
@@ -541,6 +542,29 @@ is left out of both exports. The public shelf and article reads, administrator v
 public health check do not read that cache. The browser's kept copy of the shelf has the band
 stripped both when saved and when a legacy copy is read. Plan
 [261025l](../plans/261025l-shelf-cards-show-the-how-much-read-pie.md).
+
+## Your place in an article
+
+**Added 2026-10-29**, with plan
+[261029f](../plans/261029f-your-place-in-an-article-follows-you-to-another-device.md):
+`reading_place`, one row per article, the paragraph the owner last read (or none, for the top) and
+`saved_at`, so a browser with no memory of its own can open there.
+
+> A
+>
+> — Greg, 2026-10-29, answering [q-mpq9dp](../user-feedback/questions/q-mpq9dp.md) (option A: "the
+> paragraph only")
+
+What the bullet says, and what keeps each part true:
+
+- **"Only the latest is kept"** — the primary key is the article and `setPlace`
+  (src/store/pg-reading-time.ts) upserts, so the row is replaced, never appended to. With
+  `saved_at` it is one point in time, which is why reading time's "not a history" still holds.
+- **"Not shown to anybody reading an article you have shared"** — written only through the owner's
+  reading-time POST, read only on the owner's `GET /api/article/:slug`.
+- **"It goes when the article does, or when the article is given to somebody else"** — `on delete
+  cascade` to `articles`, and reader state in src/store/pg-article-transfer.ts. It is in both
+  exports (`reading-place.json`).
 
 ## Article open times
 

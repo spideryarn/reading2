@@ -6114,6 +6114,43 @@ export const readingTime = spideryarn.table(
 );
 
 /**
+ * **Where the owner last was in each of their articles, on any device** — one
+ * row per article, so a browser that has never seen it can open at the
+ * paragraph the reader reached somewhere else.
+ * docs/plans/261029f-your-place-in-an-article-follows-you-to-another-device.md.
+ *
+ * - **`block_id` null is a place too**: opened, and at the top. A row of any
+ *   kind says the article has been opened, so "first open" means no row
+ *   anywhere (last-view.ts § The first-open default).
+ * - **Keyed to `block_identities` by a composite foreign key**, as
+ *   `reading_time` is, so an id the article never had cannot be stored; a null
+ *   block skips that key (MATCH SIMPLE), so the article has its own.
+ * - **No `owner_id`**, like `reading_time`: only the owner writes, and a
+ *   transfer deletes it (pg-article-transfer.ts).
+ * - **`saved_at`**, *Store when it happened*; docs/project/privacy.md says so.
+ *
+ * Replaced, not added to (src/store/pg-reading-time.ts § `setPlace`).
+ */
+export const readingPlace = spideryarn.table(
+  "reading_place",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    blockId: text("block_id"),
+    savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("reading_place_block_id_format", sql`${t.blockId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    foreignKey({
+      name: "reading_place_block_fk",
+      columns: [t.articleId, t.blockId],
+      foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
  * **The words a share of the article is measured in, cached for the shelf** —
  * `readSoFarWords(blocks, foldedOnArrival(article))`, the reading view's
  * denominator, worked out by the owner's `loadArticle` so the shelf's pie and

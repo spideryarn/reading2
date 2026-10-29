@@ -49,6 +49,12 @@ experimental features off" pins it through the real `App`.
   visible pixels, so a screen earns one second per second. Crediting every visible block in full made
   a screen of eight paragraphs look read after reading one of them.
   [`reading-time.ts`](../../src/web/reading-time.ts) § `shareVisible`.
+- **The same flush carries the paragraph you are on** (since 2026-10-29), which the server keeps as
+  your place for your other devices
+  ([url-state.md § A browser that has never seen it asks the server](url-state.md#a-browser-that-has-never-seen-it-asks-the-server)).
+  Unlike the seconds it is replaced, not added, so it is retried until a send of it lands, and sent
+  only when it moved. [`useReadingTime.ts`](../../src/web/useReadingTime.ts) § And the paragraph you
+  are on.
 - **It counts only while somebody could be reading**: the page visible, some activity (arriving
   counts) in the last five minutes, and the prose on screen. `Reader` decides the last of those,
   because `.band-covers` is also set when no band is open.

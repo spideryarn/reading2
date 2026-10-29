@@ -54,6 +54,7 @@ import {
   ExplanationsFeed,
   useMarginLayout,
 } from "../marginalia/MarginaliaColumn.js";
+import { type MarginQuiz, MarginQuizContext } from "../marginalia/MarginQuiz.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
 import { openFromCiteCard } from "../useBibliography.js";
@@ -2682,6 +2683,35 @@ export function Reader({
     () => new Map(article.blocks.map((b) => [b.id, b.text])),
     [article.blocks],
   );
+  /**
+   * **What a Quiz line in the margin needs to be answered there** (plan
+   * 261029i; Greg, spya-jzgrua: *"avoid having to jump away from marginalia
+   * mode to the learn mode"*). A context, not a prop through `marginNotes`,
+   * so `memo(TableView)` does not hear about it — `MarginCiteActions`' reason.
+   * Built from the read's fields rather than the read, which is a new object
+   * on every render (GPT Sol's plan review, F4). Owner only.
+   */
+  const quizKept = quizRead?.kept;
+  const quizNoteMark = quizRead?.noteMark;
+  const quizRefresh = quizRead?.refresh;
+  const quizClaimMark = quizRead?.claimMark;
+  const marginQuiz = useMemo<MarginQuiz | null>(
+    () =>
+      drawnQuiz && quizKept && quizNoteMark && quizRefresh && quizClaimMark
+        ? {
+            slug: slug,
+            quiz: drawnQuiz,
+            stale: false,
+            kept: quizKept,
+            noteMark: quizNoteMark,
+            refresh: quizRefresh,
+            claimMark: quizClaimMark,
+            blocks: blockText,
+            onJump: jumpTo,
+          }
+        : null,
+    [slug, drawnQuiz, quizKept, quizNoteMark, quizRefresh, quizClaimMark, blockText, jumpTo],
+  );
 
   /**
    * **What the reader has read, for the quiz** —
@@ -5055,6 +5085,7 @@ export function Reader({
         </div>
       )}
       <MarginCiteActions.Provider value={marginCiteActions}>
+      <MarginQuizContext.Provider value={marginQuiz}>
       <MarginExplanationActions.Provider value={marginExplanationActions}>
       <TableView
         article={article}
@@ -5141,6 +5172,7 @@ export function Reader({
         onOpenComment={openCommentDialog}
       />
       </MarginExplanationActions.Provider>
+      </MarginQuizContext.Provider>
       </MarginCiteActions.Provider>
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and

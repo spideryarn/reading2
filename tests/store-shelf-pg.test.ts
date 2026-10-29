@@ -71,6 +71,7 @@ import {
   privateLinkSignedOutOpens,
   quizAttempts,
   readSoFarWords,
+  readingPlace,
   staleNoticeDismissals,
   commandSuggestionDismissals,
   relatedWorkSearches,
@@ -1268,6 +1269,8 @@ describe("destroying an article", () => {
       /* The shelf pie's cached denominator — plan 261025l. Goes with the article. */
       read_so_far_words: () =>
         db.insert(readSoFarWords).values({ articleId: GONE_ARTICLE, basis: "b", words: { [GONE_BLOCK]: 12 } }),
+      /* Your place in it (plan 261029f): goes with the article, by both keys. */
+      reading_place: () => db.insert(readingPlace).values({ articleId: GONE_ARTICLE, blockId: GONE_BLOCK }),
       realtime_sessions: () =>
         db.insert(realtimeSessions).values({
           id: GONE_SESSION,

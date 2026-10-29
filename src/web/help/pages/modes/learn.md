@@ -66,4 +66,7 @@ question, and the question shows the chat under that mark. Answer again and the 
 own chat.
 
 Once a quiz exists, each question also appears as a faint line in the text after the passage it is
-about, in every mode. Press it to answer.
+about, in every mode. Press it to answer. With [Marginalia](/help/mode-marginalia) on, the
+questions sit in the margin instead, and you answer them there, without leaving what you are
+reading: press a question to open a small box under it, or press the microphone beside it to say
+your answer. A question you have answered turns a quiet green. Green means answered, not right.

@@ -11,6 +11,10 @@
  * cannot lose each other's seconds, because the addition happens in the row,
  * not in a read-modify-write here.
  *
+ * `setPlace` **replaces** rather than adds (plan 261029f): one row per
+ * article, the paragraph the owner last read on any device. The same join to
+ * `block_identities` drops an id the article never had, and writes nothing.
+ *
  * ## What may be logged from this file
  *
  * Nothing, and nothing is. Which passages somebody lingered on is theirs.
@@ -19,10 +23,11 @@
 import { eq, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articleRevisions, articles, readSoFarWords, readingTime } from "../db/schema.js";
+import { articleRevisions, articles, readSoFarWords, readingPlace, readingTime } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import { foldedOnArrival } from "../web/matter-view.js";
 import { readSoFarWords as countedWords } from "../web/read-filter.js";
+import type { SavedPlace } from "../types.js";
 import type { ReadingTimeStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { articleIdForOwned, ownedSlug, pgArticleReader } from "./pg.js";
@@ -54,6 +59,39 @@ const rawPgReadingTimeStore: ReadingTimeStore = {
         on bi.article_id = ${articleId} and bi.block_id = batch.key
       on conflict (article_id, block_id)
       do update set seconds = spideryarn.reading_time.seconds + excluded.seconds
+    `);
+  },
+
+  async readPlace(slug: string): Promise<SavedPlace> {
+    const articleId = await articleIdForOwned(slug);
+    /* One statement: the row, and whether any reading time exists, which is
+       the "read before places were kept" answer. */
+    const found = await getDb().execute<{ has_row: boolean; block_id: string | null; has_time: boolean }>(sql`
+      select
+        exists (select 1 from ${readingPlace} where ${readingPlace.articleId} = ${articleId}) as has_row,
+        (select ${readingPlace.blockId} from ${readingPlace} where ${readingPlace.articleId} = ${articleId}) as block_id,
+        exists (select 1 from ${readingTime} where ${readingTime.articleId} = ${articleId}) as has_time
+    `);
+    const row = found.rows[0];
+    if (row?.has_row) return { block: row.block_id };
+    return row?.has_time ? { block: null } : null;
+  },
+
+  async setPlace(slug: string, block: string | null): Promise<void> {
+    const articleId = await articleIdForOwned(slug);
+    if (block === null) {
+      await getDb()
+        .insert(readingPlace)
+        .values({ articleId, blockId: null })
+        .onConflictDoUpdate({ target: readingPlace.articleId, set: { blockId: null, savedAt: sql`now()` } });
+      return;
+    }
+    await getDb().execute(sql`
+      insert into ${readingPlace} (article_id, block_id)
+      select bi.article_id, bi.block_id
+      from spideryarn.block_identities bi
+      where bi.article_id = ${articleId} and bi.block_id = ${block}
+      on conflict (article_id) do update set block_id = excluded.block_id, saved_at = now()
     `);
   },
 

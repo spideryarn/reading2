@@ -328,9 +328,18 @@ Plan [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md).
 - **Placed by the prose's rule** (`questionsByAnchor`, after the block holding its last evidence
   passage), last in the block's note, in path order. **Open, not shut**: the question is the whole
   of it, and it is there to make the reader stop; a shut *2 questions* would hide it. Each is a
-  button in the model's face, and a press is the prose line's (`openQuizAt`): Learn › Quiz at that
-  question. Its card is `quiz` in `tips.ts`. Owner only; never a stale quiz.
+  button in the model's face. Its card is `quiz` in `tips.ts`. Owner only; never a stale quiz.
   `tests/marginalia-quiz.test.tsx`.
+- **Answered here, since 2026-10-29** (Greg's `spya-jzgrua`: *"avoid having to jump away from
+  marginalia mode to the learn mode"*; plan
+  [261029i](../plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md)). A press
+  opens a small answer box under the question, with the microphone first and *Open in Quiz* (the
+  old press, `openQuizAt`) at the end of its row; the mark streams in under it. A microphone on
+  the question line opens the box listening, in one press. An answered question is ticked and sits
+  on a pale green ground. [quiz.md § Answered in the margin](quiz.md#answered-in-the-margin-and-a-quiet-green)
+  has the rules; [`marginalia/MarginQuiz.tsx`](../../src/web/marginalia/MarginQuiz.tsx) the code,
+  reaching the column through `MarginQuizContext` so `memo(TableView)` does not hear it;
+  `tests/marginalia-quiz-answer.test.tsx`.
 
 ## Every note says where it came from
 

@@ -1980,6 +1980,8 @@ export interface GlossaryLookupStore {
  * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
  * Both methods are owner-scoped: a slug the caller does not own is a 404.
  */
+import type { SavedPlace } from "../types.js";
+
 export interface ReadingTimeStore {
   /** Every block with a total, keyed by block id. Blocks never read are absent. */
   read(slug: string): Promise<Record<string, number>>;
@@ -1996,6 +1998,18 @@ export interface ReadingTimeStore {
    * nothing was written). Plan 261025l; src/store/read-so-far-basis.ts.
    */
   refreshShelfWords(slug: string): Promise<"fresh" | "written" | "raced">;
+  /**
+   * **Where the owner last was in this article, on any device** (plan
+   * 261029f): the stored row, or `{ block: null }` when there is none but some
+   * reading time is (read before places were kept), or `null` for never.
+   */
+  readPlace(slug: string): Promise<SavedPlace>;
+  /**
+   * **Replaces** the stored place. `null` is the top of the article. A block
+   * this article never had is dropped silently, as `add` drops one, and
+   * writes nothing.
+   */
+  setPlace(slug: string, block: string | null): Promise<void>;
 }
 
 /**

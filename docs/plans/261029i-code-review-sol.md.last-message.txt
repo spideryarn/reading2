@@ -1,0 +1,18 @@
+Review complete. I fixed all 14 stage-local findings and recorded the detailed evidence in [261029i-code-review-sol.md](/var/tmp/spideryarn-worktrees/qejp09q-quiz-in-the-margin/docs/plans/261029i-code-review-sol.md).
+
+Most consequential fixes:
+
+- Corrected dictation close/switch and late-answer lifecycle bugs.
+- Made simultaneous band/margin submissions adopt the winning mark.
+- Added the band tick, coarse-pointer sizing, and microphone context.
+- Repaired eval blinding, evidence visibility, drop/gap counters, model identity, and verdict-failure accounting.
+- Corrected the dry-run ceiling from 72 to 120 physical calls; full estimate is about $7.80.
+
+Checks:
+
+- Requested suites: **7 files, 268 tests passed**.
+- Additional verdict/eval suites: **2 files, 26 tests passed**.
+- Typecheck equivalent passed all projects: **4,097 source files covered**. The literal `npm run typecheck` could not start because sandboxing rejected tsx’s `/tmp` IPC socket; this is documented in the review.
+- Dry runs: **120 / $7.80** full, **96 / $2.94** marks-only, **24 / $4.86** writes-only. No models called.
+- `npm test` could not start because the shared local Postgres was unavailable.
+- No commit, push, deployment, database operation, or paid call was made.

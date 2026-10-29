@@ -102,6 +102,7 @@ export const READER_STATE = [
   { table: "citation_investigations", label: "citation investigations", ownWords: true },
   { table: "citation_web_notes", label: "citation web notes", ownWords: true },
   { table: "reading_time", label: "passages with reading time", ownWords: false },
+  { table: "reading_place", label: "place in the article", ownWords: false },
   { table: "stale_notice_dismissals", label: "notices sent away", ownWords: false },
   { table: "command_suggestion_dismissals", label: "suggestions sent away", ownWords: false },
   { table: "link_summaries", label: "link summaries", ownWords: false },

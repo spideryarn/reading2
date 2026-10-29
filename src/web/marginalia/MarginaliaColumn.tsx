@@ -29,7 +29,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronRight, MessageCircleQuestionMark, X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type {
   BlockId,
@@ -38,7 +38,6 @@ import type {
   Faq,
   Ideas,
   MarginNote,
-  QuizQuestion,
   QuizQuestionId,
   TimelineEvent,
 } from "../../types.js";
@@ -65,6 +64,7 @@ import { useRenderCount } from "../perf.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
 import { useQuizOnShow, type QuizRead } from "../useQuiz.js";
+import { QuizNote } from "./MarginQuiz.js";
 import { useTimelineRead } from "../useTimeline.js";
 import { datingWords } from "../TimelinePanel.js";
 import {
@@ -397,49 +397,6 @@ function MarginNotes({
           }
         }
       })}
-    </div>
-  );
-}
-
-/**
- * **The quiz's questions, beside the passage they ask about** — Greg,
- * 2026-10-29 (spya-fytjtf): *"let's say the quiz mode does run as one of the
- * default modes whenever you open marginalia mode … because I think we include
- * the quiz questions in the marginalia annotations. If not, we should, to
- * really encourage the user to reflect on what they're reading."* While the
- * column is on screen these replace the prose's lines (`QuizInProse`), so a
- * question is drawn once. Open, not shut, for that reason: a shut *2
- * questions* would hide the thing meant to make the reader stop. The words
- * are the model's; only the question, never its premise (quiz.md § It
- * adapts). Pressing one is the prose line's press: Learn › Quiz at that
- * question. Plan 261029c.
- */
-function QuizNote({
-  batchId,
-  questions,
-  onOpen,
-}: {
-  batchId: string;
-  questions: readonly QuizQuestion[];
-  onOpen?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
-}) {
-  return (
-    <div className="marg-quiz">
-      <span className="marg-stamp" data-marg-tip="quiz">Quiz</span>
-      {questions.map((q) => (
-        <button
-          key={q.id}
-          type="button"
-          className="marg-quiz-q"
-          data-marg-tip="quiz"
-          data-marg-voice="ai"
-          disabled={onOpen === undefined}
-          onClick={() => onOpen?.(batchId, q.id)}
-        >
-          <MessageCircleQuestionMark size={12} aria-hidden="true" className="marg-quiz-icon" />
-          <span className={withVoice("marg-quiz-text", "ai")}>{q.question}</span>
-        </button>
-      ))}
     </div>
   );
 }

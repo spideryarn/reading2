@@ -121,6 +121,16 @@ export function parseVerdict(raw: unknown): QuizVerdict | undefined {
   return undefined;
 }
 
+/** Eval-only observability for the three outcomes production deliberately folds together. */
+export type VerdictDiagnostic = "judged" | "unclear" | "failed";
+
+function diagnosticFor(raw: unknown): { verdict?: QuizVerdict; diagnostic: VerdictDiagnostic } {
+  if (typeof raw !== "string") return { diagnostic: "failed" };
+  const word = raw.trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (word === "right" || word === "wrong") return { verdict: word, diagnostic: "judged" };
+  return { diagnostic: word === "unclear" ? "unclear" : "failed" };
+}
+
 export interface VerdictRequest {
   question: string;
   /** What the reader wrote. Never logged, never stored — as everywhere else. */
@@ -129,6 +139,8 @@ export interface VerdictRequest {
   mark: string;
   /** The reader navigating away takes this with it, as it does the mark. */
   signal?: AbortSignal | undefined;
+  /** Eval instrumentation only; production leaves the deliberately private outcome unobserved. */
+  onDiagnostic?: ((outcome: VerdictDiagnostic) => void) | undefined;
 }
 
 /**
@@ -144,7 +156,10 @@ export async function classifyVerdict(
 ): Promise<QuizVerdict | undefined> {
   /* Nothing to judge. Skipped before the meter, so an empty answer is not a
      call that cost money to learn nothing. */
-  if (!req.answer.trim() || !req.mark.trim()) return undefined;
+  if (!req.answer.trim() || !req.mark.trim()) {
+    req.onDiagnostic?.("failed");
+    return undefined;
+  }
 
   const deadline = AbortSignal.timeout(VERDICT_TIMEOUT_MS);
   const signal = req.signal
@@ -178,13 +193,16 @@ export async function classifyVerdict(
     const body = call.json as
       | { choices?: { message?: { content?: unknown } }[] }
       | null;
-    return parseVerdict(body?.choices?.[0]?.message?.content);
+    const parsed = diagnosticFor(body?.choices?.[0]?.message?.content);
+    req.onDiagnostic?.(parsed.diagnostic);
+    return parsed.verdict;
   } catch {
     /* **Swallowed on purpose, and not logged.** A refusal, a timeout, the
        reader navigating away — all of them mean the same thing to the ladder,
        and none of them is worth a line in a log that would then have to be
        scrubbed of what it was judging. The gateway has already metered the
        attempt, which is the part that has to survive. */
+    req.onDiagnostic?.("failed");
     return undefined;
   }
 }

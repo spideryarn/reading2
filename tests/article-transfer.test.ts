@@ -239,6 +239,7 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
     [a.id, mintId(), owner],
   );
   await q("insert into spideryarn.reading_time (article_id, block_id, seconds) values ($1, $2, 42)", [a.id, a.block]);
+  await q("insert into spideryarn.reading_place (article_id, block_id) values ($1, $2)", [a.id, a.block]);
   await q(
     "insert into spideryarn.stale_notice_dismissals (article_id, mode, dismissed_for) values ($1, 'glossary', array['x1'])",
     [a.id],
@@ -257,7 +258,7 @@ async function seedReaderState(a: Seeded, owner: string): Promise<Set<ReaderStat
   return new Set<ReaderStateTable>([
     "referee_criteria", "comments", "chat_threads", "skim_briefs", "chat_mentions", "chat_messages", "quiz_attempts", "referee_promises",
     "referee_hidden_checks", "sources_claim_checks", "search_runs", "article_tags", "glossary_hidden_entries",
-    "glossary_lookups", "citation_finds", "citation_investigations", "citation_web_notes", "reading_time", "stale_notice_dismissals",
+    "glossary_lookups", "citation_finds", "citation_investigations", "citation_web_notes", "reading_time", "reading_place", "stale_notice_dismissals",
     "command_suggestion_dismissals", "link_summaries",
   ]);
 }

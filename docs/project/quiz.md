@@ -54,6 +54,10 @@ the read hands it back),
 Kept answers: [`src/store/pg-quiz-attempts.ts`](../../src/store/pg-quiz-attempts.ts) and
 [`src/db/schema.ts`](../../src/db/schema.ts) § `quizAttempts` — [§ Answers are kept](#answers-are-kept).
 Eval: [`evals/quiz.ts`](../../evals/quiz.ts) — **read this before editing either prompt.**
+Haiku 5.5 against Sonnet 5.5, and a smaller-questions prompt:
+[`evals/quiz-models.ts`](../../evals/quiz-models.ts), written 2026-10-29 and not yet run
+([261029i](../plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md) § Stage 4).
+Answered in the margin: [`marginalia/MarginQuiz.tsx`](../../src/web/marginalia/MarginQuiz.tsx).
 The plan, the spike and two cross-family reviews:
 [260831al](../plans/260831al-review-quiz-sub-mode.md) and
 [its review](../plans/260831al-review-quiz-sub-mode-review-sol.md).
@@ -68,6 +72,7 @@ The plan, the spike and two cross-family reviews:
 - [§ On screen](#on-screen) — the UI, keys, the question card
 - [§ Answers are kept](#answers-are-kept) — persistence of what you answered
 - [§ In the prose, in every mode](#in-the-prose-in-every-mode) — quiz marks drawn on the article
+- [§ Answered in the margin, and a quiet green](#answered-in-the-margin-and-a-quiet-green) — the margin's own answer box, the one-press microphone, green for answered
 - [§ Only what you have read](#only-what-you-have-read) — scoping to read passages
 - [§ Shaped by who you are and why you are reading](#shaped-by-who-you-are-and-why-you-are-reading) — profile and purpose in the stamp
 - [§ Where to look again](#where-to-look-again) — tests, evals and code
@@ -230,7 +235,7 @@ So `gradeWords` in [`src/quiz-mark.ts`](../../src/quiz-mark.ts) counts them on *
 and puts the number on the log line. It blocks nothing, and that is the decision rather than an
 omission: a gate would fail a mark the reader has already watched arrive, over a sentence they may
 not mind — trading a rule they cannot see for a failure they can. Whether the ban ever gets teeth is
-a question to answer from that number, not from eight cases. `evals/quiz.ts` imports the same list
+a question to answer from that number, not from eight cases. `evals/quiz-cases.ts` (the cases and counters `evals/quiz.ts` uses) imports the same list
 instead of keeping its own, because the eval's copy is the one that would quietly stop matching the
 prompt.
 
@@ -437,7 +442,8 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-6V):
 > always show them in situ in the text, whether you're in quiz mode or not.
 
 **Except while the margin is on screen** (since 2026-10-29, Greg's `spya-fytjtf`): then the
-questions are among the margin's notes instead, beside the same block, and opening the margin on
+questions are among the margin's notes instead, beside the same block, **answered there** since
+2026-10-29 (Greg's `spya-jzgrua`, below), and opening the margin on
 an article with no quiz writes one ([marginalia.md § Quiz's
 questions](marginalia.md#quizs-questions-since-2026-10-29)).
 
@@ -463,13 +469,46 @@ options), the choice and what was deferred are
 - **Shown whether or not you have read the passage.** The reading levels move every minute and would
   re-render the whole article through `memo(TableView)`; a question before its passage is a
   pre-question, not a giveaway.
-- **Answering stays in the band.** Answering in the prose would put a second copy of the answer box,
+- **Answering stays in the band — except in the margin.** Since 2026-10-29 a question in the margin
+  opens its own small answer box (§ Answered in the margin, below); the prose line still opens
+  the band. Answering in the prose would put a second copy of the answer box,
   the mark binding and the premise rule in `TableView`'s path — the plan's *Deferred* says what would
   change that.
 - The read moved up for it: `useQuizRead` in `OwnedReader`, `useQuiz(slug, read)` in the band — the
   Quotes split — so *Write them again* moves the lines too.
   [`quiz-anchors.ts`](../../src/web/quiz-anchors.ts), [`QuizInProse.tsx`](../../src/web/QuizInProse.tsx),
   `TableView`'s `quizAfter`.
+
+## Answered in the margin, and a quiet green
+
+> Yes, let's try and avoid having to jump away from marginalia mode to the learn mode, because
+> that'll take us out the flow. … Make the voice button very easy to access, and then some kind of
+> nice feedback, visual feedback actually, it might be quite important, not gamification. But just
+> some of that sense of satisfaction of, you know, turning it a subtle green or whatever.
+>
+> — Greg, 2026-10-29 (`spya-jzgrua`, his reply to q-ejp09q)
+
+Plan [261029i](../plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md).
+
+- **A question in the margin opens a box under itself**: the band's answer box in miniature (the
+  same dictation, keeper key, refusals and mark), sized for a line. *Open in Quiz* in the box is the
+  old press, for the walk, the premise and the reference answer. Opening another question, or
+  closing this one, takes the mark with it, as Next does. The margin shows no premise (stems only,
+  the list's rule) and no *Discuss*, reference answer or *Where to look again*: each is one press
+  away in the band. [marginalia.md § Quiz's questions](marginalia.md#quizs-questions-since-2026-10-29).
+- **One press to talk.** A microphone on each question line opens its box and starts listening in
+  the same press. The box is rendered synchronously first, because a dictation is bound to the box
+  it was started for (`useDictation.ts` § `elsewhere`) and Safari wants the microphone inside the
+  gesture.
+- **The marking is shared, the mark is not.** `useQuizMark` is the band's own marking, used by both;
+  `useQuizRead.claimMark` lets only one of them mark a given question at a time, so a reader with
+  both open cannot pay twice.
+- **An answered question turns a quiet green** (`quiz-answered`, quiz.css), with a tick, in the
+  margin and on the band's question alike, and stays green on later visits. **It says answered, not
+  right**: the verdict is still never drawn (§ Whether the reader got it right is asked somewhere
+  else). In the band the green goes while the box holds words the mark is not about. No red, no
+  count, no score. Whether Greg wants it to mean *right* instead is asked in
+  q-cj0fv8, and the plan says what that would take (a shared, unstored verdict map).
 
 ## Only what you have read
 

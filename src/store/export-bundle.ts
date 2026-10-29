@@ -596,6 +596,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.readingTime.length) {
     at("reading-time.json", { blocks: rows.readingTime.map((row) => rowJson(row)) });
   }
+  if (rows.readingPlace.length) {
+    at("reading-place.json", { places: rows.readingPlace.map((row) => rowJson(row)) });
+  }
   if (rows.skimBriefs.length) {
     at("skim-briefs.json", { briefs: rows.skimBriefs.map((row) => rowJson(row)) });
   }
@@ -1076,6 +1079,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works investigated", n: rows.citationInvestigations.length },
     { label: "cited works searched for a web note", n: rows.citationWebNotes.length },
     { label: "blocks with reading time", n: rows.readingTime.length },
+    { label: "your place in it", n: rows.readingPlace.length },
     { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
     { label: "your tags", n: rows.articleTags.length },
     { label: "quiz answers", n: rows.quizAttempts.length },
