@@ -155,3 +155,43 @@ was taken; the design above is amended by these, and where they differ these win
 | F5 P2 | A shared alias makes "the first match" open an arbitrary entry. | `glossaryProposalFor` returns a proposal only when there is exactly one row; two entries that could be meant get no button (both are already in the glossary). |
 | F6 P2 | `runProposal`'s outcome is ignored, so a `stay` would still clear the selection and drop the highlight. | `add` re-resolves at the press and reports success only for `close`; the chip clears the selection, and the fresh box removes the highlight and closes, only then. |
 | F7 P3 | "Exactly when the bottom bar shows" is not what `data-bars` says (the Dock is forced back by dialogs, focus, a band). | Worded as *the same scroll-direction state*, which is what was meant; it is hidden while a band is open. |
+
+**Found while building**: after a jump the bars are already shown, so a reader's next scroll up
+flipped nothing and the reminder never came. `data-scrolled-back` is now set by any upward movement
+of the reader's, not only the hidden-to-shown flip (the scroll-settlement test pins both).
+
+### GPT Sol on the code
+
+[Prompt](261029d-code-review-prompt.md), [diff](261029d-code-review.diff),
+[answer](261029d-code-review-sol.md). No P0 or P1; it fixed three things in place, and I read and
+kept all three:
+
+- **P2, focus after the fresh box.** Skipping the return to the prose left focus on `<body>`. The
+  Glossary band now takes it once: the opened entry's row, or the band itself for a look-up (never
+  the text field, so no phone keyboard). `GlossarySelectionFocus` in `GlossaryPanel.tsx`, set by
+  `Reader` only for the fresh box's press. About a hundred lines for a keyboard user's edge case,
+  weighed and kept: contained, tested, and the alternative was a known defect left in place.
+- **P2, the reminder folded authors differently from the masthead** (four names became "three et
+  al."). The facts' words and order now have one home, `mastheadFactsAsWords` in `Masthead.tsx`,
+  with `collapsedAuthorNames` in `AuthorNames.tsx`; the reminder draws that list.
+- **P3, reduced motion.** The reminder joined the list of chrome whose slide is switched off.
+
+Gates after it: typecheck clean; the touched suites, the masthead and glossary suites (555 tests)
+and doc-links green; the browser check below was run before these three fixes and none of them
+changes what it looked at, beyond "+ N more" for five or more authors.
+
+### In a browser
+
+A Sonnet subagent, Playwright against system Chrome on the box, all seven checks passed: the bar at
+390×844 and 844×390 comes with a scroll back and goes with reading on, clears the spine, stays left
+of and under Marginalia's column with `?margin=1`, is gone after a crumb jump and after *Back to*,
+never draws at 1280×800, and is legible in dark mode; the chip's two stacked buttons send a new
+phrase to the band's box (one `POST …/ask`, no highlight) and open an existing entry with no ask;
+the fresh box's link removes the highlight, opens Glossary, and is absent for a 100-character
+selection. The look-up itself failed with the box's over-limit key, as expected.
+
+### Deferred
+
+- **Wider screens**: [q-t2p2s7](../user-feedback/questions/q-t2p2s7.md) asks whether the reminder
+  should also appear on a full-screen iPad or a laptop. Built the recommended way meanwhile.
+- **A real look-up from a selection** waits for the box's key to reset on 1 November, or the deploy.

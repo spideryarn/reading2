@@ -68,7 +68,14 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ExternalLink,
   Eye,
@@ -283,6 +290,40 @@ interface Props {
    */
   focus?: ItemFocus | null | undefined;
   onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
+  /**
+   * A fresh selection box has just closed into this band. Unlike `focus`,
+   * which identifies and flashes a row, this keeps keyboard focus from falling
+   * back to `<body>` when the box's focused button is unmounted. A new lookup
+   * lands on the labelled band, never its text field (and therefore never
+   * summons a phone keyboard); an existing term lands on its row button.
+   */
+  selectionFocus?: GlossarySelectionFocus | null | undefined;
+  onSelectionFocusTaken?: ((focus: GlossarySelectionFocus) => void) | undefined;
+}
+
+export type GlossarySelectionFocus =
+  | { readonly kind: "band"; readonly n: number }
+  | { readonly kind: "term"; readonly id: BlockId; readonly n: number };
+
+/** `undefined` means the requested row is not ready to receive focus yet. */
+function selectionFocusDestination(
+  request: GlossarySelectionFocus,
+  surface: HTMLElement | null,
+  ready: boolean,
+  all: readonly GlossaryEntry[],
+  shown: readonly GlossaryEntry[],
+): HTMLElement | undefined {
+  if (!surface) return undefined;
+  if (request.kind === "band") return surface;
+  if (!ready) return undefined;
+  const known = all.some((entry) => entry.id === request.id);
+  /* The threshold is being lowered. The next render will draw the row. */
+  if (known && !shown.some((entry) => entry.id === request.id)) return undefined;
+  if (!known) return surface;
+  const row = [...surface.querySelectorAll<HTMLElement>("[data-term-id]")].find(
+    (candidate) => candidate.dataset.termId === request.id,
+  );
+  return row?.querySelector<HTMLElement>(".gloss-term-btn") ?? undefined;
 }
 
 export function GlossaryPanel({
@@ -297,6 +338,8 @@ export function GlossaryPanel({
   onAskChat,
   focus = null,
   onFocusTaken,
+  selectionFocus = null,
+  onSelectionFocusTaken,
 }: Props) {
   useRenderCount("GlossaryPanel");
   const owner = access.kind === "owner" ? access.owner : null;
@@ -331,6 +374,28 @@ export function GlossaryPanel({
     attribute: "data-term-id",
     onTaken: onFocusTaken,
   });
+  /* **Keep the fresh box's keyboard journey continuous.** Its Add button is
+     removed in the same commit that mounts this panel, so refusing the usual
+     return-to-prose focus is only half the job: without a destination the
+     browser leaves focus on `<body>`. This is a layout effect so that gap is
+     not painted or announced. It waits for an existing term's row when the
+     threshold is being lowered, just as `useLandOnItem` above does. */
+  const selectionFocusTaken = useRef(onSelectionFocusTaken);
+  selectionFocusTaken.current = onSelectionFocusTaken;
+  const selectionFocusReady = glossary !== null && (owner === null || owner.status === "ready");
+  useLayoutEffect(() => {
+    if (!selectionFocus) return;
+    const destination = selectionFocusDestination(
+      selectionFocus,
+      surface.current,
+      selectionFocusReady,
+      all,
+      shown,
+    );
+    if (!destination) return;
+    destination.focus({ preventScroll: true });
+    selectionFocusTaken.current?.(selectionFocus);
+  }, [selectionFocus, selectionFocusReady, all, shown]);
   /* Against the raw list, hidden included: a dig that finished on an entry
      the reader has since hidden is not an answer whose term left the glossary. */
   const orphanedLookup = keptWithoutEntry(owner, owner?.glossary?.entries ?? all);
@@ -421,6 +486,7 @@ export function GlossaryPanel({
   return (
     <ModeSurface
       ref={surface}
+      tabIndex={-1}
       label="Glossary"
       feature="gloss"
       mode="glossary"

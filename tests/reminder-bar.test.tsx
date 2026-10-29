@@ -14,33 +14,39 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Article } from "../src/types.js";
-import { ReminderBar, reminderFacts } from "../src/web/ReminderBar.js";
+import { mastheadFactsAsWords } from "../src/web/Masthead.js";
+import { ReminderBar } from "../src/web/ReminderBar.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type Meta = Article["meta"];
 const meta = (extra: Partial<Meta>): Meta => ({ slug: "a-piece", title: "A piece", ...extra }) as Meta;
 
-describe("reminderFacts — the masthead's facts, as words", () => {
+describe("mastheadFactsAsWords — the reminder's plain-text facts", () => {
   it("keeps the masthead's order: who, journal, site, published, read time", () => {
     expect(
-      reminderFacts(
+      mastheadFactsAsWords(
         meta({ byline: "Ada Lovelace", journal: "Nature", siteName: "nature.com", publishedAt: "2023-08-17" }),
         12,
-      ),
+      ).ordered,
     ).toEqual(["Ada Lovelace", "Nature", "nature.com", expect.stringMatching(/2023/), "~12 min"]);
   });
 
-  it("names three authors and folds the rest into et al.", () => {
-    const authors = ["Patrick Butlin", "Robert Long", "Eric Elmoznino", "Yoshua Bengio"].map((name) => ({ name }));
-    expect(reminderFacts(meta({ authors, byline: "ignored when there is a list" } as Partial<Meta>), 95)[0]).toBe(
-      "Patrick Butlin, Robert Long, Eric Elmoznino et al.",
+  it("uses the masthead's own fold: four names fit, five become three plus the remainder", () => {
+    const authors = ["Patrick Butlin", "Robert Long", "Eric Elmoznino", "Yoshua Bengio", "Murray Shanahan"].map(
+      (name) => ({ name }),
+    );
+    expect(mastheadFactsAsWords(meta({ authors: authors.slice(0, 4) } as Partial<Meta>), 95).byline).toBe(
+      "Patrick Butlin, Robert Long, Eric Elmoznino, Yoshua Bengio",
+    );
+    expect(mastheadFactsAsWords(meta({ authors } as Partial<Meta>), 95).byline).toBe(
+      "Patrick Butlin, Robert Long, Eric Elmoznino + 2 more",
     );
   });
 
   it("says the journal once when it is the site, and leaves out what it does not know", () => {
-    expect(reminderFacts(meta({ journal: "arXiv", siteName: "arXiv" }), 3)).toEqual(["arXiv", "~3 min"]);
-    expect(reminderFacts(meta({}), 1)).toEqual(["~1 min"]);
+    expect(mastheadFactsAsWords(meta({ journal: "arXiv", siteName: "arXiv" }), 3).ordered).toEqual(["arXiv", "~3 min"]);
+    expect(mastheadFactsAsWords(meta({}), 1).ordered).toEqual(["~1 min"]);
   });
 });
 
@@ -162,6 +168,13 @@ describe("what jsdom cannot evaluate", () => {
     expect(rule).toContain("top: var(--bar-bottom)");
     expect(rule, "the reading column, not Marginalia's").toContain("var(--marg-reserve)");
     expect(rule, "under Marginalia's head (30)").toContain("z-index: 29");
+  });
+
+  it("does not slide for a reader who asked for less motion", () => {
+    const reduced = css.indexOf("@media (prefers-reduced-motion: reduce)");
+    expect(reduced).toBeGreaterThan(-1);
+    const rule = css.slice(reduced, css.indexOf("}", css.indexOf("transition: none", reduced)) + 1);
+    expect(rule).toMatch(/\.reminder-bar,[\s\S]*transition:\s*none/);
   });
 
   it("is mounted beside the masthead, and only while no band is open", () => {

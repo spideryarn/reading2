@@ -83,7 +83,7 @@ import { ReadTimeCard } from "./ReadTimeCard.js";
 import { ReadSoFarMark } from "./ReadSoFarMark.js";
 import type { ReadBand } from "./read-filter.js";
 import { articleStats } from "./stats.js";
-import { AuthorNames } from "./AuthorNames.js";
+import { AuthorNames, collapsedAuthorNamesText } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { FoldAllButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
@@ -131,6 +131,36 @@ interface Props {
    * until the owner's reading time has answered.
    */
   readBand?: ReadBand | undefined;
+}
+
+/**
+ * **The masthead's facts as plain words, in their displayed order.** The
+ * masthead replaces the author string and read-time string with interactive
+ * renderers, but their visible words come from this same list. ReminderBar
+ * draws it directly, so changing a fact or its order cannot leave the reminder
+ * saying something else (plan 261029d).
+ */
+export function mastheadFactsAsWords(meta: Article["meta"], minutes: number): {
+  byline: string | undefined;
+  journal: string | undefined;
+  site: string | undefined;
+  published: string | undefined;
+  readTime: string;
+  ordered: readonly string[];
+} {
+  const byline = meta.authors ? collapsedAuthorNamesText(meta.authors) : meta.byline;
+  const journal = journalBesideSite(meta.journal, meta.siteName);
+  const site = meta.siteName;
+  const published = publishedLabel(meta);
+  const readTime = `~${minutes} min`;
+  return {
+    byline,
+    journal,
+    site,
+    published,
+    readTime,
+    ordered: [byline, journal, site, published, readTime].filter(Boolean) as string[],
+  };
 }
 
 export function Masthead({ article, slug, onRenamed, archive, readBand }: Props) {
@@ -230,10 +260,11 @@ export function Masthead({ article, slug, onRenamed, archive, readBand }: Props)
   // filtered list beats a chain of `&&`s that can leave a stranded separator.
   /* **The authors one at a time when we know who they are**, and the byline
      string exactly as before when we do not — AuthorNames.tsx. Plan 260929d § 4. */
+  const factWords = mastheadFactsAsWords(meta, stats.minutes);
   const byline: ReactNode = meta.authors ? (
     <AuthorNames authors={meta.authors} linkToShelf={onRenamed !== undefined} />
   ) : (
-    meta.byline
+    factWords.byline
   );
   /* **Where and when it was published**, in the order both Metadata pages
      print the facts — Greg, 2026-10-15 (`spya-u7yfns`): *"Please
@@ -243,9 +274,9 @@ export function Masthead({ article, slug, onRenamed, archive, readBand }: Props)
      face: a fact about the piece is nobody's sentence (fonts.md). Plan 261015c. */
   const facts = [
     byline,
-    journalBesideSite(meta.journal, meta.siteName),
-    meta.siteName,
-    publishedLabel(meta),
+    factWords.journal,
+    factWords.site,
+    factWords.published,
     /* **The one fact here with a card**, because it is the one that is an
        estimate — ReadTimeCard.tsx. Focusable so a keyboard and a finger reach
        what a pointer does; it is not a button because pressing it does
@@ -266,7 +297,7 @@ export function Masthead({ article, slug, onRenamed, archive, readBand }: Props)
       >
         {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the only way to the explanation, and focus is how a keyboard opens it */}
         <span className="read-time-trigger" tabIndex={0}>
-          {`~${stats.minutes} min`}
+          {factWords.readTime}
         </span>
       </Tooltip>
       <ReadSoFarMark band={readBand} />

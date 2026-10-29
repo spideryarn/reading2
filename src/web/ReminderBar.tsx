@@ -28,36 +28,18 @@
  */
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import type { Article } from "../types.js";
+import { mastheadFactsAsWords } from "./Masthead.js";
 import { READ_BAND_PIE, type ReadBand } from "./read-filter.js";
-import { publishedLabel } from "./relative-time.js";
 import { PieGlyph } from "./SharePie.js";
-import { journalBesideSite } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { articleTitleVoice, withVoice } from "./voice.js";
 
-/** Names before the rest become "et al." — the masthead folds at the same count. */
-const NAMES_SHOWN = 3;
-
-/**
- * **The masthead's facts, as words, in the masthead's order** (Masthead.tsx §
- * `facts`): byline, journal, site, published, read time. Strings rather than
- * the masthead's nodes, because its byline and read time are focusable (GPT
- * Sol, plan review F4). A change to the order there is a change here.
- */
-export function reminderFacts(meta: Article["meta"], minutes: number): string[] {
-  const names = meta.authors?.map((a) => a.name).filter((n) => n.trim() !== "") ?? [];
-  const byline =
-    names.length > 0
-      ? names.slice(0, NAMES_SHOWN).join(", ") + (names.length > NAMES_SHOWN ? " et al." : "")
-      : meta.byline;
-  return [byline, journalBesideSite(meta.journal, meta.siteName), meta.siteName, publishedLabel(meta), `~${minutes} min`]
-    .map((f) => f?.trim() ?? "")
-    .filter((f) => f !== "");
-}
-
 export function ReminderBar({ article, readBand }: { article: Article; readBand?: ReadBand | undefined }): ReactElement {
   const stats = useMemo(() => articleStats(article), [article]);
-  const facts = useMemo(() => reminderFacts(article.meta, stats.minutes), [article.meta, stats.minutes]);
+  const facts = useMemo(
+    () => mastheadFactsAsWords(article.meta, stats.minutes).ordered,
+    [article.meta, stats.minutes],
+  );
   const mastheadGone = useMastheadGone();
   return (
     <div className="reminder-bar" aria-hidden="true" inert data-masthead-gone={mastheadGone ? "" : undefined}>

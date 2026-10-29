@@ -82,6 +82,7 @@ import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
 import type { ChatAnchor, Quote, Situate, SituateFinding } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
+import type { GlossarySelectionFocus } from "../GlossaryPanel.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
 import { visitorArrival } from "../modes/structure/StructureArriving.js";
@@ -1833,6 +1834,21 @@ export function Reader({
    */
   const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
   const termFocusTaken = useCallback((taken: ItemFocus) => setTermFocus(focusTaken(taken)), []);
+  /* The fresh selection box closes as Glossary opens. Its focused Add button
+     disappears, so the band takes focus once it (or the selected term's row)
+     exists; this request is separate from the visual scroll-and-flash focus. */
+  const [glossarySelectionFocus, setGlossarySelectionFocus] =
+    useState<GlossarySelectionFocus | null>(null);
+  const glossarySelectionFocusNumber = useRef(0);
+  const glossarySelectionFocusTaken = useCallback(
+    (taken: GlossarySelectionFocus) =>
+      setGlossarySelectionFocus((now) => {
+        if (!now || now.kind !== taken.kind || now.n !== taken.n) return now;
+        if (now.kind === "term" && (taken.kind !== "term" || now.id !== taken.id)) return now;
+        return null;
+      }),
+    [],
+  );
   const [ideaFocus, setIdeaFocus] = useState<ItemFocus | null>(null);
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
@@ -1883,6 +1899,7 @@ export function Reader({
       switch (slot) {
         case "term":
           setTermFocus(null);
+          setGlossarySelectionFocus(null);
           break;
         case "cite":
           setCiteFocus(null);
@@ -3618,11 +3635,20 @@ export function Reader({
        * were, rather than throwing them away for nothing (GPT Sol, plan
        * review F6). Both glossary runners answer synchronously.
        */
-      add: (words: string): boolean => {
+      add: (words: string, takeFocus = false): boolean => {
         const proposal = proposalFor(words);
         if (!proposal) return false;
         const outcome = runProposal(executor.runners, proposal);
-        return outcome !== null && !(outcome instanceof Promise) && outcome.kind === "close";
+        const went = outcome !== null && !(outcome instanceof Promise) && outcome.kind === "close";
+        if (went && takeFocus) {
+          setGlossarySelectionFocus({
+            ...(proposal.id === "glossary-open"
+              ? { kind: "term" as const, id: proposal.termId }
+              : { kind: "band" as const }),
+            n: ++glossarySelectionFocusNumber.current,
+          });
+        }
+        return went;
       },
     };
   }, [isOwner, glossaryDrawn, glossaryReady, terms, executor]);
@@ -4117,6 +4143,8 @@ export function Reader({
               chats={entryChats}
               focus={termFocus}
               onFocusTaken={termFocusTaken}
+              selectionFocus={glossarySelectionFocus}
+              onSelectionFocusTaken={glossarySelectionFocusTaken}
             />
           );
         return artefacts?.glossary ? (
@@ -5335,7 +5363,7 @@ export function Reader({
                       ? () => {
                           const id = openComment.id;
                           const quote = openComment.quote;
-                          if (quote === undefined || !selectionGlossary.add(quote)) return false;
+                          if (quote === undefined || !selectionGlossary.add(quote, true)) return false;
                           const api = commentsNow.current;
                           const row = api?.comments.find((comment) => comment.id === id);
                           if (api && row && isPristineHighlight(row) && !copyOnlyProtected.current.has(id)) {

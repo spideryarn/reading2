@@ -24,6 +24,7 @@ import { hiddenEntries, shownEntries } from "../../glossary-shown.js";
 import {
   effectiveSort,
   GlossaryPanel,
+  type GlossarySelectionFocus,
   PRIORITY_GATE,
   visibleEntries,
 } from "../../GlossaryPanel.js";
@@ -67,6 +68,8 @@ export function GlossaryBand({
   chats,
   focus,
   onFocusTaken,
+  selectionFocus,
+  onSelectionFocusTaken,
 }: {
   slug: string;
   /**
@@ -104,6 +107,9 @@ export function GlossaryBand({
   /** One entry to scroll into view, once: a chat's way back (GlossaryPanel § Props). */
   focus?: ItemFocus | null | undefined;
   onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
+  /** Keyboard destination after a fresh selection box closes into Glossary. */
+  selectionFocus?: GlossarySelectionFocus | null | undefined;
+  onSelectionFocusTaken?: ((focus: GlossarySelectionFocus) => void) | undefined;
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
@@ -130,6 +136,8 @@ export function GlossaryBand({
       onAskChat={onAskChat}
       focus={focus}
       onFocusTaken={onFocusTaken}
+      selectionFocus={selectionFocus}
+      onSelectionFocusTaken={onSelectionFocusTaken}
     />
   );
 }

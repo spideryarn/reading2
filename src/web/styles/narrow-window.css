@@ -1239,6 +1239,7 @@
      (see the `.controls` rule for why the two differ), so both have to be named
      here or half the chrome would still slide. */
   .controls,
+  .reminder-bar,
   .dock,
   .install-hint,
   .spine,

@@ -563,6 +563,8 @@ describe("a mouse's selection: the fresh box offers Add to glossary", () => {
     const id = sentId();
     const add = boxButton("Add to glossary");
     expect(add, "the button, beside Copy").toBeDefined();
+    add?.focus();
+    expect(document.activeElement).toBe(add);
     await act(async () => add?.click());
     await until(() => asks().length > 0);
     expect(asks()).toHaveLength(1);
@@ -571,16 +573,28 @@ describe("a mouse's selection: the fresh box offers Add to glossary", () => {
     expect(marks(), "and its paint").toEqual([]);
     expect(dialog(), "and its box").toBeNull();
     expect(param("mode")).toBe("glossary");
+    await until(() => document.activeElement?.matches(".mode-band.gloss") === true);
+    expect(document.activeElement, "focus follows the closed box into the labelled band").toBe(
+      host.querySelector(".mode-band.gloss"),
+    );
+    expect(document.activeElement?.matches("input, textarea"), "does not summon a phone keyboard").toBe(
+      false,
+    );
     expect(jobPosts(), "a look-up, never a glossary run").toEqual([]);
   });
 
   it("opens an entry that already names the words, and asks nothing", async () => {
     await open();
     await drag(...at("paragraph"));
-    await act(async () => boxButton("Add to glossary")?.click());
+    const add = boxButton("Add to glossary");
+    add?.focus();
+    await act(async () => add?.click());
     await until(() => param("mode") === "glossary");
-    await settle();
+    await until(() => document.activeElement?.matches(".gloss-term-btn") === true);
     expect(param("mode")).toBe("glossary");
+    expect(document.activeElement?.closest<HTMLElement>("[data-term-id]")?.dataset.termId).toBe(
+      "spya-gggggg",
+    );
     expect(asks(), "no model call for a term the glossary has").toEqual([]);
   });
 
