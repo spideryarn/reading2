@@ -159,7 +159,7 @@ These are the reasons to go carefully, each one already said by Greg in another 
 - **Cost and consent — settled 2026-10-02: opening Marginalia spends nothing.** It shows only what
   other modes have already made, and the automatic help comments in 7E were declined for the same
   reason. **One exception since 2026-10-05, Greg's own**: the column's relation words are made the
-  first time it is shown ([marginalia.md § Relation words](marginalia.md#relation-words)), and since 2026-10-11 the same call may add a few notes of its own ([§ Notes the model writes](marginalia.md#notes-the-model-writes)). Greg would have had it run the missing modes, but only if a mode made later never reached
+  first time it is shown ([marginalia.md § Relation words](marginalia.md#relation-words)), and since 2026-10-11 the same call may add a few notes of its own ([§ Notes the model writes](marginalia.md#notes-the-model-writes)). Since 2026-10-29 the owner's press that turns the column on also starts Sources' literature search where none is stored (Greg's answer to q-sxfwqq; [sources.md § Where it sits](sources.md#where-it-sits)). Greg would have had it run the missing modes, but only if a mode made later never reached
   the margin:
 
   > My worry is that if we *don't* fill in stuff that hasn't been generated, then even if we do
