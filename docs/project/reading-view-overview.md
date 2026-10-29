@@ -120,6 +120,10 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   order the Metadata page prints them; the word, part and section counts wait behind *Show
   counts*, shut on every load:
   [261015c](../plans/261015c-why-you-are-reading-higher-in-metadata-and-the-publication-date-in-the-masthead.md).
+- **The reminder bar** — the title and that facts line again, in brief, fixed at the top while you
+  scroll back on a small device, gone when you read on: [`ReminderBar.tsx`](../../src/web/ReminderBar.tsx),
+  [phone-and-touch.md](phone-and-touch.md),
+  [261029d](../plans/261029d-a-reminder-bar-at-the-top-and-add-a-selection-to-the-glossary.md).
 
 ### The modes in the band
 

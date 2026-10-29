@@ -127,6 +127,7 @@ import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
 import { AnnotateDialog, annotateKey } from "../AnnotateDialog.js";
+import { ReminderBar } from "../ReminderBar.js";
 import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
 import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-highlight.js";
@@ -4871,6 +4872,10 @@ export function Reader({
           constant is the word that decides it belongs here and not in a
           column. */}
       <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} readBand={readSoFarBand} />
+      {/* The masthead again, in brief, while the reader scrolls back on a small
+          device — ReminderBar.tsx says when. Not while a band is open: it
+          would lie over the band's own head (plan 261029d). */}
+      {!bandOpen && <ReminderBar article={article} readBand={readSoFarBand} />}
       {/* The statement, where a visitor's eye already is on arrival. The
           *persistent* half of it is the chip in the bar below, which is sticky;
           this is the sentence and the ask, which belong with the title. Not
