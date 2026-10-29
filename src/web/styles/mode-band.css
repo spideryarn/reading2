@@ -1574,6 +1574,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 .crit-text,
 .crit-poles input,
 .quiz-answer,
+.marg-quiz-box,
 .ill-steer-input,
 .skim-purpose-input {
   padding: 0.45rem 0.55rem;
@@ -1589,6 +1590,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 .crit-text:focus-visible,
 .crit-poles input:focus-visible,
 .quiz-answer:focus-visible,
+.marg-quiz-box:focus-visible,
 .ill-steer-input:focus-visible,
 .skim-purpose-input:focus-visible,
 .guide-next-search-box:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }

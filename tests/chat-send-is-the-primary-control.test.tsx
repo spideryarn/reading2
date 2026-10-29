@@ -165,8 +165,9 @@ describe("the send button", () => {
       '.chat-send.quiz-go:not([aria-disabled="true"])',
       '.chat-send.quiz-go:not([aria-disabled="true"]):hover',
       /* Size only, under a finger: Answer keeps 40px after a mark takes
-         `.quiz-go` away (quiz.css; plan 261021g). */
-      ".quiz-actions .chat-send",
+         `.quiz-go` away (quiz.css; plan 261021g), and the margin's Answer
+         likewise (plan 261029i). */
+      ".quiz-actions .chat-send, .marg-quiz-actions .chat-send",
     ]);
   });
 

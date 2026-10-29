@@ -57,6 +57,7 @@ import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
 import {
   type BlockId,
   type CitedWork,
+  type Explanation,
   type GlossaryEntry,
   type Job,
   MAX_MENTIONS,
@@ -139,6 +140,7 @@ import { helpHref, modeAnchor } from "./help/help-anchors.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
+import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "./explanation-labels.js";
 import { MODE_ICON } from "./mode-icons.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Mode } from "../modes.js";
@@ -242,6 +244,12 @@ interface Hit {
    * depends on that.
    */
   quoteKeys: string[];
+  /**
+   * The explanation ids on the words (`data-explained`), filtered against the
+   * owner's list. At most one in practice — one per block — but nothing here
+   * depends on it. Plan 261029j § 4.
+   */
+  explainedIds: string[];
   /** The href, already described. Null when the pointer is on a bare term. */
   link: LinkPreview | null;
   /** For an in-article anchor: the block it resolves to. */
@@ -310,6 +318,8 @@ function HoverCard({
   onCheckCitedWork = null,
   onOpenCitedWork = null,
   citeCheck = null,
+  explanations = null,
+  explanationActions = null,
   quotes = null,
 }: {
   entries: GlossaryEntry[];
@@ -488,6 +498,19 @@ function HoverCard({
    */
   citeCheck?: CiteCheckSenders | null;
   /**
+   * **The owner's explanations, whose passages the prose underlines** — the
+   * same list (Reader's `ownerExplanations`), so a mark finds its explanation.
+   * `null` or absent for a visitor and with the experimental switch off, and
+   * then `read` never looks for one. Plan 261029j § 4.
+   */
+  explanations?: readonly Explanation[] | null;
+  /**
+   * ***Ask in chat* and *Open in Explanations* on an explained passage's card**
+   * — the margin note's own senders (Reader's `marginExplanationActions`), so
+   * all three doors record one origin. `null` draws neither button.
+   */
+  explanationActions?: ExplanationActions | null;
+  /**
    * **The quotes the prose fills, and what the card's buttons do with one**
    * — `QuoteCard`. `null` where there are none to point at; then `read` never
    * looks for one. A visitor gets it too: the scores and the reason are on the
@@ -501,6 +524,10 @@ function HoverCard({
   /* The same indexing for the citations, for the same reason: `read` runs on
      every `pointerover` and must look things up rather than scan. */
   const byWork = useMemo(() => new Map(works.map((w) => [w.id, w])), [works]);
+  const byExplanation = useMemo(
+    () => new Map((explanations ?? []).map((e) => [e.id, e])),
+    [explanations],
+  );
 
   /* Called on every hover, so it looks things up and scans nothing.
 
@@ -558,6 +585,21 @@ function HoverCard({
           )
         : [];
 
+      /* **The explained passage, read both ways**, as the terms and the
+         citations are: a keyboard focus lands on a link inside the passage,
+         whose marks are its descendants (GPT Sol, plan review of 261029j, P2-5).
+         Filtered against the owner's list, so a stale or forged id draws
+         nothing. */
+      const explainedMark = byExplanation.size > 0 ? el.closest("mark.explained") : null;
+      const explainedEls = explainedMark
+        ? [explainedMark]
+        : anchorEl && byExplanation.size > 0
+          ? [...anchorEl.querySelectorAll("mark.explained")]
+          : [];
+      const explainedIds = [
+        ...new Set(explainedEls.flatMap((m) => (m.getAttribute("data-explained") ?? "").split(" "))),
+      ].filter((id) => byExplanation.has(id));
+
       const href = anchorEl?.getAttribute("href") ?? null;
       const link = href ? describeLink(href, sourceUrl) : null;
 
@@ -606,18 +648,23 @@ function HoverCard({
         : null;
 
       if (note) {
-        return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false, authorTitle };
+        return { termIds, citeIds, quoteKeys, explainedIds, link, anchor, inBlock, href, note, back: false, authorTitle };
       }
 
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
       const marked =
-        termIds.length > 0 || citeIds.length > 0 || quoteKeys.length > 0 || authorTitle !== null;
+        termIds.length > 0 ||
+        citeIds.length > 0 ||
+        quoteKeys.length > 0 ||
+        explainedIds.length > 0 ||
+        authorTitle !== null;
       if (!marked && !link) return null;
       if (!marked && link?.kind === "anchor" && !anchor) return null;
       return {
         termIds,
         citeIds,
         quoteKeys,
+        explainedIds,
         link,
         anchor,
         inBlock,
@@ -627,7 +674,7 @@ function HoverCard({
         authorTitle,
       };
     },
-    [byId, byWork, sourceUrl, blockText, notes, quotes],
+    [byId, byWork, byExplanation, sourceUrl, blockText, notes, quotes],
   );
 
   const { shown, close, anchorProps, arrowRef, context } = useHoverCard<Hit>({
@@ -660,7 +707,9 @@ function HoverCard({
        a titled `<abbr>` or `<span>` opens the card by itself, where the browser
        used to draw its grey box. Pointer only, as the quote is: a `<span>` takes
        no focus, and a finger never got the grey box either. Plan 261018n. */
-    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}], ${XREF_SELECTOR}`,
+    /* **And an explained passage, since 2026-10-29** (plan 261029j § 4):
+       Glossary's rule, pointer, keyboard focus of a link round it, and tap. */
+    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), mark.explained:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}], ${XREF_SELECTOR}`,
     /* Both containers survive their own re-render, which is the whole
        requirement — see `host`. A chat answer's `<p>` does not, so the
        fallback would leave a card pinned to a detached node as an answer
@@ -671,8 +720,10 @@ function HoverCard({
        passage the reader rests in while reading, not a word they point at to
        ask. A quote that is also a term, a citation or a link keeps the
        ordinary rest, because the reader may be asking about those. */
+    /* An explained passage is clause-long and rested in while reading, as a
+       quote is, so it waits as long when it is all that is on the words. */
     openDelay: (hit) =>
-      hit.quoteKeys.length > 0 &&
+      (hit.quoteKeys.length > 0 || hit.explainedIds.length > 0) &&
       hit.termIds.length === 0 &&
       hit.citeIds.length === 0 &&
       !hit.link &&
@@ -750,7 +801,18 @@ function HoverCard({
        cross-reference would show the term. Excluded, the tap is
        BlockLinkCard's: its first tap shows the target passage, its second falls
        through to TableView's click and jumps (plan 261018e, spya-yk33ke). */
-    tapSelector: `mark.term:not(.xref), mark.cite:not(.xref), a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
+    /* **And an explained passage** (plan 261029j § 4): a `mark` that is not a
+       quote, so TableView's `NOT_A_BLOCK_SELECTION` already swallows its tap
+       and, left out of here, it would be a clause-long dead hole — the reason
+       `mark.cite` is in. First tap shows the card; a second opens
+       Explanations on its row (the last branch of `onCommit`).
+
+       **Not over a comment or a chat** (`:not(.cmt):not(.chat)` on every mark
+       selector): those are the reader's own and a tap opens them
+       (TableView.tsx § the mark click). One merged mark can also be a term or
+       citation, so excluding the new selector alone would still let an older
+       selector claim the tap and cancel that click (code review of 261029j). */
+    tapSelector: `mark.term:not(.xref):not(.cmt):not(.chat), mark.cite:not(.xref):not(.cmt):not(.chat), mark.explained:not(.xref):not(.cmt):not(.chat), a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
     /* The second tap on the same words, which is what the foot's "in the
        glossary" button does. Both, rather than the button alone: on a touch
        screen the words are a far bigger target than a 10px-tall row of text,
@@ -808,12 +870,23 @@ function HoverCard({
       if (data.link?.kind === "external" && data.href) {
         close();
         window.open(data.href, "_blank", "noopener,noreferrer");
+        return;
+      }
+      /* **An explained passage's second tap opens Explanations on its row** —
+         the glossary's rule. Last, so a term inside the passage and a link
+         the passage contains keep the second tap they already had; the card
+         that is up names *Open in Explanations* for those. */
+      const explained = data.explainedIds.filter((id) => byExplanation.has(id));
+      const onlyExplained = explained.length === 1 ? explained[0] : undefined;
+      if (onlyExplained && explanationActions) {
+        close();
+        explanationActions.onOpen(onlyExplained);
       }
     },
   });
 
   if (!shown) return null;
-  const { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back, authorTitle } =
+  const { termIds, citeIds, quoteKeys, explainedIds, link, anchor, inBlock, href, note, back, authorTitle } =
     shown.data;
   const found = termIds
     .map((id) => byId.get(id))
@@ -826,12 +899,24 @@ function HoverCard({
   const quoted = quoteKeys
     .map((key) => quotes?.byKey.get(key))
     .filter((q): q is Quote => q !== undefined);
-  if (found.length === 0 && cited.length === 0 && quoted.length === 0 && !link && !authorTitle) {
+  /* The same, for the explanations: a Find more can replace the list. */
+  const explainedHere = explainedIds
+    .map((id) => byExplanation.get(id))
+    .filter((e): e is Explanation => e !== undefined);
+  if (
+    found.length === 0 &&
+    cited.length === 0 &&
+    quoted.length === 0 &&
+    explainedHere.length === 0 &&
+    !link &&
+    !authorTitle
+  ) {
     return null;
   }
 
   const label = [
     ...found.map((e) => e.name),
+    ...explainedHere.map(() => "explained"),
     ...cited.map((w) => w.title),
     ...quoted.map(() => "quote"),
     authorTitle ? "from the article" : null,
@@ -877,6 +962,16 @@ function HoverCard({
               onOpen={() => { close(); onOpenTerm(entry.id); }}
               actions={termActions}
               onAsk={onAskTerm}
+              onClose={close}
+            />
+          ))}
+          {/* **The explanation, under the term**: what a word means, then
+              what the passage it sits in is missing — plan 261029j § 3. */}
+          {explainedHere.map((e) => (
+            <ExplainedCard
+              key={e.id}
+              explanation={e}
+              actions={explanationActions}
               onClose={close}
             />
           ))}
@@ -937,7 +1032,7 @@ function HoverCard({
           {authorTitle && (
             <AuthorTitlePart
               words={authorTitle}
-              divided={found.length > 0 || cited.length > 0 || quoted.length > 0}
+              divided={found.length > 0 || cited.length > 0 || quoted.length > 0 || explainedHere.length > 0}
             />
           )}
           {/* The note in full, in place of the link half rather than under it.
@@ -948,7 +1043,7 @@ function HoverCard({
           {note && (
             <NoteCard
               note={note}
-              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
+              divided={found.length > 0 || quoted.length > 0 || explainedHere.length > 0 || !!authorTitle}
               onGo={() => {
                 close();
                 onFollowNote(
@@ -970,7 +1065,7 @@ function HoverCard({
               facts={facts}
               add={add}
               back={back}
-              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
+              divided={found.length > 0 || quoted.length > 0 || explainedHere.length > 0 || !!authorTitle}
               onJump={(id) => { close(); onJump(id); }}
             />
           )}
@@ -2961,6 +3056,72 @@ export function TermCard({
         </p>
       )}
       {hideFailed && <p className="prose-card-text prose-card-failed">{hideFailed}</p>}
+    </div>
+  );
+}
+
+/**
+ * **What an explained passage's card can do**: the margin note's two senders
+ * (MarginaliaColumn.tsx § `MarginExplanationSenders`, which this matches), so
+ * the card, the margin and the band start one chat origin and land on one row.
+ */
+export type ExplanationActions = {
+  onAsk(explanation: Explanation): void;
+  onOpen(explanationId: string): void;
+};
+
+/**
+ * **An explained passage, as a section of the card** — Greg, 2026-10-29
+ * (spya-njkskc): *"indicate when, in the text, when something's being
+ * explained, perhaps using … an underline quite similar to the glossary"*.
+ * docs/plans/261029j-explained-passages-underlined-in-the-prose.md § 4.
+ *
+ * What the margin's *Explained* note shows opened, in the same words: the
+ * explanation in the AI's face, its labels (`explanationLabels`, the one copy
+ * the band and the margin draw), and a foot of *Ask in chat* and
+ * `OpenInMode`. No quote line: the reader is pointing at the words.
+ */
+function ExplainedCard({
+  explanation,
+  actions,
+  onClose,
+}: {
+  explanation: Explanation;
+  actions: ExplanationActions | null;
+  onClose(): void;
+}) {
+  const labels = explanationLabels(explanation);
+  return (
+    <div className="prose-card-body prose-card-explained">
+      <p className="prose-card-label">
+        <Sparkles size={9} aria-hidden="true" />
+        explained
+      </p>
+      <p className="prose-card-text">
+        <span className={voiceClass("ai")}>{explanation.text}</span>
+      </p>
+      {labels.length > 0 && <p className="prose-card-meta prose-card-explained-labels">{labels.join(" · ")}</p>}
+      {actions && (
+        <p className="prose-card-foot prose-card-foot-wraps">
+          <span className="prose-card-acts">
+            <CardAskInChat
+              label={ASK_EXPLANATION_IN_CHAT}
+              className="prose-card-act"
+              onAsk={() => {
+                onClose();
+                actions.onAsk(explanation);
+              }}
+            />
+            <OpenInMode
+              mode="explanations"
+              onPress={() => {
+                onClose();
+                actions.onOpen(explanation.id);
+              }}
+            />
+          </span>
+        </p>
+      )}
     </div>
   );
 }

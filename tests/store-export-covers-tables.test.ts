@@ -370,6 +370,9 @@ const SUGGESTION_READ_FROM_SENTINEL = "3f9c1e00eead4f50";
 function sentinel(table: string): string {
   if (table === "block_identities") return DEPARTED_BLOCK_ID;
   if (table === "reading_time") return READING_TIME_SENTINEL;
+  /* Its only string is a block id the article has had, and it has its own
+     file, so the departed block's id cannot have come from anywhere else. */
+  if (table === "reading_place") return DEPARTED_BLOCK_ID;
   if (table === "glossary_hidden_entries") return HIDDEN_ENTRY_SENTINEL;
   if (table === "command_suggestion_dismissals") return SUGGESTION_DISMISSAL_SENTINEL;
   return `sentinel-3f9c1e-${table}`;
@@ -715,6 +718,10 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         seconds: Number(sentinel("reading_time")),
       });
     },
+    /* On the departed block, which has an identity row. Plan 261029f. */
+    reading_place: async () => {
+      await db.insert(schema.readingPlace).values({ articleId: ARTICLE_ID, blockId: sentinel("reading_place") });
+    },
     /* Straight into the table: the store's `hide` would refuse an id the
        glossary does not have, and this file is about the export. */
     glossary_hidden_entries: async () => {
@@ -897,6 +904,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   citation_investigations: {},
   citation_web_notes: {},
   reading_time: {},
+  reading_place: {},
   glossary_hidden_entries: {},
   article_tags: {},
   quiz_attempts: {},
@@ -948,6 +956,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   citation_investigations: (parsed) => listAt(parsed, "investigations"),
   citation_web_notes: (parsed) => listAt(parsed, "notes"),
   reading_time: (parsed) => listAt(parsed, "blocks"),
+  reading_place: (parsed) => listAt(parsed, "places"),
   glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
   article_tags: (parsed) => listAt(parsed, "tags"),
   quiz_attempts: (parsed) => listAt(parsed, "attempts"),
@@ -996,6 +1005,7 @@ await pgReady({
     "spideryarn.citation_investigations",
     "spideryarn.citation_web_notes",
     "spideryarn.reading_time",
+    "spideryarn.reading_place",
     "spideryarn.glossary_hidden_entries",
     "spideryarn.article_tags",
     "spideryarn.quiz_attempts",

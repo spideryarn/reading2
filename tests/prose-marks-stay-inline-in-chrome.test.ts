@@ -49,7 +49,7 @@ const CLAUSES = [
 ];
 
 /* Every kind, so a seventh cannot arrive untested: a missing key fails to compile. */
-const KINDS: Record<MarkKind, true> = { cmt: true, chat: true, term: true, hit: true, cite: true, xref: true };
+const KINDS: Record<MarkKind, true> = { cmt: true, chat: true, term: true, hit: true, cite: true, xref: true, explained: true };
 
 function marked(kind: MarkKind): string {
   const marks: Mark[] = CLAUSES.map((clause, i) => {

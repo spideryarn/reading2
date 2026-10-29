@@ -289,6 +289,11 @@ area ([reading-time.md](reading-time.md)), is not a scale and lives in
 191) and 12 (cyan-blue, 213), the two a reader can pick for a search. Told apart by position again:
 an area from the rail's left edge against a thin lane on its right.
 
+**And a third, since 2026-10-29: `--explained`**, the teal (hue 175) of the dotted rule under an
+explained passage ([explanations.md](explanations.md#the-underline-in-the-prose)), also in
+`tokens.css`, a little short of slot 11 (teal, 191). Told apart by channel: a dotted
+`border-bottom` under the words against a search hit's outline round them.
+
 ### Assigning a colour to a search
 
 [`src/web/hit-colours.ts`](../../src/web/hit-colours.ts) hands out **slot numbers**, never colours,

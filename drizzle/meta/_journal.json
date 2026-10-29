@@ -1604,6 +1604,13 @@
       "when": 1793205336313,
       "tag": "20261028163536_explanations",
       "breakpoints": true
+    },
+    {
+      "idx": 229,
+      "version": "7",
+      "when": 1793266680123,
+      "tag": "20261029093800_reading_place",
+      "breakpoints": true
     }
   ]
 }

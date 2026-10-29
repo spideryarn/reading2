@@ -21,6 +21,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useId,
@@ -28,7 +29,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronRight, MessageCircleQuestionMark, X } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import { useRootFlag } from "../root-flags.js";
 import type {
@@ -38,7 +39,6 @@ import type {
   Faq,
   Ideas,
   MarginNote,
-  QuizQuestion,
   QuizQuestionId,
   TimelineEvent,
 } from "../../types.js";
@@ -55,7 +55,6 @@ import { isWebUrl } from "../../urls.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
 import { useExplanationsRead } from "../useExplanations.js";
-import { useExperimental } from "../useExperimental.js";
 import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "../explanation-labels.js";
 import { AskInChatButton } from "../OriginChat.js";
 import { byLineOf, CiteBlurb } from "../BibliographyPanel.js";
@@ -66,6 +65,7 @@ import { useRenderCount } from "../perf.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
 import { useQuizOnShow, type QuizRead } from "../useQuiz.js";
+import { QuizNote } from "./MarginQuiz.js";
 import { useTimelineRead } from "../useTimeline.js";
 import { datingWords } from "../TimelinePanel.js";
 import {
@@ -398,49 +398,6 @@ function MarginNotes({
           }
         }
       })}
-    </div>
-  );
-}
-
-/**
- * **The quiz's questions, beside the passage they ask about** — Greg,
- * 2026-10-29 (spya-fytjtf): *"let's say the quiz mode does run as one of the
- * default modes whenever you open marginalia mode … because I think we include
- * the quiz questions in the marginalia annotations. If not, we should, to
- * really encourage the user to reflect on what they're reading."* While the
- * column is on screen these replace the prose's lines (`QuizInProse`), so a
- * question is drawn once. Open, not shut, for that reason: a shut *2
- * questions* would hide the thing meant to make the reader stop. The words
- * are the model's; only the question, never its premise (quiz.md § It
- * adapts). Pressing one is the prose line's press: Learn › Quiz at that
- * question. Plan 261029c.
- */
-function QuizNote({
-  batchId,
-  questions,
-  onOpen,
-}: {
-  batchId: string;
-  questions: readonly QuizQuestion[];
-  onOpen?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
-}) {
-  return (
-    <div className="marg-quiz">
-      <span className="marg-stamp" data-marg-tip="quiz">Quiz</span>
-      {questions.map((q) => (
-        <button
-          key={q.id}
-          type="button"
-          className="marg-quiz-q"
-          data-marg-tip="quiz"
-          data-marg-voice="ai"
-          disabled={onOpen === undefined}
-          onClick={() => onOpen?.(batchId, q.id)}
-        >
-          <MessageCircleQuestionMark size={12} aria-hidden="true" className="marg-quiz-icon" />
-          <span className={withVoice("marg-quiz-text", "ai")}>{q.question}</span>
-        </button>
-      ))}
     </div>
   );
 }
@@ -1302,8 +1259,6 @@ export type MarginFeed = {
   notes: MarginNotesList;
   /** Situate's findings (plan 261024o): the owner's, whatever the experimental switch says since spya-pkpqch. */
   literature: MarginLiterature | null;
-  /** The explanations (plan 261028c): the owner's, with the experimental switch on, and never a stale list. */
-  explanations: readonly Explanation[] | null;
 };
 
 export const NO_OWNER_FEED: MarginFeed = {
@@ -1314,7 +1269,6 @@ export const NO_OWNER_FEED: MarginFeed = {
   relations: null,
   notes: null,
   literature: null,
-  explanations: null,
 };
 
 /**
@@ -1390,41 +1344,49 @@ export function OwnerMarginFeed({
      sits found to be beside the passage as he reads (spya-pkpqch). The read
      is a component of its own, so it can hand back none when unmounted. */
   const [literature, setLiterature] = useState<MarginLiterature | null>(null);
-  /* **The explanations, only with the experimental switch on** (plan
-     261028c), as the literature findings were until spya-pkpqch: the mode is
-     behind the switch, so its lines are too. A component of its own, mounted
-     only then, so with the switch off nothing asks `/api/explanations`. */
-  const { on: experimental } = useExperimental();
-  const [explanations, setExplanations] = useState<readonly Explanation[] | null>(null);
+  /* The explanations are not read here: the prose underlines them in every
+     mode, so Reader reads them once for both (`ExplanationsFeed` below; plan
+     261029j § 5). */
   useEffect(() => {
-    onFeed({ ideas, faq, timeline, claims, relations, notes, literature, explanations });
-  }, [ideas, faq, timeline, claims, relations, notes, literature, explanations, onFeed]);
+    onFeed({ ideas, faq, timeline, claims, relations, notes, literature });
+  }, [ideas, faq, timeline, claims, relations, notes, literature, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
-  return (
-    <>
-      <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />
-      {experimental && <ExplanationsMarginFeed slug={slug} onExplanations={setExplanations} />}
-    </>
-  );
+  return <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />;
 }
 
 /**
- * **The explanations, read and never made** — `useExplanationsRead`, the read
- * half with no job under it, and `useStepFinished` for a run finished while the
- * column is open. **A stale list is not drawn** (the article moved under it);
- * one written by an older prompt or for an older profile still is, its words
- * checked against each block before drawing (notes.ts § `explainedBlocks`).
- * Unmounted, it hands back none.
+ * **The owner's explanations, read and never made** — for the margin's notes
+ * and the prose's underline both (plan 261029j § 5), so Reader mounts it in
+ * every mode, for an owner with the experimental switch on, and nowhere else:
+ * with the switch off nothing asks `/api/explanations` (plan 261028c).
+ * `useExplanationsRead`, the read half with no job under it, and
+ * `useStepFinished` for a run finished while the page is open. **A stale list
+ * is not drawn** (the article moved under it); one written by an older prompt
+ * or for an older profile still is, its words checked against each block
+ * before drawing (notes.ts § `explainedBlocks`; annotate.ts §
+ * `explainedMarks`). Unmounted, it hands back none.
  */
-function ExplanationsMarginFeed({
+export function ExplanationsFeed({
   slug,
+  bandOpen,
   onExplanations,
 }: {
   slug: string;
+  /**
+   * Explanations is the mode. While it is open, its own read owns both
+   * revalidation and job completion and publishes the answer back to Reader;
+   * this feed must not issue the same GET independently (code review of
+   * 261029j). Closed, this feed hears completions for the prose and margin.
+   */
+  bandOpen: boolean;
   onExplanations(explanations: readonly Explanation[] | null): void;
 }) {
   const read = useExplanationsRead(slug);
-  useStepFinished(slug, "explanations", read.refresh);
+  const { refresh } = read;
+  const refreshWhileBandClosed = useCallback(() => {
+    if (!bandOpen) void refresh();
+  }, [bandOpen, refresh]);
+  useStepFinished(slug, "explanations", refreshWhileBandClosed);
   const list = read.status === "ready" && !read.stale ? (read.explanations?.explanations ?? null) : null;
   useEffect(() => {
     onExplanations(list);

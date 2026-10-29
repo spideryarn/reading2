@@ -96,6 +96,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   List,
@@ -967,6 +968,10 @@ export function QuizPanel({
       arrival.questionId !== shownId &&
       questions.some((q) => q.id === arrival.questionId)
     ) return;
+    if (owner.attempt?.claimedElsewhere) {
+      owner.showKept(shownId);
+      return;
+    }
     if (owner.attempt !== null || typed !== "") return;
     setTyped(keptHere.answer);
     owner.showKept(shownId);
@@ -1284,7 +1289,14 @@ export function QuizPanel({
                     so hiding it leaves nothing dangling. Never in the list
                     below; see `QuestionList`. */}
                 {premised && <p className="quiz-premise">{question.premise}</p>}
-                <p className="quiz-question">{question.question}</p>
+                {/* **Green once answered** (plan 261029i, Greg's spya-jzgrua),
+                    the margin's line's class: answered, never right or wrong.
+                    Not while the box holds words the mark is not about —
+                    those are an answer nobody has marked yet. */}
+                <p className={answered.has(question.id) && !superseded ? "quiz-question quiz-answered" : "quiz-question"}>
+                  {answered.has(question.id) && !superseded && <Check size={14} aria-hidden="true" className="quiz-tick" />}
+                  {question.question}
+                </p>
 
                 <textarea
                   ref={box}
@@ -1653,6 +1665,9 @@ function sentenceCase(text: string): string {
  * the mark and not about the reader — it states which answer this describes and
  * how to get one for the new answer, and it does not scold.
  */
+/** The band's mark, for the margin's answer box (marginalia/MarginQuiz.tsx, plan 261029i). */
+export { Mark as QuizMarkText };
+
 function Mark({
   attempt,
   superseded,

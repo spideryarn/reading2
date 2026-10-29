@@ -38,6 +38,7 @@ import {
   citationWebNotes,
   comments as commentsTable,
   glossaryLookups,
+  readingPlace,
   readingTime,
   glossaryHiddenEntries,
   articleTags,
@@ -268,6 +269,12 @@ export const ARTICLE_TABLE_COVERAGE = {
   reading_time: {
     rollback: { exported: true, into: "reading-time.json" },
     bundle: { exported: true, into: "augmentations/reading-time.json" },
+  },
+  /* The paragraph the owner last read, on any device — reader state, exported
+     for `reading_time`'s reason. Plan 261029f. */
+  reading_place: {
+    rollback: { exported: true, into: "reading-place.json" },
+    bundle: { exported: true, into: "augmentations/reading-place.json" },
   },
   /* The glossary entries the owner hid — reader state beside the glossary, as
      `reading_time` is beside the blocks, and exported for its reason: it is the
@@ -884,6 +891,8 @@ export interface ArticleRows {
   /** One per cited work pressed: a web note or a completed *none*. Plan 261018o stage 2. */
   readonly citationWebNotes: readonly (typeof citationWebNotes.$inferSelect)[];
   readonly readingTime: readonly (typeof readingTime.$inferSelect)[];
+  /** At most one: where the owner last was. Plan 261029f. */
+  readonly readingPlace: readonly (typeof readingPlace.$inferSelect)[];
   /** The glossary entries the owner hid, by entry id. Plan 261002c § 2. */
   readonly glossaryHiddenEntries: readonly (typeof glossaryHiddenEntries.$inferSelect)[];
   /** The reader's own tags, by tag. Plan 261003d. */
@@ -1140,6 +1149,8 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(readingTime)
     .where(eq(readingTime.articleId, article.id))
     .orderBy(asc(readingTime.blockId));
+  /* At most one row: the primary key is the article. */
+  const place = await tx.select().from(readingPlace).where(eq(readingPlace.articleId, article.id));
   const tags = await tx
     .select()
     .from(articleTags)
@@ -1182,6 +1193,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     citationInvestigations: investigations,
     citationWebNotes: webNotes,
     readingTime: secondsRead,
+    readingPlace: place,
     glossaryHiddenEntries: hiddenTerms,
     articleTags: tags,
     quizAttempts: quizMarks,

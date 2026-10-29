@@ -51,8 +51,10 @@ import {
   type MarginFeed,
   NO_OWNER_FEED,
   OwnerMarginFeed,
+  ExplanationsFeed,
   useMarginLayout,
 } from "../marginalia/MarginaliaColumn.js";
+import { type MarginQuiz, MarginQuizContext } from "../marginalia/MarginQuiz.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
 import { openFromCiteCard } from "../useBibliography.js";
@@ -2464,6 +2466,16 @@ export function Reader({
    * not re-render `TableView`.
    */
   const [ownerFeed, setOwnerFeed] = useState<MarginFeed>(NO_OWNER_FEED);
+  /* **The owner's explanations, for the margin and the prose both** (plan
+     261029j § 5): read by `ExplanationsFeed`, mounted below for an owner with
+     the experimental switch on, in every mode — the prose underlines them
+     whether or not the margin is open. Null otherwise, and for a stale list. */
+  const [ownerExplanations, setOwnerExplanations] = useState<readonly Explanation[] | null>(null);
+  /* Gate the value at the render boundary too. `ExplanationsFeed` clears its
+     parent on unmount, but passive-effect cleanup is after the switch-off
+     render; relying on it leaves one paint in which the hidden experiment's
+     marks and margin notes are still present. */
+  const drawnExplanations = isOwner && experimental.on ? ownerExplanations : null;
   const marginaliaIdeas = owner ? ownerFeed.ideas : (artefacts?.ideas?.ideas ?? null);
   /* **Other modes' items, already stored** (report 82, plan 261002b): the
      owner's FAQ and Reception from the feed's read-only reads, a visitor's from
@@ -2678,6 +2690,35 @@ export function Reader({
   const blockText = useMemo(
     () => new Map(article.blocks.map((b) => [b.id, b.text])),
     [article.blocks],
+  );
+  /**
+   * **What a Quiz line in the margin needs to be answered there** (plan
+   * 261029i; Greg, spya-jzgrua: *"avoid having to jump away from marginalia
+   * mode to the learn mode"*). A context, not a prop through `marginNotes`,
+   * so `memo(TableView)` does not hear about it — `MarginCiteActions`' reason.
+   * Built from the read's fields rather than the read, which is a new object
+   * on every render (GPT Sol's plan review, F4). Owner only.
+   */
+  const quizKept = quizRead?.kept;
+  const quizNoteMark = quizRead?.noteMark;
+  const quizRefresh = quizRead?.refresh;
+  const quizClaimMark = quizRead?.claimMark;
+  const marginQuiz = useMemo<MarginQuiz | null>(
+    () =>
+      drawnQuiz && quizKept && quizNoteMark && quizRefresh && quizClaimMark
+        ? {
+            slug: slug,
+            quiz: drawnQuiz,
+            stale: false,
+            kept: quizKept,
+            noteMark: quizNoteMark,
+            refresh: quizRefresh,
+            claimMark: quizClaimMark,
+            blocks: blockText,
+            onJump: jumpTo,
+          }
+        : null,
+    [slug, drawnQuiz, quizKept, quizNoteMark, quizRefresh, quizClaimMark, blockText, jumpTo],
   );
 
   /**
@@ -2897,7 +2938,7 @@ export function Reader({
       literature: isOwner ? ownerFeed.literature : null,
       /* The owner's only, and the feed reads them only with the experimental
          switch on: the mode is behind it (plan 261028c). */
-      explanations: isOwner ? ownerFeed.explanations : null,
+      explanations: drawnExplanations,
       /* The owner's quiz, from the read the prose and the band share — never a
          stale one, the prose's rule (plan 261029c). */
       quiz: isOwner && drawnQuiz ? drawnQuiz : null,
@@ -2963,7 +3004,7 @@ export function Reader({
     ownerFeed.relations,
     ownerFeed.notes,
     ownerFeed.literature,
-    ownerFeed.explanations,
+    drawnExplanations,
     drawnQuiz,
     openQuizAt,
     marginaliaClaims,
@@ -4435,6 +4476,7 @@ export function Reader({
             slug={slug}
             onJump={bandJump}
             onAsk={askExplanationInChat}
+            onExplanations={setOwnerExplanations}
             focus={explanationFocus}
             onFocusTaken={explanationFocusTaken}
           />
@@ -5056,6 +5098,7 @@ export function Reader({
         </div>
       )}
       <MarginCiteActions.Provider value={marginCiteActions}>
+      <MarginQuizContext.Provider value={marginQuiz}>
       <MarginExplanationActions.Provider value={marginExplanationActions}>
       <TableView
         article={article}
@@ -5132,6 +5175,8 @@ export function Reader({
         terms={termSelections}
         cites={citeSelections}
         xrefs={xrefs}
+        /* The owner's explanations, underlined in every mode (plan 261029j). */
+        explained={drawnExplanations}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}
         hitHues={hitHues}
@@ -5140,6 +5185,7 @@ export function Reader({
         onOpenComment={openCommentDialog}
       />
       </MarginExplanationActions.Provider>
+      </MarginQuizContext.Provider>
       </MarginCiteActions.Provider>
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and
@@ -5573,6 +5619,11 @@ export function Reader({
            view (plan 261010e). Owner only, as the marks are. On a row with
            no note it also starts the one web search (plan 261018o). */
         onOpenCitedWork={owner ? openCitedWorkFromCard : null}
+        /* **An explained passage's card** (plan 261029j § 4): the list the
+           prose underlines, and the margin note's own two senders, so a chat
+           started from the card records the same origin as one from the band. */
+        explanations={drawnExplanations}
+        explanationActions={marginExplanationActions}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}
@@ -5580,6 +5631,7 @@ export function Reader({
         onJump={jumpTo}
         onFollowNote={followNote}
       />
+      {owner && experimental.on && <ExplanationsFeed slug={slug} bandOpen={mode === "explanations"} onExplanations={setOwnerExplanations} />}
 
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —

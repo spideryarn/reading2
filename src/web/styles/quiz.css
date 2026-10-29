@@ -122,6 +122,31 @@
   line-height: 1.45;
 }
 
+/* **A quiet green for an answered question** — Greg, 2026-10-29
+   (spya-jzgrua): *"some kind of nice feedback, visual feedback actually … not
+   gamification. But just some of that sense of satisfaction of, you know,
+   turning it a subtle green"*. One class, the band's question and the
+   margin's line alike (controls.md § Controls that do the same job look the
+   same). It says *answered*, never right or wrong: the hidden verdict is still
+   not drawn (quiz.md). A pale ground, so the words keep the ink's contrast;
+   `--positive` (styles/tokens.css) is the tick's colour, held at 4.5:1 there.
+   Plan 261029i § Stage 3. */
+.quiz-answered {
+  background: color-mix(in oklab, var(--positive) 13%, transparent);
+  transition: background-color 700ms ease;
+}
+.quiz-answered .marg-quiz-tick,
+.quiz-answered .quiz-tick { color: var(--positive); }
+.quiz-question.quiz-answered {
+  padding: 0.15rem 0.4rem;
+  margin-left: -0.4rem;
+  margin-right: -0.4rem;
+  border-radius: var(--radius);
+}
+@media (prefers-reduced-motion: reduce) {
+  .quiz-answered { transition: none; }
+}
+
 .quiz-premise + .quiz-question {
   margin-top: 0.2rem;
 }
@@ -158,7 +183,8 @@
   /* The answer button loses `.quiz-go` after a mark but remains pressable: it
      can submit an edited answer. Size the row's Send-shaped button, not the
      transient fill class. */
-  .quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
+  .quiz-actions .chat-send,
+  .marg-quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
 }
 
 .quiz-actions {

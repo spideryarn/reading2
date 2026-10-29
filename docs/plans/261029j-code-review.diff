@@ -1,0 +1,938 @@
+diff --git a/docs/project/explanations.md b/docs/project/explanations.md
+index 7cd23bbd3..4cb6c8081 100644
+--- a/docs/project/explanations.md
++++ b/docs/project/explanations.md
+@@ -145,9 +145,39 @@ In the margin, a block with a fresh Explanation does not also draw the relations
+ note ([marginalia.md](marginalia.md)); whether those notes are now redundant is one of the things
+ the live runs decide.
+ 
++## The underline in the prose
++
++> New Explanations mode: Can we indicate when, in the text, when something's being explained,
++> perhaps using something, an underline quite similar to the glossary.
++>
++> — Greg, 2026-10-29 (spya-njkskc)
++
++Since 2026-10-29 every explanation in a fresh list is underlined where its quoted words are, **in
++every mode**, for the owner with the experimental switch on: Glossary's 2px dotted rule, in a teal
++(`--explained`) so it can be told from a term's orange. Resting on it opens the prose card's
++*explained* section — the explanation, its labels, *Ask in chat · Open in Explanations* — and a
++finger's first tap does, its second opening the band on that row. Plan
++[261029j](../plans/261029j-explained-passages-underlined-in-the-prose.md); the survey of every mark
++and its card is [tooltips.md § Every card on a mode's mark](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode).
++
++- **Placed as a citation is** (`explainedMarks`, which shares `citeMarks`' finder in
++  [annotate.ts](../../src/web/annotate.ts)): the only occurrence of the quote in the block's
++  rendered text, or no mark — never the whole block.
++- **Who keeps the line where marks share words.** A glossary term inside the passage keeps its
++  orange rule on its own words and the teal runs either side; the card draws the term, then the
++  explanation. A comment or chat keeps its solid line, and a tap on it still opens it. A citation,
++  a cross-reference (both `text-decoration`), a quote's fill and a search's outline all show
++  alongside. The CSS rule is in `:where()`, weighing nothing, so every other mark wins the border
++  without a pairwise override ([annotations.css](../../src/web/styles/annotations.css) § an
++  explained passage).
++- **One read for the prose and the margin**: `ExplanationsFeed`
++  ([MarginaliaColumn.tsx](../../src/web/marginalia/MarginaliaColumn.tsx)), mounted by Reader for an
++  owner with the switch on, in every mode; it reads again when the band opens, so the three agree.
++  A stale list draws neither.
++- **Not built**: a pressed state when a row is chosen in the band, a keyboard letter like
++  Glossary's G, and whether the underline should follow the band's threshold (the margin does not
++  either). How a dozen clause-long underlines reads on a real article waits for the first live run.
++
+ ## Not built yet
+ 
+-- **The underline in the prose** Greg asked for. It has to share the text with glossary underlines,
+-  citation marks, cross-references and comments, so it needs a design for who wins where, drawn
+-  against real explanations. Queued.
+ - A copy for visitors to a shared article; a chat thread of its own per explanation.
+diff --git a/docs/project/tooltips.md b/docs/project/tooltips.md
+index c12667c34..c14ce8a18 100644
+--- a/docs/project/tooltips.md
++++ b/docs/project/tooltips.md
+@@ -811,6 +811,7 @@ This is the single home for which marks have a card. As of 2026-10-20:
+ | Quote, `mark.hit[data-quote]` | every mode | `QuoteCard` | *Open in Quotes*: `?quote=`, the bar lowered if needed; Quotes scrolls a selected row in |
+ | Citation, `mark.cite` | every mode, owner only | `CiteCard` | *Open in Sources*: Bibliography, `openBibliographyWork`'s one-shot focus (no `?cite=`, no selection) |
+ | Not on the prose: Marginalia's *Cites* line (since 2026-10-20) | with the column, owner only | `CiteCard`, the same | the same ([marginalia.md](marginalia.md#every-note-says-where-it-came-from)) |
++| Explained passage, `mark.explained` (since 2026-10-29) | every mode, owner only, experimental switch on | `ExplainedCard` | *Open in Explanations*: the margin note's `openExplanationInBand`, the bar lowered if it hides the row; a finger's second tap does the same ([explanations.md](explanations.md#the-underline-in-the-prose)) |
+ | Cross-reference, `mark.xref` | every mode | `BlockLinkCard` | none needed — it is a link to another passage, not a mode's |
+ | Highlight, comment, Referee placement, `mark.cmt` | every mode | **none** | a press opens the comment's dialog (`?note=`) |
+ | Chat anchor, `mark.chat` | every mode | **none** | a press opens the floating conversation (`?thread=`) |
+diff --git a/src/web/DesignPage.tsx b/src/web/DesignPage.tsx
+index 07f0dfd03..30cb158d5 100644
+--- a/src/web/DesignPage.tsx
++++ b/src/web/DesignPage.tsx
+@@ -2000,6 +2000,20 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
+     marks: [
+       { id: "design-0", start: 25, end: 65, kind: "xref", label: "mind is software running on wet hardware" },
+     ],
++  },  {
++    /* The seventh kind, 2026-10-29 (spya-njkskc, plan 261029j): a passage one
++       of the owner's Explanations is about. Glossary's dotted rule in a teal. */
++    label: "A passage the AI explains — Glossary's dotted rule, in teal",
++    marks: [{ id: "e", start: 25, end: 65, kind: "explained" }],
++  },
++  {
++    /* The overlap the plan was decided on: a glossary term inside an explained
++       passage keeps its orange rule, and the teal runs either side. */
++    label: "A glossary term inside an explained passage — the term keeps its orange rule",
++    marks: [
++      { id: "e", start: 25, end: 65, kind: "explained" },
++      { id: "t", start: 33, end: 41, kind: "term" },
++    ],
+   },
+ ];
+ 
+@@ -2017,4 +2031,6 @@ export const SPECIMEN_OUT: string[] = [
+   '<p>He rejects the idea that <mark class="cmt" data-comment="spya-cmt001">mind is </mark><em><mark class="cmt" data-comment="spya-cmt001">software</mark></em><mark class="cmt" data-comment="spya-cmt001" data-mark-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+   '<p>He rejects the idea that <mark class="chat" data-chat="spya-chat01">mind is </mark><em><mark class="chat" data-chat="spya-chat01">software</mark></em><mark class="chat" data-chat="spya-chat01" data-chat-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+   '<p>He rejects the idea that <mark class="xref" data-xref="design-0" tabindex="0" role="link" aria-label="mind is software running on wet hardware">mind is </mark><em><mark class="xref" data-xref="design-0">software</mark></em><mark class="xref" data-xref="design-0"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
++  '<p>He rejects the idea that <mark class="explained" data-explained="e">mind is </mark><em><mark class="explained" data-explained="e">software</mark></em><mark class="explained" data-explained="e"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
++  '<p>He rejects the idea that <mark class="explained" data-explained="e">mind is </mark><em><mark class="term explained" data-term="t" data-explained="e">software</mark></em><mark class="explained" data-explained="e"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+ ];
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index b3273de01..e330d572c 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -57,6 +57,7 @@ import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
+ import {
+   type BlockId,
+   type CitedWork,
++  type Explanation,
+   type GlossaryEntry,
+   type Job,
+   MAX_MENTIONS,
+@@ -139,6 +140,7 @@ import { helpHref, modeAnchor } from "./help/help-anchors.js";
+ import { readHref } from "./router.js";
+ import { internalTarget } from "./internal-links.js";
+ import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
++import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "./explanation-labels.js";
+ import { MODE_ICON } from "./mode-icons.js";
+ import { MODE_LABEL } from "../title-text.js";
+ import type { Mode } from "../modes.js";
+@@ -242,6 +244,12 @@ interface Hit {
+    * depends on that.
+    */
+   quoteKeys: string[];
++  /**
++   * The explanation ids on the words (`data-explained`), filtered against the
++   * owner's list. At most one in practice — one per block — but nothing here
++   * depends on it. Plan 261029j § 4.
++   */
++  explainedIds: string[];
+   /** The href, already described. Null when the pointer is on a bare term. */
+   link: LinkPreview | null;
+   /** For an in-article anchor: the block it resolves to. */
+@@ -310,6 +318,8 @@ function HoverCard({
+   onCheckCitedWork = null,
+   onOpenCitedWork = null,
+   citeCheck = null,
++  explanations = null,
++  explanationActions = null,
+   quotes = null,
+ }: {
+   entries: GlossaryEntry[];
+@@ -487,6 +497,19 @@ function HoverCard({
+    * pointer or keyboard focus (not a tap, C8), from a paragraph that cites it.
+    */
+   citeCheck?: CiteCheckSenders | null;
++  /**
++   * **The owner's explanations, whose passages the prose underlines** — the
++   * same list (Reader's `ownerExplanations`), so a mark finds its explanation.
++   * `null` or absent for a visitor and with the experimental switch off, and
++   * then `read` never looks for one. Plan 261029j § 4.
++   */
++  explanations?: readonly Explanation[] | null;
++  /**
++   * ***Ask in chat* and *Open in Explanations* on an explained passage's card**
++   * — the margin note's own senders (Reader's `marginExplanationActions`), so
++   * all three doors record one origin. `null` draws neither button.
++   */
++  explanationActions?: ExplanationActions | null;
+   /**
+    * **The quotes the prose fills, and what the card's buttons do with one**
+    * — `QuoteCard`. `null` where there are none to point at; then `read` never
+@@ -501,6 +524,10 @@ function HoverCard({
+   /* The same indexing for the citations, for the same reason: `read` runs on
+      every `pointerover` and must look things up rather than scan. */
+   const byWork = useMemo(() => new Map(works.map((w) => [w.id, w])), [works]);
++  const byExplanation = useMemo(
++    () => new Map((explanations ?? []).map((e) => [e.id, e])),
++    [explanations],
++  );
+ 
+   /* Called on every hover, so it looks things up and scans nothing.
+ 
+@@ -558,6 +585,21 @@ function HoverCard({
+           )
+         : [];
+ 
++      /* **The explained passage, read both ways**, as the terms and the
++         citations are: a keyboard focus lands on a link inside the passage,
++         whose marks are its descendants (GPT Sol, plan review of 261029j, P2-5).
++         Filtered against the owner's list, so a stale or forged id draws
++         nothing. */
++      const explainedMark = byExplanation.size > 0 ? el.closest("mark.explained") : null;
++      const explainedEls = explainedMark
++        ? [explainedMark]
++        : anchorEl && byExplanation.size > 0
++          ? [...anchorEl.querySelectorAll("mark.explained")]
++          : [];
++      const explainedIds = [
++        ...new Set(explainedEls.flatMap((m) => (m.getAttribute("data-explained") ?? "").split(" "))),
++      ].filter((id) => byExplanation.has(id));
++
+       const href = anchorEl?.getAttribute("href") ?? null;
+       const link = href ? describeLink(href, sourceUrl) : null;
+ 
+@@ -606,18 +648,23 @@ function HoverCard({
+         : null;
+ 
+       if (note) {
+-        return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false, authorTitle };
++        return { termIds, citeIds, quoteKeys, explainedIds, link, anchor, inBlock, href, note, back: false, authorTitle };
+       }
+ 
+       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
+       const marked =
+-        termIds.length > 0 || citeIds.length > 0 || quoteKeys.length > 0 || authorTitle !== null;
++        termIds.length > 0 ||
++        citeIds.length > 0 ||
++        quoteKeys.length > 0 ||
++        explainedIds.length > 0 ||
++        authorTitle !== null;
+       if (!marked && !link) return null;
+       if (!marked && link?.kind === "anchor" && !anchor) return null;
+       return {
+         termIds,
+         citeIds,
+         quoteKeys,
++        explainedIds,
+         link,
+         anchor,
+         inBlock,
+@@ -627,7 +674,7 @@ function HoverCard({
+         authorTitle,
+       };
+     },
+-    [byId, byWork, sourceUrl, blockText, notes, quotes],
++    [byId, byWork, byExplanation, sourceUrl, blockText, notes, quotes],
+   );
+ 
+   const { shown, close, anchorProps, arrowRef, context } = useHoverCard<Hit>({
+@@ -660,7 +707,9 @@ function HoverCard({
+        a titled `<abbr>` or `<span>` opens the card by itself, where the browser
+        used to draw its grey box. Pointer only, as the quote is: a `<span>` takes
+        no focus, and a finger never got the grey box either. Plan 261018n. */
+-    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}], ${XREF_SELECTOR}`,
++    /* **And an explained passage, since 2026-10-29** (plan 261029j § 4):
++       Glossary's rule, pointer, keyboard focus of a link round it, and tap. */
++    selector: `mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), mark.explained:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href], .prose [${AUTHOR_TITLE_ATTR}], ${XREF_SELECTOR}`,
+     /* Both containers survive their own re-render, which is the whole
+        requirement — see `host`. A chat answer's `<p>` does not, so the
+        fallback would leave a card pinned to a detached node as an answer
+@@ -671,8 +720,10 @@ function HoverCard({
+        passage the reader rests in while reading, not a word they point at to
+        ask. A quote that is also a term, a citation or a link keeps the
+        ordinary rest, because the reader may be asking about those. */
++    /* An explained passage is clause-long and rested in while reading, as a
++       quote is, so it waits as long when it is all that is on the words. */
+     openDelay: (hit) =>
+-      hit.quoteKeys.length > 0 &&
++      (hit.quoteKeys.length > 0 || hit.explainedIds.length > 0) &&
+       hit.termIds.length === 0 &&
+       hit.citeIds.length === 0 &&
+       !hit.link &&
+@@ -750,7 +801,17 @@ function HoverCard({
+        cross-reference would show the term. Excluded, the tap is
+        BlockLinkCard's: its first tap shows the target passage, its second falls
+        through to TableView's click and jumps (plan 261018e, spya-yk33ke). */
+-    tapSelector: `mark.term:not(.xref), mark.cite:not(.xref), a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
++    /* **And an explained passage** (plan 261029j § 4): a `mark` that is not a
++       quote, so TableView's `NOT_A_BLOCK_SELECTION` already swallows its tap
++       and, left out of here, it would be a clause-long dead hole — the reason
++       `mark.cite` is in. First tap shows the card; a second opens
++       Explanations on its row (the last branch of `onCommit`).
++
++       **Not over a comment or a chat** (`:not(.cmt):not(.chat)`): those are the
++       reader's own and a tap opens them (TableView.tsx § the mark click); a
++       claimed tap would cancel that click and the comment could not be opened
++       by a finger (GPT Sol, plan review of 261029j, P1). */
++    tapSelector: `mark.term:not(.xref), mark.cite:not(.xref), mark.explained:not(.xref):not(.cmt):not(.chat), a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
+     /* The second tap on the same words, which is what the foot's "in the
+        glossary" button does. Both, rather than the button alone: on a touch
+        screen the words are a far bigger target than a 10px-tall row of text,
+@@ -808,12 +869,23 @@ function HoverCard({
+       if (data.link?.kind === "external" && data.href) {
+         close();
+         window.open(data.href, "_blank", "noopener,noreferrer");
++        return;
++      }
++      /* **An explained passage's second tap opens Explanations on its row** —
++         the glossary's rule. Last, so a term inside the passage and a link
++         the passage contains keep the second tap they already had; the card
++         that is up names *Open in Explanations* for those. */
++      const explained = data.explainedIds.filter((id) => byExplanation.has(id));
++      const onlyExplained = explained.length === 1 ? explained[0] : undefined;
++      if (onlyExplained && explanationActions) {
++        close();
++        explanationActions.onOpen(onlyExplained);
+       }
+     },
+   });
+ 
+   if (!shown) return null;
+-  const { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back, authorTitle } =
++  const { termIds, citeIds, quoteKeys, explainedIds, link, anchor, inBlock, href, note, back, authorTitle } =
+     shown.data;
+   const found = termIds
+     .map((id) => byId.get(id))
+@@ -826,12 +898,24 @@ function HoverCard({
+   const quoted = quoteKeys
+     .map((key) => quotes?.byKey.get(key))
+     .filter((q): q is Quote => q !== undefined);
+-  if (found.length === 0 && cited.length === 0 && quoted.length === 0 && !link && !authorTitle) {
++  /* The same, for the explanations: a Find more can replace the list. */
++  const explainedHere = explainedIds
++    .map((id) => byExplanation.get(id))
++    .filter((e): e is Explanation => e !== undefined);
++  if (
++    found.length === 0 &&
++    cited.length === 0 &&
++    quoted.length === 0 &&
++    explainedHere.length === 0 &&
++    !link &&
++    !authorTitle
++  ) {
+     return null;
+   }
+ 
+   const label = [
+     ...found.map((e) => e.name),
++    ...explainedHere.map(() => "explained"),
+     ...cited.map((w) => w.title),
+     ...quoted.map(() => "quote"),
+     authorTitle ? "from the article" : null,
+@@ -880,6 +964,16 @@ function HoverCard({
+               onClose={close}
+             />
+           ))}
++          {/* **The explanation, under the term**: what a word means, then
++              what the passage it sits in is missing — plan 261029j § 3. */}
++          {explainedHere.map((e) => (
++            <ExplainedCard
++              key={e.id}
++              explanation={e}
++              actions={explanationActions}
++              onClose={close}
++            />
++          ))}
+           {/* The citation half, under the term half and above the link half.
+               That order is the one the link half already argues for: the reader
+               is in the middle of a sentence, so what the word means comes first,
+@@ -937,7 +1031,7 @@ function HoverCard({
+           {authorTitle && (
+             <AuthorTitlePart
+               words={authorTitle}
+-              divided={found.length > 0 || cited.length > 0 || quoted.length > 0}
++              divided={found.length > 0 || cited.length > 0 || quoted.length > 0 || explainedHere.length > 0}
+             />
+           )}
+           {/* The note in full, in place of the link half rather than under it.
+@@ -948,7 +1042,7 @@ function HoverCard({
+           {note && (
+             <NoteCard
+               note={note}
+-              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
++              divided={found.length > 0 || quoted.length > 0 || explainedHere.length > 0 || !!authorTitle}
+               onGo={() => {
+                 close();
+                 onFollowNote(
+@@ -970,7 +1064,7 @@ function HoverCard({
+               facts={facts}
+               add={add}
+               back={back}
+-              divided={found.length > 0 || quoted.length > 0 || !!authorTitle}
++              divided={found.length > 0 || quoted.length > 0 || explainedHere.length > 0 || !!authorTitle}
+               onJump={(id) => { close(); onJump(id); }}
+             />
+           )}
+@@ -2964,3 +3058,69 @@ export function TermCard({
+     </div>
+   );
+ }
++
++/**
++ * **What an explained passage's card can do**: the margin note's two senders
++ * (MarginaliaColumn.tsx § `MarginExplanationSenders`, which this matches), so
++ * the card, the margin and the band start one chat origin and land on one row.
++ */
++export type ExplanationActions = {
++  onAsk(explanation: Explanation): void;
++  onOpen(explanationId: string): void;
++};
++
++/**
++ * **An explained passage, as a section of the card** — Greg, 2026-10-29
++ * (spya-njkskc): *"indicate when, in the text, when something's being
++ * explained, perhaps using … an underline quite similar to the glossary"*.
++ * docs/plans/261029j-explained-passages-underlined-in-the-prose.md § 4.
++ *
++ * What the margin's *Explained* note shows opened, in the same words: the
++ * explanation in the AI's face, its labels (`explanationLabels`, the one copy
++ * the band and the margin draw), and a foot of *Ask in chat* and
++ * `OpenInMode`. No quote line: the reader is pointing at the words.
++ */
++function ExplainedCard({
++  explanation,
++  actions,
++  onClose,
++}: {
++  explanation: Explanation;
++  actions: ExplanationActions | null;
++  onClose(): void;
++}) {
++  const labels = explanationLabels(explanation);
++  return (
++    <div className="prose-card-body prose-card-explained">
++      <p className="prose-card-label">
++        <Sparkles size={9} aria-hidden="true" />
++        explained
++      </p>
++      <p className="prose-card-text">
++        <span className={voiceClass("ai")}>{explanation.text}</span>
++      </p>
++      {labels.length > 0 && <p className="prose-card-meta prose-card-explained-labels">{labels.join(" · ")}</p>}
++      {actions && (
++        <p className="prose-card-foot prose-card-foot-wraps">
++          <span className="prose-card-acts">
++            <CardAskInChat
++              label={ASK_EXPLANATION_IN_CHAT}
++              className="prose-card-act"
++              onAsk={() => {
++                onClose();
++                actions.onAsk(explanation);
++              }}
++            />
++            <OpenInMode
++              mode="explanations"
++              onPress={() => {
++                onClose();
++                actions.onOpen(explanation.id);
++              }}
++            />
++          </span>
++        </p>
++      )}
++    </div>
++  );
++}
+diff --git a/src/web/TableView.tsx b/src/web/TableView.tsx
+index 0553e4013..19d3af7c2 100644
+--- a/src/web/TableView.tsx
++++ b/src/web/TableView.tsx
+@@ -27,6 +27,7 @@ import type {
+   BlockId,
+   Comment,
+   Crossref,
++  Explanation,
+ } from "../types.js";
+ import { XREF_NONCE, xrefTarget } from "./xref.js";
+ import { useRenderCount } from "./perf.js";
+@@ -39,6 +40,7 @@ import {
+   resolveMark,
+   termMarks,
+   citeMarks,
++  explainedMarks,
+   xrefMarks,
+   type CiteSelection,
+   type Mark,
+@@ -127,6 +129,11 @@ interface ProseEntry {
+    * when something else happened to move (see the `proseHtml` dependencies).
+    */
+   xrefs: readonly Mark[];
++  /**
++   * `explainedMarksByBlock`'s array for this block — the passage explained
++   * here, if any. In the key for `cites`' reason: the list is a separate GET.
++   */
++  explained: readonly Mark[];
+   /**
+    * `openTerm`, but **only when this block carries that term** — otherwise
+    * null.
+@@ -191,6 +198,7 @@ function sameInputs(
+   hits: readonly Mark[],
+   cites: readonly Mark[],
+   xrefs: readonly Mark[],
++  explained: readonly Mark[],
+   openTerm: string | null,
+ ): boolean {
+   return (
+@@ -200,6 +208,7 @@ function sameInputs(
+     had.hits === hits &&
+     had.cites === cites &&
+     had.xrefs === xrefs &&
++    had.explained === explained &&
+     had.openTerm === openTerm
+   );
+ }
+@@ -606,6 +615,14 @@ interface Props {
+    * `cites`' reason.
+    */
+   xrefs?: readonly Crossref[] | null | undefined;
++  /**
++   * **The passages the owner's Explanations explain**, underlined in every
++   * mode — null for a visitor, with the experimental switch off, or for a
++   * stale list (Reader decides). `explainedMarks` in annotate.ts places them;
++   * docs/plans/261029j-explained-passages-underlined-in-the-prose.md.
++   * Optional, for `cites`' reason.
++   */
++  explained?: readonly Pick<Explanation, "id" | "blockId" | "quote">[] | null | undefined;
+   /**
+    * The term the reader has pressed in the glossary band, of the many drawn.
+    *
+@@ -771,6 +788,7 @@ function TableViewInner({
+   terms,
+   cites,
+   xrefs,
++  explained,
+   openTerm,
+   hitMarks,
+   hitStrength,
+@@ -1050,6 +1068,15 @@ function TableViewInner({
+     [blocks, xrefs],
+   );
+ 
++  /**
++   * The explained passages, placed. Its own memo for `citeMarksByBlock`'s
++   * reason: it changes only when the list is replaced.
++   */
++  const explainedMarksByBlock = useMemo(
++    () => explainedMarks(blocks, explained ?? []),
++    [blocks, explained],
++  );
++
+   /**
+    * Last render's `{ __html }` objects **and what each was built from**, so an
+    * unchanged block can be handed back the one React has already seen without
+@@ -1167,9 +1194,10 @@ function TableViewInner({
+       const hits = hitMarks?.get(block.id) ?? NO_MARKS;
+       const cited = citeMarksByBlock.get(block.id) ?? NO_MARKS;
+       const linked = xrefMarksByBlock.get(block.id) ?? NO_MARKS;
++      const explainedHere = explainedMarksByBlock.get(block.id) ?? NO_MARKS;
+       const pressed = pressedIn(found, openTerm);
+       const had = was.get(block.id);
+-      if (had && sameInputs(had, block, cmts, found, hits, cited, linked, pressed)) {
++      if (had && sameInputs(had, block, cmts, found, hits, cited, linked, explainedHere, pressed)) {
+         /* Nothing this block is drawn from has changed, so neither has its
+            html. The entry — and with it the `{ __html }` object React compares
+            — is passed through untouched. */
+@@ -1186,6 +1214,7 @@ function TableViewInner({
+         ...hits,
+         ...cited,
+         ...linked,
++        ...explainedHere,
+       ];
+       /* The unmarked majority never reaches the parser at all. `annotateHtml`
+          has this test too; doing it here as well is what keeps an unmarked
+@@ -1214,6 +1243,7 @@ function TableViewInner({
+         hits,
+         cites: cited,
+         xrefs: linked,
++        explained: explainedHere,
+         openTerm: pressed,
+         out: had && had.out.__html === withHandles ? had.out : { __html: withHandles },
+       });
+@@ -1232,7 +1262,16 @@ function TableViewInner({
+ 
+        `xrefMarksByBlock` is here for the same reason from the start: the
+        cross-references are a separate GET too. tests/xref-prose.test.tsx. */
+-  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, citeMarksByBlock, xrefMarksByBlock, openTerm]);
++  }, [
++    blocks,
++    marksByBlock,
++    termMarksByBlock,
++    hitMarks,
++    citeMarksByBlock,
++    xrefMarksByBlock,
++    explainedMarksByBlock,
++    openTerm,
++  ]);
+ 
+   /**
+    * **Apparatus, dressed as apparatus** — which block starts a note, what the
+diff --git a/src/web/annotate.ts b/src/web/annotate.ts
+index 7928bc003..facffcf6f 100644
+--- a/src/web/annotate.ts
++++ b/src/web/annotate.ts
+@@ -106,8 +106,17 @@ import { costOn, leafClock, noteCost } from "./annotation-cost.js";
+  * `data-xref` carries a per-page-load nonce, and every handler resolves it
+  * through `xrefTarget` in xref.ts, never by reading a target off the DOM. Where
+  * it overlaps another kind it wins the click, the tap and the hover.
++ *
++ * `explained` is a passage the owner's Explanations list explains, and the
++ * seventh kind, added 2026-10-29 (Greg, `spya-njkskc`: *"an underline quite
++ * similar to the glossary"*;
++ * docs/plans/261029j-explained-passages-underlined-in-the-prose.md). Found the
++ * way a citation is (`explainedMarks`, below), drawn in Glossary's channel —
++ * `border-bottom` — in its own hue, and inert to the click as a term is. Where
++ * a term, a comment or a chat shares its words, they keep the border
++ * (annotations.css § an explained passage); the card draws both.
+  */
+-export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite" | "xref";
++export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite" | "xref" | "explained";
+ 
+ /**
+  * How many coloured rules one phrase can wear.
+@@ -502,6 +511,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
+       const hits = covering.filter((m) => m.kind === "hit");
+       const cites = covering.filter((m) => m.kind === "cite");
+       const xrefs = covering.filter((m) => m.kind === "xref");
++      const explained = covering.filter((m) => m.kind === "explained");
+       // Every class that applies. `mark.cmt` and `mark.chat` are what the click
+       // handler in TableView.tsx selects on, so a term or a hit must never
+       // carry either class alone — and neither artefact may lose its class
+@@ -513,6 +523,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
+         hits.length > 0 ? "hit" : "",
+         cites.length > 0 ? "cite" : "",
+         xrefs.length > 0 ? "xref" : "",
++        explained.length > 0 ? "explained" : "",
+       ]
+         .filter(Boolean)
+         .join(" ");
+@@ -778,6 +789,10 @@ function annotate(html: string, marks: readonly Mark[]): string {
+ 
+          Written last, so the attributes come out in the order the classes do. */
+       if (cites.length > 0) el.setAttribute("data-cite", cites.map((m) => m.id).join(" "));
++      /* The explanations' ids, as `data-cite`'s: one passage is explained at
++         most once (one per block, src/explanations.ts), but nothing here
++         depends on it, and the hover card reads them all. */
++      if (explained.length > 0) el.setAttribute("data-explained", explained.map((m) => m.id).join(" "));
+       /* **One id, not a list.** `xrefMarks` never lets two cross-references
+          overlap in a block, so a piece carries at most one; taking the first is
+          the defensive reading if that ever stops being true. The id is
+@@ -1151,6 +1166,37 @@ export interface CiteSelection {
+ export function citeMarks(
+   blocks: Block[],
+   selections: readonly CiteSelection[],
++): Map<BlockId, Mark[]> {
++  return placedMarks(blocks, selections, "cite");
++}
++
++/**
++ * **Every explained passage, as marks**, grouped by block — the owner's
++ * Explanations list, one place each (docs/plans/261029j-….md § 1).
++ *
++ * The citation's question exactly, so the citation's finder: an explanation's
++ * `quote` is a slice of the article's own characters in a named block, checked
++ * to occur once in `block.text` when it was written (src/explanations.ts) —
++ * which, as the docstring above says of `verifyPlace`, does not prove it occurs
++ * once in the rendered text. So the same rule: the only occurrence or nothing,
++ * and a passage that cannot be re-found draws no mark, never the whole block.
++ */
++export function explainedMarks(
++  blocks: Block[],
++  explanations: readonly { id: string; blockId: BlockId; quote: string }[],
++): Map<BlockId, Mark[]> {
++  return placedMarks(
++    blocks,
++    explanations.map((e) => ({ id: e.id, places: [{ blockId: e.blockId, quote: e.quote }] })),
++    "explained",
++  );
++}
++
++/** `citeMarks`' finder, for any kind that arrives as checked slices of a block. */
++function placedMarks(
++  blocks: Block[],
++  selections: readonly CiteSelection[],
++  kind: "cite" | "explained",
+ ): Map<BlockId, Mark[]> {
+   const byBlock = new Map<BlockId, Mark[]>();
+   if (selections.length === 0) return byBlock;
+@@ -1178,7 +1224,7 @@ export function citeMarks(
+       /* `null` is both "the words have gone" and "there are two of them", and
+          both mean the same thing here: no mark. See the docstring. */
+       if (!span) continue;
+-      marks.push({ id: place.id, kind: "cite" as const, start: span.start, end: span.end });
++      marks.push({ id: place.id, kind, start: span.start, end: span.end });
+     }
+     if (marks.length > 0) byBlock.set(block.id, marks);
+   }
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index eaf137bdb..210761f0f 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -54,7 +54,6 @@ import { isWebUrl } from "../../urls.js";
+ import { useStepFinished } from "../useStepJob.js";
+ import { useFaqRead } from "../useFaq.js";
+ import { useExplanationsRead } from "../useExplanations.js";
+-import { useExperimental } from "../useExperimental.js";
+ import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "../explanation-labels.js";
+ import { AskInChatButton } from "../OriginChat.js";
+ import { byLineOf, CiteBlurb } from "../BibliographyPanel.js";
+@@ -1298,8 +1297,6 @@ export type MarginFeed = {
+   notes: MarginNotesList;
+   /** Situate's findings (plan 261024o): the owner's, whatever the experimental switch says since spya-pkpqch. */
+   literature: MarginLiterature | null;
+-  /** The explanations (plan 261028c): the owner's, with the experimental switch on, and never a stale list. */
+-  explanations: readonly Explanation[] | null;
+ };
+ 
+ export const NO_OWNER_FEED: MarginFeed = {
+@@ -1310,7 +1307,6 @@ export const NO_OWNER_FEED: MarginFeed = {
+   relations: null,
+   notes: null,
+   literature: null,
+-  explanations: null,
+ };
+ 
+ /**
+@@ -1386,41 +1382,55 @@ export function OwnerMarginFeed({
+      sits found to be beside the passage as he reads (spya-pkpqch). The read
+      is a component of its own, so it can hand back none when unmounted. */
+   const [literature, setLiterature] = useState<MarginLiterature | null>(null);
+-  /* **The explanations, only with the experimental switch on** (plan
+-     261028c), as the literature findings were until spya-pkpqch: the mode is
+-     behind the switch, so its lines are too. A component of its own, mounted
+-     only then, so with the switch off nothing asks `/api/explanations`. */
+-  const { on: experimental } = useExperimental();
+-  const [explanations, setExplanations] = useState<readonly Explanation[] | null>(null);
++  /* The explanations are not read here: the prose underlines them in every
++     mode, so Reader reads them once for both (`ExplanationsFeed` below; plan
++     261029j § 5). */
+   useEffect(() => {
+-    onFeed({ ideas, faq, timeline, claims, relations, notes, literature, explanations });
+-  }, [ideas, faq, timeline, claims, relations, notes, literature, explanations, onFeed]);
++    onFeed({ ideas, faq, timeline, claims, relations, notes, literature });
++  }, [ideas, faq, timeline, claims, relations, notes, literature, onFeed]);
+   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
+-  return (
+-    <>
+-      <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />
+-      {experimental && <ExplanationsMarginFeed slug={slug} onExplanations={setExplanations} />}
+-    </>
+-  );
++  return <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />;
+ }
+ 
+ /**
+- * **The explanations, read and never made** — `useExplanationsRead`, the read
+- * half with no job under it, and `useStepFinished` for a run finished while the
+- * column is open. **A stale list is not drawn** (the article moved under it);
+- * one written by an older prompt or for an older profile still is, its words
+- * checked against each block before drawing (notes.ts § `explainedBlocks`).
+- * Unmounted, it hands back none.
++ * **The owner's explanations, read and never made** — for the margin's notes
++ * and the prose's underline both (plan 261029j § 5), so Reader mounts it in
++ * every mode, for an owner with the experimental switch on, and nowhere else:
++ * with the switch off nothing asks `/api/explanations` (plan 261028c).
++ * `useExplanationsRead`, the read half with no job under it, and
++ * `useStepFinished` for a run finished while the page is open. **A stale list
++ * is not drawn** (the article moved under it); one written by an older prompt
++ * or for an older profile still is, its words checked against each block
++ * before drawing (notes.ts § `explainedBlocks`; annotate.ts §
++ * `explainedMarks`). Unmounted, it hands back none.
+  */
+-function ExplanationsMarginFeed({
++export function ExplanationsFeed({
+   slug,
++  bandOpen,
+   onExplanations,
+ }: {
+   slug: string;
++  /**
++   * Explanations is the mode. The band reads the list itself, and
++   * `useStepFinished` does not hear a run another tab finished while this one
++   * was idle; so opening the band reads again here too, and the prose, the
++   * margin and the band agree on the list (GPT Sol, plan review of 261029j,
++   * P2-2). Not on mount: the opening read is already that.
++   */
++  bandOpen: boolean;
+   onExplanations(explanations: readonly Explanation[] | null): void;
+ }) {
+   const read = useExplanationsRead(slug);
+   useStepFinished(slug, "explanations", read.refresh);
++  const { refresh } = read;
++  const mounted = useRef(false);
++  useEffect(() => {
++    if (!mounted.current) {
++      mounted.current = true;
++      return;
++    }
++    if (bandOpen) void refresh();
++  }, [bandOpen, refresh]);
+   const list = read.status === "ready" && !read.stale ? (read.explanations?.explanations ?? null) : null;
+   useEffect(() => {
+     onExplanations(list);
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 9d00657d8..290bb869e 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -51,6 +51,7 @@ import {
+   type MarginFeed,
+   NO_OWNER_FEED,
+   OwnerMarginFeed,
++  ExplanationsFeed,
+   useMarginLayout,
+ } from "../marginalia/MarginaliaColumn.js";
+ import { MODE_CATALOG } from "../../mode-catalog.js";
+@@ -2456,6 +2457,11 @@ export function Reader({
+    * not re-render `TableView`.
+    */
+   const [ownerFeed, setOwnerFeed] = useState<MarginFeed>(NO_OWNER_FEED);
++  /* **The owner's explanations, for the margin and the prose both** (plan
++     261029j § 5): read by `ExplanationsFeed`, mounted below for an owner with
++     the experimental switch on, in every mode — the prose underlines them
++     whether or not the margin is open. Null otherwise, and for a stale list. */
++  const [ownerExplanations, setOwnerExplanations] = useState<readonly Explanation[] | null>(null);
+   const marginaliaIdeas = owner ? ownerFeed.ideas : (artefacts?.ideas?.ideas ?? null);
+   /* **Other modes' items, already stored** (report 82, plan 261002b): the
+      owner's FAQ and Reception from the feed's read-only reads, a visitor's from
+@@ -2889,7 +2895,7 @@ export function Reader({
+       literature: isOwner ? ownerFeed.literature : null,
+       /* The owner's only, and the feed reads them only with the experimental
+          switch on: the mode is behind it (plan 261028c). */
+-      explanations: isOwner ? ownerFeed.explanations : null,
++      explanations: isOwner ? ownerExplanations : null,
+       /* The owner's quiz, from the read the prose and the band share — never a
+          stale one, the prose's rule (plan 261029c). */
+       quiz: isOwner && drawnQuiz ? drawnQuiz : null,
+@@ -2955,7 +2961,7 @@ export function Reader({
+     ownerFeed.relations,
+     ownerFeed.notes,
+     ownerFeed.literature,
+-    ownerFeed.explanations,
++    ownerExplanations,
+     drawnQuiz,
+     openQuizAt,
+     marginaliaClaims,
+@@ -5119,6 +5125,8 @@ export function Reader({
+         terms={termSelections}
+         cites={citeSelections}
+         xrefs={xrefs}
++        /* The owner's explanations, underlined in every mode (plan 261029j). */
++        explained={isOwner ? ownerExplanations : null}
+         openTerm={term?.id ?? null}
+         hitMarks={hitMarks}
+         hitHues={hitHues}
+@@ -5560,6 +5568,11 @@ export function Reader({
+            view (plan 261010e). Owner only, as the marks are. On a row with
+            no note it also starts the one web search (plan 261018o). */
+         onOpenCitedWork={owner ? openCitedWorkFromCard : null}
++        /* **An explained passage's card** (plan 261029j § 4): the list the
++           prose underlines, and the margin note's own two senders, so a chat
++           started from the card records the same origin as one from the band. */
++        explanations={isOwner ? ownerExplanations : null}
++        explanationActions={marginExplanationActions}
+         quotes={quoteCard}
+         blockText={blockText}
+         notes={notes}
+@@ -5567,6 +5580,7 @@ export function Reader({
+         onJump={jumpTo}
+         onFollowNote={followNote}
+       />
++      {owner && experimental.on && <ExplanationsFeed slug={slug} bandOpen={mode === "explanations"} onExplanations={setOwnerExplanations} />}
+ 
+       {/* The mode band. Rendered only in its mode, which is what keeps the
+           fetch inside it from being charged to every reader of every article —
+diff --git a/src/web/styles/annotations.css b/src/web/styles/annotations.css
+index 914bbf5c3..1f1745d0a 100644
+--- a/src/web/styles/annotations.css
++++ b/src/web/styles/annotations.css
+@@ -207,6 +207,46 @@ mark.cmt.term {
+   border-bottom-width: 1px;
+ }
+ 
++/* ---- an explained passage ------------------------------------------
++   The seventh `MarkKind` (annotate.ts § `explainedMarks`): the words one of
++   the owner's Explanations is about, standing and in every mode while the
++   experimental switch is on. Greg, 2026-10-29 (spya-njkskc): *"an underline
++   quite similar to the glossary"*.
++
++   **Glossary's shape and weight, its own hue.** The same 2px dotted
++   `border-bottom` as `mark.term`, in `--explained` (a teal, tokens.css), so a
++   reader who has learnt the orange line learns this one for free and can
++   still tell them apart. No fade: there is at most one per block.
++
++   **Where a term shares the words, the term keeps its line** — one `<mark>`
++   carries both classes, and `border-bottom` can be only one colour. A term is
++   a word or two inside a clause, so the clause still reads as underlined,
++   broken by an orange stretch: this clause is explained, and this word in it
++   is a glossary term. The card on those words draws both. A comment or chat
++   keeps its solid line for `mark.cmt.term`'s reason (it is the clickable one).
++   A citation and a cross-reference draw on `text-decoration`, so both show.
++   docs/plans/261029j-explained-passages-underlined-in-the-prose.md § 3. */
++/* `:where()`, so this rule weighs nothing: every other mark's own rule —
++   `mark.term`, `mark.cmt`, `mark.chat`, a quote's fill, a highlight's wash —
++   wins on the words it shares, whatever order the stylesheets load in
++   (dialogs.css, where `mark.chat` lives, loads after this one and
++   annotations.css's `mark.cmt` before it). One rule instead of a pairwise
++   override for each kind, and a new kind is covered without an edit. */
++:where(mark.explained) {
++  background: none;
++  color: inherit;
++  border-bottom: 2px dotted color-mix(in oklab, var(--explained) 70%, transparent);
++  /* `help` for `mark.term`'s reason: a click does nothing; the card is it. */
++  cursor: help;
++  transition: background 0.12s, border-color 0.12s;
++}
++:where(mark.explained:hover),
++/* The words a finger has armed — useHoverCard.ts § TAP_ATTR. */
++:where(mark.explained[data-hover-tap]) {
++  background: color-mix(in oklab, var(--explained) 7%, transparent);
++  border-bottom-color: var(--explained);
++}
++
+ /* ---- a work the piece cites -----------------------------------------
+    The fifth `MarkKind` (annotate.ts § `citeMarks`), drawn on every phrase the
+    article cites a work at, standing and in every mode. Greg, 2026-09-12
+diff --git a/src/web/styles/tokens.css b/src/web/styles/tokens.css
+index 4e03ac715..ad530b0f4 100644
+--- a/src/web/styles/tokens.css
++++ b/src/web/styles/tokens.css
+@@ -137,6 +137,14 @@
+      side. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md. */
+   --read-time: oklch(0.82 0.11 200);
+ 
++  /* **An explained passage's dotted rule** — annotations.css § an explained
++     passage. Glossary's shape in a teal, so the two read as one family and
++     can be told apart: orange is the glossary's, and a fainter orange would
++     pass for a term faded on repeat. Between the reader's green highlight
++     (150) and `--read-time` (200), and drawn as a rule where both of those
++     are fills. docs/plans/261029j-explained-passages-underlined-in-the-prose.md. */
++  --explained: oklch(0.76 0.11 175);
++
+   /* **A highlight's four washes** — the reader's own colours, stored by name on
+      the comment (`HighlightColour`, src/types.ts) so they can be retuned here
+      without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
+@@ -522,6 +530,7 @@
+   --chat-mark: oklch(0.52 0.13 235);
+   /* The same cyan, darkened: on the light rail the edge has to be a dark line. */
+   --read-time: oklch(0.5 0.1 200);
++  --explained: oklch(0.52 0.1 175);
+ 
+   /* The reader's four highlighter washes (span highlights, plan 261003e-span-highlights): the
+      same bases, mixed into the light page a little harder, because a share
+diff --git a/tests/annotate.test.ts b/tests/annotate.test.ts
+index 92c9f160b..96de3c358 100644
+--- a/tests/annotate.test.ts
++++ b/tests/annotate.test.ts
+@@ -1206,6 +1206,7 @@ describe("annotateHtml — a quote is filled and a search hit is outlined", () =
+       hit: true,
+       cite: true,
+       xref: true,
++      explained: true,
+     } satisfies Record<MarkKind, true>;
+     const drawn = new Set(SPECIMEN_MARKS.flatMap((s) => s.marks.map((m) => m.kind ?? "cmt")));
+     expect([...drawn].sort()).toEqual(Object.keys(every).sort());
+diff --git a/tests/prose-marks-stay-inline-in-chrome.test.ts b/tests/prose-marks-stay-inline-in-chrome.test.ts
+index fe34f6e03..1cd38824b 100644
+--- a/tests/prose-marks-stay-inline-in-chrome.test.ts
++++ b/tests/prose-marks-stay-inline-in-chrome.test.ts
+@@ -49,7 +49,7 @@ const CLAUSES = [
+ ];
+ 
+ /* Every kind, so a seventh cannot arrive untested: a missing key fails to compile. */
+-const KINDS: Record<MarkKind, true> = { cmt: true, chat: true, term: true, hit: true, cite: true, xref: true };
++const KINDS: Record<MarkKind, true> = { cmt: true, chat: true, term: true, hit: true, cite: true, xref: true, explained: true };
+ 
+ function marked(kind: MarkKind): string {
+   const marks: Mark[] = CLAUSES.map((clause, i) => {

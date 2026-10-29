@@ -568,3 +568,83 @@ p.marg-shut {
 @media (any-pointer: coarse) {
   .marg-quiz-q { min-height: 40px; }
 }
+
+/* **Answered here, since plan 261029i** (Greg, spya-jzgrua: *"avoid having to
+   jump away from marginalia mode to the learn mode"*). Each question is a row:
+   the question's button, and beside it a microphone that opens the box
+   listening — two sibling buttons, never one inside the other. The box, its
+   row of actions and the mark open under the question, in flow, so the
+   collision pass pushes the notes below down as it grows. The column can be
+   200px wide (layout.ts), so the row of actions wraps. */
+.marg-quiz-item {
+  border-radius: var(--radius);
+  /* Room for the green to show as a ground rather than a highlight on the words. */
+  padding: 0 0.2rem;
+  margin: 0 -0.2rem;
+}
+.marg-quiz-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+.marg-quiz-row .marg-quiz-q { flex: 1 1 auto; min-width: 0; }
+.marg-quiz-talk {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius);
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.marg-quiz-talk:hover,
+.marg-quiz-talk:focus-visible { color: var(--ink); background: var(--panel); }
+.marg-quiz-talk:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 1px;
+}
+.marg-quiz-talk:disabled { cursor: default; opacity: 0.5; }
+.marg-quiz-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.3rem 0 0.5rem;
+  font-style: normal;
+}
+.marg-quiz-box {
+  box-sizing: border-box;
+  width: 100%;
+  resize: none;
+  font: inherit;
+  line-height: 1.4;
+}
+.marg-quiz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.marg-quiz-more {
+  all: unset;
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: max(var(--text-min), 0.75rem);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.marg-quiz-more:hover,
+.marg-quiz-more:focus-visible { color: var(--ink); }
+.marg-quiz-more:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 2px;
+}
+.marg-quiz-answer .quiz-reply { margin: 0; }
+@media (any-pointer: coarse) {
+  .marg-quiz-talk { width: 40px; height: 40px; }
+  .marg-quiz-more { min-height: 40px; display: inline-flex; align-items: center; }
+}

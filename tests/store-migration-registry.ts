@@ -2061,6 +2061,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "reach into the condemned modules is the seeder's copy step, as for " +
       "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/reading-place-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with plan 261029f (2026-10-29). It seeds four articles " +
+      "with `scratchArticleInPg` and drives `place` on `POST /api/reading-time/:slug` and " +
+      "`readingPlace` on `GET /api/article/:slug` through `handleApi` — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reading-time-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-hidden-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -3172,6 +3183,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds three articles and drives the reading-time GET and POST through the
      route, reading rows back out of `reading_time`. No model is called. */
   "tests/reading-time-route.test.ts": "private-postgres",
+  /* Seeds four articles and drives the place on reading time's POST and the
+     owner's article GET, reading `reading_place` back. No model is called. */
+  "tests/reading-place-route.test.ts": "private-postgres",
   /* Seeds one article, writes reading time, and checks the shelf pie's cached
      words against the masthead's own computation, and when they go stale. No
      model is called. */

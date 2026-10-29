@@ -811,6 +811,7 @@ This is the single home for which marks have a card. As of 2026-10-20:
 | Quote, `mark.hit[data-quote]` | every mode | `QuoteCard` | *Open in Quotes*: `?quote=`, the bar lowered if needed; Quotes scrolls a selected row in |
 | Citation, `mark.cite` | every mode, owner only | `CiteCard` | *Open in Sources*: Bibliography, `openBibliographyWork`'s one-shot focus (no `?cite=`, no selection) |
 | Not on the prose: Marginalia's *Cites* line (since 2026-10-20) | with the column, owner only | `CiteCard`, the same | the same ([marginalia.md](marginalia.md#every-note-says-where-it-came-from)) |
+| Explained passage, `mark.explained` (since 2026-10-29) | every mode, owner only, experimental switch on | `ExplainedCard` | *Open in Explanations*: the margin note's `openExplanationInBand`, the bar lowered if it hides the row; a finger's second tap does the same ([explanations.md](explanations.md#the-underline-in-the-prose)) |
 | Cross-reference, `mark.xref` | every mode | `BlockLinkCard` | none needed — it is a link to another passage, not a mode's |
 | Highlight, comment, Referee placement, `mark.cmt` | every mode | **none** | a press opens the comment's dialog (`?note=`) |
 | Chat anchor, `mark.chat` | every mode | **none** | a press opens the floating conversation (`?thread=`) |

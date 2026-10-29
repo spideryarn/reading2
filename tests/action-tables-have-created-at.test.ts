@@ -58,6 +58,8 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
   read_so_far_words: { column: "computed_at" },
   rate_limit_events: { column: "started_at" },
   reader_arrivals: { column: "first_seen_at" },
+  /* Plan 261029f: one row per article, replaced as the owner moves. */
+  reading_place: { column: "saved_at" },
   reading_time: {
     exempt:
       "the privacy page promises 'the totals, not a history' (docs/project/privacy.md § Reading time); " +

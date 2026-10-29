@@ -18,6 +18,7 @@ export function quizReadStub(over: Partial<QuizRead> = {}): QuizRead {
     kept: new Map(),
     keptUnread: false,
     noteMark: () => {},
+    claimMark: () => () => {},
     error: null,
     retryRead: async () => {},
     reload: async () => {},
