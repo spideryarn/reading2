@@ -1183,7 +1183,7 @@ prerequisite are in
 [results/embedding-retrieval-2026-08-26.md](results/embedding-retrieval-2026-08-26.md);
 the decision is recorded in [search.md](../docs/project/search.md).
 
-## Quiz — three evals, one per question asked of the prompt
+## Quiz — four evals, one per question asked of the prompt
 
 Each file's header comment is its manual: the commands, which are paid and which free, and what it
 writes. The method all three follow is
@@ -1195,8 +1195,17 @@ writes. The method all three follow is
 - [`quiz-build-up.ts`](quiz-build-up.ts) — **does a batch get easier per question and build up?**
   Before and after arms separated in time, a blind side-by-side per article
   ([260930c](../docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md)).
+- [`quiz-models.ts`](quiz-models.ts) — **is Haiku 5.5 good enough to write or mark a quiz, and
+  is a quiz of smaller, easier questions better?** Greg's spya-jzgrua. Four write arms (Sonnet and
+  Haiku, today's prompt and a smaller-questions one) on two corpus articles and two mark arms on the
+  eight cases, three runs each; a blind A/B pair per comparison with `key.json` apart; the decision
+  rule written before the run in
+  [261029i § Stage 4](../docs/plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md).
+  `--dry-run` lists the 72 calls (about $7) and spends nothing. **Not yet run**: written while the
+  box's OpenRouter key was over its limit, until 2026-11-01. Its pure half is `quiz-models-lib.ts`;
+  the eight marking cases are [`quiz-cases.ts`](quiz-cases.ts), shared with `quiz.ts`.
 - [`quiz-reading-goal.ts`](quiz-reading-goal.ts) — **does who is reading, and why, move the
-  quiz?** The newest of the three and the fullest harness: arms per profile and reading goal, each
+  quiz?** The fullest harness: arms per profile and reading goal, each
   run stamped with the prompt that wrote it, a seeded `blind` sheet for a judge, and `score` to join
   the labels back. Its judge's brief is [`quiz-reading-goal-judge.md`](quiz-reading-goal-judge.md);
   one round's bars and runs are the two `quiz-reading-goal-261001c-*` files

@@ -81,8 +81,8 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
   },
   quiz: {
     head: "Quiz",
-    what: "A question about what you have just read, to answer in your own words. Press this line to answer it in Learn mode, where your answer is marked against the article.",
-    how: "From Quiz mode. The question was written by AI from the whole article. It sits after the passage that finishes what it asks about, and the questions build on one another in order.",
+    what: "A question about what you have just read, to answer in your own words. Press this line to answer it here, in a line, or press the microphone beside it to say your answer. It is marked against the article, and the line turns green once answered. The link under the box opens every question together.",
+    how: "From Quiz mode. The question was written by AI from the whole article, and the AI marks your answer against the article's own words. It sits after the passage that finishes what it asks about, and the questions build on one another in order. Green means answered, not right or wrong.",
   },
   "comment-own": {
     head: "Yours",

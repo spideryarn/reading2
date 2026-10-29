@@ -31,6 +31,11 @@ pressing **Marginalia** again swaps the notes in for it.
 - **Other modes’ lines**, shut by default: saved FAQ questions, dated Timeline events, Sources’
   claims and cited works can appear beside their passages, as can your comments. A line shows one
   item or a count; press it to open it.
+- **Quiz** questions sit after the passage each asks about. The first time you turn the notes on
+  for an article with no quiz, one is written. Press a question to answer it in the margin, in a
+  line, or press the microphone beside it to say your answer; the AI marks it against the article.
+  A question you have answered turns a quiet green, which means answered, not right. **Open in
+  Quiz** takes you to the whole quiz in [Learn](/help/mode-learn).
 - **Note, Recall or Tension** is a short AI-written note. Recall and Tension link to the other
   passage they refer to; press the link to go there and check its words.
 - **Origin** says where a quotation, an allusion or a name in the passage comes from, when the

@@ -570,8 +570,9 @@ export function messagesWireBody(
   task: Task,
   body: MessagesBody,
   power: ModelPower,
+  /** An eval's model, in place of the task's — `streamMessage`'s `model`. */
+  model: string = modelFor(task, power),
 ): Anthropic.MessageStreamParams {
-  const model = modelFor(task, power);
   /* **Effort parity, plan 260930f decision 1.** Opus 5.5's default effort is
      `medium` where Sonnet 5's is `high`, so a call that thinks adaptively
      without naming an effort (`illustrated` today) would think *less* on the
@@ -603,7 +604,17 @@ export function streamMessage(
   body: MessagesBody,
   /* `power` required, like `modelFor`'s: which article this call is for
      decides the model, and a stage that has not asked does not compile. */
-  options: { power: ModelPower; signal?: AbortSignal },
+  options: {
+    power: ModelPower;
+    signal?: AbortSignal;
+    /**
+     * **An eval's model, in place of the one the task and power choose.** For
+     * comparing models on one stage (evals/quiz-models.ts, plan 261029i); no
+     * production caller passes it, because a stage's stamp names the model it
+     * expects and an override here would make that stamp untrue.
+     */
+    model?: string;
+  },
 ): MeteredCall {
   /* **No request, no row.** The SDK refuses an already-aborted signal before
      calling `fetch`; opening a meter first would therefore write an `aborted`
@@ -613,7 +624,7 @@ export function streamMessage(
   if (options.signal?.aborted) {
     let rejection: Promise<Anthropic.Message> | null = null;
     return {
-      model: modelFor(task, options.power),
+      model: options.model ?? modelFor(task, options.power),
       onText: () => {},
       onStart: () => {},
       finalMessage: () => {
@@ -626,7 +637,7 @@ export function streamMessage(
   }
 
   const client = messagesClient();
-  const wire = messagesWireBody(task, body, options.power);
+  const wire = messagesWireBody(task, body, options.power, options.model);
   const model = wire.model;
 
   /* The caller's listeners, kept here rather than on a stream, because a

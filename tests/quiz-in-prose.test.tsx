@@ -634,7 +634,12 @@ describe("memo(TableView) and the quiz lines", () => {
       });
     const q1 = marginLines().find((b) => (b.textContent ?? "").trim() === Q1.question);
     expect(q1, "a margin line for Q1").toBeDefined();
+    /* Pressing the line opens its answer box in the margin (261029i); the
+       box's Open in Quiz is the way to the band. */
     await act(async () => q1?.click());
+    const more = host.querySelector<HTMLButtonElement>(".marg-quiz .marg-quiz-more");
+    expect(more, "the margin's Open in Quiz").not.toBeNull();
+    await act(async () => more?.click());
     await until(() => param("learn") === "quiz");
     await settle();
     expect(
