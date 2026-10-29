@@ -23,7 +23,7 @@
  * (computed colour and contrast on each site's actual ground) are the evidence
  * that it renders.
  *
- * The order checks also parse the six listed callers: the five OrderGroup
+ * The order checks also parse the seven listed callers: the six OrderGroup
  * rows retain the component and its chip class, and Search retains its own
  * named group and chip class. Each chip retains aria-pressed. Negative
  * controls remove the component/group or one chip's class to prove the guard
@@ -40,6 +40,7 @@ const ORDER_CALLERS = [
   { mode: "Quotes", file: "src/web/QuotesPanel.tsx", label: "Order the quotes by" },
   { mode: "Citations", file: "src/web/BibliographyPanel.tsx", label: "Order the citations by" },
   { mode: "FAQ", file: "src/web/FaqPanel.tsx", label: "Order the questions by" },
+  { mode: "Explanations", file: "src/web/ExplanationsPanel.tsx", label: "Order the explanations by" },
   { mode: "Debate", file: "src/web/ReceptionAndClaimsPanel.tsx", label: "Order the sources by" },
 ] as const;
 

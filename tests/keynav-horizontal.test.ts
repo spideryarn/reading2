@@ -187,11 +187,12 @@ describe("without one (every other mode)", () => {
 
 /* **← / → as a stride of their own — Structure's sections**, since 2026-10-01
    (Greg, spya-b2wzjf: "left and right would jump to the previous or next
-   low-level-heading/section"). Reader.tsx passes the section depth while
-   Structure is the mode; here depth 1, the fine one, so its steps cannot be
-   mistaken for ↓'s at the fallback depth 0.
+   low-level-heading/section"). Reader.tsx passes Structure's frontier rows
+   while Structure is the mode (since 261029a; the section depth before); here
+   depth 1's rows, the fine ones, so its steps cannot be mistaken for ↓'s at
+   the fallback depth 0.
    docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
-describe("with an across depth (Structure)", () => {
+describe("with across rows (Structure)", () => {
   function AcrossHarness({ withHandler }: { withHandler: boolean }) {
     useArrowNav(
       plan,
@@ -204,7 +205,7 @@ describe("with an across depth (Structure)", () => {
             return takes;
           }
         : null,
-      1,
+      plan.starts[1]!,
     );
     return null;
   }
@@ -238,7 +239,7 @@ describe("with an across depth (Structure)", () => {
     expect(jumps).toEqual([]);
 
     /* Non-vacuity: the same key outside both guards really is owned. Without
-       this control, deleting `acrossDepth` altogether leaves the assertion
+       this control, deleting `acrossStarts` altogether leaves the assertion
        above green. */
     press("ArrowRight");
     expect(jumps).toEqual(["spya-h1"]);

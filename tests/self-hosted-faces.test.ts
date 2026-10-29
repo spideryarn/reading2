@@ -11,8 +11,13 @@
  * Quattro (261021f).
  *
  * The model's and reader's faces also need all the styles they are drawn in: a missing
- * italic or 700 is synthesised by the browser, which on these faces looks like
- * a bug, not a choice.
+ * italic or 700 is synthesised by the browser, which on these faces usually looks
+ * like a bug, not a choice. **Unless it is a choice, named in `ACCEPTED`**: the
+ * reader's Kalam (2026-10-29) has 400 and 700 upright only, so a 500 or 600 is
+ * the nearest weight and `.prof-interim`'s italic is the browser's slant —
+ * docs/project/fonts.md § Three faces, and the reader's. A gap is either covered
+ * or listed, and a listed gap that gets covered fails too, so the list cannot
+ * outlive the face it was written for.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -58,6 +63,19 @@ function covers(face: Face, weight: number): boolean {
 
 const FACES = declaredFaces(readFileSync(ENTRY, "utf8"));
 
+/**
+ * Styles a face is drawn in but does not have, by decision. Kalam: the nearest
+ * weight for 500 and 600, the browser's slant for italic (fonts.md).
+ */
+const ACCEPTED = new Set([
+  "Kalam normal 500",
+  "Kalam normal 600",
+  "Kalam italic 400",
+  "Kalam italic 500",
+  "Kalam italic 600",
+  "Kalam italic 700",
+]);
+
 describe("self-hosted faces", () => {
   it("finds the packages' @font-face rules at all", () => {
     expect(FACES.length).toBeGreaterThan(10);
@@ -77,21 +95,23 @@ describe("self-hosted faces", () => {
   it.each([
     ["--font-ai", ["normal", "italic"], [400, 700]],
     ["--font-reader", ["normal", "italic"], [400, 500, 600, 700]],
-  ] as const)("%s has every style it is drawn in", (token, styles, weights) => {
+  ] as const)("%s has every style it is drawn in, or the gap is accepted", (token, styles, weights) => {
     const family = primaryFamily(TOKENS, token);
     for (const style of styles) {
       for (const weight of weights) {
         const found = FACES.some(
           (f) => f.family === family && f.style === style && covers(f, weight),
         );
-        expect(found, `${family} ${style} ${weight}`).toBe(true);
+        const accepted = ACCEPTED.has(`${family} ${style} ${weight}`);
+        expect(found || accepted, `${family} ${style} ${weight}`).toBe(true);
+        expect(found && accepted, `${family} ${style} ${weight} is listed as a gap but covered`).toBe(false);
       }
     }
   });
 
   it.each([
     ["--font-ai", "iA Writer Quattro", "iA Writer Quatro"],
-    ["--font-reader", "Shantell Sans Variable", "Shantell Sans"],
+    ["--font-reader", "Kalam", "Kalm"],
   ])("would catch a wrong family for %s", (token, family, wrong) => {
     const misspelt = TOKENS.replace(`'${family}'`, `'${wrong}'`);
     expect(misspelt).not.toBe(TOKENS);

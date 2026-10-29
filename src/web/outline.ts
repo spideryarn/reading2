@@ -25,10 +25,18 @@ import type { Voice } from "./voice.js";
  * all-or-nothing — a partly-drawn level is a lie about the structure.
  *
  *  1  every part
- *  2  + the current part's sections
- *  3  + a sentence on the current section   — the floor of what is drawn
+ *  2  + the current part's sections, and the current section's sub-sections
+ *  3  + a sentence on the deepest current one   — the floor of what is drawn
  *  4  + the arc sentence for the current part
- *  5  + the current section's paragraphs
+ *  5  + the deepest current one's paragraphs
+ *
+ * **Sub-sections since 2026-10-29**, where a tree is ragged: a section the
+ * article divides gets its sub-sections drawn under it while the reader is in
+ * it, the sentence goes to the sub-section they are in, and the paragraphs, at
+ * rung 5, hang off that. In rung 2 rather than a rung of their own because
+ * they are the level the reader is in, which is what the floor is for —
+ * 261003k deferred exactly this (§ Not in this change). A section with no
+ * sub-sections draws as it always did. Plan 261029a § Stage 1, item 4.
  *
  * **Rungs 1 and 2 are built and never chosen, since 2026-10-03.** OutlinePanel
  * draws rung 3 at the least and lets the list scroll when it does not fit
@@ -62,10 +70,12 @@ export const PARAGRAPH_CAP = 8;
  * A paragraph row is never marked as the one the reader is in.
  *
  * Not a style choice — nothing on the page knows. Both available answers to
- * "where is the reader" are section-granular: `?at=` stores a section's first
- * block (position.ts § sectionDepth), and `LiveContext.focusRow` returns
- * `sections[...].row` (useColumnContext.ts). Marking the deepest row that
- * *contains* `focusRow` would therefore light the section's **first** paragraph
+ * "where is the reader" stop above the paragraphs: `?at=` stores a section's
+ * first block (position.ts § sectionDepth), and `LiveContext.focusRow` returns
+ * the first row of the section, or sub-section where the article has them, under
+ * the focus line (position.ts § structureFrontier, useColumnContext.ts). Marking
+ * the deepest row that *contains* `focusRow` would therefore light the item's
+ * **first** paragraph
  * every time, on every article, for ever — a mark that is wrong far more often
  * than it is right and looks entirely plausible while being so.
  *
@@ -79,8 +89,14 @@ export interface OutlineRow {
   node: TreeNode;
   /** "3.2" — the reader's address for this row, and what sets its indent. */
   number: string;
-  /** 1 = part, 2 = section, 3 = paragraph. Not the tree depth: see `rowsFor`. */
+  /**
+   * The indent: 1 = part, 2 = section, 3 = sub-section, and a paragraph one
+   * below whatever it hangs off. Whether a row is a paragraph is `paragraph`,
+   * not this — a sub-section and a section's paragraph are both level 3.
+   */
   level: number;
+  /** A paragraph row: a leaf, drawn at rung 5 and never marked current. */
+  paragraph: boolean;
   /** Where clicking it goes — the row's first block. */
   blockId: BlockId;
   startRow: number;
@@ -162,11 +178,15 @@ interface Input {
    * always the *first row of the section under the focus line*, never the exact
    * block. `?at=` is the same (position.ts § sectionDepth). So nothing on this
    * page knows which paragraph the reader is on, and this projection therefore
-   * never claims one — see `PARAGRAPHS_ARE_NEVER_CURRENT`.
+   * never claims one — see `PARAGRAPHS_ARE_NEVER_CURRENT`. Since 261029a the
+   * list it is measured over is Structure's frontier (position.ts §
+   * `structureFrontier`), so where an article divides a section it is the
+   * first row of the *sub-section* under the line: finer, and still never a
+   * paragraph.
    *
    * GPT Sol's review of the plan found this about `?at=`; I answered that
-   * `focusRow` was exact and it is not. Both routes are section-granular and
-   * the review's own second option — stop at the section — is what is built.
+   * `focusRow` was exact and it is not. Neither route reaches a paragraph, and
+   * the review's own second option — stop above the paragraphs — is what is built.
    */
   focusRow: number;
   rung: Rung;
@@ -202,6 +222,10 @@ const NO_MATTER: readonly MatterRange[] = [];
 
 const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.endRow;
 
+/** A node with children — a section or sub-section by shape, not a paragraph. The projected
+    list, as `expand` reads it: Structure builds its tree at full depth, so nothing is cut. */
+const hasChildren = (n: SummaryNode) => n.children.length > 0;
+
 /**
  * Build the drawn list for one rung.
  *
@@ -226,8 +250,14 @@ export function outlineProjection({
 
   const parts = root.children;
   const currentPart = parts.find((p) => contains(p, focusRow)) ?? null;
-  const currentSection =
-    currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
+  /* `focusRow` is a frontier start. On a deepened branch that is the start of
+     the deepest internal node; on today's shallow branches it is exactly the
+     old section-level start, including a leaf directly under a part. */
+  const currentSection = currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
+  const currentSub =
+    currentSection?.children.find((s) => contains(s, focusRow) && hasChildren(s)) ?? null;
+  /** The node the sentence and the paragraphs hang off: the sub-section the reader is in, else the section. */
+  const deepest = currentSub ?? currentSection;
 
   const rows: OutlineRow[] = [];
 
@@ -258,6 +288,7 @@ export function outlineProjection({
        */
       number: supplement ? "" : entry.number,
       level,
+      paragraph,
       blockId: entry.node.range[0],
       startRow: entry.startRow,
       endRow: entry.endRow,
@@ -284,14 +315,15 @@ export function outlineProjection({
    * sections a leaf is a paragraph and gets no row. A node with no text gets
    * no row either, but its
    * children are still walked: a section with no title must not take its
-   * sub-sections with it. Deeper than 3 is drawn at 3's indent, which is as
-   * far as the stylesheet goes.
+   * sub-sections with it. A sub-section is level 3 and drawn as a section, not
+   * a paragraph (`OutlineRow.paragraph`); deeper than 4 is drawn at 4's indent,
+   * which is as far as the stylesheet goes (plan 261029a, item 5).
    */
   const expand = (entry: SummaryNode, depth: number) => {
     const supplement = supplementOf.has(entry.node.id);
     const arc = depth === 1 && !supplement ? arcByRow?.get(entry.startRow)?.text : undefined;
     const gist = supplement ? undefined : entry.gist;
-    push(entry, Math.min(depth, 3), {
+    push(entry, Math.min(depth, 4), {
       ...(gist !== undefined && { sentence: gist }),
       ...(arc !== undefined && { arc }),
     });
@@ -322,23 +354,42 @@ export function outlineProjection({
 
     if (rung < 2 || !isCurrent || supplement) continue;
 
-    for (const section of part.children) {
-      const sectionCurrent = section === currentSection;
-      const sentence =
-        rung >= 3 && sectionCurrent ? section.gist : undefined;
-      const drawn = push(section, 2, sentence !== undefined ? { sentence } : {});
-      if (!drawn) continue;
-
+    /** The sentence, at rung 3, on the deepest current node only. */
+    const sentenceOf = (entry: SummaryNode) =>
+      rung >= 3 && entry === deepest && entry.gist !== undefined ? { sentence: entry.gist } : {};
+    /**
+     * Rung 5: the paragraphs of the deepest current node, one level under it.
+     * **Only ever leaves**, so a section whose children are sub-sections (or a
+     * mix) gets none here — its sub-sections are drawn at rung 2 instead.
+     */
+    const paragraphsOf = (entry: SummaryNode, level: number) => {
+      const kids = entry.children;
       if (
         rung < 5 ||
-        !sectionCurrent ||
+        entry !== deepest ||
         !allowParagraphs ||
-        section.children.length === 0 ||
-        section.children.length > PARAGRAPH_CAP
+        kids.length === 0 ||
+        kids.length > PARAGRAPH_CAP ||
+        kids.some(hasChildren)
       ) {
-        continue;
+        return;
       }
-      for (const para of section.children) push(para, 3, {}, true);
+      for (const para of kids) push(para, level, {}, true);
+    };
+
+    for (const section of part.children) {
+      const drawn = push(section, 2, sentenceOf(section));
+      if (!drawn) continue;
+      if (section === currentSection) {
+        /* The section the reader is in, divided by the article: its
+           sub-sections, each a row of its own. A leaf among them is a
+           paragraph and waits for rung 5 like any other. */
+        for (const sub of section.children) {
+          if (!hasChildren(sub)) continue;
+          if (push(sub, 3, sentenceOf(sub))) paragraphsOf(sub, 4);
+        }
+      }
+      paragraphsOf(section, 3);
     }
   }
 

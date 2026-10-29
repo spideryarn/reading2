@@ -288,11 +288,12 @@
        iA Writer Mono for a model's code and Courier for block ids went on 2026-10-25, so
        there is one monospace. The reader's words were Arial until 2026-10-25, when Greg
        asked for them to be set a little apart, "a hint of being handwritten ... without
-       hurting readability": Shantell Sans, a marker hand drawn for legibility, at its
-       default (least informal) setting. docs/project/fonts.md. */
+       hurting readability": Shantell Sans until 2026-10-29, when Greg found it "a tiny
+       bit ... Comic Sans and irritating" and asked for the same family "a little bit
+       less over the top": Kalam, a pen hand. docs/project/fonts.md. */
     --font-author: 'Source Serif 4 Variable', 'Times New Roman', Times, serif;
     --font-ai: 'iA Writer Quattro', 'Courier New', Courier, monospace;
-    --font-reader: 'Shantell Sans Variable', Arial, Helvetica, 'Liberation Sans', sans-serif;
+    --font-reader: 'Kalam', Arial, Helvetica, 'Liberation Sans', sans-serif;
 
     /* ---- reading measure --------------------------------------------- */
     /* About 60 real characters a line (median), and at most ~65 on most lines — the rule is

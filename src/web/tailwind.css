@@ -73,10 +73,11 @@
 @import "@fontsource/ia-writer-quattro/400-italic.css";
 @import "@fontsource/ia-writer-quattro/700.css";
 @import "@fontsource/ia-writer-quattro/700-italic.css";
-/* The reader's face (2026-10-25): variable on weight only; the other axes
-   stay at their defaults. Both styles cover 300–800. */
-@import "@fontsource-variable/shantell-sans/wght.css";
-@import "@fontsource-variable/shantell-sans/wght-italic.css";
+/* The reader's face (2026-10-29, Shantell Sans before it): Kalam, static, 400
+   and 700 upright only. It has no italic, so the browser slants one; a 500 or
+   600 resolves to 400 or 700 (docs/project/fonts.md). */
+@import "@fontsource/kalam/400.css";
+@import "@fontsource/kalam/700.css";
 
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);

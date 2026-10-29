@@ -196,7 +196,7 @@ import { arrivalTarget, endCentredArrival, isBlockOnScreen, scrollToBlock } from
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
-import { buildSections, sectionDepth } from "../position.js";
+import { buildSections, sectionDepth, structureFrontier } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import { useDockEntrance } from "./dock-entrance.js";
@@ -399,6 +399,15 @@ export function Reader({
     () => buildSections(geometry, article.blocks),
     [geometry, article.blocks],
   );
+  /* **Structure's own, finer list** — a sub-section where the article has
+     them, the section everywhere else (position.ts § `structureFrontier`).
+     Its "you are here" and its ← / → read this; everything else, `?at=`
+     included, keeps `sections`. Plan 261029a. */
+  const frontier = useMemo(
+    () => structureFrontier(geometry, article.blocks),
+    [geometry, article.blocks],
+  );
+  const frontierStarts = useMemo(() => frontier.map((s) => s.row), [frontier]);
   const windowWidth = useWindowWidth();
   const rootFontPx = useRootFontPx();
 
@@ -2373,10 +2382,11 @@ export function Reader({
     geometry.leafDepth,
     !drawerOpen,
     skimKeys ?? quizStepKeys ?? quoteStepKeys ?? searchStepKeys,
-    /* …and the lowest-level sections while Structure is the mode — the unit
-       `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
-       keyboard.md § ← / → in Structure. */
-    mode === "structure" ? sectionDepth(geometry) : null,
+    /* …and the lowest-level sections while Structure is the mode — the
+       stride ↓ took over the band until 2026-10-01 — or sub-sections where the
+       article has them: Structure's frontier, the rows its "you are here" is
+       measured over (plan 261029a). keyboard.md § ← / → in Structure. */
+    mode === "structure" ? frontierStarts : null,
   );
 
   /* **The door after the current stop's block** — SkimPanel.tsx §
@@ -2416,7 +2426,12 @@ export function Reader({
   const quizRead = owner?.quiz ?? null;
   const drawnQuiz = quizRead?.status === "ready" && !quizRead.stale ? quizRead.quiz : null;
   const quizAfter = useMemo(() => {
-    if (!drawnQuiz || drawnQuiz.questions.length === 0) return null;
+    /* **Not while the margin is on screen**: there the questions are among its
+       notes (Greg, spya-fytjtf; plan 261029c), and drawn in both they would
+       say the same sentence twice, side by side. `marginRoom` is the very
+       condition the margin's notes are drawn on (`marginNotes` below), so a
+       question is always in exactly one of the two. */
+    if (marginRoom || !drawnQuiz || drawnQuiz.questions.length === 0) return null;
     const byBlock = questionsByAnchor(
       drawnQuiz.questions,
       article.blocks.map((b) => b.id),
@@ -2429,7 +2444,7 @@ export function Reader({
       );
     }
     return out;
-  }, [drawnQuiz, article.blocks, openQuizAt]);
+  }, [marginRoom, drawnQuiz, article.blocks, openQuizAt]);
 
   /**
    * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx.
@@ -2875,6 +2890,9 @@ export function Reader({
       /* The owner's only, and the feed reads them only with the experimental
          switch on: the mode is behind it (plan 261028c). */
       explanations: isOwner ? ownerFeed.explanations : null,
+      /* The owner's quiz, from the read the prose and the band share — never a
+         stale one, the prose's rule (plan 261029c). */
+      quiz: isOwner && drawnQuiz ? drawnQuiz : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2903,6 +2921,7 @@ export function Reader({
             onOpenAsked={openAskedFromMargin}
             onJump={jumpTo}
             onOpenFinding={openFindingFromMargin}
+            onOpenQuiz={openQuizAt}
           />
         </>,
       );
@@ -2937,6 +2956,8 @@ export function Reader({
     ownerFeed.notes,
     ownerFeed.literature,
     ownerFeed.explanations,
+    drawnQuiz,
+    openQuizAt,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
@@ -4178,7 +4199,7 @@ export function Reader({
             owner={isOwner}
             article={article}
             leafDepth={geometry.leafDepth}
-            sections={sections}
+            frontier={frontier}
             layoutKey={layoutKey}
             supplementOf={geometry.supplementOf}
             arcByRow={arcCells}
@@ -4634,6 +4655,7 @@ export function Reader({
             slug={slug}
             shown={marginRoom}
             awaitingStructure={awaitingStructure(article.tree)}
+            quiz={owner.quiz}
             onFeed={setOwnerFeed}
           />
         )}

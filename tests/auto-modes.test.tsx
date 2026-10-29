@@ -163,10 +163,12 @@ describe("which steps are queued", () => {
        and names no step, and the column asks when it is shown
        (tests/marginalia-relations-on-open.test.tsx;
        docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
+    /* **No `ideas`**, since 2026-10-29. Greg (spya-shwpw5) did not find it
+       helpful and thought it expensive, and it was: a median $0.19 an
+       article. Opening Ideas writes it (plan 261029c). */
     expect(derivedAutoModeSteps()).toEqual([
       "glossary",
       "quotes",
-      "ideas",
       "simple",
       "skim",
       /* Sources' Bibliography, since 2026-10-09: out of the switch, and
@@ -183,6 +185,8 @@ describe("which steps are queued", () => {
     expect(modeStep("marginalia")).toBeNull();
     expect(AUTO_MODE_STEPS).not.toContain("relations");
     expect(AUTO_MODE_STEPS).not.toContain("tweets");
+    expect(modeStep("ideas")).toBe("ideas");
+    expect(AUTO_MODE_STEPS).not.toContain("ideas");
   });
 
   it("the written list the server queues from equals the derived one", () => {
@@ -200,9 +204,8 @@ describe("which steps are queued", () => {
     expect(imported.sort()).toEqual(["./step-order.js", "./types.js"]);
   });
 
-  it("puts Skim after Quotes and Ideas, which it reads", () => {
+  it("puts Skim after Quotes, which it reads", () => {
     expect(AUTO_MODE_STEPS.indexOf("skim")).toBeGreaterThan(AUTO_MODE_STEPS.indexOf("quotes"));
-    expect(AUTO_MODE_STEPS.indexOf("skim")).toBeGreaterThan(AUTO_MODE_STEPS.indexOf("ideas"));
   });
 
   it("takes nothing from behind the experimental switch", () => {
@@ -215,28 +218,32 @@ describe("which steps are queued", () => {
   it("names them to the reader", () => {
     /* Summary, for its lengths. It must not vanish with its `fixed` row (F2).
        In `STEP_ORDER` of each mode's first step, so Summary (`simple`) sits
-       after Ideas since its thread left the list (plan 261022b). */
+       after Quotes since its thread left the list (plan 261022b). Ideas is not
+       named: it is not prepared on import (plan 261029c). */
     expect(autoModesDetail()).toContain(
-      "Glossary, Quotes, Ideas, Summary, Skim and Sources’ Bibliography are prepared",
+      "Glossary, Quotes, Summary, Skim and Sources’ Bibliography are prepared",
     );
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
 });
 
 describe("what each job asks for", () => {
-  it("gives Skim's job the shape its panel posts when both prerequisites are absent", () => {
+  it("gives Skim's job Quotes but not Ideas, which the import no longer queues", () => {
     /* The panel posts `[...precededBy, "skim"]` (useStepJob.ts). With
        neither prerequisite present this is the same work key; after one becomes
        ready the panel may post a narrower row, which serialises behind this job
        and skips rather than paying for Skim twice. Carrying both here is
        what keeps a job that lands first from refusing for want of Quotes (Sol
-       P1). */
+       P1). **Not Ideas** (plan 261029c): carrying every read bought Ideas
+       inside Skim's job on every import after it left the list, so a read
+       the import does not queue is left out and the route is planned
+       without it. */
+    expect(STEP_READS.skim).toContain("ideas");
     expect(autoModeRequests()).toEqual([
       ["glossary"],
       ["quotes"],
-      ["ideas"],
       ["simple"],
-      ["quotes", "ideas", "skim"],
+      ["quotes", "skim"],
       ["bibliography"],
       ["crossrefs"],
     ]);
@@ -246,8 +253,8 @@ describe("what each job asks for", () => {
     /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
        goes before it. The publication stamps them in this order. */
     const { together, after } = autoModePosts();
-    expect(together).toEqual([["glossary"], ["quotes"], ["ideas"], ["simple"], ["bibliography"], ["crossrefs"]]);
-    expect(after).toEqual([["quotes", "ideas", "skim"]]);
+    expect(together).toEqual([["glossary"], ["quotes"], ["simple"], ["bibliography"], ["crossrefs"]]);
+    expect(after).toEqual([["quotes", "skim"]]);
   });
 
   it("knows the same dependencies as the server's queue", () => {

@@ -621,7 +621,11 @@ and falls to a quarter past 100
 
 **So code reads the body's author–year citations itself**
 ([`citation-author-year.ts`](../../src/citation-author-year.ts)): `(Craik, 1943)`, `(Bryson and
-Ho, 1969; Levine, 2021)`, `Hafner et al. (2018, 2020)`. It reads only body prose, never a heading,
+Ho, 1969; Levine, 2021)`, `Hafner et al. (2018, 2020)`, and a list whose items a comma separates,
+`(Carruthers & Gennaro 2020, Rosenthal 2005)` — read only onwards from a cite already read, so a
+stray year never starts one (report `spya-d5e2jk`, plan
+[261029b](../plans/261029b-citations-in-a-comma-separated-list-are-all-read.md): 178 of an arXiv
+paper's 243 works found before, 214 after). It reads only body prose, never a heading,
 note or reference entry. **A work no model row stands for gets a row of its own**
 (`rowsFromText` in [`bibliography.ts`](../../src/bibliography.ts)), with `listedBy: "text"`. Its
 title, authors, year and mentions are the article's own characters (`Levine (2021)`, mentioned at

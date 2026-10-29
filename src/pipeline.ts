@@ -131,6 +131,7 @@ import {
   generateExplanations,
   inputFingerprint as explanationsFingerprint,
   PROMPT_VERSION as EXPLANATIONS_PROMPT_VERSION,
+  previousExplanationsFrom,
 } from "./explanations.js";
 import {
   CROSSREFS_OUTPUT_SCHEMA,
@@ -691,9 +692,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      nothing in the pipeline reads what it writes, and it replaces rather than
      appends. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
-  /* `faq`'s two reasons again: it reads the blocks, the tree and the metadata,
-     nothing in the pipeline reads what it writes, and it replaces rather than
-     appends. Plan 261028c. */
+  /* `faq`'s two reasons: it reads the blocks, the tree and the metadata, and
+     nothing in the pipeline reads what it writes (plan 261028c). And a forced
+     run is *Find more* when the list is current (it appends, as the glossary
+     and quotes do — plan 261029e) and a rewrite otherwise; either way it is a
+     paid call the reader asked for by name, never one a cascade should buy. */
   "explanations",
   /* The same two reasons: it reads the blocks and tree, and nothing except the
      separately requested `illustrated` stage reads what it writes, so a
@@ -5343,9 +5346,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      FORCE_ONLY_WHEN_NAMED.
      docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
 
-     **No baseline read**, like `faq`: an item's id is a hash of its block and
-     words, so a re-run that finds the same words keeps it without reading the
-     old list. */
+     **It reads its previous list**, as `quotes` does, since plan 261029e: a
+     forced run on a current list for the same profile is *Find more*, and
+     appends (src/explanations.ts § `existingFor`). Ids need no inheriting —
+     an item's id is a hash of its block and words. */
   explanations: {
     name: "explanations",
     label: "Finding the places a reader might get stuck",
@@ -5367,15 +5371,23 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
     async run(ctx, store) {
+      /* **The store, not a path.** The previous list is what *Find more*
+         extends; `previousExplanationsFrom` refuses one it cannot read rather
+         than treating it as none, and is null quietly when there is none. */
+      const previous = await previousExplanationsFrom(store, ctx.slug);
       const run = await generateExplanations({
         article: await readArticle(ctx.slug, store),
+        previous,
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
         power: ctx.power,
         cacheArticle: ctx.cacheArticle,
       });
-      const kept = run.explanations.explanations.length;
+      const total = run.explanations.explanations.length;
+      const added = run.explanations.lastAdded ?? total;
+      const passes = run.explanations.passes ?? 1;
+      const appended = passes > 1;
       plog.info(
         {
           slug: ctx.slug,
@@ -5388,18 +5400,29 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           maxTokens: run.maxTokens,
           ms: run.elapsedMs,
           paragraphs: run.paragraphs,
-          explanations: kept,
+          explanations: total,
+          added,
+          passes,
           profiled: run.explanations.profileHash !== null,
-          /* Counts only — never a word of the article or of an explanation.
-             `ambiguous` and `unquoted` are the ones to watch: the model
-             pointing at words it cannot quote once. */
+          /* **This pass's counts**, not the list's: the artefact's `dropped`
+             is cumulative (Sol F6), and a prompt that has drifted shows in
+             the pass that did it. Counts only — never a word of the article
+             or of an explanation. `ambiguous` and `unquoted` are the ones to
+             watch: the model pointing at words it cannot quote once. */
           ...run.dropped,
+          /* Fields, not explanations — src/score-fields.ts. Both scores are
+             required, so any `*Absent` is the model disobeying. */
+          ...run.scores,
         },
-        `explanations ${ctx.slug}: ${kept}`,
+        appended
+          ? `explanations ${ctx.slug}: ${added} more, ${total} in all`
+          : `explanations ${ctx.slug}: ${total}`,
       );
       return {
         parts: { explanations: run.explanations },
-        detail: `${kept} ${kept === 1 ? "explanation" : "explanations"}`,
+        detail: appended
+          ? `${added} more, ${total} in all`
+          : `${total} ${total === 1 ? "explanation" : "explanations"}`,
       };
     },
   },

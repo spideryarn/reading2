@@ -254,6 +254,10 @@ describe("drawn 40px tall under a finger", () => {
     expect(declsFor(coarse, ".quiz-only-read label")).toMatch(/min-height:\s*40px/);
   });
 
+  it("Quiz questions in the margin are 40px tall", () => {
+    expect(declsFor(coarse, ".marg-quiz-q")).toMatch(/min-height:\s*40px/);
+  });
+
   it("Quiz's share pie is 40 × 40, with no negative margin and an 8px gap from the label", () => {
     const pie = declsFor(coarse, ".share-pie");
     expect(pie).toMatch(/width:\s*40px/);

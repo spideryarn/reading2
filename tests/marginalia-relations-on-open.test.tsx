@@ -26,6 +26,10 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "../src/types.js";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -115,7 +119,7 @@ async function settle(): Promise<void> {
 
 /** The column mounting for the owner. Nothing here presses anything. */
 async function openMargin(strict = false, shown = true): Promise<void> {
-  const feedEl = createElement(OwnerMarginFeed, { slug: SLUG, shown, onFeed });
+  const feedEl = createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, slug: SLUG, shown, onFeed });
   await act(async () => root.render(strict ? createElement(StrictMode, null, feedEl) : feedEl));
   await settle();
 }
@@ -262,12 +266,12 @@ describe("the switch on, on a window with no room for the notes", () => {
 describe("the column open on an article still showing its temporary outline", () => {
   it("asks for nothing until the real structure is in, then asks once", async () => {
     await act(async () => jobEngine.start("reader-1"));
-    const waiting = createElement(OwnerMarginFeed, { slug: SLUG, shown: true, awaitingStructure: true, onFeed });
+    const waiting = createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, slug: SLUG, shown: true, awaitingStructure: true, onFeed });
     await act(async () => root.render(waiting));
     await settle();
     expect(starts(), "a job the server would refuse was asked for").toBe(0);
 
-    const arrived = createElement(OwnerMarginFeed, { slug: SLUG, shown: true, awaitingStructure: false, onFeed });
+    const arrived = createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, slug: SLUG, shown: true, awaitingStructure: false, onFeed });
     await act(async () => root.render(arrived));
     await settle();
     expect(starts()).toBe(1);

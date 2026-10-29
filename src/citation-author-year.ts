@@ -68,6 +68,17 @@ const PARENTHETICAL = new RegExp(
   "gu",
 );
 const NARRATIVE = new RegExp(String.raw`(${NAMES})\s+\((${YEARS})(?=\s*[);,])`, "gu");
+/**
+ * The next item of a list whose items a comma separates —
+ * `(Carruthers & Gennaro 2020, Rosenthal 2005)`, arXiv 2308.08708's house
+ * style (report spya-d5e2jk, plan 261029b). Tried only straight after the
+ * years of a parenthetical cite already read, so a year that was not itself a
+ * citation (`(founded in 2019, Kenya 2021)`) never starts a list. After a real
+ * one, `(Smith 2020, Kenya 2021)` still reads Kenya as an author: the grammar
+ * cannot tell, and it is accepted on the measurement — on 2308.08708 the
+ * continuation added 39 works and every one was real (GPT Sol's plan review).
+ */
+const NEXT_IN_LIST = new RegExp(String.raw`,\s*(${NAMES}),?\s+(${YEARS})(?=\s*[);,])`, "uy");
 
 /**
  * **A line that is itself a reference entry** — `Russo, Lucio (2004). The
@@ -132,39 +143,51 @@ export function citeKey(cite: Pick<AuthorYearCite, "surnames" | "year">): string
 /** Every author–year citation in `text`, in order; one per year when an item names several. */
 export function authorYearCites(text: string): AuthorYearCite[] {
   const found = new Map<number, AuthorYearCite[]>();
+  /* Starts matched by PARENTHETICAL or NARRATIVE themselves. Continuations
+     are separate returned hits, but not separate evidence that an ENTRY_LINE
+     is prose: one comma-list in an unmarked reference entry is still one
+     independently found citation shape. */
+  const directStarts = new Set<number>();
+  /** The item `names` + `years` at `start`, if its names are a citation's; `length` runs to the end of its years. */
+  const read = (names: string, years: string, start: number, length: number, form: AuthorYearCite["form"]) => {
+    const { surnames, etAl } = surnamesOf(names);
+    const first = surnames[0];
+    if (first === undefined || NOT_A_NAME.has(fold(first.split(/\s+/u)[0]!))) return undefined;
+    /* A surname in a cased script has a lowercase letter: not `IV` of a
+       manual's edition, not `OECD`. Scripts without case (`李`) still count. */
+    if (!surnames.every((s) => /\p{Ll}/u.test(s) || !/[\p{Lu}\p{Lt}]/u.test(s))) return undefined;
+    const lone = surnames.length === 1 && !etAl;
+    if (form === "narrative" && lone && BEFORE_A_TITLE.test(text.slice(0, start))) return undefined;
+    /* A narrative cite's own bracket closes it: `Levine (2021)`, not `Levine (2021`. */
+    const end = start + length + (form === "narrative" && text[start + length] === ")" ? 1 : 0);
+    return years.split(/,\s*/u).map((year) => ({ start, end, surnames, names: names.replace(/['’]s$/u, ""), etAl, year, form, lone }));
+  };
   for (const pattern of [PARENTHETICAL, NARRATIVE]) {
     for (const m of text.matchAll(pattern)) {
-      const names = m[1]!;
       const start = m.index!;
       if (found.has(start)) continue;
-      const { surnames, etAl } = surnamesOf(names);
-      const first = surnames[0];
-      if (first === undefined || NOT_A_NAME.has(fold(first.split(/\s+/u)[0]!))) continue;
-      /* A surname in a cased script has a lowercase letter: not `IV` of a
-         manual's edition, not `OECD`. Scripts without case (`李`) still count. */
-      if (!surnames.every((s) => /\p{Ll}/u.test(s) || !/[\p{Lu}\p{Lt}]/u.test(s))) continue;
-      const lone = surnames.length === 1 && !etAl;
-      if (pattern === NARRATIVE && lone && BEFORE_A_TITLE.test(text.slice(0, start))) continue;
-      /* A narrative cite's own bracket closes it: `Levine (2021)`, not `Levine (2021`. */
-      const end = start + m[0].length + (pattern === NARRATIVE && text[start + m[0].length] === ")" ? 1 : 0);
-      found.set(
-        start,
-        m[2]!.split(/,\s*/u).map((year) => ({
-          start,
-          end,
-          surnames,
-          names: names.replace(/['’]s$/u, ""),
-          etAl,
-          year,
-          form: pattern === PARENTHETICAL ? ("parenthetical" as const) : ("narrative" as const),
-          lone,
-        })),
-      );
+      const form = pattern === PARENTHETICAL ? ("parenthetical" as const) : ("narrative" as const);
+      const cites = read(m[1]!, m[2]!, start, m[0].length, form);
+      if (cites === undefined) continue;
+      found.set(start, cites);
+      directStarts.add(start);
+      /* The rest of a comma-separated list, each item read from where the last one's years end. */
+      for (let at = cites[0]!.end; form === "parenthetical"; ) {
+        NEXT_IN_LIST.lastIndex = at;
+        const next = NEXT_IN_LIST.exec(text);
+        if (next === null) break;
+        const nextStart = at + next[0].indexOf(next[1]!);
+        const more = read(next[1]!, next[2]!, nextStart, at + next[0].length - nextStart, "parenthetical");
+        if (more === undefined || found.has(nextStart)) break;
+        found.set(nextStart, more);
+        at = more[0]!.end;
+      }
     }
   }
   /* A stray reference-entry block normally contains one author-year shape.
      Do not let that heuristic discard a prose block merely because its first
-     sentence starts `Smith (2020).`: two separate hits are prose evidence. */
-  if (ENTRY_LINE.test(text) && found.size <= 1) return [];
+     sentence starts `Smith (2020).`: two independently matched shapes are
+     prose evidence. */
+  if (ENTRY_LINE.test(text) && directStarts.size <= 1) return [];
   return [...found.entries()].sort(([a], [b]) => a - b).flatMap(([, cites]) => cites);
 }

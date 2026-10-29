@@ -387,6 +387,43 @@ a.fb-earlier-page:focus-visible {
   overflow-x: auto;
 }
 .fb-question-more > pre.fb-mono { margin-top: 0.35rem; }
+/* **A mockup's id in a question, and the mockup it opens in place** (plan
+   261029g): the id reads as a link would, in the monospace an id has, with a
+   ▸/▾ saying it opens here rather than going anywhere; the mockup is boxed
+   after its surrounding text like the ASCII is, so it reads as part of the question. */
+.fb-mockup-toggle {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--highlight-text);
+  font-family: var(--font-mono);
+  font-size: inherit;
+  cursor: pointer;
+}
+.fb-mockup-id {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fb-mockup-toggle::after { content: " ▸"; }
+.fb-mockup-toggle[aria-expanded="true"]::after { content: " ▾"; }
+.fb-mockup {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+}
+.fb-mockup > * { max-width: 100%; }
+.fb-mockup-title {
+  margin: 0;
+  font-size: max(var(--text-min), 0.78rem);
+  font-weight: 700;
+  color: var(--ink);
+}
+.fb-mockup img { display: block; }
 /* What the admin replied, set apart the way a note's comment is. */
 .fb-question-answer {
   align-self: stretch;

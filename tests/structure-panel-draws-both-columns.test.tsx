@@ -75,18 +75,26 @@ function fixture(): { tree: Tree; blocks: Block[] } {
     gist: "What part one establishes.",
   };
 
-  /* Part two: three sections of two blocks each. */
+  /* Part two: three sections of two blocks each, one leaf per block. The
+     leaves matter: only a section with children of its own can be current
+     (structure.ts § `currentSection`, plan 261029a), because a childless one
+     is a paragraph by shape. */
   const sectionIds: NodeId[] = [];
   const p2First = b;
   for (let s = 0; s < 3; s++) {
     const first = block();
     const last = block();
     const sid = `n-s${s}` as NodeId;
+    const leaves = [first, last].map((row) => {
+      const lid = `n-s${s}-l${row}` as NodeId;
+      nodes[lid] = { id: lid, depth: 3, parent: sid, children: [], range: [id(row), id(row)], title: "" };
+      return lid;
+    });
     nodes[sid] = {
       id: sid,
       depth: 2,
       parent: "n-p2",
-      children: [],
+      children: leaves,
       range: [id(first), id(last)],
       title: `SECTION ${s} TITLE`,
       gist: `What section ${s} establishes.`,

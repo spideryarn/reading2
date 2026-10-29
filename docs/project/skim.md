@@ -242,8 +242,14 @@ written under `trajectory/7` and unchanged in `skim/8` (whose request adds a str
   as data. Which Ideas each quote *carries* (same block) or sits *beside* (the nearest body
   paragraph either side, same top-level section) is worked out in code, never by the model. It is
   asked to cover as many Ideas as the quotes allow at each pass. Stops are still quotes only.
-- **It waits for the Ideas.** The automatic run and *Plan it again* find the Ideas first, in the
-  same job, when they are missing or stale; the empty state says so before the press, and that
+- **It waits for the Ideas, except on import.** Since 2026-10-29 an import no longer makes the
+  Ideas (Greg, `spya-shwpw5`; plan
+  [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md)), and its Skim job is
+  `["quotes", "skim"]`, so a new article's route is planned without them: the stop cards have no
+  *Ideas it bears on*, and the Gist covered about two fewer of 21 key ideas when last measured
+  (§ Stage 6 of plan 260928a). Ideas made later mark the route stale, which offers *Plan it again*
+  rather than re-planning by itself. The band's automatic run and *Plan it again* find the Ideas
+  first, in the same job, when they are missing or stale; the empty state says so before the press, and that
   finding them is the long part. The job's end refreshes the stop card's Ideas.
 - **One input hash** (`skimInputHash`) over exactly what the prompt renders is both the stamp
   and the read's freshness check, so regenerated Ideas, or Ideas arriving after a route planned
@@ -407,13 +413,14 @@ lost is checked against what is stored before the box says whether it was saved
 ([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
 [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
-**Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
-SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are now
-drawn in the prose in every mode ([quiz.md § In the prose](quiz.md)), after their passage, so at a
-stop with one it sits between the passage and **Next stop ›** — the cue asks what to look for before
-you read, the question what you took after. Nothing was added to the card or the route: on the card
-the question repeated the cue, and a question as its own stop would braid a second ordered path into
-the route. Both, and the pass's questions at the end of a pass, are deferred in
+**Quiz questions at a stop belong beside the article, not to the card** — Greg, 2026-09-30,
+SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are
+drawn after their passage in every mode ([quiz.md § In the prose](quiz.md)): normally in the prose,
+and among the margin's notes instead while that column is on screen. At a stop with one and no
+margin, it sits between the passage and **Next stop ›** — the cue asks what to look for before you
+read, the question what you took after. Nothing was added to the card or the route: on the card the
+question repeated the cue, and a question as its own stop would braid a second ordered path into the
+route. Both, and the pass's questions at the end of a pass, are deferred in
 [260930i](../plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md).
 
 **The FAQ question at a stop is gone** — Greg, 2026-10-01, SPIDERYARN-READING2-8Z (report

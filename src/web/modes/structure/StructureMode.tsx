@@ -169,7 +169,7 @@ export function StructureBand({
   owner,
   article,
   leafDepth,
-  sections,
+  frontier,
   layoutKey,
   supplementOf,
   arcByRow,
@@ -185,8 +185,13 @@ export function StructureBand({
   article: Article;
   /** `Geometry.leafDepth` — how far down `buildSummaryTree` should walk. */
   leafDepth: number;
-  /** The article's sections, for the focus-line sampler. `buildSections`. */
-  sections: Section[];
+  /**
+   * Structure's own list of where a reader can be, for the focus-line sampler:
+   * `structureFrontier`, which is the section list on a three-level tree and
+   * goes down to the sub-sections where the article has them. Not
+   * `buildSections`, which stops at the sections for `?at=`'s sake. Plan 261029a.
+   */
+  frontier: Section[];
   /** Re-measure when the columns change — the same key the `?at=` tracker uses. */
   layoutKey: string;
   /** `Geometry.supplementOf` — the list face draws the apparatus unnumbered. */
@@ -276,15 +281,16 @@ export function StructureBand({
    * resize must not also move "here".
    *
    * `enabled: true` because mounting is the condition — see the `useMemo`
-   * above. **Section-granular**: `focusRow` is a
-   * section's first row, never the exact block, which is why no paragraph in
+   * above. **Frontier-granular**: `focusRow` is the first row of the
+   * deepest section or sub-section under the focus line (position.ts §
+   * `structureFrontier`), never the exact block, which is why no paragraph in
    * either face is ever marked current.
    *
    * **Held to once a second while the reader scrolls** (useColumnContext.ts §
    * `holdMs`): each change redraws and re-measures a fitted tree, and on an
    * iPad a band redrawn under a moving finger flickered (Greg, spya-m5gxk9).
    */
-  const live = useColumnContext({ sections, enabled: true, layoutKey, holdMs: STRUCTURE_HOLD_MS });
+  const live = useColumnContext({ sections: frontier, enabled: true, layoutKey, holdMs: STRUCTURE_HOLD_MS });
 
   /**
    * **Both halves of "may we draw paragraph rows", answered here rather than in
