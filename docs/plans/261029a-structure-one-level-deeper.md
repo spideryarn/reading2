@@ -4,10 +4,11 @@ Started 2026-10-29, for feedback `spya-pn7gvw` (Greg, admin, suggestion). Worktr
 `fbpn7gvw-structure-one-level-deeper`. Up: [structure.md](../project/structure.md).
 
 **Status: stage 1 (the reading view copes with a deeper tree) is done and on `dev` (7cc28dc53, Sol's
-code-review fixes f44c9da8e; browser-checked on a locally deepened copy of the paper). Stage 2 (the
-structure step makes one) waits on two things: Greg's answer to
-[q-vrnbyj](../user-feedback/questions/q-vrnbyj.md), and the box's OpenRouter key, which is over its
-monthly limit until 1 November, so no prompt can be measured before then. Queued as `qi-negzd289`.**
+code-review fixes f44c9da8e). Greg answered [q-vrnbyj](../user-feedback/questions/q-vrnbyj.md) on
+2026-10-29: automatic, and the layout chosen by trying it (§ Greg's answer). Stage 1b (column B
+opens the current section's sub-sections) is built. Stage 2 (the structure step makes the level)
+waits only on the box's OpenRouter key, over its monthly limit until 1 November, so no prompt can be
+measured before then. Queued as `qi-negzd289`.**
 
 ## What Greg asked
 
@@ -166,9 +167,82 @@ local article whose tree a scratch script deepens by its own headings (local dat
 1,280 px and on a 390 px phone, light and dark, in Fisheye and Expanded. Docs: structure.md,
 granularity-zoom.md § the tree (ragged depth is allowed).
 
-## Stage 2 — the structure step makes the level (after 1 November, after Greg's answer)
+## Greg's answer, and how the layout was chosen
 
-If Greg picks "automatically" (recommended):
+> Okay, I'm not sure, but I'm inclined to say number one, yes, let's try and do this automatically.
+> So that's A. And how should structures show it? Go with your recommendation. Perhaps try a few
+> different ways if you can. Maybe in a mock-up, take screenshots, experiment, ask a couple of
+> sub-agents to play the roles of being product managers or naive users, and then make a decision.
+>
+> — Greg, 2026-10-29, reply `spya-b2ceuy` to q-vrnbyj
+
+So **1A: automatically**, in the one structure call (stage 2 as written). For the layout, three
+ways were built as mockups **on the real page** (local dev server, local copy of the paper; a
+Playwright script edits the panel's DOM using the panel's own classes, so the type, colours,
+ribbon and widths are the real ones; the sub-section titles are the author's h4s, the one summary
+is made up). Screenshots in mockup [m-fq095c](../mockups/m-fq095c.md):
+
+- **X: nested in column B.** The section you are in opens its sub-sections under it, indented;
+  the current one is orange with its summary. (The recommendation.)
+- **Y: a third column**, at 1,520 px. **Finding: the band hardly widens with the window** (it is
+  ~700 px at 1,280 and at 1,520), so three columns are ~230 px each and every title wraps; a
+  summary runs to eight lines of two or three words.
+- **Z: the columns slide down a level** inside a deepened section: column A becomes the part's
+  sections, column B the sub-sections, and the parts shrink to an "↑ All 8 parts" link. (A new
+  idea, added to test whether X's height cost was worth avoiding.)
+
+Judged blind (labelled X/Y/Z, no recommendation given) by three subagents: a product manager
+(Opus) and two first-time readers (Sonnet: a history teacher; a skimming graduate student). **All
+three picked X.** The readers: Y was "busy", "too much to scan", titles split over lines; Z hid
+the rest of the paper behind "a tiny grey link" ("I might think the paper is only these six
+sections"); X "lets me see the whole paper's outline at once". The PM ranked X > Z > Y: X reuses
+the layout, is today's screen whenever the current section has no sub-sections, and matches the
+narrow list; Z re-shuffles the columns under the reader on every crossing into or out of a
+deepened section; Y needs a third layout plus a fallback and is cramped even at 1,520 px.
+
+**Decided: X**, with three of the PM's four tweaks:
+
+1. **A long run must not push the later sections off.** The section and its sub-sections are one
+   measured unit, windowed as one row (Sol's PR-4). If the unit is too tall for the column, the
+   section is drawn as today (closed, with its summary) and a line under the column says
+   "6 sub-sections". (The PM's alternative, an inner window of the current sub-section ± 2 with a
+   "+4 more", is passed over for v1 as a second windowing scheme inside the first; revisit if the
+   fallback is seen.)
+2. **The trail reads as one path**: the opened section is bold and marked current
+   (`aria-current`, as the part in column A is) but carries no wash and no thumb, which stay on
+   the one deepest row; a hairline runs down the sub-section run.
+3. **The section's summary is not lost**: while open, its summary moves to the row's hover card
+   (which `cardFor` already does whenever the row is not printing it).
+4. Indent sub-sections ~1 rem, not 1.35, so long titles stay on one line.
+
+Not acted on: both readers noticed the panel numbers the sub-section 5.5.2 while the article's
+own heading says 2.4.2. That is Structure's existing numbering (its own positional numbers; the
+source's are stripped, queue item `qi-ac2z88kt`), not this change; noted for Greg, not changed.
+
+## Stage 1b — column B opens the current section's sub-sections (no model call)
+
+- **Projection** (`structure.ts`): the current section's row carries `subs: StructureRow[]`
+  (kind `"subsection"`) when its children are internal nodes; the current sub-section is `here`
+  and gets the gist at the rung that gives the current section one; the section keeps `here` and
+  loses its printed gist. One option, `openSubs` (default on), so the panel can also build the
+  closed version. Cards: the opened section's card does not list its children (they are on
+  screen); a sub-section's card is a section's card.
+- **Panel** (`StructurePanel.tsx`): `Row` draws its `subs` inside its own `<li>` as a nested list,
+  so the measuring copy, `capacityFrom` and `windowed` all see the unit as **one row** and can
+  never split it. A second hidden copy of column B, closed, is measured only when a unit exists;
+  if the open unit alone does not fit (capacity 0), column B is drawn closed with the
+  "N sub-sections" line.
+- **CSS**: `.struct-subs`, `.struct-opened`, indent on `.struct-line` (so the thumb still sits on
+  the bracket), the hairline. Light and dark.
+- **Tests**, each seen red first: the projection on the ragged fixture (unit shape, here/gist
+  placement, cards, identity on every non-ragged fixture); the panel draws the nested list and
+  the opened row; the open/closed choice as a pure function. Browser check (Sonnet) on the locally
+  deepened paper at 1,280 and 1,180 px, light and dark, plus a short-band height where the
+  fallback shows.
+
+## Stage 2 — the structure step makes the level (after 1 November)
+
+Greg picked "automatically" (reply `spya-b2ceuy`):
 
 - **Schema**: `depth2Schema` gains optional `children` of a new `depth3Schema` (title, gist, start,
   sourceHeading) — the same shape depth 1 already has. Optional, as depth 1's is, so a section with
@@ -182,6 +256,11 @@ If Greg picks "automatically" (recommended):
   sub-section; an author heading beats the 5–9 fan-out target and the short-section floor. "Never
   split a short section" applies only to joins the model invents. A post-build count of swallowed
   same-or-shallower headings goes on the run and in the eval.
+- **A section's opening prose, before its first sub-heading** (Sol, code review of stage 1b): the
+  prompt must say whether it stays a paragraph directly under the section (unnumbered, not listed in
+  column B; the ragged fixture's shape) or becomes an explicit "Opening" sub-section (numbered .1,
+  listed). The reading view draws either. Recommended: the first, so the author's 2.4.1 stays .1;
+  measure how often the model does the other.
 - **The headings fallback stays three levels** (Sol PR-5: production's fallback is
   `buildBoundedHeadingTree`, whose batching guarantee depends on its shape). A fallback tree is
   provisional and rare; deepening it is a later change if ever.
@@ -193,8 +272,6 @@ If Greg picks "automatically" (recommended):
   ~20% in cost and time.
 - Then, with Greg's yes, re-run this paper's structure in production (≈ $0.65 with labels).
 
-If he picks "on request" instead, stage 2 is the deepening wave's scoped call behind a Structure
-button, and this section is rewritten first.
 
 Queued for the Overseer to pick up after 1 November: `overseer-queue.ts` item naming this plan.
 

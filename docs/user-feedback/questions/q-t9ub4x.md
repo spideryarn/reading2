@@ -1,10 +1,11 @@
 ---
 id: q-t9ub4x
 report: spya-xurkmf
-status: open
+status: answered
 asked: 2026-10-29
 title: Your words are now in Kalam, a pen hand, instead of the comic Shantell Sans. Keep it, or one of the runners-up?
 refs: SPIDERYARN-READING2-PV · docs/user-feedback/261028_2327-the-readers-words-in-kalam-not-shantell.md · docs/plans/261029e-explanations-borrow-glossary-controls-full-width-and-a-calmer-reader-face.md § 1 · docs/mockups/m-nypk6z.md · docs/project/fonts.md
+acted: spya-jm80k5
 ---
 Which face should the words you type be in? The comparison is mockup m-nypk6z: the same sentences of yours in all four.
 
@@ -26,3 +27,9 @@ What I did. I set nine free fonts side by side on your own typed words, at the s
 The picture is on the mockups page after that deploy too (mockups are files that ship with the app). Until then it is in the repo at docs/mockups/m-nypk6z-1.png.
 
 What would decide it: whether you want your words to look clearly handwritten (A), or calmer and closer to ordinary text (B or C). Any of them is a one-line change.
+
+Greg's answer, 2026-10-29 08:58 UTC (in the Feedback dialog, reply spya-jm80k5)
+
+> Okay, let's go with this for now. Good choice.
+
+Settled: Kalam stays as the reader's face. Nothing more to build.

@@ -94,7 +94,7 @@ export const PARAGRAPH_CAP = 8;
  */
 const PARAGRAPH_IS_NEVER_CURRENT = false;
 
-export type RowKind = "part" | "section" | "paragraph";
+export type RowKind = "part" | "section" | "subsection" | "paragraph";
 
 /**
  * **What a row's hover card says — and it is defined as what the panel is *not*
@@ -197,6 +197,18 @@ export interface StructureRow {
    * (matter-view.ts § `coveredByStretches`; plan review of 261018a, F9).
    */
   matter: boolean;
+  /**
+   * **The current section's sub-sections, carried on its own row** (plan
+   * 261029a § Stage 1b). Present only on the current section of column B, and
+   * only when its children are sub-sections rather than paragraphs. On the row
+   * and not spliced into the column, so the panel draws them inside the
+   * section's own `<li>` and every measure and window sees the section and its
+   * sub-sections as **one row**: a window can keep the unit or drop it, never
+   * cut it in half (Sol's PR-4). When the reader is in one of them, it is the
+   * one `here` sub-section and carries the gist the section would otherwise
+   * print.
+   */
+  subs?: StructureRow[];
 }
 
 export interface StructureColumn {
@@ -236,6 +248,13 @@ export interface StructureProjection {
   paragraphTotal: number | null;
   rungA: RungA;
   rungB: RungB;
+  /**
+   * How many sub-sections the current section has when they were **not**
+   * opened (`openSubs: false`, which the panel asks for when the open unit
+   * will not fit), so the column can say so; `null` when there are none, or
+   * when they are drawn.
+   */
+  subsTotal: number | null;
 }
 
 /**
@@ -430,6 +449,7 @@ function attachCards({
   currentSection,
   allowParagraphs,
   paragraphsShown,
+  subPairs,
 }: {
   aPairs: RowPair[];
   bPairs: RowPair[];
@@ -437,6 +457,8 @@ function attachCards({
   currentSection: SummaryNode | null;
   allowParagraphs: boolean;
   paragraphsShown: boolean;
+  /** The opened sub-sections, if any. Their parent's card then lists none of them. */
+  subPairs: RowPair[];
 }) {
   for (const { row, entry } of aPairs) {
     row.card = cardFor(entry, row, entry !== currentPart, allowParagraphs);
@@ -445,9 +467,14 @@ function attachCards({
     row.card = cardFor(
       entry,
       row,
-      allowParagraphs && !(entry === currentSection && paragraphsShown),
+      allowParagraphs && !(entry === currentSection && (paragraphsShown || row.subs !== undefined)),
       allowParagraphs,
     );
+  }
+  /* A sub-section's card is a section's card: its paragraphs are never drawn
+     in this face, so it may name them when the page allows paragraphs. */
+  for (const { row, entry } of subPairs) {
+    row.card = cardFor(entry, row, allowParagraphs, allowParagraphs);
   }
 }
 
@@ -530,6 +557,12 @@ export interface StructureInput {
   limitB?: number | null;
   /** The stretches the prose folds (matter-view.ts § `matterStretches`), for `StructureRow.matter`. */
   matter?: readonly MatterRange[];
+  /**
+   * Open the current section's sub-sections under it (`StructureRow.subs`).
+   * On by default; the panel builds the closed version too, for when the open
+   * unit is taller than column B.
+   */
+  openSubs?: boolean;
 }
 
 export function structureProjection({
@@ -541,10 +574,11 @@ export function structureProjection({
   limitA = null,
   limitB = null,
   matter = NO_MATTER,
+  openSubs = true,
 }: StructureInput): StructureProjection {
   const empty: StructureColumn = { rows: [], earlier: 0, later: 0 };
   if (!root) {
-    return { columnA: empty, columnB: empty, ofPart: null, paragraphTotal: null, rungA, rungB };
+    return { columnA: empty, columnB: empty, ofPart: null, paragraphTotal: null, subsTotal: null, rungA, rungB };
   }
 
   /* ---- the one selection model. Everything below reads these three. ---- */
@@ -650,6 +684,40 @@ export function structureProjection({
     }
   }
 
+  /* ---- the current section's sub-sections (plan 261029a § Stage 1b) ----
+
+     Only its children that have children: a section that opens with a
+     paragraph before its first sub-section keeps that paragraph out of the
+     list, as column B keeps every paragraph out at the shipped rung. The
+     current one gets the gist at the rung the current section would have. */
+  let subsTotal: number | null = null;
+  const subPairs: RowPair[] = [];
+  const sectionPair = bPairs.find((p) => p.entry === currentSection);
+  if (currentSection !== null && sectionPair) {
+    const subs = currentSection.children.filter(hasChildren);
+    const currentSub = subs.find((s) => contains(s, focusRow)) ?? null;
+    const subRows: StructureRow[] = [];
+    for (const sub of subs) {
+      const isCurrent = sub === currentSub;
+      const gist = rungB >= 2 && isCurrent ? sub.gist : undefined;
+      const row = makeRow(sub, "subsection", isCurrent, focusRow, gist, matter);
+      if (row) {
+        subRows.push(row);
+        subPairs.push({ row, entry: sub });
+      }
+    }
+    if (subRows.length > 0 && !openSubs) {
+      subsTotal = subRows.length;
+      subPairs.length = 0;
+    } else if (subRows.length > 0) {
+      sectionPair.row.subs = subRows;
+      /* The deepest marked row prints the sentence, and only it: the section's
+         moves to its card (`cardFor` gives a card the gist whenever the row is
+         not printing it). */
+      if (currentSub !== null) delete sectionPair.row.gist;
+    }
+  }
+
   const columnB = windowed(sectionRows, limitB);
 
   /* The paragraph rung, spliced under the current section if it is still on
@@ -717,6 +785,7 @@ export function structureProjection({
     currentSection,
     allowParagraphs,
     paragraphsShown,
+    subPairs,
   });
 
   return {
@@ -736,6 +805,7 @@ export function structureProjection({
             };
           })(),
     paragraphTotal,
+    subsTotal,
     rungA,
     rungB,
   };

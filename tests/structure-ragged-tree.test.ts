@@ -58,6 +58,7 @@ const SECTIONS = [
   "3.2 Case Studies",
 ];
 const IN_MIDBRAIN = ragged.rowOf("2.4.3 Midbrain Theory") + 1;
+const MIDBRAIN_GIST = ragged.nodeOf("2.4.3 Midbrain Theory").gist;
 /** The paragraph 2.4 opens with, before 2.4.1 — in 2.4 and in no sub-section. */
 const IN_24_INTRO = ragged.rowOf("2.4 Other Theories and Conditions");
 const IN_21 = ragged.rowOf("2.1 Recurrent Processing Theory") + 1;
@@ -366,10 +367,10 @@ describe("Expanded (item 5)", () => {
   });
 });
 
-describe("Structure's two columns (item 6: unchanged, but the paragraph rung lists only leaves)", () => {
+describe("Structure's two columns: the paragraph rung lists only leaves", () => {
   const ALL = { rungA: 4, rungB: 5, allowParagraphs: true } as const;
 
-  it("marks 2.4 in column B and splices nothing under it when its children are sub-sections", () => {
+  it("splices no paragraph rows into column B when 2.4's children are sub-sections", () => {
     const p = structureProjection({ root: summary, focusRow: ragged.rowOf("2.4.3 Midbrain Theory"), ...ALL });
     expect(p.columnB.rows.map((r) => r.kind)).toEqual(Array(5).fill("section"));
     expect(p.columnB.rows.filter((r) => r.here).map((r) => r.text)).toEqual(["Other Theories and Conditions"]);
@@ -381,6 +382,70 @@ describe("Structure's two columns (item 6: unchanged, but the paragraph rung lis
     expect(p.columnB.rows.filter((r) => r.kind === "paragraph").map((r) => r.id)).toEqual(
       ragged.nodeOf("2.1 Recurrent Processing Theory").children,
     );
+  });
+});
+
+/* Plan 261029a § Stage 1b: column B opens the current section's sub-sections
+   under it, as one unit carried on the section's row. */
+describe("Structure's two columns open the current section's sub-sections (stage 1b)", () => {
+  /* The shipped rungs (StructurePanel § STAGE_ONE_RUNG_*). */
+  const SHIPPED = { rungA: 2, rungB: 2, allowParagraphs: true } as const;
+  const frontierRow = (title: string) =>
+    structureFrontier(geometry, ragged.blocks).find((s) => s.nodeId === ragged.nodeOf(title).id)!.row;
+  const opened = (focusRow: number, extra: { openSubs?: boolean } = {}) => {
+    const p = structureProjection({ root: summary, focusRow, ...SHIPPED, ...extra });
+    return { p, section: p.columnB.rows.find((r) => r.text === "Other Theories and Conditions")! };
+  };
+
+  it("in 2.4.3: 2.4 carries its six sub-sections, 2.4.3 is where you are and has the sentence", () => {
+    const { p, section } = opened(frontierRow("2.4.3 Midbrain Theory"));
+    /* Still one row per section: the unit is one row, so a window cannot split it. */
+    expect(p.columnB.rows).toHaveLength(5);
+    expect(section.here).toBe(true);
+    expect(section.gist).toBeUndefined();
+    const subs = section.subs ?? [];
+    expect(subs.map((r) => `${r.number} ${r.text}`)).toEqual(
+      SUB_SECTIONS.map((t, i) => `2.5.${i + 1} ${t.replace(/^2\.4\.\d /, "")}`),
+    );
+    expect(subs.every((r) => r.kind === "subsection")).toBe(true);
+    expect(subs.filter((r) => r.here).map((r) => r.text)).toEqual(["Midbrain Theory"]);
+    expect(subs.find((r) => r.here)!.gist).toBe(MIDBRAIN_GIST);
+    expect(subs.filter((r) => r.gist !== undefined)).toHaveLength(1);
+    expect(subs.filter((r) => r.before).map((r) => r.text)).toEqual(["Attention Schema Theory", "Predictive Processing"]);
+  });
+
+  it("moves 2.4's sentence into its card while it is open, and lists none of its children there", () => {
+    const { section } = opened(frontierRow("2.4.3 Midbrain Theory"));
+    expect(section.card?.gist).toBe(ragged.nodeOf("2.4 Other Theories and Conditions").gist);
+    expect(section.card?.children ?? []).toEqual([]);
+  });
+
+  it("in 2.4's own opening paragraph: the sub-sections are listed, none current, and 2.4 keeps its sentence", () => {
+    const { section } = opened(IN_24_INTRO);
+    expect(section.here).toBe(true);
+    expect(section.gist).toBe(ragged.nodeOf("2.4 Other Theories and Conditions").gist);
+    expect(section.subs).toHaveLength(6);
+    expect(section.subs!.some((r) => r.here)).toBe(false);
+  });
+
+  it("with openSubs off, column B is today's: no unit, 2.4 has its sentence", () => {
+    const { p, section } = opened(frontierRow("2.4.3 Midbrain Theory"), { openSubs: false });
+    expect(section.subs).toBeUndefined();
+    expect(section.gist).toBe(ragged.nodeOf("2.4 Other Theories and Conditions").gist);
+    expect(p.subsTotal).toBe(6);
+  });
+
+  it("opens nothing in an undivided section, nor in another part", () => {
+    for (const row of [IN_21, ragged.rowOf("3.1 Implementing Indicator Properties in AI")]) {
+      const { p } = opened(row);
+      expect(p.columnB.rows.some((r) => r.subs !== undefined)).toBe(false);
+      expect(p.subsTotal).toBeNull();
+    }
+  });
+
+  it("numbers the sub-sections from .1: 2.4's opening paragraph takes no number", () => {
+    const section = summary!.children[1]!.children[4]!;
+    expect(section.children.map((c) => c.number)).toEqual(["", "2.5.1", "2.5.2", "2.5.3", "2.5.4", "2.5.5", "2.5.6"]);
   });
 });
 
@@ -449,6 +514,24 @@ describe("on every uniform tree, nothing changes", () => {
     const sections = buildSections(geo, blocks);
     expect(sections.length).toBeGreaterThan(1);
     expect(structureFrontier(geo, blocks)).toEqual(sections);
+  });
+
+  it.each(uniformFixtures())("column B opens nothing and numbers nothing differently — %s", (_name, tree, blocks) => {
+    const geo = buildGeometry(tree, blocks);
+    const root = buildSummaryTree(tree, blocks, geo.leafDepth);
+    for (let focusRow = 0; focusRow < blocks.length; focusRow++) {
+      const p = structureProjection({ root, focusRow, rungA: 2, rungB: 2, allowParagraphs: true });
+      expect(p.columnB.rows.some((r) => r.subs !== undefined)).toBe(false);
+      expect(p.subsTotal).toBeNull();
+    }
+    /* Every child numbered, as before: no uniform tree has a mixed child list. */
+    const walk = (n: NonNullable<typeof root>): void => {
+      n.children.forEach((c, i) => {
+        if (c.supplement !== true) expect(c.number.endsWith(`.${i + 1}`) || c.number === `${i + 1}`).toBe(true);
+        walk(c);
+      });
+    };
+    if (root) walk(root);
   });
 
   it.each(uniformFixtures())("the sections are the old formula's — %s", (_name, tree, blocks) => {
