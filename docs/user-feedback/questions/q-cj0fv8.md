@@ -33,4 +33,4 @@ Why A was built first: the plan's first draft was B. GPT Sol's review argued tha
 
 What would decide it: if, reading with A, the green feels empty because it comes whatever you write, B. If it feels right as a sign of progress through the piece, keep A.
 
-The other half of your reply, Haiku and Sonnet evals for Quiz, is written and waits for the OpenRouter key to reset on 1 November (about $7 to run). "Smaller and more often" is built into that eval as a second prompt, to be shipped only if it reads better.
+The other half of your reply, Haiku and Sonnet evals for Quiz, is written and waits for the OpenRouter key to reset on 1 November (about $8 to run). "Smaller and more often" is built into that eval as a second prompt, to be shipped only if it reads better.

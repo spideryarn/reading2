@@ -6412,6 +6412,12 @@ export interface QuizQuestion {
  * Counts only. Never the question, never the reference answer, never the quote.
  */
 export interface QuizDropped {
+  /**
+   * Whole candidate questions rejected for any reason. Exact for new runs;
+   * optional because quizzes stored before 2026-10-29 only have the individual
+   * validation counters, some of which count evidence rather than questions.
+   */
+  questions?: number;
   /** A `blockId` that is not in blocks.json. The model invented it. */
   unknownIds: number;
   /** A `quote` that `findQuote` could not locate in the block the model named. */
@@ -6420,7 +6426,7 @@ export interface QuizDropped {
   truncated: number;
   /** Questions past `MAX_QUESTIONS`, discarded whole. */
   overCap: number;
-  /** Questions missing a field. Dropped. */
+  /** Malformed question or evidence records encountered. */
   malformed: number;
   /** Questions asking the same thing as one already kept. Dropped. */
   duplicate: number;

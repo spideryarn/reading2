@@ -247,6 +247,7 @@ export type Dropped = QuizDropped;
 
 export function emptyDropped(): QuizDropped {
   return {
+    questions: 0,
     unknownIds: 0,
     unquoted: 0,
     truncated: 0,
@@ -416,6 +417,7 @@ export function toQuestions(
   let pending = 0;
   const drop = (reason: "malformed" | "duplicate" | "unanchored") => {
     dropped[reason]++;
+    dropped.questions = (dropped.questions ?? 0) + 1;
     pending++;
   };
   for (const [i, item] of raws.entries()) {
@@ -468,7 +470,9 @@ export function toQuestions(
        answer went unread", and if you want to know whether a usable question
        was in there, look at the raw answer. */
     if (out.length === maxQuestions) {
-      dropped.overCap += Math.max(0, raws.length - i - 1);
+      const overCap = Math.max(0, raws.length - i - 1);
+      dropped.overCap += overCap;
+      dropped.questions = (dropped.questions ?? 0) + overCap;
       break;
     }
   }

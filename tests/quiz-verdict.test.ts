@@ -120,7 +120,19 @@ describe("parseVerdict", () => {
 describe("classifyVerdict", () => {
   it("returns the verdict the model gave", async () => {
     behaviour = { kind: "answer", content: "wrong" };
-    await expect(classifyVerdict(REQ)).resolves.toBe("wrong");
+    const seen: string[] = [];
+    await expect(classifyVerdict({ ...REQ, onDiagnostic: (outcome) => seen.push(outcome) })).resolves.toBe("wrong");
+    expect(seen).toEqual(["judged"]);
+  });
+
+  it("lets an eval distinguish explicit unclear from a failed call", async () => {
+    const seen: string[] = [];
+    behaviour = { kind: "answer", content: "unclear" };
+    await expect(classifyVerdict({ ...REQ, onDiagnostic: (outcome) => seen.push(outcome) })).resolves.toBeUndefined();
+    expect(seen).toEqual(["unclear"]);
+    behaviour = { kind: "answer", content: "not a verdict" };
+    await classifyVerdict({ ...REQ, onDiagnostic: (outcome) => seen.push(outcome) });
+    expect(seen).toEqual(["unclear", "failed"]);
   });
 
   it("bills under its own job name, so the mark's cost stays the mark's", async () => {

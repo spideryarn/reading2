@@ -507,8 +507,8 @@ Plan [261029i](../plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-qui
   margin and on the band's question alike, and stays green on later visits. **It says answered, not
   right**: the verdict is still never drawn (§ Whether the reader got it right is asked somewhere
   else). In the band the green goes while the box holds words the mark is not about. No red, no
-  count, no score. Whether Greg wants it to mean *right* instead is asked in the follow-up to
-  q-ejp09q, and the plan says what that would take (a shared, unstored verdict map).
+  count, no score. Whether Greg wants it to mean *right* instead is asked in
+  q-cj0fv8, and the plan says what that would take (a shared, unstored verdict map).
 
 ## Only what you have read
 

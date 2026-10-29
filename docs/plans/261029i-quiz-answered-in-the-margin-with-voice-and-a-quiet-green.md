@@ -170,8 +170,9 @@ carries the "smaller" prompt.
 | Writing | Sonnet 5.5 · Haiku 5.5 × current prompt · *smaller* prompt | 3 each, on 2 corpus articles |
 | Marking | Sonnet 5.5 · Haiku 5.5, on the eight fixed cases | 3 each |
 
-72 calls, about $7 at production's ledger rates (`--dry-run` prints them; Haiku 5.5 is not in
-`src/pricing.ts`, so it is estimated at Haiku 4.5's half of Sonnet).
+120 physical model calls, about $8 at production's ledger rates (`--dry-run` prints them; 72 are
+the visible write/mark trials and 48 are the quick hidden-verdict calls made after each mark; Haiku
+5.5 is not in `src/pricing.ts`, so it is estimated at Haiku 4.5's half of Sonnet).
 
 - **Counted for every call**: cost (its own spend collector, into the ledger as `eval`), seconds,
   failures, questions kept and dropped, gaps, premises, words per question and per reference answer,
@@ -182,10 +183,10 @@ carries the "smaller" prompt.
 - **A failure is a result.** A write that does not parse, or a model that refuses adaptive thinking
   or `effort`, is recorded against its arm and counted in *ok / runs*; averages over successes
   alone would flatter a model that fails half the time.
-- **Judged by reading, blind.** Each Haiku or smaller-prompt batch is paired with the incumbent's on
-  the same article and run, each Haiku mark with Sonnet's on the same case and run, labelled A and B
-  by a seeded hash, with the key in `key.json` beside them. Ties are allowed. An Opus subagent (and
-  Greg, if he likes) reads the pairs before the key.
+- **Judged by reading, blind.** All four writing arms appear once on a deterministically shuffled
+  A/B/C/D sheet for the same article and run; each Haiku mark is paired with Sonnet's on the same
+  case and run. The key is written separately. Ties are allowed. An Opus subagent (and Greg, if he
+  likes) reads the sheets before the key.
 - **The smaller prompt** is `QUIZ_SYSTEM` with four passages replaced: *HOW MANY* goes to thirty;
   each question answerable in a phrase or one short sentence, smaller and easier over thorough; the
   reference answer one short sentence; the questions spread evenly so a reader meets one soon after
@@ -208,9 +209,9 @@ carries the "smaller" prompt.
   Sonnet on more than a third of the pairs, ties counted as neither.
 - **Haiku writes a quiz** if every run parses, its dropped questions average no more than one per
   batch above Sonnet's, and the blind read prefers Sonnet on no more than a third of the pairs.
-- **The smaller prompt ships** (as `quiz/6`) if the blind read prefers it on more than half the
-  pairs, its words per question are at least a quarter fewer, its `blocksBetween` is lower, and its
-  drops are no worse than one per batch.
+- **The smaller prompt ships** (under the next quiz prompt version) if the blind read prefers it on
+  more than half the pairs, its words per question are at least a quarter fewer, its
+  `blocksBetween` is lower, and its drops are no worse than one per batch.
 - Two articles and three runs are not precise. A result inside these margins is "no evidence of a
   difference", which for a cheaper model means it is worth a trial on Greg's own reading, not that
   it is proven.
@@ -234,6 +235,21 @@ GPT Sol, read-only, [261029i-plan-review-sol.md](261029i-plan-review-sol.md). Te
 | F8 | The override must reach the run's model name | `QuizRun.model` is the experiment's model; the ledger records the wire's. |
 | F9 | The decision rule leaned on counters | Rewritten above, with hard failures named before the run. |
 | F10 | Layout, touch, keyboard and the one-press start untested | jsdom tests where they can reach; the rest in the browser check. |
+
+## The code review
+
+GPT Sol, fixing as it went, [261029i-code-review-sol.md](261029i-code-review-sol.md): fourteen
+findings, all fixed in the stage and each read before commit. The ones that change behaviour: a
+margin press that lost the one-mark claim to the band now takes the band's mark when it lands,
+instead of saying "will be here" for ever; no switching question, and no late kept answer filling
+the box, while dictation is live (both would strand the transcript); the band's answered question
+gets the tick as well as the green; the margin's Answer button is 40px on a coarse pointer; each
+microphone is described by its question. The eval: one shuffled A/B/C/D sheet per article and run
+with premise and evidence shown (pairs gave the incumbent away, and hid what is needed to judge
+support); the hidden verdict calls counted, so 120 calls and about $8, not 72 and $7; a failed
+verdict call kept apart from an explicit *unclear*, through an eval-only callback production never
+passes; dropped *questions* counted once each (a new optional `QuizDropped.questions`); gaps
+counted as the blocks strictly between anchors; and each run in its own directory.
 
 ## Simpler options passed over
 
@@ -266,6 +282,12 @@ A Sonnet subagent, Playwright on the box: the margin at its narrowest (200px) an
 width; open, type, answer (the mark is a stubbed or real-key-less failure — the key is over its
 limit — so the check is the box, the layout, the failure line, and a kept answer from the database
 showing green); the microphone's one press on Chromium; light and dark.
+
+**Done 2026-10-29**, on the local database: all of that held, at 178px too, with no console errors.
+One defect: a box opened with Enter left the focus on the question, so typing went nowhere. Fixed
+(the box takes the focus; Escape closes it and gives the focus back), with a test seen red first.
+Left as they are: PageUp/PageDown in the box scroll the article, as the band's box does, and a
+half-typed margin answer is not carried into the band by Open in Quiz.
 
 ## Docs
 

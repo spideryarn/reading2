@@ -3,7 +3,7 @@
  * smaller, easier questions better?
  *
  *     npx tsx evals/quiz-models.ts --dry-run    # every call and a rough total; calls nothing
- *     npx tsx evals/quiz-models.ts              # about $5; writes evals/results/quiz-models/
+ *     npx tsx evals/quiz-models.ts              # about $8; writes a dated directory
  *     npx tsx evals/quiz-models.ts --marks-only | --writes-only
  *
  * **This one spends money.** Greg, 2026-10-29 (spya-jzgrua): *"Can we
@@ -15,11 +15,10 @@
  * ## Read it, blind
  *
  * The counters are a prompt to look, as in evals/quiz.ts. The judgement is a
- * read: every write arm is paired with the incumbent (Sonnet 5.5, today's
- * prompt) on the same article and run, and every Haiku mark with Sonnet's on
- * the same case and run, each pair written to its own file with the two
- * labelled A and B. Which is which is in `key.json` beside them, so a reader —
- * an Opus subagent, or Greg — reads the pairs before opening it.
+ * read: every article/run puts all four writing arms once on a shuffled
+ * A/B/C/D sheet, and every Haiku mark is paired with Sonnet's on the same case
+ * and run. Which is which is in `key.json` beside them, so a reader — an Opus
+ * subagent, or Greg — reads the sheets before opening it.
  *
  * ## A failure is a result
  *
@@ -45,7 +44,9 @@ import { CASES, citations, flags, loadMeta, misattributed, namesTheDraft } from 
 import {
   ARTICLES,
   type BatchStats,
+  batchText,
   batchStats,
+  blindOrder,
   experimentFor,
   incumbentIsA,
   MARK_ARMS,
@@ -56,7 +57,8 @@ import {
 
 loadEnvLocal();
 
-const OUT = path.resolve(import.meta.dirname, "results", "quiz-models");
+const RUN_ID = new Date().toISOString().replace(/[:.]/g, "-");
+const OUT = path.resolve(import.meta.dirname, "results", "quiz-models", RUN_ID);
 
 interface WriteResult {
   arm: string;
@@ -67,6 +69,7 @@ interface WriteResult {
   stats?: BatchStats;
   seconds?: number;
   dollars: number;
+  model?: string;
   batch?: QuizRun["quiz"];
 }
 
@@ -86,6 +89,8 @@ interface MarkResult {
   defendsReader?: boolean;
   seconds?: number;
   dollars: number;
+  model?: string;
+  verdictStatus?: "judged" | "unclear" | "failed";
 }
 
 /** Run `fn` under its own spend collector, so each call's cost is its own. */
@@ -111,15 +116,12 @@ async function loadArticle(name: string): Promise<{ article: Article; meta: Meta
   return { article, meta };
 }
 
-function batchText(batch: QuizRun["quiz"]): string {
-  return batch.questions
-    .map((q, i) => `${i + 1}. ${q.question}\n   — ${q.referenceAnswer}`)
-    .join("\n");
-}
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const calls = plan(CASES.map((c) => c.name));
+  const allCalls = plan(CASES.map((c) => c.name));
+  const calls = allCalls.filter((c) =>
+    args.includes("--marks-only") ? c.half !== "write" : args.includes("--writes-only") ? c.half === "write" : true,
+  );
   if (args.includes("--dry-run")) {
     const total = calls.reduce((sum, c) => sum + c.estimate, 0);
     for (const c of calls)
@@ -151,6 +153,7 @@ async function main(): Promise<void> {
               run,
               ok: true,
               stats: batchStats(result, article.blocks),
+              model: result.model,
               seconds,
               dollars,
               batch: result.quiz,
@@ -169,6 +172,7 @@ async function main(): Promise<void> {
       for (const arm of MARK_ARMS) {
         for (const c of CASES) {
           const started = performance.now();
+          let verdictStatus: MarkResult["verdictStatus"];
           const { result, dollars } = await priced(() =>
             markAnswer({
               power: "standard",
@@ -180,6 +184,9 @@ async function main(): Promise<void> {
               evidence: c.evidence,
               answer: c.said,
               telemetry: { slug: article.slug, questionId: c.name },
+              onVerdictDiagnostic: (outcome) => {
+                verdictStatus = outcome;
+              },
             }),
           );
           const seconds = (performance.now() - started) / 1000;
@@ -193,7 +200,9 @@ async function main(): Promise<void> {
               run,
               ok: true,
               reply: result.reply,
+              model: result.model,
               verdict: result.verdict ?? "none",
+              verdictStatus: verdictStatus ?? "failed",
               ...(c.expectVerdict ? { expectVerdict: c.expectVerdict } : {}),
               flagged: flags(result.reply),
               knownCites: cited.known,
@@ -215,21 +224,25 @@ async function main(): Promise<void> {
   await writeSummary(writes, marks);
 }
 
-/** The pairs, A and B, and the key kept apart from them. */
+/** Blind sheets and their key, kept apart. Writing uses one four-way sheet. */
 async function writeBlind(writes: readonly WriteResult[], marks: readonly MarkResult[]): Promise<void> {
-  const key: Record<string, { A: string; B: string }> = {};
-  const incumbent = WRITE_ARMS[0]!.name;
-  for (const w of writes) {
-    if (w.arm === incumbent || !w.batch) continue;
-    const base = writes.find((x) => x.arm === incumbent && x.article === w.article && x.run === w.run);
-    if (!base?.batch) continue;
-    const pair = `write-${w.article}-run${w.run}-${w.arm}`;
-    const [a, b] = incumbentIsA(pair) ? [base, w] : [w, base];
-    key[pair] = { A: a.arm, B: b.arm };
-    await writeFile(
-      path.join(OUT, `${pair}.md`),
-      `# ${w.article}, run ${w.run}\n\nTwo quizzes on the same article. Which would a reader learn more from, met beside the passage as they read? Which questions are easier to answer in a line?\n\n## A\n\n${batchText(a.batch!)}\n\n## B\n\n${batchText(b.batch!)}\n`,
-    );
+  const key: Record<string, Record<string, string>> = {};
+  for (const article of ARTICLES) {
+    for (let run = 1; run <= RUNS; run++) {
+      const sheet = `write-${article}-run${run}`;
+      const available = writes.filter((w) => w.article === article && w.run === run && w.batch);
+      if (available.length < 2) continue;
+      const ordered = blindOrder(sheet, available.map((w) => w.arm));
+      const labels = ordered.map((arm, i) => ({
+        label: String.fromCharCode(65 + i),
+        row: available.find((w) => w.arm === arm)!,
+      }));
+      key[sheet] = Object.fromEntries(labels.map(({ label, row }) => [label, row.arm]));
+      await writeFile(
+        path.join(OUT, `${sheet}.md`),
+        `# ${article}, run ${run}\n\nFour quizzes on the same article. Rank them: which would a reader learn more from, met beside the passage as they read? Which questions are easiest to answer in a line? Check whether each premise and answer is supported by its quoted evidence.\n\n${labels.map(({ label, row }) => `## ${label}\n\n${batchText(row.batch!)}`).join("\n\n")}\n`,
+      );
+    }
   }
   for (const m of marks) {
     if (m.arm === MARK_ARMS[0]!.name || !m.reply) continue;
@@ -263,14 +276,23 @@ async function writeSummary(writes: readonly WriteResult[], marks: readonly Mark
   for (const arm of MARK_ARMS) {
     const rows = marks.filter((m) => m.arm === arm.name);
     const ok = rows.filter((m) => m.ok);
-    const labelled = ok.filter((m) => m.expectVerdict);
-    const agree = labelled.filter((m) => m.verdict === m.expectVerdict).length;
+    const labelled = ok.filter((m) => m.expectVerdict && m.verdictStatus !== "failed");
+    const agree = labelled.filter((m) =>
+      m.expectVerdict === "none" ? m.verdictStatus === "unclear" : m.verdict === m.expectVerdict,
+    ).length;
     const poisoned = ok.filter((m) => m.defendsReader !== undefined);
     lines.push(
       `| ${arm.name} | ${ok.length} / ${rows.length} | ${rows.length ? (rows.reduce((t, m) => t + m.dollars, 0) / rows.length).toFixed(3) : "—"} | ${rows.length ? (rows.reduce((t, m) => t + (m.seconds ?? 0), 0) / rows.length).toFixed(0) : "—"} | ${agree} / ${labelled.length} | ${ok.reduce((t, m) => t + (m.flagged?.length ?? 0), 0)} | ${ok.reduce((t, m) => t + (m.unknownCites ?? 0), 0)} | ${ok.reduce((t, m) => t + (m.misplaced ?? 0), 0)} | ${poisoned.filter((m) => m.defendsReader).length} / ${poisoned.length} |`,
     );
   }
   const failures = [...writes, ...marks].filter((r) => !r.ok);
+  const verdictFailures = marks.filter((m) => m.ok && m.verdictStatus === "failed");
+  if (verdictFailures.length) {
+    lines.push(
+      "",
+      `Hidden verdict failures: ${verdictFailures.length}. These are excluded from agreement, not credited as an explicit unclear.`,
+    );
+  }
   if (failures.length) {
     lines.push("", "## Failures", "");
     for (const f of failures) lines.push(`- ${"article" in f ? `write ${f.arm} ${f.article}` : `mark ${f.arm} ${f.caseName}`} run ${f.run}: ${f.error}`);

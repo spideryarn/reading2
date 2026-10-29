@@ -1198,10 +1198,13 @@ writes. The method all three follow is
 - [`quiz-models.ts`](quiz-models.ts) — **is Haiku 5.5 good enough to write or mark a quiz, and
   is a quiz of smaller, easier questions better?** Greg's spya-jzgrua. Four write arms (Sonnet and
   Haiku, today's prompt and a smaller-questions one) on two corpus articles and two mark arms on the
-  eight cases, three runs each; a blind A/B pair per comparison with `key.json` apart; the decision
+  eight cases, three runs each; one shuffled A/B/C/D writing sheet per article/run and blind A/B
+  marking pairs, with `key.json` apart; the decision
   rule written before the run in
   [261029i § Stage 4](../docs/plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md).
-  `--dry-run` lists the 72 calls (about $7) and spends nothing. **Not yet run**: written while the
+  `--dry-run` lists the 120 physical calls (about $8: 24 writes, 48 visible marks and the 48 quick
+  hidden-verdict calls those marks make) and spends nothing. `--marks-only` and `--writes-only`
+  filter that plan as well as the paid run. **Not yet run**: written while the
   box's OpenRouter key was over its limit, until 2026-11-01. Its pure half is `quiz-models-lib.ts`;
   the eight marking cases are [`quiz-cases.ts`](quiz-cases.ts), shared with `quiz.ts`.
 - [`quiz-reading-goal.ts`](quiz-reading-goal.ts) — **does who is reading, and why, move the

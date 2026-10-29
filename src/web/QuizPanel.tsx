@@ -96,6 +96,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   List,
@@ -967,6 +968,10 @@ export function QuizPanel({
       arrival.questionId !== shownId &&
       questions.some((q) => q.id === arrival.questionId)
     ) return;
+    if (owner.attempt?.claimedElsewhere) {
+      owner.showKept(shownId);
+      return;
+    }
     if (owner.attempt !== null || typed !== "") return;
     setTyped(keptHere.answer);
     owner.showKept(shownId);
@@ -1289,6 +1294,7 @@ export function QuizPanel({
                     Not while the box holds words the mark is not about —
                     those are an answer nobody has marked yet. */}
                 <p className={answered.has(question.id) && !superseded ? "quiz-question quiz-answered" : "quiz-question"}>
+                  {answered.has(question.id) && !superseded && <Check size={14} aria-hidden="true" className="quiz-tick" />}
                   {question.question}
                 </p>
 

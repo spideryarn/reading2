@@ -183,7 +183,8 @@
   /* The answer button loses `.quiz-go` after a mark but remains pressable: it
      can submit an edited answer. Size the row's Send-shaped button, not the
      transient fill class. */
-  .quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
+  .quiz-actions .chat-send,
+  .marg-quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
 }
 
 .quiz-actions {

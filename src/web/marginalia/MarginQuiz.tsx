@@ -18,7 +18,7 @@
  * green: answered is what the green says, never right or wrong, so the hidden
  * verdict is still not drawn (quiz.md § Whether the reader got it right is
  * asked somewhere else; whether green should mean "right" instead is Greg's
- * question q-ejp09q follow-up).
+ * question q-cj0fv8).
  *
  * The marking is `useQuizMark`, the band's own, so the mark's terminal
  * contract, its kept answer and the page-wide one-mark-per-question claim are
@@ -165,6 +165,10 @@ function Answerable({
    * than racing it (Sol F3).
    */
   const show = (id: QuizQuestionId | null) => {
+    /* The active dictation is bound to this question's keeper key. Hiding its
+       Stop control or moving the box would make the eventual transcript
+       `elsewhere`, so a pointer follows Escape's refusal while it is busy. */
+    if (dictate.busy) return;
     if (id === openId) return;
     clearAttempt();
     const earlier = id ? kept.get(id) : undefined;
@@ -199,12 +203,20 @@ function Answerable({
      goes in only if the box is still empty and has no mark of its own: the
      band's restoring rule. */
   const keptHere = open ? kept.get(open.id) : undefined;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the open question's kept answer changes; the guards read the rest
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the open question's kept answer changes, or when dictation ends and a refused restore may now go ahead; the guards read the rest
   useEffect(() => {
-    if (!open || !keptHere || attempt !== null || typed !== "") return;
+    if (!open || !keptHere || dictate.busy) return;
+    /* A collision is a temporary explanation, not a competing mark. Replace
+       it when the winning surface publishes the kept answer, while leaving
+       this surface's draft alone so the reader can still compare or edit it. */
+    if (attempt?.claimedElsewhere) {
+      showKept(open.id);
+      return;
+    }
+    if (attempt !== null || typed !== "") return;
     setTyped(keptHere.answer);
     showKept(open.id);
-  }, [keptHere]);
+  }, [keptHere, dictate.busy]);
 
   /**
    * **One press to talk** — Greg's *"make the voice button very easy to
@@ -255,7 +267,9 @@ function Answerable({
                 ) : (
                   <MessageCircleQuestionMark size={12} aria-hidden="true" className="marg-quiz-icon" />
                 )}
-                <span className={withVoice("marg-quiz-text", "ai")}>{q.question}</span>
+                <span id={`${boxId}-text-${q.id}`} className={withVoice("marg-quiz-text", "ai")}>
+                  {q.question}
+                </span>
                 {answered && <span className="sr-only"> (answered)</span>}
               </button>
               {dictate.dictation.supported && !isOpen && !stale && (
@@ -273,6 +287,7 @@ function Answerable({
                     type="button"
                     className="marg-quiz-talk"
                     aria-label="Answer out loud"
+                    aria-describedby={`${boxId}-text-${q.id}`}
                     disabled={dictate.busy}
                     onClick={() => talk(q.id)}
                   >

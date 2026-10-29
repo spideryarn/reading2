@@ -10,15 +10,15 @@
  * quizzes."* Plan 261029i § Stage 4.
  */
 import { QUIZ_SYSTEM, type QuizRun } from "../src/quiz.js";
-import { modelFor } from "../src/models.js";
-import type { Block } from "../src/types.js";
+import { CAPABLE_MODEL_OPENROUTER, QUICK_MODEL_OPENROUTER } from "../src/models.js";
+import type { Block, Quiz } from "../src/types.js";
 
 /** Haiku 5.5, in OpenRouter's spelling — the one both wires take. */
 export const HAIKU = "anthropic/claude-haiku-5.5";
 
 /** What writes and marks a quiz today, at standard power (Sonnet 5.5). */
-export const CURRENT_WRITER = modelFor("quiz", "standard");
-export const CURRENT_MARKER = modelFor("quiz-mark", "standard");
+export const CURRENT_WRITER = CAPABLE_MODEL_OPENROUTER;
+export const CURRENT_MARKER = CAPABLE_MODEL_OPENROUTER;
 
 export type PromptArm = "current" | "smaller";
 
@@ -120,6 +120,20 @@ export function experimentFor(arm: WriteArm): { model: string; instructions?: st
 const words = (text: string): number => text.split(/\s+/).filter(Boolean).length;
 const mean = (xs: readonly number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
+/** A blind writing sheet must expose the support path, not just the answer key. */
+export function batchText(batch: Quiz): string {
+  return batch.questions
+    .map((q, i) =>
+      [
+        `${i + 1}. ${q.question}`,
+        ...(q.premise ? [`   Premise: ${q.premise}`] : []),
+        `   Reference answer: ${q.referenceAnswer}`,
+        ...q.evidence.map((e) => `   Evidence ${e.blockId}: “${e.quote}”`),
+      ].join("\n"),
+    )
+    .join("\n");
+}
+
 /** One batch, counted. Nothing here is a verdict: the read is. */
 export interface BatchStats {
   questions: number;
@@ -145,12 +159,14 @@ export function batchStats(run: Pick<QuizRun, "quiz" | "dropped">, blocks: reado
     .map((q) => Math.max(...q.evidence.map((e) => position.get(e.blockId) ?? -1)))
     .filter((i) => i >= 0)
     .sort((a, b) => a - b);
-  const gaps = anchors.slice(1).map((p, i) => p - (anchors[i] ?? p));
+  const gaps = anchors.slice(1).map((p, i) => Math.max(0, p - (anchors[i] ?? p) - 1));
   const d = run.dropped;
   return {
     questions: questions.length,
     premised: questions.filter((q) => q.premise).length,
-    dropped: d.unanchored + d.unknownIds + d.unquoted + d.malformed + d.duplicate + d.overCap,
+    /* Evidence counters are not question counters and can overlap. New runs
+       carry the exact total; the fallback is the best legacy approximation. */
+    dropped: d.questions ?? d.unanchored + d.duplicate + d.overCap,
     gaps: d.gaps ?? 0,
     questionWords: mean(questions.map((q) => words(q.question))),
     answerWords: mean(questions.map((q) => words(q.referenceAnswer))),
@@ -161,7 +177,7 @@ export function batchStats(run: Pick<QuizRun, "quiz" | "dropped">, blocks: reado
 
 /** One call the run will make. */
 export interface PlannedCall {
-  readonly half: "write" | "mark";
+  readonly half: "write" | "mark" | "verdict";
   readonly arm: string;
   readonly model: string;
   readonly article: string;
@@ -179,18 +195,29 @@ export interface PlannedCall {
  * not in the table yet). An estimate for deciding to run, not a measurement:
  * the run's own ledger rows are the measurement.
  */
-const ESTIMATE = { write: 0.24, mark: 0.08 } as const;
-const estimate = (half: "write" | "mark", model: string): number =>
-  ESTIMATE[half] * (model === HAIKU ? 0.5 : 1);
+const ESTIMATE = { write: 0.24, mark: 0.075, verdict: 0.005 } as const;
+const estimate = (half: PlannedCall["half"], model: string, prompt: PromptArm = "current"): number => {
+  const outputUplift = half === "write" && prompt === "smaller" ? 1.25 : 1;
+  return ESTIMATE[half] * (model === HAIKU ? 0.5 : 1) * outputUplift;
+};
 
 export function plan(caseNames: readonly string[]): PlannedCall[] {
   const calls: PlannedCall[] = [];
   for (let run = 1; run <= RUNS; run++) {
-    for (const article of ARTICLES)
-      for (const arm of WRITE_ARMS)
-        calls.push({ half: "write", arm: arm.name, model: arm.model, article, run, estimate: estimate("write", arm.model) });
-    for (const arm of MARK_ARMS)
-      for (const caseName of caseNames)
+    for (const article of ARTICLES) {
+      for (const arm of WRITE_ARMS) {
+        calls.push({
+          half: "write",
+          arm: arm.name,
+          model: arm.model,
+          article,
+          run,
+          estimate: estimate("write", arm.model, arm.prompt),
+        });
+      }
+    }
+    for (const arm of MARK_ARMS) {
+      for (const caseName of caseNames) {
         calls.push({
           half: "mark",
           arm: arm.name,
@@ -200,6 +227,17 @@ export function plan(caseNames: readonly string[]): PlannedCall[] {
           caseName,
           estimate: estimate("mark", arm.model),
         });
+        calls.push({
+          half: "verdict",
+          arm: arm.name,
+          model: QUICK_MODEL_OPENROUTER,
+          article: ARTICLES[0],
+          run,
+          caseName,
+          estimate: estimate("verdict", QUICK_MODEL_OPENROUTER),
+        });
+      }
+    }
   }
   return calls;
 }
@@ -216,4 +254,17 @@ export function incumbentIsA(pairName: string): boolean {
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0) % 2 === 0;
+}
+
+/** Deterministic arm order for one four-way blind writing sheet. */
+export function blindOrder(pairName: string, arms: readonly string[]): string[] {
+  const rank = (arm: string): number => {
+    let h = 0x811c9dc5;
+    for (const ch of `${pairName}\n${arm}`) {
+      h ^= ch.charCodeAt(0);
+      h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+  };
+  return [...arms].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }

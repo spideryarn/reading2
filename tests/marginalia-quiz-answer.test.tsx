@@ -55,8 +55,14 @@ vi.mock("../src/web/useJobs.js", () => ({
   }),
 }));
 vi.mock("../src/web/useAutoRun.js", () => ({ useAutoRun: () => {} }));
+let dictationBusy = false;
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, busy: false, toggle: () => {} }),
+  useDictationField: () => ({
+    dictation: { supported: false },
+    readOnly: dictationBusy,
+    busy: dictationBusy,
+    toggle: () => {},
+  }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null, DictationStrip: () => null, TalkLabel: () => null,
@@ -218,6 +224,7 @@ beforeEach(() => {
   Object.assign(server, { batchId: "spya-batch1", attempts: [], verdict: undefined, marks: [], hold: false, release: [], clock: Date.parse("2026-10-29T12:00:00.000Z") });
   opened.length = 0;
   withBand = false;
+  dictationBusy = false;
   stubFetch();
   host = document.createElement("div");
   document.body.append(host);
@@ -309,6 +316,39 @@ describe("a Quiz question in the margin", () => {
     expect(box()?.value).toBe("");
   });
 
+  it("does not close or switch the box while its dictation is still arriving", async () => {
+    await paint();
+    await click(line(1));
+    dictationBusy = true;
+    await paint();
+    await click(line(2));
+    expect(box()?.closest(".marg-quiz-item")).toBe(item(1));
+    await click(line(1));
+    expect(box()?.closest(".marg-quiz-item")).toBe(item(1));
+  });
+
+  it("does not restore a late kept answer underneath a dictation in progress", async () => {
+    withBand = true;
+    server.hold = true;
+    await paint();
+    const band = host.querySelector(".band")!;
+    type(band.querySelector<HTMLTextAreaElement>("textarea")!, "From the band.");
+    await click(answerButton(band));
+    await click(line(1));
+    dictationBusy = true;
+    await paint();
+
+    await act(async () => {
+      for (const go of server.release) go();
+    });
+    await settle();
+    expect(box()?.value, "the old answer was inserted while this box was listening").toBe("");
+
+    dictationBusy = false;
+    await paint();
+    expect(box()?.value).toBe("From the band.");
+  });
+
   it("turns the band's question the same green, and not while its box holds an answer nobody has marked", async () => {
     withBand = true;
     await paint();
@@ -318,6 +358,7 @@ describe("a Quiz question in the margin", () => {
     type(band.querySelector<HTMLTextAreaElement>("textarea")!, "From the band.");
     await click(answerButton(band));
     expect(asked().classList.contains("quiz-answered")).toBe(true);
+    expect(asked().querySelector(".quiz-tick")).not.toBeNull();
     /* The margin hears it through the shared read. */
     expect(item(1).classList.contains("quiz-answered")).toBe(true);
     type(band.querySelector<HTMLTextAreaElement>("textarea")!, "A different answer.");
@@ -345,5 +386,8 @@ describe("a Quiz question in the margin", () => {
     });
     await settle();
     expect(item(1).classList.contains("quiz-answered")).toBe(true);
+    expect(margin().textContent).not.toContain("already being marked elsewhere on the page");
+    expect(reply()).toBe("A mark of “From the band.”.");
+    expect(box()?.value, "the losing draft is still the reader's words").toBe("From the margin.");
   });
 });

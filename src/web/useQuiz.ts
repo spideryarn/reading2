@@ -147,6 +147,12 @@ export interface Attempt {
    */
   restored?: true;
   /**
+   * Another surface owns the live mark. Kept only long enough to explain why
+   * this press did not start a second paid call; when that mark lands, the
+   * kept-answer restore may replace this attempt while preserving the draft.
+   */
+  claimedElsewhere?: true;
+  /**
    * **The stored row this mark is**, `quiz_attempts.id`: what *Discuss this in
    * chat* names it by, so the chat is about this mark and no other
    * (`QuizOrigin`; plan 261024i, stage 2). Absent on a mark that was not
@@ -784,6 +790,7 @@ export function useQuizMark(slug: string, read: QuizMarkSource): QuizMark {
           status: "failed",
           reply: "",
           error: "This question is already being marked elsewhere on the page. Its mark will be here when it lands.",
+          claimedElsewhere: true,
         });
         return;
       }
