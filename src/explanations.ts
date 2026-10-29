@@ -41,6 +41,16 @@
  *    validation empties, throws — `buildFaq`'s three outcomes.
  * 6. **Owner only**, as Marginalia's relation notes: nothing here reaches a
  *    visitor (src/sharing-steps.ts).
+ * 7. **Two scores on every explanation** since `explanations/2` —
+ *    `difficulty` and `centrality`, Glossary's names and range — so the band
+ *    can order and threshold them as Glossary does. In the system block and
+ *    the schema only: the first pass's user message is byte-identical, so a
+ *    `/1` list reads as *outdated*, never falsely *stale*. A bad score drops
+ *    the field and is counted (`ExplanationScoreDrops`), never the explanation.
+ * 8. **Find more appends**, Quotes' way (src/quotes.ts): `existingFor` decides,
+ *    the step reads the previous list from the store
+ *    (`previousExplanationsFrom`), and the second pass is told the places
+ *    already explained and kept out of their blocks. Plan 261029e § 2c.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -67,6 +77,12 @@ import { plainWords } from "./plain-words.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { findOnlyQuote, findQuote } from "./quote-match.js";
 import {
+  type DifficultyCentralityDrops,
+  noDifficultyCentralityDrops,
+  scoreCounting,
+} from "./score-fields.js";
+import type { ArtifactStore } from "./store/artifacts.js";
+import {
   checkpointKey,
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
@@ -84,8 +100,11 @@ import type {
 
 export type { Explanation, Explanations, ExplanationsDropped } from "./types.js";
 
-/** Bumped whenever the prompt changes what an explanation *is*. */
-export const PROMPT_VERSION = "explanations/1";
+/**
+ * Bumped whenever the prompt changes what an explanation *is*. `/2` (plan
+ * 261029e) added the two scores.
+ */
+export const PROMPT_VERSION = "explanations/2";
 
 /** An explanation is a few sentences. Over this it is dropped, never cut. */
 export const MAX_WORDS = 60;
@@ -111,13 +130,29 @@ export function bodyParagraphs(
   return blocks.filter((b) => isBodyEvidence(b) && b.kind === "text").length;
 }
 
+/** `, "difficulty": 0.35, "centrality": 0.80` and its whitespace, generously — FAQ's `SCORE_CHARS`. */
+export const SCORE_CHARS = 60;
+
 /**
  * The answer budget in tokens, from the field caps: per item an id, the quote,
- * sixty words (counted as a hundred tokens) and the punctuation, at a
- * conservative three characters a token for the quote. Undersizing does not
- * degrade: it throws `truncationFailure` and loses the pass.
+ * the two scores with their keys (`SCORE_CHARS`), sixty words (counted as a
+ * hundred tokens) and the punctuation, at a conservative three characters a
+ * token for everything but the words. Undersizing does not degrade: it throws
+ * `truncationFailure` and loses the pass. Sol F8 on plan 261029e: the scores
+ * must be counted, and tests/explanations.test.ts checks a full answer fits.
  */
-export const ANSWER_TOKENS = 400 + 15 * (Math.ceil((MAX_QUOTE_CHARS + 80) / 3) + 100);
+export const ANSWER_TOKENS = 400 + 15 * (Math.ceil((MAX_QUOTE_CHARS + 80 + SCORE_CHARS) / 3) + 100);
+
+/**
+ * **The scores the prompt required, and did not get. Counts of FIELDS** —
+ * src/score-fields.ts has the absent/rejected split. Logged by the step, never
+ * stored: it is a fact about our prompt, not about the reader's article. The
+ * twin of `GlossaryScoreDrops`.
+ */
+export type ExplanationScoreDrops = DifficultyCentralityDrops;
+
+/** A fresh set. One per run, threaded by hand so nothing sums two runs. */
+export const noExplanationScoreDrops = noDifficultyCentralityDrops;
 
 /**
  * **The item's id: a short hash of where it is** — stable when a re-run finds
@@ -167,12 +202,121 @@ export function isStale(
   return explanations.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
-/** Would a run today use a different prompt or model generation? */
+/**
+ * **Was this list written by an older prompt, or another model generation?**
+ * One predicate for the read path's `outdated` (src/store/pg.ts) and for
+ * `existingFor`, which makes a forced run on an outdated list a rewrite.
+ *
+ * **Older, not merely different** — Quotes' rule (src/quotes.ts §
+ * `isOutdated`, Sol F2 on plan 261029e). In a rollback an older build meets a
+ * list a newer prompt wrote; inequality would call it outdated and rewrite it
+ * with the older prompt. So a version that is newer, or does not parse as
+ * `explanations/<n>`, is current: appended to, never downgraded. (The
+ * `explanations/1` build compared with `!==`; a rollback to it would offer a
+ * rewrite of a `/2` list — accepted for an experimental, owner-only mode.)
+ */
 export function isOutdated(explanations: Pick<Explanations, "version" | "generator">): boolean {
-  return (
-    explanations.version !== PROMPT_VERSION ||
-    !sameGenerator(explanations.generator, CAPABLE_MODEL)
-  );
+  const stored = versionNumber(explanations.version);
+  const current = versionNumber(PROMPT_VERSION);
+  const older = stored !== null && current !== null && stored < current;
+  return older || !sameGenerator(explanations.generator, CAPABLE_MODEL);
+}
+
+function versionNumber(version: string): number | null {
+  const match = /^explanations\/(\d+)$/.exec(version);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * **The list a forced run appends to — *Find more* — or null for a run that
+ * writes a list of its own.** Glossary's three tests (src/glossary.ts §
+ * `existingFor`), with Quotes' version rule:
+ *
+ * - **the same article** (`sourceHash`): a moved article's block ids and
+ *   words may be gone, so extending it would add true lines to a list that is
+ *   no longer true;
+ * - **not outdated** (`isOutdated`): an older prompt's list has no scores, and
+ *   appending scored places to it would leave the band ordering half a list;
+ * - **the same profile, exactly**, either way round: who is reading decides
+ *   what is confusing, so places found for a physicist are not merged with
+ *   places found for nobody in particular. Stricter than `profileIsStale`,
+ *   which does not count a cleared profile as a change — the question here is
+ *   "may these be merged", not "should we warn".
+ *
+ * **One predicate for the step and the button.** `panelRunKind` below asks
+ * this too, for the GET route's `panelRun`, so the band cannot say *Find more*
+ * over a run that rewrites (Sol F1).
+ */
+export function existingFor(
+  onDisk: Explanations | null,
+  sourceHash: string,
+  /** The profile the incoming run will use, hashed — or null for none. */
+  profileHash: string | null,
+): Explanations | null {
+  if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
+  if (isOutdated(onDisk)) return null;
+  /* `?? null`: a list from before the field existed was written for nobody. */
+  if ((onDisk.profileHash ?? null) !== profileHash) return null;
+  return onDisk;
+}
+
+/**
+ * **What the band's run button will do** — append or rewrite — for its label:
+ * *Find more* or *Write a new list*. Glossary's `panelRunKind`, through this
+ * stage's own `existingFor`.
+ *
+ * `stale` stands in for the source test (`isStale` compares the same
+ * fingerprint `existingFor` does). The press keeps **the list's own setting**
+ * (useExplanations.ts § `more`): a plain list is run plainly, so it matches;
+ * a profiled list is run with today's profile, so it matches only if today's
+ * hashes the same — and not if the reader has changed it **or cleared it**,
+ * which `profileChanged` deliberately does not count.
+ *
+ * `nowHash` is the hash of the reader's current profile, or null for none.
+ */
+export function panelRunKind(
+  found: { explanations: Explanations; stale: boolean },
+  nowHash: string | null,
+): "append" | "rewrite" {
+  const recorded = found.explanations.profileHash ?? null;
+  const pressHash = recorded === null ? null : nowHash;
+  const list = found.stale ? null : found.explanations;
+  return existingFor(list, found.explanations.sourceHash, pressHash) ? "append" : "rewrite";
+}
+
+/**
+ * There is a previous `explanations` artefact, this store cannot read it, and
+ * we are not guessing which harmless case it would have been. The sibling of
+ * `QuotesBaselineUnusable` (Sol F5 on plan 261029e).
+ */
+export class ExplanationsBaselineUnusable extends Error {
+  constructor(readonly slug: string) {
+    super(
+      `explanations "${slug}": there is a previous explanations artefact and this store cannot ` +
+        "read it — it will not parse, is of the wrong shape, or is past the size the store reads " +
+        "back.\nA Find more would treat it as no list and write a fresh one over it, quietly.\n" +
+        "Nothing has been written — the explanations are still the previous run's.\n" +
+        "Put it back from a backup, or delete it deliberately if this article's explanations " +
+        "really are starting again from nothing.",
+    );
+    this.name = "ExplanationsBaselineUnusable";
+  }
+}
+
+/**
+ * The previous explanations, **from the store** — what *Find more* extends.
+ * Quotes' table (src/quotes.ts § `previousQuotesFrom`): none is a first run;
+ * one whose `sourceHash` differs is `existingFor`'s to refuse; one the store
+ * cannot read **fails the stage** rather than reading as none; a store fault
+ * propagates.
+ */
+export async function previousExplanationsFrom(
+  store: Pick<ArtifactStore, "readBaseline">,
+  slug: string,
+): Promise<Explanations | null> {
+  const outcome = await store.readBaseline(slug, "explanations", "explanations");
+  if (outcome.state === "unusable") throw new ExplanationsBaselineUnusable(slug);
+  return outcome.state === "ok" ? outcome.value : null;
 }
 
 export function emptyDropped(): ExplanationsDropped {
@@ -200,15 +344,22 @@ function words(v: unknown): { text: string; count: number } {
  * Turn what the model said into explanations, believing as little as possible.
  * Pure. Every rule runs before the cap, so a bad row never uses up a slot;
  * the cap keeps the model's first, and what is returned is in reading order.
+ *
+ * `used` is the blocks the list being extended already explains — on a *Find
+ * more* — so one-per-block holds across the whole list, and a second place in
+ * a used block counts as `repeated`. `scores` counts the two score fields
+ * (src/score-fields.ts), only for an explanation about to be kept.
  */
 export function toExplanations(
   raw: readonly unknown[],
   body: readonly Block[],
   cap: number,
   dropped: ExplanationsDropped,
+  scores: ExplanationScoreDrops = noExplanationScoreDrops(),
+  used: Iterable<string> = [],
 ): Explanation[] {
   const byId = new Map(body.map((b) => [b.id as string, b]));
-  const taken = new Set<string>();
+  const taken = new Set<string>(used);
   const kept: Explanation[] = [];
   for (const row of raw) {
     if (!row || typeof row !== "object") {
@@ -260,6 +411,9 @@ export function toExplanations(
       continue;
     }
     const quote = block.text.slice(span.start, span.end);
+    /* The field, never the explanation: a bad score is dropped and counted. */
+    const difficulty = scoreCounting(r.difficulty, scores, "difficultyAbsent", "difficultyRejected");
+    const centrality = scoreCounting(r.centrality, scores, "centralityAbsent", "centralityRejected");
     kept.push({
       id: explanationId(block.id, quote),
       blockId: block.id,
@@ -267,21 +421,44 @@ export function toExplanations(
       text,
       sure: r.sure,
       outside: r.outside,
+      ...(difficulty === undefined ? {} : { difficulty }),
+      ...(centrality === undefined ? {} : { centrality }),
     });
   }
-  const position = new Map<BlockId, number>();
-  for (const [i, b] of body.entries()) position.set(b.id, i);
-  /* One per block, so the block's position alone is the reading order. */
-  return kept.sort((a, b) => (position.get(a.blockId) ?? 0) - (position.get(b.blockId) ?? 0));
+  return inReadingOrder(kept, body);
 }
 
 /**
- * The artefact, from what the model said plus what we could verify of it.
- * `blocks` is the body evidence the model was shown.
+ * One per block, so the block's position alone is the reading order. A block
+ * the body no longer lists goes last, in the order it came — reachable only
+ * for an old item whose block left the body evidence without the article
+ * moving — and nothing else is reordered.
+ */
+function inReadingOrder(items: readonly Explanation[], body: readonly Block[]): Explanation[] {
+  const position = new Map<BlockId, number>();
+  for (const [i, b] of body.entries()) position.set(b.id, i);
+  const at = (e: Explanation) => position.get(e.blockId) ?? body.length;
+  return items
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => at(a.e) - at(b.e) || a.i - b.i)
+    .map(({ e }) => e);
+}
+
+/**
+ * The artefact, from what the model said plus what we could verify of it —
+ * **and, on a *Find more*, the list it extends**. `blocks` is the body
+ * evidence the model was shown.
  *
- * **Three empty outcomes**, `buildFaq`'s: no `explanations` array throws; an
- * empty one is a real answer; a non-empty one that validation empties throws,
- * with the counts, and nothing is written.
+ * **Three empty outcomes on a first pass**, `buildFaq`'s: no `explanations`
+ * array throws; an empty one is a real answer; a non-empty one that validation
+ * empties throws, with the counts, and nothing is written.
+ *
+ * **On an append nothing short of a missing array throws** — Quotes' rule.
+ * A pass that adds nothing is the piece having no more places worth
+ * explaining: written back with `lastAdded: 0`, and the band says so, because
+ * a *Find more* that found nothing otherwise looks exactly like a button that
+ * did nothing (docs/reusable/silent-success.md). What it dropped is in the
+ * stored, cumulative `dropped` and in the step's log line for the pass.
  */
 export function buildExplanations(
   parsed: { explanations?: unknown },
@@ -292,7 +469,17 @@ export function buildExplanations(
     profileHash: string | null;
     power: ModelPower;
     elapsedMs: number;
+    /** This pass's drops, mutated in place. The artefact stores the cumulative sum. */
     dropped: ExplanationsDropped;
+    /** The scores the model did not give us — logged by the caller, never stored. */
+    scores?: ExplanationScoreDrops;
+    /** The list this pass appends to — `existingFor` — or null/absent for a list of its own. */
+    existing?: Explanations | null;
+    /**
+     * When this pass finished, as an ISO string: one value for every new
+     * item's `addedAt` and the list's `generatedAt`. Absent means now.
+     */
+    now?: string;
   },
 ): Explanations {
   if (!Array.isArray(parsed.explanations)) {
@@ -302,9 +489,21 @@ export function buildExplanations(
     );
   }
   const d = opts.dropped;
+  const existing = opts.existing ?? null;
+  const previous = existing?.explanations ?? [];
+  const completedAt = opts.now ?? new Date().toISOString();
+  /* The cap is per pass, not per list: a *Find more* asks for up to as many
+     again, and one-per-block is what bounds the whole list. */
   const cap = explanationCap(bodyParagraphs(opts.blocks));
-  const explanations = toExplanations(parsed.explanations, opts.blocks, cap, d);
-  if (parsed.explanations.length > 0 && explanations.length === 0) {
+  const added = toExplanations(
+    parsed.explanations,
+    opts.blocks,
+    cap,
+    d,
+    opts.scores,
+    previous.map((e) => e.blockId),
+  ).map((e) => ({ ...e, addedAt: completedAt }));
+  if (!existing && parsed.explanations.length > 0 && added.length === 0) {
     throw new Error(
       `The model wrote ${parsed.explanations.length} explanations and none of them could be ` +
         "kept, so there is nothing to write. " +
@@ -316,18 +515,34 @@ export function buildExplanations(
         `${d.repeated} second ones beside the same block.`,
     );
   }
+  /* Cumulative, as Quotes' `discarded` (Sol F6): the band's (i) reads it as
+     a fact about the list on screen, and after two passes that is both. */
+  const dropped: ExplanationsDropped = { ...d };
+  if (existing) {
+    for (const key of Object.keys(dropped) as (keyof ExplanationsDropped)[]) {
+      dropped[key] += existing.dropped?.[key] ?? 0;
+    }
+  }
   return {
-    version: PROMPT_VERSION,
+    /* On an append the list keeps its version: `existingFor` refuses an older
+       one, so this is the current prompt's — or, in a rollback, a newer
+       build's, whose items most of the list still are. */
+    version: existing ? existing.version : PROMPT_VERSION,
     generator: generatorFor(opts.power),
     slug: opts.slug,
     /* The store's spellings (`sourceHash`, `version`, `generator`,
        `profileHash`), which `stampOf` reads — src/store/artifacts.ts. */
     sourceHash: opts.sourceHash,
-    profileHash: opts.profileHash,
-    explanations,
-    dropped: { ...d },
-    generatedAt: new Date().toISOString(),
-    elapsedMs: opts.elapsedMs,
+    /* Equal by `existingFor` on an append; the list's own is kept regardless. */
+    profileHash: existing ? (existing.profileHash ?? null) : opts.profileHash,
+    /* Old items unchanged — ids, scores and `addedAt` — and the new ones
+       among them, in reading order. */
+    explanations: existing ? inReadingOrder([...previous, ...added], opts.blocks) : added,
+    dropped,
+    passes: (existing?.passes ?? (existing ? 1 : 0)) + 1,
+    lastAdded: added.length,
+    generatedAt: completedAt,
+    elapsedMs: (existing?.elapsedMs ?? 0) + opts.elapsedMs,
   };
 }
 
@@ -393,6 +608,24 @@ Every block of the article above has an id like spya-k3m9qt.
 
 At most one explanation per block.
 
+RATE EVERY EXPLANATION
+
+Two numbers from 0 to 1, on every explanation. Both are required.
+
+  "difficulty" — how likely THIS reader is to get stuck here without your
+                 explanation.
+                 0.9: they would almost certainly lose the thread here.
+                 0.5: they might, if they are reading quickly.
+                 0.1: most would get past it on their own.
+  "centrality" — how much of the piece's argument depends on getting past
+                 this place.
+                 0.9: the main claim cannot be followed without it.
+                 0.5: one part of the argument depends on it.
+                 0.1: a side point; missing it costs little.
+
+Use the whole range, and judge each place on its own — do not make the
+numbers fall in order down the list.
+
 HOW MANY
 
 The user message gives an upper limit. It is a ceiling, not a target. Fewer is
@@ -416,7 +649,9 @@ JSON only, no prose, no code fence:
     "quote": "minimised over the latent variable",
     "text": "The model is not given z; it tries every value and keeps the one that fits best, so z stands for whatever the input leaves open.",
     "sure": true,
-    "outside": false
+    "outside": false,
+    "difficulty": 0.7,
+    "centrality": 0.6
   }
 ]}
 
@@ -428,10 +663,43 @@ string, so if the article's quotation marks are straight ones, escape them as
  * The user message: the ceiling, then who is reading. The profile goes here,
  * after the breakpoint, never in the system block — src/profile.ts §
  * `profileSection` says why. Exported for the test that pins both halves.
+ *
+ * **Byte-identical since `explanations/1`**, and it must stay so: it is in
+ * `inputFingerprint`, so changing it would mark every existing list *stale*
+ * ("describes an older version of the article"), which would be false. A
+ * prompt change goes in `EXPLANATIONS_SYSTEM` and bumps `PROMPT_VERSION`.
  */
 export function renderPrompt(opts: { count: number; profile: string | null }): string {
   const who = profileSection(opts.profile);
   return `Find up to ${opts.count} places where this reader would get stuck, and explain each. Fewer is fine, and none is fine.${who ? `\n\n${who}` : ""}`;
+}
+
+/**
+ * **The user message on a *Find more***: the places already explained — block
+ * id and quote — and a ceiling of as many again, none in a block already used.
+ * Quotes' and Glossary's ALREADY lists (src/quotes.ts § `renderPrompt`).
+ *
+ * In the user message, never the system block: the article is the cached
+ * system block, and it has to be byte-identical between a first pass and every
+ * append, or each pass pays for it again. Not in the fingerprint either — the
+ * fingerprint is the first pass's message, which is what makes a list stale.
+ */
+export function renderAppendPrompt(opts: {
+  count: number;
+  profile: string | null;
+  existing: readonly Pick<Explanation, "blockId" | "quote">[];
+}): string {
+  const who = profileSection(opts.profile);
+  const already = opts.existing.map((e) => `- ${e.blockId}: ${JSON.stringify(e.quote)}`).join("\n");
+  return `Find up to ${opts.count} MORE places where this reader would get stuck, and explain each. Fewer is fine, and none is fine.
+
+=== ALREADY EXPLAINED ===
+
+The reader already has an explanation at each of these places. Do not return a place in any of these blocks, and do not explain the same difficulty again somewhere else in other words. Every one of these is kept whatever you return.
+
+${already}
+
+If there are genuinely no more places worth explaining, return {"explanations": []}. That is a real answer, and a better one than padding.${who ? `\n\n${who}` : ""}`;
 }
 
 function parseJson(raw: string): { explanations?: unknown } {
@@ -456,8 +724,11 @@ export const EXPLANATIONS_OUTPUT_SCHEMA = {
           text: { type: "string" },
           sure: { type: "boolean" },
           outside: { type: "boolean" },
+          /* 0–1 is a code check (`score`, src/score-fields.ts), as FAQ's. */
+          difficulty: { type: "number" },
+          centrality: { type: "number" },
         },
-        required: ["blockId", "quote", "text", "sure", "outside"],
+        required: ["blockId", "quote", "text", "sure", "outside", "difficulty", "centrality"],
         additionalProperties: false,
       },
     },
@@ -470,9 +741,13 @@ validateAnthropicJsonSchema(EXPLANATIONS_OUTPUT_SCHEMA);
 assertNoBlockIdEnums(EXPLANATIONS_OUTPUT_SCHEMA, ["blockId"]);
 
 export interface ExplanationsRun {
+  /** The artefact — on a *Find more*, the old list with this pass's added. */
   explanations: Explanations;
   paragraphs: number;
+  /** **This pass's** drops, for the log; the artefact's `dropped` is cumulative. */
   dropped: ExplanationsDropped;
+  /** The scores this pass asked for and did not get. Logged, never stored. */
+  scores: ExplanationScoreDrops;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -493,6 +768,13 @@ export async function generateExplanations(opts: {
   cacheArticle?: boolean;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
+  /**
+   * The list this article already has, or null **only** when it has none —
+   * `previousExplanationsFrom` is how the pipeline gets it. Required, so a
+   * later change cannot drop it and still compile: the symptom would be every
+   * *Find more* quietly rewriting the list.
+   */
+  previous: Explanations | null;
 }): Promise<ExplanationsRun> {
   const { blocks, tree, meta: realMeta } = opts.article;
 
@@ -502,6 +784,9 @@ export async function generateExplanations(opts: {
   const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
   const sourceHash = inputFingerprint(blocks, tree, realMeta);
   const profileHash = opts.profile ? hashProfile(opts.profile) : null;
+  /* **Append** to a list the current prompt wrote, from this article, for
+     this profile — *Find more*. Anything else a forced run rewrites. */
+  const existing = existingFor(opts.previous, sourceHash, profileHash);
 
   const evidence = blocks.filter(isBodyEvidence);
   const paragraphs = bodyParagraphs(evidence);
@@ -527,7 +812,14 @@ export async function generateExplanations(opts: {
           },
           { type: "text" as const, text: EXPLANATIONS_SYSTEM },
         ],
-        messages: [{ role: "user", content: renderPrompt({ count, profile: opts.profile }) }],
+        messages: [
+          {
+            role: "user",
+            content: existing
+              ? renderAppendPrompt({ count, profile: opts.profile, existing: existing.explanations })
+              : renderPrompt({ count, profile: opts.profile }),
+          },
+        ],
       }, EXPLANATIONS_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
@@ -541,7 +833,9 @@ export async function generateExplanations(opts: {
         const now = Date.now();
         if (now - last < 500) return;
         last = now;
-        report(`up to ${count} explanations, ${Math.round(chars / 1000)}k characters so far`);
+        report(
+          `up to ${count} ${existing ? "more " : ""}explanations, ${Math.round(chars / 1000)}k characters so far`,
+        );
       });
     }
 
@@ -554,6 +848,7 @@ export async function generateExplanations(opts: {
   const raw = finishedText(message, "explanations", maxTokens, ANSWER_TOKENS);
 
   const dropped = emptyDropped();
+  const scores = noExplanationScoreDrops();
   const explanations = buildExplanations(parseJson(raw), {
     slug: opts.article.slug,
     blocks: evidence,
@@ -562,6 +857,8 @@ export async function generateExplanations(opts: {
     power: opts.power,
     elapsedMs: Date.now() - started,
     dropped,
+    scores,
+    existing,
   });
 
   /* Nothing is written here — the caller writes through the store. */
@@ -569,6 +866,7 @@ export async function generateExplanations(opts: {
     explanations,
     paragraphs,
     dropped,
+    scores,
     model: generatorFor(opts.power),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,

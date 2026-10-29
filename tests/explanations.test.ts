@@ -22,10 +22,20 @@ import { CAPABLE_MODEL } from "../src/models.js";
 import { FORCE_ONLY_WHEN_NAMED, STEP_ORDER, sharesArticleCache } from "../src/pipeline.js";
 import { hashProfile, PROFILE_RULES } from "../src/profile.js";
 import { METADATA_RERUN_STEPS } from "../src/rerun-steps.js";
-import { SHAPE } from "../src/store/artifacts.js";
-import type { Block } from "../src/types.js";
+import { isBodyEvidence } from "../src/block-policy.js";
+import { SHAPE, whyUnusableAsBaseline } from "../src/store/artifacts.js";
+import type { Block, Explanations } from "../src/types.js";
 import {
+  ANSWER_TOKENS,
   EXPLANATIONS_OUTPUT_SCHEMA,
+  ExplanationsBaselineUnusable,
+  SCORE_CHARS,
+  existingFor,
+  isOutdated,
+  noExplanationScoreDrops,
+  panelRunKind,
+  previousExplanationsFrom,
+  renderAppendPrompt,
   EXPLANATIONS_SYSTEM,
   MAX_QUOTE_CHARS,
   MAX_WORDS,
@@ -349,7 +359,15 @@ describe("the prompt and schema", () => {
     const json = JSON.stringify(EXPLANATIONS_OUTPUT_SCHEMA);
     expect(json).not.toContain("enum");
     const items = EXPLANATIONS_OUTPUT_SCHEMA.properties.explanations.items;
-    expect([...items.required].sort()).toEqual(["blockId", "outside", "quote", "sure", "text"]);
+    expect([...items.required].sort()).toEqual([
+      "blockId",
+      "centrality",
+      "difficulty",
+      "outside",
+      "quote",
+      "sure",
+      "text",
+    ]);
   });
 });
 
@@ -372,7 +390,7 @@ describe("the request", () => {
     const article: Article = { ...example, meta: null };
     const { quotable, words } = quotableIn(article);
     answer = JSON.stringify({ explanations: [item(quotable.id, words, "The step skipped here is this.")] });
-    const run = await generateExplanations({ power: "standard", article, cacheArticle: true, profile: null });
+    const run = await generateExplanations({ power: "standard", article, cacheArticle: true, profile: null, previous: null });
 
     /* Only Ideas' request is wanted; its answer to an empty list is its own business. */
     answer = JSON.stringify({ ideas: [] });
@@ -422,7 +440,7 @@ describe("the request", () => {
     const { quotable, words } = quotableIn(example);
     const profile = "A cardiologist reading outside her field, after the main argument.";
     answer = JSON.stringify({ explanations: [item(quotable.id, words, "Here is the missing step.")] });
-    const run = await generateExplanations({ power: "standard", article: example, profile });
+    const run = await generateExplanations({ power: "standard", article: example, profile, previous: null });
     const [call] = sent;
     if (!call) throw new Error("no call");
     const body = call.body as { system: { text: string }[]; messages: { content: string }[] };
@@ -443,5 +461,353 @@ describe("forcing", () => {
     expect(METADATA_RERUN_STEPS).not.toContain("explanations");
     expect(cascadeForce([...STEP_ORDER], new Set(["fetch"])).has("explanations")).toBe(false);
     expect(cascadeForce(["faq", "explanations"], new Set(["explanations"])).has("explanations")).toBe(true);
+  });
+});
+
+/* ------------------------------------------------- explanations/2: scores -- */
+
+describe("the two scores (explanations/2, plan 261029e)", () => {
+  it("keeps both scores on a first pass, and stamps the pass", () => {
+    const scores = noExplanationScoreDrops();
+    const made = buildExplanations(
+      { explanations: [{ ...item(A.id, "latent variable"), difficulty: 0.7, centrality: 0.4 }] },
+      opts({ scores, now: "2026-10-29T00:00:00.000Z" }),
+    );
+    expect(made.version).toBe("explanations/2");
+    expect(made.explanations[0]).toMatchObject({
+      difficulty: 0.7,
+      centrality: 0.4,
+      addedAt: "2026-10-29T00:00:00.000Z",
+    });
+    expect(made.passes).toBe(1);
+    expect(made.lastAdded).toBe(1);
+    expect(made.generatedAt).toBe("2026-10-29T00:00:00.000Z");
+    expect(scores).toEqual(noExplanationScoreDrops());
+  });
+
+  it("drops a bad score, not the explanation, and counts absent and rejected apart", () => {
+    const scores = noExplanationScoreDrops();
+    const kept = toExplanations(
+      [
+        { ...item(A.id, "latent variable"), difficulty: 1.4, centrality: "high" },
+        { ...item(B.id, "local entropy"), centrality: 0.5 },
+        { ...item(C.id, "the author does not say why"), difficulty: null, centrality: 0 },
+      ],
+      body,
+      15,
+      emptyDropped(),
+      scores,
+    );
+    expect(kept).toHaveLength(3);
+    expect(kept[0]).not.toHaveProperty("difficulty");
+    expect(kept[0]).not.toHaveProperty("centrality");
+    expect(kept[1]).toMatchObject({ centrality: 0.5 });
+    expect(kept[1]).not.toHaveProperty("difficulty");
+    /* Zero is a score. */
+    expect(kept[2]).toMatchObject({ centrality: 0 });
+    expect(scores).toEqual({
+      difficultyAbsent: 1,
+      difficultyRejected: 2,
+      centralityAbsent: 0,
+      centralityRejected: 1,
+    });
+  });
+
+  it("does not count the scores of an explanation it refuses", () => {
+    const scores = noExplanationScoreDrops();
+    toExplanations([{ ...item("spya-zzzzzz", "x"), difficulty: "?" }], body, 15, emptyDropped(), scores);
+    expect(scores).toEqual(noExplanationScoreDrops());
+  });
+
+  it("asks for the scores in the system block", () => {
+    expect(EXPLANATIONS_SYSTEM).toContain('"difficulty"');
+    expect(EXPLANATIONS_SYSTEM).toContain('"centrality"');
+  });
+
+  /* Sol F8: the budget is a hand sum per item, and it caps the answer. A full
+     answer — every item at the longest quote, with both scores, laid out as a
+     model lays it out — must fit, counting the sixty words as the hundred
+     tokens the budget allows them and everything else at three characters a
+     token. Without `SCORE_CHARS` in the sum, this fails. */
+  it("budgets enough answer tokens for a full list with both scores", () => {
+    const quote = "q".repeat(MAX_QUOTE_CHARS);
+    const one = {
+      blockId: "spya-k3m9qt",
+      quote,
+      text: "",
+      sure: false,
+      outside: false,
+      difficulty: 0.35,
+      centrality: 0.85,
+    };
+    const answer = JSON.stringify({ explanations: Array.from({ length: 15 }, () => one) }, null, 2);
+    const perItemWords = 100;
+    expect(Math.ceil(answer.length / 3) + 15 * perItemWords).toBeLessThanOrEqual(ANSWER_TOKENS);
+    expect(SCORE_CHARS).toBeGreaterThanOrEqual(', "difficulty": 0.35, "centrality": 0.85'.length);
+  });
+});
+
+/* ------------------------------------------ the first-pass message, pinned -- */
+
+describe("the version bump leaves the first pass's message alone", () => {
+  /* `inputFingerprint` hashes this message, so changing it would mark every
+     `explanations/1` list stale — "an older version of the article" — which
+     would be false. The bump must make them outdated instead. The literal
+     hash below was computed by the `explanations/1` code on this fixture. */
+  it("is byte-identical to explanations/1's, and so is the fingerprint", () => {
+    expect(renderPrompt({ count: 4, profile: null })).toBe(
+      "Find up to 4 places where this reader would get stuck, and explain each. Fewer is fine, and none is fine.",
+    );
+    const blocks = [
+      { id: "spya-aaaaaa", kind: "text" as const, text: "The energy is minimised over the latent variable." },
+      { id: "spya-bbbbbb", kind: "text" as const, text: "A fridge exports entropy." },
+    ];
+    const tree = { slug: "s", rootId: "r", nodes: {} } as unknown as Article["tree"];
+    const meta = { title: "A title", url: "https://example.com/a" };
+    expect(inputFingerprint(blocks as never, tree, meta as never)).toBe("37199c283b995cea");
+  });
+});
+
+/* ------------------------------------------------------- outdated, older -- */
+
+const list = (over: Partial<Explanations> = {}): Explanations => ({
+  version: PROMPT_VERSION,
+  generator: CAPABLE_MODEL,
+  slug: "s",
+  sourceHash: "h",
+  profileHash: null,
+  explanations: [],
+  dropped: emptyDropped(),
+  generatedAt: "2026-10-29T00:00:00.000Z",
+  elapsedMs: 1,
+  ...over,
+});
+
+describe("isOutdated: only an older prompt, Quotes' way (Sol F2)", () => {
+  it("is true for an older version and false for this one", () => {
+    expect(isOutdated(list({ version: "explanations/1" }))).toBe(true);
+    expect(isOutdated(list())).toBe(false);
+  });
+
+  it("is false for a newer version and an unparseable one, so a rollback never downgrades", () => {
+    expect(isOutdated(list({ version: "explanations/99" }))).toBe(false);
+    expect(isOutdated(list({ version: "something else" }))).toBe(false);
+  });
+
+  it("is still true for another model generation", () => {
+    expect(isOutdated(list({ generator: "claude-some-other-model" }))).toBe(true);
+  });
+});
+
+/* ------------------------------------------ existingFor and the run button -- */
+
+describe("panelRunKind agrees with existingFor (Sol F1)", () => {
+  /** What `existingFor` says for the panel's press: the list's own profile setting. */
+  const viaExistingFor = (e: Explanations, sourceNow: string, nowHash: string | null) => {
+    const pressHash = e.profileHash == null ? null : nowHash;
+    return existingFor(e, sourceNow, pressHash) ? "append" : "rewrite";
+  };
+  const CASES: {
+    name: string;
+    e: Explanations;
+    sourceNow: string;
+    nowHash: string | null;
+    want: "append" | "rewrite";
+  }[] = [
+    { name: "a current plain list, reader with a profile", e: list(), sourceNow: "h", nowHash: "p1", want: "append" },
+    { name: "a current plain list, reader without one", e: list(), sourceNow: "h", nowHash: null, want: "append" },
+    { name: "a profiled list, same profile", e: list({ profileHash: "p1" }), sourceNow: "h", nowHash: "p1", want: "append" },
+    { name: "a profiled list, profile changed", e: list({ profileHash: "p1" }), sourceNow: "h", nowHash: "p2", want: "rewrite" },
+    /* The case the client's three flags got wrong: `profileChanged` is false
+       here, and the press would rewrite. */
+    { name: "a profiled list, no current profile", e: list({ profileHash: "p1" }), sourceNow: "h", nowHash: null, want: "rewrite" },
+    { name: "an outdated list", e: list({ version: "explanations/1" }), sourceNow: "h", nowHash: null, want: "rewrite" },
+    { name: "a list a newer build wrote", e: list({ version: "explanations/99" }), sourceNow: "h", nowHash: null, want: "append" },
+    { name: "a stale list", e: list(), sourceNow: "moved", nowHash: null, want: "rewrite" },
+  ];
+  for (const c of CASES) {
+    it(`${c.name}: ${c.want}`, () => {
+      expect(panelRunKind({ explanations: c.e, stale: c.e.sourceHash !== c.sourceNow }, c.nowHash)).toBe(c.want);
+      expect(viaExistingFor(c.e, c.sourceNow, c.nowHash)).toBe(c.want);
+    });
+  }
+});
+
+/* ------------------------------------------------- the baseline read (F5) -- */
+
+describe("previousExplanationsFrom", () => {
+  const storeSaying = (outcome: unknown) => ({ readBaseline: () => Promise.resolve(outcome) }) as never;
+
+  it("is null for none, the list for one, and refuses one it cannot read", async () => {
+    expect(await previousExplanationsFrom(storeSaying({ state: "absent" }), "s")).toBeNull();
+    const l = list();
+    expect(await previousExplanationsFrom(storeSaying({ state: "ok", value: l }), "s")).toBe(l);
+    await expect(previousExplanationsFrom(storeSaying({ state: "unusable" }), "s")).rejects.toBeInstanceOf(
+      ExplanationsBaselineUnusable,
+    );
+  });
+
+  it("has a baseline rule, so a usable list is usable and one without a hash is not", () => {
+    const one = buildExplanations({ explanations: [item(A.id, "latent variable")] }, opts());
+    expect(whyUnusableAsBaseline("explanations", one)).toBeNull();
+    expect(whyUnusableAsBaseline("explanations", { ...one, sourceHash: "" })).toMatch(/sourceHash/);
+  });
+});
+
+/* ------------------------------------------------------------ Find more -- */
+
+describe("Find more appends (plan 261029e § 2c)", () => {
+  /** Distinct body blocks of the example article, each with words it holds once. */
+  const places = (n: number) => {
+    const found = example.blocks
+      .filter((b) => isBodyEvidence(b) && b.kind === "text" && b.text.split(/\s+/).length > 14)
+      .slice(0, n)
+      .map((b) => ({ block: b, words: b.text.split(/\s+/).slice(3, 11).join(" ") }));
+    if (found.length < n) throw new Error(`the fixture has fewer than ${n} quotable blocks`);
+    return found;
+  };
+  const scored = (blockId: string, quote: string, text: string) => ({
+    ...item(blockId, quote, text),
+    difficulty: 0.6,
+    centrality: 0.5,
+  });
+  const userMessage = (i: number) => {
+    const call = sent[i];
+    if (!call) throw new Error(`no call ${i}`);
+    return (call.body as { messages: { content: string }[] }).messages[0]?.content ?? "";
+  };
+  /** Another quote from a block, still once in it: its first six words. */
+  const opening = (b: Block) => b.text.split(/\s+/).slice(0, 6).join(" ");
+
+  const firstPass = async (profile: string | null = null) => {
+    const [x] = places(1);
+    answer = JSON.stringify({ explanations: [scored(x!.block.id, x!.words, "First pass.")] });
+    const run = await generateExplanations({ power: "standard", article: example, profile, previous: null });
+    return run.explanations;
+  };
+
+  it("sends the places already explained, keeps the old ones unchanged, and merges in reading order", async () => {
+    const before = await firstPass();
+    const [x, y, z] = places(3);
+    sent.length = 0;
+    /* Out of reading order, one in a used block, and one new pair. */
+    answer = JSON.stringify({
+      explanations: [
+        scored(z!.block.id, z!.words, "Third block."),
+        scored(x!.block.id, opening(x!.block), "Again in a used block."),
+        scored(y!.block.id, y!.words, "Second block."),
+      ],
+    });
+    const run = await generateExplanations({ power: "standard", article: example, profile: null, previous: before });
+
+    const message = userMessage(0);
+    expect(message).toBe(
+      renderAppendPrompt({
+        count: explanationCap(run.paragraphs),
+        profile: null,
+        existing: before.explanations,
+      }),
+    );
+    expect(message).toContain(`${x!.block.id}: ${JSON.stringify(x!.words)}`);
+    expect(message).not.toBe(renderPrompt({ count: explanationCap(run.paragraphs), profile: null }));
+
+    const after = run.explanations;
+    expect(after.explanations.map((e) => e.text)).toEqual(["First pass.", "Second block.", "Third block."]);
+    /* The old item is unchanged: id, scores and stamp. */
+    expect(after.explanations[0]).toEqual(before.explanations[0]);
+    const fresh = after.explanations.slice(1);
+    expect(new Set(fresh.map((e) => e.addedAt)).size).toBe(1);
+    expect(fresh[0]?.addedAt).toBe(after.generatedAt);
+    expect(after.passes).toBe(2);
+    expect(after.lastAdded).toBe(2);
+    /* One per block across passes: the used block's second place is `repeated`. */
+    expect(run.dropped.repeated).toBe(1);
+    expect(after.dropped.repeated).toBe(1);
+    expect(after.version).toBe(before.version);
+    expect(after.sourceHash).toBe(before.sourceHash);
+  });
+
+  it("keeps `dropped` cumulative on the artefact and this pass's on the run", async () => {
+    const before = { ...(await firstPass()), dropped: { ...emptyDropped(), unquoted: 2 } };
+    const [, y] = places(2);
+    answer = JSON.stringify({
+      explanations: [scored(y!.block.id, y!.words, "New."), scored("spya-zzzzzz", "x", "Nowhere.")],
+    });
+    const run = await generateExplanations({ power: "standard", article: example, profile: null, previous: before });
+    expect(run.dropped.unknownIds).toBe(1);
+    expect(run.dropped.unquoted).toBe(0);
+    expect(run.explanations.dropped).toMatchObject({ unknownIds: 1, unquoted: 2 });
+  });
+
+  it("an append that adds nothing is a real answer, not a failure", async () => {
+    const before = await firstPass();
+    answer = JSON.stringify({ explanations: [] });
+    const run = await generateExplanations({ power: "standard", article: example, profile: null, previous: before });
+    expect(run.explanations.explanations).toEqual(before.explanations);
+    expect(run.explanations.lastAdded).toBe(0);
+    expect(run.explanations.passes).toBe(2);
+  });
+
+  it("an append whose every place is in a used block adds nothing, and does not throw", async () => {
+    const before = await firstPass();
+    const [x] = places(1);
+    answer = JSON.stringify({ explanations: [scored(x!.block.id, opening(x!.block), "Again.")] });
+    const run = await generateExplanations({ power: "standard", article: example, profile: null, previous: before });
+    expect(run.explanations.lastAdded).toBe(0);
+    expect(run.dropped.repeated).toBe(1);
+  });
+
+  it("rewrites, with the first pass's message, when the profile has changed", async () => {
+    const before = await firstPass("A physicist.");
+    const [, y] = places(2);
+    sent.length = 0;
+    answer = JSON.stringify({ explanations: [scored(y!.block.id, y!.words, "For a chemist.")] });
+    const run = await generateExplanations({
+      power: "standard",
+      article: example,
+      profile: "A chemist.",
+      previous: before,
+    });
+    expect(userMessage(0)).toBe(renderPrompt({ count: explanationCap(run.paragraphs), profile: "A chemist." }));
+    expect(run.explanations.explanations.map((e) => e.text)).toEqual(["For a chemist."]);
+    expect(run.explanations.passes).toBe(1);
+    expect(run.explanations.profileHash).toBe(hashProfile("A chemist."));
+  });
+
+  it("rewrites an outdated list, and appends to one a newer build wrote", async () => {
+    const before = await firstPass();
+    const [, y] = places(2);
+    answer = JSON.stringify({ explanations: [scored(y!.block.id, y!.words, "New.")] });
+    const outdated = await generateExplanations({
+      power: "standard",
+      article: example,
+      profile: null,
+      previous: { ...before, version: "explanations/1" },
+    });
+    expect(outdated.explanations.passes).toBe(1);
+    expect(outdated.explanations.version).toBe(PROMPT_VERSION);
+
+    const newer = await generateExplanations({
+      power: "standard",
+      article: example,
+      profile: null,
+      previous: { ...before, version: "explanations/99" },
+    });
+    expect(newer.explanations.passes).toBe(2);
+    expect(newer.explanations.version).toBe("explanations/99");
+  });
+
+  it("rewrites a stale list", async () => {
+    const before = await firstPass();
+    const [, y] = places(2);
+    answer = JSON.stringify({ explanations: [scored(y!.block.id, y!.words, "New.")] });
+    const run = await generateExplanations({
+      power: "standard",
+      article: example,
+      profile: null,
+      previous: { ...before, sourceHash: "moved" },
+    });
+    expect(run.explanations.passes).toBe(1);
+    expect(run.explanations.explanations.map((e) => e.text)).toEqual(["New."]);
   });
 });

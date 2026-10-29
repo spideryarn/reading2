@@ -664,8 +664,9 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          over `articleWithIds` with `profileSection(profile)` after it
          (src/explanations.ts), `profileHash` in its stamp (src/pipeline.ts §
          STEPS.explanations).
-       - "written once and stored": the `explanations` column, replaced on a
-         forced re-run (`FORCE_ONLY_WHEN_NAMED`).
+       - "written once and stored": the `explanations` column; a forced re-run
+         (`FORCE_ONLY_WHEN_NAMED`) appends (*Find more*) or rewrites, as
+         `existingFor` decides (src/explanations.ts, plan 261029e).
        - "the missing piece, not a retelling" and "not a single term's
          meaning, which is Glossary's": the prompt's own two rules
          (src/explanations.ts § 3).
