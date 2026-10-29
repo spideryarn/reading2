@@ -256,6 +256,11 @@ Greg picked "automatically" (reply `spya-b2ceuy`):
   sub-section; an author heading beats the 5–9 fan-out target and the short-section floor. "Never
   split a short section" applies only to joins the model invents. A post-build count of swallowed
   same-or-shallower headings goes on the run and in the eval.
+- **A section's opening prose, before its first sub-heading** (Sol, code review of stage 1b): the
+  prompt must say whether it stays a paragraph directly under the section (unnumbered, not listed in
+  column B; the ragged fixture's shape) or becomes an explicit "Opening" sub-section (numbered .1,
+  listed). The reading view draws either. Recommended: the first, so the author's 2.4.1 stays .1;
+  measure how often the model does the other.
 - **The headings fallback stays three levels** (Sol PR-5: production's fallback is
   `buildBoundedHeadingTree`, whose batching guarantee depends on its shape). A fallback tree is
   provisional and rare; deepening it is a later change if ever.

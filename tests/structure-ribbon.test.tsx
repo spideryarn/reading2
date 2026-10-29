@@ -206,7 +206,7 @@ describe("the ribbon's geometry", () => {
     const css = readFileSync("src/web/styles/structure-mode.css", "utf8");
     expect(css).toMatch(
       new RegExp(
-        String.raw`\.struct-grid\[data-ribbon\] > \.struct-inner \.struct-row\[aria-current\]::before \{\s*left: -${RIBBON_EDGE_INSET_PX}px;`,
+        String.raw`\.struct-grid\[data-ribbon\] > \.struct-inner \.struct-row\[aria-current\]:not\(\.struct-ancestor\)::before \{\s*left: -${RIBBON_EDGE_INSET_PX}px;`,
       ),
     );
     expect(css).toMatch(
