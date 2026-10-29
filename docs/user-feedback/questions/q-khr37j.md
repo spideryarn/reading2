@@ -1,10 +1,11 @@
 ---
 id: q-khr37j
 report: none
-status: open
+status: answered
 asked: 2026-10-29
 title: [Q-agents-rename] May tidy-renames-sweep apply its five AGENTS.md edits for product-vision.md and principles.md?
 refs: session tidy-renames-sweep · worktree /var/tmp/spideryarn-worktrees/tidy-names-and-drift · scratch AGENTS.proposed.md in session 82630029's scratchpad · docs/reusable/edit-important-docs.md
+acted: spya-sh2nv9
 ---
 May the session tidy-renames-sweep make exactly the five AGENTS.md edits below, so it can finish renaming vision.md to product-vision.md and push?
 
@@ -46,3 +47,9 @@ The five edits:
 Prefer boring and Simpler first move from vision.md into principles.md in the same push. Their wording is unchanged.
 
 How you answer reaches the session. Your reply here is your approval. The Overseer applies the edit itself and tells the session to carry on. It does not ask the session to treat a relayed message as your yes.
+
+Greg's answer, 2026-10-29 09:13 UTC (in the Feedback dialog, reply spya-sh2nv9)
+
+> Approved.
+
+Settled: A. The Overseer applied the five edits word for word to AGENTS.md in the tidy-names-and-drift worktree, and told tidy-renames-sweep to test and push with the rest of its tidy-up.
