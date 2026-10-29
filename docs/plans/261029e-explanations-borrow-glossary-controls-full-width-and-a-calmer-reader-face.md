@@ -249,7 +249,12 @@ capped list can only ever show fewer — the opposite of what he asked to be abl
 
 - [x] Plan reviewed by GPT Sol (all taken but F13 and half of F1)
 - [x] Stage 1 — the face (98cde90e8; F9 in a follow-up)
-- [ ] Stage 2 — server
-- [ ] Stage 3 — client
-- [ ] Code reviewed by GPT Sol
-- [ ] Stage 4 — docs, question, notes
+- [x] Stage 2 — server (74920bc2d)
+- [x] Stage 3 — client (b0eb29ade). The builder's five departures from the plan are listed in
+  the code review prompt, and Sol judged them sound. Checked in a browser against a canned list
+  at 1600 and 1280: rows sit 11px from the left and 12px from the right (31px on the right
+  before), and nothing overlaps the corner (i). The profile badge's clearance was not seen,
+  because no profile was set.
+- [x] Code reviewed by GPT Sol: no defect in the code, and five tests added where a broken
+  feature would have stayed green (`…-code-review-sol.md`)
+- [x] Stage 4 — docs, question q-t9ub4x, notes

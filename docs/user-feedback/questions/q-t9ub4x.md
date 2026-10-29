@@ -4,7 +4,7 @@ report: spya-xurkmf
 status: open
 asked: 2026-10-29
 title: Your words are now in Kalam, a pen hand, instead of the comic Shantell Sans. Keep it, or one of the runners-up?
-refs: docs/plans/261029e-explanations-borrow-glossary-controls-full-width-and-a-calmer-reader-face.md § 1 · docs/mockups/m-nypk6z.md · docs/project/fonts.md
+refs: SPIDERYARN-READING2-PV · docs/user-feedback/261028_2327-the-readers-words-in-kalam-not-shantell.md · docs/plans/261029e-explanations-borrow-glossary-controls-full-width-and-a-calmer-reader-face.md § 1 · docs/mockups/m-nypk6z.md · docs/project/fonts.md
 ---
 Which face should the words you type be in? The comparison is mockup m-nypk6z: the same sentences of yours in all four.
 
