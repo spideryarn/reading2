@@ -60,6 +60,10 @@ type StepAutoRunTarget = StepTarget<
   | "sources-claims"
   /* Every work the piece cites — docs/plans/260911g-citations-mode.md. */
   | "bibliography"
+  /* Sources › Digest: the prose digest of what the piece cites and who cites
+     it, armed by the press on its chip or command-bar row —
+     docs/plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md. */
+  | "sources-digest"
   /* The questions a careful reader would put to the piece —
      docs/plans/260916d-faq-mode.md. */
   | "faq"

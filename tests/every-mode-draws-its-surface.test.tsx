@@ -291,6 +291,8 @@ const RELATED_TITLE = "Instruments Before Theories";
 const INVESTIGATE_SUGGESTED = "How has this piece been received, and by whom?";
 /* Where it sits' literature-search button, written out for the same reason (plan 261025h). */
 const SITUATE_RUN = "Search the literature";
+/* The sources digest's own button, with none stored (SourcesDigestPanel.tsx § `DIGEST_RUN`). */
+const DIGEST_RUN = "Write the digest";
 const RELATED_WORK = {
   kind: "found",
   works: [{ openalexId: "W1234567", title: RELATED_TITLE, authors: ["Ada Lovelace"], authorCount: 1, year: 2019 }],
@@ -835,6 +837,8 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   "sources-where": true,
   /* The press that turns the margin on: the same search, from the margin (plan 261029h). */
   "margin-literature": true,
+  /* Sources › Digest: its own step, armed by a press on its chip (plan 261030b). */
+  "sources-digest": true,
   bibliography: true,
   faq: true,
   explanations: true,
@@ -878,6 +882,8 @@ function artefact(url: string): Response | null {
   if (url.startsWith("/api/related-work/")) return json(has ? RELATED_WORK : { kind: "not-searched" });
   /* Nobody has searched the literature: the none-yet answer (Where it sits, plan 261025h). */
   if (url.startsWith("/api/situate/")) return json(null);
+  /* Nobody has written the sources digest: the none-yet answer (plan 261030b). */
+  if (url.startsWith("/api/sources-digest/")) return json(null);
   /* Sources' Claims: the reader's checks (none), and the list. Before
      2026-10-09 nothing here opened Claims, so neither was served. */
   if (url.startsWith("/api/sources-claims/") && url.endsWith("/checks")) return json({ checks: [] });
@@ -1673,6 +1679,8 @@ const DRAWS: Record<Mode, Draws> = {
  */
 const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
   { search: "?mode=sources", where: ".mode-band.sources.where", says: SITUATE_RUN },
+  /* The sources digest, behind the switch this file turns on (plan 261030b). */
+  { search: "?mode=sources&sources=digest", where: ".mode-band.sources.digest", says: DIGEST_RUN },
   { search: "?mode=sources&sources=bibliography", where: ".mode-band.sources.bibliography", says: CITATION_TITLE },
   { search: "?mode=sources&sources=not-cited", where: ".mode-band.sources.not-cited", says: RELATED_TITLE },
   { search: "?mode=sources&sources=links", where: ".mode-band.sources.links", says: LINK_PHRASE },
@@ -1696,6 +1704,8 @@ describe("phase B — Sources' seven sub-modes", () => {
         const chips = (band as Element).querySelectorAll(":scope > .band-head .rcp-views [role='radio']");
         expect([...chips].map((c) => c.textContent?.replace(/\d+$/, ""))).toEqual([
           "Where it sits",
+          /* Behind the experimental switch, which this file turns on (plan 261030b). */
+          "Digest",
           "Bibliography",
           "Links",
         ]);

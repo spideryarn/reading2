@@ -366,8 +366,11 @@ function Paragraph({
  * inside the link, so a bold phrase is as pressable as the words round it.
  * `usableSentences` has already checked the key is in the text; a key that
  * somehow is not draws no bold rather than anything else.
+ *
+ * Exported for Sources › Digest (SourcesDigestPanel.tsx, plan 261030b), whose
+ * sentences are doors in exactly this way: one sentence link, not two.
  */
-function Sentence({ sentence, onJump }: { sentence: SimpleSentence; onJump(id: BlockId): void }) {
+export function Sentence({ sentence, onJump }: { sentence: SimpleSentence; onJump(id: BlockId): void }) {
   const { text, id, key } = sentence;
   const at = key === undefined ? -1 : text.indexOf(key);
   const words =

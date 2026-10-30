@@ -1,5 +1,5 @@
 ---
-keywords: where it sits papers that cite it what it builds on after it before it peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier
+keywords: where it sits papers that cite it what it builds on after it before it peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier digest sources digest what its sources say
 related: mode-referee, faq-beyond-the-article
 ---
 
@@ -22,7 +22,8 @@ Every source links out, so you can check it rather than take our word for it.
 
 For an academic paper or a report, where the questions are “what is this built on, and where do I
 find it?” and “what have others made of it?”. Three buttons at the top choose the view: Where it
-sits, Bibliography and Links; the number on Bibliography and Links is how much each has to show.
+sits, Bibliography and Links, and a fourth, Digest, beside Where it sits when experimental features
+are on; the number on Bibliography and Links is how much each has to show.
 Bibliography is usually prepared in the background when the article is added; if it was not,
 opening Where it sits or Bibliography makes it, at no charge to you. A press that opens Where it
 sits also starts its search of the literature when that is missing. The four tools start nothing on
@@ -85,6 +86,25 @@ for that.
     supports it, challenges it or adds to it, then press **Reveal the search’s reading** to see your
     answer beside how the search read it. Neither is marked right or wrong: the search’s own six
     labels do not map exactly onto your choices.
+
+**Digest** (with [experimental features](/help/experimental-features) turned on)
+
+- A few paragraphs to read rather than a list: **What it builds on**, **Who has taken it up**,
+  **What it may have missed**, and **Worth checking: citations that may not say that**, after two or
+  three sentences on the shape of it. The **(i)** beside each heading says what that section is and
+  how it was found.
+- Pressing **Digest** writes it, the first time; a link, reload or Back to it starts nothing, and
+  then **Write the digest** is a button. It takes a few minutes and costs more than anything else
+  in Sources: an AI plans questions and web searches from the piece, a smaller AI reads what each
+  search found, and the digest is written from those readings, using only quotes found word for
+  word in the pages. It sends the piece to an AI, the searches to a web search engine, and the
+  piece’s DOI or title to a public index of papers ([Privacy](/privacy) says more). It is kept;
+  **Write it again** replaces it.
+- Each sentence that names a passage is a link to it: press it to go there, and while that passage
+  is on screen the sentence is lit. **More** under a paragraph opens the detail and the sources it
+  rests on, each a link out with the words found in it. **What was searched**, at the foot, lists
+  every question and search, and what each found. *Worth checking* is something to check, not a
+  verdict, and finding nothing does not mean there is nothing. Only you see it, not visitors.
 
 **Bibliography**
 

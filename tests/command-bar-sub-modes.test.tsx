@@ -273,6 +273,9 @@ describe("which sub-mode rows the bar offers", () => {
     ]);
     expect(names).not.toContain("Diagram › Illustrated");
     expect(names).not.toContain("Diagram › Force");
+    /* The sources digest is behind the switch (plan 261030b). */
+    expect(names).not.toContain("Sources › Digest");
+    expect(names).toContain("Sources › Where it sits");
     /* And not nothing: Summary's levels are for everybody. */
     expect(names).toContain("Summary › Fuller");
     expect(names).toContain("Summary › Thread");
@@ -585,13 +588,15 @@ describe("Sources' seven sub-modes", () => {
   const RECEPTION: SubMode = { mode: "sources", view: "reception" };
 
   /* Plan 261025h: Where it sits first, the default; the four tools keep their rows. */
-  it("lists all seven under Sources, Where it sits first", () => {
+  it("lists all seven under Sources, Where it sits first, and Digest after it with the switch on", () => {
     reading();
     openBar();
     type("sources");
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
     expect(subRows().map(fullName).filter((n) => n.startsWith("Sources ›"))).toEqual([
       "Sources › Where it sits",
+      /* Behind the experimental switch, which this file turns on (plan 261030b). */
+      "Sources › Digest",
       "Sources › Bibliography",
       "Sources › Not cited",
       "Sources › Links",

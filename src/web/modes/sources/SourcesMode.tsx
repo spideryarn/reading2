@@ -1,11 +1,13 @@
 /**
  * **Sources mode's controller** — what this piece cites, and what others
- * say about it. One band, nine sub-mode addresses (`?sources=`), three of them chips
- * for the owner since plan 261025h:
+ * say about it. One band, ten sub-mode addresses (`?sources=`), three of them chips
+ * for the owner since plan 261025h, and a fourth, Digest, behind the
+ * experimental switch since plan 261030b:
  *
  * ```
- *  ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                           (i)
+ *  ┌ Where it sits │ Digest │ Bibliography 42 │ Links 61 ┐                  (i)
  *  │ WhereItSitsPanel: dossier, Go further, Papers that cite it, What it builds on ← Where it sits (owner default)
+ *  │ SourcesDigestPanel, the prose digest on the owner's press        ← Digest (switch on)
  *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (a visitor's default)
  *  │ LinksPanel, read from the article's markup                    ← Links
  *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims (tools)
@@ -83,6 +85,7 @@ import {
   visitorSourcesView,
 } from "../../params.js";
 import { SOURCES_SUB_MODES } from "../../sub-modes.js";
+import { shownBehindTheSwitch } from "../../experimental-visibility.js";
 import { armActivationForSubMode } from "../../activation.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
@@ -116,6 +119,8 @@ import { useSituate, useSituateRead } from "../../useSituate.js";
 import { ToolBack, type WhereBefore, type WhereChild, WhereItSitsPanel } from "../../WhereItSitsPanel.js";
 import { SourcesExperimentPanel } from "../../SourcesExperiments.js";
 import { useExperimental } from "../../useExperimental.js";
+import { useSourcesDigest } from "../../useSourcesDigest.js";
+import { SourcesDigestPanel } from "../../SourcesDigestPanel.js";
 
 /** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
 function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
@@ -125,7 +130,7 @@ function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | nu
 const NO_WORKS: readonly LinkableWork[] = [];
 
 /**
- * **The owner's band.** Every read the nine sub-mode addresses need, the chip row, and
+ * **The owner's band.** Every read the ten sub-mode addresses need, the chip row, and
  * the panel the sub-mode names.
  *
  * A component of its own for the reason every artefact band is: the hooks
@@ -240,7 +245,9 @@ export function SourcesBand({
     relevance: receptionAndClaimsControls.relevance,
     thread: receptionAndClaimsControls.thread,
   });
-  const chips = <SourcesViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
+  const chips = (
+    <SourcesViews view={view} counts={counts} ownerSlug={slug} experimental={experimental.on} onView={setView} />
+  );
   /* A tool's head says which tool it is and the way back (plan 261025h); an experiment's too. */
   const toolHead = (tool: WhereChild) => (
     <>
@@ -287,6 +294,10 @@ export function SourcesBand({
           experiments={experimental.on}
         />
       );
+    /* The digest (plan 261030b): behind the switch on the chip row, drawn
+       for a pasted address whatever the switch says. */
+    case "digest":
+      return <DigestBand slug={slug} head={head} onJump={onJump} />;
     case "guess-first":
     case "evidence-first":
       return (
@@ -400,6 +411,21 @@ function WhereBand({
 }
 
 /**
+ * **Sources › Digest, with its read and its press mounted** (plan 261030b §
+ * Stages, 2). A component of its own so `useSourcesDigest`'s read, job watch
+ * and `useAutoRun` token live only while the digest is on screen: a press
+ * armed for it that lands anywhere else is retired unspent, and mounting with
+ * no press spends nothing (useSourcesDigest.ts).
+ */
+function DigestBand({
+  slug,
+  ...props
+}: Omit<ComponentProps<typeof SourcesDigestPanel>, "owner"> & { slug: string }) {
+  const owner = useSourcesDigest(slug);
+  return <SourcesDigestPanel owner={owner} {...props} />;
+}
+
+/**
  * **One of the two experiments, with the dossier's read alone mounted**
  * (plan 261025h, Stage 4): `useSituateRead` has no press and no job watch, so
  * nothing here can start the search. A component of its own so the read lives
@@ -500,12 +526,14 @@ export function VisitorSourcesBand({
     relevance: receptionAndClaimsControls.relevance,
     thread: receptionAndClaimsControls.thread,
   });
-  const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
+  /* A visitor's row has no experimental chip (`VISITOR_SOURCES_VIEWS`), so the switch is not asked. */
+  const head = <SourcesViews view={view} counts={counts} ownerSlug={null} experimental={false} onView={setView} />;
   switch (view) {
-    /* `where`, `not-cited`, `investigate` and the experiments never reach here (`visitorSourcesView`); named so
+    /* `where`, `digest`, `not-cited`, `investigate` and the experiments never reach here (`visitorSourcesView`); named so
        the switch is exhaustive and a new sub-mode has to say what a visitor
        gets. */
     case "where":
+    case "digest":
     case "bibliography":
     case "not-cited":
     case "investigate":
@@ -588,7 +616,9 @@ function useReceptionAndClaimsControls() {
 
 /**
  * **Where it sits | Bibliography | Links** — the owner's chip row since
- * 2026-10-25 (plan 261025h, decision 7), and **Bibliography | Links |
+ * 2026-10-25 (plan 261025h, decision 7), with *Digest* second since plan
+ * 261030b for a reader with the experimental switch on (and on its own
+ * address for anyone: experimental-visibility.ts), and **Bibliography | Links |
  * Reception | Claims** for a visitor, unchanged (`VISITOR_SOURCES_VIEWS`). It
  * was Debate's two-way control (`DebateViews`, 2026-10-03, plan 261003o) until
  * 2026-10-09, widened to three, then four and five on 2026-10-11, and six on
@@ -617,28 +647,39 @@ function useReceptionAndClaimsControls() {
  *
  * The owner's press arms the chip's own work, the same contract as its
  * command-bar row (activation.ts § `activationForSources`): *Where it sits*'
- * composite, Bibliography's list, and nothing for Links. Stored artefacts
+ * composite, the Digest's own step, Bibliography's list, and nothing for Links. Stored artefacts
  * consume the token without running. A visitor can never arm owner work.
  */
 export function SourcesViews({
   view,
   counts,
   ownerSlug,
+  experimental,
   onView,
 }: {
   view: SourcesView;
   counts: SourcesCounts;
   ownerSlug: string | null;
+  /**
+   * The reader's experimental-features switch. A chip whose sub-mode is behind
+   * it (`SOURCES_SUB_MODES[v].experimental`, the Digest's) is drawn when the
+   * switch is on **or** it is the chip lit now, so a pasted `?sources=digest`
+   * still shows its own chip checked (experimental-visibility.ts).
+   */
+  experimental: boolean;
   onView(view: SourcesView): void;
 }) {
   const group = useRef<HTMLDivElement>(null);
   /* The owner's chip for this address, or a visitor's view itself. */
   const chosen: SourcesView = ownerSlug === null ? view : chipOf(view);
   useRevealChosen(group, chosen);
+  const shown = (ownerSlug === null ? VISITOR_SOURCES_VIEWS : SOURCES_CHIPS).filter((v) =>
+    shownBehindTheSwitch({ experimental: SOURCES_SUB_MODES[v].experimental, on: experimental, current: v === chosen }),
+  );
   return (
     <div ref={group} className="summ-views rcp-views" role="radiogroup" aria-label="Sources view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {(ownerSlug === null ? VISITOR_SOURCES_VIEWS : SOURCES_CHIPS).map((v) => {
+        {shown.map((v) => {
           const words = SOURCES_SUB_MODES[v];
           const count = countOf(counts, v);
           return (
@@ -680,6 +721,7 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
   const plural = (n: number, one: string) => (n === 1 ? one : `${one}s`);
   switch (view) {
     case "where":
+    case "digest":
       return null;
     case "bibliography":
       return counts.bibliography === null
@@ -713,6 +755,12 @@ const VIEW_HOW: Record<SourcesView, string> = {
      and to visitors (docs/project/tooltips.md). */
   where:
     "The papers that cite it come from OpenAlex and the works it leans on from Bibliography, with no AI. Search the literature pays for an AI to search the web and read what it finds; every quote it shows is checked against its source by the app.",
+  /* Checked against src/sources-digest.ts: the planner's leads and searches
+     (Exa), OpenAlex's citers, one Haiku reader per lead, quotes kept only
+     when found in the page's text, and the writer's sentences tied to block
+     ids checked against the article. */
+  digest:
+    "An AI plans questions and web searches about what the piece cites and who cites it; a smaller AI reads what each search found; the digest is written from that, citing only quotes the app found word for word in the pages. Starts when you press it, and is kept.",
   bibliography:
     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
   /* Checked against src/related-work.ts: `openAlexRelatedUrl` (semantic search

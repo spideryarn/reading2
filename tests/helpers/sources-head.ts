@@ -35,6 +35,8 @@ export function sourcesHead(args: {
     | { kind: "visitor"; claimList: PublicSourcesClaimList | null };
   relevance?: SourcesClaimsBears | null;
   thread?: string | null;
+  /** The reader's experimental switch; off unless a test turns it on. */
+  experimental?: boolean;
 }): ReactElement {
   const list = args.claimList ?? { kind: "visitor", claimList: null };
   const checked =
@@ -49,5 +51,11 @@ export function sourcesHead(args: {
     relevance: args.relevance ?? null,
     thread: args.thread ?? null,
   });
-  return createElement(SourcesViews, { view: args.view, counts, ownerSlug: args.ownerSlug, onView: args.onView });
+  return createElement(SourcesViews, {
+    view: args.view,
+    counts,
+    ownerSlug: args.ownerSlug,
+    experimental: args.experimental ?? false,
+    onView: args.onView,
+  });
 }

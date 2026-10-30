@@ -241,6 +241,7 @@ import {
   RotateCcw,
   Route,
   ScanLine,
+  ScrollText,
   Signpost,
   Tag,
   Target,
@@ -428,10 +429,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      file plan 261024o's server stage touches, because this record is total
      over `StepName`. Stage 2 draws the dossier and may choose its own. */
   situate: MessagesSquare,
-  /* Situate's icon, reused: the same kind of answer, other people's words
-     about the piece. The only line of this file plan 261030b's server stage
-     touches, because this record is total over `StepName`. */
-  "sources-digest": MessagesSquare,
+  /* A scroll of prose: the digest is one text to read, not a list of other
+     people's words (plan 261030b, Stage 2; the chip in Sources › Digest). */
+  "sources-digest": ScrollText,
   /* The arrow the block-link card already draws for a jump (ProseHoverCard.tsx):
      what a cross-reference does is take you to another block of the piece.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

@@ -711,6 +711,48 @@ button.situate-quote:focus-visible { outline: 2px solid var(--highlight-text); o
   .situate-searched-toggle { min-height: max(40px, 2.5rem); }
 }
 
+/* **Sources › Digest** (SourcesDigestPanel.tsx, plan 261030b): one text to
+   read, in the dossier's frame. The body is one `.where-section`, so it has
+   the dossier's gutter; the paragraphs are Summary's (`.simple-text`,
+   `.simple-refs`, summary.css), so each sentence is a door drawn as Summary
+   draws one; the toggles, the sources and *What was searched* are the
+   dossier's own classes above. Only what neither has is here. */
+.digest-headline {
+  margin: 0.3rem 0 0.35rem;
+  color: var(--ink);
+  font-size: var(--type-item);
+  font-weight: 600;
+}
+.digest-overview { margin-bottom: 0.4rem; }
+.digest-section { padding-top: 0.45rem; }
+.digest-section + .digest-section { margin-top: 0.2rem; }
+.digest-head { display: flex; align-items: center; gap: 0.3rem; }
+/* The (i) beside a heading: a quiet icon button, as Settings' is. */
+.digest-info {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.digest-info:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .digest-info:hover { color: var(--ink); }
+}
+/* *More* sits in the doors row after the ids, so the row's gap spaces it. */
+.simple-refs > .digest-more-toggle { margin-left: 0; }
+.digest-more { margin: 0.3rem 0 0 0.2rem; padding-left: 0.6rem; border-left: 1px solid var(--rule); }
+.digest-more-text { color: var(--ink-soft); }
+.digest-sources { margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.digest-lead { padding: 0.12rem 0; }
+.digest-lead-q { color: var(--ink); }
+.digest-lead > .situate-queries { padding-left: 0.9rem; }
+@media (any-pointer: coarse) {
+  .digest-info { min-width: max(40px, 2.5rem); min-height: max(40px, 2.5rem); justify-content: center; }
+}
+
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no
    page that responds to a piece is this mode's commonest correct output, so it
    gets the ordinary quiet ink and ordinary padding — dimming it further, or

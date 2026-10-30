@@ -294,6 +294,21 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
       "papers citing it",
     ],
   },
+  /* **The sources digest** (plan 261030b, Greg's spya-vqmfrs): one text to
+     read over what the piece cites, who has taken it up, what it may have
+     missed and which citations to check. Behind the experimental switch while
+     Greg plays with it, because a press costs a dollar or so: `experimental`
+     hides the command-bar row, and the chip row filters through the same
+     rule (SourcesMode.tsx § `SourcesViews`). Moving it out is this flag and
+     nothing else. Its label is its own first alias (`canonical`), so `digest`
+     is not repeated as one. */
+  digest: {
+    label: "Digest",
+    description:
+      "What its sources say, in a few paragraphs: what it builds on, who has taken it up, what it may have missed, and which citations to check",
+    experimental: true,
+    aliases: ["sources digest", "citation digest", "what its sources say"],
+  },
   bibliography: {
     label: "Bibliography",
     description: "What this piece cites: the works in its bibliography, each with a link",
