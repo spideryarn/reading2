@@ -123,7 +123,7 @@ import {
 } from "../types.js";
 import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
 /** The stamp the release and the source maps went up under, if this is a build. */
-import { buildCommit } from "./build-stamp.js";
+import { buildCommit, buildTime } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import {
   EarlierFilter,
@@ -145,10 +145,13 @@ import {
   readFeedbackDraft,
   saveFeedbackDraft,
 } from "./feedback-draft.js";
+import { exactly, timeAgo } from "./relative-time.js";
 import { noteFeedbackDraft } from "./safe-to-reload.js";
+import { differentBuildLive, onDeployNoticed } from "./stale-shell.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
+import { useNow } from "./useNow.js";
 import { useSlow } from "./useSlow.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 import { dictationReporter } from "./dictation-report.js";
@@ -328,6 +331,81 @@ const KIND_LABEL: Record<FeedbackKind, string> = {
   suggestion: "A suggestion",
   discussion: "A discussion",
 };
+
+/**
+ * **How old this release is, and the way to what was in it — for an admin.**
+ *
+ * Greg, 2026-10-30 (spya-hgpctx): *"for admins: at the top, can we include a
+ * link to the changelog and some kind of indication of when the most recent
+ * release came out? You know, three hours ago, six hours ago, whatever."*
+ *
+ * **A release's time is its build time**, and that is not a stand-in: it is
+ * what `changelog.ts promote` writes as a release's `version`, and what
+ * `/changelog` dates the release this bundle carries by (ChangelogPage.tsx §
+ * `withPending`), so this line and the page its link opens agree. (Vercel
+ * promotes a minute or two after compiling — noise at "3 hours ago".)
+ *
+ * **The live release, not merely this tab's.** A tab left open across a deploy
+ * can differ from the build live now. The page's one deploy watcher
+ * (stale-shell.ts § `watchForDeploy`) already asks `/build.json` on wake and
+ * every fifteen minutes, and the build it reports carries its own build time —
+ * so when it has seen a different one live, that is the one dated. Build times
+ * distinguish the usual newer deploy from an older build restored in a
+ * rollback; the line does not call the tab older in both cases. No request of
+ * its own. Off a build there is no stamp and no watcher, and only the link is
+ * drawn.
+ *
+ * A new tab, so following it leaves the article the report is about, and the
+ * draft, where they were. Mounted only while the dialog is open, so its clock
+ * does not tick behind a closed one.
+ */
+function ReleaseLine() {
+  const now = useNow();
+  const [live, setLive] = useState(differentBuildLive);
+  useEffect(() => onDeployNoticed(setLive), []);
+  /* `buildIdentity` is `<40-character sha> <builtAt>`. Do not split on every
+     space: it deliberately accepts any timestamp `Date.parse` accepts, and a
+     valid one such as `30 Oct 2026 12:00 GMT` contains spaces of its own. Keep
+     the validation here too: this exported watcher value is a plain string,
+     not a branded identity, and a malformed one must not hide the tab's good
+     stamp or make a claim about which build is newer. */
+  const match = /^([0-9a-f]{40}) (.+)$/.exec(live ?? "");
+  const liveMs = match?.[2] === undefined ? Number.NaN : Date.parse(match[2]);
+  const liveAt = Number.isNaN(liveMs) ? undefined : match?.[2];
+  const mineAt = buildTime() ?? undefined;
+  const mineMs = mineAt === undefined ? Number.NaN : Date.parse(mineAt);
+  const builtAt = liveAt ?? mineAt;
+  const commit = liveAt ? match?.[1] : buildCommit() ?? undefined;
+  const ago = timeAgo(builtAt, now);
+  let liveNote = "";
+  if (liveAt) {
+    if (Number.isNaN(mineMs) || liveMs === mineMs) {
+      liveNote = " (a different release is live — reload for it)";
+    } else if (liveMs < mineMs) {
+      liveNote = " (an older release is live — rollback)";
+    } else {
+      liveNote = " (this tab is older — reload for it)";
+    }
+  }
+  const exact = builtAt ? exactly(builtAt) : undefined;
+  const detail = ago
+    ? [`Released ${exact}`, commit ? `commit ${commit}` : null].filter(Boolean).join(" · ")
+    : undefined;
+  return (
+    <p className="fb-release" data-tip={detail}>
+      {ago ? (
+        <span className="fb-release-age">
+          Released {ago}
+          {liveNote} ·{" "}
+        </span>
+      ) : null}
+      <a href="/changelog" target="_blank" rel="noopener noreferrer">
+        Changelog
+      </a>
+      {detail ? <span className="sr-only"> · {detail}</span> : null}
+    </p>
+  );
+}
 
 /**
  * **The guidance under the label, and it follows the toggle.**
@@ -1312,6 +1390,9 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
             <X size={16} />
           </button>
         </div>
+        {/* Under the head rather than in it, so the close button stays the
+            first thing `showModal()` focuses and the link is not. */}
+        {admin && open ? <ReleaseLine /> : null}
 
         {/* **Two tabs, outside the part that scrolls**, so switching is always
             in reach. Roving `tabIndex`: only the selected tab is in the Tab
