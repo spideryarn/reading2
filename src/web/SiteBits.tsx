@@ -102,7 +102,7 @@ export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
 export function Wordmark({ className }: { className?: string }) {
   return (
     <span
-      className={`tw:inline-flex tw:items-center tw:gap-[0.4em] tw:font-prose tw:font-medium tw:text-foreground ${className ?? ""}`}
+      className={`tw:inline-flex tw:items-center tw:gap-[0.4em] tw:font-sans tw:font-medium tw:text-foreground ${className ?? ""}`}
     >
       <LogoMark className="tw:h-auto tw:w-[1.25em]" />
       {/* **The name is ten `.logo-letter` spans since 2026-09-29**, so the
@@ -440,7 +440,7 @@ export function Showcase({
         <ExperimentalTag mode={mode} />
         <Heading
           className={
-            under ? "tw:mb-2 tw:font-prose tw:text-lg tw:text-foreground" : "site-h2 tw:mb-3"
+            under ? "tw:mb-2 tw:font-sans tw:text-lg tw:text-foreground" : "site-h2 tw:mb-3"
           }
         >
           {title}
@@ -530,7 +530,7 @@ export function Tile({
   return (
     <div className={`site-panel site-panel-hover tw:p-5 ${span}`} data-mode={mode}>
       <ExperimentalTag mode={mode} />
-      <h3 className="tw:mb-2 tw:font-prose tw:text-base tw:text-foreground">{name}</h3>
+      <h3 className="tw:mb-2 tw:font-sans tw:text-base tw:text-foreground">{name}</h3>
       <p className="tw:text-sm tw:leading-relaxed tw:text-muted-foreground">{children}</p>
     </div>
   );

@@ -112,8 +112,10 @@ import type {
   SourcesClaimCheckTarget,
   SourcesClaimCheck,
   RelationsResponse,
+  ExplanationsFound,
   CrossrefsFound,
   SimpleSummaryFound,
+  Skim,
   SkimFound,
   TimelineFound,
   ThreadFound,
@@ -349,7 +351,7 @@ export interface ArticleReader {
   loadFaq(slug: string): Promise<FaqFound>;
 
   /**
-   * Debate's claims list, plus whether its rendered body and cited head still
+   * Claims' list, plus whether its rendered body and cited head still
    * describe the article, and whether its prompt/model generation is current.
    * A visitor reads the list off the public payload instead
    * (src/store/public-reader.ts), without the staleness verdict.
@@ -371,6 +373,15 @@ export interface ArticleReader {
    * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
    */
   loadRelations(slug: string): Promise<RelationsResponse>;
+
+  /**
+   * The places a reader would get stuck, plus whether they still describe the
+   * rendered body, cited head and ceiling. The third, `profileChanged`, is the
+   * route's (`withProfileChanged`), as `loadIdeas`'.
+   * **Owner-only, and there is no public twin.**
+   * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+   */
+  loadExplanations(slug: string): Promise<ExplanationsFound>;
 
   /**
    * The cross-references, plus whether they still describe the article — the
@@ -408,7 +419,7 @@ export interface ArticleReader {
    * re-dated a post.
    *
    * **`searchedAt` is on the artefact and is deliberately not a third staleness
-   * fact.** Debate is time-sensitive research and a shared link outlives it, so
+   * fact.** Reception is time-sensitive research and a shared link outlives it, so
    * the panel says *"Searched on …"* — but age is displayed provenance, not
    * invalidity. A visitor opening a year-old article must be able to see how old
    * the search is without the artefact declaring itself unusable.
@@ -438,7 +449,9 @@ export interface ArticleReader {
    * Owner-scoped like every read here: somebody else's slug is the same 404 as
    * one that does not exist.
    */
-  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">>;
+  loadArticleIdentity(
+    slug: string,
+  ): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear" | "filename">>;
 
   /**
    * Every work the piece cites, plus whether the list still describes the
@@ -1772,7 +1785,7 @@ export interface ClaimCheckBegin {
 }
 
 /**
- * **Debate's reader-picked claim checks** — src/store/pg-sources-claim-checks.ts,
+ * **Claims' reader-picked claim checks** — src/store/pg-sources-claim-checks.ts,
  * plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3.
  *
  * Owner-scoped like every reader-state store: each method takes a slug and
@@ -1849,7 +1862,7 @@ export interface RefereeHiddenCheckStore {
 export interface CitationFindStore {
   save(slug: string, entryId: string, find: CitationFind): Promise<void>;
   /**
-   * One stored find, or `null` — for *Investigate*, which needs the URL of the
+   * One stored find, or `null` — for *Dig deeper*, which needs the URL of the
    * page a current *Look it up* read (the row carries its host, not its URL).
    * Owner-scoped: a slug the caller does not own is a 404.
    */
@@ -1857,7 +1870,7 @@ export interface CitationFindStore {
 }
 
 /**
- * **Where Bibliography's *Investigate* keeps an answer** — one row per `(article,
+ * **Where Bibliography's *Dig deeper* keeps an answer** — one row per `(article,
  * entry)`, overwritten by a second press. The read half is `loadBibliography`,
  * which attaches a row only while its fingerprint matches. Owner-scoped.
  * src/store/pg-citation-investigations.ts.
@@ -1967,6 +1980,8 @@ export interface GlossaryLookupStore {
  * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
  * Both methods are owner-scoped: a slug the caller does not own is a 404.
  */
+import type { SavedPlace } from "../types.js";
+
 export interface ReadingTimeStore {
   /** Every block with a total, keyed by block id. Blocks never read are absent. */
   read(slug: string): Promise<Record<string, number>>;
@@ -1976,6 +1991,25 @@ export interface ReadingTimeStore {
    * caller validates the shape before this is reached.
    */
   add(slug: string, seconds: Record<string, number>): Promise<void>;
+  /**
+   * **Bring the shelf's cached share denominator up to date**, loading the
+   * article only when its basis changed: `fresh` (nothing to do, or no such
+   * article), `written`, or `raced` (an input changed during the load, so
+   * nothing was written). Plan 261025l; src/store/read-so-far-basis.ts.
+   */
+  refreshShelfWords(slug: string): Promise<"fresh" | "written" | "raced">;
+  /**
+   * **Where the owner last was in this article, on any device** (plan
+   * 261029f): the stored row, or `{ block: null }` when there is none but some
+   * reading time is (read before places were kept), or `null` for never.
+   */
+  readPlace(slug: string): Promise<SavedPlace>;
+  /**
+   * **Replaces** the stored place. `null` is the top of the article. A block
+   * this article never had is dropped silently, as `add` drops one, and
+   * writes nothing.
+   */
+  setPlace(slug: string, block: string | null): Promise<void>;
 }
 
 /**
@@ -2041,6 +2075,63 @@ export interface SkimNoticeStore {
    * when it is not — a re-plan landed in between — and nothing is written.
    */
   dismissProfileNotice(slug: string, generatedAt: string, key: string): Promise<boolean>;
+}
+
+/** One added Skim brief as the store holds it — plan 261027d. */
+export interface SkimBriefRow {
+  id: string;
+  /** The reader's own words: never logged. */
+  brief: string;
+  createdAt: string;
+  updatedAt: string;
+  plannedAt: string | null;
+  /** Its route, or `null` until a job has planned one. */
+  skim: Skim | null;
+  /** `profileNoticeKey` of the notice sent away, or `null`. Never sent to the client. */
+  profileNoticeDismissedFor: string | null;
+}
+
+/**
+ * **The owner's added Skim briefs** —
+ * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md,
+ * src/store/pg-skim-briefs.ts. Every reader-facing method is owner-scoped (a
+ * stranger's slug is a 404) and refuses a brief not on the article with a 404;
+ * the two job methods take the job's owner. Errors carry an HTTP `status`.
+ */
+export interface SkimBriefStore {
+  /** Oldest first. */
+  list(slug: string): Promise<SkimBriefRow[]>;
+  get(slug: string, id: string): Promise<SkimBriefRow>;
+  /**
+   * Its route judged as `loadSkim` judges the default's (`routeFreshness`,
+   * src/skim.ts), or `null` before it is planned.
+   */
+  loadRoute(slug: string, id: string): Promise<SkimFound | null>;
+  /** At most `SKIM_BRIEFS_MAX` per article (409 past it). The same id and sentence again answer the row. */
+  create(slug: string, id: string, brief: string): Promise<SkimBriefRow>;
+  /** The sentence only; the route stays, and reads as planned for another profile. */
+  updateBrief(slug: string, id: string, brief: string): Promise<SkimBriefRow>;
+  /** `false` when there was none. */
+  remove(slug: string, id: string): Promise<boolean>;
+  /** As `SkimNoticeStore.dismissProfileNotice`, on this brief's route. */
+  dismissProfileNotice(slug: string, id: string, generatedAt: string, key: string): Promise<boolean>;
+  /** For the job's freshness check: whether the brief is still there, and its route. */
+  routeForJob(
+    ownerId: OwnerId,
+    slug: string,
+    id: string,
+  ): Promise<{ found: false } | { found: true; skim: Skim | null }>;
+  /**
+   * The job's write, fenced on its claim (`StaleAttemptError` when lost) and
+   * on the row: `false`, writing nothing, when the brief has gone.
+   */
+  writeRoute(
+    fence: { jobId: string; attempt: string },
+    ownerId: OwnerId,
+    slug: string,
+    id: string,
+    skim: Skim,
+  ): Promise<boolean>;
 }
 
 /**
@@ -2908,9 +2999,10 @@ export interface NewFeedback {
    */
   body: string;
   /**
-   * *A problem* or *a suggestion*, or **null for a reader who did not say**.
-   * Greg asked for the toggle to start unset, so absence is an answer here
-   * rather than a missing one — src/types.ts § `FEEDBACK_KINDS`.
+   * *A problem*, *a suggestion*, an admin's *discussion*, or **null for a
+   * reader who did not say**. Greg asked for the toggle to start unset, so
+   * absence is an answer here rather than a missing one — src/types.ts §
+   * `FEEDBACK_KINDS`.
    */
   kind: FeedbackKind | null;
   /**
@@ -3425,7 +3517,7 @@ export type RateBucket =
   | "link-summary-fill"
   | "shelf-topics"
   | "upload-source-guess"
-  /* Bibliography's *Investigate* — a streamed, web-searching answer over the whole
+  /* Bibliography's *Dig deeper* — a streamed, web-searching answer over the whole
      article, several times *Find it*'s cost a press, so its own allowance
      (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`). */
   | "citation-investigate"
@@ -3460,8 +3552,9 @@ export type RateBucket =
      a cheap one here must not starve them, or they it. */
   | "citation-web-note"
   /* Sources' *Search the literature* — the `situate` step's planned web
-     searches and its one read over everything they found, about $0.40–0.50 a
-     run, taken inside the step so every way of starting it passes it
+     searches, Haiku triage and capable-model read of the shortlist, about
+     $0.30 at standard power or $0.52 at high power, taken inside the step so
+     every way of starting it passes it
      (src/situate.ts § `SITUATE_RATE_POLICY`, plan 261024o, GPT Sol's S5). */
   | "situate"
   /* A citation's *Does it say that?* started by resting on its card, not by

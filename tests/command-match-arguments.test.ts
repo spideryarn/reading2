@@ -198,6 +198,8 @@ function everyRow(): readonly Command[] {
       queue: { run: async () => null, lastFailure: () => null },
       /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
       extensionStore: extensionStoreUrl("a".repeat(32)),
+      /* On, so *Start this article again* is in the matrix too (plan 261029l). */
+      experimentalOn: true,
     }),
     ...METADATA_RERUN_STEPS.map((step) => rerunCommand(step, close)),
     ...SECTION_ROWS.map((row) => sectionCommand(row, close)),

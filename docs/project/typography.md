@@ -7,21 +7,20 @@ Up: [design-css-overview.md](design-css-overview.md)
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
 > tokens. This is one area of the territory.
 
-**Geist is the base face and the chrome.** It is self-hosted from
-`@fontsource-variable/geist`, imported at the top of
+**Geist is the app's own face** — the chrome, every fixed sentence we wrote, and the wordmark. It
+is self-hosted from `@fontsource-variable/geist`, imported at the top of
 [`tailwind.css`](../../src/web/tailwind.css) with the system stack behind it. Author, model and
 reader words override that base with the faces in [fonts.md](fonts.md).
 
 | Token | Used for |
 |---|---|
-| `--font-sans` | Geist — the family itself. Nothing should name this directly; use one of the two below |
-| `--font-reading` | the default reading stack before a voice-specific override |
-| `--font-ui` | chrome: controls, masthead facts. The table's column headers wore it until 2026-09-05, when that row lost its height — it is still in the DOM for the fisheye panels' geometry and for a screen reader, and sets no type at all |
+| `--font-ui` | Geist — the app's own words: controls, headings, masthead facts, and the wordmark. Tailwind's `tw:font-sans` is this token. The table's column headers wore it until 2026-09-05, when that row lost its height — it is still in the DOM for the fisheye panels' geometry and for a screen reader, and sets no type at all |
 | `--font-mono` | Geist Mono — code (whoever wrote it), block ids, counts, and anything that wants to line up. Block ids were Courier and a model's code iA Writer Mono until 2026-10-25 ([fonts.md](fonts.md#three-faces-and-the-readers)) |
-| `--font-brand` | Geist — the wordmark, and only the wordmark. Trebuchet MS until 2026-09-08 |
 
-`--font-reading` and `--font-ui` both resolve to `--font-sans` today. They remain separate base
-tokens so changing the unvoiced reading stack is one decision. Visible provenance is a different
+Until 2026-10-25 this one face had five names: `--font-sans`, `--font-reading` and `--font-brand`
+here, and `--font-prose` and `--font-serif` in Tailwind's theme. They became `--font-ui`
+([261025k § 4](../plans/261025k-fonts-and-css-code-quality.md)). The wordmark, Trebuchet MS until
+2026-09-08, is the UI face by Greg's decision of 2026-10-25. Visible provenance is a different
 decision, carried by `--font-author`, `--font-ai` and `--font-reader` as [fonts.md](fonts.md)
 describes.
 
@@ -35,7 +34,7 @@ Sans sits behind Tailwind's `--font-sans`, and Georgia appears nowhere in it. It
 was sans, headings and body in the same face. Greg, 2026-08-25, asked to *"follow how we were doing
 fonts in the previous version"* — so we now follow what they did rather than what they wrote down.
 
-That 2026-08-25 decision still supplies the base tokens. Since 2026-10-02 the article, model and
+That 2026-08-25 decision still supplies `--font-ui`. Since 2026-10-02 the article, model and
 reader voices deliberately differ from the chrome; [fonts.md](fonts.md) owns the current rule.
 
 Two numbers from that research doc *are* worth keeping, because they are independently attested:
@@ -131,7 +130,7 @@ plan, [261022d](../plans/261022d-reading-measure-in-real-characters.md).
 ## A face per voice
 
 For every reader, on every page: the author, the model and the reader each get
-their own face — a serif, iA Writer Quattro and Shantell Sans — and Geist stays the chrome. The rule,
+their own face — a serif, iA Writer Quattro and Kalam — and Geist stays the chrome. The rule,
 the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
 ## Text roles in a band
@@ -159,10 +158,10 @@ jobs are settled, not that every number is. `/design` § Text roles shows each a
 meets.
 
 **A role is decided by the line's job in its row, not by whose words they are.** In Quotes the
-quotation *is* the row, so it is `--type-item`; under a Debate title, a quotation is `--type-quote`.
+quotation *is* the row, so it is `--type-item`; under a Reception title, a quotation is `--type-quote`.
 Search's results are Quotes' case. Face is a separate decision, [fonts.md](fonts.md)'s.
 
-**Exceptions, each with a comment beside the rule:** Quiz's one question stays 1.03rem; Debate's
+**Exceptions, each with a comment beside the rule:** Quiz's one question stays 1.03rem; Claims'
 foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and block-id fallback stay
 0.88rem. They occupy similar places without doing one of the six jobs. Skim's question before a
 quote (`.skim-cue`) does a body line's job but stays 0.78rem: Greg asked that it be smaller than the

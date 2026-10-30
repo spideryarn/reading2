@@ -1,5 +1,5 @@
 /**
- * **What Debate's Claims draws from the reader's checks** — pure, so the
+ * **What Sources' Claims draws from the reader's checks** — pure, so the
  * panel's decisions can be tested without painting it. Plan
  * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 and § 5.
  *

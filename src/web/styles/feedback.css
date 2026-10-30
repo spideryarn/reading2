@@ -301,7 +301,7 @@ a.fb-earlier-page:focus-visible {
   font-weight: 600;
 }
 /* The one line a note says about the report, under the reader's own words. A
-   model wrote it: styles/voices.css gives it the model's face, and the rule to
+   model wrote it: voices.css gives it the model's face, and the rule to
    its left sets it apart from what the reader wrote. `anywhere` for the same
    reason as the body: one long word must not push the panel sideways. */
 .fb-earlier-comment,
@@ -365,6 +365,65 @@ a.fb-earlier-page:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* **An ASCII mockup or diagram in a question** (plan 261028b, Stage 2): the
+   lines between two ``` lines, in the one monospace, never wrapped, scrolling
+   sideways when wider than the dialog, so its columns line up. Boxed as a code
+   block in a chat answer is (mode-band.css § `.fmt-pre`), the same job. On a
+   touch screen `--text-min` holds it at 13px, so a 70-column drawing scrolls
+   rather than shrinking past reading. */
+.fb-mono {
+  align-self: stretch;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-size: max(var(--text-min), 0.72rem);
+  line-height: 1.35;
+  color: var(--ink);
+  white-space: pre;
+  overflow-x: auto;
+}
+.fb-question-more > pre.fb-mono { margin-top: 0.35rem; }
+/* **A mockup's id in a question, and the mockup it opens in place** (plan
+   261029g): the id reads as a link would, in the monospace an id has, with a
+   ▸/▾ saying it opens here rather than going anywhere; the mockup is boxed
+   after its surrounding text like the ASCII is, so it reads as part of the question. */
+.fb-mockup-toggle {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--highlight-text);
+  font-family: var(--font-mono);
+  font-size: inherit;
+  cursor: pointer;
+}
+.fb-mockup-id {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fb-mockup-toggle::after { content: " ▸"; }
+.fb-mockup-toggle[aria-expanded="true"]::after { content: " ▾"; }
+.fb-mockup {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+}
+.fb-mockup > * { max-width: 100%; }
+.fb-mockup-title {
+  margin: 0;
+  font-size: max(var(--text-min), 0.78rem);
+  font-weight: 700;
+  color: var(--ink);
+}
+.fb-mockup img { display: block; }
 /* What the admin replied, set apart the way a note's comment is. */
 .fb-question-answer {
   align-self: stretch;
@@ -879,3 +938,39 @@ details.fb-threads-group > summary { cursor: pointer; }
    in this file that declare their own `font: inherit` still win, and so does
    every utility. Two spellings of one rule is the thing worth not leaving
    behind. */
+
+/* **The number beside the Feedback trigger**, for an admin, when threads wait
+   on a decision (spya-wwyw8y): Greg asked for "a subtle red", so it is the
+   error text colour on no fill, slightly smaller than the word, rather than a
+   filled badge. FeedbackButton.tsx § `FeedbackWaitingContext`. */
+.fb-waiting-count {
+  color: var(--danger);
+  font-size: 0.85em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* The corner has a fixed ordinary width. Let an admin's exact count grow it
+   leftwards instead of squeezing or clipping the word; on a narrow window the
+   hidden word means it grows only by the number itself. */
+.fb-button.fb-has-waiting-count {
+  width: auto;
+  min-width: var(--feedback-w);
+}
+
+/* The Dock's fit ladder measures its row before the asynchronous count lands.
+   Keep the superscript out of flow so that arrival cannot invalidate that
+   measurement. At a coarse-pointer width Dock buttons share spare room, so
+   anchor it beside the centred icon rather than at the grown button's edge. */
+.dock-feedback { position: relative; }
+.dock-feedback .fb-waiting-count {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.15rem;
+}
+@media (any-pointer: coarse) {
+  .dock-feedback .fb-waiting-count {
+    right: calc(50% - 1.1rem);
+  }
+}

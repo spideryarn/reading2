@@ -370,6 +370,16 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
   skim: { kind: "artefact", key: "skim" },
+  /**
+   * **Owner only, as a decision rather than a staging default** (plan 261028c,
+   * Sol's PR-4): the explanations are written for the owner's profile, and
+   * there is no public projection of them, so a visitor's payload has nothing
+   * to draw and the band says the mode is the owner's. This is not the
+   * `owners-only` the postmortem 260929a warns about — there is no stored
+   * public copy being refused, because none is published. A visitor's copy is
+   * a follow-up if Greg wants one (the plan's § Not built).
+   */
+  explanations: { kind: "owners-only" },
   /* `tweets` was a row here from 2026-09-29 to 2026-10-03, `artefact` on the
      `tweets` key. The thread is Summary's Thread view now, and `summary` above
      is `available`: `VisitorSummaryBand` draws a stored thread through

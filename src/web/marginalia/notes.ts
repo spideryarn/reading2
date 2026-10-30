@@ -22,10 +22,12 @@ import type {
   BlockId,
   CitedWork,
   Comment,
+  Explanation,
   FaqQuestion,
   Idea,
   IdeaProvenance,
   MarginNote,
+  QuizQuestion,
   Relation,
   SituateFinding,
   TimelineEvent,
@@ -36,11 +38,12 @@ import type { PublicClaimReceptionRow, PublicComment } from "../../public-types.
 import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
 import { isSupplementNode } from "../../supplement.js";
+import { questionsByAnchor } from "../quiz-anchors.js";
 import { titleVoice } from "../tree.js";
 import { type AskedQuestion, type CommentKind, commentKind } from "../comment-nav.js";
 import type { Voice } from "../voice.js";
 
-/** A Debate claim row, the owner's or a visitor's — every owner row is one. */
+/** A Claims row, the owner's or a visitor's — every owner row is one. */
 export type MarginClaim = PublicClaimReceptionRow;
 /** A comment or bookmark, the owner's or a visitor's. */
 export type MarginComment = Comment | PublicComment;
@@ -69,6 +72,10 @@ export type MarginaliaNote =
   /** A note the relations call chose to write here (plan 261011o): open, not
       shut, since there are at most eight and the line is the whole of it. */
   | { kind: "aside"; note: MarginNote }
+  /** A place the reader is likely to get stuck, explained (Explanations,
+      plan 261028c). Drawn shut. One per block, which the step enforces.
+      Owner only — the caller's rule. */
+  | { kind: "explanation"; explanation: Explanation }
   /** The question a part — or, at `depth` 0, the whole article — answers. */
   | { kind: "question"; depth: number; text: string }
   /** An idea the piece assumes or introduces, occurring in this block. */
@@ -93,14 +100,20 @@ export type MarginaliaNote =
   /** Pages on the web that answer a claim made in this block. */
   | { kind: "reception"; items: MarginClaim[] }
   /** What a search of the literature found about this block (Situate, plan
-      261024o), strongest first (`strongestFirst`). Owner only, behind the
-      experimental switch — the caller's rule. */
+      261024o), strongest first (`strongestFirst`). Owner only — the
+      caller's rule. */
   | { kind: "literature"; items: LiteratureItem[] }
   /** Works first cited in this block. Owner only — the caller's rule. */
   | { kind: "citation"; items: CitedWork[] }
   /** The reader's own comments on this block, and the questions they asked
       from it — each with its kind (SPIDERYARN-READING2-9H, plan 261002j). */
-  | { kind: "comment"; items: MarginEntry[] };
+  | { kind: "comment"; items: MarginEntry[] }
+  /** The quiz's questions that hang after this block, in path order — the
+      prose's own placement (quiz-anchors.ts). Open, not shut: the question is
+      the whole of it, and it is there to make the reader stop and think
+      (Greg, spya-fytjtf; plan 261029c). Last in the note. Owner only — the
+      caller's rule. `questions` is never empty. */
+  | { kind: "quiz"; batchId: string; questions: QuizQuestion[] };
 
 /**
  * **One of the reader's marks, with which of three it is** — a comment, a
@@ -134,9 +147,38 @@ export type MarginSources = {
   relations?: Readonly<Record<BlockId, Relation>> | null;
   /** The notes the same call wrote — the owner's only, as the words are. */
   notes?: readonly MarginNote[] | null;
-  /** Situate's findings — the owner's only, with the experimental switch on (plan 261024o). */
+  /** Situate's findings — the owner's only (plan 261024o). */
   literature?: MarginLiterature | null;
+  /** The explanations of the places a reader is likely to get stuck — the
+      owner's only, and never a stale list (plan 261028c). */
+  explanations?: readonly Explanation[] | null;
+  /** The owner's quiz, never a stale one — the batch is what a press opens
+      Quiz at (plan 261029c). */
+  quiz?: { batchId: string; questions: readonly QuizQuestion[] } | null;
 };
+
+/**
+ * **The blocks an explanation still speaks for**: each explanation whose block
+ * this article has and whose quoted words are still in it (the forgiving
+ * match, as every browser-side check against a block uses — quote-match.ts §
+ * `findQuote`). The one answer to two questions, so they cannot disagree:
+ * which explanations the margin draws, and beside which blocks the relations
+ * call's own `explain` note gives way to one (plan 261028c § The margin's
+ * `explain` notes stay). Pure.
+ */
+export function explainedBlocks(
+  index: ReadonlyMap<string, number>,
+  blocks: readonly Block[],
+  explanations: readonly Explanation[] | null | undefined,
+): Set<BlockId> {
+  const out = new Set<BlockId>();
+  for (const e of explanations ?? []) {
+    const at = index.get(e.blockId);
+    const block = at === undefined ? undefined : blocks[at];
+    if (block !== undefined && e.quote.trim() !== "" && findQuote(block.text, e.quote) !== null) out.add(e.blockId);
+  }
+  return out;
+}
 
 type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
 type GroupedItems = Partial<{
@@ -223,10 +265,32 @@ export function marginaliaNotes(
      at a passage this article no longer has is left out rather than drawn
      with a dead link (a stale list is never handed here, but a fresh one is
      checked anyway: it costs one lookup). */
-  const placed = (more.notes ?? []).filter((note) => note.to === null || index.has(note.to));
+  /* **An explanation outranks the relations call's `explain` note beside the
+     same block** (plan 261028c): the two say the same kind of thing, and the
+     explanation is the one written for it, shaped by the reader's profile and
+     with *Ask in chat*. Only one whose words still hold: otherwise the note is
+     all the reader has. The other kinds of note stay. */
+  const explained = explainedBlocks(index, blocks, more.explanations);
+  const placed = (more.notes ?? []).filter(
+    (note) => (note.to === null || index.has(note.to)) && !(note.kind === "explain" && explained.has(note.blockId)),
+  );
   /* In article order, as the words are, whatever order the model wrote them. */
   placed.sort((a, b) => (index.get(a.blockId) ?? 0) - (index.get(b.blockId) ?? 0));
   for (const note of placed) add(note.blockId, { kind: "aside", note });
+
+  /* **Then the explanation**, under the model's own note and above the part's
+     question: like that note it is about this passage's words, and it is shut,
+     so it costs one line. In article order; the first for a block wins, which
+     the step already guarantees. */
+  const explanationsHere = (more.explanations ?? [])
+    .filter((e) => explained.has(e.blockId))
+    .sort((a, b) => (index.get(a.blockId) ?? 0) - (index.get(b.blockId) ?? 0));
+  const seen = new Set<BlockId>();
+  for (const explanation of explanationsHere) {
+    if (seen.has(explanation.blockId)) continue;
+    seen.add(explanation.blockId);
+    add(explanation.blockId, { kind: "explanation", explanation });
+  }
 
   /* **Beside the part's first paragraph, not its first block.** A part's range
      starts at its heading, or at the date line under the title, and a question
@@ -295,6 +359,17 @@ export function marginaliaNotes(
 
   for (const [blockId, notes] of groupedNotes(index, blocks, more)) {
     for (const note of notes) add(blockId, note);
+  }
+
+  /* **The quiz's questions last**, after the passage that finishes what each
+     asks about: having read it, this is the thing to ask yourself. The
+     prose's rule, so a question sits in the same place whichever of the two
+     draws it (Reader.tsx § `quizAfter`). */
+  if (more.quiz) {
+    const order = blocks.map((b) => b.id);
+    for (const [blockId, questions] of questionsByAnchor(more.quiz.questions, order)) {
+      add(blockId, { kind: "quiz", batchId: more.quiz.batchId, questions });
+    }
   }
   return out;
 }

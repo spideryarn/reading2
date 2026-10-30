@@ -119,6 +119,7 @@ export function workKeyFor(
         ...(more.reset !== undefined && { reset: true }),
         ...(more.scope !== undefined && { scope: more.scope }),
         ...(more.illustrationNote !== undefined && { illustrationNote: more.illustrationNote }),
+        ...(more.skimBrief !== undefined && { skimBrief: more.skimBrief }),
       }),
     )
     .digest("hex");
@@ -161,6 +162,13 @@ export interface WorkKeyExtras {
    * hashes exactly as before. Plan 261002j.
    */
   illustrationNote?: string;
+  /**
+   * **The added Skim brief a `skim` job plans for** (`Job.skimBrief`), so one
+   * brief pressed twice is one job and two briefs are two — even two briefs
+   * with the same sentence, whose rendered profiles would otherwise agree.
+   * Only when present, so every other key hashes as before. Plan 261027d.
+   */
+  skimBrief?: string;
 }
 
 /**

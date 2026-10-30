@@ -1,40 +1,90 @@
 ---
-keywords: peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier
+keywords: where it sits papers that cite it what it builds on after it before it peer review citations references bibliography sources works cited papers links hyperlinks external links urls doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim not cited uncited related work related papers missing citations missing references what it does not cite ask question questions suggested investigate research chat situate literature where this piece sits dossier
 related: mode-referee, faq-beyond-the-article
 ---
 
 ## In short
 
 A piece sits among other people’s work: the works it builds on, and what others have said about it
-since. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;
-**Not cited** lists papers close to it that its bibliography does not;
-**Links** lists every web address the piece itself links to;
-**Reception** is what others say about the piece itself; **Claims** lists the claims it rests on,
-so you can check what others say about each one; and **Investigate** offers questions about all of it to
-put to [Chat](/help/mode-chat), which searches the web to answer. Every source links out, so you can
-check it rather than take our word for it.
+since. Sources shows both. **Where it sits** opens first: the papers that have cited the piece since,
+the works it leans on most, and a search of the wider literature, which starts when you press Sources
+into this view, or press Marginalia to turn its notes on where they fit. **Bibliography**
+lists everything this piece cites, with a link for each, and **Links** every web address the piece
+itself links to. Under Where it sits are four tools: **Pages about it** (what others say about the
+piece itself), **Check a claim** (the claims it rests on, to check against the web), **Close to it,
+not cited** (papers close to it that its bibliography does not list), and **Ask your own question**
+(questions about all of it to put to [Chat](/help/mode-chat), which searches the web to answer).
+Every source links out, so you can check it rather than take our word for it.
 
 ![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-bibliography.png "Bibliography, prioritised: each work with its two bars, and where the piece first cites it.")
 
 ## When to use it
 
 For an academic paper or a report, where the questions are “what is this built on, and where do I
-find it?” and “what have others made of it?”. Six buttons at the top choose the view; the number
-on each is how much it has to show. Bibliography is usually prepared in the background when the
-article is added; if it was not, pressing Bibliography makes it. Reception and Claims are never
-made in the background: pressing their view makes them (as does running them again from the
-article's details page), and each is kept. Investigate makes nothing until you press a question.
-Reception’s is a search of the open web: it takes
+find it?” and “what have others made of it?”. Three buttons at the top choose the view: Where it
+sits, Bibliography and Links; the number on Bibliography and Links is how much each has to show.
+Bibliography is usually prepared in the background when the article is added; if it was not,
+opening Where it sits or Bibliography makes it, at no charge to you. A press that opens Where it
+sits also starts its search of the literature when that is missing. The four tools start nothing on
+the way in: each has its own button, such as **Search the web** in Pages about it or **List its
+claims** in Check a claim. Whatever is made is kept. The web search behind Pages about it takes
 about a minute, and often finds nothing, which it says plainly, because many pieces have no
-reception at all. A link or Back to a view never starts anything; it shows a button instead, such as
-**Search the web**. Only whoever added the article can make these; visitors to a shared article see
-what has already been made.
+reception at all. A link, reload or Back to a view never starts anything. Only whoever added the
+article can make these; visitors to a shared article see Bibliography, Links, Reception and Claims,
+with what has already been made.
 
 Sources used to be two modes, Citations and Debate, and was briefly called Peer review. Old links
 to any of them still open the right view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode
 for that.
 
 ## Reading it
+
+**Where it sits**
+
+- A line at the top says how old the piece is, when its details give a year: for an older piece,
+  what has been said since; for a recent one, where it sits now.
+- **Search the literature** starts by itself when you open Where it sits with the Sources button
+  or its tab, the first time, or when you press [Marginalia](/help/mode-marginalia) to turn the
+  notes on where they fit, and is a button otherwise (after a link, say). Over a few minutes an
+  AI plans a dozen or so web searches
+  from the piece, reads what they find and the later papers that cite it, and lists the passages
+  later work challenges, supports or has moved on from, each with its sources and what they say,
+  checked against the source’s own words. It sends the piece to an AI, sends the searches that AI
+  writes to a web search engine, and sends its DOI or title to a public index of papers
+  ([Privacy](/privacy) says more). Finding nothing does not mean there is nothing. Once it has run,
+  a box at the top sums it up, with a count of each kind of finding; press a count to open that
+  kind. The kind that most changes how far to trust the piece is open first. Its own questions
+  appear in Ask your own question as **Suggested for this piece**. The chat icon beside the summary,
+  or beside a finding, asks about it in [Chat](/help/mode-chat); the chat goes back to it. Press a
+  finding’s quoted words to go to that passage. Only you see any of it.
+- **Go further**, under the search, opens the tools: Pages about it, Check a claim, Close to it, not
+  cited, and Ask your own question. Opening one starts nothing: each has its own button inside, and
+  the line under each says what that costs. A number on one is how much it already holds. Inside,
+  **Where it sits**, at the top beside the view's name, brings you back.
+- **Papers that cite it** lists the papers that cite the piece, most cited first, from OpenAlex, a
+  free public index of published work. It is the same list as Cited by in Pages about it. No AI is
+  involved, and we have not read what those papers say about the piece.
+- For a much-cited piece, a second button sits beside **Most cited**: **About** and a keyword in
+  quotes, such as *About “extended mind”*. The keyword is OpenAlex’s own for the piece. Pressing it
+  lists only the citing papers whose title or abstract contains that keyword. That is a match on
+  words, not a reading of how those papers cite the piece. It is asked from OpenAlex when you press
+  it, not before, and once it has been asked the button shows how many there are. Leaving Where it
+  sits puts the list back to Most cited.
+- **What it builds on** lists the works the piece leans on most, as Bibliography rated them. Press
+  one to open its row in Bibliography, or its link to open the work itself.
+- For an older piece, Papers that cite it comes first; for a recent one, What it builds on; with no
+  year, side by side.
+- With [experimental features](/help/experimental-features) turned on, **Experiments** after the
+  tools offers two ways to meet the search of the literature before reading its verdicts. Both use
+  the search already made for this piece, cost nothing and start nothing; with no search yet, they
+  say so and take you to **Search the literature**. Nothing you choose in them is saved or sent.
+  - **Guess first** shows the passages the search found something about, without saying what. For
+    each, pick a guess (Challenged, Supported, Added to since, or Something else), then press its
+    **Reveal** to see your guess beside what the search found; **Reveal them all** shows every one.
+  - **Evidence first** shows each passage beside what a source says. Decide whether the source
+    supports it, challenges it or adds to it, then press **Reveal the search’s reading** to see your
+    answer beside how the search read it. Neither is marked right or wrong: the search’s own six
+    labels do not map exactly onto your choices.
 
 **Bibliography**
 
@@ -112,7 +162,7 @@ for that.
   relevance counting double; a work whose influence is unknown is judged on its relevance alone
   when available. Ordered by influence, the unknown ones come last, the most relevant first.
 
-**Not cited**
+**Close to it, not cited** (Not cited)
 
 - Papers close to this piece that are not among the works Spideryarn found in its bibliography,
   closest first. Nothing is searched until you press **Search OpenAlex for related work**, which
@@ -141,8 +191,9 @@ for that.
   at another address; press it to open that work’s row.
 - An article read from a PDF has no links of its own: its addresses, if any, are in Bibliography.
 
-**Reception**
+**Pages about it** (Reception)
 
+- Nothing is searched until you press **Search the web**, about a minute of searching that is kept.
 - What others have written about this piece itself: replies, reviews, and work that cites it and
   says something about it. The AI's sections and **Cited by** start folded, so you see their outline
   first; press one to open it. **Every page** starts open, so no source depends on a press.
@@ -160,7 +211,10 @@ for that.
   ask using the piece’s DOI, and no AI is involved. It is a list only: we have not read what any of
   those papers says about the piece. When the piece has no DOI on record, we look for it in
   OpenAlex by its title instead, and list its citers only if the record's title and authors (or an
-  author and the year) match; the list then names the record it matched, so you can check it. Only
+  author and the year) match; the list then names the record it matched, so you can check it. With
+  experimental features on, when there is no such record, it lists instead **Possible citations**:
+  papers whose text matched a search for the piece's title. Most of them refer to it, but we have
+  not checked each one, and it finds research papers only. Only
   whoever added the article sees it. **Search Google Scholar**, under it, opens a search for the piece’s
   title.
 - To ask about the piece from an angle of your own, use **Investigate** (below). The box that was here has
@@ -168,10 +222,10 @@ for that.
 - Reception can be ordered **as found**, by **date** or by **stance** (most critical first); the
   order applies inside every section.
 
-**Claims**
+**Check a claim** (Claims)
 
-- Opening **Claims** makes the list the first time, with one AI call over the piece and no web
-  search; a link or Back to Claims only shows **List its claims**. Each claim is quoted in the
+- Press **List its claims** to make the list the first time, with one AI call over the piece and no
+  web search; opening the view makes nothing. Each claim is quoted in the
   piece’s own words, with a link to that passage, and under it a short line in the AI’s words. If
   the piece changes afterwards, the list is shown with **List again**. The number on Claims is how
   many claims are listed, or, once you have checked some, how many sources the checks found.
@@ -197,7 +251,7 @@ for that.
   Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to
   bear on their claim only loosely or partly.
 
-**Investigate**
+**Ask your own question** (Investigate)
 
 - Questions about the piece and what others say about it, each answered in a new conversation in
   [Chat](/help/mode-chat), which searches the web. A press sends the question straight away, and
@@ -213,15 +267,9 @@ for that.
   under the box, lists every conversation started here, newest first; press one to open it again.
 - Coming back to Investigate opens your newest of those conversations beside it, so you carry on
   where you left off. Close it to see the questions; it stays closed until you next come back.
+- Once the literature search in Where it sits has run, its own questions appear here as
+  **Suggested for this piece**, above the others.
 - Only whoever added the article has Investigate: visitors to a shared article have no chat.
-- **Where this piece sits** (experimental: shown only with Experimental features on) is at the top
-  of Investigate. Press **Search the literature** and, over a few minutes, an AI plans a dozen or so
-  web searches from the piece, reads what they find and the later papers that cite it, and lists
-  the passages later work challenges, supports or has moved on from, each with its sources and what
-  they say, checked against the source’s own words. Its press sends the piece to an AI, sends the
-  searches that AI writes to a web search engine, and sends its DOI or title to a public index of
-  papers. Finding nothing does not mean there is nothing.
-  Its questions appear as **Suggested for this piece**; only you see any of it.
 
 ![The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work](../images/mode-sources-claims.png "Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.")
 

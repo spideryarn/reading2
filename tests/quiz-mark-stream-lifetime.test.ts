@@ -40,8 +40,10 @@
  *
  * **Outside this oracle.** What the model is told, the verdict and the
  * reader-leaving abort — `markAnswerStream` is stubbed, so no model is called
- * and no ledger row is written; tests/quiz-mark.test.ts and
- * tests/quiz-mark-route.test.ts hold those. The spend collector's own window:
+ * and no ledger row is written. tests/quiz.test.ts covers the prompt,
+ * tests/quiz-verdict.test.ts the verdict, and tests/quiz-mark-stream.test.tsx
+ * and tests/quiz-mark-route.test.ts the reader-leaving abort.
+ * The spend collector's own window:
  * no assertion here reads the ledger.
  */
 import { readFile, writeFile } from "node:fs/promises";

@@ -1,14 +1,16 @@
 /**
- * **The dossier's words and order, without React** — what Sources ›
- * Investigate's *Where this piece sits* says about a stored `Situate`
+ * **The dossier's words and order, without React** — what the literature
+ * search in Sources › *Where it sits* says about a stored `Situate`
  * (src/types.ts), kept here so the tests can hold each rule without mounting
  * the panel. The section itself is SituateDossier.tsx. Plan
  * docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md
- * § The dossier, at the top of Investigate.
+ * § The dossier (at the top of Investigate until plan 261025h moved it to
+ * *Where it sits* and out of the experimental switch).
  */
 import {
+  type LensOrigin,
   MAX_LENS_CHARS,
-  SITUATE_FINDING_KINDS,
+  originName,
   type Situate,
   type SituateAngle,
   type SituateFinding,
@@ -16,24 +18,32 @@ import {
   type SituateKind,
   type SituateQueryGroup,
   type SituateQueryOutcome,
+  type SituateOrigin,
+  situateOverviewId,
   type SituateSearched,
 } from "../types.js";
 
-/** The section's heading. */
-export const SITUATE_HEAD = "Where this piece sits";
-/** Before it has run: what a press does, in one sentence. */
+/**
+ * The section's heading. *Where this piece sits* until plan 261025h, when the
+ * dossier moved into the sub-mode named *Where it sits* and the heading would
+ * have said the chip's name twice.
+ */
+export const SITUATE_HEAD = "Search of the literature";
+/** Before it has run: what the search does, in one sentence. */
 export const SITUATE_WHAT =
   "Searches the web and the papers that cite this piece, then marks the passages that later work challenges, supports or has moved on from.";
 /** The button that starts it, and the one that starts it again. */
 export const SITUATE_RUN = "Search the literature";
 export const SITUATE_AGAIN = "Search again";
 /**
- * **What leaves, said before the press** (plan § Privacy, GPT Sol's S4). The
- * piece's own words go to a search engine, which none of Investigate's other
- * presses does before the reader has typed or picked a question.
+ * **What leaves** (plan § Privacy, GPT Sol's S4), under the manual button; the
+ * privacy page carries the same disclosure before a press that opens the
+ * sub-mode. The piece's own words go to a search engine, which none of
+ * Investigate's other presses does before the reader has typed or picked a
+ * question.
  */
 export const SITUATE_DISCLOSURE =
-  "Pressing it sends this piece through OpenRouter to an AI, which writes short searches from its text. Those searches go through OpenRouter to Exa, a web search engine; its DOI or title goes to OpenAlex to find papers that cite it. The article, results and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.";
+  "It starts by itself when you open Where it sits with the Sources button or its tab. It sends this piece through OpenRouter to an AI, which writes short searches from its text. Those searches go through OpenRouter to Exa, a web search engine; its DOI or title goes to OpenAlex to find papers that cite it. The article, results and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.";
 /** While the job runs. */
 export const SITUATE_WORKING = "This takes a few minutes. You can keep reading; the findings appear here when it is done.";
 /** The stale banner's words. */
@@ -88,13 +98,19 @@ const ANGLE_WORDS: Record<SituateAngle, string> = {
 };
 
 /**
- * **The dossier's first line**: what the planner judged the piece to be, when,
- * and so what the search looked for — *A review from 2023: what has happened
- * since*. A year the planner could not tell is left out rather than guessed.
+ * **The dossier's first line**: what the planner judged the piece to be, and
+ * so what the search looked for, with the piece's year from its metadata —
+ * *A review from 2023: what has happened since*.
+ *
+ * **The year is `articleYear`, never the planner's `year`**, which is a
+ * model's reading of the text: on Clark & Chalmers it printed *from 1998*
+ * while Not cited, reading the metadata, said *we do not know when this piece
+ * was published* (a persona review, 2026-10-26). With no year in the
+ * metadata the line names none.
  */
-export function situateHeadLine(situate: Pick<Situate, "kind" | "year" | "angle">): string {
+export function situateHeadLine(situate: Pick<Situate, "kind" | "angle">, articleYear: number | null): string {
   const noun = KIND_NOUN[situate.kind] ?? KIND_NOUN.other;
-  const when = typeof situate.year === "number" && Number.isFinite(situate.year) ? ` from ${situate.year}` : "";
+  const when = articleYear !== null && Number.isFinite(articleYear) ? ` from ${articleYear}` : "";
   return `${noun}${when}: ${ANGLE_WORDS[situate.angle] ?? ANGLE_WORDS.now}`;
 }
 
@@ -105,13 +121,32 @@ export interface FindingGroup {
 }
 
 /**
+ * **The order the groups are drawn in**: what most changes how far to trust
+ * the piece first — challenged, then what has happened since, then a citation
+ * to check and the work it leaves out, then how it was received, and what
+ * bears it out last. A display order only: the stored kinds and the margin's
+ * stamp order (`SITUATE_FINDING_KINDS`, `strongestFirst`) are untouched.
+ * Plan docs/plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md
+ * § Stage 2, from four persona reviews that each found the old order
+ * (Supported last, Since in the middle) followed no rule a reader could see.
+ */
+export const SITUATE_DISPLAY_ORDER: readonly SituateFindingKind[] = [
+  "challenged",
+  "since",
+  "citation",
+  "missing",
+  "reception",
+  "supported",
+];
+
+/**
  * **The findings, grouped by kind in the order a reader most needs them**
- * (`SITUATE_FINDING_KINDS`), each group in the stored order, which is
+ * (`SITUATE_DISPLAY_ORDER`), each group in the stored order, which is
  * strongest first. An empty kind has no group: a heading over nothing would
  * read as a finding. A kind the client does not know is left out.
  */
 export function groupFindings(findings: readonly SituateFinding[]): FindingGroup[] {
-  return SITUATE_FINDING_KINDS.map((kind) => ({
+  return SITUATE_DISPLAY_ORDER.map((kind) => ({
     kind,
     label: SITUATE_FINDING_LABEL[kind],
     findings: findings.filter((f) => f.kind === kind),
@@ -122,6 +157,53 @@ export function groupFindings(findings: readonly SituateFinding[]): FindingGroup
 export function groupHeading(group: Pick<FindingGroup, "label" | "findings">): string {
   return `${group.label} · ${group.findings.length}`;
 }
+
+/**
+ * **One passage and what the search found about it, in one group**: the
+ * findings that quote the same words of the same block, run together under
+ * one quote. Two *Since* findings on one passage drawn as two cards with the
+ * same quote read as a bug (plan 261026g § Stage 2). Only neighbours merge, so
+ * the group's strongest-first order stands.
+ */
+export interface PassageCluster {
+  blockId: SituateFinding["blockId"];
+  quote: string;
+  findings: SituateFinding[];
+}
+export function passageClusters(findings: readonly SituateFinding[]): PassageCluster[] {
+  const out: PassageCluster[] = [];
+  for (const finding of findings) {
+    const last = out[out.length - 1];
+    if (last && last.blockId === finding.blockId && last.quote === finding.quote) last.findings.push(finding);
+    else out.push({ blockId: finding.blockId, quote: finding.quote, findings: [finding] });
+  }
+  return out;
+}
+
+/**
+ * **What *Ask about this in chat* on the overview asks** (spya-mfuz6g): the
+ * overview's own words, whole, because no chat tool reads the dossier, then
+ * the question. Sent through `askInSources` (Reader.tsx § `askOverview`).
+ */
+export function overviewQuestion(overview: string): string {
+  return `A search of the literature on this piece summed up where it sits like this: “${overview.replace(/\s+/g, " ").trim()}” What does that rest on, and how far should I trust it?`;
+}
+
+/**
+ * **The overview chat's origin** (plan 261026g § Stage 2, GPT Sol's F3): a
+ * `situate` origin whose item is this dossier's overview
+ * (`situateOverviewId`), so the chat is listed under *Where it sits*, its
+ * way back opens it, and a new search's overview gets a chat of its own. The
+ * quote is the overview's first words, for the title and the list.
+ */
+export function overviewOrigin(situate: Pick<Situate, "generatedAt" | "overview">): SituateOrigin {
+  return { mode: "situate", itemId: situateOverviewId(situate.generatedAt), quote: originName(situate.overview) };
+}
+/** The overview's chat button and mark. */
+export const ASK_OVERVIEW_IN_CHAT = "Ask about this in chat";
+export const OPEN_OVERVIEW_CHAT = "Open the chat about this overview";
+/** The count strip's name, for a screen reader. */
+export const SITUATE_COUNTS_LABEL = "What the search found, by kind";
 
 function clip(text: string, max: number): string {
   const words = text.replace(/\s+/g, " ").trim();
@@ -135,12 +217,15 @@ const LENS_CLOSE = " How strong is that, and what else bears on it?";
 const LENS_QUOTE_MAX = 160;
 
 /**
- * **What *Ask in chat* on a finding asks**, which is also the lens its chat
- * stores (`{ mode: "reception", lens }`), so it is listed under *Your
- * questions* and found again by `threadForOrigin`. The passage, the note and a
+ * **What *Ask in chat* on a finding asks**: the passage, the note and a
  * question, the note cut to fit `MAX_LENS_CHARS` so the question at the end
- * survives. Already trimmed and within the cap, so Reader.tsx § `lensInChat`,
- * which trims and cuts, stores exactly these characters and the mark finds it.
+ * survives. Sent through `askInSources` (Reader.tsx § `askFinding`).
+ *
+ * It was also the origin its chat stored, a `reception` lens, until plan
+ * 261025h gave a finding its own origin (`findingOrigin`): a re-run that
+ * reworded the note lost the chat's mark, because the mark was found by these
+ * words (queue item qi-mmtsxdhg). A chat stored that way is still found by
+ * them (`findingLensOrigin`).
  */
 export function findingLens(finding: Pick<SituateFinding, "quote" | "note">): string {
   const quote = clip(finding.quote, LENS_QUOTE_MAX);
@@ -197,4 +282,25 @@ export function sourceHost(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * **The origin a finding's chat stores**: the finding's stable id, and its
+ * passage as a snapshot (plan 261025h, decision 9; queue item qi-mmtsxdhg).
+ * Matched by the id alone (`sameOrigin`), so a *Search again* that rewords the
+ * note keeps the mark, and the way back opens *Where it sits* on that finding
+ * (Reader.tsx § `openOrigin`). The passage is the article's words, cut by
+ * `originName`, which is what Chat's list and the way back name it by.
+ */
+export function findingOrigin(finding: Pick<SituateFinding, "id" | "quote">): SituateOrigin {
+  return { mode: "situate", itemId: finding.id, quote: originName(finding.quote) };
+}
+
+/**
+ * **The origin a finding's chat stored before plan 261025h**: the lens its
+ * question was, so a chat started then still shows as the finding's mark, as
+ * long as the note has not been reworded since. Read only, never written.
+ */
+export function findingLensOrigin(finding: Pick<SituateFinding, "quote" | "note">): LensOrigin {
+  return { mode: "reception", lens: findingLens(finding) };
 }

@@ -22,7 +22,10 @@ import type { Voice } from "./voice.js";
 export interface Cell {
   node: TreeNode;
   rowSpan: number;
-  /** True when the branch bottomed out above this column, so the node repeats. */
+  /**
+   * True when the branch bottomed out above this column, so the node repeats —
+   * and for a leaf in any column but the leaf column (§ `buildGeometry`).
+   */
   continuation: boolean;
 }
 
@@ -156,14 +159,27 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
     const column: Cell[] = [];
     // A block whose branch is shallower than this column reuses its deepest
     // node; we mark that as a continuation so the text isn't repeated.
+    /* **A leaf is real only in the leaf column.** On a ragged tree — one
+       section divided into sub-sections, its neighbours not — an undeepened
+       branch's leaf is shallower than `leafDepth`, and the rule above put it
+       into the sub-sections' column as real content, with the leaf column its
+       continuation: a paragraph standing as a sub-section. So between its
+       parent and the leaf column a leaf is the continuation, and the leaf
+       column holds it for real. A chain that stops at a node with children (a
+       tree that does not cover the block) keeps the old rule. GPT Sol's PR-3,
+       plan 261029a. */
     const nodeFor = (row: number): { node: TreeNode | undefined; continuation: boolean } => {
       // A row with no chain means the tree does not cover that block. The
       // caller already skips a missing node (it draws nothing rather than
       // guessing), and validate-tree.ts is what complains about it properly.
       const chain = chains[row];
       if (!chain?.length) return { node: undefined, continuation: false };
-      const id = chain[Math.min(depth, chain.length - 1)]!;
-      return { node: tree.nodes[id], continuation: depth > chain.length - 1 };
+      const last = chain.length - 1;
+      const id = chain[Math.min(depth, last)]!;
+      const node = tree.nodes[id];
+      const shortLeaf = depth >= last && (tree.nodes[chain[last]!]?.children?.length ?? 0) === 0;
+      const continuation = shortLeaf ? depth < maxDepth : depth > last;
+      return { node, continuation };
     };
 
     let row = 0;
@@ -590,13 +606,24 @@ export function buildSummaryTree(
        advances only on the parts that are the argument, so appending an
        apparatus cannot renumber part 1 or invent a part 3. */
     let n = 0;
+    /* **A section's opening paragraph is not a sub-section, and does not take
+       one's number.** A section divided into sub-sections (plan 261029a) can
+       open with a paragraph of its own before the first; counted, it made the
+       sub-sections 2.5.2 to 2.5.7 under a 2.5 with no 2.5.1 anywhere on screen,
+       since a paragraph row is drawn without a number. Below the parts only:
+       a part's numbering is what every tree in production already shows, and
+       renumbering it is a different change. */
+    const mixed =
+      node.depth >= 2 &&
+      node.children.some((id) => (tree.nodes[id]?.children.length ?? 0) > 0) &&
+      node.children.some((id) => (tree.nodes[id]?.children.length ?? 0) === 0);
     const children =
       node.depth < depthLimit && !apparatus
         ? node.children
             .map((id) => {
               const child = tree.nodes[id];
               const childNumber =
-                child && isSupplementNode(child)
+                (child && isSupplementNode(child)) || (mixed && child?.children.length === 0)
                   ? ""
                   : number
                     ? `${number}.${++n}`

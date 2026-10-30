@@ -27,6 +27,7 @@ import type {
   BlockId,
   Comment,
   Crossref,
+  Explanation,
 } from "../types.js";
 import { XREF_NONCE, xrefTarget } from "./xref.js";
 import { useRenderCount } from "./perf.js";
@@ -39,6 +40,7 @@ import {
   resolveMark,
   termMarks,
   citeMarks,
+  explainedMarks,
   xrefMarks,
   type CiteSelection,
   type Mark,
@@ -72,7 +74,7 @@ import {
 import { OriginalLinkNote, originalLinksIn } from "./OriginalLink.js";
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 import { useFoldArticle } from "./fold.js";
-import { atFront, matterStretches, stubCount, stubHow, stubLabel, stubWhat } from "./matter-view.js";
+import { atFront, foldedOnArrival, matterStretches, stubCount, stubHow, stubLabel, stubWhat } from "./matter-view.js";
 import { FoldToggle, MatterStub } from "./FoldToggle.js";
 import { mastheadEcho } from "./masthead-echo.js";
 
@@ -127,6 +129,11 @@ interface ProseEntry {
    * when something else happened to move (see the `proseHtml` dependencies).
    */
   xrefs: readonly Mark[];
+  /**
+   * `explainedMarksByBlock`'s array for this block — the passage explained
+   * here, if any. In the key for `cites`' reason: the list is a separate GET.
+   */
+  explained: readonly Mark[];
   /**
    * `openTerm`, but **only when this block carries that term** — otherwise
    * null.
@@ -191,6 +198,7 @@ function sameInputs(
   hits: readonly Mark[],
   cites: readonly Mark[],
   xrefs: readonly Mark[],
+  explained: readonly Mark[],
   openTerm: string | null,
 ): boolean {
   return (
@@ -200,6 +208,7 @@ function sameInputs(
     had.hits === hits &&
     had.cites === cites &&
     had.xrefs === xrefs &&
+    had.explained === explained &&
     had.openTerm === openTerm
   );
 }
@@ -607,6 +616,14 @@ interface Props {
    */
   xrefs?: readonly Crossref[] | null | undefined;
   /**
+   * **The passages the owner's Explanations explain**, underlined in every
+   * mode — null for a visitor, with the experimental switch off, or for a
+   * stale list (Reader decides). `explainedMarks` in annotate.ts places them;
+   * docs/plans/261029j-explained-passages-underlined-in-the-prose.md.
+   * Optional, for `cites`' reason.
+   */
+  explained?: readonly Pick<Explanation, "id" | "blockId" | "quote">[] | null | undefined;
+  /**
    * The term the reader has pressed in the glossary band, of the many drawn.
    *
    * **Its own prop rather than an `open` flag inside `terms`**, so that pressing
@@ -771,6 +788,7 @@ function TableViewInner({
   terms,
   cites,
   xrefs,
+  explained,
   openTerm,
   hitMarks,
   hitStrength,
@@ -816,8 +834,12 @@ function TableViewInner({
   const stretchIds = useMemo(() => stretches.map((s) => s.ids), [stretches]);
   /* The same blocks as one set, with the masthead's echo, for the glossary's
      fade: folded on arrival or never drawn, so a term met there neither counts
-     nor fades (annotate.ts § termProminence). */
-  const uncounted = useMemo(() => new Set([...echo, ...stretchIds.flat()]), [echo, stretchIds]);
+     nor fades (annotate.ts § termProminence). The one definition of that set,
+     which the masthead's read-so-far pie also leaves out (plan 261025j). */
+  const uncounted = useMemo(
+    () => foldedOnArrival({ blocks, matter, meta: { title, authors, byline }, titleOverridden }),
+    [blocks, matter, title, authors, byline, titleOverridden],
+  );
   /* Each stub, by the row it stands in, with its words worked out once. */
   const stubs = useMemo(
     () =>
@@ -1047,6 +1069,15 @@ function TableViewInner({
   );
 
   /**
+   * The explained passages, placed. Its own memo for `citeMarksByBlock`'s
+   * reason: it changes only when the list is replaced.
+   */
+  const explainedMarksByBlock = useMemo(
+    () => explainedMarks(blocks, explained ?? []),
+    [blocks, explained],
+  );
+
+  /**
    * Last render's `{ __html }` objects **and what each was built from**, so an
    * unchanged block can be handed back the one React has already seen without
    * being computed again — see `proseHtml` below for why each half matters.
@@ -1163,9 +1194,10 @@ function TableViewInner({
       const hits = hitMarks?.get(block.id) ?? NO_MARKS;
       const cited = citeMarksByBlock.get(block.id) ?? NO_MARKS;
       const linked = xrefMarksByBlock.get(block.id) ?? NO_MARKS;
+      const explainedHere = explainedMarksByBlock.get(block.id) ?? NO_MARKS;
       const pressed = pressedIn(found, openTerm);
       const had = was.get(block.id);
-      if (had && sameInputs(had, block, cmts, found, hits, cited, linked, pressed)) {
+      if (had && sameInputs(had, block, cmts, found, hits, cited, linked, explainedHere, pressed)) {
         /* Nothing this block is drawn from has changed, so neither has its
            html. The entry — and with it the `{ __html }` object React compares
            — is passed through untouched. */
@@ -1182,6 +1214,7 @@ function TableViewInner({
         ...hits,
         ...cited,
         ...linked,
+        ...explainedHere,
       ];
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
@@ -1210,6 +1243,7 @@ function TableViewInner({
         hits,
         cites: cited,
         xrefs: linked,
+        explained: explainedHere,
         openTerm: pressed,
         out: had && had.out.__html === withHandles ? had.out : { __html: withHandles },
       });
@@ -1228,7 +1262,16 @@ function TableViewInner({
 
        `xrefMarksByBlock` is here for the same reason from the start: the
        cross-references are a separate GET too. tests/xref-prose.test.tsx. */
-  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, citeMarksByBlock, xrefMarksByBlock, openTerm]);
+  }, [
+    blocks,
+    marksByBlock,
+    termMarksByBlock,
+    hitMarks,
+    citeMarksByBlock,
+    xrefMarksByBlock,
+    explainedMarksByBlock,
+    openTerm,
+  ]);
 
   /**
    * **Apparatus, dressed as apparatus** — which block starts a note, what the

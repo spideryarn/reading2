@@ -21,6 +21,7 @@
  * docs/plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md
  */
 import { useMemo } from "react";
+import { useRootFlag } from "./root-flags.js";
 import type { BlockId } from "../types.js";
 import { crumbPath, type Crumb } from "./crumbs.js";
 import type { Section } from "./position.js";
@@ -52,6 +53,10 @@ export function HeadingsCrumbs({
      event, reading rects with no writes between. */
   const { focusRow } = useColumnContext({ sections, enabled: true, layoutKey });
   const path = useMemo(() => crumbPath(root, focusRow), [root, focusRow]);
+  /* The bar holds the breadcrumb — for the guard in shell.css that keeps such
+     a bar on screen, and the taller bar in crumbs.css. Said here because this
+     is the `.crumbs` they mean; `Reader` draws it only inside `.controls`. */
+  useRootFlag("bar-crumbs", true);
 
   return (
     <nav className="crumbs" aria-label="Where you are">

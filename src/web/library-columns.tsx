@@ -39,6 +39,7 @@ import { Link } from "./Link.js";
 import { exactly, publishedOf, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
+import { ReadSoFarMark } from "./ReadSoFarMark.js";
 import type { Shelf } from "./ShelfEntry.js";
 import type { ComponentType } from "react";
 import { ShelfTags } from "./ShelfTags.js";
@@ -433,7 +434,7 @@ function TitleCell({
         link
       )}
       {(sub || archived || entry.visibility === "public" || entry.privateLinkOn === true || entry.fixture) && (
-        <span className="tw:block tw:wrap-anywhere tw:text-xs tw:text-muted-foreground">
+        <span data-shelf-title-sub="" className="tw:block tw:wrap-anywhere tw:text-xs tw:text-muted-foreground">
           {/* **First on the line, unlike on the card.** It went first because
               this line used to truncate, and the byline and the site name could
               afford to run out of room where "anyone can read this" could not.
@@ -465,6 +466,14 @@ function TitleCell({
             </>
           )}
           {sub}
+          {/* After the minutes, which `sub` always ends with: the card's mark,
+              in the card's place (plan 261025l). */}
+          {entry.readBand !== undefined && (
+            <>
+              {" "}
+              <ReadSoFarMark band={entry.readBand} />
+            </>
+          )}
           {entry.fixture && (
             <span className="tw:ml-1.5 tw:rounded tw:border tw:border-border tw:px-1 tw:py-0.5">
               fixture

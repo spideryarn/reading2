@@ -337,7 +337,7 @@ the column existed.
 
 **And a publication is judged on the input it changes, not the input it carries forward.** The same
 copy is why: `beginDraftIn` hands every draft the published blocks and tree, so a glossary or quotes
-or debate step arrives at the gate holding artefacts it never looked at. `checkTree`'s problems
+or reception step arrives at the gate holding artefacts it never looked at. `checkTree`'s problems
 against an *unchanged* pair are pre-existing — they are in front of readers either way — so they are
 carried out on `PublishRevisionResult.carriedTreeProblems` and logged after the commit rather than
 refusing. Anything that alters either half is judged in full, and everything else the gate checks —

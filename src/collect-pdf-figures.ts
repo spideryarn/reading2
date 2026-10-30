@@ -102,6 +102,7 @@ import { type FigurePage, type FigurePages, openFigurePages } from "./pdf-figure
 import {
   anchorBox,
   type DrawnFigureVerdict,
+  isPartOfDrawing,
   judgeLocatedRegion,
   locateDrawnFigure,
   type PageBox,
@@ -113,6 +114,7 @@ import {
   type DecodedRaster,
   downscaleRaster,
   encodeFigurePng,
+  type FigureOutcome,
   MAX_FIGURE_PIXELS,
   pairPageFigures,
   type PdfFigureFailure as PairingFailure,
@@ -243,11 +245,37 @@ export const PDF_FIGURES_BUDGET_MS = 180_000;
 
 /**
  * **At most this many model calls per article** on the located route — about
- * $0.002 and two seconds each, measured (the plan's test-run table). Eight
- * covers every essay and paper seen so far; a document with more refused
- * figures than that keeps the rest caption-only, the state they were in.
+ * $0.002 and two seconds each, measured (the plan's test-run table), so at
+ * most about three cents. It was eight until 2026-10-27, which covered every
+ * essay and paper seen until LeCun's, whose diagrams need nine
+ * (docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md). A
+ * document with more refused figures than this keeps the rest caption-only,
+ * the state they were in.
  */
-export const MAX_LOCATE_CALLS = 8;
+export const MAX_LOCATE_CALLS = 16;
+
+/**
+ * **Pictures make a located region "the same" as another figure only when,
+ * together, they cover at least this share of it.** Two regions on different
+ * pages that share a whole grid of photos are one figure under two captions
+ * and both are refused (GPT Sol, 261001q P1); two diagrams that share a 3 %
+ * icon are two figures (LeCun's 10 and 12). The same share decides whether a
+ * region is mostly one picture. Summed over the shared pictures, never judged
+ * one at a time, or a repeated six-photo grid would slip through (GPT Sol,
+ * plan review of 261027e, 3).
+ * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
+ */
+const REGION_PICTURE_SHARE = 0.25;
+
+/**
+ * The refusals that mean **the page's one picture is not the figure**: the
+ * located route may recover such a figure only as a rendered region, and not
+ * as a region that is mostly one picture.
+ */
+const WHOLE_DRAWING_ONLY: ReadonlySet<PdfFigureFailure> = new Set<PdfFigureFailure>([
+  "in-a-drawing",
+  "unmeasured-picture",
+]);
 
 /**
  * **At most this many windows read** on the located route, asked about or not
@@ -282,6 +310,8 @@ const LOCATABLE: ReadonlySet<PdfFigureFailure> = new Set<PdfFigureFailure>([
   "no-raster",
   "not-located",
   "uncaptioned",
+  "in-a-drawing",
+  "unmeasured-picture",
 ]);
 
 /**
@@ -501,7 +531,7 @@ export async function collectPdfFigures(
        there is nothing to check its page against. The drawn route is not tried
        for it; the locator is, by the prose either side.
        docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md. */
-    const { outcomes } = pairPageFigures({
+    const { outcomes: paired } = pairPageFigures({
       markers: looked,
       candidates: read.candidates,
       captions: options.captions,
@@ -509,7 +539,7 @@ export async function collectPdfFigures(
     });
     /* The drawn route's candidates: refused `no-raster` by the bitmap route,
        and captioned by the article. Everything else is decided above. */
-    const candidates = outcomes.flatMap((outcome) =>
+    const candidates = paired.flatMap((outcome) =>
       outcome.status === "refused" && outcome.reason === "no-raster" && options.captions.has(outcome.marker.ref)
         ? [outcome.marker]
         : [],
@@ -518,16 +548,31 @@ export async function collectPdfFigures(
     /* Preserve the bitmap route's outputs: everything it already decided is
        stored or recorded before the new layout/render work starts. Otherwise a
        slow drawn page can spend the clock and turn an unrelated decoded bitmap
-       into `out-of-time`. Final assembly below restores marker order. */
-    for (const outcome of outcomes) {
+       into `out-of-time`. Final assembly below restores marker order.
+
+       **A pairing is not decided until its page has been asked whether the
+       picture is only part of a drawing** (`settleDrawingPart`), one page at a
+       time and each stored before the next is read, so a slow page cannot undo
+       the ones before it. The settled outcomes, not the pairing's, are what
+       `taken` is worked out from below: a refused icon is nobody's picture. */
+    const outcomes: FigureOutcome[] = [];
+    for (const outcome of paired) {
       if (outcome.status === "refused") {
+        outcomes.push(outcome);
         if (!candidates.includes(outcome.marker)) refuse(outcome.marker, pdfFigureFailure(outcome.reason));
         continue;
       }
       /* Stop rather than record: every marker left is finalised below, which is
          the one place that decides what an unfinished run says. */
       if (signal.aborted) return;
-      await storeOne(outcome.marker, outcome.raster, limits, signal, book, record, at);
+      const settled = await settleDrawingPart(outcome, read, options, signal);
+      if (signal.aborted) return;
+      outcomes.push(settled);
+      if (settled.status === "refused") {
+        refuse(settled.marker, pdfFigureFailure(settled.reason));
+        continue;
+      }
+      await storeOne(settled.marker, settled.raster, limits, signal, book, record, at);
     }
 
     const drawnRan = await drawnPhase();
@@ -876,7 +921,7 @@ async function locatedRoute(
     marker: PdfFigureMarker;
     raster: DecodedRaster;
     identity: string;
-    pictureIdentities: readonly string[];
+    pictures: readonly RegionPicture[];
     page: number;
     box: PageBox;
   }[] = [];
@@ -983,7 +1028,12 @@ async function locatedRoute(
          markers pointing at one picture must both be seen doing it, below. */
       taken,
     });
-    if (verdict.status === "chosen") {
+    /* A figure whose page picture was refused as part of a drawing (or could
+       not be measured) is recovered as a rendered region or not at all: the
+       one-picture verdict would put the icon back under its caption, which is
+       the very thing it was refused for. GPT Sol, plan review of 261027e, 1. */
+    const wholeDrawing = WHOLE_DRAWING_ONLY.has(book.held.get(marker.ref) ?? "no-raster");
+    if (verdict.status === "chosen" && !wholeDrawing) {
       const picture = usable.find((u) => u.page === verdict.page && u.key === verdict.key);
       const paint = read.paints.find((p) => p.page === verdict.page && p.key === verdict.key);
       if (picture) {
@@ -998,8 +1048,9 @@ async function locatedRoute(
     }
     /* The composite route binds a box to the caption it finds printed on the
        page, and an uncaptioned figure has none to find. */
-    if (subject.kind !== "caption" || !COMPOSITE_REFUSALS.has(verdict.reason)) continue;
-    const composite = await compositeRegion(marker, answer.answer, sent, read, usable, taken, cuts, options, signal);
+    if (subject.kind !== "caption") continue;
+    if (!wholeDrawing && (verdict.status === "chosen" || !COMPOSITE_REFUSALS.has(verdict.reason))) continue;
+    const composite = await compositeRegion(marker, answer.answer, sent, read, usable, taken, cuts, options, signal, wholeDrawing);
     if (composite) regions.push({ marker, ...composite });
   }
 
@@ -1008,12 +1059,18 @@ async function locatedRoute(
      nothing here can say which, so neither is kept. */
   const overlaps = (a: { page: number; box: PageBox }, b: { page: number; box: PageBox | null }) =>
     a.page === b.page && b.box !== null && overlapArea(a.box, b.box) > 0;
-  const sharesPicture = (a: { pictureIdentities: readonly string[] }, identity: string) =>
-    a.pictureIdentities.includes(identity);
+  /* A region "is" a picture another figure chose when that picture is a large
+     part of it (`REGION_PICTURE_SHARE`), and two regions are one figure when the
+     pictures they share are a large part of both. An icon in two diagrams is
+     neither. docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md. */
+  const identitiesOf = (r: (typeof regions)[number]) => r.pictures.map((p) => p.identity);
+  const sharesPicture = (a: (typeof regions)[number], identity: string) =>
+    sharedShare(a.pictures, [identity]) >= REGION_PICTURE_SHARE;
   const regionsConflict = (a: (typeof regions)[number], b: (typeof regions)[number]) =>
     overlaps(a, b) ||
     a.identity === b.identity ||
-    a.pictureIdentities.some((identity) => b.pictureIdentities.includes(identity));
+    (sharedShare(a.pictures, identitiesOf(b)) >= REGION_PICTURE_SHARE &&
+      sharedShare(b.pictures, identitiesOf(a)) >= REGION_PICTURE_SHARE);
   /* A run of uncaptioned figures that share their neighbours is told apart by
      order alone, so the pictures chosen for it must come down the pages in the
      run's order, or none of the run is kept. GPT Sol, plan review of 261019j. */
@@ -1093,10 +1150,12 @@ async function compositeRegion(
   cuts: FigurePages,
   options: CollectPdfFiguresOptions,
   signal: AbortSignal,
+  /** A figure whose own page picture was refused as part of a drawing: the region may not be mostly one picture. */
+  wholeDrawing: boolean,
 ): Promise<{
   raster: DecodedRaster;
   identity: string;
-  pictureIdentities: readonly string[];
+  pictures: readonly RegionPicture[];
   page: number;
   box: PageBox;
 } | null> {
@@ -1123,21 +1182,38 @@ async function compositeRegion(
   });
   if (!verdict.ok) return null;
   const crop = verdict.containment[0]?.box ?? verdict.region;
-  /* Which decoded pictures this region mostly holds. The identities travel
-     with the choice so a repeat on another page cannot be stored under a
-     second caption merely because its page-space boxes do not overlap. */
-  const pictureIdentities = new Set<string>();
+  /* Which decoded pictures this region mostly holds, and how much of it each
+     covers. They travel with the choice so a repeat on another page cannot be
+     stored under a second caption merely because its page-space boxes do not
+     overlap. **What counts is the share of the region they cover**
+     (`sharedShare`): an icon reused inside several diagrams is no evidence
+     that two diagrams are one figure, and counting it dropped LeCun's Figures
+     10, 12, 16 and 17; a grid of photos repeated whole still is. */
+  const pictures: RegionPicture[] = [];
+  const cropArea = overlapArea(crop, crop);
+  let unmeasuredPicture = false;
   for (const picture of usable) {
     if (picture.page !== answered.page) continue;
-    const visible = paints
-      .filter((p) => p.key === picture.key)
-      .map((p) => visiblePaintBox(p, viewFromLayout(layout)))
-      .filter((box): box is PageBox => box !== null);
-    if (visible.some((box) => overlapArea(box, crop) >= 0.5 * overlapArea(box, box))) {
-      pictureIdentities.add(picture.identity);
-    }
+    const ownPaints = paints.filter((p) => p.key === picture.key);
+    const visible = ownPaints.map((p) => visiblePaintBox(p, viewFromLayout(layout)));
+    if (ownPaints.length === 0 || visible.some((box) => box === null)) unmeasuredPicture = true;
+    const covered = visible
+      .filter((box): box is PageBox => box !== null && overlapArea(box, crop) >= 0.5 * overlapArea(box, box))
+      .reduce((sum, box) => sum + overlapArea(box, crop), 0);
+    if (covered > 0 && cropArea > 0) pictures.push({ identity: picture.identity, share: Math.min(1, covered / cropArea) });
   }
-  if ([...pictureIdentities].some((identity) => taken.includes(identity))) return null;
+  if (sharedShare(pictures, taken) >= REGION_PICTURE_SHARE) return null;
+  /* The model may box the very icon the bitmap route refused: a region that is
+     mostly one picture is that picture again, not the drawing. If a picture on
+     this page cannot be placed, fail closed: otherwise it disappears from
+     `pictures` and an `unmeasured-picture` can come back as a tight rendered
+     crop of that same picture. GPT Sol, plan review of 261027e, 1. */
+  if (
+    wholeDrawing &&
+    (unmeasuredPicture || pictures.some((p) => sharedShare(pictures, [p.identity]) >= REGION_PICTURE_SHARE))
+  ) {
+    return null;
+  }
   const [vx0, vy0, vx1, vy1] = layout.view;
   try {
     if (signal.aborted) return null;
@@ -1153,7 +1229,7 @@ async function compositeRegion(
       ? {
           raster: rendered.raster,
           identity: pictureIdentity(rendered.raster),
-          pictureIdentities: [...pictureIdentities],
+          pictures,
           page: answered.page,
           box: crop,
         }
@@ -1161,6 +1237,64 @@ async function compositeRegion(
   } catch {
     return null;
   }
+}
+
+/**
+ * **A pairing, kept, or refused because its picture is a small part of a
+ * drawing** (`in-a-drawing`) — `isPartOfDrawing`, src/pdf-figure-region.ts, on
+ * the page's layout from the drawn route's reader.
+ *
+ * **Fails closed**: a page whose layout, or whose picture's painted box, cannot
+ * be read is refused `unmeasured-picture`, since nothing then shows the picture
+ * is the whole figure, and a wrong picture under a caption is the outcome the
+ * product bar does not accept where a missing one is (GPT Sol, plan review of
+ * 261027e, 4). On every single-picture page in production's PDFs and the eval
+ * PDFs, 2026-10-27, both were readable, so this costs no figure we have seen.
+ * An abort claims nothing: the caller sees the signal and stops.
+ * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
+ */
+async function settleDrawingPart(
+  outcome: Extract<FigureOutcome, { status: "paired" }>,
+  read: PdfRasterRead,
+  options: CollectPdfFiguresOptions,
+  signal: AbortSignal,
+): Promise<FigureOutcome> {
+  const { page } = outcome.marker;
+  const refused = (reason: "in-a-drawing" | "unmeasured-picture"): FigureOutcome => ({
+    status: "refused",
+    marker: outcome.marker,
+    reason,
+  });
+  let layout: PageLayout | null | undefined;
+  try {
+    layout = (await (options.readLayouts ?? readPdfPageLayouts)({ data: options.pdf, pages: [page], signal })).get(page);
+  } catch {
+    return refused("unmeasured-picture");
+  }
+  const view = read.views.get(page);
+  const boxes = read.paints
+    .filter((p) => p.page === page && p.key === outcome.key)
+    .map((p) => (view ? visiblePaintBox(p, view) : null));
+  if (!layout || boxes.length === 0 || boxes.some((box) => box === null)) return refused("unmeasured-picture");
+  return boxes.some((box) => box !== null && isPartOfDrawing(box, layout)) ? refused("in-a-drawing") : outcome;
+}
+
+/** A picture a located region holds, and the share of the region's crop it covers. */
+interface RegionPicture {
+  identity: string;
+  share: number;
+}
+
+/**
+ * **How much of a region is made of these pictures** — the summed shares of
+ * those it holds, capped at the whole. Summed rather than unioned, which can
+ * only count more, so it errs towards a conflict.
+ */
+function sharedShare(pictures: readonly RegionPicture[], identities: readonly string[]): number {
+  return Math.min(
+    1,
+    pictures.filter((p) => identities.includes(p.identity)).reduce((sum, p) => sum + p.share, 0),
+  );
 }
 
 /** The area two boxes share. */
@@ -1379,6 +1513,10 @@ function pdfFigureFailure(reason: PairingFailure): PdfFigureFailure {
       return "caption-not-in-page-text";
     case "uncaptioned":
       return "uncaptioned";
+    case "in-a-drawing":
+      return "in-a-drawing";
+    case "unmeasured-picture":
+      return "unmeasured-picture";
     case "unsupported-kind":
       return "unsupported-kind";
     case "grayscale-1bpp":

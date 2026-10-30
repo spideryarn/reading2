@@ -7,7 +7,7 @@
  * Citations had this first, as `CiteFocus` (plan 261004b): something outside
  * the band asks for a row, the band scrolls to it once it is drawn, and hands
  * the request back so that coming back to the band later does not scroll
- * again. Glossary, Ideas and Debate's claims take the same shape, so it lives
+ * again. Glossary, Ideas and Claims' claims take the same shape, so it lives
  * here and `CiteFocus` is this type under its old name.
  *
  * **Not a selection and not a URL parameter.** A selection (`?term=`,
@@ -65,7 +65,7 @@ export function focusTaken(taken: ItemFocus): (now: ItemFocus | null) => ItemFoc
  * All four lists land this way on purpose: one job, one look (controls.md §
  * Controls that do the same job look the same). Plan
  * docs/plans/261017h-sources-go-to-a-work-lands-and-flashes-and-a-blurb-per-cited-work.md.
- * `onLand` may do one more thing to it first (Debate unfolds a claim), and it
+ * `onLand` may do one more thing to it first (Claims unfolds a claim), and it
  * is measured after that.
  */
 export function useLandOnItem({
@@ -184,7 +184,7 @@ function centreInScroller(row: HTMLElement, scroller: HTMLElement): boolean {
 }
 
 /**
- * **What a claim of Debate's is focused by**: its block and its words, the
+ * **What a claim of Claims' is focused by**: its block and its words, the
  * pair that is its identity (`ClaimOrigin`; reception-order.ts), as one string.
  * Each claim row carries it in `data-claim-key`.
  */
@@ -193,9 +193,11 @@ export function claimFocusKey(claim: { blockId: string; quote: string }): string
 }
 
 /** The lists a focus can bring a row into view in, one piece of state each (Reader.tsx).
-    `finding` is Investigate's *Where this piece sits* (plan 261024o): a margin
-    *literature* line's *Open in Sources*. */
-export type FocusSlot = "term" | "cite" | "idea" | "claim" | "finding";
+    `finding` is the literature search's dossier (plan 261024o), in *Where it
+    sits* since plan 261025h (in Investigate before): a margin *literature*
+    line's *Open in Sources*, and a finding or overview chat's way back.
+    `explanation` is a margin *Explained* line's *Open in Explanations* (plan 261028c). */
+export type FocusSlot = "term" | "cite" | "idea" | "claim" | "finding" | "explanation";
 
 /** Where the reader is, as far as a focus cares: the mode, and Sources' sub-mode. */
 export interface FocusPlace {
@@ -210,12 +212,14 @@ function slotAt(place: FocusPlace): FocusSlot | null {
       return "term";
     case "ideas":
       return "idea";
+    case "explanations":
+      return "explanation";
     case "sources":
       return place.sources === "bibliography"
         ? "cite"
         : place.sources === "claims"
           ? "claim"
-          : place.sources === "investigate"
+          : place.sources === "where"
             ? "finding"
             : null;
     default:

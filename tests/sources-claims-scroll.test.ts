@@ -1,5 +1,5 @@
 /**
- * **Debate's claims list scrolls inside the band** — the half of that a test
+ * **Claims's claims list scrolls inside the band** — the half of that a test
  * can reach.
  *
  * Measured in Chrome on 2026-10-09 (261008i's browser check): at 1440 × 900 the

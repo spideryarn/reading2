@@ -47,7 +47,7 @@
  * — `done` or `error` — and this hook **ticks a question answered only on
  * `done`**. A stream that simply stops produces neither frame, leaves `status`
  * on `"marking"` → `"failed"`, and the reply stays visibly incomplete and
- * retryable. tests/quiz-mark-stream.test.ts is that case and nothing else.
+ * retryable. tests/quiz-mark-stream.test.tsx is that case and nothing else.
  *
  * One live request per attempt: `mark` refuses to start a second while one is
  * running, and aborts the old one when the reader moves to another question or
@@ -59,7 +59,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useAutoRun } from "./useAutoRun.js";
+import { useAutoRun, useAutoRunOnArrival } from "./useAutoRun.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -118,13 +118,13 @@ export interface Attempt {
   /** Why it stopped badly, if it did. */
   error: string | null;
   /**
-   * **Whether they got it right — and it is never rendered.**
+   * **Whether the hidden check thought the answer looked right.**
    *
    * The walk reads this to decide whether the next step carries its premise
    * (src/web/quiz-ladder.ts), and "Where to look again" to decide which sections
-   * it names (src/web/quiz-sections.ts). It may select scaffolding and
-   * navigation like that; `QuizPanel` must never print the word, a count or a
-   * score, or change a line of copy to say how the reader did:
+   * it names (src/web/quiz-sections.ts), and both Quiz surfaces use it for a
+   * deeper green. `QuizPanel` never prints the verdict as a word, count or
+   * score:
    * docs/project/quiz.md is explicit that quoting a difficulty at a reader
    * hands them a token with nothing behind it, and a verdict is worse — it is
    * the grade the whole marking prompt refuses to give.
@@ -138,14 +138,19 @@ export interface Attempt {
   /**
    * **Put back from a kept answer, not marked just now** — `showKept`.
    *
-   * It looks like any other finished mark, and that is the point; the one
-   * thing that must tell them apart is the panel's verdict effect, which reads
-   * a `done` attempt with no verdict as *a new mark that could not be judged*
-   * and forgets the old verdict. A restored attempt never has one — verdicts
-   * are not stored — so without this flag, Next then Previous would un-learn a
-   * verdict earned a minute ago. GPT Sol's plan review of 261005b, F4.
+   * It looks like any other finished mark, and that is the point. The flag is
+   * for the one place the distinction matters on screen: after a due answer is
+   * revealed beside a new draft, quote the earlier words that the restored
+   * mark is about. Verdicts live on `kept`, not restored attempts, and are not
+   * stored.
    */
   restored?: true;
+  /**
+   * Another surface owns the live mark. Kept only long enough to explain why
+   * this press did not start a second paid call; when that mark lands, the
+   * kept-answer restore may replace this attempt while preserving the draft.
+   */
+  claimedElsewhere?: true;
   /**
    * **The stored row this mark is**, `quiz_attempts.id`: what *Discuss this in
    * chat* names it by, so the chat is about this mark and no other
@@ -174,6 +179,14 @@ export interface KeptAnswer {
   saved: boolean;
   /** The row's id, `Attempt.attemptId`; `null` when there is no row to name. */
   attemptId: string | null;
+  /**
+   * **The hidden check's word, for a mark given this visit only** — never from
+   * the server, which does not store it (privacy.md § Quiz answers). Here so
+   * the band and the margin draw the same deeper green for *right* from one
+   * place (plan 261029m; 261029i's F1). Absent for a kept answer from an
+   * earlier visit, and whenever the check failed or declined.
+   */
+  verdict?: QuizVerdict;
 }
 
 export interface UseQuiz {
@@ -270,8 +283,9 @@ export interface UseQuiz {
 
 /**
  * **The opening quiz read, and nothing else** — the GET, its ordering, and the
- * four facts the prose needs. Since 2026-09-30 the questions are drawn in the
- * prose in **every** mode (SPIDERYARN-READING2-6V), so this runs in
+ * four facts the prose needs. Since 2026-09-30 the questions are drawn beside
+ * the prose in **every** mode (SPIDERYARN-READING2-6V) — in Marginalia's column
+ * while that column is on screen, and in the prose otherwise — so this runs in
  * `OwnedReader` (ArticlePage.tsx) and the band layers `useQuiz` on top of it —
  * the split `useQuotesRead` / `useQuotes` made for the same reason. No job
  * subscription and no activation up here, for the reasons `QuotesRead` gives:
@@ -322,8 +336,18 @@ export interface QuizRead {
   noteMark(
     batchId: string,
     questionId: QuizQuestionId,
-    mark: { answer: string; reply: string; answeredAt: string | null; attemptId: string | null },
+    mark: { answer: string; reply: string; answeredAt: string | null; attemptId: string | null; verdict?: QuizVerdict },
   ): void;
+  /**
+   * **Claim the right to mark one question**, or `null` when a mark of it is
+   * already in flight somewhere on this page. Returns the release.
+   *
+   * Since plan 261029i the band and the margin each hold a `useQuizMark`, and
+   * each one's own guard is a ref nobody else can see. With both on screen the
+   * same question could be sent twice, bought twice, and the two results race
+   * into `noteMark` (GPT Sol's plan review, F2). This is the one guard both see.
+   */
+  claimMark(batchId: string, questionId: QuizQuestionId): (() => void) | null;
 }
 
 /** One batch's kept answers, and which batch of which article that is. */
@@ -442,6 +466,7 @@ export function useQuizRead(slug: string): QuizRead {
           answeredAt,
           saved: mark.answeredAt !== null,
           attemptId: mark.answeredAt !== null ? mark.attemptId : null,
+          ...(mark.verdict ? { verdict: mark.verdict } : {}),
         });
         return { key, byQuestion, known: true };
       });
@@ -532,7 +557,32 @@ export function useQuizRead(slug: string): QuizRead {
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with
      every other artefact reader — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
-  const { reload, refresh } = useOrderedRead(load);
+  const { reload, refresh: orderedRefresh } = useOrderedRead(load);
+  /**
+   * **Two listeners, one read when they hear the same completion.** The
+   * always-mounted read hears every announced Quiz completion, while the
+   * mounted Quiz band or margin hook also owns the exact job it started. The
+   * latter is what catches a very fast job already `done` on the engine's first
+   * list; the former is what still hears it after that surface unmounts.
+   *
+   * Both callbacks run in the same React effect turn for an ordinary
+   * completion. Passing `orderedRefresh` to both would make its second call arm
+   * a trailing GET. Coalesce only that turn: clear the latch before the real
+   * refresh starts, so a genuinely later completion while its GET is in flight
+   * still asks `useOrderedRead` for the required trailing read.
+   */
+  const queuedRefresh = useRef<Promise<void> | null>(null);
+  const refresh = useCallback((): Promise<void> => {
+    if (queuedRefresh.current) return queuedRefresh.current;
+    const next = new Promise<void>((resolve, reject) => {
+      queueMicrotask(() => {
+        queuedRefresh.current = null;
+        void orderedRefresh().then(resolve, reject);
+      });
+    });
+    queuedRefresh.current = next;
+    return next;
+  }, [orderedRefresh]);
   /* A run that finishes after the reader left the Learn band still reaches the
      questions in the prose. This read was hoisted two days before its three
      siblings were given the line (e039d2acd) and was missed until 2026-10-06.
@@ -572,6 +622,18 @@ export function useQuizRead(slug: string): QuizRead {
   }, [batchKey, fromServer, thisVisit]);
   const keptUnread = batchKey !== null && fromServer.key === batchKey && !fromServer.known;
 
+  /* `claimMark`: a ref, for `live`'s reason in `useQuizMark` — a double press
+     lands before any state would. */
+  const marking = useRef(new Set<string>());
+  const claimMark = useCallback((batchId: string, questionId: QuizQuestionId) => {
+    const key = `${batchId}\n${questionId}`;
+    if (marking.current.has(key)) return null;
+    marking.current.add(key);
+    return () => {
+      marking.current.delete(key);
+    };
+  }, []);
+
   return {
     status,
     quiz,
@@ -587,6 +649,7 @@ export function useQuizRead(slug: string): QuizRead {
     kept,
     keptUnread,
     noteMark,
+    claimMark,
   };
 }
 
@@ -594,78 +657,66 @@ export function useQuizRead(slug: string): QuizRead {
  * The band's half: the job, the verbs and the marks. `read` comes from
  * `useQuizRead` in `OwnedReader` — see `QuizRead` for why the fetch moved up.
  */
-export function useQuiz(slug: string, read: QuizRead): UseQuiz {
-  const { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
-  const { kept, noteMark } = read;
-  const [attempt, setAttempt] = useState<Attempt | null>(null);
-  /* **Derived, not kept** — until 2026-10-05 this was a set of its own, added
-     to on `done` and emptied on a new batch. `kept` is scoped to the batch on
-     screen already (a replacement batch can reuse question ids with new
-     meanings: GPT Sol's plan review, 260930i finding 6), so the tick and the
-     restored answer cannot disagree. */
-  const answered = useMemo(() => new Set(kept.keys()), [kept]);
-
-  /* **Revalidate on mount, behind whatever is on screen** — `useQuotes`' reason:
-     `useStepJob`'s first poll is a baseline and does not announce a job that had
-     already finished, so a batch written in another tab while the band was
-     closed has nothing else to bring it in. `reload` joins a read in flight and
-     never returns `status` to `loading`. */
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const batchId = quiz?.batchId;
-
-  /* The job half — the poll, the running job, and what a refused or dead run
-     says to the reader — is src/web/useStepJob.ts, shared with the glossary,
-     the summaries, the ideas and the timeline. */
-  const queue = useStepJob(slug, "quiz", refresh, "watches-queue");
-
-  /* **The unforced one.** Two callers, and they must be the same request: the
-     automatic run below, and the button under the empty state (`QuizPanel` §
-     `run`). See `ensure` on the interface for why that matters. */
+/**
+ * **Write the questions when the margin is shown and there are none** —
+ * Greg, 2026-10-29 (spya-fytjtf): *"let's say the quiz mode does run as one
+ * of the default modes whenever you open marginalia mode"*. The relation
+ * words' rule (useRelations.ts): `useAutoRunOnArrival`, one unforced attempt
+ * per article per page load, whatever put the column there, and only while
+ * the notes are on screen (`shown`), so a window too narrow for them buys
+ * nothing.
+ *
+ * **Only `none` runs.** A stale quiz is the band's to rewrite, as it is
+ * today, and an outdated one stays: a rewrite mints a new batch, and the
+ * answers the reader has given stop showing (quiz.md § Answers are kept).
+ * About $0.17–0.24 an article, measured on production's ledger on
+ * 2026-10-29 (plan 261029c). Owner only: the one caller is `OwnerMarginFeed`.
+ * Quiet, as the relations job is: the column stays open as long as somebody
+ * reads, and the read's `refresh` brings the questions in when it finishes.
+ */
+export function useQuizOnShow(slug: string, read: QuizRead, shown: boolean): void {
+  const { status, reload, refresh } = read;
+  /* The job hook must refresh too: unlike `useStepFinished`, it reconciles the
+     exact job it started even when that job is already done on the engine's
+     first list. `useQuizRead.refresh` coalesces the ordinary case where both
+     listeners hear the same completion, so this does not add a trailing GET. */
+  const queue = useStepJob(slug, "quiz", refresh, "quiet");
   const ensure = useCallback(async () => {
     await queue.start();
   }, [queue]);
+  useAutoRunOnArrival(slug, "quiz", shown ? status : "loading", ensure, reload);
+}
 
-  /* **`rewriting`: the hold is not this band's**, so it survives the band
-     unmounting while the job runs on — rewrite-hold.ts, which owns what
-     releases it. The batch is the identity: a new `batchId` is the replacement. */
-  const { rewriting, run: held } = useRewriteHold({
-    slug,
-    step: "quiz",
-    identity: batchId ?? null,
-    queue,
-    fresh: read.fresh,
-    refresh,
-  });
+/** One question's marking, as `useQuizMark` hands it out. */
+export interface QuizMark {
+  /** `UseQuiz.attempt`. */
+  attempt: Attempt | null;
+  /** `UseQuiz.showKept`. */
+  showKept(questionId: QuizQuestionId): void;
+  /** `UseQuiz.mark`. */
+  mark(questionId: QuizQuestionId, answer: string): Promise<void>;
+  /** `UseQuiz.clearAttempt`. */
+  clearAttempt(): void;
+}
 
-  const write = useCallback(async () => {
-    await held(() =>
-      queue.start({
-        /* **Always forced**, for `useIdeas.regenerate`'s reason: the button is
-           offered beside questions that are current, so an unforced run would skip
-           and the reader would watch a job start and finish having changed
-           nothing. Forcing is safe because this step replaces rather than appends.
+/**
+ * **Marking one answer at a time, and nothing else** — the half of `useQuiz`
+ * that the margin needs too (plan 261029i: Greg, spya-jzgrua, *"avoid having
+ * to jump away from marginalia mode to the learn mode"*).
+ *
+ * Its own hook rather than `useQuiz` mounted in the margin, because `useQuiz`
+ * re-reads on mount and follows the job queue at its watching cadence, and the
+ * margin's mount must cost nothing (marginalia.md). Each caller holds its own
+ * attempt and its own live request; what they share is `read`, whose
+ * `noteMark` merges a finished mark into the one `kept`, so an answer given in
+ * the margin is ticked in the band and the other way round.
+ */
+/** The part of `QuizRead` marking needs — all the margin's context carries (plan 261029i, Sol F4). */
+export type QuizMarkSource = Pick<QuizRead, "quiz" | "kept" | "noteMark" | "refresh" | "claimMark">;
 
-           It also mints a new `batchId`, which is deliberate and is why the mark
-           route answers 409 rather than falling forward: the reference answers
-           have genuinely been rewritten. */
-        force: true,
-      }),
-    );
-  }, [queue, held]);
-
-  /* **The reader pressed Quiz and there is nothing there — write the questions.**
-     `ensure` and not `write`, for the double-charge reason on the interface; and
-     `reload` and not `ensure` for the last argument, because a read that failed
-     is answered by reading again rather than by spending. useAutoRun.ts § A
-     failed read is not an answer.
-
-     The press is minted by Learn's own sub-mode toggle (App.tsx §
-     `LearnBand`), not by the `?learn=` setter beside it — Back and Forward
-     move that, and retracing your steps must not buy a model call. */
-  useAutoRun(slug, "quiz", status, ensure, reload);
+export function useQuizMark(slug: string, read: QuizMarkSource): QuizMark {
+  const { quiz, kept, noteMark, refresh, claimMark } = read;
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
 
   /**
    * **The one live request, so a second submission cannot start a second.**
@@ -731,6 +782,23 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
           status: "failed",
           reply: "",
           error: "There are no questions loaded to mark this against.",
+        });
+        return;
+      }
+
+      /* **Not while the same question is being marked elsewhere on the page**
+         — the band and the margin both answer since plan 261029i. Said, not
+         swallowed: a press that does nothing reads as a dead button. */
+      const release = claimMark(batchId, questionId);
+      if (!release) {
+        live.current = null;
+        setAttempt({
+          questionId,
+          answer,
+          status: "failed",
+          reply: "",
+          error: "This question is already being marked elsewhere on the page. Its mark will be here when it lands.",
+          claimedElsewhere: true,
         });
         return;
       }
@@ -821,7 +889,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
         });
         /* **The tick, and what Next → Previous puts back** — stored or not: a
            mark the reader watched finish is theirs for this visit either way. */
-        noteMark(batchId, questionId, { answer, reply, answeredAt, attemptId });
+        noteMark(batchId, questionId, { answer, reply, answeredAt, attemptId, ...(verdict ? { verdict } : {}) });
         if (answeredAt !== null) {
           /* **Read the quiz again, behind the screen, because the offline copy
              of it is now out of date.** `apiFetch` deliberately does not throw
@@ -853,11 +921,91 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
           error: describeFetchFailure(err as Error),
         });
       } finally {
+        release();
         if (live.current === controller) live.current = null;
       }
     },
-    [quiz?.batchId, slug, noteMark, refresh],
+    [quiz?.batchId, slug, noteMark, refresh, claimMark],
   );
+
+  return { attempt, showKept, mark, clearAttempt };
+}
+
+export function useQuiz(slug: string, read: QuizRead): UseQuiz {
+  const { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
+  const { kept } = read;
+  /* **Derived, not kept** — until 2026-10-05 this was a set of its own, added
+     to on `done` and emptied on a new batch. `kept` is scoped to the batch on
+     screen already (a replacement batch can reuse question ids with new
+     meanings: GPT Sol's plan review, 260930i finding 6), so the tick and the
+     restored answer cannot disagree. */
+  const answered = useMemo(() => new Set(kept.keys()), [kept]);
+
+  /* **Revalidate on mount, behind whatever is on screen** — `useQuotes`' reason:
+     `useStepJob`'s first poll is a baseline and does not announce a job that had
+     already finished, so a batch written in another tab while the band was
+     closed has nothing else to bring it in. `reload` joins a read in flight and
+     never returns `status` to `loading`. */
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const batchId = quiz?.batchId;
+
+  /* The job half — the poll, the running job, and what a refused or dead run
+     says to the reader — is src/web/useStepJob.ts, shared with the glossary,
+     the summaries, the ideas and the timeline. */
+  const queue = useStepJob(slug, "quiz", refresh, "watches-queue");
+
+  /* **The unforced one.** Two callers, and they must be the same request: the
+     automatic run below, and the button under the empty state (`QuizPanel` §
+     `run`). See `ensure` on the interface for why that matters. */
+  const ensure = useCallback(async () => {
+    await queue.start();
+  }, [queue]);
+
+  /* **`rewriting`: the hold is not this band's**, so it survives the band
+     unmounting while the job runs on — rewrite-hold.ts, which owns what
+     releases it. The batch is the identity: a new `batchId` is the replacement. */
+  const { rewriting, run: held } = useRewriteHold({
+    slug,
+    step: "quiz",
+    identity: batchId ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+
+  const write = useCallback(async () => {
+    await held(() =>
+      queue.start({
+        /* **Always forced**, for `useIdeas.regenerate`'s reason: the button is
+           offered beside questions that are current, so an unforced run would skip
+           and the reader would watch a job start and finish having changed
+           nothing. Forcing is safe because this step replaces rather than appends.
+
+           It also mints a new `batchId`, which is deliberate and is why the mark
+           route answers 409 rather than falling forward: the reference answers
+           have genuinely been rewritten. */
+        force: true,
+      }),
+    );
+  }, [queue, held]);
+
+  /* **The reader pressed Quiz and there is nothing there — write the questions.**
+     `ensure` and not `write`, for the double-charge reason on the interface; and
+     `reload` and not `ensure` for the last argument, because a read that failed
+     is answered by reading again rather than by spending. useAutoRun.ts § A
+     failed read is not an answer.
+
+     The press is minted by Learn's own sub-mode toggle (App.tsx §
+     `LearnBand`), not by the `?learn=` setter beside it — Back and Forward
+     move that, and retracing your steps must not buy a model call. */
+  useAutoRun(slug, "quiz", status, ensure, reload);
+
+  /* **Marking is `useQuizMark`'s** — the margin answers questions too (plan
+     261029i), and it must not take the job subscription above with it. */
+  const { attempt, showKept, mark, clearAttempt } = useQuizMark(slug, read);
 
   return {
     status,

@@ -63,7 +63,7 @@
      with 616px of content in 254px looks exactly like one that ends where it
      stops. A trailing fade is the answer these stylesheets already give for
      the table that runs off the right edge
-     (`.reader:has(table.zoom.overflowing)::after`), and gave a second time in
+     (`.reader:has(> table.zoom.overflowing)::after`), and gave a second time in
      `.ctx-panel`'s own mask until the fisheye panels went on 2026-09-29.
      It is drawn whether or not there is anything below it, which is the price
      of a rule that cannot ask. */
@@ -185,7 +185,7 @@
 /* **Dimmed, never hidden.** The `ordinary` label is read off class names and is
    therefore forgeable, so a labelled finding is sorted last and drawn quieter —
    and it is still here, with its own words on screen. docs/project/security.md. */
-.ref-scan-item.explained { opacity: 0.7; }
+.ref-scan-item.ref-scan-ordinary { opacity: 0.7; }
 .ref-scan-kind { color: var(--ink); font-weight: 600; }
 .ref-scan-tag { color: var(--ink-faint); font-style: italic; }
 /* How many identical findings this row stands for. */

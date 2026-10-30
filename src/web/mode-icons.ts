@@ -29,6 +29,7 @@ import {
   MessagesSquare,
   Network,
   PanelRight,
+  Puzzle,
   Quote,
   Route,
   Search,
@@ -44,6 +45,9 @@ export const MODE_ICON: Readonly<Record<Mode, LucideIcon>> = {
   quotes: Quote,
   glossary: BookA,
   faq: BadgeQuestionMark,
+  /* The missing piece each explanation supplies (plan 261028c). Used nowhere
+     else: not `CircleHelp` (the gutter's ?) nor `LifeBuoy` (Help). */
+  explanations: Puzzle,
   ideas: Lightbulb,
   timeline: Clock,
   referee: ClipboardCheck,

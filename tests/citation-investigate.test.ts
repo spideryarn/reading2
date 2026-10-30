@@ -1,5 +1,5 @@
 /**
- * **Citations' *Investigate*, with the model and the stores injected** —
+ * **Bibliography's *Dig deeper*, with the model and the stores injected** —
  * src/citation-investigate.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
  * What is pinned here:
@@ -394,7 +394,7 @@ describe("the request", () => {
        then quoted its own phrases, the paper's terms and result titles too. */
     expect(system).toContain("NO QUOTATION MARKS AT ALL");
     expect(system).not.toContain("Use quotation marks only for");
-    /* Opus reasons inside this ceiling. Citations' dug answer gets the same
+    /* Opus reasons inside this ceiling. Bibliography's dug answer gets the same
        measured headroom as the other Dig deeper answers, rather than keeping
        the old Sonnet-sized ceiling. */
     expect(body.max_tokens).toBe(DIG_ANSWER_TOKENS);

@@ -64,7 +64,7 @@ export function SetNewPassword() {
 
   return (
     <div className="tw:flex tw:flex-col">
-      <h1 className="tw:font-prose tw:text-2xl tw:text-foreground">Choose a new password</h1>
+      <h1 className="tw:font-sans tw:text-2xl tw:text-foreground">Choose a new password</h1>
       <p className="tw:mb-6 tw:mt-1 tw:text-sm tw:text-muted-foreground">
         You are signed in. Choose the password you will use next time.
       </p>

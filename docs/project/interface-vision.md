@@ -42,7 +42,7 @@ always the simpler-first version, not the end state.
        │                         │ disclosed                    │
    ▮   │ Structure (the tree)    │ ¶ … a ·glossary· term, a     │
    ▮   │ Summary                 │   quote's rule, a citation   │ ? What would have to be true
-   ▯   │ Tweets                  │   mark, a cross-reference …  │   for this to hold?
+   ▯   │ Summary's Thread view   │   mark, a cross-reference …  │   for this to hold?
    ▯   │ (Diagram, Skim?)  │                              │
    ▯   │                         │ ¶ …                          │ ⚑ Disputed — 2 replies  ▸
    ▯   │                         │                              │
@@ -56,7 +56,7 @@ always the simpler-first version, not the end state.
   passage they are about, scrolling with it. Today's Marginalia (called Annotations until the
   rename in [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md))
   is the first cut.
-- **The left is everything that is about the piece as a whole**: Structure, Summary, Tweets. It
+- **The left is everything that is about the piece as a whole**: Structure and Summary (whose Thread view is the post-per-passage face). It
   stays put while the text scrolls.
 - **Both sides can be open at once** when the window is wide enough.
 - **The single-purpose mode bands still exist but recede.** Glossary's list, Ideas' list, Timeline,
@@ -78,14 +78,14 @@ anchored, so placing it costs layout, not a model call.
 | Quiz questions | paragraphs | middle: italic line after the paragraph | **yes** ([quiz.md](quiz.md)) |
 | Socratic questions, the arc | parts | right, and the right's head | **yes**, in Marginalia |
 | Ideas (assumes / introduces) | block ids | right: a stamp at first occurrence | **in the margin**, once Ideas has run; marked in the prose only while Ideas' band is open (`selectPassages`, `src/web/reader/passages.ts`) |
-| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/reception.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first — Greg, 2026-10-02: *"Let's try with everything, and see how it feels"* (narrowing to `disputes` is one line in `src/web/marginalia/notes.ts`) |
+| Reception's legacy claim-source rows (shown in Claims) | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/reception.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first — Greg, 2026-10-02: *"Let's try with everything, and see how it feels"* (narrowing to `disputes` is one line in `src/web/marginalia/notes.ts`). The current Claims list and its checks do not feed the margin |
 | FAQ answers | the passages that answer | right, or a mark | **in the margin** since 261002b, beside the earliest answering passage, shut; marked nowhere in the prose |
 | Timeline events | resolved passages | right, or a mark | data yes; marked in the prose only while Timeline's band is open |
 | Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **partly** — the relation words *so*, *but* and *vs* are in the margin since 2026-10-03 ([marginalia.md § Relation words](marginalia.md#relation-words)); fuller rebuttals and conclusions are not, and would be a new model pass |
 | Explaining a hard paragraph | blocks | right, collapsed | **no** — needs [vision.md](vision.md)'s difficulty map, which does not exist |
 | Structure | the whole | left | yes, as a band |
 | Summary | the whole, linked to passages | left | yes, as a band |
-| Tweets | the whole, posts linked to passages | left | yes, as a wide band (Greg already called it *"its own left-hand column"*, 5A) |
+| Summary's Thread view | the whole, posts linked to passages | left | yes, as a wide band (Greg already called it *"its own left-hand column"*, 5A) |
 | Diagram / Sketch / Illustrated | the whole | left, or a surface of its own | yes, as bands |
 | Skim | a route through quotes | left? it is walked, not read | yes, as a band |
 | Comments and bookmarks | blocks or quoted passages | right: collapsed | **in the margin** since 261002b; a visitor sees the owner's published comments |
@@ -98,7 +98,7 @@ model pass, and they can come last.
 ## What is already true
 
 - **The right column exists.** Marginalia's notes sit level with their blocks, push each other down
-  when they collide, and generate nothing. Visitors see the public Ideas, FAQ and Debate artefacts
+  when they collide, and generate nothing. Visitors see the public Ideas and FAQ artefacts and Reception's legacy claim-source rows
   plus the owner's published comments, but never the owner's Citations. The notes are faint, small
   and hueless
   ([261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md)).
@@ -159,7 +159,7 @@ These are the reasons to go carefully, each one already said by Greg in another 
 - **Cost and consent — settled 2026-10-02: opening Marginalia spends nothing.** It shows only what
   other modes have already made, and the automatic help comments in 7E were declined for the same
   reason. **One exception since 2026-10-05, Greg's own**: the column's relation words are made the
-  first time it is shown ([marginalia.md § Relation words](marginalia.md#relation-words)), and since 2026-10-11 the same call may add a few notes of its own ([§ Notes the model writes](marginalia.md#notes-the-model-writes)). Greg would have had it run the missing modes, but only if a mode made later never reached
+  first time it is shown ([marginalia.md § Relation words](marginalia.md#relation-words)), and since 2026-10-11 the same call may add a few notes of its own ([§ Notes the model writes](marginalia.md#notes-the-model-writes)). Since 2026-10-29 the owner's press that turns the column on also starts Sources' literature search where none is stored (Greg's answer to q-sxfwqq; [sources.md § Where it sits](sources.md#where-it-sits)). Greg would have had it run the missing modes, but only if a mode made later never reached
   the margin:
 
   > My worry is that if we *don't* fill in stuff that hasn't been generated, then even if we do
@@ -171,7 +171,7 @@ These are the reasons to go carefully, each one already said by Greg in another 
   >
   > — Greg, 2026-10-02
 
-  The worry does not hold: the margin reads the owner's FAQ, Debate and Ideas each time it opens,
+  The worry does not hold: the margin reads the owner's FAQ, Reception's legacy claim-source rows and Ideas each time it opens,
   and since [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md) it
   also refreshes them, and the Reader's shared Citations read, on completions announced by this
   tab's job engine — his "ideal", which turned out small.

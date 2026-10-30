@@ -370,7 +370,7 @@ describe("the shape of a card, over every tip that can be reached from a module"
        makes the cheapest way to fill a `how` — restating the `what` — fail,
        which is the failure the dock's own tips were shipped with once
        (docs/plans/260907b-rich-tooltips-on-the-dock-modes.md). Lifted from
-       `restates` in tests/dock-mode-tooltips.tsx. */
+       `restates` in tests/dock-mode-tooltips.test.tsx. */
     for (const [name, tip] of everyTip()) {
       const what = contentWords(tip.what);
       const how = contentWords(tip.how);

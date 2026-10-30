@@ -135,6 +135,13 @@ export const STEP_ORDER = [
      press that turns Marginalia on.
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
+  /* Beside `faq` and `relations`, whose article bytes it shares: `high`
+     effort, the `ids` renderer, the body-only evidence, and its own schema.
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: one model call
+     over the whole article, made by the owner's press into the mode, and not
+     on import until Greg answers q-gkrkf5.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  "explanations",
   /* With the other body-only `ids` stages: `high` effort (measured against
      `medium` in stage 1, src/models.ts § STAGE_EFFORT) and its own schema.
      Off `DEFAULT_INGEST_STEPS`
@@ -361,8 +368,8 @@ export type StepsMissingFromOrder<
  * arrives by `STEP_ORDER` and nothing else — so `precededBy: ["assets"]` on
  * `structure` would come back as `["structure", "assets"]`, a "preceding" step
  * that runs afterwards, with nothing anywhere saying so. GPT Sol reproduced
- * exactly that on 2026-09-03; the one caller in the tree is safe, so what this
- * closes is the next caller rather than a live bug.
+ * exactly that on 2026-09-03; the callers in the tree are safe, so what this
+ * closes is a future caller rather than a live bug.
  *
  * **A type rather than a `STEP_ORDER.indexOf` comparison at the call site**,
  * because a wrong `precededBy` should fail the build rather than a test, and

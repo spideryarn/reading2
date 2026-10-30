@@ -30,18 +30,18 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { unrunnableStepPlan } from "../src/jobs.js";
+import { cascadeForce, unrunnableStepPlan } from "../src/jobs.js";
 import { FORCE_ONLY_WHEN_NAMED } from "../src/pipeline.js";
 import { METADATA_RERUN_STEPS } from "../src/rerun-steps.js";
 import { STEP_ORDER } from "../src/step-order.js";
 import type { StepName } from "../src/types.js";
 
-/** The seven the plan argues out, each for a reason of its own. */
+/** The six the plans argue out, each for a reason of its own. `structure` was
+ *  the seventh until plan 261029l. */
 const REFUSED: StepName[] = [
   "fetch",
   "extract",
   "blocks",
-  "structure",
   "labels",
   "assets",
   "illustrated",
@@ -50,6 +50,9 @@ const REFUSED: StepName[] = [
 describe("the steps the Metadata page will re-run", () => {
   it("is exactly the list the plans settled, in pipeline order", () => {
     expect([...METADATA_RERUN_STEPS]).toEqual([
+      /* Plan 261029l, 2026-10-29: Greg's "a way to rerun just the structure
+         mode". Why it was out and what answers that is in src/rerun-steps.ts. */
+      "structure",
       "arc",
       "tweets",
       "glossary",
@@ -81,7 +84,7 @@ describe("the steps the Metadata page will re-run", () => {
     for (const step of METADATA_RERUN_STEPS) expect(STEP_ORDER).toContain(step);
   });
 
-  it("offers none of the seven the plan argued out", () => {
+  it("offers none of the six the plans argued out", () => {
     for (const step of REFUSED) expect([...METADATA_RERUN_STEPS]).not.toContain(step);
   });
 
@@ -95,7 +98,23 @@ describe("the steps the Metadata page will re-run", () => {
    * The plan's § Findings records that claim being made and withdrawn.
    */
   it("forces nothing beyond the step that was pressed", () => {
+    /* **The property itself, since plan 261029l**, rather than membership of
+       `FORCE_ONLY_WHEN_NAMED`, which was a stand-in for it. `structure` is not
+       in that set and must not be: in a job that also runs `labels`, forcing
+       the tree has to force the labels too (src/pipeline.ts). A press is a
+       one-step job, `{ steps: [s], force: [s] }`, and `cascadeForce` names only
+       steps already in the job, so it forces `s` and nothing else. */
     for (const step of METADATA_RERUN_STEPS) {
+      expect([...cascadeForce([step], new Set([step]))], `${step} would cascade`).toEqual([step]);
+    }
+  });
+
+  it("keeps every member but `structure` out of the positional cascade too", () => {
+    /* What the old assertion said, kept for the others: a member that left
+       `FORCE_ONLY_WHEN_NAMED` would be swept into every multi-step force,
+       Rebuild and the reset included. `structure` is the deliberate exception. */
+    for (const step of METADATA_RERUN_STEPS) {
+      if (step === "structure") continue;
       expect(FORCE_ONLY_WHEN_NAMED.has(step), `${step} would cascade`).toBe(true);
     }
   });

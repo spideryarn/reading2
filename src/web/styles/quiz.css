@@ -122,6 +122,88 @@
   line-height: 1.45;
 }
 
+/* **A quiet green for an answered question** — Greg, 2026-10-29
+   (spya-jzgrua): *"some kind of nice feedback, visual feedback actually … not
+   gamification. But just some of that sense of satisfaction of, you know,
+   turning it a subtle green"*. One class, the band's question and the
+   margin's line alike (controls.md § Controls that do the same job look the
+   same). It says *answered*, never right or wrong: the hidden verdict is still
+   not drawn (quiz.md). A pale ground, so the words keep the ink's contrast;
+   `--positive` (styles/tokens.css) is the tick's colour, held at 4.5:1 there.
+   Plan 261029i § Stage 3. */
+.quiz-answered {
+  background: color-mix(in oklab, var(--positive) 13%, transparent);
+  transition: background-color 700ms ease;
+}
+.quiz-answered .marg-quiz-tick,
+.quiz-answered .quiz-tick { color: var(--positive); }
+/* The band's tick, ringed tick or clock, a space before the words (the margin's
+   row has its own gap). */
+.quiz-question > svg {
+  margin-right: 0.35rem;
+  vertical-align: -2px;
+}
+.quiz-question.quiz-answered {
+  padding: 0.15rem 0.4rem;
+  margin-left: -0.4rem;
+  margin-right: -0.4rem;
+  border-radius: var(--radius);
+}
+/* **Deeper for right, a faint wash for due** — Greg, 2026-10-29
+   (spya-v2aehw): *"even more positive feedback if they got it right, and maybe
+   some other indication if it's sort of stale"*. Both ride on `.quiz-answered`
+   (quiz-recall.ts § `quizLookClass`), so only the ground and the mark change.
+   *Right* is this visit's hidden check, never stored; a failed check is plain
+   answered green, never less. *Due* is an answer older than RECALL_AFTER_DAYS:
+   the green has faded, and the clock says come back to it. No red anywhere.
+   Plan 261029m. */
+.quiz-answered.quiz-right {
+  background: color-mix(in oklab, var(--positive) 26%, transparent);
+}
+.quiz-answered.quiz-due {
+  background: color-mix(in oklab, var(--positive) 5%, transparent);
+  /* The green drained to its outline. The wash alone vanished against the dark
+     page, leaving only the clock to tell due from unanswered (browser check of
+     plan 261029m). */
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--positive) 40%, transparent);
+}
+.quiz-due .marg-quiz-due,
+.quiz-due .quiz-due { color: var(--ink-faint); }
+@media (prefers-reduced-motion: reduce) {
+  .quiz-answered { transition: none; }
+}
+
+/* A due question's box opens empty; `RecallLine` says why and brings the
+   earlier answer back on a press, beside a draft rather than over it. Band and
+   margin alike (plan 261029m). */
+.quiz-recall,
+.quiz-earlier {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: max(var(--text-min), 0.8rem);
+}
+.quiz-earlier-words { color: var(--ink); }
+.quiz-recall-show {
+  all: unset;
+  color: var(--ink-faint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.quiz-recall-show:hover,
+.quiz-recall-show:focus-visible { color: var(--ink); }
+.quiz-recall-show:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.quiz-recall-show:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 2px;
+}
+@media (any-pointer: coarse) {
+  .quiz-recall-show { min-height: 40px; display: inline-flex; align-items: center; }
+}
+
 .quiz-premise + .quiz-question {
   margin-top: 0.2rem;
 }
@@ -158,7 +240,8 @@
   /* The answer button loses `.quiz-go` after a mark but remains pressable: it
      can submit an edited answer. Size the row's Send-shaped button, not the
      transient fill class. */
-  .quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
+  .quiz-actions .chat-send,
+  .marg-quiz-actions .chat-send { width: max(40px, var(--control-h)); height: max(40px, var(--control-h)); }
 }
 
 .quiz-actions {
@@ -395,41 +478,8 @@ td.text .quiz-in-prose-icon {
   top: 0.15em;
 }
 
-/* ------------------------------------------------------------ § share-pie ----
-   SharePie.tsx: a share of a whole as a small pie, the figure on its card.
-   Generic, but the quiz is its only user so far, so it lives here; move it to
-   its own sheet when a second mode draws one. Plan 261003e. */
-/* A 24px button round a 14px pie: the hit area a finger needs, with the
-   margin taking the extra 10px back so the row is no taller than the pie. */
-.share-pie {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin: -5px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--ink-soft);
-  cursor: default;
-}
-.share-pie:focus-visible {
-  outline: 1px solid var(--highlight-text);
-  outline-offset: -2px;
-}
-.share-pie svg {
-  display: block;
-}
-/* The slice is the ink's soft grey rather than the row's faint one: at 14px
-   a faint slice on a faint track read as nearly nothing in the browser look. */
-.share-pie-whole {
-  fill: color-mix(in oklab, var(--ink-faint) 30%, transparent);
-}
-.share-pie-part {
-  fill: currentColor;
-}
+/* ------------------------------------------------------- § only what I've read ----
+   The pie itself is share-pie.css, since the masthead draws one too. */
 /* The tick-box and its pie wrap as one, so the pie never sits alone on a
    line with nothing to say what it is a share of. */
 .quiz-only-read-what {
@@ -440,15 +490,11 @@ td.text .quiz-in-prose-icon {
 }
 /* **Under a finger, the tick-box's label and the pie are 40px** (plan 261021g
    § Stage 2; controls.md § The numbers): the label was 22px tall and the pie
-   24px, pulled 5px into its gap by the margin above. The pie drops that margin
-   so 8px stays between the two boxes, and the row grows instead. The label is
-   the target, not the 13px box inside it, so it is the label that grows. */
+   24px, pulled 5px into its gap by its negative margin. The pie drops that
+   margin (share-pie.css) so 8px stays between the two boxes, and the row grows
+   instead. The label is the target, not the 13px box inside it, so it is the
+   label that grows. */
 @media (any-pointer: coarse) {
   .quiz-only-read label { min-height: 40px; }
-  .share-pie {
-    width: 40px;
-    height: 40px;
-    margin: 0;
-  }
   .quiz-only-read-what { gap: 8px; }
 }

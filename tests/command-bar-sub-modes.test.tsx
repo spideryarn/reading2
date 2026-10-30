@@ -576,19 +576,22 @@ describe("Enter on Referee › Hidden text, on the reading view", () => {
    so a sub-mode that lives only in the panel is one the bar never offers; and
    Reader's batched setter enumerates its keys, so one missing from it opens
    the mode and drops the view. */
-describe("Sources' six sub-modes", () => {
+describe("Sources' seven sub-modes", () => {
+  const WHERE: SubMode = { mode: "sources", view: "where" };
   const BIBLIOGRAPHY: SubMode = { mode: "sources", view: "bibliography" };
   const NOT_CITED: SubMode = { mode: "sources", view: "not-cited" };
   const LINKS: SubMode = { mode: "sources", view: "links" };
   const CLAIMS: SubMode = { mode: "sources", view: "claims" };
   const RECEPTION: SubMode = { mode: "sources", view: "reception" };
 
-  it("lists all six under Sources, in the control's order", () => {
+  /* Plan 261025h: Where it sits first, the default; the four tools keep their rows. */
+  it("lists all seven under Sources, Where it sits first", () => {
     reading();
     openBar();
     type("sources");
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
     expect(subRows().map(fullName).filter((n) => n.startsWith("Sources ›"))).toEqual([
+      "Sources › Where it sits",
       "Sources › Bibliography",
       "Sources › Not cited",
       "Sources › Links",
@@ -600,6 +603,22 @@ describe("Sources' six sub-modes", () => {
     type("peer review");
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
     expect(rows().map(fullName)).toContain("Referee");
+  });
+
+  it("finds Where it sits by the words a reader would use", () => {
+    reading();
+    openBar();
+    for (const words of [
+      "where it sits",
+      "situate",
+      "the literature",
+      "where this piece sits",
+      "literature search",
+      "search the literature",
+    ]) {
+      type(words);
+      expect(fullName(rows()[0] as HTMLElement), words).toBe("Sources › Where it sits");
+    }
   });
 
   it("finds Links by the words a reader would use", () => {
@@ -652,11 +671,14 @@ describe("Sources' six sub-modes", () => {
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Reception");
   });
 
-  /* **Each row buys its own sub-mode's work and nothing else**: the
-     citations for Bibliography, the `reception` search for Reception (since
-     `debate/7`, 2026-10-08, the search is Reception's only — plan 261008i,
-     GPT Sol's F1), the claims list for Claims: one call, no search. */
-  it("arms the three generated views and nothing for Not cited or Links", () => {
+  /* **Only Where it sits and Bibliography arm anything, and that is the
+     citations** (plan 261025h, decisions 6 and 8): Reception's search and
+     Claims' list are each their panel's own button since their chips went. */
+  it("arms the search for Where it sits, the citations for Bibliography, and nothing for any other", () => {
+    /* Where it sits arms its own composite token: the search, preceded by
+       the citations when they are missing too (plan 261026g, Stage 2). */
+    expect(subModeTarget(WHERE)).toBe("sources-where");
+    expect(subModeGenerates(WHERE)).toBe(true);
     expect(subModeTarget(BIBLIOGRAPHY)).toBe("bibliography");
     expect(subModeGenerates(BIBLIOGRAPHY)).toBe(true);
     /* Its search sends the piece's words to OpenAlex, so only its own button
@@ -665,10 +687,10 @@ describe("Sources' six sub-modes", () => {
     expect(subModeGenerates(NOT_CITED)).toBe(false);
     expect(subModeTarget(LINKS)).toBeNull();
     expect(subModeGenerates(LINKS)).toBe(false);
-    expect(subModeTarget(RECEPTION)).toBe("reception");
-    expect(subModeGenerates(RECEPTION)).toBe(true);
-    expect(subModeTarget(CLAIMS)).toBe("sources-claims");
-    expect(subModeGenerates(CLAIMS)).toBe(true);
+    expect(subModeTarget(RECEPTION)).toBeNull();
+    expect(subModeGenerates(RECEPTION)).toBe(false);
+    expect(subModeTarget(CLAIMS)).toBeNull();
+    expect(subModeGenerates(CLAIMS)).toBe(false);
   });
 
   it("opens Sources on Links from the bar and arms nothing", () => {
@@ -695,7 +717,7 @@ describe("Sources' six sub-modes", () => {
     expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
-  it("opens Sources on Claims from the bar arming the list and never the Reception search", () => {
+  it("opens Sources on Claims from the bar and arms nothing: the list is its own button", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
@@ -704,14 +726,14 @@ describe("Sources' six sub-modes", () => {
     expect(onMode).toHaveBeenCalledWith("sources", CLAIMS);
     expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "bibliography")).toBeNull();
-    expect(pendingActivation("a-piece", "sources-claims")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
   /* **The mode row too**: it lands on whatever sub-mode the reading view says
      is showing, so it arms by that, from the parsed state the Reader hands the
      bar (`<Dock sources>`) — the address lags a press (activation.ts §
      `PressContext`). */
-  it("arms the claims list, not the search, from the mode row when Sources would open on Claims", () => {
+  it("arms nothing from the mode row when Sources would open on Claims", () => {
     const onMode = vi.fn();
     reading({ onMode, sources: "claims" });
     openBar();
@@ -721,17 +743,16 @@ describe("Sources' six sub-modes", () => {
     expect(onMode).toHaveBeenCalledWith("sources", undefined, false);
     expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "bibliography")).toBeNull();
-    expect(pendingActivation("a-piece", "sources-claims")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
-  it("arms the search from the mode row when Sources would open on Reception", () => {
+  it("arms nothing from the mode row when Sources would open on Reception", () => {
     const onMode = vi.fn();
     reading({ onMode, sources: "reception" });
     openBar();
     type("sources");
     press("Enter");
-    expect(pendingActivation("a-piece", "reception")).not.toBeNull();
-    /* …and never Claims' list (plan 261008i stage 2), nor the citations. */
+    expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
     expect(pendingActivation("a-piece", "bibliography")).toBeNull();
   });
@@ -746,27 +767,29 @@ describe("Sources' six sub-modes", () => {
     expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
-  /* Bibliography is the default: a mode row with nothing named buys the
-     citations, and never the search. */
-  it("arms the citations from the mode row when Sources would open on Bibliography", () => {
+  /* Where it sits is the default (plan 261025h): a mode row with nothing
+     named arms its one composite target (plan 261026g), the search and, when
+     missing, the citations for *What it builds on*. */
+  it("arms the search from the mode row when Sources would open on Where it sits", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
     type("sources");
     press("Enter");
-    expect(pendingActivation("a-piece", "bibliography")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-where")).not.toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).toBeNull();
     expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
-  it("opens Sources on Reception from the bar and arms the search, as the mode row does", () => {
+  it("opens Sources on Reception from the bar and arms nothing: the search is its own button", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
     type("sources reception");
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("sources", RECEPTION);
-    expect(pendingActivation("a-piece", "reception")).not.toBeNull();
+    expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
@@ -784,12 +807,13 @@ describe("Sources' six sub-modes", () => {
     expect(new URLSearchParams(location.search).get("at")).toBe("spya-k3m9qt");
   });
 
-  it("leaves Bibliography, the default, out of the address", () => {
-    expect(subModeParams(BIBLIOGRAPHY)).toEqual({ mode: "sources", sources: null });
+  it("leaves Where it sits, the default, out of the address, and names Bibliography", () => {
+    expect(subModeParams(WHERE)).toEqual({ mode: "sources", sources: null });
+    expect(subModeParams(BIBLIOGRAPHY)).toEqual({ mode: "sources", sources: "bibliography" });
     expect(subModeParams(NOT_CITED)).toEqual({ mode: "sources", sources: "not-cited" });
     expect(subModeParams(LINKS)).toEqual({ mode: "sources", sources: "links" });
     expect(subModeParams(CLAIMS)).toEqual({ mode: "sources", sources: "claims" });
-    expect(withSubMode("?mode=sources&sources=claims&at=spya-aaaaaa", BIBLIOGRAPHY)).toBe(
+    expect(withSubMode("?mode=sources&sources=claims&at=spya-aaaaaa", WHERE)).toBe(
       "?mode=sources&at=spya-aaaaaa",
     );
     expect(withSubMode("?mode=plain", CLAIMS)).toBe("?mode=sources&sources=claims");
@@ -877,7 +901,8 @@ describe("the registry's two answers agree", () => {
       /* Brief, Summary's default since 8N (plan 261002c); Simple was until then. */
       { mode: "summary", view: "brief" },
       { mode: "structure", view: "fisheye" },
-      { mode: "sources", view: "bibliography" },
+      /* Where it sits, Sources' default since plan 261025h; Bibliography was until then. */
+      { mode: "sources", view: "where" },
     ] as const satisfies readonly SubMode[]) {
       const key = sub.mode;
       expect(subModeParams(sub)).toEqual({ mode: sub.mode, [key]: null });

@@ -561,7 +561,7 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
-  /* **Debate — what the rest of the web says about this piece** (src/reception.ts).
+  /* **Reception — what the rest of the web says about this piece** (src/reception.ts).
      `referee-candidates`' policy, and its `require_parameters` argument holds
      here with the volume turned up.
 
@@ -714,7 +714,7 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
-  /* **Bibliography's *Investigate*** (src/citation-investigate.ts) — explain's
+  /* **Bibliography's *Dig deeper*** (src/citation-investigate.ts) — explain's
      route and both of its reasons: the article is a cached first part, so the
      `order` pin keeps it landing on the prefix it wrote, and the request pins
      Exa and `max_characters` on the search tool, which an upstream that
@@ -1414,7 +1414,7 @@ export function effortOf(job: ChatJob): ReasoningEffort | null {
  *
  * Opus 5.5's default effort is `medium` where Sonnet 5's is `high`, so leaving
  * the default in place would make High-powered AI think *less* on every
- * provider-default job — explain, chat, debate, bibliography, quiz marking —
+ * provider-default job — explain, chat, reception, bibliography, quiz marking —
  * which is the opposite of the switch's promise. `high` is Sonnet's own
  * default, so no ceiling sized against Sonnet is asked for more than it was.
  * Keyed on the model sent, because the reason is that model's default. Plan
@@ -1475,12 +1475,15 @@ export type ChatJob = Exclude<
   | "faq"
   /* Generation, on the Messages wire like `faq`. src/relations.ts. */
   | "relations"
+  /* Generation, on the Messages wire like `faq`. src/explanations.ts. */
+  | "explanations"
   /* Generation, on the Messages wire like `faq`. src/sources-claims.ts. */
   | "sources-claims"
-  /* Situate's plan and its read, on the Messages wire like `sources-claims`.
-     Its searches (`situate-search`) stay IN: they are chat completions.
-     src/situate.ts. */
+  /* Situate's plan, its triage and its read, on the Messages wire like
+     `sources-claims`. Its searches (`situate-search`) stay IN: they are chat
+     completions. src/situate.ts. */
   | "situate-plan"
+  | "situate-triage"
   | "situate"
   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
   | "skim"
@@ -2740,7 +2743,7 @@ export async function* openRouterStream(
  * own verdict; this says which of `CHAT_REASONING`'s rows to revisit.
  *
  * **Both wires call it** since 2026-10-10. It was written into
- * `openRouterStream` alone, so Debate and the PDF passes, which go through
+ * `openRouterStream` alone, so Reception and the PDF passes, which go through
  * `openRouterJson`, could stop on `length` after thinking with nothing saying
  * so — postmortem 260928b's class a second time (plan 261010f).
  *
@@ -3229,8 +3232,10 @@ export async function openRouterImage(
  *    they leave open for a provider's own** — `provider.options.openai`. They
  *    document that *"unrecognized keys are silently dropped"*, which makes this
  *    the one parameter here that can stop working without anything going red.
- *    `tests/dictation-keywords.test.ts` is the guard, and it asserts that a
- *    *transcript changes*, never that a request succeeded.
+ *    `tests/ai-call.test.ts` guards the outgoing keyword nesting with a stubbed
+ *    transcript. Whether the provider actually uses those words needs a real
+ *    transcript comparison: `evals/dictation/probe-stt-routes.ts` compares the
+ *    same clip with and without keywords.
  * 5. **The bill is zero, and that is not a bug in this code.** `usage.cost`
  *    came back `0` for 3 seconds of audio and for 22. `Meter.saw` records what
  *    it is told, so dictation rows carry no cost. `unpriceZero` below drops

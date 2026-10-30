@@ -436,6 +436,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "quiz",
   "faq",
   "relations",
+  "explanations",
   "sourcesClaims",
   "skim",
   "crossrefs",
@@ -519,6 +520,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("relations.json", revision.relations);
+  at("explanations.json", revision.explanations);
   at("sources-claims.json", revision.sourcesClaims);
   at("skim.json", revision.skim);
   at("crossrefs.json", revision.crossrefs);
@@ -593,6 +595,12 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   }
   if (rows.readingTime.length) {
     at("reading-time.json", { blocks: rows.readingTime.map((row) => rowJson(row)) });
+  }
+  if (rows.readingPlace.length) {
+    at("reading-place.json", { places: rows.readingPlace.map((row) => rowJson(row)) });
+  }
+  if (rows.skimBriefs.length) {
+    at("skim-briefs.json", { briefs: rows.skimBriefs.map((row) => rowJson(row)) });
   }
   if (rows.glossaryHiddenEntries.length) {
     at("glossary-hidden.json", {
@@ -703,6 +711,8 @@ one thing that will make the rest of these files make sense.
       relations.json       How each paragraph bears on the one before it, one word each, and a few margin
                            notes. A note with kind "source" says where a quotation or allusion comes
                            from, from AI memory, unchecked.
+      explanations.json    Places a reader might get stuck, each with a short AI explanation of what
+                           is missing there, and whether it is unsure or draws on AI memory.
       sources-claims.json  The claims the article rests on that someone outside could argue with,
                            each in the article's words and the model's.
       skim.json            A route through the quotes, in the order to read them, at three depths.
@@ -912,6 +922,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
     "Questions a careful reader might put to the article, and the passages that respond.",
   "augmentations/relations.json":
     'How each paragraph bears on the one before it, one word each, and a few margin notes. A note with kind "source" says where a quotation or allusion comes from, from AI memory, unchecked.',
+  "augmentations/explanations.json":
+    "Places a reader might get stuck, each with a short AI explanation of what is missing there, and whether it is unsure or draws on AI memory.",
   "augmentations/sources-claims.json":
     "The claims the article rests on that someone outside could argue with, each in the article's words and the model's.",
   "augmentations/skim.json":
@@ -1031,6 +1043,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works", n: countOf(revision.bibliography, "citations") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
+    { label: "explanations", n: countOf(revision.explanations, "explanations") },
     { label: "Claims' listed claims", n: countOf(revision.sourcesClaims, "claims") },
     { label: "findings from the literature", n: countOf(revision.situate, "findings") },
     { label: "Skim stops", n: countOf(revision.skim, "stops") },
@@ -1059,12 +1072,14 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "chat threads", n: rows.chatThreads.length },
     { label: "chat messages", n: rows.chatMessages.length },
     { label: "searches", n: rows.searchRuns.length },
+    { label: "Skim briefs", n: rows.skimBriefs.length },
     { label: "referee criteria", n: rows.refereeCriteria.length },
     { label: "glossary lookups", n: rows.glossaryLookups.length },
     { label: "cited works found on the web", n: rows.citationFinds.length },
     { label: "cited works investigated", n: rows.citationInvestigations.length },
     { label: "cited works searched for a web note", n: rows.citationWebNotes.length },
     { label: "blocks with reading time", n: rows.readingTime.length },
+    { label: "your place in it", n: rows.readingPlace.length },
     { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
     { label: "your tags", n: rows.articleTags.length },
     { label: "quiz answers", n: rows.quizAttempts.length },

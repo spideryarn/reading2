@@ -96,7 +96,7 @@
   padding-left: 0.5rem;
   border-left: 2px solid var(--rule-strong);
   color: var(--ink);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: var(--type-item);
   line-height: 1.45;
 }

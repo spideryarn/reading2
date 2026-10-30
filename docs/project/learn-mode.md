@@ -452,7 +452,7 @@ whose rules are there to keep the move fair
 - **One at a time**; at most three when the reader asks for several, in prose, never bullets.
 - **Asked, it answers** with a problem, not a question back. Unasked, it is one move among five.
 
-It is not Debate. Debate is a stored survey of what the web says about the piece; this is one turn
+It is not Reception. Reception is a stored survey of what the web says about the piece; this is one turn
 of a conversation, about the argument or the reader's own doubt. Tutorial was unchanged by it.
 
 There are three chips for every owner (four until 2026-10-20), and in a narrow band head the group

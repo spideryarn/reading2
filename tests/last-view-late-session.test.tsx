@@ -75,7 +75,18 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 // The real App and ArticlePage; only the article's network answer is held loading.
-vi.mock("../src/web/article/access.js", () => ({ useArticleAccess: () => ({ kind: "loading" }) }));
+vi.mock("../src/web/article/access.js", async () => {
+  const { useEffect } = await import("react");
+  const { settleSavedPlace } = await import("../src/web/last-view.js");
+  return {
+    /* Held loading, but answering the server's place as "never opened", as the
+       real read does before it draws (last-view.ts § The server's place). */
+    useArticleAccess: (slug: string, readerId: string | null) => {
+      useEffect(() => settleSavedPlace(slug, readerId, null), [slug, readerId]);
+      return { kind: "loading" };
+    },
+  };
+});
 const { App } = await import("../src/web/App.js");
 const { lastViewKey } = await import("../src/web/last-view.js");
 const { watchHistoryWrites } = await import("../src/web/router.js");

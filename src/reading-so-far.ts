@@ -11,11 +11,13 @@
  * never mentions. Plan
  * docs/plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md.
  *
- * **The quiz's rule, not a second one.** A block is read at `readLevel`'s
- * level 2 (70% of its reading time on screen, `isRead`), the share is by words
- * over body blocks (`countsTowardReadingTime`) — what Reader.tsx hands the
- * quiz as `bodyWords` — and only blocks in the current article count, so a
- * total left over from a re-extraction does not.
+ * **The quiz's per-block rule, not a second one.** A block is read at
+ * `readLevel`'s level 2 (70% of its reading time on screen, `isRead`), the
+ * share is by words over body blocks (`countsTowardReadingTime`), and only
+ * blocks in the current article count, so a total left over from a
+ * re-extraction does not. Unlike the reading view's quiz share, chat still
+ * includes folded matter because this server path has no validated fold rule
+ * (plan 261025j).
  *
  * **Coarse words, never a number.** Seconds on screen are a rough guide to
  * reading, and a model treats a percentage as a fact. The privacy page
@@ -24,31 +26,59 @@
  */
 import { countsTowardReadingTime } from "./block-policy.js";
 import type { Block, BlockId } from "./types.js";
-import { shareRead } from "./web/read-filter.js";
+import { readBand, shareRead } from "./web/read-filter.js";
 import { type ReadLevel, readLevel } from "./web/reading-time.js";
 
 export const READING_SO_FAR_HEADING = "READING SO FAR";
 
-/** The share of the body read, 0 to 1, by the quiz's rule. */
+/** The share of the body read, 0 to 1, by the shared per-block rule and chat's broader denominator. */
 export function readingShare(seconds: Readonly<Record<string, number>>, blocks: readonly Block[]): number {
-  const levels = new Map<BlockId, ReadLevel>();
   const words = new Map<BlockId, number>();
-  for (const b of blocks) {
-    if (!countsTowardReadingTime(b)) continue;
-    words.set(b.id, b.words);
-    levels.set(b.id, readLevel(seconds[b.id] ?? 0, b.words));
-  }
+  for (const b of blocks) if (countsTowardReadingTime(b)) words.set(b.id, b.words);
+  return shareOfWords(seconds, words);
+}
+
+/**
+ * **The share read, from the totals on the server, over the caller's words** —
+ * each block's level by `readLevel`, as `useReadingTime` grades it in the
+ * browser, then `shareRead`. The chats pass every body block; the shelf passes
+ * the reading view's own `readSoFarWords`, cached (src/store/read-so-far-basis.ts),
+ * so its pie is the masthead's. Plan 261025l.
+ */
+export function shareOfWords(
+  seconds: Readonly<Record<string, number>>,
+  words: ReadonlyMap<BlockId, number>,
+): number {
+  const levels = new Map<BlockId, ReadLevel>();
+  for (const [id, n] of words) levels.set(id, readLevel(seconds[id] ?? 0, n));
   return shareRead(levels, words);
 }
 
-/** The share in words a model will not mistake for a measurement. */
+/**
+ * The share in words a model will not mistake for a measurement, on the
+ * masthead pie's cut points (read-filter.ts § `readBand`). The two may still
+ * land in different bands because chat includes folded matter. Started is
+ * split once more, because a model can use the difference and the pie has no
+ * room for it. Plan 261025j.
+ */
 export function shareWords(share: number): string {
-  if (!(share >= 0.05)) return "little or none of it yet";
-  if (share < 0.15) return "a small part of it";
-  if (share < 0.375) return "about a quarter of it";
-  if (share < 0.625) return "about half of it";
-  if (share < 0.875) return "about three quarters of it";
-  return "most or all of it";
+  const band = readBand(share);
+  switch (band) {
+    case "none":
+      return "little or none of it yet";
+    case "started":
+      return share < 0.15 ? "a small part of it" : "about a quarter of it";
+    case "half":
+      return "about half of it";
+    case "most":
+      return "about three quarters of it";
+    case "finished":
+      return "most or all of it";
+    default: {
+      const never: never = band;
+      return never;
+    }
+  }
 }
 
 /**

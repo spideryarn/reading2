@@ -785,7 +785,7 @@ check.)
 
 A block with neither text nor a `src` — in practice only `<hr>` — gets a **fresh id on every
 re-extraction**, because ids are carried over by matching content and a rule has no content.
-Nothing points at a rule today (it's `gistable: false`, so no Hierarchy row), but a tree leaf anchored to
+Nothing points at a rule today (it's `gistable: false`, so no Structure row), but a tree leaf anchored to
 one goes stale. `tests/blocks.test.ts` asserts the current behaviour so that fixing it is a
 deliberate act rather than an accident. See [block-ids.md](block-ids.md).
 

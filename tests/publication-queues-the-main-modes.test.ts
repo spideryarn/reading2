@@ -124,15 +124,15 @@ const PURPOSE = "To see whether the modes are written for this.";
  * change somebody has to make twice.
  */
 const EXPECTED: StepName[][] = [
-  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b). */
+  /* Not `tweets`, Summary's thread, since 2026-10-22: written when pressed (plan 261022b).
+     Not `ideas`, since 2026-10-29, nor inside Skim's job: opened, not imported (plan 261029c). */
   ["glossary"],
   ["quotes"],
-  ["ideas"],
   ["simple"],
   /* Sources' Bibliography, queued since 2026-10-09 (plan 261009l § On import). */
   ["bibliography"],
   ["crossrefs"],
-  ["quotes", "ideas", "skim"],
+  ["quotes", "skim"],
 ];
 
 const LABELS_WORK_KEY = workKeyFor(["labels"], new Set());
@@ -853,7 +853,7 @@ describe("an import's first full publication queues the main modes", () => {
     const was = process.env.VERCEL;
     process.env.VERCEL = "1"; // so `enqueue` starts no pump
     try {
-      for (const steps of [["glossary"], ["quotes", "ideas", "skim"]] as StepName[][]) {
+      for (const steps of [["glossary"], ["quotes", "skim"]] as StepName[][]) {
         const pressed = await enqueue({ slug, steps, ...(profile ? { profile } : {}) });
         const holder = queued.find((row) => names(row).join() === steps.join());
         expect(pressed.id, `${steps.join("+")}: the press made a second job`).toBe(holder?.id);

@@ -14,6 +14,7 @@
  * docs/plans/260828av-mobile-screen-real-estate.md § 1.
  */
 import { useState } from "react";
+import { useFocusWithinFlag, useRootFlag } from "./root-flags.js";
 import { Share, X } from "lucide-react";
 import { readEnvironment, rememberDismissed, shouldOfferInstall } from "./install-hint.js";
 
@@ -32,6 +33,10 @@ export function InstallHint({
      would ask the same unchanging questions of the browser dozens of times a
      scroll. The lazy form runs it exactly once per mount. */
   const [show, setShow] = useState(() => shouldOfferInstall(readEnvironment()));
+  /* Its room (`--hint-h`, dock.css) and, with focus in it, the narrow guard
+     that brings the bar home (narrow-window.css) — root-flags.ts. */
+  useRootFlag("install-hint", show);
+  const focusRef = useFocusWithinFlag("install-hint-focus");
   if (!show) return null;
 
   return (
@@ -39,7 +44,7 @@ export function InstallHint({
        live region would interrupt a screen-reader user mid-sentence to tell
        them about a visual affordance they are not using. It is announced when
        they reach it, like any other text. */
-    <div className={`install-hint${entering ? " dock-enter" : ""}`} role="note">
+    <div className={`install-hint${entering ? " dock-enter" : ""}`} role="note" ref={focusRef}>
       <p className="install-hint-text">
         {/* The icon is named in the sentence as well as drawn, because the
             reader has to find the real one in a toolbar we do not control and

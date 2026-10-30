@@ -393,6 +393,11 @@ export const REVISION_CARRY_POLICY: Record<
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: "carry",
   /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
+     answers at read time whether the article moved underneath it. A stale one
+     is not drawn in the margin (plan 261028c § States); carrying keeps it for
+     the band's *Write it again* and for the day the article moves back. */
+  explanations: "carry",
+  /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
      answers at read time whether the article moved underneath it. A carried
      list that no longer matches is drawn **read-only**, with *List again*
      (plan 261008i, Sol F6); its quotes are the article's characters as they

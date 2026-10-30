@@ -323,7 +323,7 @@
   margin: 0.55rem 0 0.6rem;
   padding-left: 0.7rem;
   border-left: 2px solid var(--highlight);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.98rem;
   line-height: 1.45;
   color: var(--ink-soft);
@@ -713,7 +713,7 @@
   margin: 0.55rem 0 0.6rem;
   padding-left: 0.7rem;
   border-left: 2px solid var(--highlight);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.98rem;
   line-height: 1.45;
   color: var(--ink-soft);
@@ -721,7 +721,7 @@
 
 .chat-dialog-opening {
   margin: 0.55rem 0 0.6rem;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.94rem;
   line-height: 1.45;
   color: var(--ink-faint);
@@ -798,6 +798,10 @@ mark.chat {
      2026-10-03). `mark.cmt`, `mark.term`, `mark.cite` and `mark.hit` each
      carry this line for the same reason. */
   color: inherit;
+  /* A chat mark opens its conversation. This also keeps that click affordance
+     when the same run is an explained passage, whose zero-specificity base
+     rule otherwise supplies `cursor: help`. */
+  cursor: pointer;
   border-bottom: 1px solid color-mix(in oklab, var(--chat-mark) 60%, var(--page));
 }
 mark.chat[data-chat-open] {

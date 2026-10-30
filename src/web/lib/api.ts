@@ -93,6 +93,7 @@ import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
 import { heldReader, heldToken, onSession, sessionObserved, sessionRevision, tokenOwnerOf } from "./session.js";
 import { supabase } from "./supabase.js";
 import { noteRequest } from "./writes.js";
+import { withoutReadBands } from "./cached-shelf.js";
 import {
   endViewAsTab,
   VIEW_AS_ENDED_CODE,
@@ -903,7 +904,7 @@ async function attempt(
     noteServedCopy(saved.savedAt);
 
     const body = input.split("?")[0] === "/api/library"
-      ? await onlyWhatWeHave(saved.body, owner)
+      ? await onlyWhatWeHave(withoutReadBands(saved.body), owner)
       : saved.body;
 
     /* A real `Response`, so every caller downstream — `readJson`, the hooks,
@@ -1030,7 +1031,10 @@ function saving(
             ) return;
           }
         }
-        await writeCached(input, body, ticket, slugOf(input));
+        /* The shelf's pies are as of this answer, so a kept copy has none
+           (cached-shelf.ts § `withoutReadBands`, plan 261025l). */
+        const kept = input.split("?")[0] === "/api/library" ? withoutReadBands(body) : body;
+        await writeCached(input, kept, ticket, slugOf(input));
       })
       .catch(() => {
         /* A body that dies after its headers arrived. Nothing to save, and the
@@ -1044,11 +1048,11 @@ function saving(
 }
 
 /**
- * The eighteen reads that may answer `200 null` for "not made yet" — every
- * artefact read since plan 261007n, and Situate's since plan 261024o — see the
- * note where it is used, above.
+ * The nineteen reads that may answer `200 null` for "not made yet" — every
+ * artefact read since plan 261007n, Situate's since plan 261024o, and
+ * Explanations' since plan 261028c — see the note where it is used, above.
  *
- * **The same eighteen as the routes that call `orNullWhenNotMadeYet`** in
+ * **The same nineteen as the routes that call `orNullWhenNotMadeYet`** in
  * src/routes.ts, and nothing derives one list from the other: a new artefact
  * read is a name here as well as the helper there. Exported for the test that
  * fails when they differ (tests/api-fetch-offline.test.ts).
@@ -1058,7 +1062,7 @@ function saving(
  * a file, and a missing artefact there is a missing plate.
  */
 export const NONE_YET_AS_NULL =
-  /^\/api\/(?:quiz|crossrefs|bibliography|simple|ideas|faq|timeline|reception|sources-claims|situate|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
+  /^\/api\/(?:quiz|crossrefs|bibliography|simple|ideas|faq|timeline|reception|sources-claims|situate|glossary|quotes|tweets|relations|explanations|skim|sketch|illustrated|arc)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {
@@ -1125,6 +1129,8 @@ const CACHEABLE = [
   "/api/quotes/",
   "/api/timeline/",
   "/api/relations/",
+  /* With the route, as `/api/faq/` is: the owner's offline cache. Plan 261028c. */
+  "/api/explanations/",
   "/api/quiz/",
   /* Here with the route rather than with the panel, as `/api/reception/` is: the
      derived test asks for it the moment the route exists. */
@@ -1158,7 +1164,7 @@ const CACHEABLE = [
   /* With the route, as `/api/faq/` is: the claims list, which Claims
      draws from — docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "/api/sources-claims/",
-  /* With the route, as `/api/faq/` is: Investigate's dossier, the owner's own
+  /* With the route, as `/api/faq/` is: Where it sits' dossier, the owner's own
      and the dearest press in Sources — docs/plans/261024o. */
   "/api/situate/",
   "/api/bibliography/",

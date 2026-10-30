@@ -341,7 +341,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      end in this code, or it would read as authored. */
   "live-upstream": "retry",
   "jb-slot-held": "bug",
-  /* Bibliography's *Investigate* — src/citation-investigate.ts. */
+  /* Bibliography's *Dig deeper* — src/citation-investigate.ts. */
   "cite-quoted": "retry",
   "cite-no-extract": "retry",
   "cite-unfinished": "retry",
@@ -435,7 +435,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      saved as whole. `retry`, `ai-mark-cut-off`'s reason: a second go usually
      fits. See `GLOSSARY_CUT_OFF`. */
   "gl-cut-off": "retry",
-  /* **Debate's own, and the only `db-`.** `retry` because the model choosing
+  /* **Reception's own, and the only `db-`.** `retry` because the model choosing
      not to search, and a provider falling back to one that dropped the tool,
      both come out differently next time. See `RECEPTION_SEARCH_DID_NOT_RUN` for
      why a search that did not run is a *failure* rather than an empty result. */
@@ -527,6 +527,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-situate-plan": "retry",
   "jb-situate-searches": "retry",
   "jb-situate-claims": "retry",
+  /* The triage named no source it was shown (plan 261025h stage 3): another
+     go may well name some. */
+  "jb-situate-shortlist": "retry",
   "jb-situate-busy": "retry",
   "jb-situate-limited": "blocked",
   "jb-situate-resting": "blocked",
@@ -1239,7 +1242,7 @@ export const STEP_STOPPED: ReaderFacingFailure = {
  * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
  * A `checkTree` rule tightened over already-stored trees took roughly one
  * article in twenty off the air permanently, and each attempt to publish
- * *anything* for one of them — glossary, quotes, debate — completed its model
+ * *anything* for one of them — glossary, quotes, reception — completed its model
  * call, paid for it, and was then refused at the door. Four times on one
  * article in thirteen minutes, one of them $0.2454, every one of them shown
  * this file's `retry` sentence: *"a step that stops like this often comes out
@@ -1750,6 +1753,19 @@ export const SITUATE_CLAIMS_NOT_FOUND: ReaderFacingFailure = {
   message:
     "None of the searches about this piece's claims found anything, so it was not read against " +
     "the literature this time. Another try plans different searches. [jb-situate-claims]",
+};
+
+/**
+ * **The triage picked none of the sources the searches found** (plan 261025h
+ * stage 3): said as a failure, because a read shown nothing would come back
+ * empty and look like a literature with nothing to say about the piece.
+ */
+export const SITUATE_SHORTLIST_EMPTY: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The searches found pages, but choosing which of them bear on this piece did not work this " +
+    "time, so nothing was written. Try again: another go searches and chooses afresh. " +
+    "[jb-situate-shortlist]",
 };
 
 /** The allowance (`SITUATE_RATE_POLICY`): one at a time for each reader. */
@@ -5580,6 +5596,11 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      line are the model's reading (src/skim.ts). */
   skim:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
+  /* "The model expected", because which passages would trip the reader up is
+     its reading; the explanations are its words (src/explanations.ts). Owner
+     only: nothing of it reaches a visitor (no public projection). */
+  explanations:
+    "The places the model expected you to get stuck, each with a short explanation of what is missing there.",
   /* What the column draws is all built elsewhere: the tree's question for each
      part, the arc, and the ideas where they have been made. So the row names
      those, and says they sit beside the text — the one thing this mode adds is
@@ -5865,7 +5886,7 @@ export function sourcesClaimsHandoff(sources: number): string {
 }
 
 /**
- * **What the press on Debate searches, said before the button.** Since
+ * **What the press on Reception searches, said before the button.** Since
  * `debate/7` (2026-10-08) it is one search, for Reception only: the claims are
  * the reader's to pick (plan 261008i). The sub-mode control's own cards say
  * what each sub-mode is (src/web/sub-modes.ts § `SOURCES_SUB_MODES`); no
@@ -6046,6 +6067,49 @@ export const CITERS_ABOUT =
   "the piece's DOI, or the words of its title when we have no DOI, and our contact address; " +
   "never its text or reader details. No AI is involved, and we have not read the papers.";
 
+/* ---- *Possible citations*: when the list above cannot be made ----
+
+   Under a `no-doi` or `no-match` answer, with the experimental switch on: the
+   works whose full text matched OpenAlex's search for the piece's title
+   (src/citation-fulltext.ts, plan 261026f). The plain words are the persona
+   reviews' and GPT Sol's (F2: "matched a search", never "contains the exact
+   title", because the search stems words and also reads titles and
+   abstracts). */
+
+export const POSSIBLE_CITERS_HEADING = "Possible citations";
+/** Under the heading, once. Two hedges in one line read as noise (the persona reviews). */
+export const POSSIBLE_CITERS_WHAT =
+  "Research papers whose text matched a search for this piece's title. Most will refer to it; " +
+  "we have not checked each one.";
+/** `25 of 134`: the rows listed, of OpenAlex's count. One count, said once (the designer). */
+export function possibleCitersCount(listed: number, total: number): string {
+  return listed >= total ? `${total}` : `${listed} of ${total}`;
+}
+/** The link to the rest, naming what OpenAlex is for a reader who has never heard of it. */
+export function possibleCitersAll(total: number): string {
+  return `See all ${total} at OpenAlex, a free index of research papers`;
+}
+/** Beside the count: which rows come first when there are more than fit (`orderFor`, src/citation-fulltext.ts). */
+export const POSSIBLE_CITERS_ORDER = { newest: "newest first", "most-cited": "most cited first" } as const;
+/** What it does not find, so it is not read as complete. */
+export const POSSIBLE_CITERS_PAPERS_ONLY =
+  "This finds research papers only. Blog posts and web pages that cite it are not here.";
+/** A count with no row we could show (GPT Sol's S1-F2): the count and the link are still worth having. */
+export const POSSIBLE_CITERS_NO_ROWS = "None of them could be shown here.";
+/** The phrase gate (plan 261026f, decision 3), in Sol's evidenced words. */
+export const POSSIBLE_CITERS_COMMON_PHRASE =
+  "Older papers used the words of this title too often for a search of papers' text to tell " +
+  "citations of this piece from other uses of them.";
+export const POSSIBLE_CITERS_NONE = "No research paper's text matched a search for its title either.";
+/**
+ * **The sentence above the list when there is one** — the no-DOI sentence,
+ * moved to the empty case and said as what we did instead (the persona
+ * reviews: the reader met "cannot" and then a list).
+ */
+export const POSSIBLE_CITERS_LEAD =
+  "We have no DOI or sure OpenAlex record for this piece, so there is no citation list. " +
+  "Instead, a search of research papers' text:";
+
 const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
 
 /**
@@ -6057,15 +6121,26 @@ const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
  * we `listed`; whether the page limit left some out (`capped`, of `returned`
  * asked for); and how many records could not be shown (`dropped`).
  *
+ * **The keyword view says what it is a list of** (`filteredBy`, plan
+ * 261025h, decision 10): its `count` is the citers that mention the keyword,
+ * not every citer, so the first sentence says so and never reads as the
+ * piece's whole count.
+ *
  * @param day the day OpenAlex answered, already formatted, or undefined.
  */
 export function citersLines(
-  found: { count: number; returned: number; dropped: number; capped: boolean; listed: number },
+  found: { count: number; returned: number; dropped: number; capped: boolean; listed: number; filteredBy?: string },
   day: string | undefined,
 ): string[] {
-  if (found.count === 0 && found.returned === 0) return [CITERS_NONE];
+  const about = found.filteredBy;
+  const when = `by OpenAlex's count${day ? ` on ${day}` : ""}`;
+  if (found.count === 0 && found.returned === 0) {
+    return [about === undefined ? CITERS_NONE : `None of the papers that cite this piece mention “${about}” in their title or abstract, ${when}.`];
+  }
   const lines = [
-    `${papers(found.count)} ${found.count === 1 ? "cites" : "cite"} this piece, by OpenAlex's count${day ? ` on ${day}` : ""}.`,
+    about === undefined
+      ? `${papers(found.count)} ${found.count === 1 ? "cites" : "cite"} this piece, ${when}.`
+      : `${papers(found.count)} that ${found.count === 1 ? "cites" : "cite"} this piece ${found.count === 1 ? "mentions" : "mention"} “${about}” in ${found.count === 1 ? "its" : "their"} title or abstract, ${when}.`,
   ];
   if (found.listed === 0) {
     lines.push("None of them could be shown here.");
@@ -6127,6 +6202,17 @@ export const RELATED_WORK_RATE_LIMITED =
 /** A found search with nothing left once the bibliography and the piece itself are taken out. */
 export const RELATED_WORK_NONE =
   "No other papers remain to show after taking out this piece and the works Spideryarn found in its bibliography.";
+/**
+ * The two groups below the list, never hidden (plan 261025h, decision 3). The
+ * first has evidence it is the piece in another form; the second only shares
+ * its authors, so its label claims nothing more.
+ */
+export const RELATED_WORK_EDITIONS = "Other editions of this piece";
+export const RELATED_WORK_EDITIONS_NOTE =
+  "These share the piece's authors and a version of its title or identifier: most likely the piece itself, reprinted or translated.";
+export const RELATED_WORK_SAME_AUTHORS = "By the same authors";
+export const RELATED_WORK_SAME_AUTHORS_NOTE =
+  "These share the piece's authors. Some may be the piece in another language or collection; nothing here says which.";
 /** Above the list, when the bibliography is stale or capped (F4). */
 export const RELATED_WORK_BIBLIOGRAPHY_STALE =
   "The bibliography was listed from an older version of this piece, so this list may include works it does cite.";
@@ -6179,7 +6265,7 @@ export function citedTimes(n: number): string {
 export const SOURCES_CLAIMS_UNJUDGED = "Not judged for relevance by the AI";
 
 /**
- * Where Debate's threads box would be, when the call that makes it failed
+ * Where Reception's threads box would be, when the call that makes it failed
  * (plan 260930j). Says the list is whole, because the reader's next question is
  * whether they are missing sources, and they are not.
  */
@@ -6209,7 +6295,7 @@ export function receptionWorkFieldsNote(parts: readonly string[]): string {
 }
 
 /**
- * **Which Debate fields came from a registry** (plan 261001a stage 6): the
+ * **Which Reception fields came from a registry** (plan 261001a stage 6): the
  * identifier is the page address's own, and the record was kept only because
  * its title agreed with the page's. `parts` names only fields actually used,
  * so a missing registry year cannot claim an extracted year as Crossref's.
@@ -6261,9 +6347,12 @@ export const RECEPTION_EXTRACTS_ONLY =
    in src/pipeline.ts runs extraction, structure and gists at ingest, and a PDF
    is read by a model before it is anything else. GPT Sol's review of the plan
    found it and called it the most serious thing in the draft. So the sentence
-   at the *add* surface is present tense and comes first in the reader's life,
-   and the one in the mode is past tense and does not pretend a choice is still
-   open. docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+   at the *add* surface is present tense, and the one in the mode is past tense
+   and does not pretend a choice is still open.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+   Since 2026-10-26 the add surface's sentence is in an (i) rather than on
+   show (plan 261026h), so the mode's may be the first a reader reads; it is
+   worded to stand alone, and does not claim they were told before.
 
    There is deliberately **no acknowledgement to tick** in either place. A box
    that says "I understand" in front of something already done would imply that
@@ -6275,13 +6364,20 @@ export const RECEPTION_EXTRACTS_ONLY =
  * **One sentence at the point of adding an article**, before any of it happens.
  *
  * True of everything this app does, so it belongs on that page whatever happens
- * to Referee mode — and it is the sentence that makes the past-tense notice
- * below honest rather than a surprise. No gate, no checkbox, no attestation:
- * the reader is told, and then they decide.
+ * to Referee mode. No gate, no checkbox, no attestation: the reader can be told,
+ * and then they decide. Until 2026-10-26 this was also what made the past-tense
+ * notice below a reminder rather than news; see the next paragraph but one.
  *
  * It says *processing* rather than naming steps or the provider. Which model
  * ran which stage is our machinery and changes; that the text leaves this app
- * is the fact a person needs. src/web/AddArticle.tsx is where it is shown.
+ * is the fact a person needs.
+ *
+ * **Shown in the add box's (i), beside File, since 2026-10-26** (`LimitsInfo`,
+ * src/web/UploadPicker.tsx), rather than as a visible line under the box. So it
+ * is available before adding but no longer seen by everyone who adds. Greg
+ * (reply `spya-dqhrvy` to q-p6fvep): *"B I think it's pretty obvious that
+ * we're sending stuff to AI. I mean, the whole thing is AI powered, and it's
+ * all in the privacy policy."* Plan 261026h.
  */
 export const ADDING_SENDS_TEXT_AWAY =
   "The article's text is sent to a third-party model provider for processing.";
@@ -6299,7 +6395,7 @@ export const ADDING_SENDS_TEXT_AWAY =
  * So this is `ADDING_SENDS_TEXT_AWAY` with its tense corrected, and **the
  * asymmetry between the two is the point rather than an inconsistency to tidy
  * up**. Above, the reader still has a choice, so the sentence is present tense
- * and sits beside the control that makes it. Here the choice is already spent
+ * and sits in the (i) beside the controls that make it. Here the choice is already spent
  * once the server accepts the job.
  *
  * **A job receipt does not prove a model provider has received the text.** The
@@ -7156,7 +7252,7 @@ export const CITATION_NO_MATCH =
 export const CITATION_LOOKUP_NO_MATCH =
   "No page the search found was clearly this work's own, so nothing was read from it. The article's own link is still there.";
 
-/* --------------------------------------------- Bibliography's *Investigate* --
+/* --------------------------------------------- Bibliography's *Dig deeper* --
    src/citation-investigate.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
    Every one of these reaches the reader as the whole of what they see in place
    of the answer: the client replaces the streamed text on an error. */
@@ -7193,9 +7289,10 @@ export const CITATION_INVESTIGATE_UNFINISHED: ReaderFacingFailure = {
     "a fresh one. [cite-unfinished]",
 };
 
+// Kept on purpose for old tabs while the server half waits on Greg (plan 261009k, decision D5): do not reword these refusal strings (`dig-resting` etc.).
 /**
  * ***Dig deeper* refused by its allowance** (`DIG_DEEPER_RATE_POLICY`,
- * src/dig-deeper.ts) — one sentence per reason, Investigate's three below in
+ * src/dig-deeper.ts) — one sentence per reason, Bibliography's three below in
  * shape. Said of the action rather than of a glossary entry or a comment,
  * because the one allowance covers both buttons. They say only that this
  * request changed nothing: the first glossary press may have no earlier answer.

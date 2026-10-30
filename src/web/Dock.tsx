@@ -107,6 +107,7 @@
  * Metadata. Greg, 2026-08-26 — *"Rearrange the buttons in the bottom-bar. It
  * should be Hierarchy, Summary, Glossary, Search, Chat, Questions, Thread
  * (renamed to 'Tweets'), Metadata."*
+ * (Hierarchy has since become Structure, and Tweets is Summary's Thread view.)
  *
  * That was the seed of the bar rather than a permanent enumeration. The mode
  * list has since grown and been regrouped; `MODES_UI` below is the current
@@ -170,12 +171,14 @@ import {
   type CSSProperties,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useId,
   useState,
   type ReactNode,
 } from "react";
+import { trackFocusWithin, useRootFlag } from "./root-flags.js";
 import {
   Check,
   Command,
@@ -679,7 +682,7 @@ interface Props {
  *
  *  - `exit` — Plain, alone: the way out of a mode.
  *  - `shape` — the article's shape, restated, and the way through it at
- *    increasing depth (Structure, Summary, Diagram, Skim). Skim joined on
+ *    increasing depth (Structure, Summary, Skim, Diagram). Skim joined on
  *    2026-10-08 (below).
  *  - `guides` — ways through the piece, each drawn from it along one line: the
  *    quotes, questions it answers, its terms, its ideas, its dates (Quotes,
@@ -708,8 +711,9 @@ interface Props {
  * Skim moved from `guides` to `shape` on 2026-10-08, Greg: *"move the skim
  * mode icon into the same group after structure and summary"* (spya-wm5gu2,
  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md).
- * The More button stands in the same run, at its end straight after Skim since
- * 2026-10-18 (`MORE_AFTER`).
+ * The More button stands in the same run straight after Skim since 2026-10-18
+ * (`MORE_AFTER`). Diagram follows it when offered since 2026-10-26, so the
+ * button keeps the same place when the experimental switch is turned on.
  */
 type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
@@ -845,7 +849,37 @@ const MODES_UI = [
      thread is Summary's Thread view now, one button fewer on the bar — Greg:
      *"I would like to have fewer modes"* (spya-thpsnd,
      docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
-  /* **In the shape run, just after Summary, since 2026-09-29**, because it is
+  /* **First of the guides run, just before Quotes, since 2026-09-29** —
+     Greg: *"Move Trajectory one further left, before Quotes"* (Skim was called
+     Trajectory until 2026-10-01, plan 261001r)
+     (SPIDERYARN-READING2-4E). It is a walk through the article's own Quotes,
+     so it sits beside them; on 2026-09-28 it went straight after them (the
+     sentence quoted on the Quotes row below), and before that after FAQ, where
+     the plan first put it and Greg had not yet placed it by hand.
+
+     `Route`, used nowhere else — a path with stops on it, which is the mode.
+     Not `ListOrdered`, which was the Tweets mode's numbered thread.
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c.
+
+     **In the shape run, straight after Summary, since 2026-10-08** — Greg: *"move the
+     skim mode icon into the same group after structure and summary"*
+     (spya-wm5gu2). More was drawn straight after it until
+     2026-10-11, after Summary until 2026-10-18 (spya-hdde62, plan 261011x),
+     and straight after it again since (`MORE_AFTER`, spya-c0va9e).
+     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
+  {
+    mode: "skim",
+    group: "shape",
+  },
+  /* **In the shape run, after Skim and so after More, since 2026-10-26** —
+     Greg: *"move the three dots when we're in experimental features mode to be
+     in roughly the same position they are in the main mode"* (spya-d0pyzt,
+     docs/plans/261026d-more-button-keeps-its-place-with-experimental-on-diagram-after-more.md).
+     Before Skim, this experimental row pushed More one button right with the
+     switch on, and off a phone's edge, where More jumped to the front of the
+     frame (`bandsInOrder`). After Skim, More has the same neighbours either way.
+
+     **Just after Summary from 2026-09-29**, because it is
      the same move Summary makes — the article restated — with a picture
      instead of prose. It had sat between Referee and Chat, and Greg's reorder
      that day (SPIDERYARN-READING2-4E) put Citations, Referee and Debate
@@ -876,29 +910,6 @@ const MODES_UI = [
     mode: "diagram",
     group: "shape",
   },
-  /* **First of the guides run, just before Quotes, since 2026-09-29** —
-     Greg: *"Move Trajectory one further left, before Quotes"* (Skim was called
-     Trajectory until 2026-10-01, plan 261001r)
-     (SPIDERYARN-READING2-4E). It is a walk through the article's own Quotes,
-     so it sits beside them; on 2026-09-28 it went straight after them (the
-     sentence quoted on the Quotes row below), and before that after FAQ, where
-     the plan first put it and Greg had not yet placed it by hand.
-
-     `Route`, used nowhere else — a path with stops on it, which is the mode.
-     Not `ListOrdered`, which was the Tweets mode's numbered thread.
-     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c.
-
-     **In the shape run, at its end, since 2026-10-08** — Greg: *"move the
-     skim mode icon into the same group after structure and summary"*
-     (spya-wm5gu2). Its row did not move, so it still leads into the Quotes it
-     walks, which are now under More. More was drawn straight after it until
-     2026-10-11, and since then it has stood before Diagram and Skim, after
-     Summary (spya-hdde62, plan 261011x).
-     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
-  {
-    mode: "skim",
-    group: "shape",
-  },
   /* **After Skim, since 2026-09-29**; straight after Summary, with
      Skim after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
      the left (after Summary)"*. It stood after Ideas before that, on the
@@ -924,6 +935,17 @@ const MODES_UI = [
      after FAQ since 2026-09-29. */
   {
     mode: "glossary",
+    group: "guides",
+    more: true,
+  },
+  /* **Straight after Glossary, under More, since 2026-10-28** — the places a
+     reader is likely to get stuck, each with the missing piece. Glossary's
+     neighbour because it is the same help pointed at a different unit: a term
+     you look up, against a step or an assumption you trip on. Behind the
+     experimental switch. `Puzzle`: the missing piece.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  {
+    mode: "explanations",
     group: "guides",
     more: true,
   },
@@ -1217,18 +1239,23 @@ function drawnCount(bar: DockBar): number {
 }
 
 /**
- * **The row More stands straight after: Skim**, the last of the shape run.
+ * **The row More stands straight after: Skim**, the last of the shape run
+ * with the experimental switch off. Diagram, the run's one experimental row,
+ * stands after More rather than before Skim since 2026-10-26, so More has the
+ * same neighbours with the switch on or off (spya-d0pyzt, plan 261026d).
  * Greg, 2026-10-17 (spya-c0va9e): *"Move the three dots mode one to the right
  * in the bottom bar after Skim but still in the same group"*. It is still
- * inside that run, so no line stands between Skim and More; the shape run's
- * line stands straight after More, before the next run.
+ * inside that run, so no line stands between Skim and More. With Diagram
+ * offered, the shape run continues after More and its line stands after
+ * Diagram; otherwise the line stands after More.
  * docs/plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md.
  * History: after Skim from 2026-10-08 (spya-mcs4gb, plan 261008d), after
  * Summary from 2026-10-11 (spya-hdde62, plan 261011x), and after Skim again
  * since 2026-10-18.
- * **Wherever that place can be seen** — on a phone with Diagram drawn it is
- * off the edge (plan 261009c measured x 354–398), and More leads the frame
- * instead (`bandsInOrder`).
+ * **Wherever that place can be seen** — on a phone with Diagram drawn before
+ * Skim it was off the edge (plan 261009c measured x 354–398), and More led the
+ * frame instead (`bandsInOrder`). With Diagram after More that no longer
+ * happens on today's bar; the guard stays for a bar that grows.
  */
 const MORE_AFTER: Mode = "skim";
 
@@ -1320,7 +1347,7 @@ function modeInSearch(search: string): BandMode | undefined {
  * **The one appearance the bar's own switch wears**, or `null` when it is not
  * drawn at all.
  *
- * Six of them, and they are exclusive on purpose: one state, one look, so
+ * Seven of them, and they are exclusive on purpose: one state, one look, so
  * `fitSignature` can carry *which* button is drawn rather than merely that there
  * is one. GPT Sol, reviewing stage 2: keying the fit on presence alone leaves
  * the bar mis-measured when the warning marker appears, because the marker is a
@@ -1349,6 +1376,8 @@ export type ExperimentalVariant =
   | "load-failed"
   /** The save failed. The value has already sprung back; the button says so. */
   | "save-failed"
+  /** The save failed before any value was read. Marked, but still no toggle value. */
+  | "save-failed-waiting"
   /** What we last knew, from the offline cache. Disabled, and it says why. */
   | "stale"
   /** No answer yet. Disabled — a switch drawn from a default is a value nobody chose. */
@@ -1379,6 +1408,7 @@ export type ExperimentalVariant =
 const PRESS = {
   saving: "nothing",
   waiting: "nothing",
+  "save-failed-waiting": "nothing",
   "load-failed": "retry",
   stale: "retry",
   "save-failed": "toggle",
@@ -1411,7 +1441,13 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
   if (!e.signedIn) return null;
   if (e.saving) return "saving";
   if (e.loadError !== null) return "load-failed";
-  if (e.error !== null) return "save-failed";
+  /* A failed save holds a value only if there was one before the press: the
+     store puts back what it had, and before the first answer that is the
+     placeholder `off`, with a read already on its way (experimental-store.ts §
+     `set`). Toggling it would write the opposite of a value nobody read. It is
+     still a failure, though: calling it plain `waiting` hid the failed save
+     behind "Loading…" for as long as that recovery read took. */
+  if (e.error !== null) return e.loaded || e.stale ? "save-failed" : "save-failed-waiting";
   if (e.stale) return "stale";
   if (!e.loaded) return "waiting";
   return "ready";
@@ -1424,7 +1460,7 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * The five things that vary: the modes are buttons on the reading view and
  * links in the same frames elsewhere; Comments is a drawer trigger here and a
  * link elsewhere; its count grows a digit; the bar's own experimental switch is
- * absent, or drawn in one of six appearances; and the Feedback trigger at the
+ * absent, or drawn in one of seven appearances; and the Feedback trigger at the
  * end of the row is there for a signed-in reader and not for a stranger.
  *
  * **Feedback is its own term even though it moves with the switch's**, and that
@@ -1437,7 +1473,7 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * has a term that follows it.
  *
  * **The switch goes in by variant, not by presence.** `null` for a signed-out
- * reader and one word otherwise, because the six do not draw the same width: a
+ * reader and one word otherwise, because the seven do not draw the same width: a
  * failed load and a failed save each add a warning triangle beside the flask.
  * A signature that only said *there is a toggle* would leave the row overflowing
  * for as long as the marker was up. GPT Sol, reviewing stage 2.
@@ -1851,8 +1887,10 @@ export function useActivateMode(
       /* **Nor does a Marginalia press while the column is on**, from either
          door: the bar's press turns it off, with its feed still mounted for
          that instant, and naming it in the command bar leaves it where it is.
-         Only the press that turns the column on can ask from the browser for
-         relation words missing after import (plans 261003f and 261005d). */
+         Only the press that turns the column on arms anything: the
+         literature search, where none has run (Greg's answer to q-sxfwqq,
+         plan 261029h). The relation words are asked for when the column is
+         shown, whatever showed it (plan 261005d). */
       const marginOn = next === "marginalia" && margin;
       if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, sources });
       onMode(next, undefined, toggles);
@@ -1941,6 +1979,10 @@ export function Dock({
 }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
+  /* The drawer rises out of the bar, so a narrow window's bar stays home while
+     it is drawn (narrow-window.css § the guard; root-flags.ts). The same
+     condition that draws `.dock-drawer` below. */
+  useRootFlag("dock-drawer", open);
   /* Narrowed once, so the four reads below are the compiler checking one fact
      rather than four independent tests that could drift apart. */
   const own = drawer && drawer.visitor !== true ? drawer : null;
@@ -2094,6 +2136,14 @@ export function Dock({
       hasQuickSearch(view, isVisitor ? null : own, onMode),
     ),
   );
+  /* **Focus inside the bar holds it home** on a narrow window, so a keyboard
+     reader is not left on a button that slid away (narrow-window.css § the
+     guard). `.dock` is drawn for the whole life of this component, so its ref
+     is set once and this follows it until unmount — root-flags.ts. */
+  useLayoutEffect(() => {
+    const el = dockRef.current;
+    return el ? trackFocusWithin(el, "dock-focus") : undefined;
+  }, [dockRef]);
 
   /**
    * Escape closes the drawer, and the drawer wins.
@@ -2150,8 +2200,9 @@ export function Dock({
          and the first Escape must close the menu and leave the drawer for the
          second. Radix's own listener is on `document`, after this one, so
          standing aside is all it needs (GPT Sol, PR-2 of plan 261007c;
-         tests/dock-more.test.tsx). The same attribute narrow-window.css reads
-         to hold the bar home under an open menu. */
+         tests/dock-more.test.tsx). The same state, as `data-dock-more-open`
+         on `<html>`, is what narrow-window.css reads to hold the bar home
+         under an open menu (`DockMore`). */
       if (document.querySelector(MORE_OPEN) !== null) return;
       e.stopImmediatePropagation();
       if (isImeComposing(e)) {
@@ -3407,7 +3458,7 @@ function DockModeLinks({
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map((m) => link(m))}</div>}
         {/* More in the same place as on the reading view — straight after
-            Summary, or first where that is off a phone's edge
+            Skim, or first where that is off a phone's edge
             (`bandsInOrder`) — and its items are these same links
             (`modeLinkHref`). Comments after Marginalia, as there. */}
         <div className="dock-frame" style={frameStyle(bands.length + moreCount(bar))}>
@@ -3446,11 +3497,13 @@ const MORE_LABEL = "More";
 
 /**
  * **An open More menu, as a selector** — Radix writes `data-state` on the
- * trigger. The drawer's Escape handler asks this (`Dock`), and
- * narrow-window.css § the guard spells the same selector to hold the bar home
- * on a phone, because the menu is portalled out of `.dock` and takes focus
- * with it. tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds the
- * stylesheet's copy to this one.
+ * trigger. The drawer's Escape handler asks this (`Dock`). narrow-window.css §
+ * the guard asked the same selector from `:root` until 2026-10-29 to hold the
+ * bar home on a phone, because the menu is portalled out of `.dock` and takes
+ * focus with it; it reads `data-dock-more-open` now, which `DockMore` sets
+ * from the `open` state that drives this attribute (root-flags.ts, plan
+ * 261029k). tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds
+ * the two together.
  */
 export const MORE_OPEN = '.dock-more-trigger[data-state="open"]';
 
@@ -3522,6 +3575,11 @@ function DockMore({
   pick: MorePick;
 }) {
   const [open, setOpen] = useState(false);
+  /* An open menu holds a narrow window's bar home: the menu is portalled out of
+     `.dock` and takes focus with it, so `dock-focus` goes false the moment it
+     opens (narrow-window.css § the guard). From this state, which is what puts
+     `data-state="open"` on the trigger — and only while there is a trigger. */
+  useRootFlag("dock-more-open", open && menu.length > 0);
   /* A finger that lands here at the start of a sideways scroll of the bar must
      not open the menu — menu.ts § `useFingerPressMenu`. */
   const finger = useFingerPressMenu(open, setOpen);
@@ -4466,9 +4524,10 @@ function DockExperimentalSwitch({
   variant: ExperimentalVariant;
 }) {
   const press = PRESS[variant];
-  /* The two states with something wrong to show. Kept as one name because two
+  /* The three states with something wrong to show. Kept as one name because two
      things key on it: the warning marker and `aria-invalid`. */
-  const broken = variant === "load-failed" || variant === "save-failed";
+  const broken =
+    variant === "load-failed" || variant === "save-failed" || variant === "save-failed-waiting";
   const state = SWITCH_STATE[variant](setting.on);
   /* Saving cannot accept another press, but it is still a toggle whose current
      value is known. `aria-disabled` reports the temporary unavailability;
@@ -4521,7 +4580,7 @@ function DockExperimentalSwitch({
            tooling reads it; the thing that actually carries the failure is the
            description below, plus the triangle a sighted reader can see. If it
            were the only carrier this would be the silent-success shape. */
-        aria-invalid={variant === "save-failed" ? true : undefined}
+        aria-invalid={variant === "save-failed" || variant === "save-failed-waiting" ? true : undefined}
         aria-disabled={press === "nothing" || undefined}
         /* **The name is fixed and the state is a description, never both in the
            name.** The APG allows a moving accessible name *or* a fixed one with
@@ -4589,17 +4648,16 @@ function DockExperimentalSwitch({
  * **Where the drawn switch's knob sits**, per appearance — the class on
  * `.dock-switch` (dock.css § the experimental switch).
  *
- * Not `broken`. That covers a failed load *and* a failed save, and only the
- * first has no value to draw: after a failed save the store has already put the value back (experimental-store.ts §
- * `set`), so the position is known and `aria-pressed` reports it — a knob
- * forced left there would contradict the button's own state. And where there
- * is no answer at all, a knob on the left is the silent-default mistake in its
- * most visible form: it draws "off" for a value nobody has read. GPT Sol, plan
- * review, 2026-09-29.
+ * Not `broken`. A failed save over a known value has already put that value
+ * back (experimental-store.ts § `set`), so `save-failed` keeps its position and
+ * `aria-pressed`; a failed save before the first answer has no value, so
+ * `save-failed-waiting` is centred like `waiting` and `load-failed`. Forcing
+ * either kind left would contradict the known value or draw "off" for a value
+ * nobody read. GPT Sol, plan review, 2026-09-29; code review of 261030a.
  *
  *  - known — `ready`, `saving`, `save-failed`: the value.
  *  - `stale`: the cached value, muted, because it is what we last knew.
- *  - no answer — `waiting`, `load-failed`: `is-unknown`, the knob centred.
+ *  - no answer — `waiting`, `load-failed`, `save-failed-waiting`: `is-unknown`, the knob centred.
  *
  * Exported for tests/dock-experimental-switch.test.tsx.
  */
@@ -4610,6 +4668,7 @@ export const SWITCH_LOOK: Record<ExperimentalVariant, (on: boolean) => string> =
   stale: (on) => (on ? "is-on is-stale" : "is-off is-stale"),
   waiting: () => "is-unknown",
   "load-failed": () => "is-unknown",
+  "save-failed-waiting": () => "is-unknown",
 };
 
 /**
@@ -4621,8 +4680,8 @@ export const SWITCH_LOOK: Record<ExperimentalVariant, (on: boolean) => string> =
  * must say the same thing to both. A state carried only by the dimming would
  * be a state half the readers cannot perceive.
  *
- * `on` is a parameter because two of the six sentences need it: what an offline
- * copy says, and what a working switch says. The other four do not read it.
+ * `on` is a parameter because two of the seven sentences need it: what an offline
+ * copy says, and what a working switch says. The other five do not read it.
  */
 const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
   saving: () => "Saving…",
@@ -4633,6 +4692,10 @@ const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
      lying about its position; what it must not do is let that pass quietly.
      experimental-store.ts § set. */
   "save-failed": () => "Not saved. Press to try again.",
+  /* The failed save cancelled the opening read, so the store is already asking
+     again. There is no value or useful press yet, but the failure must not be
+     relabelled as ordinary loading while that recovery is in flight. */
+  "save-failed-waiting": () => "Not saved. Loading this setting again…",
   /* **A copy, and a way out of it.** The value itself is not one to move —
      another device may have changed it since — but the reader has to be able to
      ask again, because nothing else will: `offline.ts` listens for going offline

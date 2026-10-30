@@ -164,6 +164,10 @@ export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot
        and a `?faq=` selection that marks a question's passages in the prose is
        deferred — docs/plans/260916d-faq-mode.md § Deferred. */
     case "faq":
+    /* Explanations marks nothing in this version: each quote is a jump. The
+       prose underline Greg asked for is the plan's deferred stage 3, which
+       needs its own overlap design — docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+    case "explanations":
       return NOTHING;
     default: {
       /* The compiler being made to say that every mode has been given an
@@ -229,6 +233,7 @@ export function railMarks(mode: BandMode): RailMarks {
     case "structure":
     case "sources":
     case "faq":
+    case "explanations":
       return GENERIC_RAIL_MARKS;
     default: {
       const unhandled: never = mode;

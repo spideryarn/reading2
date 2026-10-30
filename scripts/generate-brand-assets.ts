@@ -26,9 +26,10 @@ export const BRAND_OUTPUTS = [
   { file: "favicon-32x32.png", size: 32, padding: 0.005 },
   { file: "favicon-48x48.png", size: 48, padding: 0.005 },
   { file: "spideryarn-reader.png", size: 512, padding: 0.03 },
-  { file: "apple-touch-icon.png", size: 180, padding: 0.08, background: LIGHT },
-  { file: "android-chrome-192x192.png", size: 192, padding: 0.08, background: LIGHT },
-  { file: "android-chrome-512x512.png", size: 512, padding: 0.08, background: LIGHT },
+  { file: "apple-touch-icon.png", size: 180, padding: 0.08, background: DARK },
+  { file: "apple-touch-icon-light.png", size: 180, padding: 0.08, background: LIGHT },
+  { file: "android-chrome-192x192.png", size: 192, padding: 0.08, background: DARK },
+  { file: "android-chrome-512x512.png", size: 512, padding: 0.08, background: DARK },
   { file: "app-icon-light-1024.png", size: 1024, padding: 0.12, background: LIGHT },
   { file: "app-icon-dark-1024.png", size: 1024, padding: 0.12, background: DARK },
 ] as const;
@@ -122,12 +123,12 @@ async function renderPreview(input: Source, files: Map<string, Buffer>): Promise
   const ctx = canvas.getContext("2d");
   const detail = await proofImage(files, "spideryarn-reader.png");
   const mark = await proofImage(files, "spideryarn-logo.png");
-  const install = await proofImage(files, "apple-touch-icon.png");
   ctx.imageSmoothingQuality = "high";
   ctx.font = "15px SpideryarnBrandPreview";
   for (const [left, background, foreground, label] of [
     [0, LIGHT, DARK, "Light"], [400, DARK, LIGHT, "Dark"],
   ] as const) {
+    const install = await proofImage(files, label === "Light" ? "apple-touch-icon-light.png" : "apple-touch-icon.png");
     ctx.fillStyle = background;
     ctx.fillRect(left, 0, 400, 740);
     ctx.fillStyle = foreground;
@@ -146,7 +147,7 @@ async function renderPreview(input: Source, files: Map<string, Buffer>): Promise
       ctx.drawImage(detail, x, 200, size, size);
       ctx.fillText(`${size}px`, x, 406);
     }
-    ctx.fillText("180px install tile - opaque ivory, 8% inset", left + 20, 458);
+    ctx.fillText(`180px install tile - ${label.toLowerCase()} phone, opaque, 8% inset`, left + 20, 458);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(install, left + 110, 478);
     ctx.fillText(`One master SHA256 ${input.hash}`, left + 20, 696);
@@ -159,11 +160,11 @@ async function renderTinyPreview(files: Map<string, Buffer>): Promise<Buffer> {
   const canvas = proofCanvas(920, 740);
   const ctx = canvas.getContext("2d");
   const mark = await proofImage(files, "spideryarn-logo.png");
-  const install = await proofImage(files, "apple-touch-icon.png");
   const favicon16 = await proofImage(files, "favicon-16x16.png");
   for (const [left, background, foreground, label] of [
     [0, LIGHT, DARK, "LIGHT"], [460, DARK, LIGHT, "DARK"],
   ] as const) {
+    const install = await proofImage(files, label === "LIGHT" ? "apple-touch-icon-light.png" : "apple-touch-icon.png");
     ctx.fillStyle = background;
     ctx.fillRect(left, 0, 460, 740);
     ctx.fillStyle = foreground;
@@ -208,6 +209,7 @@ async function renderTinyPreview(files: Map<string, Buffer>): Promise<Buffer> {
 /** Use the committed public files directly: opening or serving this page
  * exercises browser favicon selection rather than drawing a pretend tab. */
 function renderBrowserPreview(): string {
+  const install = (theme: string) => theme === "light" ? "apple-touch-icon-light.png" : "apple-touch-icon.png";
   const sample = (theme: string) => `<section class="${theme}"><h2>${theme} background</h2>
     <p>16 logical pixels, 1× / 2× source selection:</p>
     <img width="16" height="16" src="../../public/favicon-16x16.png" srcset="../../public/favicon-16x16.png 1x, ../../public/favicon-32x32.png 2x" alt="Reader favicon at 16 logical pixels">
@@ -215,7 +217,7 @@ function renderBrowserPreview(): string {
     ${[16, 32, 48].map((size) => `<img width="${size}" height="${size}" src="../../public/favicon-${size}x${size}.png" alt="${size} pixel favicon">`).join(" ")}
     <p>Same reader in the app, at 20, 44 and 128 logical pixels:</p>
     ${[20, 44, 128].map((size) => `<img width="${size}" height="${size}" src="../../public/spideryarn-logo.png" alt="${size} pixel app reader">`).join(" ")}
-    <p>Install tile, 60 logical pixels — 84% artwork fill:</p><img width="60" height="60" src="../../public/apple-touch-icon.png" alt="Install tile"></section>`;
+    <p>Install tile for a ${theme} phone, 60 logical pixels — 84% artwork fill:</p><img width="60" height="60" src="../../public/${install(theme)}" alt="Install tile for a ${theme} phone"></section>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Spideryarn — selected reader tab preview</title>

@@ -104,6 +104,8 @@ function chats(summaries: ThreadSummary[]): SourcesInvestigateChats {
     onQuestion: (q) => asked.push(q),
     onCheck: (origin) => checked.push(origin),
     onAskWork: (w) => worked.push(w.id),
+    onFinding: () => {},
+    onOverview: () => {},
     onOpen: (id) => opened.push(id),
   };
 }
@@ -171,7 +173,8 @@ describe("the box", () => {
     expect(input?.maxLength, "the cap the origin is refused over").toBe(600);
     expect(send()?.textContent).toContain(SOURCES_INVESTIGATE_SEND);
     const chips = host.querySelector(".band-head .rcp-views") as Element;
-    expect(chips.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe("Investigate");
+    /* A tool since plan 261025h: its chip row lights Where it sits (`chipOf`). */
+    expect(chips.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe("Where it sits");
     expect(input && input.compareDocumentPosition(chips) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 

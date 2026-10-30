@@ -106,8 +106,17 @@ import { costOn, leafClock, noteCost } from "./annotation-cost.js";
  * `data-xref` carries a per-page-load nonce, and every handler resolves it
  * through `xrefTarget` in xref.ts, never by reading a target off the DOM. Where
  * it overlaps another kind it wins the click, the tap and the hover.
+ *
+ * `explained` is a passage the owner's Explanations list explains, and the
+ * seventh kind, added 2026-10-29 (Greg, `spya-njkskc`: *"an underline quite
+ * similar to the glossary"*;
+ * docs/plans/261029j-explained-passages-underlined-in-the-prose.md). Found the
+ * way a citation is (`explainedMarks`, below), drawn in Glossary's channel —
+ * `border-bottom` — in its own hue, and inert to the click as a term is. Where
+ * a term, a comment or a chat shares its words, they keep the border
+ * (annotations.css § an explained passage); the card draws both.
  */
-export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite" | "xref";
+export type MarkKind = "cmt" | "chat" | "term" | "hit" | "cite" | "xref" | "explained";
 
 /**
  * How many coloured rules one phrase can wear.
@@ -502,6 +511,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
       const hits = covering.filter((m) => m.kind === "hit");
       const cites = covering.filter((m) => m.kind === "cite");
       const xrefs = covering.filter((m) => m.kind === "xref");
+      const explained = covering.filter((m) => m.kind === "explained");
       // Every class that applies. `mark.cmt` and `mark.chat` are what the click
       // handler in TableView.tsx selects on, so a term or a hit must never
       // carry either class alone — and neither artefact may lose its class
@@ -513,6 +523,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
         hits.length > 0 ? "hit" : "",
         cites.length > 0 ? "cite" : "",
         xrefs.length > 0 ? "xref" : "",
+        explained.length > 0 ? "explained" : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -778,6 +789,10 @@ function annotate(html: string, marks: readonly Mark[]): string {
 
          Written last, so the attributes come out in the order the classes do. */
       if (cites.length > 0) el.setAttribute("data-cite", cites.map((m) => m.id).join(" "));
+      /* The explanations' ids, as `data-cite`'s: one passage is explained at
+         most once (one per block, src/explanations.ts), but nothing here
+         depends on it, and the hover card reads them all. */
+      if (explained.length > 0) el.setAttribute("data-explained", explained.map((m) => m.id).join(" "));
       /* **One id, not a list.** `xrefMarks` never lets two cross-references
          overlap in a block, so a piece carries at most one; taking the first is
          the defensive reading if that ever stops being true. The id is
@@ -1152,6 +1167,37 @@ export function citeMarks(
   blocks: Block[],
   selections: readonly CiteSelection[],
 ): Map<BlockId, Mark[]> {
+  return placedMarks(blocks, selections, "cite");
+}
+
+/**
+ * **Every explained passage, as marks**, grouped by block — the owner's
+ * Explanations list, one place each (docs/plans/261029j-….md § 1).
+ *
+ * The citation's question exactly, so the citation's finder: an explanation's
+ * `quote` is a slice of the article's own characters in a named block, checked
+ * to occur once in `block.text` when it was written (src/explanations.ts) —
+ * which, as the docstring above says of `verifyPlace`, does not prove it occurs
+ * once in the rendered text. So the same rule: the only occurrence or nothing,
+ * and a passage that cannot be re-found draws no mark, never the whole block.
+ */
+export function explainedMarks(
+  blocks: Block[],
+  explanations: readonly { id: string; blockId: BlockId; quote: string }[],
+): Map<BlockId, Mark[]> {
+  return placedMarks(
+    blocks,
+    explanations.map((e) => ({ id: e.id, places: [{ blockId: e.blockId, quote: e.quote }] })),
+    "explained",
+  );
+}
+
+/** `citeMarks`' finder, for any kind that arrives as checked slices of a block. */
+function placedMarks(
+  blocks: Block[],
+  selections: readonly CiteSelection[],
+  kind: "cite" | "explained",
+): Map<BlockId, Mark[]> {
   const byBlock = new Map<BlockId, Mark[]>();
   if (selections.length === 0) return byBlock;
 
@@ -1178,7 +1224,7 @@ export function citeMarks(
       /* `null` is both "the words have gone" and "there are two of them", and
          both mean the same thing here: no mark. See the docstring. */
       if (!span) continue;
-      marks.push({ id: place.id, kind: "cite" as const, start: span.start, end: span.end });
+      marks.push({ id: place.id, kind, start: span.start, end: span.end });
     }
     if (marks.length > 0) byBlock.set(block.id, marks);
   }

@@ -269,7 +269,7 @@ Two of Greg's, 2026-09-05, recorded so they aren't lost — neither is on the ne
 
 ## Under this doc
 
-`vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Five things sit
+`vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Six things sit
 under it, and then the five folders that hold the project's memory.
 
 - **[positioning.md](positioning.md)** — what the website says, who it says it to first, and what
@@ -285,6 +285,8 @@ under it, and then the five folders that hold the project's memory.
 - **[reading-research-overview.md](reading-research-overview.md)** — the peer-reviewed evidence on
   reading and learning deeply, and what it says about each mode: what is well founded, what is
   untested, and where the evidence says we built something the wrong way.
+- **[principles.md](principles.md)** — how we build: a few short, general rules, each added only
+  with Greg's yes. The first: improve forwards, and backfill only when it is cheap or simpler.
 - **[open-questions.md](open-questions.md)** — the calls nobody has made yet, each with a
   recommendation so nobody is blocked. It should shrink: when a question gets decided, the answer
   goes into the doc that owns it and the question is deleted.

@@ -177,6 +177,35 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
   };
 }
 
+function keptFrom(attempt: Attempt | null | undefined): UseQuiz["kept"] {
+  if (attempt?.status !== "done" || attempt.restored) return new Map();
+  return new Map([
+    [
+      attempt.questionId,
+      {
+        answer: attempt.answer,
+        reply: attempt.reply,
+        answeredAt: new Date().toISOString(),
+        saved: attempt.notSaved !== true,
+        attemptId: attempt.attemptId ?? null,
+        ...(attempt.verdict ? { verdict: attempt.verdict } : {}),
+      },
+    ],
+  ]);
+}
+
+/**
+ * The state `useQuizRead.noteMark` publishes with a finished attempt. Since
+ * plan 261029m verdicts deliberately come from this shared record, a direct
+ * panel test about adaptive premises or Where-to-look-again must pose both.
+ */
+function withKeptAttempt(o: UseQuiz, attempt: Attempt): UseQuiz {
+  const kept = new Map(o.kept);
+  const one = keptFrom(attempt).get(attempt.questionId);
+  if (one) kept.set(attempt.questionId, one);
+  return { ...o, attempt, kept, answered: new Set(kept.keys()) };
+}
+
 let host: HTMLDivElement;
 let root: Root;
 const jumped: BlockId[] = [];
@@ -208,6 +237,17 @@ function buttons(label: string): HTMLButtonElement[] {
   return [...host.querySelectorAll("button")].filter(
     (b) => (b.getAttribute("aria-label") ?? (b.textContent ?? "").trim()) === label,
   ) as HTMLButtonElement[];
+}
+
+/** The stem as a sighted reader sees it, without its spoken status suffix. */
+function visibleQuestionText(): string | null {
+  const question = host.querySelector(".quiz-question");
+  if (!question) return null;
+  const visible = question.cloneNode(true) as Element;
+  visible.querySelectorAll(".sr-only").forEach((node) => {
+    node.remove();
+  });
+  return visible.textContent;
 }
 
 /**
@@ -935,13 +975,23 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
     };
   }
 
-  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const stem = () => visibleQuestionText();
   const premiseShown = () => host.querySelector(".quiz-premise")?.textContent ?? null;
 
   /** A fresh panel, for a loop that paints several independent walks. */
   function remount() {
     act(() => root.unmount());
     root = createRoot(host);
+  }
+
+  /** Mount before the answer lands: production has already made its one-time
+      resume choice by the time noteMark publishes the kept verdict. */
+  function startJudged(attempt: Attempt, quiz: Quiz = PATH): UseQuiz {
+    const o = owner({ quiz });
+    paint(o);
+    const marked = withKeptAttempt(o, attempt);
+    paint(marked);
+    return marked;
   }
 
   function pickRow(n: number) {
@@ -961,7 +1011,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
 
   it("goes to the next question in the array whatever the verdict", () => {
     for (const verdict of ["right", "wrong", undefined] as const) {
-      paint(owner({ quiz: PATH, attempt: judged(first.id, verdict) }));
+      startJudged(judged(first.id, verdict));
       press("Next question");
       expect(stem(), `after ${verdict ?? "no"} verdict`).toBe("Question number 2?");
       expect(host.textContent).toContain("Question 2 of 3");
@@ -970,7 +1020,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   });
 
   it("asks the next step on its own after a right answer", () => {
-    paint(owner({ quiz: PATH, attempt: judged(first.id, "right") }));
+    startJudged(judged(first.id, "right"));
     press("Next question");
     expect(premiseShown()).toBeNull();
     /* Hiding the premise is not hiding the step. */
@@ -978,7 +1028,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   });
 
   it("hands the reader the thread after a wrong answer, above the question and apart from it", () => {
-    paint(owner({ quiz: PATH, attempt: judged(first.id, "wrong") }));
+    startJudged(judged(first.id, "wrong"));
     press("Next question");
     expect(premiseShown()).toBe(P2);
     const premise = host.querySelector(".quiz-premise");
@@ -988,7 +1038,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   });
 
   it("hands it over too when nothing was judged — a skip, or a classifier that failed", () => {
-    paint(owner({ quiz: PATH, attempt: judged(first.id, undefined) }));
+    startJudged(judged(first.id, undefined));
     press("Next question");
     expect(premiseShown()).toBe(P2);
     remount();
@@ -1000,8 +1050,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("remembers the verdict after the attempt has gone", () => {
     /* In the app `move` clears the attempt, so by the time step 2 is on screen
        the only record of step 1's verdict is the panel's own. */
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
-    paint(o);
+    const o = startJudged(judged(first.id, "right"));
     paint({ ...o, attempt: null });
     press("Next question");
     expect(stem()).toBe("Question number 2?");
@@ -1009,13 +1058,12 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   });
 
   it("follows the latest verdict on the step before", () => {
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
-    paint(o);
+    const o = startJudged(judged(first.id, "right"));
     press("Next question");
     paint({ ...o, attempt: null });
     press("Previous question");
     /* Answered again, and wrong this time. */
-    paint({ ...o, attempt: judged(first.id, "wrong") });
+    paint(withKeptAttempt(o, judged(first.id, "wrong")));
     press("Next question");
     expect(premiseShown()).toBe(P2);
   });
@@ -1023,11 +1071,10 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   it("shows the premise on a step reached by Previous, even after a right answer before it", () => {
     /* Right on 1, right on 2, on to 3, then back to 2. The reader did not just
        carry step 1's thread to step 2 — they came from the other side. */
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
-    paint(o);
+    const o = startJudged(judged(first.id, "right"));
     press("Next question");
     expect(premiseShown()).toBeNull();
-    paint({ ...o, attempt: judged(second.id, "right") });
+    paint(withKeptAttempt(o, judged(second.id, "right")));
     press("Next question");
     press("Previous question");
     expect(stem()).toBe("Question number 2?");
@@ -1067,7 +1114,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
     const o = owner({ quiz: PATH });
     paint(o);
     press("Next question");
-    paint({ ...o, attempt: judged(second.id, "right") });
+    paint(withKeptAttempt(o, judged(second.id, "right")));
     press("Previous question");
     paint({ ...o, attempt: null });
     press("Show all 3 questions");
@@ -1085,7 +1132,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
    */
   it("always shows the premise when the batch had a question dropped mid-path", () => {
     const gapped: Quiz = { ...PATH, dropped: { ...PATH.dropped, gaps: 1 } };
-    paint(owner({ quiz: gapped, attempt: judged(first.id, "right") }));
+    startJudged(judged(first.id, "right"), gapped);
     press("Next question");
     expect(premiseShown()).toBe(P2);
   });
@@ -1124,21 +1171,19 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
   });
 
   it("forgets every verdict when the batch is replaced", () => {
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "right") });
-    paint(o);
+    startJudged(judged(first.id, "right"));
     press("Next question");
     expect(premiseShown()).toBeNull();
     /* The same questions under a new `batchId` — the case where a verdict map
        that outlived its batch would still find ids to match. */
-    paint({ ...o, quiz: { ...PATH, batchId: "spya-batch2" }, attempt: null });
+    paint(owner({ quiz: { ...PATH, batchId: "spya-batch2" }, attempt: null }));
     expect(host.textContent).toContain("Question 1 of 3");
     press("Next question");
     expect(premiseShown()).toBe(P2);
   });
 
   it("does not put the old verdict back while clearing a replacement batch", () => {
-    const old = owner({ quiz: PATH, attempt: judged(first.id, "right") });
-    paint(old);
+    startJudged(judged(first.id, "right"));
     press("Next question");
     expect(premiseShown()).toBeNull();
 
@@ -1148,7 +1193,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
        recording it again after clearing the map would silently carry a verdict
        across batches. */
     paint({
-      ...old,
+      ...owner({ quiz: { ...PATH, batchId: "spya-batch2" } }),
       quiz: { ...PATH, batchId: "spya-batch2" },
       attempt: judged(first.id, "right"),
     });
@@ -1165,7 +1210,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
    */
   it("never says a word about difficulty, however the reader is doing", () => {
     for (const verdict of ["right", "wrong", undefined] as const) {
-      paint(owner({ quiz: PATH, attempt: judged(first.id, verdict) }));
+      startJudged(judged(first.id, verdict));
       press("Next question");
       press("Show all 3 questions");
       const shown = (host.textContent ?? "").toLowerCase();
@@ -1220,7 +1265,7 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
       press("Next question");
       paint({ ...o, attempt: marking(second.id) });
       expect(off(buttons("Next question")[0])).toBe(true);
-      paint({ ...o, attempt: judged(second.id, "right") });
+      paint(withKeptAttempt(o, judged(second.id, "right")));
       expect(off(buttons("Next question")[0])).toBe(false);
       press("Next question");
       expect(stem()).toBe(third.question);
@@ -1270,7 +1315,7 @@ describe("only what you have read", () => {
     });
   }
 
-  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const stem = () => visibleQuestionText();
   const premiseShown = () => host.querySelector(".quiz-premise")?.textContent ?? null;
   const box = () => host.querySelector<HTMLInputElement>(".quiz-only-read input");
   const tick = () =>
@@ -1358,7 +1403,7 @@ describe("only what you have read", () => {
     tick();
     press("Next question");
     expect(stem()).toBe(second.question);
-    paintRead({ ...o, attempt: judged(second.id, "right") }, some);
+    paintRead(withKeptAttempt(o, judged(second.id, "right")), some);
     tick();
     expect(stem()).toBe(third.question);
     press("Previous question");
@@ -1369,7 +1414,10 @@ describe("only what you have read", () => {
   });
 
   it("hides the premise after a right answer when Next skipped nothing — the control", () => {
-    paintRead(owner({ quiz: PATH, attempt: judged(first.id, "right") }), read([KNOWN, OTHER]));
+    const o = owner({ quiz: PATH });
+    const seen = read([KNOWN, OTHER]);
+    paintRead(o, seen);
+    paintRead(withKeptAttempt(o, judged(first.id, "right")), seen);
     press("Next question");
     expect(stem()).toBe(second.question);
     expect(premiseShown()).toBeNull();
@@ -1555,7 +1603,7 @@ describe("only what you have read, across a new batch", () => {
 describe("← and → step the path", () => {
   const PATH = batch([question(1), question(2), question(3)]);
   const [first] = PATH.questions as [QuizQuestion];
-  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const stem = () => visibleQuestionText();
   const key = (dir: -1 | 1): boolean | undefined => {
     let took: boolean | undefined;
     act(() => {
@@ -1671,7 +1719,7 @@ describe("an arrival from the prose", () => {
     question(3, { evidence: on(THIRD), premise: P3 }),
   ]);
   const [first, second, third] = PATH.questions as [QuizQuestion, QuizQuestion, QuizQuestion];
-  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const stem = () => visibleQuestionText();
   const premiseShown = () => host.querySelector(".quiz-premise")?.textContent ?? null;
   const taken: QuizArrival[] = [];
 
@@ -1851,20 +1899,29 @@ describe("where to look again", () => {
   }
 
   const block = () => host.querySelector(".quiz-look-again");
-  const stem = () => host.querySelector(".quiz-question")?.textContent ?? null;
+  const stem = () => visibleQuestionText();
   const RETRY = "Back to a question on Opening";
 
+  function startJudgedSections(attempt: Attempt, readSoFar?: ReadSoFar): UseQuiz {
+    const o = owner({ quiz: PATH });
+    paintSections(o, readSoFar);
+    const marked = withKeptAttempt(o, attempt);
+    paintSections(marked, readSoFar);
+    return marked;
+  }
+
   it("is not there until an answer has been judged wrong", () => {
-    paintSections(owner({ quiz: PATH }));
+    const o = owner({ quiz: PATH });
+    paintSections(o);
     expect(block()).toBeNull();
-    paintSections(owner({ quiz: PATH, attempt: judged(first.id, "right") }));
+    paintSections(withKeptAttempt(o, judged(first.id, "right")));
     expect(block()).toBeNull();
-    paintSections(owner({ quiz: PATH, attempt: judged(first.id) }));
+    paintSections(withKeptAttempt(o, judged(first.id)));
     expect(block()).toBeNull();
   });
 
   it("names the section and nothing else, and the name jumps the prose there", () => {
-    paintSections(owner({ quiz: PATH, attempt: judged(first.id, "wrong") }));
+    startJudgedSections(judged(first.id, "wrong"));
     expect(block()?.textContent).toBe("Where to look againOpening");
     const before = jumped.length;
     act(() => {
@@ -1876,8 +1933,7 @@ describe("where to look again", () => {
   });
 
   it("offers the missed question from elsewhere on the path, not while it is open, and goes back to it as a jump", () => {
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
-    paintSections(o);
+    const o = startJudgedSections(judged(first.id, "wrong"));
     expect(buttons(RETRY)).toHaveLength(0);
     paintSections({ ...o, attempt: null });
     press("Next question");
@@ -1892,7 +1948,7 @@ describe("where to look again", () => {
     const o = owner({ quiz: PATH });
     paintSections(o);
     press("Next question");
-    paintSections({ ...o, attempt: judged(second.id, "wrong") });
+    paintSections(withKeptAttempt(o, judged(second.id, "wrong")));
     press("Next question");
     expect(stem()).toBe("Question number 3?");
 
@@ -1902,31 +1958,28 @@ describe("where to look again", () => {
   });
 
   it("drops the section once its answer is judged right again", () => {
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
-    paintSections(o);
+    const o = startJudgedSections(judged(first.id, "wrong"));
     expect(block()).not.toBeNull();
-    paintSections({ ...o, attempt: judged(first.id, "right") });
+    paintSections(withKeptAttempt(o, judged(first.id, "right")));
     expect(block()).toBeNull();
   });
 
   it("drops the old wrong verdict when a newer finished mark has no verdict", () => {
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
-    paintSections(o);
+    const o = startJudgedSections(judged(first.id, "wrong"));
     expect(block()).not.toBeNull();
-    paintSections({ ...o, attempt: judged(first.id) });
+    paintSections(withKeptAttempt(o, judged(first.id)));
     expect(block()).toBeNull();
   });
 
   it("forgets the section on a replacement batch, even while the old completed attempt is still in props", () => {
-    const old = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
-    paintSections(old);
+    startJudgedSections(judged(first.id, "wrong"));
     expect(block()).not.toBeNull();
 
     /* The replacement deliberately reuses question ids and the old attempt
        survives the first render. Without both the map reset and the
        reset-only verdict pass, "Opening" comes straight back on the new batch. */
     paintSections({
-      ...old,
+      ...owner({ quiz: { ...PATH, batchId: "spya-batch2" } }),
       quiz: { ...PATH, batchId: "spya-batch2" },
       attempt: judged(first.id, "wrong"),
     });
@@ -1945,13 +1998,16 @@ describe("where to look again", () => {
       ]),
     });
     /* Answered while everything was read… */
-    const o = owner({ quiz: PATH, attempt: judged(first.id, "wrong") });
-    paintSections(o, read([KNOWN, OTHER, THIRD]));
-    paintSections({ ...o, attempt: null }, read([KNOWN, OTHER, THIRD]));
+    const o = owner({ quiz: PATH });
+    const all = read([KNOWN, OTHER, THIRD]);
+    paintSections(o, all);
+    const wrong = withKeptAttempt(o, judged(first.id, "wrong"));
+    paintSections(wrong, all);
+    paintSections({ ...wrong, attempt: null }, all);
     press("Next question");
     expect(buttons(RETRY)).toHaveLength(1);
     /* …and then the opening passage no longer counts as read. */
-    paintSections({ ...o, attempt: null }, read([OTHER, THIRD]));
+    paintSections({ ...wrong, attempt: null }, read([OTHER, THIRD]));
     expect(block()?.textContent).toContain("Opening");
     expect(buttons(RETRY)).toHaveLength(0);
   });

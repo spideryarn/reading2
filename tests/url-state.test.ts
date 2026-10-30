@@ -24,6 +24,9 @@ import {
   diagramAxisParam,
   diagramHueParam,
   diagramParam,
+  EXPLANATION_ORDERS,
+  explanationBarParam,
+  explanationOrderParam,
   FAQ_ORDERS,
   faqOrderParam,
   modeParam,
@@ -159,7 +162,12 @@ describe("buildSections", () => {
   const sections = buildSections(geometry, blocks);
 
   it("uses the deepest level that still has titles, not the leaves", () => {
+    /* A three-level tree, where that is one above the leaves. On a deeper tree
+       it stops at 2, so a sub-section is never a section of its own — plan
+       261029a, tests/structure-ragged-tree.test.ts. */
+    expect(geometry.leafDepth).toBe(3);
     expect(sectionDepth(geometry)).toBe(geometry.leafDepth - 1);
+    expect(sectionDepth({ ...geometry, leafDepth: 4 })).toBe(2);
   });
 
   // The whole point of storing a section rather than a position: there are
@@ -256,6 +264,26 @@ describe("faq mode parameters", () => {
   });
 });
 
+describe("explanations mode parameters", () => {
+  /* Plan 261029e § 2b: `?explby=` and `?explbar=`, the FAQ's pattern. */
+  it("reads and writes every order, defaults to prioritised, and drops an unknown one", () => {
+    for (const order of ["prioritised", "document", "difficulty", "centrality"] as const) {
+      expect(EXPLANATION_ORDERS).toContain(order);
+      expect(explanationOrderParam.parse(explanationOrderParam.serialize(order))).toBe(order);
+    }
+    expect(explanationOrderParam.defaultValue).toBe("prioritised");
+    expect(explanationOrderParam.parse("hardest")).toBeNull();
+  });
+
+  it("reads a bar on 0–1 to two places, and refuses one outside it", () => {
+    expect(explanationBarParam.parse("0.25")).toBe(0.25);
+    expect(explanationBarParam.parse("0.123")).toBe(0.12);
+    expect(explanationBarParam.serialize(0.1)).toBe("0.10");
+    expect(explanationBarParam.parse("1.5")).toBeNull();
+    expect(explanationBarParam.parse("x")).toBeNull();
+  });
+});
+
 describe("referee mode parameters", () => {
   /**
    * **One ramp for the whole mode**, `?refscale=rg|br` — which is a bug fix
@@ -297,8 +325,14 @@ describe("Sources' sub-mode, and Reception's order", () => {
    * Debate's `?debate=` on 2026-10-09 (plan 261009l); an old one is lifted
    * before anything parses it (tests/sources-old-addresses.test.ts).
    */
-  it("reads the six sub-modes, and anything else as Bibliography", () => {
-    expect([...SOURCES_VIEWS]).toEqual(["bibliography", "not-cited", "links", "reception", "claims", "investigate"]);
+  /* Where it sits is the default since plan 261025h (decision 7). */
+  it("reads the nine sub-modes, and anything else as Where it sits", () => {
+    expect([...SOURCES_VIEWS]).toEqual([
+      "where", "bibliography", "not-cited", "links", "reception", "claims", "investigate", "guess-first", "evidence-first",
+    ]);
+    expect(sourcesParam.parse("guess-first")).toBe("guess-first");
+    expect(sourcesParam.parse("evidence-first")).toBe("evidence-first");
+    expect(sourcesParam.parse("where")).toBe("where");
     expect(sourcesParam.parse("investigate")).toBe("investigate");
     expect(sourcesParam.parse("not-cited")).toBe("not-cited");
     expect(sourcesParam.parse("links")).toBe("links");
@@ -308,16 +342,20 @@ describe("Sources' sub-mode, and Reception's order", () => {
     for (const junk of ["Claims", "claim", "", "cited", "1", "citations", "debate", "Investigate", "chat"]) {
       expect(sourcesParam.parse(junk), `?sources=${junk}`).toBeNull();
     }
-    expect(sourcesParam.defaultValue).toBe("bibliography");
+    expect(sourcesParam.defaultValue).toBe("where");
   });
 
   /* Not cited and Investigate are the owner's (plan 261011ac, F6; plan 261020n §
      Visitors): a visitor's band has no chip for either and draws Bibliography
      for a shared `?sources=not-cited` or `?sources=investigate`. */
-  it("gives a visitor every sub-mode but Not cited and Investigate, and reads those as Bibliography", () => {
+  it("gives a visitor every sub-mode but Where it sits, Not cited and Investigate, and reads those as Bibliography", () => {
     expect([...VISITOR_SOURCES_VIEWS]).toEqual(["bibliography", "links", "reception", "claims"]);
+    expect(visitorSourcesView("where")).toBe("bibliography");
     expect(visitorSourcesView("not-cited")).toBe("bibliography");
     expect(visitorSourcesView("investigate")).toBe("bibliography");
+    /* The two experiments read the owner's dossier (plan 261025h, Stage 4). */
+    expect(visitorSourcesView("guess-first")).toBe("bibliography");
+    expect(visitorSourcesView("evidence-first")).toBe("bibliography");
     for (const view of VISITOR_SOURCES_VIEWS) expect(visitorSourcesView(view)).toBe(view);
   });
 

@@ -65,7 +65,8 @@ import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { PurposeLine } from "./SkimPurpose.js";
+import { BriefLine, NewBriefBox, PurposeLine } from "./SkimPurpose.js";
+import { type BriefPicking, intends } from "./SkimBriefPicker.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Excerpt } from "./Excerpt.js";
@@ -133,7 +134,8 @@ export interface SkimRow {
   /**
    * The quote's own words — `Quote.text`, the article's characters, never a
    * model's. `null` when its quote has gone. Drawn cut short on every row but
-   * the current one, the whole of it in a tooltip (plan 260928e).
+   * the current one, the whole of it in a tooltip (plan 260928e) — except
+   * where the band covers the prose, where every row is whole (`wholeWords`).
    */
   words: string | null;
   /**
@@ -195,7 +197,8 @@ function OpenIn({ label, icon, onOpen }: { label: string; icon: ReactNode; onOpe
 
 /**
  * **How much of a quote a row shows** before it is cut, in characters — about
- * two lines at the band's width. The current row shows all of it.
+ * two lines at the band's width. The current row shows all of it, and so does
+ * every row where the band covers the prose (`SkimView.wholeWords`).
  */
 export const WORDS_ON_A_ROW = 100;
 
@@ -205,17 +208,19 @@ export const WORDS_ON_A_ROW = 100;
  * on hover, and on focus since the row is a button. A quote that fits gets no
  * tooltip, which would only repeat it. Touch has no hover, so what a finger
  * gets is the tap: that makes the row current, and the current row is whole.
+ * Except where the band covers the prose, where the tap goes to the article
+ * instead — so there every row is whole (`wholeWords`, spya-r246pf).
  *
  * Why a character cut and not CSS `line-clamp`: the clamp cannot say whether
  * it cut, and this decides whether there is a tooltip at all.
  */
-function rowWords(row: SkimRow): { shown: string; whole: string | null } | null {
+function rowWords(row: SkimRow, wholeWords: boolean): { shown: string; whole: string | null } | null {
   /* A figure's label is cut the same way: a caption can run to a paragraph. */
   const text = row.figure?.text ?? row.words;
   if (text === null) return null;
   const clean = text.replace(/\s+/g, " ").trim();
   if (clean === "") return null;
-  if (row.current) return { shown: clean, whole: null };
+  if (row.current || wholeWords) return { shown: clean, whole: null };
   const cut = snippet(clean, WORDS_ON_A_ROW);
   return { shown: cut, whole: cut === clean ? null : clean };
 }
@@ -762,7 +767,23 @@ export function PlacePath({ place }: { place: readonly PlaceStep[] | null }) {
  * mode.md asks for. Since 2026-09-29, SPIDERYARN-READING2-56.
  */
 export type SkimAccess =
-  | { kind: "owner"; owner: UseSkim }
+  | {
+      kind: "owner";
+      owner: UseSkim;
+      /**
+       * An added brief's sentence, when `owner.brief` names one and the list
+       * has been read — what its route is planned for (plan 261027d). Absent
+       * for the default, whose line is the article's purpose (`PurposeLine`).
+       */
+      briefSentence?: string | null;
+      /**
+       * The switcher between the default and the added briefs, with *Edit* and
+       * *New brief…* (SkimBriefPicker.tsx, plan 261027d stage 4). The band's
+       * own; a test of the panel alone may leave it out, and the line then
+       * has no ▾.
+       */
+      picking?: BriefPicking;
+    }
   | { kind: "visitor"; route: PublicSkim };
 
 /**
@@ -785,6 +806,15 @@ export function SkimPanel({ access, view, away }: Props) {
   useRenderCount("SkimPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
+  /* An added brief's route (plan 261027d): drawn exactly as the default's,
+     but with its own sentence where the purpose line is, its own *Plan this
+     route* in place of the automatic run, and *Plan it again* standing in the
+     foot, since Metadata's Skim row re-plans only the default. */
+  const added = owner !== null && owner.brief !== null;
+  const picking = access.kind === "owner" ? access.picking : undefined;
+  /* *New brief…* opens its box in place of this route's line (stage 4). */
+  const newBrief =
+    owner !== null && picking !== undefined && intends(picking, owner.brief, "new") ? <NewBriefBox picking={picking} /> : null;
   const route = access.kind === "owner" ? access.owner.skim : access.route;
   /* A visitor's route arrived with the page, so it is ready by construction. */
   const ready = route !== null && (owner === null || owner.status === "ready");
@@ -798,6 +828,11 @@ export function SkimPanel({ access, view, away }: Props) {
     identities: owner?.stale ? (owner.skim?.generatedAt ?? null) : null,
   });
   const reason = owner ? bannerReason(owner, staleNotice.showing.length === 0) : null;
+  const briefLine =
+    newBrief ??
+    (added && access.kind === "owner" && access.briefSentence ? (
+      <BriefLine owner={access.owner} sentence={access.briefSentence} bannerUp={reason !== null} picking={picking} />
+    ) : null);
   const total = view.rows.length;
   const deepest = view.depths.at(-1)?.depth ?? null;
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
@@ -812,7 +847,9 @@ export function SkimPanel({ access, view, away }: Props) {
   /* The depth and the card reflow the list without changing the current row.
      `away` is there because a band that stepped aside is `display: none`: a
      step made from the prose's door measures nothing, so the list is measured
-     again when the band comes back (GPT Sol, plan review F1). */
+     again when the band comes back (GPT Sol, plan review F1). `wholeWords`
+     because a rotation across `covers` draws every other row whole or cut
+     again (spya-r246pf). */
   /* Only a snippet on the current stop counts as open — see `OpenSnippet`. */
   const snippet = snippetOpen !== null && snippetOpen.stop === currentId ? snippetOpen : null;
   const toggle = (kind: OpenSnippet["kind"], id: string) =>
@@ -842,15 +879,15 @@ export function SkimPanel({ access, view, away }: Props) {
       ?.querySelector<HTMLButtonElement>('.skim-go[aria-current="step"]')
       ?.focus({ preventScroll: true });
   };
-  useFollow(scroller, currentId, [view.depth, view.card, away, snippet?.kind, snippet?.id]);
+  useFollow(scroller, currentId, [view.depth, view.card, away, view.wholeWords, snippet?.kind, snippet?.id]);
   /* A depth or route refresh can remove an open row, so its Tooltip unmounts
      before it can report that it closed. Do not let that stale id reopen if
      the row later returns. The enabled check also covers words disappearing. */
   useEffect(() => {
     if (tipFor === null) return;
     const row = ready ? view.rows.find((candidate) => candidate.key === tipFor) : undefined;
-    if (row === undefined || !(row.missing || rowWords(row)?.whole)) setTipFor(null);
-  }, [ready, tipFor, view.rows]);
+    if (row === undefined || !(row.missing || rowWords(row, view.wholeWords)?.whole)) setTipFor(null);
+  }, [ready, tipFor, view.rows, view.wholeWords]);
   /* A controlled tooltip can unmount before reporting that it closed. Do not
      let its stale id reopen if a shallower pass removes the row and a later
      pass brings it back. This is the where-card equivalent of `tipFor` above. */
@@ -972,7 +1009,11 @@ export function SkimPanel({ access, view, away }: Props) {
            (plan 261009i) or stale (plan 261010a), has no button left, so a job
            from Metadata shows here. */
         reason === null &&
-        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
+        /* An added brief has no Metadata row (Sol F5 on plan 261027d), so its
+           *Plan it again* stands here, idle or not: its *Edit* re-plans only
+           a changed sentence, and this is the re-plan of the same one
+           (stage 4 kept it). */
+        (added || owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
           </div>
@@ -983,13 +1024,25 @@ export function SkimPanel({ access, view, away }: Props) {
 
       {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the route…</BandWaiting>}
 
-      {owner?.status === "none" && (
-        <div className="gloss-empty">
-          <p>Nobody has planned a route through this one yet.</p>
-          <p className="gloss-hint">{emptyHint(owner)}</p>
-          {run("Plan the route")}
-        </div>
-      )}
+      {owner?.status === "none" &&
+        (added ? (
+          /* **Never planned by itself**: the band's automatic run is the
+             default's (useSkim.ts), so an added brief waits for this press.
+             Its sentence is shown here too, since it is the only thing that
+             says which route this is. */
+          <div className="gloss-empty">
+            {briefLine}
+            <p>No route has been planned for this brief yet.</p>
+            <p className="gloss-hint">{emptyHint(owner)}</p>
+            {run("Plan this route")}
+          </div>
+        ) : (
+          <div className="gloss-empty">
+            <p>Nobody has planned a route through this one yet.</p>
+            <p className="gloss-hint">{emptyHint(owner)}</p>
+            {run("Plan the route")}
+          </div>
+        ))}
 
       {ready && (
         <>
@@ -997,12 +1050,15 @@ export function SkimPanel({ access, view, away }: Props) {
 
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
-              run would race a press). SkimPurpose.tsx. */}
-          {owner && (
+              run would race a press). SkimPurpose.tsx. An added brief's
+              line is its own sentence and *Edit*, and *New brief…* puts its
+              box here; both carry the ▾ between briefs (plan 261027d). */}
+          {added || newBrief ? briefLine : owner && (
             <PurposeLine
               key={owner.slug}
               owner={owner}
               bannerUp={reason !== null}
+              picking={picking}
             />
           )}
 
@@ -1020,7 +1076,7 @@ export function SkimPanel({ access, view, away }: Props) {
                     const place = row.place === null ? null : placeText(row.place);
                     const above = view.rows[index - 1]?.place;
                     const repeatedPlace = place !== null && above != null && place === placeText(above);
-                    const words = rowWords(row);
+                    const words = rowWords(row, view.wholeWords);
                     const go = (
                       <button
                         type="button"

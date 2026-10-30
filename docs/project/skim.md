@@ -156,8 +156,9 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 
 - **A flash on every arrival** — ‹ ›, ← →, the door, and a depth change that
   moves you all go through one helper that scrolls to the stop and flashes it with
-  [`flashBlock`](../../src/web/flash.ts) once the scroll settles, and on a narrow window steps the
-  band aside. A row press is a jump and flashes through `beginJump`, once. A `?stop=` link scrolls
+  [`flashBlock`](../../src/web/flash.ts) once the scroll settles. On a narrow window it stepped the
+  band aside until 2026-10-03; now only a row press does, and the rest keep Skim up (§ On a phone,
+  the head's controls stay in Skim, below). A row press is a jump and flashes through `beginJump`, once. A `?stop=` link scrolls
   to its stop and flashes it once when the band opens, leaving the band open. A depth change that
   keeps your stop does nothing. This is the named exception to flash.ts's "stepping does not
   flash": the route is out of paper order, so each step is a jump across the article.
@@ -165,8 +166,8 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   the dots zig-zag down the list as the route jumps about. The dot is at the stop's position in
   words (`positionOf` in [`skim-route.ts`](../../src/web/skim-route.ts)); the current
   row's dot is in the accent. A screen reader hears "about 70% of the way through".
-- **Further left in the bar**: Quotes, then Skim, straight after Summary (`MODES_UI` in
-  [`Dock.tsx`](../../src/web/Dock.tsx)).
+- **In the shape run**: Skim stands straight after Summary and before More; Diagram follows More
+  when offered (`MODES_UI` and `MORE_AFTER` in [`Dock.tsx`](../../src/web/Dock.tsx)).
 - **Plan it again** rebuilds the route only (`skim` is forced by name). **Since 2026-09-29 it
   is offered only in the stale and profile-changed banners**; the standing button in the foot went,
   and a current route is re-planned from Metadata's *AI processing*, which has a Skim
@@ -241,8 +242,14 @@ written under `trajectory/7` and unchanged in `skim/8` (whose request adds a str
   as data. Which Ideas each quote *carries* (same block) or sits *beside* (the nearest body
   paragraph either side, same top-level section) is worked out in code, never by the model. It is
   asked to cover as many Ideas as the quotes allow at each pass. Stops are still quotes only.
-- **It waits for the Ideas.** The automatic run and *Plan it again* find the Ideas first, in the
-  same job, when they are missing or stale; the empty state says so before the press, and that
+- **It waits for the Ideas, except on import.** Since 2026-10-29 an import no longer makes the
+  Ideas (Greg, `spya-shwpw5`; plan
+  [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md)), and its Skim job is
+  `["quotes", "skim"]`, so a new article's route is planned without them: the stop cards have no
+  *Ideas it bears on*, and the Gist covered about two fewer of 21 key ideas when last measured
+  (§ Stage 6 of plan 260928a). Ideas made later mark the route stale, which offers *Plan it again*
+  rather than re-planning by itself. The band's automatic run and *Plan it again* find the Ideas
+  first, in the same job, when they are missing or stale; the empty state says so before the press, and that
   finding them is the long part. The job's end refreshes the stop card's Ideas.
 - **One input hash** (`skimInputHash`) over exactly what the prompt renders is both the stamp
   and the read's freshness check, so regenerated Ideas, or Ideas arriving after a route planned
@@ -262,7 +269,11 @@ written under `trajectory/7` and unchanged in `skim/8` (whose request adds a str
 on 2026-09-28: *"include summarised and/or truncated version (with tooltip for full version) of the
 quote itself in the left-hand column, not just the double-quotes symbol"*. The words are the Quote's
 own, cut at about 100 characters with the whole of them in a tooltip; the current row shows them
-whole, which is also what a tap reaches on touch. The `〃` that stood for a repeated section path is
+whole. **Where the band covers the prose, every row is whole and none has a tooltip** (Greg, an
+iPhone, 2026-10-28, spya-r246pf, plan
+[261028a](../plans/261028a-skim-on-a-phone-shows-whole-quotes-and-a-tapped-term-card-stays-open.md)):
+there a tap on a row goes to the article, so a cut quote's rest could not be read from Skim at
+all. `SkimView.wholeWords`, set from `covers`. The `〃` that stood for a repeated section path is
 gone — beside a quotation it read as another quotation mark — and a repeated path is now said to a
 screen reader only. A model-written summary per stop is deferred, with the reason, in the plan.
 
@@ -402,13 +413,14 @@ lost is checked against what is stored before the box says whether it was saved
 ([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
 [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
-**Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
-SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are now
-drawn in the prose in every mode ([quiz.md § In the prose](quiz.md)), after their passage, so at a
-stop with one it sits between the passage and **Next stop ›** — the cue asks what to look for before
-you read, the question what you took after. Nothing was added to the card or the route: on the card
-the question repeated the cue, and a question as its own stop would braid a second ordered path into
-the route. Both, and the pass's questions at the end of a pass, are deferred in
+**Quiz questions at a stop belong beside the article, not to the card** — Greg, 2026-09-30,
+SPIDERYARN-READING2-6V (*"we could reuse that in trajectory mode somehow"*). Quiz questions are
+drawn after their passage in every mode ([quiz.md § In the prose](quiz.md)): normally in the prose,
+and among the margin's notes instead while that column is on screen. At a stop with one and no
+margin, it sits between the passage and **Next stop ›** — the cue asks what to look for before you
+read, the question what you took after. Nothing was added to the card or the route: on the card the
+question repeated the cue, and a question as its own stop would braid a second ordered path into the
+route. Both, and the pass's questions at the end of a pass, are deferred in
 [260930i](../plans/260930i-quiz-questions-in-the-prose-and-in-trajectory-stops.md).
 
 **The FAQ question at a stop is gone** — Greg, 2026-10-01, SPIDERYARN-READING2-8Z (report
@@ -735,7 +747,8 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   Skim-only focus**, separate from the purpose and closer to a search query, was weighed and not
   built: its own column, its own stamp field, and either several routes per article or a rule for
   which one wins — the "a lot of complexity" Greg said to push back on. Queued, for if the shared
-  purpose feels wrong in use.
+  purpose feels wrong in use; built on 2026-10-27 as added briefs beside the purpose (§ Several
+  briefs per article, below).
 - What Greg wondered might already exist did: the route is planned for the reading goals (§ The
   route says what it was planned for), and a changed goal brings up the profile-changed banner, with
   *Plan it again* and an ×.
@@ -794,6 +807,30 @@ measured in [261011b](../investigations/261011b-skim-more-beats-gist-intros-and-
   ([261018m](../plans/261018m-skim-figure-stops-cross-to-visitors.md)).
 - The input hash covers the figures, so a `skim/14` route is stale when they change; older routes
   have no figures until planned again, and are only outdated, which is not announced.
+
+**Several briefs per article, and a ▾ between them** — 2026-10-27
+([plan 261027d](../plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md),
+which holds the design, the passed-over options and each stage's decisions in its Log):
+
+> Could we allow for multiple Skim briefs, i.e. a default one (perhaps based on user profile + why
+> you're reading), with the option to add one or more new briefs, and then select between them
+> (kinda like how you can choose between Chat threads).
+>
+> — Greg, 2026-10-27 (`spya-xyje0z`)
+
+- **The default is the route above**, unchanged. An **added brief** is one sentence the owner types,
+  planned for the profile with that sentence in the purpose's place, stored in `skim_briefs` (at most
+  12 per article) and planned by the same `skim` job named for it (`Job.skimBrief`).
+- **The ▾ on *Reading for: …* is the switcher** (option A in the plan, Greg's choice): the default,
+  each brief with *Edit* and Chat's two-press bin, and *New brief…*, which opens the same *What are
+  you skimming for?* box with *Plan a route for this*.
+  [`SkimBriefPicker.tsx`](../../src/web/SkimBriefPicker.tsx); the boxes are in
+  [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
+- **`?brief=` says which route is drawn**, and a switch writes it with `stop` and `depth` in one
+  update ([url-state.md](url-state.md)). The list is read only once the ▾ has been opened, or when
+  `?brief=` names one, so Skim on the default costs no extra request.
+- **Owner only.** A visitor sees the default's route and no ▾. Metadata's Skim row re-plans only the
+  default, so an added brief keeps *Plan it again* in its foot.
 
 ### What we tried for v2
 

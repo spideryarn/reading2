@@ -59,6 +59,7 @@ import type { HTMLAttributes, ReactNode, Ref } from "react";
 import type { Mode } from "../modes.js";
 import { AboutMode, BandAbout } from "./BandAbout.js";
 import { helpHref, modeAnchor } from "./help/help-anchors.js";
+import { useBandRootFlags } from "./band-root-flags.js";
 
 /**
  * Everything an `<aside>` takes that this component does not name itself.
@@ -243,6 +244,10 @@ export function ModeSurface({
 } & Corner & PassThrough) {
   const extra = typeof about !== "boolean" && about != null;
   const hasAbout = mode !== undefined || extra;
+  /* `band-covers` and `band-fitted` on `<html>`, for shell.css's and
+     narrow-window.css's guards — said here because this is where the band is
+     drawn (band-root-flags.ts). */
+  useBandRootFlags(feature);
   const className = [feature ? `mode-band ${feature}` : "mode-band", hasAbout ? "has-about" : ""]
     .filter(Boolean)
     .join(" ");

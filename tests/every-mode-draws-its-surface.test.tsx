@@ -23,7 +23,7 @@
  *    a mode with its artefact already there spends nothing, correctly;
  *  - but a controller with a missing artefact draws its *empty* or *running*
  *    state, not its populated body. Any `says` asserted from there would be
- *    matching chrome, and deleting the real Ideas, Quotes, Timeline or Debate
+ *    matching chrome, and deleting the real Ideas, Quotes, Timeline or Reception
  *    renderer would leave the sweep green.
  *
  * So: one `<App/>`/`NuqsAdapter`/`StrictMode` harness — the one
@@ -93,6 +93,7 @@ import type {
   ChatThread,
   Bibliography,
   Reception,
+  Explanations,
   Faq,
   SourcesClaimList,
   ReceptionCounts,
@@ -276,7 +277,7 @@ const IDEA_NAME = "Instruments outrun explanation";
 const QUOTE_LINE = "before anybody could say what it would measure";
 const TIMELINE_LABEL = "The Vienna calibration";
 const RECEPTION_APPLIES = "A replication in Leiden reached the opposite reading.";
-/* The page title a Debate row leads with since 260929h — the applies paragraph
+/* The page title a Reception row leads with since 260929h — the applies paragraph
    above now sits closed behind the row's `more`, so it is not what a reader sees. */
 const RECEPTION_TITLE = "The Leiden replication";
 /* A work's title, which is what a row leads with — drawn from the artefact,
@@ -288,6 +289,8 @@ const RELATED_TITLE = "Instruments Before Theories";
    valid `?sources=investigate` that drew Reception (or nothing of Investigate's) is red
    (GPT Sol's F7 on plan 261020n). */
 const INVESTIGATE_SUGGESTED = "How has this piece been received, and by whom?";
+/* Where it sits' literature-search button, written out for the same reason (plan 261025h). */
+const SITUATE_RUN = "Search the literature";
 const RELATED_WORK = {
   kind: "found",
   works: [{ openalexId: "W1234567", title: RELATED_TITLE, authors: ["Ada Lovelace"], authorCount: 1, year: 2019 }],
@@ -301,6 +304,9 @@ const RELATED_WORK = {
 /* A question — the row's own content, not the (i) card's promise, which is a
    constant a panel with no rows would still be free to draw. */
 const FAQ_QUESTION = "Why trust a rig nobody could yet explain?";
+/* An explanation's own words — the row's content, not the (i) card's promise
+   or the labels, which are constants. */
+const EXPLANATION_TEXT = "The rig was trusted before anyone could say why it worked.";
 /* The current stop's role — drawn on the current row only, so a panel that
    drew the stepper and no rows would not satisfy it. */
 const SKIM_ROLE = "Where the chapter turns";
@@ -491,6 +497,27 @@ const FAQ: Faq = {
     overCap: 0,
     malformed: 0,
   },
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+};
+
+const EXPLANATIONS: Explanations = {
+  version: "test",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  profileHash: null,
+  explanations: [
+    {
+      id: "expl-1",
+      blockId: "spya-bbbbbb" as BlockId,
+      quote: "The instrument was built",
+      text: EXPLANATION_TEXT,
+      sure: false,
+      outside: false,
+    },
+  ],
+  dropped: { malformed: 0, unknownIds: 0, unquoted: 0, tooLong: 0, ambiguous: 0, badText: 0, repeated: 0, overCap: 0 },
   generatedAt: "2026-09-01T09:00:00.000Z",
   elapsedMs: 1,
 };
@@ -802,10 +829,15 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   quotes: true,
   timeline: true,
   reception: true,
-  /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
+  /* Claims's Claims list — armed one level down, by a press that lands on Claims. */
   "sources-claims": true,
+  /* Where it sits: the works cited and the search of the literature, behind one press (plan 261026g). */
+  "sources-where": true,
+  /* The press that turns the margin on: the same search, from the margin (plan 261029h). */
+  "margin-literature": true,
   bibliography: true,
   faq: true,
+  explanations: true,
   relations: true,
   skim: true,
   sketch: true,
@@ -844,6 +876,8 @@ function artefact(url: string): Response | null {
     return has ? json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false }) : GONE();
   /* Sources' Not cited: the stored search, or none. Its GET never searches. */
   if (url.startsWith("/api/related-work/")) return json(has ? RELATED_WORK : { kind: "not-searched" });
+  /* Nobody has searched the literature: the none-yet answer (Where it sits, plan 261025h). */
+  if (url.startsWith("/api/situate/")) return json(null);
   /* Sources' Claims: the reader's checks (none), and the list. Before
      2026-10-09 nothing here opened Claims, so neither was served. */
   if (url.startsWith("/api/sources-claims/") && url.endsWith("/checks")) return json({ checks: [] });
@@ -851,6 +885,10 @@ function artefact(url: string): Response | null {
     return has ? json({ claimList: CLAIM_LIST, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
+  if (url.startsWith("/api/explanations/"))
+    return has
+      ? json({ explanations: stamped(EXPLANATIONS), stale: false, outdated: false, profileChanged: false })
+      : GONE();
   /* Marginalia's relation words. */
   if (url.startsWith("/api/relations/"))
     return has
@@ -1204,6 +1242,13 @@ interface Press {
   /** The `steps` of the one `POST /api/jobs` the press must make, or `[]`. */
   steps: readonly string[];
   /**
+   * **Any other job the page posts as it settles**, each one's `steps`. One
+   * row has these: Marginalia, whose press buys the literature search and whose
+   * column, once shown, asks for its relation words on arrival (plan 261029h).
+   * Compared with `steps` as one list, in no particular order.
+   */
+  also?: readonly (readonly string[])[];
+  /**
    * **Every paid request the press makes directly**, as `METHOD /path` —
    * everything the job queue is not, minus `FREE_MUTATIONS`. `[]` for a press
    * that buys nothing outside the queue, which is most of them.
@@ -1229,7 +1274,7 @@ type AtLeastOne<T> = readonly [T, ...T[]];
  */
 type Spend =
   /** One press, one job. The steps it must ask the queue for. */
-  | { kind: "posts"; steps: AtLeastOne<string> }
+  | { kind: "posts"; steps: AtLeastOne<string>; also?: readonly (readonly string[])[] }
   /**
    * The press arms something, but *which* thing depends on what the address bar
    * says — so the row lists the presses, one per picture, and every one of them
@@ -1263,11 +1308,14 @@ const SPENDS: Record<Mode, Spend> = {
     ],
   },
   /* The tree's questions, the arc and other modes' lists are read, never
-     generated: a press that started the Ideas job here would be the bug. Its
-     own relation words are the one thing it asks for, when the column is
-     shown — which a press does, so the post is seen here; the press itself
-     arms nothing (tests/marginalia-relations-on-open.test.tsx). */
-  marginalia: { kind: "posts", steps: ["relations"] },
+     generated: a press that started the Ideas job here would be the bug. **The
+     press buys the literature search** where none is stored, with the works
+     cited first when they are missing too (Greg's answer to q-sxfwqq, plan
+     261029h; tests/margin-press-starts-the-search.test.tsx). Its own relation
+     words are asked for when the column is shown, which the press does, so
+     that post is seen here too; the press does not arm them
+     (tests/marginalia-relations-on-open.test.tsx). */
+  marginalia: { kind: "posts", steps: ["bibliography", "situate"], also: [["relations"]] },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
   ideas: { kind: "posts", steps: ["ideas"] },
@@ -1284,20 +1332,31 @@ const SPENDS: Record<Mode, Spend> = {
      /api/related-work` here is red. Investigate (plan 261020n) arms nothing and
      sends nothing on arrival: each of its rows is one chat question on its
      own press, so a `POST /api/chat/…` here is red. Each press buys only its
-     own sub-mode's work. */
+     own sub-mode's work.
+
+     **Since plan 261025h only the citations are ever bought by a press**:
+     Where it sits, the bare address and the owner's default, arms them for its
+     *What it builds on* (decision 8), as Bibliography does, and Reception's search and
+     Claims' list are each their panel's own button (decision 6, GPT Sol's F5),
+     so a `reception` or `sources-claims` POST here is red. */
   sources: {
     kind: "delegated",
     presses: [
-      { search: "", steps: ["bibliography"], spends: [] },
+      /* Since plan 261026g (spya-mfuz6g) the press on Where it sits is also
+         the request for the search of the literature, after the citations. */
+      { search: "", steps: ["bibliography", "situate"], spends: [] },
+      { search: "?sources=bibliography", steps: ["bibliography"], spends: [] },
       { search: "?sources=not-cited", steps: [], spends: [] },
       { search: "?sources=links", steps: [], spends: [] },
-      { search: "?sources=reception", steps: ["reception"], spends: [] },
-      { search: "?sources=claims", steps: ["sources-claims"], spends: [] },
+      { search: "?sources=reception", steps: [], spends: [] },
+      { search: "?sources=claims", steps: [], spends: [] },
       { search: "?sources=investigate", steps: [], spends: [] },
     ],
   },
   /* One model call over the article, like Ideas. */
   faq: { kind: "posts", steps: ["faq"] },
+  /* One model call over the article, like FAQ (plan 261028c). */
+  explanations: { kind: "posts", steps: ["explanations"] },
   /* **Three steps, and the first two are the point**: with no Quotes the
      route has nothing to order, and since stage 6 of plan 260928a it plans
      around the Ideas, so the one press asks for both first in the same job
@@ -1352,7 +1411,8 @@ const SPENDS: Record<Mode, Spend> = {
  */
 function pressesFor(spend: Spend): Press[] {
   if (spend.kind === "delegated") return [...spend.presses];
-  return [{ search: "", steps: spend.kind === "posts" ? spend.steps : [], spends: [] }];
+  if (spend.kind === "posts") return [{ search: "", steps: spend.steps, ...(spend.also ? { also: spend.also } : {}), spends: [] }];
+  return [{ search: "", steps: [], spends: [] }];
 }
 
 const PHASE_MS = 30_000;
@@ -1394,10 +1454,13 @@ for (const trigger of TRIGGERS) {
             await settle();
 
             expect(modeInUrl(), `${mode}: the ${trigger.name} did not change mode`).toBe(mode);
+            const byJson = (a: readonly string[], b: readonly string[]) =>
+              JSON.stringify(a).localeCompare(JSON.stringify(b));
+            const wanted = [...(want.steps.length === 0 ? [] : [want.steps]), ...(want.also ?? [])];
             expect(
-              posts.map((p) => p.steps),
+              posts.map((p) => p.steps).sort(byJson),
               `${mode}${want.search}: what the ${trigger.name} asked the queue for`,
-            ).toEqual(want.steps.length === 0 ? [] : [[...want.steps]]);
+            ).toEqual(wanted.map((j) => [...j]).sort(byJson));
             /* The other half of the money, and the half nothing watched until
                2026-09-06: a paid request the press made for itself. */
             expect(
@@ -1576,6 +1639,7 @@ const DRAWS: Record<Mode, Draws> = {
      view only (GPT Sol's F4 on plan 261009l). */
   sources: { kind: "band", where: ".mode-band.sources", says: CITATION_TITLE, about: "corner" },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION, about: "corner" },
+  explanations: { kind: "band", where: ".mode-band.expl", says: EXPLANATION_TEXT, about: "corner" },
   skim: { kind: "band", where: ".mode-band.skim", says: SKIM_ROLE, about: "corner" },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
@@ -1599,15 +1663,17 @@ const DRAWS: Record<Mode, Draws> = {
 };
 
 /**
- * **Sources' six sub-modes**, each drawn by its real controller — `DRAWS`
- * asks of the default view only, Bibliography, so Not cited, Links, Reception,
- * Claims and Investigate get rows here too (GPT Sol's F4 on plan 261009l; Investigate's is F7
- * on plan 261020n, and names Investigate's own class and content). One band in every view,
+ * **Sources' seven sub-modes**, each drawn by its real controller — `DRAWS`
+ * asks of the default view only, Where it sits since plan 261025h, so
+ * Bibliography, Not cited, Links, Reception, Claims and Investigate get rows
+ * here too (GPT Sol's F4 on plan 261009l; Investigate's is F7 on plan 261020n,
+ * and names Investigate's own class and content). One band in every view,
  * with one (i), the panel's: the chip row is that band's header, never a
- * surface of its own.
+ * surface of its own. The owner's chips are three (plan 261025h, decision 7).
  */
 const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
-  { search: "?mode=sources", where: ".mode-band.sources.bibliography", says: CITATION_TITLE },
+  { search: "?mode=sources", where: ".mode-band.sources.where", says: SITUATE_RUN },
+  { search: "?mode=sources&sources=bibliography", where: ".mode-band.sources.bibliography", says: CITATION_TITLE },
   { search: "?mode=sources&sources=not-cited", where: ".mode-band.sources.not-cited", says: RELATED_TITLE },
   { search: "?mode=sources&sources=links", where: ".mode-band.sources.links", says: LINK_PHRASE },
   { search: "?mode=sources&sources=reception", where: ".mode-band.sources.rcp", says: RECEPTION_TITLE },
@@ -1615,7 +1681,7 @@ const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string
   { search: "?mode=sources&sources=investigate", where: ".mode-band.sources.investigate:not(.rcp)", says: INVESTIGATE_SUGGESTED },
 ];
 
-describe("phase B — Sources' six sub-modes", () => {
+describe("phase B — Sources' seven sub-modes", () => {
   for (const view of SOURCES_VIEWS_DRAW) {
     it(
       `${view.search}: one band, its own body, the chip row as its head and one (i)`,
@@ -1629,12 +1695,9 @@ describe("phase B — Sources' six sub-modes", () => {
         expect((band as Element).querySelectorAll(":scope > .band-about")).toHaveLength(1);
         const chips = (band as Element).querySelectorAll(":scope > .band-head .rcp-views [role='radio']");
         expect([...chips].map((c) => c.textContent?.replace(/\d+$/, ""))).toEqual([
+          "Where it sits",
           "Bibliography",
-          "Not cited",
           "Links",
-          "Reception",
-          "Claims",
-          "Investigate",
         ]);
       },
       PHASE_MS,
@@ -1773,7 +1836,7 @@ describe("phase B — Summary's Thread view", () => {
    whose artefact can be written for the reader's profile and that show it in
    the band. Sketch is the named exception — its badge is in its picture's own
    toolbar, plan 261002e § Deferred. */
-const PROFILED = ["summary", "glossary", "ideas", "quotes"] as const satisfies readonly Mode[];
+const PROFILED = ["summary", "glossary", "ideas", "quotes", "explanations"] as const satisfies readonly Mode[];
 
 /** Each profiled band: a mode's, by its `DRAWS` row — and Summary's thread, which has no row. */
 const PROFILED_BANDS: readonly { name: string; search: string; where: string; says: string }[] = [

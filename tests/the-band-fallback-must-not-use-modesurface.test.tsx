@@ -67,6 +67,7 @@ vi.mock("../src/web/ModeSurface.js", () => ({
 const { FeatureBoundary } = await import("../src/web/FeatureBoundary.js");
 const { AppBoundary } = await import("../src/web/AppBoundary.js");
 const { ModeSurface } = await import("../src/web/ModeSurface.js");
+const { BandCoversContext } = await import("../src/web/band-root-flags.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -173,5 +174,33 @@ describe("when ModeSurface itself throws, the feature fallback still stands", ()
        band at all is a fallback that did not go through it. */
     const fallback = host.querySelector('aside[aria-label="Ideas is not working"]');
     expect(fallback?.getAttribute("class"), "the fallback's own bare band").toBe("mode-band");
+  });
+});
+
+describe("the fallback is a band, so it says so on <html>", () => {
+  /* `data-band-covers` (src/web/band-root-flags.ts, plan 261029k): the narrow
+     window's guards and the hidden masthead read it, and they asked for any
+     `.mode-band` in a covering reader — the fallback's included. */
+  it("holds band-covers in a covering reader, and lets it go on unmount", async () => {
+    await act(async () => {
+      root.render(
+        createElement(
+          BandCoversContext.Provider,
+          { value: true },
+          createElement(FeatureBoundary, {
+            name: "Ideas",
+            slug: "a-piece",
+            target: null,
+            resetKey: "ideas",
+            onPlain: () => {},
+            children: createElement(BandedPanel),
+          }),
+        ),
+      );
+    });
+    expect(host.querySelector('aside[aria-label="Ideas is not working"]')).not.toBeNull();
+    expect(document.documentElement.hasAttribute("data-band-covers")).toBe(true);
+    await act(async () => root.render(null));
+    expect(document.documentElement.hasAttribute("data-band-covers")).toBe(false);
   });
 });

@@ -78,7 +78,7 @@ export function ContactPage() {
       floor
       className="tw:mx-auto tw:flex tw:max-w-2xl tw:flex-col tw:px-6 tw:font-sans"
     >
-      <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+      <h1 className="tw:m-0 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground">
         Contact
       </h1>
 

@@ -82,6 +82,9 @@ export const RESET_ROLE = {
      DEFAULT_INGEST_STEPS, a whole column: the modes' shape, though it is not a
      mode of its own. */
   relations: "extra",
+  /* Made by the owner's press into the mode, off DEFAULT_INGEST_STEPS, a
+     whole column: the modes' shape. Plan 261028c. */
+  explanations: "extra",
   sketch: "extra",
   illustrated: "extra",
   reception: "extra",

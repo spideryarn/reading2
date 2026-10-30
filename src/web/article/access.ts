@@ -13,7 +13,9 @@
  */
 
 import { useEffect, useState } from "react";
-import type { Article, Comment, Crossref, UnreadPaper } from "../../types.js";
+import type { Article, Comment, Crossref, SavedPlace, UnreadPaper } from "../../types.js";
+import { isSpideryarnId } from "../../ids.js";
+import { settleSavedPlace } from "../last-view.js";
 import { sanitizeArticle } from "../sanitize.js";
 import { withChildLists } from "../tree.js";
 import type { SavedSearch } from "../useSearch.js";
@@ -276,8 +278,12 @@ export function useArticleAccess(
     let live = true;
     setAnswer(null);
     void resolveAccess(slug, readerId, load, shareKey)
-      .then(({ access, withImages }) => {
+      .then(({ access, withImages, readingPlace }) => {
         if (!live) return;
+        /* **Before the answer is drawn**, so a paragraph from another device is
+           on the address when the reading view first reads it (last-view.ts §
+           The server's place). Every answer settles, not only an owner's. */
+        settleSavedPlace(slug, readerId, readingPlace);
         setAnswer({ slug, readerId, shareKey, access });
         /* **The second draw**, and the same `live` guard for the same reason:
            this one lands a second or so after the first, which is comfortably
@@ -292,11 +298,11 @@ export function useArticleAccess(
           (drawn) => live && drawn && setAnswer({ slug, readerId, shareKey, access: drawn }),
         );
       })
-      .catch(
-        (e: Error) =>
-          live &&
-          setAnswer({ slug, readerId, shareKey, access: { kind: "error", message: e.message } }),
-      );
+      .catch((e: Error) => {
+        if (!live) return;
+        settleSavedPlace(slug, readerId, null);
+        setAnswer({ slug, readerId, shareKey, access: { kind: "error", message: e.message } });
+      });
     return () => {
       live = false;
       /* **And the resources, which `live` does not touch.** Leaving the reader
@@ -359,6 +365,8 @@ interface ResolvedAccess {
   access: ArticleAccess;
   /** `null` when there was never a second draw coming, which is most articles. */
   withImages: Promise<ArticleAccess | null>;
+  /** The owner's place on any device (src/types.ts § `SavedPlace`); `null` for every answer but an owned article. */
+  readingPlace: SavedPlace;
 }
 
 /** Nothing of ours to draw on this one, so there is no second draw. */
@@ -381,7 +389,7 @@ export async function resolveAccess(
     found.kind === "reauth-required" ||
     found.kind === "unread"
   ) {
-    return { access: found, withImages: NO_SECOND_ANSWER };
+    return { access: found, withImages: NO_SECOND_ANSWER, readingPlace: null };
   }
   /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
      of why it is here at all.** `stripOwnApiUrls` (src/sanitize-policy.ts)
@@ -506,7 +514,15 @@ export async function resolveAccess(
           sessionUnconfirmed: found.sessionUnconfirmed,
         };
 
+  /* **A paragraph the article no longer draws is the top**: identities outlive
+     re-extraction, so the server can name a block today's body lacks, and
+     `?at=` could not arrive there (GPT Sol's build review, F5). */
+  const place = found.kind === "owned" ? found.readingPlace : null;
+  const readingPlace: SavedPlace =
+    place?.block != null && !found.article.blocks.some((b) => b.id === place.block) ? { block: null } : place;
+
   return {
+    readingPlace,
     access: accessWith(rehosted.article),
     /* **`catch`, and it falls back to `presentable` rather than to `null`.**
        The second draw is decoration on an article the reader already has, so a
@@ -547,7 +563,7 @@ async function findArticle(
   | { kind: "not-shared" }
   | { kind: "still-being-added" }
   | { kind: "reauth-required" }
-  | { kind: "owned"; article: Article }
+  | { kind: "owned"; article: Article; readingPlace: SavedPlace }
   | { kind: "unread"; paper: UnreadPaper }
   | { kind: "public"; article: PublicArticle; sessionUnconfirmed: boolean }
 > {
@@ -579,7 +595,8 @@ async function findArticle(
          the error page with its own sentence, as before. */
       return { kind: "unread", paper: await unreadPaperFrom(res, slug) };
     } else if (res.status !== 404) {
-      return { kind: "owned", article: await readJson<Article>(res) };
+      const body = await readJson<Article & { readingPlace?: unknown }>(res);
+      return { kind: "owned", article: body, readingPlace: savedPlaceFrom(body.readingPlace) };
     }
   }
 
@@ -665,4 +682,17 @@ function isUnreadPaper(value: unknown): value is UnreadPaper {
     (p.titleOverridden === undefined || typeof p.titleOverridden === "boolean") &&
     typeof p.addedAt === "string"
   );
+}
+
+/**
+ * **The owned answer's `readingPlace`, checked** (plan 261029f). Our own
+ * server's field, but a block id becomes an address: anything that is not a
+ * well-formed one is the top. Absent, from a server older than the field, is
+ * "never opened", which is what every browser assumed before it.
+ */
+function savedPlaceFrom(raw: unknown): SavedPlace {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "object") return { block: null };
+  const block = (raw as { block?: unknown }).block;
+  return { block: typeof block === "string" && isSpideryarnId(block) ? block : null };
 }

@@ -1,5 +1,5 @@
 /**
- * **Debate's pure half — the refusals, and the counting.** No network, no model.
+ * **Reception's pure half — the refusals, and the counting.** No network, no model.
  *
  * Everything here is a way this mode would be wrong *quietly*, and the mode is
  * unusually prone to that because of the one fact Stage 0 established:

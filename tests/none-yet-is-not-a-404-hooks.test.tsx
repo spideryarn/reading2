@@ -6,12 +6,12 @@
  *
  * 1. Each sends the opt-in header on its GET.
  * 2. A `200` with a `null` body is the same state a 404 was: Quiz and
- *    Citations offer their button (`status: "none"`), the prose draws no
+ *    Bibliography offer their button (`status: "none"`), the prose draws no
  *    underlines.
  * 3. **A 404 still is**, for the minutes of a deploy when the new client meets
  *    the old server.
  *
- * **And the other seven since** — Simple, Ideas, FAQ, Timeline, Debate,
+ * **And the other seven since** — Simple, Ideas, FAQ, Timeline, Reception,
  * Glossary, Quotes: the same three, and two more that the first three's review
  * found (docs/postmortems/261006k-a-null-sentinel-is-widened-by-a-truthiness-check.md):
  *

@@ -2,7 +2,7 @@
  * **The artefact read and the profile read overlap — and the artefact's error
  * still wins, at the moment it always did.**
  *
- * Four artefact routes answer "here it is, and here is whether you have changed
+ * These artefact routes answer "here it is, and here is whether you have changed
  * since it was written". The second half is `resolveProfile`, two queries of its
  * own, and it used to start only after the artefact read had finished:
  *
@@ -35,7 +35,7 @@
  * 4. **A profile failure gets swallowed** into `profileChanged: false`, which
  *    would be a wrong answer nobody could see.
  *
- * **Every one of these runs against all four routes**, not just the one. Sol's
+ * **Every one of these runs against every route in the table**, not just one. Sol's
  * second finding: a test of the glossary alone would stay green while `tweets`,
  * `summary` or `ideas` went back to awaiting first.
  *
@@ -44,7 +44,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  PROMPT_VERSION as EXPLANATIONS_PROMPT_VERSION,
+  emptyDropped as emptyExplanationsDropped,
+} from "../src/explanations.js";
 import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
+import { CAPABLE_MODEL } from "../src/models.js";
 import { hashProfile, renderProfile } from "../src/profile.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
@@ -68,6 +73,7 @@ const ROUTES = [
   { name: "glossary", url: "/api/glossary/anything", stamp: "glossary" },
   { name: "ideas", url: "/api/ideas/anything", stamp: "ideas" },
   { name: "quotes", url: "/api/quotes/anything", stamp: "quotes" },
+  { name: "explanations", url: "/api/explanations/anything", stamp: "explanations" },
   /* Since 2026-10-02: the quiz records the profile it was written for, so the
      panel can offer to write it again (plan 261002f). */
   { name: "quiz", url: "/api/quiz/anything", stamp: "quiz" },
@@ -106,6 +112,30 @@ const payloadFor = (stamp: string) => ({
     /* `panelRunKind` reads the list's own prompt version since plan 261004f
        (`appendableVersion`), where it used to take `outdated` on trust. */
     ...(stamp === "glossary" ? { version: GLOSSARY_PROMPT_VERSION } : {}),
+    /* Explanations' verdict reads the same real artefact fields its stage does.
+       A bare profile stamp makes `panelRunKind` accidentally look covered while
+       its source/version/model branches never run. */
+    ...(stamp === "explanations"
+      ? {
+          version: EXPLANATIONS_PROMPT_VERSION,
+          generator: CAPABLE_MODEL,
+          slug: "anything",
+          sourceHash: "source",
+          explanations: [
+            {
+              id: "spya-k3m9qt",
+              blockId: "spya-k3m9qt",
+              quote: "The article's words.",
+              text: "The missing background.",
+              sure: true,
+              outside: false,
+            },
+          ],
+          dropped: emptyExplanationsDropped(),
+          generatedAt: "2026-10-29T09:00:00.000Z",
+          elapsedMs: 1,
+        }
+      : {}),
     questions: [{ id: "spya-k3m9qt", question: "Why?", referenceAnswer: "Because.", evidence: [] }],
   },
   stale: false,
@@ -123,6 +153,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
     loadGlossary: "glossary",
     loadIdeas: "ideas",
     loadQuotes: "quotes",
+    loadExplanations: "explanations",
     loadQuiz: "quiz",
   } as const;
   const mocked: Record<string, unknown> = {};
@@ -205,7 +236,7 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     /* The same profile string the artefact was written under, so nothing has
        changed — proving the two halves were joined and not merely started. */
     expect(body.profileChanged).toBe(false);
-    if (name === "glossary") expect(body.panelRun).toBe("append");
+    if (name === "glossary" || name === "explanations") expect(body.panelRun).toBe("append");
     if (name === "quiz") {
       expect((body.quiz as { questions: unknown[] }).questions).toEqual([
         expect.objectContaining({ band: "easy", value: 3, question: "Why?" }),
@@ -304,7 +335,7 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     expect(body.profileChanged).toBe(name === "quotes");
     /* Clearing is not a badge warning, but it is a different run profile:
        the panel must say it rewrites even while profileChanged stays false. */
-    if (name === "glossary") expect(body.panelRun).toBe("rewrite");
+    if (name === "glossary" || name === "explanations") expect(body.panelRun).toBe("rewrite");
   });
 
   it("says the profile changed when the artefact was written for another one", async () => {
@@ -318,7 +349,7 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     const { status, body } = await reply;
     expect(status).toBe(200);
     expect(body.profileChanged).toBe(true);
-    if (name === "glossary") expect(body.panelRun).toBe("rewrite");
+    if (name === "glossary" || name === "explanations") expect(body.panelRun).toBe("rewrite");
   });
 
   it("does not call a legacy artefact with no profile hash changed", async () => {
@@ -333,6 +364,6 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     const { status, body } = await reply;
     expect(status).toBe(200);
     expect(body.profileChanged).toBe(false);
-    if (name === "glossary") expect(body.panelRun).toBe("append");
+    if (name === "glossary" || name === "explanations") expect(body.panelRun).toBe("append");
   });
 });

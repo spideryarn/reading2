@@ -91,6 +91,10 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             ? '{"since":null,"until":null,"label":"all recorded calls","rows":[],"owners":[],"emailsAvailable":true}'
           : url.startsWith("/api/admin/articles")
             ? '{"articles":[],"emailsAvailable":true}'
+          : url.startsWith("/api/admin/mockups/")
+            ? '{"mockup":{"id":"m-k3m9qt","title":"A mockup","made":"2026-10-28","question":null,"report":null,"body":[],"images":[]}}'
+          : url.startsWith("/api/admin/mockups")
+            ? '{"mockups":[]}'
           : "{}";
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
@@ -219,6 +223,14 @@ describe("/admin still refuses exactly as it did", () => {
     await show("/admin/articles");
     expect(heading()).toBe("Spideryarn");
   });
+
+  it("refuses the mockups pages to a reader", async () => {
+    session.user = READER;
+    await show("/admin/mockups");
+    expect(heading()).toBe("Spideryarn");
+    await show("/admin/mockups/m-k3m9qt");
+    expect(heading()).toBe("Spideryarn");
+  });
 });
 
 /**
@@ -243,6 +255,8 @@ describe("the pages that load on demand", () => {
     ["/admin/vouchers", "Gift vouchers"],
     ["/admin/costs", "Costs"],
     ["/admin/articles", "Articles"],
+    ["/admin/mockups", "Mockups"],
+    ["/admin/mockups/m-k3m9qt", "A mockup"],
     ["/design", "Design reference"],
   ];
   for (const [path, name] of variants) {
@@ -267,6 +281,11 @@ describe("the list itself", () => {
     /* Every article, and moving one (plan 261011n). */
     expect(parseRoute("/admin/articles")).toEqual({ kind: "admin", page: "articles" });
     expect(adminOnly(parseRoute("/admin/articles"))).toBe(true);
+    /* Mockups for Greg's decisions (plan 261028b, Stage 3). */
+    expect(parseRoute("/admin/mockups")).toEqual({ kind: "admin", page: "mockups" });
+    expect(adminOnly(parseRoute("/admin/mockups"))).toBe(true);
+    expect(parseRoute("/admin/mockups/m-k3m9qt")).toEqual({ kind: "admin", page: "mockup", id: "m-k3m9qt" });
+    expect(adminOnly(parseRoute("/admin/mockups/m-k3m9qt"))).toBe(true);
     expect(adminOnly(parseRoute("/design"))).toBe(true);
     for (const open of ["/", "/profile", "/privacy", "/pricing", "/features", "/contact", "/help", "/asdf"]) {
       expect(adminOnly(parseRoute(open)), open).toBe(false);

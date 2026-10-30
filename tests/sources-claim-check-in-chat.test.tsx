@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 /**
- * **Checking a claim from Debate starts a chat that remembers the claim, and
+ * **Checking a claim from Claims starts a chat that remembers the claim, and
  * the claim shows the way back to it — with no reload.**
  * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
  * (D2, D3, D4, D6) and the plan review's F1.
  *
  * The whole app (`App` under `StrictMode`, the real nuqs adapter), because the
- * claim crosses five components on the way out (the claim's heading, Debate's
+ * claim crosses five components on the way out (the claim's heading, Claims's
  * band, `Reader`, the conversation band, the draft store) and comes back by a
  * different route (the thread summaries `Reader` holds, which Chat's band
  * never told about anything). A test of any one of them passes over the seam
@@ -23,12 +23,12 @@
  * 1. the press lands in Chat, in a **fresh** conversation, and **sends the
  *    fenced claim and its question once**, leaving Chat's box empty;
  * 2. that one request carries **exactly** that claim's origin;
- * 3. Back returns to Debate, and the claim now has its mark and the answer's
+ * 3. Back returns to Claims, and the claim now has its mark and the answer's
  *    opening line, though the page was never reloaded;
- * 4. the mark opens that conversation **beside Debate** (`?thread=`, the mode
+ * 4. the mark opens that conversation **beside Claims** (`?thread=`, the mode
  *    unchanged), in the floating dialog;
  * 5. a follow-up there changes the line on the mark;
- * 6. Chat's list shows the conversation with Debate's icon and the claim;
+ * 6. Chat's list shows the conversation with Claims's icon and the claim;
  * 7. deleting the conversation removes the mark.
  *
  * The server is a small fake that stores what is posted, so the summaries it
@@ -455,7 +455,7 @@ async function typeAndSend(box: HTMLTextAreaElement, text: string): Promise<void
   await settle();
 }
 
-describe("checking a Debate claim in chat", () => {
+describe("checking a Claims claim in chat", () => {
   it("refreshes the claim after an answer that begins and finishes after leaving Chat", async () => {
     who.set(OWNER);
     await open("?mode=sources&sources=claims");
@@ -512,7 +512,7 @@ describe("checking a Debate claim in chat", () => {
     expect(sent.anchor, "not anchored: it is not the block's own chat").toBeUndefined();
     await until(() => (host.textContent ?? "").includes("It did not replicate."), "the answer");
 
-    /* 3. Back to Debate: the mark and its line, with no reload. */
+    /* 3. Back to Claims: the mark and its line, with no reload. */
     await act(async () => history.back());
     await until(() => param("mode") === "sources" && marks().length === 1, "the mark on the claim");
     expect(summaryGets().length, "the summaries were asked for again on leaving Chat").toBeGreaterThan(fetchedAtLoad);
@@ -521,7 +521,7 @@ describe("checking a Debate claim in chat", () => {
     expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("1");
     expect(mark.querySelector(".origin-chat-line")?.textContent).toBe("It did not replicate.");
 
-    /* 4. The mark opens the conversation beside Debate. */
+    /* 4. The mark opens the conversation beside Claims. */
     await act(async () => mark.click());
     await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Debate");
     expect(param("mode"), "still in Sources").toBe("sources");
@@ -557,7 +557,7 @@ describe("checking a Debate claim in chat", () => {
       "Started from a claim in Sources › Claims",
     );
 
-    /* 7. Delete it there, go back to Debate, and the mark has gone. */
+    /* 7. Delete it there, go back to Claims, and the mark has gone. */
     const del = fromClaimCheck[0]?.querySelector<HTMLButtonElement>('button[data-tip="Delete this conversation"]');
     await act(async () => del?.click());
     await settle();

@@ -859,7 +859,9 @@ async function cachedStoreCheck(warnings: string[]): Promise<StoreCheck> {
   const run = async (): Promise<StoreCheck> => {
   let value: StoreCheck;
   try {
-    const articles = await listArticles({ archived: false });
+    /* Availability needs a count, never the configured owner's private
+       reading progress. This public endpoint must not ask that table at all. */
+    const articles = await listArticles({ archived: false, readBands: false });
     value = { name: "postgres", articles: articles.length };
     if (articles.length === 0) {
       mine.push("the shelf is empty — nothing has been imported, or the query found nothing");

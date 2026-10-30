@@ -170,6 +170,53 @@ describe("the experimental-features switch", () => {
     expect(said()).toContain("Loading…");
   });
 
+  it("does not say off before it knows — the box is mixed, not unchecked", async () => {
+    /* **Disabled is not enough.** A disabled, *unchecked* box still answers
+       "not checked" to everything that reads it rather than looks at it: a
+       screen reader, and a browser agent's `isChecked()`. Found while
+       investigating qi-ydgn7smk
+       (docs/postmortems/261030a-a-check-that-found-a-control-by-its-kind-read-a-different-one.md).
+       The bar's switch has drawn this state as a centred knob with no
+       `aria-pressed` since 2026-09-29; the checkbox's equivalent is
+       `indeterminate`, exposed as "mixed". */
+    answer = () => Promise.resolve({ experimentalSince: "2026-08-31T10:00:00.000Z" });
+    paint();
+    expect(box().indeterminate, "a box not yet answered must not read as off").toBe(true);
+    await settle();
+    expect(box().indeterminate).toBe(false);
+    expect(box().checked).toBe(true);
+  });
+
+  it("is mixed, not unchecked, when the load failed and there is nothing to show", async () => {
+    answer = () => Promise.reject(new Error("offline"));
+    paint();
+    await settle();
+    expect(said()).toContain("Couldn't load");
+    expect(box().indeterminate).toBe(true);
+  });
+
+  it("is disabled as well as mixed when a reload fails after a good load", async () => {
+    /* `loaded` stays true when a later read fails, so `!loaded` alone left a
+       mixed box that took a click — and a click on a mixed box writes a value
+       nobody read. GPT Sol, plan review of 261030a. */
+    paint();
+    await settle();
+    answer = () => Promise.reject(new Error("offline"));
+    await act(async () => {
+      snapshot().reload();
+    });
+    await settle();
+    expect(box().indeterminate).toBe(true);
+    expect(box().disabled).toBe(true);
+  });
+
+  it("ties the status line to the box, so a screen reader hears why it is waiting", async () => {
+    paint();
+    const describedBy = box().getAttribute("aria-describedby");
+    expect(describedBy, "the box names its status line").toBeTruthy();
+    expect(document.getElementById(describedBy ?? "")?.textContent).toContain("Loading…");
+  });
+
   it("is off, and says so, for a reader who has never switched it on", async () => {
     paint();
     await settle();

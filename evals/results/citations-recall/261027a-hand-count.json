@@ -1,0 +1,1315 @@
+{
+ "1 prod LeCun (Path Towards AMI)": {
+  "style": "author-year, parenthetical \"(Surname et al., 2020)\" / \"Surname and Surname, 2020\"; reference list NOT in blocks",
+  "distinct_works_cited": 105,
+  "covered": 23,
+  "missed": 82,
+  "recall": 0.219,
+  "capped": false,
+  "rows_total": 23,
+  "rows_not_matching_in_text_cite": 0,
+  "by_third_of_body_covered_over_total": [
+   "4/6",
+   "4/16",
+   "15/83"
+  ],
+  "by_new_works_in_block": {
+   "1-2": "10/31",
+   "3-5": "10/48",
+   "6+": "3/26"
+  },
+  "by_rank_in_block": {
+   "first_work_in_block": "13/37",
+   "later_works_in_block": "10/68"
+  },
+  "missed_list": [
+   {
+    "key": "Levine:2021",
+    "first_block": "spya-g9ssef",
+    "ordinal": 32,
+    "citing_words": "Levine, 2021"
+   },
+   {
+    "key": "Gottlieb:2013",
+    "first_block": "spya-axpgrc",
+    "ordinal": 103,
+    "citing_words": "Gottlieb et al., 2013"
+   },
+   {
+    "key": "Walker:2021",
+    "first_block": "spya-bvhday",
+    "ordinal": 209,
+    "citing_words": "Walker et al., 2021"
+   },
+   {
+    "key": "Jing:2020",
+    "first_block": "spya-bvhday",
+    "ordinal": 209,
+    "citing_words": "Jing et al., 2020"
+   },
+   {
+    "key": "Gregor:2010b",
+    "first_block": "spya-bvhday",
+    "ordinal": 209,
+    "citing_words": "Gregor and LeCun, 2010b"
+   },
+   {
+    "key": "Evtimova:2022",
+    "first_block": "spya-bvhday",
+    "ordinal": 209,
+    "citing_words": "Evtimova and LeCun, 2022"
+   },
+   {
+    "key": "Doi:2007",
+    "first_block": "spya-bvhday",
+    "ordinal": 209,
+    "citing_words": "Doi et al., 2007"
+   },
+   {
+    "key": "Henaff:2019",
+    "first_block": "spya-bvhday",
+    "ordinal": 209,
+    "citing_words": "Henaff et al., 2019"
+   },
+   {
+    "key": "Carion:2020",
+    "first_block": "spya-qzs5cw",
+    "ordinal": 266,
+    "citing_words": "Carion et al., 2020"
+   },
+   {
+    "key": "Battaglia:2016",
+    "first_block": "spya-qzs5cw",
+    "ordinal": 266,
+    "citing_words": "Battaglia et al., 2016"
+   },
+   {
+    "key": "Sobal:2022",
+    "first_block": "spya-gex5jf",
+    "ordinal": 268,
+    "citing_words": "Sobal et al., 2022"
+   },
+   {
+    "key": "Bordes:2015",
+    "first_block": "spya-prfr9u",
+    "ordinal": 274,
+    "citing_words": "Bordes et al., 2015"
+   },
+   {
+    "key": "Sukhbaatar:2015",
+    "first_block": "spya-prfr9u",
+    "ordinal": 274,
+    "citing_words": "Sukhbaatar et al., 2015"
+   },
+   {
+    "key": "Henaff:2017",
+    "first_block": "spya-prfr9u",
+    "ordinal": 274,
+    "citing_words": "Henaff et al., 2017"
+   },
+   {
+    "key": "Morari:1997",
+    "first_block": "spya-gy8f6b",
+    "ordinal": 326,
+    "citing_words": "Morari and Lee, 1997"
+   },
+   {
+    "key": "Richalet:1978",
+    "first_block": "spya-gy8f6b",
+    "ordinal": 326,
+    "citing_words": "Richalet et al., 1978"
+   },
+   {
+    "key": "Jordan:1992",
+    "first_block": "spya-xvww7c",
+    "ordinal": 327,
+    "citing_words": "Jordan and Rumelhart, 1992"
+   },
+   {
+    "key": "Narendra:1990",
+    "first_block": "spya-xvww7c",
+    "ordinal": 327,
+    "citing_words": "Narendra and Parthasarathy, 1990"
+   },
+   {
+    "key": "Miller:1995",
+    "first_block": "spya-xvww7c",
+    "ordinal": 327,
+    "citing_words": "Miller et al., 1995"
+   },
+   {
+    "key": "Bertsekas:2019",
+    "first_block": "spya-k3e6qw",
+    "ordinal": 328,
+    "citing_words": "Bertsekas, 2019"
+   },
+   {
+    "key": "Ha:2018b",
+    "first_block": "spya-ff3vfq",
+    "ordinal": 329,
+    "citing_words": "Ha and Schmidhuber, 2018b"
+   },
+   {
+    "key": "Ha:2018a",
+    "first_block": "spya-ff3vfq",
+    "ordinal": 329,
+    "citing_words": "Ha and Schmidhuber, 2018a"
+   },
+   {
+    "key": "Hafner:2018",
+    "first_block": "spya-ff3vfq",
+    "ordinal": 329,
+    "citing_words": "Hafner et al., 2018"
+   },
+   {
+    "key": "Hafner:2020",
+    "first_block": "spya-ff3vfq",
+    "ordinal": 329,
+    "citing_words": "Hafner et al., 2020"
+   },
+   {
+    "key": "Moerland:2020",
+    "first_block": "spya-ff3vfq",
+    "ordinal": 329,
+    "citing_words": "Moerland et al., 2020"
+   },
+   {
+    "key": "Agrawal:2016",
+    "first_block": "spya-d99f0y",
+    "ordinal": 330,
+    "citing_words": "Agrawal et al., 2016"
+   },
+   {
+    "key": "Finn:2017",
+    "first_block": "spya-d99f0y",
+    "ordinal": 330,
+    "citing_words": "Finn and Levine, 2017"
+   },
+   {
+    "key": "Chua:2018",
+    "first_block": "spya-d99f0y",
+    "ordinal": 330,
+    "citing_words": "Chua et al., 2018"
+   },
+   {
+    "key": "Srinivas:2018",
+    "first_block": "spya-d99f0y",
+    "ordinal": 330,
+    "citing_words": "Srinivas et al., 2018"
+   },
+   {
+    "key": "Yu:2020",
+    "first_block": "spya-d99f0y",
+    "ordinal": 330,
+    "citing_words": "Yu et al., 2020"
+   },
+   {
+    "key": "Yarats:2021",
+    "first_block": "spya-d99f0y",
+    "ordinal": 330,
+    "citing_words": "Yarats et al., 2021"
+   },
+   {
+    "key": "Lerer:2016",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Lerer et al., 2016"
+   },
+   {
+    "key": "Oord:2017",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "van den Oord et al., 2017"
+   },
+   {
+    "key": "Mathieu:2015",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Mathieu et al., 2015"
+   },
+   {
+    "key": "Luc:2020",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Luc et al., 2020"
+   },
+   {
+    "key": "Babaeizadeh:2017",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Babaeizadeh et al., 2017"
+   },
+   {
+    "key": "Denton:2018",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Denton and Fergus, 2018"
+   },
+   {
+    "key": "Mercat:2020",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Mercat et al., 2020"
+   },
+   {
+    "key": "Oh:2015",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Oh et al., 2015"
+   },
+   {
+    "key": "Fragkiadaki:2015",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Fragkiadaki et al., 2015"
+   },
+   {
+    "key": "Finn:2016",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Finn et al., 2016"
+   },
+   {
+    "key": "Nagabandi:2017",
+    "first_block": "spya-jpx05q",
+    "ordinal": 331,
+    "citing_words": "Nagabandi et al., 2017"
+   },
+   {
+    "key": "Henaff:2019o",
+    "first_block": "spya-fapgtp",
+    "ordinal": 332,
+    "citing_words": "Hénaff et al., 2019 (CPC; a different Hénaff from Henaff et al., 2019 above)"
+   },
+   {
+    "key": "Oord:2018",
+    "first_block": "spya-fapgtp",
+    "ordinal": 332,
+    "citing_words": "van den Oord et al., 2018"
+   },
+   {
+    "key": "Luc:2017",
+    "first_block": "spya-dw8kj9",
+    "ordinal": 333,
+    "citing_words": "Luc et al., 2017"
+   },
+   {
+    "key": "Luc:2018",
+    "first_block": "spya-dw8kj9",
+    "ordinal": 333,
+    "citing_words": "Luc et al., 2018"
+   },
+   {
+    "key": "Goroshin:2015a",
+    "first_block": "spya-a9a38m",
+    "ordinal": 334,
+    "citing_words": "Goroshin et al., 2015a"
+   },
+   {
+    "key": "Srivastava:2015",
+    "first_block": "spya-a9a38m",
+    "ordinal": 334,
+    "citing_words": "Srivastava et al., 2015"
+   },
+   {
+    "key": "Wiskott:2002",
+    "first_block": "spya-a9a38m",
+    "ordinal": 334,
+    "citing_words": "Wiskott and Sejnowski, 2002"
+   },
+   {
+    "key": "Gregor:2010a",
+    "first_block": "spya-a9a38m",
+    "ordinal": 334,
+    "citing_words": "Gregor and LeCun, 2010a"
+   },
+   {
+    "key": "Goroshin:2015b",
+    "first_block": "spya-a9a38m",
+    "ordinal": 334,
+    "citing_words": "Goroshin et al., 2015b"
+   },
+   {
+    "key": "Pari:2021",
+    "first_block": "spya-fp80br",
+    "ordinal": 335,
+    "citing_words": "Pari et al., 2021"
+   },
+   {
+    "key": "Mohamed:2022",
+    "first_block": "spya-pe4hfh",
+    "ordinal": 336,
+    "citing_words": "Mohamed et al., 2022"
+   },
+   {
+    "key": "Wayne:2014",
+    "first_block": "spya-pwm06u",
+    "ordinal": 339,
+    "citing_words": "Wayne and Abbott, 2014"
+   },
+   {
+    "key": "Gehring:2021",
+    "first_block": "spya-pwm06u",
+    "ordinal": 339,
+    "citing_words": "Gehring et al., 2021"
+   },
+   {
+    "key": "LeCun:2006",
+    "first_block": "spya-nt9nsa",
+    "ordinal": 343,
+    "citing_words": "LeCun et al., 2006"
+   },
+   {
+    "key": "LeCun:1998",
+    "first_block": "spya-nt9nsa",
+    "ordinal": 343,
+    "citing_words": "LeCun et al., 1998"
+   },
+   {
+    "key": "Hinton:1983",
+    "first_block": "spya-edwyt3",
+    "ordinal": 344,
+    "citing_words": "Hinton and Sejnowski, 1983"
+   },
+   {
+    "key": "Chopra:2005",
+    "first_block": "spya-yxn8ts",
+    "ordinal": 346,
+    "citing_words": "Chopra et al., 2005"
+   },
+   {
+    "key": "Hadsell:2006",
+    "first_block": "spya-yxn8ts",
+    "ordinal": 346,
+    "citing_words": "Hadsell et al., 2006"
+   },
+   {
+    "key": "Goldberger:2005",
+    "first_block": "spya-yxn8ts",
+    "ordinal": 346,
+    "citing_words": "Goldberger et al., 2005"
+   },
+   {
+    "key": "Taigman:2014",
+    "first_block": "spya-yxn8ts",
+    "ordinal": 346,
+    "citing_words": "Taigman et al., 2014"
+   },
+   {
+    "key": "Misra:2020",
+    "first_block": "spya-ypc9mu",
+    "ordinal": 347,
+    "citing_words": "Misra and Maaten, 2020"
+   },
+   {
+    "key": "Chen:2020b",
+    "first_block": "spya-ypc9mu",
+    "ordinal": 347,
+    "citing_words": "Chen et al., 2020b",
+    "note": "row already used by sibling work (same surname/year, other letter)"
+   },
+   {
+    "key": "Caron:2020",
+    "first_block": "spya-je4mcv",
+    "ordinal": 348,
+    "citing_words": "Caron et al., 2020"
+   },
+   {
+    "key": "Ermolov:2021",
+    "first_block": "spya-vp8dmm",
+    "ordinal": 349,
+    "citing_words": "Ermolov et al., 2021"
+   },
+   {
+    "key": "Dai:2022",
+    "first_block": "spya-vp8dmm",
+    "ordinal": 349,
+    "citing_words": "Dai et al., 2022"
+   },
+   {
+    "key": "Zaadnoordijk:2022",
+    "first_block": "spya-mfrf35",
+    "ordinal": 351,
+    "citing_words": "Zaadnoordijk et al., 2022"
+   },
+   {
+    "key": "Murphy:2002",
+    "first_block": "spya-fbszzh",
+    "ordinal": 352,
+    "citing_words": "Murphy, 2002"
+   },
+   {
+    "key": "Gopnik:1997",
+    "first_block": "spya-fbszzh",
+    "ordinal": 352,
+    "citing_words": "Gopnik and Meltzoff, 1997"
+   },
+   {
+    "key": "Spelke:2007",
+    "first_block": "spya-fbszzh",
+    "ordinal": 352,
+    "citing_words": "Spelke and Kinzler, 2007"
+   },
+   {
+    "key": "Carey:2009",
+    "first_block": "spya-fbszzh",
+    "ordinal": 352,
+    "citing_words": "Carey, 2009"
+   },
+   {
+    "key": "Gopnik:2001",
+    "first_block": "spya-fbszzh",
+    "ordinal": 352,
+    "citing_words": "Gopnik et al., 2001"
+   },
+   {
+    "key": "Lake:2017b",
+    "first_block": "spya-n7jnzn",
+    "ordinal": 353,
+    "citing_words": "Lake et al., 2017b",
+    "note": "row already used by sibling work (same surname/year, other letter)"
+   },
+   {
+    "key": "Orhan:2020",
+    "first_block": "spya-n7jnzn",
+    "ordinal": 353,
+    "citing_words": "Orhan et al., 2020"
+   },
+   {
+    "key": "Riochet:2019",
+    "first_block": "spya-n7jnzn",
+    "ordinal": 353,
+    "citing_words": "Riochet et al., 2019"
+   },
+   {
+    "key": "Mattar:2022",
+    "first_block": "spya-nt9g2d",
+    "ordinal": 354,
+    "citing_words": "Mattar and Lengyel, 2022"
+   },
+   {
+    "key": "Ho:2022",
+    "first_block": "spya-nt9g2d",
+    "ordinal": 354,
+    "citing_words": "Ho et al., 2022"
+   },
+   {
+    "key": "Marcus:2019",
+    "first_block": "spya-g69p3r",
+    "ordinal": 385,
+    "citing_words": "Marcus and Davis, 2019"
+   },
+   {
+    "key": "Vincent:2010",
+    "first_block": "spya-ud5m7m",
+    "ordinal": 388,
+    "citing_words": "Vincent et al., 2010"
+   },
+   {
+    "key": "Devlin:2018",
+    "first_block": "spya-ud5m7m",
+    "ordinal": 388,
+    "citing_words": "Devlin et al., 2018"
+   },
+   {
+    "key": "Carreira:2005",
+    "first_block": "spya-pf465v",
+    "ordinal": 435,
+    "citing_words": "Carreira-Perpiñán and Hinton, 2005"
+   }
+  ]
+ },
+ "2 JMLR Srivastava (Dropout)": {
+  "style": "author-year (Natbib), incl. inside tables; reference list NOT in blocks",
+  "distinct_works_cited": 36,
+  "covered": 36,
+  "missed": 0,
+  "recall": 1,
+  "capped": false,
+  "rows_total": 35,
+  "rows_not_matching_in_text_cite": 0,
+  "by_third_of_body_covered_over_total": [
+   "23/23",
+   "9/9",
+   "4/4"
+  ],
+  "by_new_works_in_block": {
+   "1-2": "33/33",
+   "3-5": "3/3",
+   "6+": "0/0"
+  },
+  "by_rank_in_block": {
+   "first_work_in_block": "24/24",
+   "later_works_in_block": "12/12"
+  },
+  "missed_list": []
+ },
+ "3 arXiv Vaswani (Attention)": {
+  "style": "numbered, bracketed [12] / [35, 2, 5]; reference list IS in blocks (ord 114-154)",
+  "distinct_works_cited": 40,
+  "covered": 40,
+  "missed": 0,
+  "recall": 1,
+  "capped": false,
+  "rows_total": 40,
+  "rows_not_matching_in_text_cite": 0,
+  "by_third_of_body_covered_over_total": [
+   "24/24",
+   "4/4",
+   "12/12"
+  ],
+  "by_new_works_in_block": {
+   "1-2": "18/18",
+   "3-5": "7/7",
+   "6+": "15/15"
+  },
+  "by_rank_in_block": {
+   "first_work_in_block": "19/19",
+   "later_works_in_block": "21/21"
+  },
+  "missed_list": []
+ },
+ "4 Sci Rep Layfield (rearing)": {
+  "style": "numbered superscripts flattened to glued digits (\"memory1-7\", \"Wells et al.18\"); reference list NOT in blocks (only in row entries)",
+  "distinct_works_cited": 70,
+  "covered": 69,
+  "missed": 1,
+  "recall": 0.986,
+  "capped": false,
+  "rows_total": 69,
+  "rows_not_matching_in_text_cite": 0,
+  "by_third_of_body_covered_over_total": [
+   "42/42",
+   "5/6",
+   "22/22"
+  ],
+  "by_new_works_in_block": {
+   "1-2": "9/10",
+   "3-5": "15/15",
+   "6+": "45/45"
+  },
+  "by_rank_in_block": {
+   "first_work_in_block": "14/15",
+   "later_works_in_block": "55/55"
+  },
+  "missed_list": [
+   {
+    "key": "43",
+    "first_block": "spya-w3u6mu",
+    "ordinal": 23,
+    "citing_words": "...baited arms in the first four choices at test41–43. S"
+   }
+  ]
+ },
+ "5 Clark & Chalmers 1998": {
+  "style": "author-year without parentheses around year (\"Kirsh 1995\", \"(Hutchins 1995)\") plus 5 footnotes; no reference list",
+  "distinct_works_cited": 17,
+  "covered": 17,
+  "missed": 0,
+  "recall": 1,
+  "capped": false,
+  "rows_total": 17,
+  "rows_not_matching_in_text_cite": 0,
+  "by_third_of_body_covered_over_total": [
+   "7/7",
+   "5/5",
+   "5/5"
+  ],
+  "by_new_works_in_block": {
+   "1-2": "6/6",
+   "3-5": "11/11",
+   "6+": "0/0"
+  },
+  "by_rank_in_block": {
+   "first_work_in_block": "7/7",
+   "later_works_in_block": "10/10"
+  },
+  "missed_list": []
+ },
+ "6 Synesthesia (Wikipedia)": {
+  "style": "numbered Wikipedia bracket refs [12], footnote blocks at end (ord 168-319); reference list in footnotes",
+  "distinct_works_cited": 152,
+  "covered": 42,
+  "missed": 110,
+  "recall": 0.276,
+  "capped": true,
+  "rows_total": 44,
+  "rows_not_matching_in_text_cite": 2,
+  "by_third_of_body_covered_over_total": [
+   "18/54",
+   "17/52",
+   "7/46"
+  ],
+  "by_new_works_in_block": {
+   "1-2": "20/54",
+   "3-5": "14/53",
+   "6+": "8/45"
+  },
+  "by_rank_in_block": {
+   "first_work_in_block": "21/60",
+   "later_works_in_block": "21/92"
+  },
+  "missed_list": [
+   {
+    "key": "1",
+    "first_block": "spya-xvxrn5",
+    "ordinal": 0,
+    "citing_words": "...ence, neurology, psychology Frequency 4%[1]"
+   },
+   {
+    "key": "6",
+    "first_block": "spya-adpz5b",
+    "ordinal": 1,
+    "citing_words": "...nsory or cognitive pathways.[2][3][4][5][6] Syne"
+   },
+   {
+    "key": "7",
+    "first_block": "spya-adpz5b",
+    "ordinal": 1,
+    "citing_words": "...ption, chronoception, and interoception.[7] Peop"
+   },
+   {
+    "key": "8",
+    "first_block": "spya-adpz5b",
+    "ordinal": 1,
+    "citing_words": "...esthesia are referred to as synesthetes.[8]"
+   },
+   {
+    "key": "9",
+    "first_block": "spya-zrk2q4",
+    "ordinal": 2,
+    "citing_words": "...ific type of synesthesia that they have.[9][10]"
+   },
+   {
+    "key": "10",
+    "first_block": "spya-zrk2q4",
+    "ordinal": 2,
+    "citing_words": "...c type of synesthesia that they have.[9][10] In o"
+   },
+   {
+    "key": "14",
+    "first_block": "spya-zrk2q4",
+    "ordinal": 2,
+    "citing_words": "...map (clockwise or counterclockwise).[13][14] Syne"
+   },
+   {
+    "key": "15",
+    "first_block": "spya-zrk2q4",
+    "ordinal": 2,
+    "citing_words": "... number of senses or cognitive pathways.[15]"
+   },
+   {
+    "key": "17",
+    "first_block": "spya-af7gu5",
+    "ordinal": 4,
+    "citing_words": "...et when he heard the sound of a trumpet.[17] Howe"
+   },
+   {
+    "key": "19",
+    "first_block": "spya-af7gu5",
+    "ordinal": 4,
+    "citing_words": "...n Georg Tobias Ludwig Sachs in 1812.[18][19][20]"
+   },
+   {
+    "key": "20",
+    "first_block": "spya-af7gu5",
+    "ordinal": 4,
+    "citing_words": "...org Tobias Ludwig Sachs in 1812.[18][19][20] The"
+   },
+   {
+    "key": "22",
+    "first_block": "spya-fq3acq",
+    "ordinal": 10,
+    "citing_words": "...synesthesia that linked all five senses.[22] Type"
+   },
+   {
+    "key": "23",
+    "first_block": "spya-ae8zpn",
+    "ordinal": 13,
+    "citing_words": "...f the least common forms of synesthesia,[23] a si"
+   },
+   {
+    "key": "24",
+    "first_block": "spya-ae8zpn",
+    "ordinal": 13,
+    "citing_words": "... be evoked in many people known as ASMR.[24][25]"
+   },
+   {
+    "key": "25",
+    "first_block": "spya-ae8zpn",
+    "ordinal": 13,
+    "citing_words": "...evoked in many people known as ASMR.[24][25]"
+   },
+   {
+    "key": "26",
+    "first_block": "spya-bbpuk6",
+    "ordinal": 15,
+    "citing_words": "... aids them in identifying notes or keys.[26]"
+   },
+   {
+    "key": "27",
+    "first_block": "spya-he8nty",
+    "ordinal": 16,
+    "citing_words": "...xperiences, are referred to as photisms.[27]"
+   },
+   {
+    "key": "32",
+    "first_block": "spya-zdt4ne",
+    "ordinal": 26,
+    "citing_words": "... rarest documented forms of synesthesia.[32] This"
+   },
+   {
+    "key": "33",
+    "first_block": "spya-f83nda",
+    "ordinal": 28,
+    "citing_words": "...ation whenever he hears the name spoken.[33][34]"
+   },
+   {
+    "key": "34",
+    "first_block": "spya-f83nda",
+    "ordinal": 28,
+    "citing_words": "...n whenever he hears the name spoken.[33][34] It i"
+   },
+   {
+    "key": "35",
+    "first_block": "spya-f83nda",
+    "ordinal": 28,
+    "citing_words": "...esia, making it one of the rarest forms.[35]"
+   },
+   {
+    "key": "37",
+    "first_block": "spya-zgt7zu",
+    "ordinal": 30,
+    "citing_words": "...n, which some research links to empathy.[37] Howe"
+   },
+   {
+    "key": "40",
+    "first_block": "spya-f6bv2z",
+    "ordinal": 35,
+    "citing_words": "...ssociated with personalities or genders.[40] Alth"
+   },
+   {
+    "key": "41",
+    "first_block": "spya-f6bv2z",
+    "ordinal": 35,
+    "citing_words": "...ia was documented as early as the 1890s,[41][42]"
+   },
+   {
+    "key": "42",
+    "first_block": "spya-f6bv2z",
+    "ordinal": 35,
+    "citing_words": "...as documented as early as the 1890s,[41][42] rese"
+   },
+   {
+    "key": "43",
+    "first_block": "spya-f6bv2z",
+    "ordinal": 35,
+    "citing_words": "...terature by Julia Simner and colleagues,[43] alth"
+   },
+   {
+    "key": "44",
+    "first_block": "spya-tzh2js",
+    "ordinal": 37,
+    "citing_words": "...le triggers (usually) consistent colors.[44]"
+   },
+   {
+    "key": "45",
+    "first_block": "spya-z0tbkd",
+    "ordinal": 39,
+    "citing_words": "...cupying space in front and through them.[45][46]["
+   },
+   {
+    "key": "46",
+    "first_block": "spya-z0tbkd",
+    "ordinal": 39,
+    "citing_words": "...ing space in front and through them.[45][46][47]"
+   },
+   {
+    "key": "47",
+    "first_block": "spya-z0tbkd",
+    "ordinal": 39,
+    "citing_words": "...space in front and through them.[45][46][47]"
+   },
+   {
+    "key": "48",
+    "first_block": "spya-md3f5f",
+    "ordinal": 41,
+    "citing_words": "... sometimes on imaginary strips of paper.[48] It h"
+   },
+   {
+    "key": "49",
+    "first_block": "spya-md3f5f",
+    "ordinal": 41,
+    "citing_words": "...a\" would better describe the phenomenon.[49] Rese"
+   },
+   {
+    "key": "50",
+    "first_block": "spya-md3f5f",
+    "ordinal": 41,
+    "citing_words": "...e synesthesia may help explain dyslexia.[50]"
+   },
+   {
+    "key": "51",
+    "first_block": "spya-kkbnsb",
+    "ordinal": 44,
+    "citing_words": "...ia, or if a new type will be considered.[51]"
+   },
+   {
+    "key": "53",
+    "first_block": "spya-g9aq2t",
+    "ordinal": 48,
+    "citing_words": "...t noticed early in synesthesia research.[53] Some"
+   },
+   {
+    "key": "54",
+    "first_block": "spya-g9aq2t",
+    "ordinal": 48,
+    "citing_words": "... creative processes, and daily life.[52][54]"
+   },
+   {
+    "key": "55",
+    "first_block": "spya-u5ys88",
+    "ordinal": 49,
+    "citing_words": "...y to participate in creative activities.[55] It h"
+   },
+   {
+    "key": "56",
+    "first_block": "spya-u5ys88",
+    "ordinal": 49,
+    "citing_words": "... reference their spatial visualizations.[56]"
+   },
+   {
+    "key": "60",
+    "first_block": "spya-yb6zd8",
+    "ordinal": 54,
+    "citing_words": "...tain conditions: temporal lobe epilepsy,[60] head"
+   },
+   {
+    "key": "61",
+    "first_block": "spya-tg4nax",
+    "ordinal": 55,
+    "citing_words": "... and the problem of the explanatory gap.[61]"
+   },
+   {
+    "key": "64",
+    "first_block": "spya-vzccrx",
+    "ordinal": 58,
+    "citing_words": "...interfere with normal daily functioning.[64] Inde"
+   },
+   {
+    "key": "68",
+    "first_block": "spya-pxa63e",
+    "ordinal": 73,
+    "citing_words": "...ic–color is also prevalent at 18[7]–41%.[68] Some"
+   },
+   {
+    "key": "69",
+    "first_block": "spya-ssrh29",
+    "ordinal": 74,
+    "citing_words": "...roposing a female bias of around 6 to 1.[69] Howe"
+   },
+   {
+    "key": "72",
+    "first_block": "spya-cw8fv5",
+    "ordinal": 75,
+    "citing_words": "...ng synesthesia is greater in autism.[71][72] Anot"
+   },
+   {
+    "key": "76",
+    "first_block": "spya-nx89ky",
+    "ordinal": 76,
+    "citing_words": "...ts that sensory hyperresponsiveness,[75][76] and"
+   },
+   {
+    "key": "77",
+    "first_block": "spya-nx89ky",
+    "ordinal": 76,
+    "citing_words": "...n evoke distressing emotional responses.[77] A st"
+   },
+   {
+    "key": "79",
+    "first_block": "spya-f0sbfq",
+    "ordinal": 78,
+    "citing_words": "...o the vocabulary of color in visual art.[79] Isaa"
+   },
+   {
+    "key": "80",
+    "first_block": "spya-f0sbfq",
+    "ordinal": 78,
+    "citing_words": "...id Goethe in his book Theory of Colours.[80] Ther"
+   },
+   {
+    "key": "81",
+    "first_block": "spya-f0sbfq",
+    "ordinal": 78,
+    "citing_words": "... perform colored music in concert halls.[81][82]"
+   },
+   {
+    "key": "82",
+    "first_block": "spya-f0sbfq",
+    "ordinal": 78,
+    "citing_words": "...form colored music in concert halls.[81][82]"
+   },
+   {
+    "key": "83",
+    "first_block": "spya-w699xx",
+    "ordinal": 79,
+    "citing_words": "...man physician Georg Tobias Ludwig Sachs.[83][18]["
+   },
+   {
+    "key": "85",
+    "first_block": "spya-w699xx",
+    "ordinal": 79,
+    "citing_words": "...otisms among 73 synesthetes in 1876,[84][85] foll"
+   },
+   {
+    "key": "86",
+    "first_block": "spya-w699xx",
+    "ordinal": 79,
+    "citing_words": "...owed in the 1880s by Francis Galton.[13][86][87]"
+   },
+   {
+    "key": "87",
+    "first_block": "spya-w699xx",
+    "ordinal": 79,
+    "citing_words": "... in the 1880s by Francis Galton.[13][86][87] Carl"
+   },
+   {
+    "key": "88",
+    "first_block": "spya-w699xx",
+    "ordinal": 79,
+    "citing_words": "...n his Symbols of Transformation in 1912.[88]"
+   },
+   {
+    "key": "89",
+    "first_block": "spya-uepc65",
+    "ordinal": 80,
+    "citing_words": "...n composer Arnold Schönberg (1874–1951).[89] She"
+   },
+   {
+    "key": "90",
+    "first_block": "spya-uepc65",
+    "ordinal": 80,
+    "citing_words": "...mburg in the late 1920s and early 1930s.[90]"
+   },
+   {
+    "key": "91",
+    "first_block": "spya-mep8nh",
+    "ordinal": 87,
+    "citing_words": "...colors, he called them \"Martian colors\".[91]"
+   },
+   {
+    "key": "92",
+    "first_block": "spya-gxvhdt",
+    "ordinal": 89,
+    "citing_words": "... art, abstract film, and intermedia.[52][92][93]["
+   },
+   {
+    "key": "94",
+    "first_block": "spya-gxvhdt",
+    "ordinal": 89,
+    "citing_words": "...stract film, and intermedia.[52][92][93][94][79]["
+   },
+   {
+    "key": "95",
+    "first_block": "spya-gxvhdt",
+    "ordinal": 89,
+    "citing_words": "...ilm, and intermedia.[52][92][93][94][79][95] Dist"
+   },
+   {
+    "key": "96",
+    "first_block": "spya-gxvhdt",
+    "ordinal": 89,
+    "citing_words": "...tiple stimuli in one gestalt experience.[96] Neur"
+   },
+   {
+    "key": "97",
+    "first_block": "spya-usrc0y",
+    "ordinal": 91,
+    "citing_words": "... at length in his memoir, Speak, Memory:[97]"
+   },
+   {
+    "key": "99",
+    "first_block": "spya-zmq9s9",
+    "ordinal": 93,
+    "citing_words": "...o says she experiences colors as scents.[99] Her"
+   },
+   {
+    "key": "100",
+    "first_block": "spya-ep7pdh",
+    "ordinal": 96,
+    "citing_words": "...9–1921), using music–color associations.[100] Cont"
+   },
+   {
+    "key": "101",
+    "first_block": "spya-ep7pdh",
+    "ordinal": 96,
+    "citing_words": "...ts with synesthesia, such as Carol Steen[101] (a p"
+   },
+   {
+    "key": "102",
+    "first_block": "spya-ep7pdh",
+    "ordinal": 96,
+    "citing_words": "...eriences during severe migraine attacks.[102][103]"
+   },
+   {
+    "key": "103",
+    "first_block": "spya-ep7pdh",
+    "ordinal": 96,
+    "citing_words": "...ces during severe migraine attacks.[102][103] Bran"
+   },
+   {
+    "key": "104",
+    "first_block": "spya-ep7pdh",
+    "ordinal": 96,
+    "citing_words": "...and transmit these personal experiences.[104][105]"
+   },
+   {
+    "key": "105",
+    "first_block": "spya-ep7pdh",
+    "ordinal": 96,
+    "citing_words": "...ransmit these personal experiences.[104][105][106]"
+   },
+   {
+    "key": "106",
+    "first_block": "spya-ep7pdh",
+    "ordinal": 96,
+    "citing_words": "...it these personal experiences.[104][105][106] Davi"
+   },
+   {
+    "key": "107",
+    "first_block": "spya-ssae2z",
+    "ordinal": 101,
+    "citing_words": "...-directional sound–color synesthesia.[4][107] For"
+   },
+   {
+    "key": "108",
+    "first_block": "spya-ssae2z",
+    "ordinal": 101,
+    "citing_words": "...rted synesthesia include Duke Ellington,[108] Niko"
+   },
+   {
+    "key": "109",
+    "first_block": "spya-ssae2z",
+    "ordinal": 101,
+    "citing_words": "...Ellington,[108] Nikolai Rimsky-Korsakov,[109] and"
+   },
+   {
+    "key": "110",
+    "first_block": "spya-g73pm0",
+    "ordinal": 102,
+    "citing_words": "...olors with music, or music with colors\".[110]"
+   },
+   {
+    "key": "111",
+    "first_block": "spya-fgf6gr",
+    "ordinal": 103,
+    "citing_words": "...esent the eleven main tube line colours.[111] Each"
+   },
+   {
+    "key": "112",
+    "first_block": "spya-fgf6gr",
+    "ordinal": 103,
+    "citing_words": "... the colour of the tube line on the map.[112]"
+   },
+   {
+    "key": "113",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...ything he sonically makes is a painting.[113] Othe"
+   },
+   {
+    "key": "114",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...nclude musicians Thom Yorke, Billy Joel,[114]: 89,"
+   },
+   {
+    "key": "115",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...Billy Joel,[114]: 89, 91 Andy Partridge,[115] Itzh"
+   },
+   {
+    "key": "116",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...ge,[115] Itzhak Perlman,[114]: 53 Lorde,[116] Bill"
+   },
+   {
+    "key": "117",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...man,[114]: 53 Lorde,[116] Billie Eilish,[117] Char"
+   },
+   {
+    "key": "118",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...de,[116] Billie Eilish,[117] Charli xcx,[118] Bren"
+   },
+   {
+    "key": "119",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...ish,[117] Charli xcx,[118] Brendon Urie,[119][120]"
+   },
+   {
+    "key": "120",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...117] Charli xcx,[118] Brendon Urie,[119][120] Ida"
+   },
+   {
+    "key": "121",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...[118] Brendon Urie,[119][120] Ida Maria,[121] Bria"
+   },
+   {
+    "key": "122",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...,[119][120] Ida Maria,[121] Brian Chase,[122][123]"
+   },
+   {
+    "key": "123",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...][120] Ida Maria,[121] Brian Chase,[122][123] and"
+   },
+   {
+    "key": "124",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...cian Kristin Hersh sees music in colors.[124] Drum"
+   },
+   {
+    "key": "125",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...biography Drumming at the Edge of Magic.[125] John"
+   },
+   {
+    "key": "126",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...ynesthesia in a podcast with Rick Rubin.[126] Phar"
+   },
+   {
+    "key": "127",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...d N.E.R.D., also experiences synesthesia[127][128]"
+   },
+   {
+    "key": "128",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "....R.D., also experiences synesthesia[127][128] and"
+   },
+   {
+    "key": "129",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...ia and reports colored days of the week.[129] Awst"
+   },
+   {
+    "key": "130",
+    "first_block": "spya-ha3fm5",
+    "ordinal": 105,
+    "citing_words": "...ces many of the band's artistic choices.[130]"
+   },
+   {
+    "key": "131",
+    "first_block": "spya-g4snty",
+    "ordinal": 107,
+    "citing_words": "...ave been taken from Madame Blavatsky.[4][131] The"
+   },
+   {
+    "key": "132",
+    "first_block": "spya-gm7wxu",
+    "ordinal": 108,
+    "citing_words": "... (I invented the colors of the vowels!).[132]"
+   },
+   {
+    "key": "133",
+    "first_block": "spya-njt934",
+    "ordinal": 110,
+    "citing_words": "...chnologists, like inventor Nikola Tesla,[133] and"
+   },
+   {
+    "key": "135",
+    "first_block": "spya-njt934",
+    "ordinal": 110,
+    "citing_words": "... n's, and dark brown x's flying around.\"[135]"
+   },
+   {
+    "key": "136",
+    "first_block": "spya-crgtw9",
+    "ordinal": 112,
+    "citing_words": "... is a 13-year-old girl with synesthesia.[136]"
+   },
+   {
+    "key": "137",
+    "first_block": "spya-kn5v9c",
+    "ordinal": 113,
+    "citing_words": "...l student with person-color synesthesia.[137]"
+   },
+   {
+    "key": "138",
+    "first_block": "spya-p5qf7k",
+    "ordinal": 115,
+    "citing_words": "...acters have been used in modern fiction.[138][139]"
+   },
+   {
+    "key": "142",
+    "first_block": "spya-kuc05p",
+    "ordinal": 123,
+    "citing_words": "...eption or multisensory integration.[141][142]"
+   },
+   {
+    "key": "144",
+    "first_block": "spya-g86z7b",
+    "ordinal": 124,
+    "citing_words": "...ffect may operate a form of ideasthesia.[144]"
+   },
+   {
+    "key": "145",
+    "first_block": "spya-wk243x",
+    "ordinal": 125,
+    "citing_words": "... the philosophical problem of qualia,[5][145] give"
+   },
+   {
+    "key": "146",
+    "first_block": "spya-wk243x",
+    "ordinal": 125,
+    "citing_words": "...lead to different conscious experiences.[146]"
+   },
+   {
+    "key": "148",
+    "first_block": "spya-sbajxd",
+    "ordinal": 127,
+    "citing_words": "...echnology,[147] and sensory prosthetics.[148]"
+   },
+   {
+    "key": "149",
+    "first_block": "spya-b7f5fq",
+    "ordinal": 129,
+    "citing_words": "...emented using low-cost hardware in 1991.[149] The"
+   },
+   {
+    "key": "151",
+    "first_block": "spya-b7f5fq",
+    "ordinal": 129,
+    "citing_words": "...ed by pitch, and brightness by loudness.[151] The"
+   },
+   {
+    "key": "152",
+    "first_block": "spya-b7f5fq",
+    "ordinal": 129,
+    "citing_words": "...ty into stimuli in a remaining modality.[152]"
+   }
+  ]
+ }
+}

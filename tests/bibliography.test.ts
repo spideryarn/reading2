@@ -214,6 +214,13 @@ describe("an author or year the article never gives is dropped", () => {
     expect(replay.drops.yearUnfound).toBe(0);
     expect(replay.kept[0]?.authors).toBe("Sutton");
   });
+
+  it("the eval does not replay a row code derived from the text as a model row", () => {
+    const cited = block("spya-b00002", "Prior work (Smith, 2020).", { html: "<p>Prior work (Smith, 2020).</p>" });
+    const { rows } = build([], [cited]);
+    expect(rows[0]?.listedBy).toBe("text");
+    expect(replayGuard(rows, [cited], null).kept[0]?.listedBy).toBe("text");
+  });
 });
 
 /* ------------------------------------------------------------------ links */
@@ -552,7 +559,10 @@ describe("every place is verified against the article", () => {
   });
 
   it("an article that cites nothing is an empty list, and `{}` is a failure", () => {
-    expect(build([], [body]).rows).toEqual([]);
+    expect(build([], [block("spya-body05", "Power laws, smooth ones.")]).rows).toEqual([]);
+    /* A model's empty answer over an article that does cite is filled from
+       the text (plan 261027b), not believed. */
+    expect(build([], [body]).rows.map((r) => [r.title, r.listedBy])).toEqual([["Kaplan et al (2020)", "text"]]);
     expect(() =>
       buildBibliography({}, {
         power: "standard",
@@ -669,7 +679,12 @@ describe("one row per work, and ids that survive a re-run", () => {
   };
 
   it("merges the shorthand cite and its full entry into one row, keeping both places", () => {
-    const { rows, drops } = build([shorthand, full], BLOCKS);
+    const { rows: all, drops } = build([shorthand, full], BLOCKS);
+    /* BLOCKS names Tulving (1983) in neither answer, but only as a lone name
+       before a year, in an article with no other author–year citation: a
+       title's shape, so code lists nothing (plan 261027b). */
+    const rows = all.filter((r) => r.listedBy === undefined);
+    expect(all.filter((r) => r.listedBy === "text")).toEqual([]);
     expect(rows).toHaveLength(1);
     expect(drops.merged).toBe(1);
     expect(rows[0]!.reference?.blockId).toBe("spya-n00001");
@@ -834,8 +849,9 @@ describe("influence: a number when the model is confident, null when it is not",
         })),
         [body],
       );
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.influence).toBe(0.7);
+      const model = rows.filter((r) => r.listedBy === undefined);
+      expect(model).toHaveLength(1);
+      expect(model[0]?.influence).toBe(0.7);
       expect(scores.influenceUnknown).toBe(1);
     }
   });
@@ -974,8 +990,18 @@ describe("generateBibliography", () => {
     });
     const run = await generateBibliography({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
     expect(run.bibliography.version).toBe(PROMPT_VERSION);
-    expect(run.bibliography.citations).toHaveLength(1);
-    expect(run.coverage).toEqual({ notes: 1, notesReached: 1, references: 1, referencesReached: 0, works: 1 });
+    /* Two lone names before a year and nothing else author–year: not an
+       author–year article, so code reads no citations in it (plan 261027b). */
+    expect(run.bibliography.citations.map((c) => [c.title, c.listedBy])).toEqual([["Silk", undefined]]);
+    expect(run.coverage).toEqual({
+      notes: 1,
+      notesReached: 1,
+      references: 1,
+      referencesReached: 0,
+      authorYear: 0,
+      authorYearFilled: 0,
+      works: 1,
+    });
     expect(sent?.output_config?.effort).toBe("medium");
     expect(sent?.output_config?.format).toEqual({ type: "json_schema", schema: BIBLIOGRAPHY_OUTPUT_SCHEMA });
   });
@@ -1043,8 +1069,8 @@ describe("generateBibliography", () => {
 });
 
 describe("the prompt", () => {
-  it("is citations/6, and asks for influence only when the model is confident it knows the work", () => {
-    expect(PROMPT_VERSION).toBe("citations/6");
+  it("is citations/7, and asks for influence only when the model is confident it knows the work", () => {
+    expect(PROMPT_VERSION).toBe("citations/7");
     const said = systemPrompt().replace(/\s+/g, " ");
     expect(said).toMatch(/"influence"[^.]*\bnull\b/);
     expect(said).toMatch(/in doubt[^.]*null/i);

@@ -92,7 +92,7 @@ so a very long article's rows may be understated (`LIVE_BACKEND_PRICES` in
 A reader may be told what something costs **them**: in articles against their allowance, or in their
 subscription's price. They are never told what an AI call costs **us**. That covers the ledger, and
 it covers hand-written estimates too. Five of those were in reader copy until 2026-09-30:
-"about $0.20" beside the Sketch, "$0.40–$0.65" beside Illustrated, a debate re-run note, the reset
+"about $0.20" beside the Sketch, "$0.40–$0.65" beside Illustrated, a Reception re-run note, the reset
 dialog, and a `/changelog` entry.
 
 Every surface in the table above is behind the `/api/admin` namespace gate, a CLI, or an eval. So

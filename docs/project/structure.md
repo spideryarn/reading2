@@ -60,6 +60,34 @@ asked to see are the gists. The plan, and GPT Sol's review of it, is
 [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
 it are [keyboard.md § ← / → in Structure](keyboard.md).
 
+## Sub-sections, where the article has them
+
+> I'm in the section of other theories of consciousness, and I'd quite like to see, at the very
+> least, each of them have their own section. Maybe even more detail than that.
+>
+> — Greg, 2026-10-29, `spya-pn7gvw`, in [261029a](../plans/261029a-structure-one-level-deeper.md)
+
+The tree may go one level deeper inside a section the article divides, and not elsewhere
+([granularity-zoom.md § The tree](granularity-zoom.md#the-tree)). Nothing makes such a tree yet —
+the structure step's half is 261029a's stage 2 — but the reading view already draws one:
+
+- **The list's fisheye** draws, at its floor, the sub-sections of the section the reader is in;
+  the gist goes on the sub-section they are in, and the paragraphs, when drawn, hang off it.
+- **Expanded** draws every sub-section one indent further in, with its gist, as a section rather
+  than a paragraph (`OutlineRow.paragraph` is a flag, not a depth).
+- **"You are here" and ← / →** use Structure's own list, the frontier, so they can stand in a
+  sub-section; everything outside Structure stays at the section level.
+- **The two columns: column B opens the section the reader is in**, listing its sub-sections under
+  it, indented, with a hairline down the run; the sub-section they are in is the one orange row
+  and carries the sentence, and the section keeps only the weight, its sentence moving to its hover
+  card. No third column: the band hardly widens with the window, so three columns would be ~230px
+  each. Greg asked for the layout to be tried out and judged, and all three judges picked this one
+  ([q-vrnbyj](../user-feedback/questions/q-vrnbyj.md), mockup `m-fq095c`). The section and its
+  sub-sections are drawn inside one `<li>`, so the panel measures and windows them as one row and
+  can never cut the run in half. When the run is taller than the column, the section is drawn
+  closed, as before, with "N sub-sections" under the column (`unitFits` in `StructurePanel.tsx`).
+  Column B's paragraph rung lists only leaves.
+
 ## While the reader scrolls
 
 > I think it's nice that the structure mode updates as we scroll. It probably only needs to update
@@ -214,14 +242,17 @@ One press runs the `structure` step again, forced by name. What it buys:
 
 - **The structure call**, but only the slices that failed: the ones that answered are checkpointed
   ([structure-step.md § When one answer will not fit](structure-step.md#when-one-answer-will-not-fit)).
-- **The paragraph labels again**, as the free job every new tree queues. This is why `structure`
-  is not on Metadata's re-run list ([`src/rerun-steps.ts`](../../src/rerun-steps.ts)); here the old
-  labels were written for sections the new tree replaces, so nothing good is lost.
+- **The paragraph labels again**, as the free job every new tree queues. Here the old labels were
+  written for sections the new tree replaces, so nothing good is lost.
 - **The arc again, if the tree changed.** The tab that pressed asks for it, once and unforced, when the run finishes,
   because arc sentences are matched to parts by block range and a re-cut tree would otherwise drop
-  them without a word.
+  them without a word. Every other path gets the same from the article load since 2026-10-29: an
+  arc that no longer fits the tree's parts is left out of the payload, and the owner's `useArc`
+  makes it again ([`src/arc.ts`](../../src/arc.ts) § `fitsTree`).
 
-It costs no import slot. The other things made from the old tree (Glossary, Quotes, Ideas and the
+It costs no import slot. The same forced run is on the Metadata page for every article, not only a
+stand-in, as *Structure* under *AI processing*, and in the command bar as *Structure › Run again*
+([261029l](../plans/261029l-re-run-structure-from-metadata-and-start-again-from-the-command-bar.md)). The other things made from the old tree (Glossary, Quotes, Ideas and the
 rest) are kept and read as out of date in their own modes, as after any change to the article;
 nothing remakes them.
 

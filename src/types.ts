@@ -1630,6 +1630,30 @@ export type SkimFound = Omit<SkimResponse, "profileChanged" | "profileNoticeDism
   profileNoticeDismissedFor: string | null;
 };
 
+/**
+ * **The most added Skim briefs one article may have** — beside the default.
+ * Enforced by the store under the article lock (src/store/pg-skim-briefs.ts).
+ * Plan 261027d.
+ */
+export const SKIM_BRIEFS_MAX = 12;
+
+/** One added Skim brief in `GET /api/skim/:slug/briefs`. Plan 261027d. */
+export interface SkimBriefSummary {
+  /** A house id, minted by the client so `?brief=` can name it from the first frame. */
+  id: string;
+  /** The reader's sentence, which is also its name. */
+  brief: string;
+  createdAt: string;
+  /** When its route was last planned, or `null` for never. */
+  plannedAt: string | null;
+  planned: boolean;
+}
+
+/** `GET /api/skim/:slug/briefs`, oldest first. */
+export interface SkimBriefList {
+  briefs: SkimBriefSummary[];
+}
+
 /** `POST /api/skim/:slug/profile-notice-dismissal`: the route the reader was looking at. */
 export interface SkimProfileNoticeDismissalRequest {
   /** That route's `Skim.generatedAt`, its identity. */
@@ -2160,6 +2184,19 @@ export interface ProjectionResponse {
   points: ProjectionPoint[];
 }
 
+/**
+ * **Where the owner last was in an article, as the server keeps it** — on
+ * `GET /api/article/:slug`'s owned answer as `readingPlace`, and sent with
+ * reading time's flush as `place`.
+ * docs/plans/261029f-your-place-in-an-article-follows-you-to-another-device.md.
+ *
+ * `{ block }` is "opened before": the paragraph, or `null` for the top (and
+ * for an article read before places were kept, whose place nobody knows).
+ * `null` on its own is "never opened, on any device", which is what lets a
+ * browser with no memory of its own call it a first open.
+ */
+export type SavedPlace = { block: BlockId | null } | null;
+
 export interface Article {
   meta: Meta;
   blocks: Block[];
@@ -2418,6 +2455,15 @@ export interface LibraryEntry {
   /** The committed `example/` fixture rather than real pipeline output. */
   fixture?: boolean;
   /**
+   * **How much of it the owner has read**, coarsely: the masthead's pie,
+   * worked out on the server from a cached denominator
+   * (src/store/read-so-far-basis.ts). Absent for no pie: little or nothing
+   * read, or a cache not yet written or gone stale. Only the owner's shelf
+   * sends it, and a shelf painted from the browser's cache has it stripped
+   * (src/web/lib/cached-shelf.ts). Plan 261025l.
+   */
+  readBand?: "started" | "half" | "most" | "finished";
+  /**
    * **`"public"` when anyone with the link can read this, and absent otherwise.**
    *
    * The owner's side of `Visibility` below: the shelf is the one place they see
@@ -2651,6 +2697,12 @@ export interface LibraryTermsResponse {
 export interface ListOptions {
   /** True lists what has been archived, and only that. */
   archived?: boolean;
+  /**
+   * False leaves private reading progress out entirely, including its query.
+   * The health check, MCP and administrator view-as use this; only the
+   * owner-facing browser shelf paths ask for the bands. Plan 261025l.
+   */
+  readBands?: boolean;
 }
 
 /**
@@ -3001,7 +3053,7 @@ export interface PublicArtefacts {
    */
   bibliography: boolean;
   /**
-   * **The eleventh, since 2026-09-29** — a stored Debate. `owners-only` until
+   * **The eleventh, since 2026-09-29** — a stored Reception. `owners-only` until
    * then, as a staging decision (the boundary its rows' addresses must pass was
    * not built) and for the cost of *running* a search, which a visitor never
    * pays. SPIDERYARN-READING2-56, plan 260929c stage 4.
@@ -3759,6 +3811,10 @@ export type StepName =
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      Read only by Marginalia, and by the owner only. */
   | "relations"
+  /* The places a reader would get stuck, each with the missing piece —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     Owner only, and written for the reader's profile. */
+  | "explanations"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
      Nothing reads what it writes except the one below. `low` effort since
      2026-10-01 (src/models.ts § STAGE_EFFORT). */
@@ -3784,7 +3840,7 @@ export type StepName =
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
   | "reception"
-  /* **The article's own claims, listed for Debate's Claims to pick from** —
+  /* **The article's own claims, listed for Claims to pick from** —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. One
      Messages-wire call over `articleWithIds` on the body, **no web search**,
      made by a press on Claims. Ideas' article block at `high` effort, so an
@@ -4086,6 +4142,21 @@ export interface Job {
    * docs/plans/261002j-illustrated-steering-note.md.
    */
   illustrationNote?: string;
+  /**
+   * **The added Skim brief this job plans a route for** — a `skim_briefs` id,
+   * present only on a job naming `skim` that was asked for one brief's route.
+   * Checked at the route (the brief exists and is on this article), frozen
+   * here, compared by `sameWork` and part of the work key, so one brief
+   * pressed twice is one job and two briefs are two. The `skim` step then
+   * writes the brief's row instead of the revision's column (src/jobs.ts §
+   * `runStep`). The job's `profile` is already the brief's: rendered by the
+   * route with the brief in place of the article's purpose. **Kept on the
+   * wire** by `publicJob` — an id, not the sentence — so the client can tell
+   * a brief's job from the default's (src/web/useStepJob.ts § `writesStep`).
+   * Absent: the default route, exactly as before.
+   * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md.
+   */
+  skimBrief?: string;
   /**
    * **Present exactly when this job is a reset** — "as if just imported", with
    * the extras dropped. `jobs.reset` in src/db/schema.ts; src/reset.ts says
@@ -4575,7 +4646,7 @@ export type ChatAnchor =
 
 /**
  * **Where a conversation was started from, when it was started from an item
- * in another mode** — Debate's *Check this claim in chat* is the first caller.
+ * in another mode** — Claims' *Check this claim in chat* is the first caller.
  * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
  *
  * Not a `ThreadKind` and not the anchor. Kind chooses the prompt and tools,
@@ -4614,7 +4685,8 @@ export type ThreadOrigin =
   | BibliographyOrigin
   | IdeasOrigin
   | CiteCheckOrigin
-  | QuizOrigin;
+  | QuizOrigin
+  | SituateOrigin;
 
 /** One of Sources › Claims' claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
@@ -4703,7 +4775,47 @@ export type QuizOrigin = {
 };
 
 /**
- * The most the name snapshot of a glossary, citations, ideas, cite-check or Quiz origin may be.
+ * **One item in the literature search's dossier** — a finding (plan 261025h,
+ * decision 9) or, since plan 261026g, the overview. Until findings had this
+ * origin, their chats stored a lens, so a *Search again* that reworded a note
+ * lost the chat's mark.
+ *
+ * `GlossaryOrigin`'s rules: **the item id is the identity** (`sameOrigin`). A
+ * finding's is minted by src/situate.ts § `findingId`; an overview's is
+ * `situateOverviewId(generatedAt)`. `quote` is a cut snapshot for the title,
+ * list and way back: the article's words for a finding, the model's for the
+ * overview.
+ */
+export type SituateOrigin = { mode: "situate"; itemId: string; quote: string };
+
+/**
+ * **What a finding's id looks like** — `si-` and twelve hex digits, as
+ * src/situate.ts § `findingId` mints it. The route refuses any other
+ * (routes.ts § `parseSituateOrigin`); tests/situate-finding-origin.test.ts
+ * holds the two together.
+ */
+export const SITUATE_FINDING_ID = /^si-[0-9a-f]{12}$/;
+
+/**
+ * **The id of a dossier's overview, as a chat origin** — `so-` and the digits
+ * of the dossier's `generatedAt` (`situateOverviewId`), so each search's
+ * overview has its own chat and a *Search again* starts a new one rather than
+ * reopening a chat about words the dossier no longer says. Stored as a
+ * `situate` origin, so the chat is listed under *Where it sits* and its way
+ * back opens it (plan 261026g § Stage 2, GPT Sol's F3 on that plan: a
+ * `reception` lens would have been filed under Investigate). The route takes
+ * either shape (routes.ts § `parseSituateOrigin`).
+ */
+export const SITUATE_OVERVIEW_ID = /^so-\d{14,17}$/;
+export function situateOverviewId(generatedAt: string): string {
+  return `so-${generatedAt.replace(/\D/g, "").slice(0, 17)}`;
+}
+export function isSituateOverviewId(itemId: string): boolean {
+  return SITUATE_OVERVIEW_ID.test(itemId);
+}
+
+/**
+ * The most the name snapshot of a glossary, citations, ideas, cite-check, Quiz or situate origin may be.
  * The route refuses a longer one, so **every sender cuts with `originName`**:
  * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
@@ -4741,7 +4853,7 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas", "cite-check", "quiz"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas", "cite-check", "quiz", "situate"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * **An origin mode's old word, and the mode it is now.** A chat started from a
@@ -4806,6 +4918,8 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
     case "glossary":
     case "bibliography":
     case "ideas":
+    /* A dossier item: its id, never its snapshot (plans 261025h and 261026g). */
+    case "situate":
       return b.mode === a.mode && a.itemId === b.itemId;
     /* The mark, which names its batch and question (`QuizOrigin`). */
     case "quiz":
@@ -5344,8 +5458,19 @@ export interface CitedWork {
   /** As the article gives them. Absent when it gives none. */
   authors?: string;
   year?: string;
-  /** One plain sentence: what the piece uses this work for. */
-  why: string;
+  /**
+   * One plain sentence: what the piece uses this work for. **Absent on a row
+   * code listed from the text** (`listedBy: "text"`), which no model described.
+   */
+  why?: string;
+  /**
+   * **`"text"`: code found this work cited in the body and the model had not
+   * listed it** — an author–year citation read by src/citation-author-year.ts
+   * (plan 261027b, feedback spya-ez2vus). Such a row has the article's own
+   * words for its title, authors, year and mentions, and no `why` or scores.
+   * Absent on the model's rows.
+   */
+  listedBy?: "text";
   /** 0–1: how much THIS piece's argument leans on the work. The model's reading. */
   relevance?: number;
   /**
@@ -5405,7 +5530,7 @@ export interface CitedWork {
    */
   lookup?: CitationLookup;
   /**
-   * **What *Investigate* wrote about this work** — attached at read time from
+   * **What *Dig deeper* wrote about this work** — attached at read time from
    * `citation_investigations`, only while its context fingerprint matches what
    * would be sent now (src/citation-investigate-context.ts). Owner-only: never
    * crosses the public boundary.
@@ -5451,7 +5576,7 @@ export interface CitedWork {
 export type RegistrySource = "crossref" | "datacite";
 
 /**
- * **A registry's record, as a row keeps it** — Bibliography's and Debate's
+ * **A registry's record, as a row keeps it** — Bibliography's and Reception's
  * (plan 261001a stages 5 and 6). Public metadata about a public identifier.
  * Never read straight off a stored row on the client: nothing revalidates
  * stored JSON, so read it through a guard.
@@ -5482,7 +5607,7 @@ export interface RegistryCitedBy {
  * Bibliography's registry field: a record whose title agrees, or the fact that it
  * does not. `citedBy` is on the `found` arm alone, and not on `RegistryWork`:
  * a conflict's record is another work, whose count is not this row's, and
- * Debate's rows do not ask.
+ * Reception's rows do not ask.
  */
 export type CitationRegistry =
   | ({ kind: "found"; citedBy?: RegistryCitedBy } & RegistryWork)
@@ -5514,7 +5639,7 @@ export interface CitedInSpideryarn {
 }
 
 /**
- * **One *Investigate* answer, as kept** — docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+ * **One *Dig deeper* answer, as kept** — docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
  * `answer` is the AI's prose, written from web search extracts and instructed
  * not to quote them; any quotation-marked span in it was checked by code to be
@@ -5604,7 +5729,7 @@ export interface PaperPassage {
 }
 
 /**
- * **The paper, as one *Investigate* press found it** — src/paper-evidence.ts's
+ * **The paper, as one *Dig deeper* press found it** — src/paper-evidence.ts's
  * six outcomes, kept as a dated snapshot (`readAt`): nothing re-fetches on
  * read, so the row never implies the remote paper is unchanged (Sol P-10).
  * URLs and hosts are the owner's, like the rest of an investigation.
@@ -5833,6 +5958,11 @@ export interface CitationDrops {
   authorsUnfound: number;
   /** A year the work's entry does not carry, or with no entry, the article — dropped. */
   yearUnfound: number;
+  /**
+   * Works the body cites author–year that neither the model nor code listed,
+   * because code's rows reached `MAX_TEXT_ROWS` (plan 261027b). A count only.
+   */
+  textOverCap: number;
 }
 
 /**
@@ -5869,6 +5999,23 @@ export const MAX_CITATIONS = 80;
  * may not be in `citedAt`.
  */
 export const MAX_MENTIONS = 3;
+
+/**
+ * **The most rows code adds from the text** (`CitedWork.listedBy`, plan
+ * 261027b) — its own ceiling, apart from `MAX_CITATIONS`, which bounds the
+ * model's answer. These cost no tokens, but an article is a stranger's text and
+ * every row is stored, sent and drawn. Past it the rest are counted
+ * (`CitationDrops.textOverCap`), first cited first kept.
+ */
+export const MAX_TEXT_ROWS = 200;
+
+/**
+ * **What a prompt or a chat tool says for a row with no `why`** — one code
+ * listed from the text (`CitedWork.listedBy`, plan 261027b). Said, not left
+ * blank, so a model reading the context does not take an empty line for the
+ * article's own account of the work.
+ */
+export const WHY_NOT_DESCRIBED = "not described: code found this citation in the article's text, and no model has said what the article uses it for";
 
 /** The artefact. The `bibliography` column on `article_revisions`. */
 export interface Bibliography {
@@ -6278,6 +6425,12 @@ export interface QuizQuestion {
  * Counts only. Never the question, never the reference answer, never the quote.
  */
 export interface QuizDropped {
+  /**
+   * Whole candidate questions rejected for any reason. Exact for new runs;
+   * optional because quizzes stored before 2026-10-29 only have the individual
+   * validation counters, some of which count evidence rather than questions.
+   */
+  questions?: number;
   /** A `blockId` that is not in blocks.json. The model invented it. */
   unknownIds: number;
   /** A `quote` that `findQuote` could not locate in the block the model named. */
@@ -6286,7 +6439,7 @@ export interface QuizDropped {
   truncated: number;
   /** Questions past `MAX_QUESTIONS`, discarded whole. */
   overCap: number;
-  /** Questions missing a field. Dropped. */
+  /** Malformed question or evidence records encountered. */
   malformed: number;
   /** Questions asking the same thing as one already kept. Dropped. */
   duplicate: number;
@@ -6651,6 +6804,122 @@ export interface RelationsResponse {
   /** The article is the same and we would write this differently now. */
   outdated: boolean;
 }
+
+/* ----------------------------------------------------------- explanations --
+   The places a reader would get stuck, each with a short explanation of the
+   missing piece — the `explanations` column on `article_revisions`, written by
+   the `explanations` step (src/explanations.ts), owner only. Greg's report
+   spya-nkq6rj; docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+
+   Here rather than in src/explanations.ts for the reason `Faq` is: the panel
+   will read these and must not import the step. */
+
+/** One place the model expects this reader to get stuck, and what is missing there. */
+export interface Explanation {
+  /** A short hash of `blockId` and `quote` (`explanationId`): stable when a re-run finds the same words. */
+  id: string;
+  blockId: BlockId;
+  /**
+   * The words it is about — the article's characters, checked, at most
+   * `MAX_QUOTE_CHARS`, and occurring **exactly once** in the block, so a later
+   * underline can always find them.
+   */
+  quote: string;
+  /** The missing piece, in the AI's words. At most `MAX_WORDS` words. */
+  text: string;
+  /** False: the model is unsure, and `text` says of what. Drawn as *Not sure*. */
+  sure: boolean;
+  /** True: it relies on something not in the piece. Drawn as *Draws on AI memory, unchecked*. */
+  outside: boolean;
+  /**
+   * 0–1: how likely this reader is to get stuck here. Required by
+   * `explanations/2`'s prompt and schema, **optional here** because every
+   * `explanations/1` list has none, and a score the model got wrong is dropped
+   * (the field, never the explanation). Glossary's name and range, so the
+   * shared threshold helpers carry over (src/web/explanations-order.ts).
+   */
+  difficulty?: number;
+  /** 0–1: how much of the piece's argument depends on getting past this place. As `difficulty`. */
+  centrality?: number;
+  /**
+   * When the pass that found it finished — stamped once, never re-stamped by a
+   * later *Find more*. Absent on lists written before 2026-10-29. Display and
+   * provenance only: in no hash and no freshness test.
+   */
+  addedAt?: string;
+}
+
+/** What validation threw away. Counts only. */
+export interface ExplanationsDropped {
+  /** Not an object, a missing field, or `sure`/`outside` not a boolean. */
+  malformed: number;
+  /** `blockId` is not a block of the article's body. */
+  unknownIds: number;
+  /** The quote is not in the block it names, spacing and all. */
+  unquoted: number;
+  /** The quote is longer than `MAX_QUOTE_CHARS`; dropped, never cut. */
+  tooLong: number;
+  /** The quote's words occur more than once in the block. */
+  ambiguous: number;
+  /** The text is empty, or longer than `MAX_WORDS` words. */
+  badText: number;
+  /** A second explanation beside a block that already has one; the first wins. */
+  repeated: number;
+  /** Past the cap, after every other rule, in the model's order. */
+  overCap: number;
+}
+
+/** The artefact. The `explanations` column on `article_revisions`. */
+export interface Explanations {
+  version: string;
+  generator: string;
+  slug: string;
+  /** The exact rendered body, cited head and ceiling; the tree only supplies a fallback title. */
+  sourceHash: string;
+  /** The reader's profile it was written for, or null for none — and in the freshness stamp, as `ideas`'. */
+  profileHash: string | null;
+  /** In reading order. **An empty list is a real answer**: nothing worth explaining. */
+  explanations: Explanation[];
+  /** What validation threw away — **cumulative across passes**, as Quotes' `discarded`. */
+  dropped: ExplanationsDropped;
+  /**
+   * How many passes wrote this list: 1 for a first pass, one more for each
+   * *Find more* that appended. Optional on read (lists before 2026-10-29 have
+   * none, and are one pass); always written.
+   */
+  passes?: number;
+  /** How many the last pass added. 0 after a *Find more* that found nothing — a real answer. */
+  lastAdded?: number;
+  /** When the last pass finished. A *Find more* re-stamps it, even one that added nothing. */
+  generatedAt: string;
+  /** Model time across every pass. */
+  elapsedMs: number;
+}
+
+/** `GET /api/explanations/:slug`. Three staleness facts: the profile is in this stamp. */
+export interface ExplanationsResponse {
+  explanations: Explanations;
+  /** The article moved underneath this — blocks, sections or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+  /** You are not who you were when we wrote it. */
+  profileChanged: boolean;
+  /**
+   * **What the panel's one run button will do with this list** —
+   * `panelRunKind` in src/explanations.ts, the same `existingFor` the step
+   * asks: *Find more* when it appends, *Write a new list* when it rewrites.
+   * The route adds it beside `profileChanged`, because the profile half needs
+   * the reader's current profile (plan 261029e, Sol F1).
+   *
+   * Optional so a hand-built response in a test need not carry it; the route
+   * always sends it. The panel reads absent conservatively as `rewrite` when
+   * the list is stale, outdated or for a changed profile.
+   */
+  panelRun?: "append" | "rewrite";
+}
+
+export type ExplanationsFound = Omit<ExplanationsResponse, "profileChanged" | "panelRun">;
 
 /* ----------------------------------------------------------------- simple --
    A plain-words orientation to the piece — the `simple_summary` column on
@@ -7797,7 +8066,7 @@ export interface ReceptionGroup<Row> {
 }
 
 /**
- * **Debate's second group, which since `debate/7` is not searched at all.**
+ * **Reception's second group, which since `debate/7` is not searched at all.**
  *
  * Until 2026-10-08 every search ran two passes, and pass B picked three or four
  * of the article's claims by itself and searched them. Greg asked for the
@@ -7939,7 +8208,7 @@ export interface Reception {
   /**
    * **When the search ran, as displayed provenance rather than staleness.**
    *
-   * Debate is time-sensitive research and a shared link outlives it, so this
+   * Reception is time-sensitive research and a shared link outlives it, so this
    * crosses both the owner and the public DTO deliberately and the panel says
    * *"Searched on …"*. `stale` continues to mean *the article changed*: a
    * visitor opening a year-old shared article must be able to see how old the
@@ -8185,15 +8454,51 @@ export interface Citer {
 }
 
 /**
+ * **Papers that may cite a piece OpenAlex cannot list citers for** —
+ * `possible` on a `no-doi` or `no-match` answer, only when asked
+ * (`?with=possible`) and only for an article from a public address
+ * (src/citation-fulltext.ts, plan 261026f). Works that matched OpenAlex's
+ * full-text search for the piece's title: a sign each cites it, not a citation
+ * count, and never added to one.
+ *
+ * - `found` — `total` is OpenAlex's count of every such work; `citers` the
+ *   first page of them, the piece's own records and works from more than a
+ *   year before it taken out (`dropped` says how many); `order` how the page
+ *   was sorted; `phrase` the exact words sent, and `fromYear`/`toYear` its
+ *   inclusive window (both null when unbounded), which the panel's link to the
+ *   rest at OpenAlex repeats.
+ * - `common-phrase` — the title turns up in works from before the piece
+ *   existed often enough to be a phrase, not a citation of it.
+ * - `none` — no such work.
+ * - `unavailable` — OpenAlex could not be read.
+ */
+export type PossibleCiters =
+  | {
+      kind: "found";
+      total: number;
+      dropped: number;
+      order: "newest" | "most-cited";
+      phrase: string;
+      /** The inclusive years the list and `total` cover, both null for a piece with no year: the *See all* link asks the same. */
+      fromYear: number | null;
+      toYear: number | null;
+      citers: Citer[];
+    }
+  | { kind: "common-phrase" }
+  | { kind: "none" }
+  | { kind: "unavailable" };
+
+/**
  * `GET /api/citers/:slug` — **who cites this article, or why there is no
- * list.** No model made any of it, and it is not part of the stored Debate.
+ * list.** No model made any of it, and it is not part of the stored Reception.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
  * - `no-doi` — the article has no usable DOI, its own address is not an arXiv page
  *   (`citersIdOf`, src/citation-index.ts), and it has no author or no title
  *   distinctive enough to search by, so nothing was asked.
- * - `no-match` — no DOI, so OpenAlex was searched by title, and no one record
- *   passed `titleMatchOf`. Not a claim that OpenAlex has no record of it.
+ * - `no-match` — no DOI, so OpenAlex was searched by title, and no one work
+ *   passed `titleMatchOf` (two passing records are one work only when they are
+ *   twins: plan 261025h, decision 2). Not a claim that OpenAlex has no record of it.
  * - `not-indexed` — OpenAlex has no record of the DOI.
  * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
  *   article: its title and one author must both agree. Not a claim that the
@@ -8208,11 +8513,25 @@ export interface Citer {
  *   panel can say which of the two reasons a short list has. `via` says how the
  *   work was reached, by its DOI or by a title search (plan 261011q), and
  *   `target` is OpenAlex's record of it, which the panel shows after a title
- *   search so that a wrong match can be seen to be one.
+ *   search so that a wrong match can be seen to be one. `target.alsoHeldAs` is
+ *   the other OpenAlex records joined to it as one work (twins: the same whole
+ *   title, the same authors, years within one), and then `count` and the list
+ *   are OpenAlex's own for all of them together (`cites:W1|W2`), not a sum.
+ *
+ *   `topic` says a second view is available, *About "extended mind"*, which
+ *   the reader chooses: OpenAlex's own top keyword for the work, present only
+ *   when the work has more than `TOPIC_MIN_CITERS` citers. `topic.count`, how
+ *   many citers mention it in their title or abstract, is there only once that
+ *   list has been fetched: it is fetched and cached only on
+ *   `GET /api/citers/:slug?about=topic` (GPT Sol's S1-F5), which answers the
+ *   view in this same shape, with `filteredBy` set to the keyword and `count`
+ *   and the list being the filtered ones. Where there is no topic, or its list
+ *   cannot be read, that answers the unfiltered list, with no `filteredBy`.
+ *   Plan 261025h, decision 10.
  */
 export type CitersResult =
-  | { kind: "no-doi" }
-  | { kind: "no-match" }
+  | { kind: "no-doi"; possible?: PossibleCiters }
+  | { kind: "no-match"; possible?: PossibleCiters }
   | { kind: "not-indexed" }
   | { kind: "unconfirmed" }
   | { kind: "unavailable" }
@@ -8220,8 +8539,12 @@ export type CitersResult =
   | {
       kind: "found";
       via: "doi" | "title";
-      /** OpenAlex's id (`W…`, shape-checked) and its own title for the work: a stranger's string. */
-      target: { openalexId: string; title: string };
+      /**
+       * OpenAlex's id (`W…`, shape-checked) and its own title for the work: a
+       * stranger's string. `alsoHeldAs`: the other records of the same work
+       * whose citers are in the count, `W…` each; absent when there is one.
+       */
+      target: { openalexId: string; title: string; alsoHeldAs?: string[] };
       count: number;
       returned: number;
       dropped: number;
@@ -8229,6 +8552,10 @@ export type CitersResult =
       citers: Citer[];
       /** When OpenAlex answered, ISO. A cached list keeps the day it was fetched. */
       fetchedAt: string;
+      /** OpenAlex's top keyword for the work (its words, never a model's); how many citers match it, once known. */
+      topic?: { keyword: string; count?: number };
+      /** Set only on `?about=topic`'s answer: the keyword this list is filtered by. */
+      filteredBy?: string;
     };
 
 /**
@@ -8288,6 +8615,15 @@ export interface RelatedWork {
  *   searched with, so *Search again* would ask a different question.
  *   `searchedAt` is when OpenAlex answered, ISO. An empty `works` is its own
  *   sentence: nothing close that it does not cite.
+ *
+ *   **Two groups beside `works`, never hidden** (plan 261025h, decision 3):
+ *   `editions` — *Other editions of this piece*, a work whose title is a version
+ *   of the piece's (case, punctuation, a subtitle, a bracketed or reprint
+ *   marker) or whose identifier extends the piece's, and which shares the
+ *   piece's authors; `sameAuthors` — *By the same authors*, a work sharing the
+ *   authors without that evidence (a translation under another title). Neither
+ *   is in `works`, nor in `excluded`, nor in the chip's number. Both are always
+ *   sent; they are optional only so an older answer still reads.
  */
 export type RelatedWorkResult =
   | { kind: "no-bibliography" }
@@ -8298,6 +8634,8 @@ export type RelatedWorkResult =
   | {
       kind: "found";
       works: RelatedWork[];
+      editions?: RelatedWork[];
+      sameAuthors?: RelatedWork[];
       excluded: number;
       bibliographyStale: boolean;
       bibliographyCapped: boolean;
@@ -8513,13 +8851,67 @@ export interface SituateCounts {
   duplicate: number;
   /** Queries the planner wrote that the code refused (URL-only, too short, a repeat…). */
   queriesRefused: number;
+  /**
+   * A `since` finding left with no source dated after the piece (situate/2).
+   * Optional, as the next is: a `situate/1` artefact has neither.
+   */
+  notSince?: number;
+  /**
+   * A diagnostic, not a drop: findings whose note names, by author and year or
+   * a quoted title, a work none of its sources is. The finding is kept as
+   * written (situate/2; the check is too noisy to act on).
+   */
+  namesUnsourcedWork?: number;
+}
+
+/**
+ * **What the triage did**: the Haiku call that picks, from every source the
+ * run gathered, the ones the writer is shown (src/situate.ts § the triage,
+ * plan 261025h stage 3).
+ */
+export interface SituateTriage {
+  /** The exact model id sent on the triage call's wire body. */
+  model: string;
+  /** `situate-triage/N` — src/situate.ts § `TRIAGE_PROMPT_VERSION`. */
+  version: string;
+  /** Candidate findings it named, after the cap. */
+  candidates: number;
+  /** The sources the writer was shown … */
+  shortlisted: number;
+  /** … out of this many gathered. */
+  of: number;
+}
+
+/**
+ * **Which model ran each of the dossier's calls** (plan 261025h stage 3). The
+ * plan and the read follow the article's power; the triage is Haiku at both.
+ * `isOutdated` compares each with what a run today would send.
+ */
+export interface SituatePhases {
+  /** The exact model id sent on the planner call's wire body. */
+  plan: string;
+  /** Null when no read was made (`nothing-found`), so nothing was triaged. */
+  triage: SituateTriage | null;
+  /** The exact model id sent on the writer call's wire body; null when no read was made. */
+  write: string | null;
 }
 
 /** The artefact. The `situate` column on `article_revisions`. */
 export interface Situate {
   /** `situate/N` — src/situate.ts § `PROMPT_VERSION`. */
   version: string;
+  /**
+   * The capable model at the power the run had — the writer's, which is also
+   * the planner's. The one stamp the queue and the metadata page compare
+   * (`sameStamp`, by generation); `phases` says the rest.
+   */
   generator: string;
+  /**
+   * Each call's model. **Absent on a dossier written before 2026-10-26**, when
+   * one capable model planned and read the whole evidence with no triage;
+   * src/situate.ts § `isOutdated` says why such a dossier is still current.
+   */
+  phases?: SituatePhases;
   slug: string;
   /** The article as the read was sent it (src/situate.ts § `inputFingerprint`). */
   sourceHash: string;
@@ -8732,7 +9124,8 @@ export const FEEDBACK_ENVIRONMENTS = ["production", "preview", "development", "t
 export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
 
 /**
- * **What the reader says this is** — a problem, or a suggestion.
+ * **What the reader says this is** — a problem, a suggestion, or (an admin
+ * only) a discussion.
  *
  * Greg asked for the toggle on 2026-09-02 and then, a message later, for what it
  * starts as: *"don't default to Problem. Default to null/unknown."* So the third
@@ -8744,9 +9137,17 @@ export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
  * nullable column would be two spellings of one fact — the same call `consented`
  * and `comments_body_nonempty` already make.
  *
- * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
+ * **`discussion` is an admin's alone** (Greg, 2026-10-28, `spya-zytb0g`): *"a
+ * question or a discussion where I'm going to ramble for a bit, raise some
+ * ideas, and I'm going to expect the model to come back with its own responses
+ * or proposals"*. Only an admin can read a reply, so a kind that promises a
+ * conversation is offered — and accepted, by src/routes.ts § feedbackKind —
+ * only where one can happen.
+ *
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md,
+ * docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md.
  */
-export const FEEDBACK_KINDS = ["problem", "suggestion"] as const;
+export const FEEDBACK_KINDS = ["problem", "suggestion", "discussion"] as const;
 
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
 
@@ -9290,7 +9691,8 @@ export interface AdminFeedbackReport {
    */
   body: string;
   /**
-   * *A problem* or *a suggestion*, or **`null` for "they did not say"**.
+   * *A problem*, *a suggestion*, an admin's *discussion*, or **`null` for
+   * "they did not say"**.
    *
    * Null is a real answer and not a missing one — Greg, 2026-09-02: *"don't
    * default to Problem. Default to null/unknown."* It is also every report

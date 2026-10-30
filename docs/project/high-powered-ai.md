@@ -108,19 +108,24 @@ what Sonnet already made stays. [admin.md § Author gifts](admin.md#author-gifts
 
 - **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
   (structure, headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated,
-  skim, debate, bibliography) and the calls made while you read it (chat's model-calling tools; explain — a comment's
+  skim, reception, bibliography) and the calls made while you read it (chat's model-calling tools; explain — a comment's
   first answer and *Try again*, and the glossary's *Look up* box; search; quiz marking; referee;
   Bibliography's stand-alone *Look it up*; live conversation's search tool). A *Dig deeper* press does
   not move with it — the next point.
   A developer's explicit per-task environment override still wins, so a deliberate model comparison
   stays pinned. [`TASK_TIER` and `resolveModel` in `src/models.ts`](../../src/models.ts) are the
   exhaustive list and that exception.
+- ***Search the literature* moves two of its three calls.** Its plan and its read go to Opus; its
+  triage, which picks the sources the read is shown, stays on Haiku (`PINNED_MODEL`), because Haiku
+  shortlisting for an Opus writer is what the eval measured. About $0.52 an article against $0.30,
+  and 60–90 seconds to write against 20–40:
+  [sources.md § Where this piece sits](sources.md#where-this-piece-sits).
 - **Simple (Summary's plain-words levels) is already on Opus for every article**, so the switch
   does not change it. Sonnet borrowed a paper's name for one thing to name another where Opus did
   not, at about $0.05 a press more: `ALWAYS_HIGH_POWER` in `src/models.ts`,
   [261001p](../plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md).
 - **Chat is on Opus for every article**, so the switch does not change its answers: every thread
-  kind that bills as `chat` — chat, Learn, the tutorial, Explore, the guide. Greg, 2026-10-19:
+  kind that bills as `chat` — chat, Learn, Explore, the guide. Greg, 2026-10-19:
 
   > Default to Opus 5.5 for Chats
 
@@ -131,7 +136,7 @@ what Sonnet already made stays. [admin.md § Author gifts](admin.md#author-gifts
   ([261020q](../plans/261020q-chat-defaults-to-opus.md) § Cost).
 - ***Dig deeper* is always on Opus, and is not charged as the switch is.** The glossary's, a
   comment's and Bibliography's *Dig deeper* send `DIG_DEEPER_MODEL`
-  ([`src/dig-deeper.ts`](../../src/dig-deeper.ts)) directly, switch on or off — for Citations that
+  ([`src/dig-deeper.ts`](../../src/dig-deeper.ts)) directly, switch on or off — for Bibliography that
   is the quick check's verdict, the paper's passages and the answer, everything the reader reads.
   Directly, not through `resolveModel`, so a per-task environment override does not put it back on
   Sonnet either. Greg asked for the bigger model whenever a reader wants to know more about one

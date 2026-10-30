@@ -39,12 +39,12 @@ view and every page outside it (the shelf, Metadata, /profile, /add, the public 
 |---|---|---|---|
 | `--font-author` | the article, and verbatim quotes of it | Source Serif 4, variable | a screen serif; variable, so dark mode's 450 weight still works |
 | `--font-ai` | prose a model generated | iA Writer Quattro, static 400/700 upright and italic | still looks typed, so it reads as machine-made, but reads as prose; not Courier, which Greg found "really ugly", nor strict monospace, which a reader found hard going |
-| `--font-reader` | anything the reader typed | Shantell Sans, variable weight, upright and italic | a hint of a hand, so the reader's words are plainly theirs |
-| `--font-ui` | the chrome, every fixed sentence we wrote, and the wordmark (`--font-brand`) | Geist | the fourth voice, by being left alone |
+| `--font-reader` | anything the reader typed | Kalam, static 400/700, upright only | a pen hand, so the reader's words are plainly theirs; Shantell Sans until 2026-10-29 |
+| `--font-ui` | the chrome, every fixed sentence we wrote, and the wordmark | Geist | the fourth voice, by being left alone |
 | `--font-mono` | code, whoever wrote it, and block ids | Geist Mono | Geist's monospace, so machine text reads as the app's |
 
 The tokens are in [`styles/tokens.css`](../../styles/tokens.css). All five faces (Source Serif 4,
-iA Writer Quattro, Shantell Sans, Geist and Geist Mono) are self-hosted through `@fontsource`
+iA Writer Quattro, Kalam, Geist and Geist Mono) are self-hosted through `@fontsource`
 packages imported in [`tailwind.css`](../../src/web/tailwind.css). **A new downloaded face must
 be self-hosted too**: a font CDN would be a new outside party seeing every reader's page loads
 ([privacy.md](privacy.md)).
@@ -87,10 +87,27 @@ asked whether it deserved its own face:
 >
 > — Greg, 2026-10-25
 
-So it is Shantell Sans, with only weight variable and the other axes at their defaults. The
-upright and italic imports cover weights 300–800; the family and the styles used by reader text
-are checked in [`self-hosted-faces.test.ts`](../../tests/self-hosted-faces.test.ts). Readability
-in a long note still needs judging in use.
+It was Shantell Sans, a rounded marker hand, for four days. Greg, reading with it:
+
+> The new font for stuff that's written by the user, I appreciate that it looks like a script,
+> which is probably a good thing, and it's distinctive. But it's just a tiny bit sort of, I don't
+> know, Comic Sans and irritating. Can you find another font that's sort of in the same family, but
+> just a little bit less over the top?
+>
+> — Greg, 2026-10-28 (spya-xurkmf)
+
+So it is **Kalam**, a pen hand: it keeps the script and loses the cartoon. Nine faces were drawn
+side by side on Greg's own words; Playpen Sans and Mali were as comic as Shantell, Caveat and Edu
+too hard to read at 14px, and the two runners-up gave up what he liked — **Delius** (rounded and
+calm, but barely a hand) and **Klee One** (a quiet pencil, close to Geist at a glance). The
+comparison and the screenshots are in
+[261029e § 1](../plans/261029e-explanations-borrow-glossary-controls-full-width-and-a-calmer-reader-face.md),
+and the choice went to Greg as a question.
+
+What Kalam gives up: **static 400 and 700, upright only.** A 500 or 600 resolves to the nearest
+(a thread title's 600 is 700), and an italic is the browser's slant on a face that already leans,
+which is rare in reader text and accepted. The family and the styles reader text is drawn in are
+checked in [`self-hosted-faces.test.ts`](../../tests/self-hosted-faces.test.ts).
 
 The wordmark is Geist, the UI face; the emails draw it in an explicit system sans stack matching
 their text. On 2026-10-25 two monospaces went: iA Writer Mono for code in a model's
@@ -135,14 +152,15 @@ decision for Greg**, not a detail of the change that needs it.
 - **Facts about the piece are UI**: bylines, site names, dates, origin URLs, shelf terms (the
   authors' phrases, normalised and picked by a program and a model, so nobody's sentence). A URL the
   reader typed or pasted is theirs.
-- **Undecided, so left UI**: third-party text (Debate's web quotes, Wikipedia extracts), and hidden
+- **Undecided, so left UI**: third-party text (Reception's web quotes, Wikipedia extracts), and hidden
   text a scan found in the source.
 
 ## How to put an element in its voice
 
 The three voice lists and the placeholder reset are in one file,
-[`src/web/styles/voices.css`](../../src/web/styles/voices.css), every rule `:root :is(…)` — the
-`:root` is specificity, not a switch. A narrow UI reset that undoes an inherited voice lives beside
+[`src/web/voices.css`](../../src/web/voices.css), imported into a cascade layer of its own,
+`voices`, after `app` and before the utilities. Every rule is `:where(…)`, which weighs nothing:
+the layer is what beats the component sheets, and inside the file the order decides. A narrow UI reset that undoes an inherited voice lives beside
 the rule it corrects: `.passage-whole` in `annotations.css` and `dock.css`.
 
 **Two ways in, by whether the voice depends on the data:**
@@ -155,8 +173,9 @@ the rule it corrects: `.passage-whole` in `annotations.css` and `dock.css`.
   [`src/web/voice.ts`](../../src/web/voice.ts), which give `voice-author`, `voice-ai`,
   `voice-reader` or `voice-ui`. A Structure title, a shelf blurb and an article's title go this way,
   and so does any element on a page that has only Tailwind classes. **Never put one on an element a
-  list already names**: a list's rule carries its most specific entry's specificity, so `.tip-gist`
-  would beat `.voice-author` on the same element. Use a `<span>` inside.
+  list already names**: which one wins is then decided by which rule comes later in the file, not
+  by whose words they are — `.tip-gist` would beat `.voice-author` on the same element, and
+  `.voice-reader` would beat `.tip-gist`. Use a `<span>` inside.
 
 Then:
 
@@ -165,12 +184,17 @@ Then:
    that do not set their own `font-family`. `.tooltip`, `.prose-card-text`, `.mode-band`,
    `.marg-note`, `.chat-pointed` and others reset to `--font-ui`, so an AI ancestor does not carry
    through them.
-3. **A `tw:font-*` utility on the same element wins** (Tailwind's layer comes after ours). Wrap the
+3. **A `tw:font-*` utility on the same element wins** (Tailwind's layer comes after `voices`). Wrap the
    words in a classed `<span>` rather than fighting it; that is how Tweets' posts are voiced.
-4. **Model text drawn in SVG is not voiced.** Sketch wraps and measures its labels in TypeScript
-   assuming Geist's width (`CHAR_W` in `src/sketch-scene.ts`); changing the face without changing
-   that measurement can spill a label out of its shape. Voicing it means passing a per-voice width
-   into `paintScene`. Illustrated's captions are painted into the image.
+4. **Model text drawn in SVG is measured in TypeScript**, so its face and its width per character
+   are one decision. Sketch's is `SKETCH_LABEL_VOICE` in `src/sketch-scene.ts`: it sets the
+   `<svg>`'s `voiceClass`, the exporter's stack and `CHAR_W`, and
+   [`tests/sketch-label-face.test.ts`](../../tests/sketch-label-face.test.ts) holds each face's width
+   to its woff2 and refuses canvas's silent fallback when a face does not register. It is `"ai"`
+   since 2026-10-26: Greg answered [q-ugekcv](../user-feedback/questions/q-ugekcv.md), *"Stick with
+   the rules. If it's AI generated, then it should use the AI font."* Sketches stored before then
+   were not redrawn, so they show more labels cut short until redrawn. Illustrated's captions are
+   painted into the image.
 
 [`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) catches the silent failures: a class
 renamed in a component (so the rule matches nothing), a compound selector whose parts never meet, a
@@ -193,8 +217,7 @@ you add text that is not the app's own, put it in its voice at the same time.**
 - **Bibliography's "in your library" match titles** (above): `CitedInSpideryarn` does not carry the
   rename flag yet —
   [261002f § 6](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
-- **Sketch's SVG labels and Illustrated's painted captions** (§ How to put an element in its voice,
-  point 4).
+- **Illustrated's painted captions** (§ How to put an element in its voice, point 4).
 
 The audit that found what was missing, with file:line and where each string comes from:
 [261002b-voices-trawl.md](../plans/261002b-voices-trawl.md) for the reading view, and

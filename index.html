@@ -126,7 +126,34 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2" />
+    <!-- **The home-screen icon follows the phone's mode, dark by default.**
+         iOS takes this link's live `href` when the page is added to the home
+         screen, and keeps that picture; WebKit's LinkIconCollector reads the
+         DOM and ignores `media`, so a media-qualified pair is not a switch we
+         can rely on. The markup above is the dark tile, for a dark phone and
+         for anything that cannot say (no script, no or a failing matchMedia);
+         this swaps in the cream one on a light phone, which by the spec also
+         covers "no preference". Both stay direct children of <head>, which is
+         all the collector walks. `?v=` is a defensive buster for Safari's own
+         icon caches: bump it when the pixels change. tests/touch-icon.test.ts;
+         docs/project/main-icon.md § Dark mode on an iPhone. -->
+    <script id="touch-icon-boot">
+      (function () {
+        var link = document.querySelector('link[rel="apple-touch-icon"]');
+        if (!link || typeof matchMedia !== "function") return;
+        var dark = link.getAttribute("href");
+        var light;
+        try { light = matchMedia("(prefers-color-scheme: light)"); } catch (e) { return; }
+        if (!light) return;
+        function pick() {
+          link.setAttribute("href", light.matches ? "/apple-touch-icon-light.png?v=2" : dark);
+        }
+        pick();
+        if (light.addEventListener) light.addEventListener("change", pick);
+        else if (light.addListener) light.addListener(pick);
+      })();
+    </script>
     <link rel="manifest" href="/site.webmanifest" />
     <!-- **Add to Home Screen is the only way to be rid of the browser's own
          chrome**, and on iOS that is worth more screen than any CSS: the

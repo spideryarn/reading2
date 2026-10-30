@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **Checking the claims the reader picked, on screen** — Debate's Claims with
+ * **Checking the claims the reader picked, on screen** — Claims's Claims with
  * its tick boxes, the box for a claim of your own, Check and Dig further.
  * src/web/ReceptionAndClaimsPanel.tsx § `OwnerListedClaims`, src/web/sources-claim-checks.ts.
  * Plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 and § 5,
@@ -126,11 +126,13 @@ function paint(
   act(() => {
     root.render(
       createElement(ReceptionAndClaimsPanel, {
-        /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
+        /* Sources' chip row with Claims on it, the visitor's: since plan 261025h the
+           owner's Claims is a tool whose number is on Where it sits' tools row,
+           drawn by the same selector (sources-counts.ts). */
         head: sourcesHead({
           view: "claims",
           onView: () => {},
-          ownerSlug: NO_RECEPTION.slug,
+          ownerSlug: null,
           reception: NO_RECEPTION.reception,
           claimList: { kind: "owner", status: claimList.status, claimList: claimList.claimList, checks: owned.checks },
         }),
@@ -286,7 +288,7 @@ describe("what the checks found", () => {
     const titles = [...(claimItem(A.id)?.querySelectorAll(".rcp-item a.rcp-title") ?? [])].map((a) => a.textContent);
     expect(titles).toEqual(["Page at https://a.example/one", "Page at https://a.example/two", "Page at https://a.example/three"]);
     /* The segment counts the rows on screen, a page once per claim. */
-    expect(segments()[4]).toBe("Claims3");
+    expect(segments()[3]).toBe("Claims3");
   });
 
   it("says found nothing only for an explicit empty answer, and something else when a claim was not answered", () => {

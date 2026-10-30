@@ -336,6 +336,24 @@ function glossaryRows(words: string, glossary: GlossaryLookupSource | undefined)
     : [{ kind: "refused", id: "glossary-ask", shown: words, reason: ASKED_TERM_REFUSED[parsed.fault] }];
 }
 
+/**
+ * **What *Add to glossary* on a selection does with these words** — the bar's
+ * own first glossary row for them, or `null` when it would offer none (the
+ * words are too long for a term, or there is no settled glossary to ask into).
+ * An entry that already names them is opened; otherwise the band is asked to
+ * look them up, which adds them. Plan 261029d, Part 2.
+ *
+ * **Exactly one row, or nothing.** Two entries sharing an alias are two rows
+ * in the bar, where the reader picks; a selection has no list to pick from,
+ * and choosing by array order would open the wrong entry half the time (GPT
+ * Sol, plan review F5). Both are already in the glossary, so nothing is lost.
+ */
+export function glossaryProposalFor(words: string, glossary: GlossaryLookupSource): CommandProposal | null {
+  const rows = glossaryRows(words, glossary);
+  const only = rows.length === 1 ? rows[0] : undefined;
+  return only?.kind === "ready" ? only.proposal : null;
+}
+
 /** A row's words, in the bar's shape (command-match.ts § `CommandWords`). */
 export interface ProposalWords {
   readonly label: string;

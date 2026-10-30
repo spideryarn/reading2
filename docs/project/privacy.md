@@ -16,6 +16,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
 - [§ Import records](#import-records) — the record of each import, and when it goes
 - [§ Reading time](#reading-time) — the bullet and what it must keep true
+- [§ Your place in an article](#your-place-in-an-article) — one paragraph per article, replaced, for your other devices
 - [§ Article open times](#article-open-times) — the durable record and the short-lived request log
 - [§ Shelf topics](#shelf-topics) — what the topic model is shown
 - [§ Quick search](#quick-search) — what a quick search sends
@@ -28,7 +29,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
-- [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's press
+- [§ Search the literature](#search-the-literature) — what the planner, Exa, OpenAlex and the final read receive, on the owner's opening or manual press
 - [§ The Chrome extension](#the-chrome-extension) — what one press takes, and where it goes
 - [§ A claim typed into Sources › Claims](#a-claim-typed-into-sources-claims) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it, and [who opens one](#who-opens-one-since-2026-10-21), recorded since 2026-10-21
@@ -530,6 +531,41 @@ route reads the totals only for the article's owner, and the line is never store
 **Section names, per-part detail or a percentage would be a new disclosure**: rewrite the bullet
 first. Plan [261020ac](../plans/261020ac-chat-told-how-much-of-the-article-you-have-read.md).
 
+**Since 2026-10-25 the owner's own browser shelf shows the masthead's coarse pie on each card**,
+worked out on our server from the totals at each shelf load, in memory, and sent only to the owner in
+that view
+([library.md § How much of it you have read](library.md#how-much-of-it-you-have-read)). That is the
+"owner-only, in memory" case above, so the bullet did not change. **One thing is stored for it, and it
+is not from the totals**: `read_so_far_words`, which blocks of the article count and their words,
+derived from the article itself. No seconds and no band are stored, it goes with the article, and it
+is left out of both exports. The public shelf and article reads, administrator view-as, MCP and the
+public health check do not read that cache. The browser's kept copy of the shelf has the band
+stripped both when saved and when a legacy copy is read. Plan
+[261025l](../plans/261025l-shelf-cards-show-the-how-much-read-pie.md).
+
+## Your place in an article
+
+**Added 2026-10-29**, with plan
+[261029f](../plans/261029f-your-place-in-an-article-follows-you-to-another-device.md):
+`reading_place`, one row per article, the paragraph the owner last read (or none, for the top) and
+`saved_at`, so a browser with no memory of its own can open there.
+
+> A
+>
+> — Greg, 2026-10-29, answering [q-mpq9dp](../user-feedback/questions/q-mpq9dp.md) (option A: "the
+> paragraph only")
+
+What the bullet says, and what keeps each part true:
+
+- **"Only the latest is kept"** — the primary key is the article and `setPlace`
+  (src/store/pg-reading-time.ts) upserts, so the row is replaced, never appended to. With
+  `saved_at` it is one point in time, which is why reading time's "not a history" still holds.
+- **"Not shown to anybody reading an article you have shared"** — written only through the owner's
+  reading-time POST, read only on the owner's `GET /api/article/:slug`.
+- **"It goes when the article does, or when the article is given to somebody else"** — `on delete
+  cascade` to `articles`, and reader state in src/store/pg-article-transfer.ts. It is in both
+  exports (`reading-place.json`).
+
 ## Article open times
 
 **Added 2026-10-20**, with plan
@@ -739,7 +775,11 @@ indexes"*:
   **They were missing from the page until this change**, which is the page falling behind the
   code for three days.
 - **OpenAlex**, since 2026-10-04: which papers cite the article, when its owner has Sources'
-  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)).
+  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)), and since 2026-10-25
+  when its owner opens Sources at all, because *Where it sits*, the owner's default, draws the
+  same list as *Papers that cite it* ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+  GPT Sol's F7). The page says *"when you open Sources on an article of yours"*. Who is sent what
+  did not change, only when.
 
 Each is sent the identifier and our contact address (in the `User-Agent`, and as `mailto` where the
 service asks for it). Never the article's body, never anything about the reader. For a private
@@ -756,6 +796,20 @@ work, like a DOI's. The page says *"When your article has no DOI, OpenAlex is se
 title instead"*, and its earlier *"never the article's text"* became *"never the rest of the
 article's text"*, since a title is text. `LAST_UPDATED` moved to 11 October 2026, and
 `tests/privacy-page.test.ts` holds both clauses.
+
+**Since 2026-10-26, the same words may go to OpenAlex's full-text search**, when that title search
+(or the lack of a DOI) leaves no list: *Possible citations*, the works that matched a full-text
+search for the title ([261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md),
+[`src/citation-fulltext.ts`](../../src/citation-fulltext.ts)). The same lower-cased words and a
+year range, up to two requests, when its owner opens Sources and the panel asks
+(`GET /api/citers/:slug?with=possible`), and **only for an article added from a public web
+address** (`importedFromAPublicAddress`): an uploaded file's title may be the reader's own
+unpublished work, and is never sent to this search, which would match it against other people's
+text. Nothing is stored. The page adds *"and, for an article you added from a public web address,
+to find papers that matched a full-text search for its title"*; `LAST_UPDATED` moved to 26 October
+2026. GPT Sol's plan review, F6, is why the page moved with the route rather than with the panel: a
+route that can be called is a disclosure whether or not today's client calls it. The title search
+before it is unchanged, and still runs for an upload with a byline.
 
 **Also since 2026-10-11, Sources' Not cited sends the opening of the text, on the owner's press.**
 *Search OpenAlex for related work*
@@ -848,8 +902,11 @@ names the uploaded-file exception; `LAST_UPDATED` moved to 25 October 2026.
 
 **Added 2026-10-24**, with [sources.md § Where this piece sits](sources.md#where-this-piece-sits)
 ([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md),
-[`src/situate.ts`](../../src/situate.ts)). The owner's press on *Search the literature*, at the top
-of Sources › Investigate and behind the experimental switch, searches **the article itself**: a
+[`src/situate.ts`](../../src/situate.ts)). The owner's request — a press that opens Sources ›
+*Where it sits*, or its own *Search the literature* button after an arrival — searches **the
+article itself**. The dossier has been in *Where it sits* for every owner since 2026-10-25 (at the
+top of Investigate, behind the experimental switch, until then:
+[261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)). A
 model (Claude Sonnet, through OpenRouter) is shown the fenced title, headings, opening and the works
 Bibliography says it leans on, and writes a dozen or so short searches. Each search goes through
 OpenRouter to Exa (the quick-tier model running it sees the search too); Exa receives the query, not
@@ -858,16 +915,33 @@ DOI, or the words of its title, as Reception's *Cited by* asks it. The final Cla
 again through OpenRouter, receives the whole fenced article, the search results, public abstracts
 from OpenAlex and the checked abstract words already stored for cited works. The reader's profile
 block — *About you* and/or *Why you are reading this piece* — is shown only to that final read, for
-ranking and questions, and never becomes a search (the plan's review, S4).
+ranking and questions, and never becomes a search (the plan's review, S4). Under
+[high-powered AI](high-powered-ai.md) the planner and the final read are Claude Opus instead.
 
-So the press says what leaves before it is pressed (`SITUATE_DISCLOSURE`,
+**Since 2026-10-26 a third call sits between the searches and the read**: Claude Haiku, through
+OpenRouter, is shown the same fenced article and the same evidence, and picks which sources the
+final read is shown ([plan 261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)
+stage 3). It is never shown the profile. **The page's words did not change for it, on purpose**:
+the same data goes the same way to the same provider (an Anthropic model, reached through
+OpenRouter, and the page names neither the model nor the number of calls), and nothing new is sent
+anywhere. So `LAST_UPDATED` did not move.
+
+**The press that opens *Where it sits* starts it too** — the Sources button when
+*Where it sits* is the view, its tab, its command-bar row; a pasted link, a reload or Back does not
+([261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md) §
+Stage 4, Greg's spya-mfuz6g). So the button's line says what leaves (`SITUATE_DISCLOSURE`,
 [`src/web/situate-dossier.ts`](../../src/web/situate-dossier.ts)), and the page says *"When you
-press Search the literature, in Sources’ Investigate (an experimental feature), your article is
-searched for in the wider literature"*, then names the planner, Exa, OpenAlex and final read, in the
+open Sources’ Where it sits with the Sources button or its tab, or press Search the literature
+there, your article is searched for in the wider literature"* (until 2026-10-26 *"When you press
+Search the literature, in Sources’ Where it sits"*, and *in Sources’ Investigate (an experimental
+feature)* until 2026-10-25), then
+names the planner, Exa, OpenAlex and final read, in the
 indexes paragraph beside the cited-work search, whose *"never the article’s text"* stays true of
 that search alone. The dossier is stored on the article's
 revision (`article_revisions.situate`), goes with the article, and is never shown to a visitor.
-`LAST_UPDATED` moved to 24 October 2026, and `tests/privacy-page.test.ts` holds the sentence.
+`LAST_UPDATED` moved to 24 October 2026, to 25 October with the move out of the switch, and to
+26 October when opening the sub-mode started it;
+`tests/privacy-page.test.ts` holds the sentence.
 
 ## A claim typed into Sources › Claims
 
@@ -900,8 +974,11 @@ is gone; `LAST_UPDATED` moved to 5 October 2026. The plan is
 What the code has to keep true for the page to stay honest:
 
 - **Whether an answer was judged right or wrong is still not stored**, and not logged. The table has
-  no column for it; the hidden verdict lives in the panel for the length of a visit, as before
-  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)).
+  no column for it; the hidden verdict lives in the page's memory, on the kept answer it was judged
+  with, for the length of a visit. Since 2026-10-29 a *right* is drawn as a deeper green on the
+  question (plan 261029m), which needs no storage and is gone after a reload
+  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)). Storing it would
+  need the public page to say so: that is asked of Greg in q-m9zkx3.
 - **Neither the answer nor the reply is logged** — the route reports a failed save with the slug
   and nothing else, and the store is guarded so a failed query's parameters do not reach an error.
 - **Owner-only.** The owner's read returns them; the public page has no quiz and its queries never

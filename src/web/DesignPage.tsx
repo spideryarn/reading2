@@ -419,16 +419,14 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
 
 /** The type stacks, and what each is allowed to be used for. */
 const FACES: { token: string; used: string }[] = [
-  { token: "--font-reading", used: "the default reading stack before a voice-specific override" },
   /* The table's column headers wore this until 2026-09-05, when that row lost
      its height and its labels became `.sr-only` spans. The gist columns those
      headers named went on 2026-09-29; one `.sr-only` header is left, for a
      screen reader and the sticky offsets (TableView.tsx § A head with no
      height), and it sets no type at all. */
-  { token: "--font-ui", used: "chrome: controls, masthead facts" },
+  { token: "--font-ui", used: "the app's own words: controls, headings, every fixed sentence, and the wordmark" },
   { token: "--font-mono", used: "code, block ids, and anything that wants to line up" },
-  { token: "--font-brand", used: "the wordmark, and only the wordmark" },
-  /* The per-voice faces, read only by styles/voices.css, for everyone since
+  /* The per-voice faces, read only by voices.css, for everyone since
      2026-10-02. docs/project/fonts.md. */
   { token: "--font-author", used: "the article, and verbatim quotes of it" },
   { token: "--font-ai", used: "model-generated prose" },
@@ -448,7 +446,7 @@ const ROLE_VOICES: { voice: Voice; head: string }[] = [
   { voice: "ui", head: "Geist — ours" },
   { voice: "ai", head: "Quattro — the model's" },
   { voice: "author", head: "serif — the author's" },
-  { voice: "reader", head: "Shantell — the reader's" },
+  { voice: "reader", head: "Kalam — the reader's" },
 ];
 const TEXT_ROLES: {
   token: string;
@@ -470,7 +468,7 @@ const TEXT_ROLES: {
     token: "--type-quote",
     use: "verbatim source words under a row",
     samples: {
-      ui: "…a cited page's own words, which are nobody's here…", // Debate, Citations
+      ui: "…a cited page's own words, which are nobody's here…", // Reception, Bibliography
       author: "“The market can remain irrational longer than you can remain solvent.”",
     },
   },
@@ -787,7 +785,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
             <p
               key={w}
               style={{
-                fontFamily: "var(--font-reading)",
+                fontFamily: "var(--font-ui)",
                 fontSize: "1.0625rem",
                 fontWeight: w,
                 margin: "0 0 0.3rem",
@@ -1076,7 +1074,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <p className="design-note">
           The shell is <code className="design-token">.mode-band</code> and the title row is{" "}
           <code className="design-token">.band-head</code> (mode-band.css); the state bodies are the{" "}
-          <code className="design-token">.gloss-*</code> base classes that Ideas, Timeline, Debate,
+          <code className="design-token">.gloss-*</code> base classes that Ideas, Timeline, Reception,
           Quiz and Referee reuse beside their own, and whose position in the import order is
           load-bearing (glossary.css says why). <strong>Nothing here filters, scores, orders or
           attributes anything</strong> — that belongs to each feature and stays there; a design page
@@ -1516,7 +1514,7 @@ function ControlsAcrossModes() {
           </>
         }
         finger={<>44px tall (--control-h-lg) under a coarse pointer; about 25px for a mouse.</>}
-        usedBy="Summary, Debate, Structure, Referee and its criterion kinds, Learn, Diagram, Search's matcher, Skim's depths"
+        usedBy="Summary, Sources, Structure, Referee and its criterion kinds, Learn, Diagram, Search's matcher, Skim's depths"
       >
         <div className="summ-views" role="radiogroup" aria-label="Example parts">
           {DESIGN_PARTS.map((p) => (
@@ -1549,7 +1547,7 @@ function ControlsAcrossModes() {
           </>
         }
         finger={<>32px drawn; the button's own box is the target.</>}
-        usedBy="every JobProgress (Glossary, Ideas, Timeline, Quotes, Citations, FAQ, Simple, Skim, Debate, Tweets, Learn, Structure, Sketch, Illustrated, Metadata), Referee's five, Search's find, Glossary's Look up and Find more, and Glossary's and Bibliography's Ask in chat"
+        usedBy="every JobProgress (Glossary, Ideas, Timeline, Quotes, Bibliography, FAQ, Simple, Skim, Reception, Claims, Tweets, Learn, Structure, Sketch, Illustrated, Metadata), Referee's five, Search's find, Glossary's Look up and Find more, and Glossary's and Bibliography's Ask in chat"
       >
         <RunButton label="Find the terms" />
         <Button variant="outline" size="sm" aria-disabled="true">
@@ -1570,7 +1568,7 @@ function ControlsAcrossModes() {
           </>
         }
         finger={<>type at least 16px on a touchscreen (narrow-window.css), so iOS does not zoom.</>}
-        usedBy="Chat's composer, Search, Glossary's Look up, Debate, Referee's criterion, poles and Candidates, Learn's quiz answer, Illustrated's note, Skim's purpose"
+        usedBy="Chat's composer, Search, Glossary's Look up, Claims, Sources' Investigate, Referee's criterion, poles and Candidates, Learn's quiz answer, Illustrated's note, Skim's purpose"
       >
         <textarea
           className="chat-input design-family-box"
@@ -1596,7 +1594,7 @@ function ControlsAcrossModes() {
             edge with more beyond it faded.
           </>
         }
-        usedBy="Glossary, Quotes, FAQ, Citations, Debate; Search's row is .srch-sort-btn, the same chip"
+        usedBy="Glossary, Quotes, FAQ, Bibliography, Reception, Claims; Search's row is .srch-sort-btn, the same chip"
       >
         <OrderGroup label="Order the examples by" selected={order}>
           {DESIGN_ORDERS.map((o) => (
@@ -1751,8 +1749,8 @@ function ControlsAcrossModes() {
  * drift from them.
  *
  * **The two copies of the wordmark were set in different faces** until
- * 2026-09-08, which is why this section draws both. `--font-brand` now
- * resolves to Geist (styles/tokens.css), and since 2026-10-02 `.logo-letter`
+ * 2026-09-08, which is why this section draws both. Both are `--font-ui`,
+ * Geist, now (styles/tokens.css § `.logo-letter`), and since 2026-10-02 `.logo-letter`
  * gives both wrappers the same weight, tracking and white. What remains between
  * the two gallery copies is the wrapper itself, because each real host hides it
  * by a different mechanism.
@@ -2003,6 +2001,21 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
       { id: "design-0", start: 25, end: 65, kind: "xref", label: "mind is software running on wet hardware" },
     ],
   },
+  {
+    /* The seventh kind, 2026-10-29 (spya-njkskc, plan 261029j): a passage one
+       of the owner's Explanations is about. Glossary's dotted rule in a teal. */
+    label: "A passage the AI explains — Glossary's dotted rule, in teal",
+    marks: [{ id: "e", start: 25, end: 65, kind: "explained" }],
+  },
+  {
+    /* The overlap the plan was decided on: a glossary term inside an explained
+       passage keeps its orange rule, and the teal runs either side. */
+    label: "A glossary term inside an explained passage — the term keeps its orange rule",
+    marks: [
+      { id: "e", start: 25, end: 65, kind: "explained" },
+      { id: "t", start: 33, end: 41, kind: "term" },
+    ],
+  },
 ];
 
 /** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
@@ -2019,4 +2032,6 @@ export const SPECIMEN_OUT: string[] = [
   '<p>He rejects the idea that <mark class="cmt" data-comment="spya-cmt001">mind is </mark><em><mark class="cmt" data-comment="spya-cmt001">software</mark></em><mark class="cmt" data-comment="spya-cmt001" data-mark-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="chat" data-chat="spya-chat01">mind is </mark><em><mark class="chat" data-chat="spya-chat01">software</mark></em><mark class="chat" data-chat="spya-chat01" data-chat-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="xref" data-xref="design-0" tabindex="0" role="link" aria-label="mind is software running on wet hardware">mind is </mark><em><mark class="xref" data-xref="design-0">software</mark></em><mark class="xref" data-xref="design-0"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="explained" data-explained="e">mind is </mark><em><mark class="explained" data-explained="e">software</mark></em><mark class="explained" data-explained="e"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="explained" data-explained="e">mind is </mark><em><mark class="term explained" data-term="t" data-explained="e">software</mark></em><mark class="explained" data-explained="e"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
 ];

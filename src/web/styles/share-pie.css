@@ -1,0 +1,68 @@
+/* ------------------------------------------------------------ § share-pie ----
+   SharePie.tsx: a share of a whole as a small pie, the figure on its card.
+   Two users: the quiz's *Only what I've read* (quiz.css, plan 261003e) and the
+   masthead's read-so-far mark (shell.css § facts, plan 261025j). Each sizes it
+   for a finger where it sits; this sheet is what they share. */
+/* A 24px button round a 14px pie: the hit area a finger needs, with the
+   margin taking the extra 10px back so the row is no taller than the pie. */
+.share-pie {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -5px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-soft);
+  cursor: default;
+}
+.share-pie:focus-visible {
+  outline: 1px solid var(--highlight-text);
+  outline-offset: -2px;
+}
+.share-pie svg {
+  display: block;
+}
+/* The slice is the ink's soft grey rather than the row's faint one: at 14px
+   a faint slice on a faint track read as nearly nothing in the browser look. */
+.share-pie-whole {
+  fill: color-mix(in oklab, var(--ink-faint) 30%, transparent);
+}
+.share-pie-part {
+  fill: currentColor;
+}
+/* **Under a finger, 40 × 40 with no negative margin** (plan 261021g § Stage 2;
+   controls.md § The numbers), wherever it sits: the row grows rather than the
+   target overlapping its neighbours. */
+@media (any-pointer: coarse) {
+  .share-pie {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+  }
+}
+
+/* -------------------------------------------------- § the masthead's mark ----
+   ReadSoFarMark.tsx, right after "~12 min" in the facts line (shell.css §
+   facts). A hair of room after the minutes' dotted rule, and centred on the
+   line rather than sat on its baseline. Plan 261025j. */
+.facts .read-so-far {
+  margin-left: 0;
+  vertical-align: middle;
+}
+
+/* --------------------------------------------------- § the shelf's mark ----
+   The same mark after "~N min" on a shelf card and in the table's title cell
+   (ShelfEntry.tsx, library-columns.tsx; plan 261025l). `relative` lifts it
+   above the card's stretched title link, which covers the card, so the press
+   opens the pie's card rather than the article. Centred on the line, and a
+   hair after the minutes, as on the masthead. */
+[data-shelf-facts] .read-so-far,
+[data-shelf-title-sub] .read-so-far {
+  position: relative;
+  margin-left: 0;
+  vertical-align: middle;
+}

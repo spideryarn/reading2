@@ -2,7 +2,7 @@
  * **Does this page quote this article, and is it a copy of it?** — two ratios
  * over overlapping runs of words, with no model in it anywhere.
  *
- * Debate mode's group one claims that a page is *about this piece*. Until
+ * Reception's group one claims that a page is *about this piece*. Until
  * 2026-09-06 the only proof of that was `namesArticle` — the page contains the
  * title, or links it — and on a 2023 article with a same-named 2026 successor
  * that put six pages about the wrong document on screen as reception. The
@@ -207,7 +207,7 @@ export function shingleOverlap(
   /** A synthetic boundary whose two sides were never adjacent in the source. */
   boundary?: string,
 ): ShingleOverlap {
-  /* Debate may join several search extracts under one cap. The joined string
+  /* Reception may join several search extracts under one cap. The joined string
      remains the right haystack for coverage and the displayed hit: its marker
      cannot match article prose. Density is different. Letting a word window
      cross that marker adds non-matching denominator windows which were on no

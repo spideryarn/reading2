@@ -3041,7 +3041,7 @@ export async function fetchHtml(url: string, options: FetchOptions = {}): Promis
       "unsupported-type",
       doc.url,
       "That's a PDF, and this command runs Readability. Add it through the app, or run " +
-        "`npm run pdf -- <file.pdf>` — see docs/plans/260826c-pdf-ingestion.md.",
+        "`npm run ingest -- <file.pdf>` — see docs/project/setup-dev.md.",
       { status: doc.status },
     );
   }

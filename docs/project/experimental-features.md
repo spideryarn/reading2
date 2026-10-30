@@ -11,7 +11,7 @@ One setting, off by default, with **three controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Some reading modes and four Diagram pictures are behind it** —
+**Some reading modes, four Diagram pictures and two Sources experiments are behind it** —
 [What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
@@ -23,7 +23,7 @@ neither gets made properly.
 - [§ The three controls](#the-three-controls) — the /profile checkbox, the bar button, the command-bar row, and how each failure state is drawn
 - [§ Putting a feature behind it](#putting-a-feature-behind-it) — adding a gate, and what must happen mid-flight
 - [§ What is behind it today](#what-is-behind-it-today) — the list, and a reader says a mode has vanished; plus the history of what left the switch and when
-- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, and Learn's Explore until 2026-10-11
+- [§ Gated below mode level](#gated-below-mode-level) — Diagram's four pictures, Sources' two experiments, *Possible citations*, and Learn's Explore until 2026-10-11
 - [§ See also](#see-also)
 
 ## The four rules
@@ -161,11 +161,27 @@ orange *selected* look, which means *you are here* — Greg, 2026-10-01: *"when 
 too visible/emphasised somehow … Please de-emphasise."*
 [261001l](../plans/261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback.md).
 
+**"Not known yet" is never drawn as "off", by either control.** Before the first answer, and after
+a load that failed, the store's `on` is a placeholder `false`. The bar draws that as a centred knob
+with no `aria-pressed`; the checkbox draws it as `indeterminate` (exposed as "mixed"), disabled,
+with its status line wired in by `aria-describedby`. The checkbox asks
+[`hasValue`](../../src/web/experimental-store.ts); the bar decides it independently in
+`toggleVariant`, and `tests/dock-experimental-switch.test.tsx` holds the two to the same answer in
+all 32 states. A save that fails before the first answer has no value either: it put back the
+placeholder. The bar gives that its own marked, inert appearance: the knob stays centred and the
+description says the save failed while the recovery read runs. The checkbox drew a plain unchecked
+box until 2026-10-30. `disabled` alone does not fix that, because the box is still exposed as
+unchecked to a screen reader and to a test.
+It was found while chasing a report that the checkbox read off while Experimental was on; the
+report itself had read a different checkbox
+([261030a](../postmortems/261030a-a-check-that-found-a-control-by-its-kind-read-a-different-one.md)).
+
 **The failure states are drawn, not swallowed.** A dead or lying switch is worse than no switch, so
 `toggleVariant` ([`Dock.tsx`](../../src/web/Dock.tsx)) turns the store's fields into exactly one of
-six appearances — working, waiting, saving, showing an offline copy, a load that failed, a save that
-failed. The two broken ones draw a warning triangle beside the flask, because a failure visible only
-on hover is a failure most readers never see. The table is
+seven appearances — working, waiting, saving, showing an offline copy, a load that failed, a save
+that failed over a known value, and a save that failed before any value was read. The three broken
+ones draw a warning triangle beside the flask, because a failure visible only on hover is a failure
+most readers never see. The table is
 `tests/dock-experimental-switch.test.tsx`.
 
 **No state is a dead end**, and one was. `stale` — the offline copy — used to be inert on both
@@ -244,6 +260,7 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Timeline](timeline.md) | Four dating states, and drawing an undated row like a dated one throws away what the article actually said. Ten of twenty-six rows on the test article carry no date. |
 | [Referee](referee-mode.md) | **Not because it is unfinished** — all six sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
+| [Explanations](explanations.md) | Built on 2026-10-28 while model calls could not be made, so not one real answer has been read. Whether the places it picks are where a reader gets stuck, and whether its *Not sure* and *Draws on AI memory* labels are honest, is unknown. It leaves the switch, and perhaps runs on every import, on Greg's answer to q-gkrkf5 and one live run read. Its margin lines are gated too. |
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
@@ -333,7 +350,10 @@ AI processing* — on 2026-09-29. It re-reads the article with today's pipeline,
 paragraph whose text comes out different — mostly maths in articles added before maths was drawn —
 detaches any comment on it, and pressing it with the extras ticked spends a model call per mode. That
 earns a trial before everybody has the button; the route itself is not gated.
-[260928a](../plans/260928a-reset-and-regenerate-article.md).
+[260928a](../plans/260928a-reset-and-regenerate-article.md). Since 2026-10-29 the command bar has a
+*Start this article again* row (*re-import*, *reset*, *start over*) that opens that section. It
+follows the same switch, because without the switch the section has no reset in it to land on
+([261029l](../plans/261029l-re-run-structure-from-metadata-and-start-again-from-the-command-bar.md)).
 
 **Everything else is what everybody sees**, a signed-out visitor included.
 
@@ -486,7 +506,7 @@ not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
 ## Gated below mode level
 
-Four of Diagram's pictures. Learn's Explore was gated here from 2026-10-05 until it came out on
+Four of Diagram's pictures, Sources' two experiments and *Possible citations* ([§ What is behind it today](#what-is-behind-it-today)). Learn's Explore was gated here from 2026-10-05 until it came out on
 2026-10-11 ([§ What is behind it today](#what-is-behind-it-today) has the history); the flag it
 used, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), is
 still read for Learn by `visibleLearnViews` there and by `subModeRows`
@@ -516,14 +536,34 @@ system was deliberately not built — [diagram.md § Who sees which chip](diagra
 has the rest of the reasoning, including why this changes *discoverability, not authority*: entering
 Diagram buys nothing, and a shared visitor is pinned to the free picture whatever their switch says.
 
-**Sources › Investigate's *Where this piece sits*, since 2026-10-24** — a section, not a chip: the
-dossier at the top of Investigate and its *Suggested for this piece*. Behind the switch because it
-is the dearest press in Sources and Greg called it an experiment
-([261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md)).
-With the switch off the owner's band does not mount its hook at all (`InvestigateBand`,
-[`SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx)), so nothing is read and no job is
-watched; a dossier already made stays stored, and comes back when the switch does.
-[sources.md § Where this piece sits](sources.md#where-this-piece-sits).
+*Where this piece sits*, the literature search's dossier, was behind the switch from 2026-10-24
+to 2026-10-25, at the top of Sources › Investigate. It left the switch for every owner as the heart
+of Sources' new default, *Where it sits*
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+decision 5); [sources.md § Where this piece sits](sources.md#where-this-piece-sits).
+
+**Sources' two experiments, since 2026-10-26**: *Guess first* and *Evidence first*, two ways of
+meeting the literature search's findings before the model's verdict on them, as links under
+*Experiments* after *Where it sits*' tools
+([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md), Stage 4;
+[sources.md § The experiments](sources.md#the-experiments)). Free, reading the stored dossier,
+keeping nothing the reader does. The flag is `experimental: true` on their rows in
+[`sub-modes.ts`](../../src/web/sub-modes.ts), and the tools row draws them from the switch
+(`SourcesBand` passes `experiments`). Unlike Diagram's pictures they have no command-bar row even
+with the switch on: the tools row is their only door. Hidden is still not unreachable: a pasted
+`?sources=guess-first` draws the experiment with the switch off, and its crumb leads back to
+*Where it sits*.
+
+**Possible citations, since 2026-10-26**: under a *no DOI* or *no sure record* answer in *Papers
+that cite it* and in Reception's *Cited by*, the papers whose full text matched OpenAlex's search
+for the piece's title ([261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md);
+[reception.md § Cited by](reception.md#cited-by-the-papers-that-cite-the-piece)). Behind the switch
+because it was measured below the 95% a list shown to everyone should meet: 82% of the rows it
+would show cite the piece
+([261026a](../investigations/261026a-cited-by-with-no-doi-full-text-and-web-search-recall-and-cost.md)).
+**This one is gated on the server's question, not only on the drawing**: `useCiters` asks
+`?with=possible` only with the switch on, so with it off the title is not sent to the full-text
+search at all, and a cached answer carrying the list is stripped of it when the switch goes off.
 
 ## See also
 

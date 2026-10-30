@@ -39,6 +39,10 @@ start at [phone-and-touch.md](phone-and-touch.md); this doc owns the detail of w
 >
 > — Greg, 2026-08-26
 
+> **History.** Everything in this section describes the swipe as it was. It went with the gist
+> columns (Hierarchy mode) on 2026-09-29, and Outline mode, which "reading mode only" below
+> excludes, went on 2026-09-10; neither exists now. Kept for the reasoning.
+
 **A vertical swipe over a gist column moves you exactly one item at that column's level.** The
 column you touch says how big a step is; the swipe says which way. It is the finger's version of
 what the pointer and the arrow keys already do ([keyboard.md](keyboard.md)), and it runs on the same
@@ -436,7 +440,8 @@ to anything else that has to be pressed with a thumb:
   is the thing to know before changing either.
 - **Eleven buttons do not fit a 390px row at a size worth pressing**, and the row scrolls sideways
   rather than pretending otherwise. Greg chose that over hiding three of them behind a `⋯`. What it
-  costs is that Tweets and Metadata are off the right-hand edge on an iPhone until you discover the
+  costs is that Metadata (and, when this was decided in 2026-08, Tweets, which has since become
+  Summary's Thread view) sat off the right-hand edge on an iPhone until you discovered the
   bar scrolls; the two-row bar that would fix it properly is in
   [260828av-mobile-screen-real-estate.md § Open for Greg](../plans/260828av-mobile-screen-real-estate.md).
 
@@ -514,7 +519,7 @@ its root-size arithmetic is guarded, but its sandbox could not launch Chrome.
   there. A phrase link does not take the class (it is a line tall already, and an inline link that
   wraps would stretch its `::after` across the lines between), nor does an id the article no longer
   has, which is not a link. Chip-only flex lines can be shorter than that prose line: the coarse
-  rules in `tap-target.css` give wrapped Glossary, Tweets, spoken pointers, Simple references and
+  rules in `tap-target.css` give wrapped Glossary, Thread, spoken pointers, Simple references and
   Quiz evidence room between lines and at the row edges.
 - **A section heading's 13px overhang** would have reached the body under it by 1px, so a
   collapsible heading takes `max(1rem, 14px)` below it under a finger. The physical floor also
@@ -889,6 +894,14 @@ selection on iOS and iPadOS fires no `mouseup`. So on an iPad nothing of ours ap
 room between it and the selected words: "Highlight or comment".** The code is
 [`TouchSelectionChip.tsx`](../../src/web/TouchSelectionChip.tsx), mounted in `Reader.tsx` beside the
 boxes it opens; the tests are `tests/touch-selection-chip.test.tsx`.
+
+**And a second button under it, *Add to glossary*, since 2026-10-29** — Greg (`spya-turkg3`):
+*"Can we also have the option to add it to the glossary?"* It highlights nothing: it does what the
+command bar's *Look up "X"* does with the selected words, opening the entry that names them or
+asking the Glossary band to look them up, and is drawn only when that can work (the owner, a
+glossary to add to, words short enough for a term). The two are stacked, because side by side they
+are wider than a phone in portrait. [glossary.md § Looking a term up](glossary.md#looking-a-term-up);
+[261029d](../plans/261029d-a-reminder-bar-at-the-top-and-add-a-selection-to-the-glossary.md).
 
 **The button applies the highlight, since 2026-10-04.** Greg:
 

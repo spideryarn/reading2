@@ -2061,6 +2061,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "reach into the condemned modules is the seeder's copy step, as for " +
       "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/reading-place-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with plan 261029f (2026-10-29). It seeds four articles " +
+      "with `scratchArticleInPg` and drives `place` on `POST /api/reading-time/:slug` and " +
+      "`readingPlace` on `GET /api/article/:slug` through `handleApi` — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reading-time-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-hidden-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2827,6 +2838,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-costs-store.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
+  /* Plan 261029l. Its own throwaway article; sets the arc column and loads it. */
+  "tests/arc-fits-tree-pg.test.ts": "private-postgres",
   /* Plan 261006i. Claims jobs through the real `claimSession` and reads
      `articles.asked_url` straight back; two cases assert a null stayed null. */
   "tests/asked-url-claim-session.test.ts": "private-postgres",
@@ -3172,6 +3185,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds three articles and drives the reading-time GET and POST through the
      route, reading rows back out of `reading_time`. No model is called. */
   "tests/reading-time-route.test.ts": "private-postgres",
+  /* Seeds four articles and drives the place on reading time's POST and the
+     owner's article GET, reading `reading_place` back. No model is called. */
+  "tests/reading-place-route.test.ts": "private-postgres",
+  /* Seeds one article, writes reading time, and checks the shelf pie's cached
+     words against the masthead's own computation, and when they go stale. No
+     model is called. */
+  "tests/read-so-far-shelf.test.ts": "private-postgres",
   /* Seeds three articles, writes a two-entry glossary on each, and drives the
      glossary hide PUT and DELETE and the owner's GET through the route,
      reading rows back out of `glossary_hidden_entries`. No model is called. */
@@ -3530,6 +3550,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      that has to agree with the pipeline's stamp, and there is no honest
      version of that without the rows. */
   "tests/skim-freshness-pg.test.ts": "private-postgres",
+  /* Plan 261027d stage 2: added Skim briefs — their table, routes and the
+     `skim` job that writes a brief's row, all on Postgres. */
+  "tests/skim-briefs-pg.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
      its three enforcers are pure functions and need nothing; the third is
@@ -4268,6 +4291,17 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "`OUTSIDER` is a request owner for the one case that asks whether a claim is visible to " +
         "somebody who did not make it. The claims themselves are written under " +
         "`currentOwnerId()`.",
+    },
+  },
+  "tests/read-so-far-shelf.test.ts": {
+    "00000000-0000-4000-8000-00000000a5f1": {
+      kind: "no-row-needed",
+      why:
+        "the stranger only runs `refreshShelfWords` for a slug they do not own, which must answer " +
+        "`fresh` and write nothing: its first read is scoped by `ownedSlug`, and its insert is an " +
+        "`INSERT … SELECT` whose `WHERE` carries `owner_id = currentOwnerId()`. No row matches, " +
+        "so the id never lands in a column. It becomes wrong if the test ever ingests an article " +
+        "as the stranger.",
     },
   },
   "tests/store-uploads-parity.test.ts": {

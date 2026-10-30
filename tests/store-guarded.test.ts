@@ -373,7 +373,7 @@ describe("no Postgres store is selected without a guard", () => {
       /* Reception's *Cited by* cache, 2026-10-04 (261004h): public bibliographic
          rows, guarded because every adapter is. */
       "pgCitationIndexStore",
-      /* Citations' *Investigate*, 2026-09-30: its parameters are an answer
+      /* Bibliography's *Dig deeper*, 2026-09-30: its parameters are an answer
          about what somebody's article cites. */
       "pgCitationInvestigationStore",
       /* A web note on one cited work, 2026-10-19 (261018o stage 2): its
@@ -422,6 +422,7 @@ describe("no Postgres store is selected without a guard", () => {
       /* The shelf's filter topics, 2026-09-28: its parameters are the
          reader's own articles' phrases. */
       "pgShelfTermsStore",
+      "pgSkimBriefStore",
       "pgSkimNoticeStore",
       /* An upload's guessed web address, 2026-09-29: its parameter is where
          somebody's upload lives. */

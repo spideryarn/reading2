@@ -22,14 +22,19 @@ because the two pads only swapped sides.
 
 **It has one call of its own**, which generates relation words ([below](#relation-words)) and,
 since 2026-10-11, may add **a few notes of its own** ([§ Notes the model
-writes](#notes-the-model-writes)). Every other note
-comes from something another mode has already stored, and opening the column never runs another
-mode. The owner's lists are read through each mode's *read half*
-(`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`, and `useSituateRead` with the experimental switch on), never the full mode hook, because the full hook
-can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
-read. A visitor's lists come in their payload.
+writes](#notes-the-model-writes)). **And one other mode's, since 2026-10-29: Quiz**, which
+writes its questions the first time the owner has the notes on screen and there are none
+([§ Quiz's questions](#quizs-questions-since-2026-10-29)). Every other note comes from something
+another mode has already stored, with one exception: the owner's press that turns the margin on may
+start Sources' literature search, whose findings are notes here (the Literature row below). The
+other lists use each mode's *read half* (`useIdeasRead`, `useFaqRead`, `useTimelineRead`,
+`useReceptionRead`); Situate uses its full hook only to see a search already in the queue and to
+spend that press, and mounting it alone still starts nothing. `tests/artefact-read-hooks.test.tsx`
+checks that the read halves only read. A visitor's lists come in their payload.
 
-**So a FAQ, Timeline, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+**So a FAQ, Timeline or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+Reception also feeds its legacy claim-source rows to the margin; the current Claims list and its
+checks do not feed it (`OwnerMarginFeed` in `MarginaliaColumn.tsx`).
 The column keeps no copy of these lists: it reads them every time it opens, and while it is open
 it re-reads them when this tab's job engine announces a completion for them — the same feed each
 band listens to, through
@@ -55,10 +60,12 @@ one would otherwise be missed; it would not be, so it is not
   ([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
-- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Bibliography works and comments
+- **Quiz's questions, open**, after the passage each asks about —
+  [§ Quiz's questions](#quizs-questions-since-2026-10-29).
+- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Sources' Claims rows, Bibliography works and comments
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
-  quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
+  quote and remaining-passage count for FAQ, the source quote and bearing for Sources' Claims, the byline and
   reference entry for a citation (not the model's reason, since 261003j) and, where there is one,
   the checked note on what the work says from its abstract, the Sources band's own `CiteBlurb`
   (since 2026-10-18, [261018i](../plans/261018i-marginalia-notes-that-save-a-click.md)), or, for a comment, the
@@ -81,8 +88,8 @@ one would otherwise be missed; it would not be, so it is not
   |---|---|---|
   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
   | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. A date with no year counts, and shows the article's words as the band does (*"On July 7"*). An untimed event or any other date we could not read stays in the band. A date we did read always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
-| Debate (Sources › Claims) | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
-  | Literature (Sources › Investigate's *Where this piece sits*) | the finding's block | **owner only, behind the experimental switch**, and only from a dossier that is not stale; the finding's quoted words must still be in that block. One line per block: the strongest finding's stamp (`strong` before `suggestive`, then `SITUATE_FINDING_KINDS` order; `strongestFirst` in `notes.ts`) and its note, or a count (*2 from the literature*). Opened, each note in the model's face, its sources as links, a quiet *From the web*, and *Open in Sources*, which lands on the finding in Investigate (a `finding` focus, `item-focus.ts`). Its card says when the search ran. Plan [261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md) |
+| Reception's legacy claim-source rows (shown in Sources › Claims) | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band. The current Claims list and its checks are not read by the margin |
+  | Literature (the literature search in Sources › *Where it sits*) | the finding's block | **owner only** (behind the experimental switch until 2026-10-26, a day after the dossier itself left it, when Greg asked for them beside the passage as he reads: spya-pkpqch, [261026g](../plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md)), and only from a dossier that is not stale; the finding's quoted words must still be in that block. One line per block: the strongest finding's stamp (`strong` before `suggestive`, then `SITUATE_FINDING_KINDS` order; `strongestFirst` in `notes.ts`) and its note, or a count (*2 from the literature*). Opened, each note in the model's face, its sources as links, a quiet *From the web*, and *Open in Sources*, which lands on the finding in *Where it sits* (in Investigate until 2026-10-25; a `finding` focus, `item-focus.ts`). Its card says when the search ran. **The press that turns the margin on starts the search** if none is stored (Greg's option A on [q-sxfwqq](../user-feedback/questions/q-sxfwqq.md), 2026-10-28: *"Change my mind. Let's go for A."*); a reload, a pasted link or a restored view with the margin already on does not, nor a press on a window too narrow for the notes ([sources.md § Opening it is the request](sources.md#opening-it-is-the-request), [261029h](../plans/261029h-the-margin-button-starts-the-literature-search.md)). Plan [261024o](../plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md) |
   | Bibliography | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([bibliography.md](bibliography.md)) |
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
   | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
@@ -196,9 +203,10 @@ options passed over and GPT Sol's review are in
     old words and notes remain visible in the outdated case until their replacements arrive.
   - **Nothing is shown, nothing is spent.** On a window too narrow for the notes the owner's feed
     still reads, but waits to generate until the notes fit on screen. A visitor's column never reaches the hook.
-  - **The press arms nothing.** Marginalia's row in `MODE_TARGET` (src/web/activation.ts) is
-    `delegated` and answers `null`: the command bar still marks the row as one that may start work,
-    and the import's list, which is derived from that table, does not include it.
+  - **The press does not arm them.** Marginalia's row in `MODE_TARGET` (src/web/activation.ts) is
+    `delegated`, so the import's list, which is derived from that table, does not include them.
+    Since 2026-10-29 the press arms the literature search instead
+    ([§ What it shows](#what-it-shows), the Literature row).
   - **For part of 2026-10-05 an import queued it**, with the other main modes' steps
     ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)). That cost a call
     for every article, opened or not. **No backfill**: an article from before gets its words the
@@ -296,6 +304,44 @@ quotes, alludes to or names something the article leaves bare, where it comes fr
 to the passage that backs it, many to an article and unranked, in the prose. A *Recall* or
 *Tension* note is the few the model judged worth a sentence. Neither reads the other.
 
+## Quiz's questions, since 2026-10-29
+
+> let's say the quiz mode does run as one of the default modes whenever you open marginalia mode,
+> for example, because I think we include the quiz questions in the marginalia annotations. If
+> not, we should, to really encourage the user to reflect on what they're reading.
+>
+> — Greg, 2026-10-29 (spya-fytjtf)
+
+Plan [261029c](../plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md).
+
+- **Written on show, on the relation words' terms**: `useQuizOnShow`
+  ([`useQuiz.ts`](../../src/web/useQuiz.ts)), called by `OwnerMarginFeed` with the owner's quiz read
+  (`useQuizRead`, shared with the prose and the band). One unforced attempt per article per page
+  load, only while the notes are on screen and the real structure is in, nothing while viewing as
+  another reader. **Only an article with no quiz**: a stale or outdated one is left for the band,
+  because a rewrite mints a new batch and the reader's kept answers stop showing. About $0.17
+  median, $0.24 mean an article on production's ledger, plus about $0.08 per answer marked.
+- **Drawn here instead of in the prose.** While the column is on screen (`marginRoom` in
+  `Reader.tsx`, the condition the notes are drawn on) the prose draws no quiz line; otherwise it
+  does, as [quiz.md § In the prose](quiz.md#in-the-prose-in-every-mode) says. A question is
+  always in exactly one of the two.
+- **Placed by the prose's rule** (`questionsByAnchor`, after the block holding its last evidence
+  passage), last in the block's note, in path order. **Open, not shut**: the question is the whole
+  of it, and it is there to make the reader stop; a shut *2 questions* would hide it. Each is a
+  button in the model's face. Its card is `quiz` in `tips.ts`. Owner only; never a stale quiz.
+  `tests/marginalia-quiz.test.tsx`.
+- **Answered here, since 2026-10-29** (Greg's `spya-jzgrua`: *"avoid having to jump away from
+  marginalia mode to the learn mode"*; plan
+  [261029i](../plans/261029i-quiz-answered-in-the-margin-with-voice-and-a-quiet-green.md)). A press
+  opens a small answer box under the question, with the microphone first and *Open in Quiz* (the
+  old press, `openQuizAt`) at the end of its row; the mark streams in under it. A microphone on
+  the question line opens the box listening, in one press. An answered question is ticked and sits
+  on a pale green ground; deeper when this visit's check said right, faded with a clock once it is
+  three days old and worth recalling, when its box opens empty. [quiz.md § Answered in the margin](quiz.md#answered-in-the-margin-and-a-quiet-green)
+  has the rules; [`marginalia/MarginQuiz.tsx`](../../src/web/marginalia/MarginQuiz.tsx) the code,
+  reaching the column through `MarginQuizContext` so `memo(TableView)` does not hear it;
+  `tests/marginalia-quiz-answer.test.tsx`.
+
 ## Every note says where it came from
 
 > I can't tell what that Annotation is from or why or whether AI-generated (if so, it should be in
@@ -350,8 +396,11 @@ useful to include/display in Annotations mode."*
 default. Adding one is one new kind in `MarginaliaNote`, one loop in `marginaliaNotes` that places
 it at its earliest surviving block and checks its quote, one small component in
 `MarginaliaColumn.tsx`, and a read half if the mode hook can start a run.
-[mode.md](mode.md) points here from its checklist. Not here yet, and named so they are not
-forgotten: Quotes, glossary terms, cross-references (the few that matter now come as the model's
+[mode.md](mode.md) points here from its checklist. **[Explanations](explanations.md) came in
+this way on 2026-10-28** (spya-nkq6rj): a shut *Explained* line beside the passage, read from the
+mode's own artefact, behind the experimental switch and owner only; a block that has one does not
+also draw the relations call's `explain` note (`explainedBlocks` in `notes.ts`). Not here yet, and
+named so they are not forgotten: Quotes, glossary terms, cross-references (the few that matter now come as the model's
 own notes, [above](#notes-the-model-writes)). The first two already mark
 the prose.
 

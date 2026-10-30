@@ -128,20 +128,25 @@
 }
 
 /* ---- the top bar ---- */
+/* **`--safe-top` on the bar itself, so every page that has it starts below the
+   clock.** `viewport-fit=cover` lays the page out under the status bar wherever
+   iOS draws one over it — certainly in the installed app, and in whatever
+   state of a Safari tab reports the inset — and the inset is `0px` everywhere
+   else, so the bar stays at the very top where nothing covers it. While stuck,
+   the padding is the bar's own background painted behind the clock.
+   DocumentPage subtracts this same inset from its floor and adds it to anchors.
+   Until 2026-10-26 only DocumentPage's wrapper had it, and the landing page's
+   wordmark and Sign in sat under the clock: `spya-tfsjvq`,
+   docs/plans/261026a-signed-out-nav-below-the-clock-on-an-iphone.md. */
 .site-nav {
   position: sticky;
   top: 0;
+  padding-top: var(--safe-top);
   z-index: 40;
   backdrop-filter: blur(14px);
   background: color-mix(in oklab, var(--background) 82%, transparent);
   border-bottom: 1px solid transparent;
   transition: border-color 180ms ease, background-color 180ms ease;
-}
-/* The new signed-out document shell replaces an inset-aware way home. Keep
-   the row below the notch while the sticky background covers the unsafe area;
-   DocumentPage subtracts this same inset from its floor and adds it to anchors. */
-.site-document-nav > .site-nav {
-  padding-top: var(--safe-top);
 }
 /* Painted only once the page has moved, so the bar is invisible over the hero
    and becomes a surface over content. `animation-timeline: scroll()` does this
@@ -167,7 +172,7 @@
    2x. clamp() rather than breakpoints because there is one number here and it
    should be continuous. */
 .site-display {
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: clamp(2.6rem, 7.2vw, 4.75rem);
   line-height: 1.02;
   letter-spacing: -0.03em;
@@ -230,7 +235,7 @@
 }
 
 .site-lede {
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: clamp(1.1rem, 2.1vw, 1.375rem);
   line-height: 1.5;
   color: var(--muted-foreground);
@@ -513,7 +518,7 @@
 
 /* ---- a section heading, one size, on all three pages ---- */
 .site-h2 {
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: clamp(1.7rem, 3.2vw, 2.35rem);
   line-height: 1.14;
   letter-spacing: -0.02em;

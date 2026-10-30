@@ -538,10 +538,15 @@ export function pdfFigureNeighboursIn(blocks: readonly Block[]): Map<string, Fig
  * prose either side of them (`pdfFigureNeighboursIn`;
  * docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md):
  * the same uncaptioned marker can now go from refused to stored. A change to
- * the neighbour prompt is a bump too. Nothing re-runs on its own;
+ * the neighbour prompt is a bump too. **`8` is a picture inside a drawing
+ * refused as the figure** (`in-a-drawing`) and a picture counted as a located
+ * region's identity only by the share of the region it covers
+ * (docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md): an
+ * article stored under `7` may hold an icon under a diagram's caption, and must
+ * read stale (GPT Sol, plan review of 261027e). Nothing re-runs on its own;
  * tests/collect-assets.test.ts pins both stamps.
  */
-export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/7";
+export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/8";
 
 /**
  * The cheap look before the parse — built once, from the registered name rather

@@ -142,6 +142,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
     "a one-off probe of the prompt cache on chat's last tool round; it measures tokens, and no reader sees its words",
   "scripts/spikes/261024b-situate-spike.ts":
     "a one-off spike whose findings no reader sees; the step it led to, src/situate.ts, carries the rule",
+  "scripts/spikes/261025h-situate-eval.ts":
+    "an eval that runs src/situate.ts's own prompts, which carry the rule, on other models; no reader sees it",
   "scripts/eval-pdf-chunk-size.ts":
     "an eval that runs production's own PDF readers and their prompts, unchanged",
   "scripts/probes/260930d-quote-stop-repro.ts":

@@ -32,6 +32,7 @@ import {
   type BlockId,
   type CitedWork,
   type ClaimOrigin,
+  type Explanation,
   type QuizOrigin,
   type GlossaryEntry,
   type Idea,
@@ -44,12 +45,16 @@ import {
   MarginaliaHead,
   MarginCiteActions,
   type MarginCiteSenders,
+  MarginExplanationActions,
+  type MarginExplanationSenders,
   MarginNotesSlot,
   type MarginFeed,
   NO_OWNER_FEED,
   OwnerMarginFeed,
+  ExplanationsFeed,
   useMarginLayout,
 } from "../marginalia/MarginaliaColumn.js";
+import { type MarginQuiz, MarginQuizContext } from "../marginalia/MarginQuiz.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
 import { openFromCiteCard } from "../useBibliography.js";
@@ -57,8 +62,8 @@ import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { OnScreenLinksStyle } from "../OnScreenLinksStyle.js";
 import { blocksOnScreenNow } from "../on-screen.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
-import type { ReadSoFar } from "../read-filter.js";
-import { countsTowardReadingTime } from "../../block-policy.js";
+import { readBandFor, readSoFarWords, type ReadSoFar } from "../read-filter.js";
+import { foldedOnArrival } from "../matter-view.js";
 import { addressWithout, carriedSearch, navigate, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
@@ -66,6 +71,7 @@ import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
 import { SourcesBand, VisitorSourcesBand } from "../modes/sources/SourcesMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
+import { ExplanationsBand } from "../modes/explanations/ExplanationsMode.js";
 import {
   armSkimOpening,
   firstSkimArrival,
@@ -76,8 +82,9 @@ import {
 } from "../modes/skim/SkimMode.js";
 import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
-import type { ChatAnchor, Quote } from "../../types.js";
+import type { ChatAnchor, Quote, Situate, SituateFinding } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
+import type { GlossarySelectionFocus } from "../GlossaryPanel.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
 import { visitorArrival } from "../modes/structure/StructureArriving.js";
@@ -98,6 +105,8 @@ import {
   askAboutCitedWork,
   citingSentences,
   askAboutGlossaryEntry,
+  askAboutExplanation,
+  explanationPassage,
   askAboutIdea,
   askAboutTerm,
   itemOrigin,
@@ -106,6 +115,7 @@ import {
   askToCheckClaim,
 } from "../chat-handoff.js";
 import { askAboutBlock, askDoesItSayThat } from "../../chat-question.js";
+import { findingLens, findingLensOrigin, findingOrigin, overviewOrigin, overviewQuestion } from "../situate-dossier.js";
 import { chatDraftsFor } from "../chat-draft.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
@@ -120,6 +130,7 @@ import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
 import { AnnotateDialog, annotateKey } from "../AnnotateDialog.js";
+import { ReminderBar } from "../ReminderBar.js";
 import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
 import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-highlight.js";
@@ -136,6 +147,7 @@ import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from 
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl, withModeDoor } from "../command-runners.js";
+import { glossaryProposalFor, runProposal } from "../command-proposal.js";
 import { chipDoorRows, guideDoorRows } from "../chip-door.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
@@ -186,11 +198,13 @@ import { arrivalTarget, endCentredArrival, isBlockOnScreen, scrollToBlock } from
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
-import { buildSections, sectionDepth } from "../position.js";
+import { buildSections, sectionDepth, structureFrontier } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import { useDockEntrance } from "./dock-entrance.js";
 import { SkipToModes } from "./SkipToModes.js";
+import { useFocusWithinFlag, useRootFlag } from "../root-flags.js";
+import { BandCoversContext } from "../band-root-flags.js";
 import {
   bandCoversProse,
   bandShapeFor,
@@ -389,6 +403,15 @@ export function Reader({
     () => buildSections(geometry, article.blocks),
     [geometry, article.blocks],
   );
+  /* **Structure's own, finer list** — a sub-section where the article has
+     them, the section everywhere else (position.ts § `structureFrontier`).
+     Its "you are here" and its ← / → read this; everything else, `?at=`
+     included, keeps `sections`. Plan 261029a. */
+  const frontier = useMemo(
+    () => structureFrontier(geometry, article.blocks),
+    [geometry, article.blocks],
+  );
+  const frontierStarts = useMemo(() => frontier.map((s) => s.row), [frontier]);
   const windowWidth = useWindowWidth();
   const rootFontPx = useRootFontPx();
 
@@ -763,13 +786,19 @@ export function Reader({
    * a narrow mode view the chip is the only thing telling a visitor they are
    * read-only, so the bar stays for it.
    *
-   * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
+   * The CSS half is `:root:not([data-bar-drawn])` in shell.css § the bar that
    * leaves while you read, which lets `--bar-bottom` fall to the status-bar
-   * inset when this is false. Nothing in `scroll.ts` needs telling: both
-   * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
-   * absent bar, and measure a present one.
+   * inset when this is false — the flag is set here, from this, since
+   * 2026-10-29 (it was `:root:not(:has(.controls))`, a walk of the whole
+   * article on every change: plan 261029k, root-flags.ts). Nothing in
+   * `scroll.ts` needs telling: both `stickyOffset` and `stickyDestination`
+   * already answer `--safe-top` for an absent bar, and measure a present one.
    */
   const showBar = owner === null || showCrumbs;
+  useRootFlag("bar-drawn", showBar);
+  /* And focus inside it, for the guard that will not slide away a bar a
+     keyboard reader is standing in (shell.css). */
+  const barFocusRef = useFocusWithinFlag("bar-focus");
 
   // A string, so it compares by value: a fresh object every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
@@ -899,7 +928,7 @@ export function Reader({
     setBandAway(true);
   }, [bandAway, rememberBandFocus]);
   const bandJump = useCallback(
-    /* `aim`: a passage key (Skim, Citations), or the quotation a chip in a
+    /* `aim`: a passage key (Skim, Bibliography), or the quotation a chip in a
        model's answer follows, to be painted on landing — flash.ts § `JumpAim`. */
     (blockId: BlockId, aim?: JumpAim) => {
       jumpTo(blockId, aim);
@@ -1108,7 +1137,7 @@ export function Reader({
     [handToChat],
   );
   /* **A third sender since 2026-10-05, and the first whose conversation
-     remembers where it was started**: Debate's *Check this claim in chat*. The
+     remembers where it was started**: Claims' *Check this claim in chat*. The
      claim travels twice, as words in the question and as the `origin` the
      thread will store, so the claim can find its chat again
      (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md). */
@@ -1116,10 +1145,10 @@ export function Reader({
     (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), "send", origin),
     [handToChat],
   );
-  /* **A fourth, the same day: Debate's *Look at the debate from an angle***,
+  /* **A fourth, the same day: Reception's *Look at the debate from an angle***,
      Sources › Investigate's questions since plan 261020n. The words travel twice too,
      in the question and as the lens the thread stores. A lens is
-     Debate's second origin shape and has no block or quote, so this takes the
+     Reception's second origin shape and has no block or quote, so this takes the
      words and builds the origin here: a claim's handler cannot be handed one
      (docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A).
      Trimmed here as the route trims it, so what is stored equals what is sent
@@ -1150,6 +1179,16 @@ export function Reader({
     (question: string) => lensInChat(question, askInSources, "send"),
     [lensInChat],
   );
+  /* **A literature-search finding's *Ask in chat*** (plan 261025h, decision 9;
+     queue item qi-mmtsxdhg): the same question as before, asked as a Sources
+     question, but stored with the finding's own origin, so its mark is found
+     by the finding's id and its way back opens *Where it sits* on it. Wrapped
+     in `reopenItemChat` below (`askFinding`), as every item sender is. */
+  const askFindingInChat = useCallback(
+    (finding: Pick<SituateFinding, "id" | "quote" | "note">) =>
+      handToChat(askInSources(findingLens(finding)), "send", findingOrigin(finding)),
+    [handToChat],
+  );
   const suggestedLensInChat = useCallback(
     (lens: string) => lensInChat(lens, askReceptionThroughLens, "wait"),
     [lensInChat],
@@ -1179,7 +1218,7 @@ export function Reader({
   }, [setGuideParam, showBand]);
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
-     and on a Citations row**, and since 2026-10-09 on the prose hover card of
+     and on a Bibliography row**, and since 2026-10-09 on the prose hover card of
      each, where Dig deeper was (plan 261009k). Each travels twice, as a claim does: its name fenced in the question, and as
      the `origin` the thread stores, which is the entry's durable id and a
      snapshot of its name cut to the route's cap (`itemOrigin`). Not
@@ -1222,6 +1261,34 @@ export function Reader({
     (idea: Pick<Idea, "id" | "name" | "statement">) =>
       handToChat(askAboutIdea(idea), "send", itemOrigin("ideas", idea.id, idea.name)),
     [handToChat],
+  );
+  /* **An explanation's *Ask in chat*** (plan 261028c), from the band and from
+     the margin: the ordinary chat about a passage, anchored on the
+     explanation's words, its first question carrying the explanation. No
+     origin, so no mark on the item and no way back from Chat's list — the
+     plan's § Not built. The words occur exactly once in their block (the step
+     drops any that do not, src/explanations.ts § 2), so `start` is where
+     they are; a block whose words have since moved anchors on the whole
+     block instead, which the server cannot refuse. */
+  const askExplanationInChat = useCallback(
+    (explanation: Pick<Explanation, "blockId" | "quote" | "text">) => {
+      const block = article.blocks.find((candidate) => candidate.id === explanation.blockId);
+      const passage = explanationPassage(block?.text ?? null, explanation);
+      const question = askAboutExplanation(explanation);
+      /* A stale list can outlive its block. Keep Ask useful, but do not send
+         the vanished id: the route validates every passage anchor. */
+      if (passage === null) {
+        handToChat(question, "send");
+        return;
+      }
+      askPassageInChat({
+        kind: "draft",
+        ...passage,
+        question,
+        sendNow: true,
+      });
+    },
+    [article.blocks, askPassageInChat, handToChat],
   );
   /* The one sender that waits: the paragraph, quoted, and an empty line for
      the reader's question. There is nothing to ask until they type it. */
@@ -1583,7 +1650,7 @@ export function Reader({
    * whether or not the band has ever been opened — `citeMarks` in annotate.ts.
    *
    * **The prose marks and their cards stay owner-only.** A visitor does have a
-   * public projection of the list in the Citations band since 260929c, but this
+   * public projection of the list in the Bibliography band since 260929c, but this
    * prose path deliberately has no `?? artefacts?.bibliography` fallback, unlike
    * `terms` above. So `works` is empty for them, and the card's owner-only
    * `inSpideryarn` line has the named `showInSpideryarn` lock as well.
@@ -1618,7 +1685,7 @@ export function Reader({
    * row is in view (BibliographyPanel.tsx § `Props.focus`); state rather than a
    * URL parameter because nothing about it should survive a reload. A chat's
    * way back and, since plan 261010e, a citation card's *Open in Sources* set
-   * it; Glossary, Ideas and Debate have the same shape (item-focus.ts).
+   * it; Glossary, Ideas and Claims have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
@@ -1786,14 +1853,36 @@ export function Reader({
    */
   const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
   const termFocusTaken = useCallback((taken: ItemFocus) => setTermFocus(focusTaken(taken)), []);
+  /* The fresh selection box closes as Glossary opens. Its focused Add button
+     disappears, so the band takes focus once it (or the selected term's row)
+     exists; this request is separate from the visual scroll-and-flash focus. */
+  const [glossarySelectionFocus, setGlossarySelectionFocus] =
+    useState<GlossarySelectionFocus | null>(null);
+  const glossarySelectionFocusNumber = useRef(0);
+  const glossarySelectionFocusTaken = useCallback(
+    (taken: GlossarySelectionFocus) =>
+      setGlossarySelectionFocus((now) => {
+        if (!now || now.kind !== taken.kind || now.n !== taken.n) return now;
+        if (now.kind === "term" && (taken.kind !== "term" || now.id !== taken.id)) return now;
+        return null;
+      }),
+    [],
+  );
   const [ideaFocus, setIdeaFocus] = useState<ItemFocus | null>(null);
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
-  /* A Situate finding in Investigate's dossier (plan 261024o), asked for by a
-     margin *literature* line's *Open in Sources*. */
+  /* A Situate item in Where it sits' dossier: a finding asked for by a margin
+     *literature* line's *Open in Sources*, or a finding/overview chat's way back. */
   const [findingFocus, setFindingFocus] = useState<ItemFocus | null>(null);
   const findingFocusTaken = useCallback((taken: ItemFocus) => setFindingFocus(focusTaken(taken)), []);
+  /* An explanation in its band: a margin *Explained* line's *Open in
+     Explanations* (plan 261028c). */
+  const [explanationFocus, setExplanationFocus] = useState<ItemFocus | null>(null);
+  const explanationFocusTaken = useCallback(
+    (taken: ItemFocus) => setExplanationFocus(focusTaken(taken)),
+    [],
+  );
   /**
    * **Open Glossary on one term and bring its row into view** — the prose
    * card's *Open in Glossary* and its second tap, and a chat's way back to a
@@ -1829,6 +1918,7 @@ export function Reader({
       switch (slot) {
         case "term":
           setTermFocus(null);
+          setGlossarySelectionFocus(null);
           break;
         case "cite":
           setCiteFocus(null);
@@ -1841,6 +1931,9 @@ export function Reader({
           break;
         case "finding":
           setFindingFocus(null);
+          break;
+        case "explanation":
+          setExplanationFocus(null);
           break;
         default: {
           const unhandled: never = slot;
@@ -1864,10 +1957,11 @@ export function Reader({
    * **Open Bibliography on one work** — the focus and the move in one place,
    * so neither can be written without the other (GPT Sol's F7 on plan
    * 261009l). The move is one pushed entry naming the mode and the sub-mode
-   * (Bibliography is the absent default), so a reader on Not cited, Links, Reception or
-   * Claims lands on the list the focus is for. Called by a chat's way back to a
-   * cited work, by Links' *In Bibliography*, by Claims' *Cited in this
-   * paragraph* (that plan's Stage 2), and by a citation card's *Open in Sources*.
+   * (Bibliography is named explicitly), so a reader on Where it sits, Not
+   * cited, Links, Reception or Claims lands on the list the focus is for.
+   * Called by a chat's way back to a cited work, by Links' *In Bibliography*,
+   * by Claims' *Cited in this paragraph* (that plan's Stage 2), and by a
+   * citation card's *Open in Sources*.
    *
    * If Bibliography is already the visible list and no conversation is open,
    * only restore the band and focus the row. A same-value pushed write creates
@@ -1883,7 +1977,7 @@ export function Reader({
          well; a move between Sources' own lists is still a sub-mode move. */
       if (mode !== "sources") leavePassageChat();
       if (mode !== "sources" || sourcesView !== "bibliography" || thread !== null) {
-        void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
+        void setSourcesWay({ mode: "sources", sources: "bibliography", thread: null }, { history: "push" });
       }
     },
     [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
@@ -1899,22 +1993,23 @@ export function Reader({
    */
   const findWebNote = owner?.bibliography.findWebNote;
   /**
-   * **Open Investigate on one Situate finding** — a margin *literature*
-   * line's *Open in Sources* (plan 261024o § Marginalia). The focus and the
-   * move in one tick, as `openBibliographyWork` does; the dossier lands on the
-   * finding once it has drawn it (SituateDossier.tsx, `data-finding`), and a
-   * finding a newer search has replaced is dropped there, opening on the list.
-   * This is a destination press, not a chat's way back: an open conversation
-   * is cleared so it cannot cover the row, and Investigate's arrival does not
-   * reopen another while the focus is being served.
+   * **Open *Where it sits* on one literature-search item** — a margin
+   * finding's *Open in Sources*, or a finding/overview chat's way back. The
+   * focus and the move happen in one tick; the dossier lands once its target
+   * is drawn (`data-finding`). An item a newer search has replaced is dropped
+   * there, opening on the dossier. An open conversation is cleared so it
+   * cannot cover the target.
+   *
+   * `sources: null` is *Where it sits*: the default is written as no
+   * parameter, as nuqs writes it (sub-modes.ts § `subModeParams`).
    */
   const openFindingInSources = useCallback(
-    (findingId: string) => {
+    (itemId: string) => {
       setBandAway(false);
-      setFindingFocus(focusOn(findingId));
+      setFindingFocus(focusOn(itemId));
       if (mode !== "sources") leavePassageChat();
-      if (mode !== "sources" || sourcesView !== "investigate" || thread !== null) {
-        void setSourcesWay({ mode: "sources", sources: "investigate", thread: null }, { history: "push" });
+      if (mode !== "sources" || sourcesView !== "where" || thread !== null) {
+        void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
       }
     },
     [mode, sourcesView, thread, leavePassageChat, setSourcesWay],
@@ -2007,13 +2102,28 @@ export function Reader({
         case "quiz":
           openQuizAt(origin.batchId, origin.itemId);
           return;
+        /* A literature-search finding lands on its row; the overview lands
+           on the summary box (plan 261026g). `?thread=` is cleared so the
+           chat cannot cover the target. An item a newer search replaced
+           opens the dossier at its ordinary start (SituateDossier § focus). */
+        case "situate":
+          openFindingInSources(origin.itemId);
+          return;
         default: {
           const never: never = origin;
           return never;
         }
       }
     },
-    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, leavePassageChat, openQuizAt],
+    [
+      openTermAndLand,
+      openBibliographyWork,
+      setIdeaWay,
+      setSourcesWay,
+      leavePassageChat,
+      openQuizAt,
+      openFindingInSources,
+    ],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -2282,10 +2392,11 @@ export function Reader({
     geometry.leafDepth,
     !drawerOpen,
     skimKeys ?? quizStepKeys ?? quoteStepKeys ?? searchStepKeys,
-    /* …and the lowest-level sections while Structure is the mode — the unit
-       `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
-       keyboard.md § ← / → in Structure. */
-    mode === "structure" ? sectionDepth(geometry) : null,
+    /* …and the lowest-level sections while Structure is the mode — the
+       stride ↓ took over the band until 2026-10-01 — or sub-sections where the
+       article has them: Structure's frontier, the rows its "you are here" is
+       measured over (plan 261029a). keyboard.md § ← / → in Structure. */
+    mode === "structure" ? frontierStarts : null,
   );
 
   /* **The door after the current stop's block** — SkimPanel.tsx §
@@ -2325,7 +2436,12 @@ export function Reader({
   const quizRead = owner?.quiz ?? null;
   const drawnQuiz = quizRead?.status === "ready" && !quizRead.stale ? quizRead.quiz : null;
   const quizAfter = useMemo(() => {
-    if (!drawnQuiz || drawnQuiz.questions.length === 0) return null;
+    /* **Not while the margin is on screen**: there the questions are among its
+       notes (Greg, spya-fytjtf; plan 261029c), and drawn in both they would
+       say the same sentence twice, side by side. `marginRoom` is the very
+       condition the margin's notes are drawn on (`marginNotes` below), so a
+       question is always in exactly one of the two. */
+    if (marginRoom || !drawnQuiz || drawnQuiz.questions.length === 0) return null;
     const byBlock = questionsByAnchor(
       drawnQuiz.questions,
       article.blocks.map((b) => b.id),
@@ -2338,7 +2454,7 @@ export function Reader({
       );
     }
     return out;
-  }, [drawnQuiz, article.blocks, openQuizAt]);
+  }, [marginRoom, drawnQuiz, article.blocks, openQuizAt]);
 
   /**
    * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx.
@@ -2350,10 +2466,20 @@ export function Reader({
    * not re-render `TableView`.
    */
   const [ownerFeed, setOwnerFeed] = useState<MarginFeed>(NO_OWNER_FEED);
+  /* **The owner's explanations, for the margin and the prose both** (plan
+     261029j § 5): read by `ExplanationsFeed`, mounted below for an owner with
+     the experimental switch on, in every mode — the prose underlines them
+     whether or not the margin is open. Null otherwise, and for a stale list. */
+  const [ownerExplanations, setOwnerExplanations] = useState<readonly Explanation[] | null>(null);
+  /* Gate the value at the render boundary too. `ExplanationsFeed` clears its
+     parent on unmount, but passive-effect cleanup is after the switch-off
+     render; relying on it leaves one paint in which the hidden experiment's
+     marks and margin notes are still present. */
+  const drawnExplanations = isOwner && experimental.on ? ownerExplanations : null;
   const marginaliaIdeas = owner ? ownerFeed.ideas : (artefacts?.ideas?.ideas ?? null);
   /* **Other modes' items, already stored** (report 82, plan 261002b): the
-     owner's FAQ and Debate from the feed's read-only reads, a visitor's from
-     their payload. **Citations are the owner's, and only a fresh list** —
+     owner's FAQ and Reception from the feed's read-only reads, a visitor's from
+     their payload. **Bibliography is the owner's, and only a fresh list** —
      never `artefacts.bibliography`, because the prose's citation marks are
      owner-only (bibliography.md § Who sees it) and the margin is not the place to
      reverse that quietly. Comments are the one list both arms already share. */
@@ -2565,6 +2691,35 @@ export function Reader({
     () => new Map(article.blocks.map((b) => [b.id, b.text])),
     [article.blocks],
   );
+  /**
+   * **What a Quiz line in the margin needs to be answered there** (plan
+   * 261029i; Greg, spya-jzgrua: *"avoid having to jump away from marginalia
+   * mode to the learn mode"*). A context, not a prop through `marginNotes`,
+   * so `memo(TableView)` does not hear about it — `MarginCiteActions`' reason.
+   * Built from the read's fields rather than the read, which is a new object
+   * on every render (GPT Sol's plan review, F4). Owner only.
+   */
+  const quizKept = quizRead?.kept;
+  const quizNoteMark = quizRead?.noteMark;
+  const quizRefresh = quizRead?.refresh;
+  const quizClaimMark = quizRead?.claimMark;
+  const marginQuiz = useMemo<MarginQuiz | null>(
+    () =>
+      drawnQuiz && quizKept && quizNoteMark && quizRefresh && quizClaimMark
+        ? {
+            slug: slug,
+            quiz: drawnQuiz,
+            stale: false,
+            kept: quizKept,
+            noteMark: quizNoteMark,
+            refresh: quizRefresh,
+            claimMark: quizClaimMark,
+            blocks: blockText,
+            onJump: jumpTo,
+          }
+        : null,
+    [slug, drawnQuiz, quizKept, quizNoteMark, quizRefresh, quizClaimMark, blockText, jumpTo],
+  );
 
   /**
    * **What the reader has read, for the quiz** —
@@ -2572,10 +2727,24 @@ export function Reader({
    * reading-time levels, whether they can be believed yet, and the body's words
    * to measure a share in. Undefined when reading time is off, which the quiz
    * must not mistake for "read nothing".
+   *
+   * The words leave out what is folded shut on arrival (front and back matter,
+   * the title's echo), so the quiz's share and the masthead's read-so-far pie
+   * are the same share — read-filter.ts § `readSoFarWords`, plan 261025j.
    */
+  const { title: foldTitle, authors: foldAuthors, byline: foldByline } = article.meta;
   const bodyWords = useMemo(
-    () => new Map(article.blocks.filter(countsTowardReadingTime).map((b) => [b.id, b.words] as const)),
-    [article.blocks],
+    () =>
+      readSoFarWords(
+        article.blocks,
+        foldedOnArrival({
+          blocks: article.blocks,
+          matter: article.matter,
+          meta: { title: foldTitle, authors: foldAuthors, byline: foldByline },
+          titleOverridden: article.titleOverridden,
+        }),
+      ),
+    [article.blocks, article.matter, foldTitle, foldAuthors, foldByline, article.titleOverridden],
   );
   const readingLevels = owner?.readingTime.levels;
   const readingStatus = owner?.readingTime.status ?? "off";
@@ -2586,6 +2755,8 @@ export function Reader({
         : undefined,
     [readingLevels, readingStatus, bodyWords],
   );
+  /* The masthead's pie: a band, or nothing until the opening read has answered. */
+  const readSoFarBand = useMemo(() => readBandFor(readSoFar), [readSoFar]);
 
   /**
    * **Each block's position in the article** — Sources' Claims sub-mode puts
@@ -2602,6 +2773,9 @@ export function Reader({
      meta has no `publishedAt` in its type (it does not cross the public
      boundary), and then there is simply no marker. */
   const publishedAt = (article.meta as { publishedAt?: unknown }).publishedAt;
+  /* The year alone, when that is all the registry gave (Meta.publishedYear):
+     Sources takes the piece's year from either (SourcesMode.tsx § `pieceYear`). */
+  const publishedYear = (article.meta as { publishedYear?: unknown }).publishedYear;
 
   /**
    * **What every block link's card says** — each block's text and the section
@@ -2759,8 +2933,15 @@ export function Reader({
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
       relations: isOwner ? ownerFeed.relations : null,
       notes: isOwner ? ownerFeed.notes : null,
-      /* The owner's only, with the switch on: the feed reads it only then (plan 261024o). */
+      /* The owner's only: the feed reads it whatever the experimental switch says
+         since 2026-10-26 (spya-pkpqch, plan 261026g). */
       literature: isOwner ? ownerFeed.literature : null,
+      /* The owner's only, and the feed reads them only with the experimental
+         switch on: the mode is behind it (plan 261028c). */
+      explanations: drawnExplanations,
+      /* The owner's quiz, from the read the prose and the band share — never a
+         stale one, the prose's rule (plan 261029c). */
+      quiz: isOwner && drawnQuiz ? drawnQuiz : null,
       claims: marginaliaClaims,
       citations: marginaliaBibliography,
       comments,
@@ -2789,6 +2970,7 @@ export function Reader({
             onOpenAsked={openAskedFromMargin}
             onJump={jumpTo}
             onOpenFinding={openFindingFromMargin}
+            onOpenQuiz={openQuizAt}
           />
         </>,
       );
@@ -2822,6 +3004,9 @@ export function Reader({
     ownerFeed.relations,
     ownerFeed.notes,
     ownerFeed.literature,
+    drawnExplanations,
+    drawnQuiz,
+    openQuizAt,
     marginaliaClaims,
     marginaliaBibliography,
     comments,
@@ -2926,7 +3111,7 @@ export function Reader({
 
   /**
    * **Open the conversation a claim's mark names, beside the mode.** Only
-   * `?thread=` changes, so the reader stays in Debate and `overlay` draws the
+   * `?thread=` changes, so the reader stays in Sources and `overlay` draws the
    * conversation in `ChatDialog`: docked in the right-hand column when that
    * column is open and the window is wide enough, floating otherwise — the
    * block chat's rule, unchanged (plan 261005i, D3).
@@ -3105,7 +3290,27 @@ export function Reader({
     },
     [reopenItemChat, checkClaimInChat],
   );
-  /* What Debate's claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
+  /* A finding's chat, reopened if it has one: by its id, or (a chat started
+     before plan 261025h) by the lens it stored then. */
+  const askFinding = useCallback(
+    (finding: SituateFinding) => {
+      if (reopenItemChat(findingOrigin(finding)) || reopenItemChat(findingLensOrigin(finding))) return;
+      askFindingInChat(finding);
+    },
+    [reopenItemChat, askFindingInChat],
+  );
+  /* **The literature search's overview, in chat** (spya-mfuz6g, plan
+     261026g § Stage 2): its words whole in the question, its own origin
+     (`overviewOrigin`), reopened if it has a chat, as a finding is. */
+  const askOverview = useCallback(
+    (situate: Situate) => {
+      const origin = overviewOrigin(situate);
+      if (reopenItemChat(origin)) return;
+      handToChat(askInSources(overviewQuestion(situate.overview)), "send", origin);
+    },
+    [reopenItemChat, handToChat],
+  );
+  /* What Claims' claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
   const claimChats = useMemo(
@@ -3129,6 +3334,8 @@ export function Reader({
       onQuestion: askSourcesQuestion,
       onCheck: checkClaim,
       onAskWork: askWork,
+      onFinding: askFinding,
+      onOverview: askOverview,
       onOpen: openClaimChat,
     }),
     [
@@ -3141,6 +3348,8 @@ export function Reader({
       askSourcesQuestion,
       checkClaim,
       askWork,
+      askFinding,
+      askOverview,
       openClaimChat,
     ],
   );
@@ -3163,6 +3372,20 @@ export function Reader({
    * on every scroll (GPT Sol F5 on plan 261020g). Null for a visitor, whose
    * column draws no citations anyway. MarginaliaColumn.tsx § MarginCiteSenders.
    */
+  /* **An *Explained* line's two buttons** (plan 261028c): the anchored chat the
+     band's row sends, and the band itself, landing on the row. Owner only, as
+     the lines are. */
+  const openExplanationInBand = useCallback(
+    (explanationId: string) => {
+      setExplanationFocus(focusOn(explanationId));
+      showBand("explanations");
+    },
+    [showBand],
+  );
+  const marginExplanationActions = useMemo<MarginExplanationSenders | null>(
+    () => (isOwner ? { onAsk: askExplanationInChat, onOpen: openExplanationInBand } : null),
+    [isOwner, askExplanationInChat, openExplanationInBand],
+  );
   const marginCiteActions = useMemo<MarginCiteSenders | null>(
     () =>
       isOwner
@@ -3423,7 +3646,7 @@ export function Reader({
             }
           : undefined,
         openQuickSearch: isOwner ? openQuickSearch : undefined,
-        /* The bar's suggested lens row: Debate's own handoff, so the question
+        /* The bar's suggested lens row: Reception's own handoff, so the question
            waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
         askThroughLens: isOwner ? suggestedLensInChat : undefined,
         /* The bar's *Ask the guide* row, after a pick that could not tell. The owner's, as Chat is. */
@@ -3453,6 +3676,62 @@ export function Reader({
       openTheGuide,
       chipModes,
     ],
+  );
+  /**
+   * **_Add to glossary_ on a selection** — Greg, 2026-10-28 (spya-turkg3):
+   * *"When I highlight a piece of text, it gives me the option to highlight or
+   * comment it. Okay, great. Can we also have the option to add it to the
+   * glossary?"* Plan 261029d, Part 2.
+   *
+   * **Exactly the bar's *Look up “X”* for the selected words**, through the
+   * same `executor`: an entry that already names them is opened, and anything
+   * else is handed to the Glossary band's *Look up a term* box, whose finished
+   * answer adds the term for the owner (glossary.md § A finished answer adds
+   * the term). So the gates are the bar's: the owner, a settled glossary for
+   * an ask (`glossaryReady`, so nothing generates on open), and term-sized
+   * words (`parseAskedTerm`). Plus the Dock drawing Glossary, as `moreTerms`
+   * asks. `undefined` means no button anywhere.
+   */
+  const glossaryDrawn = dockDraws("glossary");
+  const selectionGlossary = useMemo(() => {
+    if (!isOwner || !glossaryDrawn) return undefined;
+    const proposalFor = (words: string) => glossaryProposalFor(words, { ready: glossaryReady, terms });
+    return {
+      offers: (words: string) => proposalFor(words) !== null,
+      /**
+       * **Whether it went**: decided again at the press, and `true` only for
+       * the runner's `close`. A `stay` (the entry was hidden since the chip
+       * appeared) or no runner leaves the selection and the highlight as they
+       * were, rather than throwing them away for nothing (GPT Sol, plan
+       * review F6). Both glossary runners answer synchronously.
+       */
+      add: (words: string, takeFocus = false): boolean => {
+        const proposal = proposalFor(words);
+        if (!proposal) return false;
+        const outcome = runProposal(executor.runners, proposal);
+        const went = outcome !== null && !(outcome instanceof Promise) && outcome.kind === "close";
+        if (went && takeFocus) {
+          setGlossarySelectionFocus({
+            ...(proposal.id === "glossary-open"
+              ? { kind: "term" as const, id: proposal.termId }
+              : { kind: "band" as const }),
+            n: ++glossarySelectionFocusNumber.current,
+          });
+        }
+        return went;
+      },
+    };
+  }, [isOwner, glossaryDrawn, glossaryReady, terms, executor]);
+  /** The chip's *Add to glossary*: a finger's words, put away as its other press puts them away. */
+  const chipGlossary = useMemo(
+    () =>
+      selectionGlossary && {
+        offers: selectionGlossary.offers,
+        add: (anchor: SelectionAnchor) => {
+          if (selectionGlossary.add(anchor.quote)) window.getSelection()?.removeAllRanges();
+        },
+      },
+    [selectionGlossary],
   );
   /**
    * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
@@ -3934,6 +4213,8 @@ export function Reader({
               chats={entryChats}
               focus={termFocus}
               onFocusTaken={termFocusTaken}
+              selectionFocus={glossarySelectionFocus}
+              onSelectionFocusTaken={glossarySelectionFocusTaken}
             />
           );
         return artefacts?.glossary ? (
@@ -3967,7 +4248,7 @@ export function Reader({
             owner={isOwner}
             article={article}
             leafDepth={geometry.leafDepth}
-            sections={sections}
+            frontier={frontier}
             layoutKey={layoutKey}
             supplementOf={geometry.supplementOf}
             arcByRow={arcCells}
@@ -4164,6 +4445,7 @@ export function Reader({
             onJump={bandJump}
             blockOrder={blockOrder}
             publishedAt={publishedAt}
+            publishedYear={publishedYear}
             articleTitle={article.meta.title}
             workChats={workChats}
             claimChats={claimChats}
@@ -4184,6 +4466,21 @@ export function Reader({
       case "faq":
         if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={bandJump} /> : null;
         return <FaqBand slug={slug} onJump={bandJump} />;
+      /* **The owner's alone** (plan 261028c): no public projection, so a
+         visitor's band is `VisitorBand`, which `visitorGap` puts in the slot
+         before this switch is asked (POLICY.explanations, visitor.ts). Each
+         quote is a jump, and *Ask in chat* is the anchored passage chat. */
+      case "explanations":
+        return owner ? (
+          <ExplanationsBand
+            slug={slug}
+            onJump={bandJump}
+            onAsk={askExplanationInChat}
+            onExplanations={setOwnerExplanations}
+            focus={explanationFocus}
+            onFocusTaken={explanationFocusTaken}
+          />
+        ) : null;
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
@@ -4408,6 +4705,8 @@ export function Reader({
             slug={slug}
             shown={marginRoom}
             awaitingStructure={awaitingStructure(article.tree)}
+            bibliography={owner.bibliography}
+            quiz={owner.quiz}
             onFeed={setOwnerFeed}
           />
         )}
@@ -4532,7 +4831,7 @@ export function Reader({
 
        `null`, not `true`: the rail goes back to following the window and
        the mode, which in a mode means on. Writing `true` would pin it,
-       and the reader would find it still there in outline mode later
+       and the reader would find it still there in Plain later
        with no memory of having asked for that.
 
        On the transition and **not** as a standing effect, which is the
@@ -4585,6 +4884,10 @@ export function Reader({
        portal — reads its card and its "is this block real" answer from here.
        BlockLinkCard.tsx. */
     <BlockLinkProvider index={blockLinks} resolveXref={resolveXref} readingTimeFor={owner?.readingTime.timeFor}>
+    {/* Whether `.reader` below carries `band-covers`, for the bands drawn
+        inside it to say on `<html>` (band-root-flags.ts). The same expression
+        as the class, so the two cannot disagree. */}
+    <BandCoversContext.Provider value={fit.modeW === 0}>
     <div
       /* `text-alone` says the prose has no mode band beside it, so the
          stylesheet can centre the reading column and put the masthead over it
@@ -4607,10 +4910,11 @@ export function Reader({
          beside the `--mode-w` it is derived from. **`fit.modeW === 0`, not
          `bandCovers`**: it is also true when no band is open at all, and one
          rule wants exactly that — narrow Marginalia in Plain hides the
-         small-screen banner with `.band-covers:has(.mode-band, .marg-narrow)`
+         small-screen banner with `.reader.band-covers` and a flag on `<html>`
          (styles/narrow-window.css). So every rule keyed off this class also
-         names what is lying over the prose: `.mode-band`, or there
-         `.marg-narrow` — narrow-window.css § a band with no room,
+         names what is lying over the prose: `data-band-covers` (a band, said
+         by the band — band-root-flags.ts, from `BandCoversContext` above), or
+         there `data-marg-narrow` — narrow-window.css § a band with no room,
          tests/spine-width.test.ts, tests/layout-margin.test.ts. */
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
@@ -4673,7 +4977,11 @@ export function Reader({
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} />
+      <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} readBand={readSoFarBand} />
+      {/* The masthead again, in brief, while the reader scrolls back on a small
+          device — ReminderBar.tsx says when. Not while a band is open: it
+          would lie over the band's own head (plan 261029d). */}
+      {!bandOpen && <ReminderBar article={article} readBand={readSoFarBand} />}
       {/* The statement, where a visitor's eye already is on arrival. The
           *persistent* half of it is the chip in the bar below, which is sticky;
           this is the sentence and the ask, which belong with the title. Not
@@ -4708,7 +5016,7 @@ export function Reader({
           the rail is 12px of the window the band is negotiating for. The raw
           parameter, not the resolved `fit.spine`, because this is a question
           about a band that is *not open yet*: `fitView` turns the rail off in
-          outline mode, where there is no band, and reading that would make the
+          Plain, where there is no band, and reading that would make the
           banner blink in and out as an iPad reader switched modes. layout.ts §
           `modeSpine` is where the two resolutions were made one.
 
@@ -4750,7 +5058,7 @@ export function Reader({
           BarStuckSentinel.tsx. */}
       {showCrumbs && <BarStuckSentinel />}
       {showBar && (
-        <div className="controls">
+        <div className="controls" ref={barFocusRef}>
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
           {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />}
@@ -4790,6 +5098,8 @@ export function Reader({
         </div>
       )}
       <MarginCiteActions.Provider value={marginCiteActions}>
+      <MarginQuizContext.Provider value={marginQuiz}>
+      <MarginExplanationActions.Provider value={marginExplanationActions}>
       <TableView
         article={article}
         /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
@@ -4865,6 +5175,8 @@ export function Reader({
         terms={termSelections}
         cites={citeSelections}
         xrefs={xrefs}
+        /* The owner's explanations, underlined in every mode (plan 261029j). */
+        explained={drawnExplanations}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}
         hitHues={hitHues}
@@ -4872,6 +5184,8 @@ export function Reader({
         onSelect={selectProse}
         onOpenComment={openCommentDialog}
       />
+      </MarginExplanationActions.Provider>
+      </MarginQuizContext.Provider>
       </MarginCiteActions.Provider>
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and
@@ -4892,6 +5206,7 @@ export function Reader({
           key={`${slug}:${mode}`}
           suppressed={Boolean(annotating || overlay || openComment)}
           onSelect={selectProseByTouch}
+          glossary={chipGlossary}
         />
       )}
       {owner && annotating && (
@@ -5120,6 +5435,27 @@ export function Reader({
                     api.remove(id);
                     void setNote((current) => (current === id ? null : current));
                   },
+                  /* **_Add to glossary_, the chip's second press on a mouse's
+                     words** (plan 261029d). The reader selected to look a term
+                     up, not to mark it, so an untouched highlight goes as
+                     Copy's does; a touched one stays. The box closes either
+                     way, because the reader has gone to the glossary. */
+                  onAddToGlossary:
+                    selectionGlossary && openComment.quote !== undefined && selectionGlossary.offers(openComment.quote)
+                      ? () => {
+                          const id = openComment.id;
+                          const quote = openComment.quote;
+                          if (quote === undefined || !selectionGlossary.add(quote, true)) return false;
+                          const api = commentsNow.current;
+                          const row = api?.comments.find((comment) => comment.id === id);
+                          if (api && row && isPristineHighlight(row) && !copyOnlyProtected.current.has(id)) {
+                            copyOnlyProtected.current.add(id);
+                            api.remove(id);
+                          }
+                          void setNote((current) => (current === id ? null : current));
+                          return true;
+                        }
+                      : undefined,
                 }
               : undefined
           }
@@ -5283,6 +5619,11 @@ export function Reader({
            view (plan 261010e). Owner only, as the marks are. On a row with
            no note it also starts the one web search (plan 261018o). */
         onOpenCitedWork={owner ? openCitedWorkFromCard : null}
+        /* **An explained passage's card** (plan 261029j § 4): the list the
+           prose underlines, and the margin note's own two senders, so a chat
+           started from the card records the same origin as one from the band. */
+        explanations={drawnExplanations}
+        explanationActions={marginExplanationActions}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}
@@ -5290,6 +5631,7 @@ export function Reader({
         onJump={jumpTo}
         onFollowNote={followNote}
       />
+      {owner && experimental.on && <ExplanationsFeed slug={slug} bandOpen={mode === "explanations"} onExplanations={setOwnerExplanations} />}
 
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —
@@ -5447,6 +5789,7 @@ export function Reader({
           is over the bars it is measuring. ViewportProbe.tsx. */}
       <ViewportProbe laidOutWidth={windowWidth} />
     </div>
+    </BandCoversContext.Provider>
     </BlockLinkProvider>
   );
 }

@@ -1132,7 +1132,7 @@ wrong — but worth knowing.
 
 - **Wanting an *Ask in chat* button on a quote?** This mode has none. Today only Glossary entries
   and Bibliography rows have one (the shared `AskInChatButton` in
-  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Debate's own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's. The
+  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Claims' own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's. The
   pattern to copy is [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat).
 - [glossary.md](glossary.md) — the mode this took its shape from: the prioritised order, the
   threshold slider, and the condition attached to keeping model scores

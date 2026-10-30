@@ -90,7 +90,6 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { addHref, ADMIN_HREF, navigate, PROFILE_HREF } from "./router.js";
 import { slugFromUrl } from "../ingest.js";
 import { Button } from "./components/ui/button.js";
-import { media } from "./media.js";
 import { ArchivedMark, ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { ShelfPhoneHint } from "./ShelfPhoneHint.js";
@@ -111,7 +110,6 @@ import { useShelf } from "./useShelf.js";
 import { usePreloadRecent } from "./usePreloadRecent.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
-import { layoutViewportWidth } from "./reader/measure.js";
 import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
 
 export function Library({
@@ -532,7 +530,7 @@ export function Library({
      installed phone the document is laid out across the whole physical screen
      and every page has to add back the edge it faces (styles/tokens.css). Every
      other signed-in `<main>` does — `ProfilePage`, `PrivacyPage`, `ContactPage`
-     and `ChangelogPage` at `3.5rem + --safe-top`, `Metadata` and `Tweets` at
+     and `ChangelogPage` at `3.5rem + --safe-top`, `Metadata` at
      `2.5rem + --safe-top` — and this page's bare `pt-10` was the one that did
      not, so on an iPhone the shelf's own `<h1>` sat at y=40 inside a 59px
      inset: under the clock. Measured 2026-09-08 with the insets stood up in
@@ -718,7 +716,12 @@ export function Library({
           flow so it scrolls away. ShelfPhoneHint.tsx; plan 261002b § Part C. */}
       <ShelfPhoneHint />
 
-      <AddArticle queue={queue} />
+      {/* **The add box takes the focus on arrival**, not the search box —
+          Greg, spya-nmx5ga. Except when the page arrived with a non-empty
+          `?q=`: that reader came to look at results, so nothing is focused.
+          AddArticle reads this once, on mount (`takesFocusOnArrival` there has
+          the rest). Plan 261027a. */}
+      <AddArticle queue={queue} focusOnArrival={query === ""} />
 
       {/* **Several files dropped at once**, each added with only its title,
           authors and abstract read — nothing at all while there is no batch.
@@ -1183,54 +1186,11 @@ function ShowAllRows({ total, onShowAll }: { total: number; onShowAll: () => voi
 /* The cards' own matcher — `filterEntries` — lives in shelf-narrow.ts since
    2026-09-28, so the archived list is searched by the same rule. */
 
-/**
- * **Does the search box take the focus as the shelf arrives?**
- *
- * > When I open the logged-in Spideryarn homepage with the shelf, let's put
- * > the focus by default on the search box.
- * >
- * > — Greg, 2026-09-29
- *
- * Yes, unless one of four readers would be worse off for it:
- *
- *  - **a finger is the primary pointer** — the on-screen keyboard would cover
- *    half the shelf they came to look at. `pointer`, not `any-pointer`, so a
- *    touchscreen laptop with a trackpad still gets it; and `media()` answers
- *    `false` where it cannot tell, so an unknown pointer gets it too;
- *  - **the page arrived with a query in it** — they are reading results, and a
- *    stray key would change their query;
- *  - **something else already has the focus** — the shelf takes it from nobody;
- *  - **the box is not wholly on screen** — scroll restoration is manual
- *    (main.tsx), so Back from far down an article can mount the shelf scrolled,
- *    and typing into a box you cannot see is worse than no focus. Scrolling to
- *    it would yank the page instead.
- *
- * docs/plans/260929g-shelf-search-focus-and-metadata-chord.md § Part A.
- */
-function takesFocusOnArrival(input: HTMLInputElement, arrivingQuery: string): boolean {
-  if (media("(pointer: coarse)") || arrivingQuery !== "") return false;
-  const active = document.activeElement;
-  if (active !== null && active !== document.body) return false;
-  const box = input.getBoundingClientRect();
-  return (
-    box.top >= 0 &&
-    box.right <= layoutViewportWidth() &&
-    box.bottom <= window.innerHeight &&
-    box.left >= 0
-  );
-}
-
+/* **The search box does not take the focus on arrival**: the add box above does
+   (AddArticle.tsx § takesFocusOnArrival). Greg, spya-nmx5ga: *"By default, put
+   the focus in the add box, not the search box."* Plan 261027a. */
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const input = useRef<HTMLInputElement>(null);
-  /* **Decided once, on mount**, from the query the page arrived with: clearing
-     a query must not re-grab the focus, and neither must the shelf's data
-     landing. Back from an article remounts the shelf, so it asks again — that
-     is arriving too. `preventScroll`, so arriving never moves the page. */
-  const arrivingQuery = useRef(value);
-  useEffect(() => {
-    const el = input.current;
-    if (el && takesFocusOnArrival(el, arrivingQuery.current)) el.focus({ preventScroll: true });
-  }, []);
   /* **Was the cross pressed with a finger or pen?** Read at the `pointerdown`,
      never off the click: since iOS 18.2 a finger's click can say `mouse`
      (docs/project/touch.md § The spine). The click still tells us when no
@@ -1331,12 +1291,11 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
           </button>
         )}
       </div>
-      {/* **A link here was meant for the add box.** The box above takes the
-          cursor on arrival, so a reader who arrives and pastes an address
-          pastes it here. A complete address is a strong signal that they meant
-          the add box. Offered, not done: the press goes through the same
-          `/add/<url>` as Add, and Enter still only puts the keyboard away.
-          Plan 261011l. */}
+      {/* **A link here was meant for the add box.** A reader can still click
+          the search box and paste one; a complete address is a strong signal
+          that they meant the add box. Offered, not done: the press goes
+          through the same `/add/<url>` as Add, and Enter still only puts the
+          keyboard away. Plan 261011l. */}
       {link !== null && (
         <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
           That's a link. Add it to your shelf?

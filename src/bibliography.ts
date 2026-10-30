@@ -71,6 +71,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
 import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import { firstAuthor, scholarUrl } from "./scholar-search.js";
+import { type AuthorYearCite, authorYearCites, citeKey, surnameKey } from "./citation-author-year.js";
 import {
   type Block,
   type BlockId,
@@ -83,6 +84,7 @@ import {
   type CitationScoreDrops,
   MAX_CITATIONS,
   MAX_MENTIONS,
+  MAX_TEXT_ROWS,
   type Meta,
   type Tree,
 } from "./types.js";
@@ -109,8 +111,14 @@ export { MAX_MENTIONS };
  * confident it knows the work, and null otherwise; the schema makes it
  * required and nullable. Greg: *"Maybe if the model is confident (e.g. because
  * it's well-known), but if in doubt default to Unknown."*
- * docs/plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md. */
-export const PROMPT_VERSION = "citations/6";
+ * docs/plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md.
+ *
+ * `citations/7`, 2026-10-27: the prompt text is unchanged. Code adds a row for
+ * every work the body cites author–year that the model left out
+ * (`rowsFromText`), and a numbered run with no years is no longer sent as the
+ * reference list — so the same article now yields a different list. Plan
+ * docs/plans/261027b-citations-missed-in-the-text-filled-by-code.md. */
+export const PROMPT_VERSION = "citations/7";
 
 /** Field caps the prompt states, and what code clips to. They are also what `PER_WORK_TOKENS` is sized on. */
 export const TITLE_CAP = 120;
@@ -200,6 +208,7 @@ export function emptyDrops(): CitationDrops {
     entryDisagrees: 0,
     authorsUnfound: 0,
     yearUnfound: 0,
+    textOverCap: 0,
   };
 }
 
@@ -344,10 +353,20 @@ export function verifyPlace(
 export interface Draft {
   /** Pre-guard metadata key, only for folding; never stored or used as a displayed fact. */
   foldKey?: string;
+  /**
+   * The model's own authors and year before the guard took out what the
+   * article does not give — only to see that this row already stands for an
+   * author–year citation (`covers`), so code does not list it twice. Never
+   * stored or shown: `Yann LeCun` is not in the article, `LeCun et al. (2006)` is.
+   */
+  said?: { authors?: string; year?: string };
   title: string;
   authors?: string;
   year?: string;
-  why: string;
+  /** Absent only on a row code listed from the text (`listedBy`). */
+  why?: string;
+  /** CitedWork § `listedBy`. */
+  listedBy?: "text";
   relevance?: number;
   influence?: number;
   reference?: CitationPlace;
@@ -816,6 +835,7 @@ function readDraft(
   const influence = influenceCounting(w.influence, scores);
   return withIdentifierEntry({
     foldKey,
+    said: { ...(said.authors ? { authors: said.authors } : {}), ...(said.year ? { year: said.year } : {}) },
     title: clip(fields.title, TITLE_CAP, drops),
     ...(authors ? { authors: clip(authors, AUTHORS_CAP, drops) } : {}),
     ...(year && year.length <= 16 ? { year } : {}),
@@ -1281,7 +1301,7 @@ function arxivUrl(id: string): string {
 }
 
 /* `scholarUrl` and `firstAuthor` moved to src/scholar-search.ts on 2026-10-03,
-   so Debate's panel can build the same search in the browser — this module is
+   so Reception's panel can build the same search in the browser — this module is
    server code. Re-exported, because the server's callers still reach them here. */
 export { firstAuthor, scholarUrl };
 
@@ -1525,7 +1545,9 @@ function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
   return {
     title: a.title,
     ...(a.foldKey ? { foldKey: a.foldKey } : {}),
-    why: a.why,
+    ...(a.said ? { said: a.said } : {}),
+    /* Model rows only: code's rows from the text join after both folds. */
+    ...(a.why === undefined ? {} : { why: a.why }),
     ...(authors ? { authors } : {}),
     ...(year ? { year } : {}),
     ...(relevance === undefined ? {} : { relevance }),
@@ -1605,12 +1627,15 @@ export function idsByKey(
        row keeps its id even if the model also changes its metadata on this
        re-run. The collision pass below still removes the alias when two old
        rows claim it (including one already stored under the arXiv key), rather
-       than moving either row's Find/Investigate state onto the other. */
+       than moving either row's Find/Dig deeper state onto the other. */
     if (c.key.startsWith("url:") && idKey?.startsWith("arxiv:") && idKey !== key) {
       claim(idKey, c.id);
     }
     workClaims.set(workKey, (workClaims.get(workKey) ?? 0) + 1);
     if (!workOwners.has(workKey)) workOwners.set(workKey, c.id);
+    /* Plan 261027b: the hand-over between a code row and a model row. */
+    const alias = authorYearAlias(c, "old");
+    if (alias !== null) claim(alias, c.id);
   }
   for (const key of ambiguous) seen.delete(key);
   for (const [workKey, claims] of workClaims) {
@@ -1637,6 +1662,186 @@ function withBlockEntry(
   if (block?.role !== "reference" || block.noteId || claims.get(block.id) !== 1) return draft;
   const entry = entryOfBlock(block);
   return entry ? { ...draft, entry } : draft;
+}
+
+/* ------------------------------------------------- filled from the text -- */
+
+/**
+ * **Where code reads author–year citations**: prose the reader reads as the
+ * article — not a heading, a note or a reference entry, which name works
+ * without citing them (plan 261027b).
+ */
+function citesInBody(block: Block): boolean {
+  return (
+    (block.kind === "text" || block.kind === "quote" || block.kind === "caption") &&
+    !block.noteId &&
+    block.role !== "reference" &&
+    isBodyBlock(block)
+  );
+}
+
+/**
+ * **How many citations of the stronger forms make an article one that cites
+ * author–year** — and so one where a lone `Levine (2021)` is a citation rather
+ * than a title before its year. Wikipedia's synesthesia page, which cites by
+ * footnote, has none and three titles (`Voyelles (1871)`); LeCun's has
+ * hundreds.
+ */
+const AUTHOR_YEAR_ARTICLE = 3;
+
+/**
+ * Every author–year citation in the body, with its block, in reading order. A
+ * lone narrative name (`CitedWork`'s `form` and `lone`) only in an article with
+ * `AUTHOR_YEAR_ARTICLE` distinct citations of the other forms.
+ */
+export function bodyAuthorYearCites(blocks: readonly Block[]): { block: Block; cite: AuthorYearCite }[] {
+  const all = blocks.filter(citesInBody).flatMap((block) => authorYearCites(block.text).map((cite) => ({ block, cite })));
+  const strong = new Set(all.filter(({ cite }) => cite.form === "parenthetical" || !cite.lone).map(({ cite }) => citeKey(cite)));
+  return strong.size >= AUTHOR_YEAR_ARTICLE ? all : all.filter(({ cite }) => cite.form === "parenthetical" || !cite.lone);
+}
+
+/** `2018b` → base `2018`, letter `b`; every year a field names, so `2008, 2010` is two. */
+function yearsOf(value: string | undefined): { base: string; letter: string }[] {
+  return [...(value ?? "").matchAll(/\b(1[5-9]\d\d|20\d\d)([a-z])?\b/g)].map((m) => ({ base: m[1]!, letter: m[2] ?? "" }));
+}
+
+/**
+ * **The author–year identity a row's own fields give**: the last word of the
+ * first author (`Yann LeCun` → `lecun`) and its years, else the title when it
+ * is itself a label (`Craik (1943)`). Null when there is neither.
+ */
+function authorYearOf(
+  draft: Pick<Draft, "authors" | "year" | "title">,
+): { surname: string; years: { base: string; letter: string }[] } | null {
+  const author = firstAuthor(draft.authors).replace(/['’]s$/u, "");
+  const years = yearsOf(draft.year);
+  if (author && years.length > 0) return { surname: surnameKey(author), years };
+  const label = authorYearCites(draft.title)[0];
+  return label ? { surname: surnameKey(label.surnames[0] ?? ""), years: yearsOf(label.year) } : null;
+}
+
+/**
+ * **The id hand-over key between a code row and the model's row for one
+ * work** — `levine 2021`, including a letter suffix when present — so a work
+ * that was a code row on one run and the model's on the next keeps its id, and
+ * what is keyed on it: a chat, a note (GPT Sol's plan review, 5). `from` is which side the row is on,
+ * so the key only ever crosses between a code row and a model row; two model
+ * rows go on inheriting by their own keys, as before. Used only where it is
+ * unique on both sides.
+ */
+export function authorYearAlias(
+  draft: Pick<Draft, "authors" | "year" | "title" | "listedBy" | "said" | "mentions">,
+  from: "old" | "new",
+): string | null {
+  /* The model's own words when the guard took the author out (`Draft.said`);
+     a stored row has none, so then its verified mentions, when every one of
+     them is the same single citation (`Levine, 2021`). A label-shaped title is
+     last: a verified `Smith, 2020` outranks a mistaken title `Roberts (1999)`. */
+  const cited = new Set(draft.mentions.flatMap((m) => authorYearCites(`(${m.quote})`).map((c) => citeKey(c))));
+  const [onlyCited] = cited.size === 1 ? [...cited] : [];
+  const ay =
+    authorYearOf({
+      title: "",
+      ...(draft.authors === undefined ? {} : { authors: draft.authors }),
+      ...(draft.year === undefined ? {} : { year: draft.year }),
+    }) ??
+    (draft.said ? authorYearOf({ ...draft.said, title: "" }) : null) ??
+    (onlyCited ? { surname: onlyCited.split(" ")[0]!, years: yearsOf(onlyCited.split(" ")[1]) } : null) ??
+    authorYearOf({ title: draft.title });
+  const year = ay?.years[0];
+  if (!ay?.surname || !year) return null;
+  /* An old code row is found by a new model row, and an old model row by a new code row. */
+  const code = (draft.listedBy === "text") === (from === "old");
+  return `\0citation-author-year:${code ? "code" : "model"}:${ay.surname} ${year.base}${year.letter}`;
+}
+
+/**
+ * **Does a model row already stand for this citation?** Two ways, each strict
+ * enough not to swallow a neighbour (GPT Sol's plan review, 1 and 6):
+ *
+ * - its own surname and year are the citation's — the base year equal, and the
+ *   letters equal unless one side has none (`2006` against `2006a` is one work,
+ *   on the safe side of a duplicate);
+ * - or one of its verified mentions overlaps the citation **and that mention
+ *   holds no other citation**: a model row for Chua whose mention is the whole
+ *   of `(Chua et al., 2018; Yu et al., 2020)` does not stand for Yu.
+ */
+function covers(draft: Draft, hit: { block: Block; cite: AuthorYearCite }): boolean {
+  const surname = surnameKey(hit.cite.surnames[0] ?? "");
+  const [year] = yearsOf(hit.cite.year);
+  for (const ay of [authorYearOf(draft), draft.said ? authorYearOf({ ...draft.said, title: "" }) : null]) {
+    if (!ay || !year || ay.surname !== surname) continue;
+    if (ay.years.some((y) => y.base === year.base && (!y.letter || !year.letter || y.letter === year.letter))) return true;
+  }
+  /* Its own entry names them: a row the model gave only a footnote
+     `Porter, D. (2005). "Predicting…"` and no authors stands for `Porter (2005)`. */
+  if (year && surname) {
+    const named = (text: string) => {
+      const withoutNumber = text.replace(/^\s*(?:\[\d{1,3}\]|\d{1,3}[.)])\s*/u, "");
+      const first = /^((?:(?:van|von|der|den|de|du|da|di|del|della|la|le|ten|ter)\s+)*(?:\p{Lu}|\p{Lo})[\p{L}'’]*(?:-\p{L}[\p{L}'’]*)*)/u.exec(withoutNumber)?.[1];
+      return first !== undefined && surnameKey(first) === surname &&
+        yearsOf(text).some((y) => y.base === year.base && (!y.letter || !year.letter || y.letter === year.letter));
+    };
+    /* `entry` has already been proved to belong to this row. A `reference`
+       quote may be a compound footnote naming several works; finding this
+       surname and year somewhere in it does not prove this row is that work. */
+    if (draft.entry !== undefined && named(draft.entry)) return true;
+  }
+  return draft.mentions.some((m) => {
+    if (m.blockId !== hit.block.id) return false;
+    const end = m.start + m.quote.length;
+    if (end <= hit.cite.start || m.start >= hit.cite.end) return false;
+    const inside = new Set(
+      authorYearCites(hit.block.text)
+        .filter((c) => c.start < end && c.end > m.start)
+        .map((c) => citeKey(c)),
+    );
+    return inside.size === 1;
+  });
+}
+
+/**
+ * **A row for every work the body cites author–year that no model row covers**
+ * (plan 261027b, feedback spya-ez2vus). Its title, authors, year and mentions
+ * are the article's own characters; it has no `why` and no scores, because no
+ * model has read it. One row per first author and year (`citeKey`), so two
+ * different works by one surname in one year are one row — accepted, as the
+ * safe side of a duplicate. At most `MAX_TEXT_ROWS`, first cited first.
+ */
+export function rowsFromText(covered: readonly Draft[], blocks: readonly Block[], drops: CitationDrops): Draft[] {
+  const byKey = new Map<string, { block: Block; cite: AuthorYearCite }[]>();
+  for (const hit of bodyAuthorYearCites(blocks)) {
+    const key = citeKey(hit.cite);
+    const hits = byKey.get(key);
+    if (hits) hits.push(hit);
+    else byKey.set(key, [hit]);
+  }
+  const rows: Draft[] = [];
+  for (const hits of byKey.values()) {
+    if (hits.some((hit) => covered.some((draft) => covers(draft, hit)))) continue;
+    if (rows.length >= MAX_TEXT_ROWS) {
+      drops.textOverCap++;
+      continue;
+    }
+    const first = hits[0]!.cite;
+    const mentions: CitationPlace[] = [];
+    for (const { block, cite } of hits) {
+      if (mentions.length === MAX_MENTIONS) break;
+      if (mentions.some((m) => m.blockId === block.id && m.start === cite.start)) continue;
+      mentions.push({ blockId: block.id, quote: block.text.slice(cite.start, cite.end), start: cite.start });
+    }
+    rows.push({
+      /* The article's own words for the names, so the row says `Kaplan et al
+         (2020)` where the article does — the shape the prompt asks the model for
+         when the article gives no title. */
+      title: `${first.names} (${first.year})`,
+      authors: first.etAl ? `${first.surnames[0]} et al.` : first.surnames.join(", "),
+      year: first.year,
+      listedBy: "text",
+      mentions,
+    });
+  }
+  return rows;
 }
 
 /* ------------------------------------------------------------- the build -- */
@@ -1763,9 +1968,20 @@ export function buildBibliography(
     );
   }
 
+  /* 3¾ — every work the body cites author–year that no model row stands for,
+     from the text (plan 261027b). After the guard above, so a model answer
+     none of whose works could be anchored still fails rather than becoming a
+     list code wrote alone; after the cap, which bounds the model's answer and
+     not these. They take the link any row with no identifier takes. */
+  const fromText = rowsFromText(works.map((w) => w.draft), blocks, drops).map((draft) => ({
+    draft,
+    ...linkFor(draft, byId, claims),
+  }));
+  const all = [...works, ...fromText];
+
   /* 4 — identity. Keys counted on this side too: two fresh rows with one key
      would both claim the old id. */
-  const keyed = works.map((w) => {
+  const keyed = all.map((w) => {
     const { idKey, workKey } = keysOf({ ...w.draft, url: w.url, linkFrom: w.linkFrom });
     return { ...w, key: idKey ?? workKey, idKey, workKey };
   });
@@ -1798,9 +2014,27 @@ export function buildBibliography(
     return opts.inherit?.get(w.workKey);
   };
 
-  const citations: CitedWork[] = keyed.map((w) => {
-    const old = inheritedBy(w);
-    const { foldKey: _foldKey, entryNumber: _entryNumber, identifierEntry: _identifierEntry, entry, ...draft } = w.draft;
+  /* **Then the author–year hand-over** (plan 261027b): a row with no id by
+     its keys, that is a code row where the old list had the model's (or the
+     other way round), takes that row's id — when the alias is unique in both
+     lists and the id is not already someone's. */
+  const direct = keyed.map(inheritedBy);
+  const claimed = new Set(direct.filter((id): id is string => id !== undefined));
+  const aliases = keyed.map((w) => authorYearAlias(w.draft, "new"));
+  const aliasCounts = new Map<string, number>();
+  for (const a of aliases) if (a !== null) aliasCounts.set(a, (aliasCounts.get(a) ?? 0) + 1);
+  const inherited = direct.map((id, i) => {
+    if (id !== undefined) return id;
+    const alias = aliases[i];
+    const old = alias != null && aliasCounts.get(alias) === 1 ? opts.inherit?.get(alias) : undefined;
+    if (old === undefined || claimed.has(old)) return undefined;
+    claimed.add(old);
+    return old;
+  });
+
+  const citations: CitedWork[] = keyed.map((w, i) => {
+    const old = inherited[i];
+    const { foldKey: _foldKey, said: _said, entryNumber: _entryNumber, identifierEntry: _identifierEntry, entry, ...draft } = w.draft;
     return {
       id: old ?? mintUniqueId(taken),
       key: w.key,
@@ -1859,6 +2093,14 @@ export interface Coverage {
   /** Bibliography entries outside any note (`role: "reference"`). */
   references: number;
   referencesReached: number;
+  /**
+   * Distinct works the body cites author–year (`citeKey`), as code reads them,
+   * and how many rows code added for them (`listedBy: "text"`, plan 261027b).
+   * `authorYear − authorYearFilled − textOverCap` is what the model's own rows
+   * covered: 23 of 105 on the LeCun run that nothing saw.
+   */
+  authorYear: number;
+  authorYearFilled: number;
   /** Rows written. */
   works: number;
 }
@@ -1881,6 +2123,8 @@ export function coverageOf(blocks: readonly Block[], bibliography: Bibliography)
     notesReached: notesReached.size,
     references: refs.length,
     referencesReached: refsReached.size,
+    authorYear: new Set(bodyAuthorYearCites(blocks).map(({ cite }) => citeKey(cite))).size,
+    authorYearFilled: bibliography.citations.filter((c) => c.listedBy === "text").length,
     works: bibliography.citations.length,
   };
 }

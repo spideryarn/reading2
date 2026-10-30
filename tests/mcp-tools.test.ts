@@ -86,8 +86,8 @@ const adminVoucher = {
 
 const DEFAULT_ROUTES: Routes = {
   "GET /api/reader": { body: { profile: null, experimentalSince: null, autoModes: true } },
-  "GET /api/library": { body: { articles: [shelfEntry("on-tools", "On Tools")] } },
-  "GET /api/library?archived=1": { body: { articles: [shelfEntry("old-one", "Old One")] } },
+  "GET /api/library?reading=0": { body: { articles: [shelfEntry("on-tools", "On Tools")] } },
+  "GET /api/library?archived=1&reading=0": { body: { articles: [shelfEntry("old-one", "Old One")] } },
   "GET /api/admin/vouchers": { body: { vouchers: [adminVoucher] } },
   "GET /api/admin/author-gifts": {
     body: {
@@ -218,8 +218,8 @@ describe("each tool calls the route it claims", () => {
     expect: { method: string; path: string; body?: unknown }[];
   }[] = [
     { tool: "whoami", expect: [{ method: "GET", path: "/api/reader" }] },
-    { tool: "list_articles", expect: [{ method: "GET", path: "/api/library" }] },
-    { tool: "list_articles", args: { archive: "archived" }, expect: [{ method: "GET", path: "/api/library?archived=1" }] },
+    { tool: "list_articles", expect: [{ method: "GET", path: "/api/library?reading=0" }] },
+    { tool: "list_articles", args: { archive: "archived" }, expect: [{ method: "GET", path: "/api/library?archived=1&reading=0" }] },
     {
       tool: "search_library",
       args: { query: "cats & dogs", limit: 5, includeArchived: true },
@@ -317,7 +317,10 @@ describe("each tool calls the route it claims", () => {
   it("list_articles all is two calls, each entry trimmed, marked archived or not, and carrying its link", async () => {
     const h = await harness();
     const result = await h.call("list_articles", { archive: "all" });
-    expect(h.seen.map((s) => s.path).sort()).toEqual(["/api/library", "/api/library?archived=1"]);
+    expect(h.seen.map((s) => s.path).sort()).toEqual([
+      "/api/library?archived=1&reading=0",
+      "/api/library?reading=0",
+    ]);
     const { articles } = result.json() as { articles: Record<string, unknown>[] };
     expect(articles).toEqual([
       expect.objectContaining({ slug: "on-tools", archived: false, link: `${SITE}/read/on-tools`, visibility: "private" }),
@@ -976,7 +979,7 @@ describe("create_private_link hands over the existing link, and makes one only w
       const approver = new StubApprover(false);
       const h = await harness({
         ...routes,
-        "GET /api/library": { body: { articles: [shelfEntry("on-tools", "A".repeat(400))] } },
+        "GET /api/library?reading=0": { body: { articles: [shelfEntry("on-tools", "A".repeat(400))] } },
       }, approver);
       await h.call("create_private_link", { slug: "on-tools" });
       expect(approver.asked).toHaveLength(1);

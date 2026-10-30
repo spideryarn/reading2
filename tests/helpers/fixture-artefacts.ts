@@ -189,11 +189,13 @@ const LAYOUT: {
   quiz: { quiz: (at) => path.join(at.dir, "quiz.json") },
   faq: { faq: (at) => path.join(at.dir, "faq.json") },
   relations: { relations: (at) => path.join(at.dir, "relations.json") },
+  explanations: { explanations: (at) => path.join(at.dir, "explanations.json") },
   skim: { skim: (at) => path.join(at.dir, "skim.json") },
   sketch: { sketch: (at) => path.join(at.dir, "sketch.json") },
   illustrated: { illustrated: (at) => path.join(at.dir, "illustrated.json") },
   reception: { reception: (at) => path.join(at.dir, "reception.json") },
   "sources-claims": { "sources-claims": (at) => path.join(at.dir, "sources-claims.json") },
+  // Deliberately the legacy file name: fixture files on disk are not renamed with the step.
   bibliography: { bibliography: (at) => path.join(at.dir, "citations.json") },
   "citation-blurbs": { "citation-blurbs": (at) => path.join(at.dir, "citation-blurbs.json") },
   situate: { situate: (at) => path.join(at.dir, "situate.json") },

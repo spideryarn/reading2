@@ -35,8 +35,8 @@
  * ## Who uses it
  *
  * **Fifteen call sites.** Fourteen are step-specific surfaces: Arc, Glossary,
- * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Debate, Skim,
- * Citations and the Thread page. The fifteenth is `RerunRow` in Metadata,
+ * Ideas, Illustrated, Quotes, Quiz, Sketch, Timeline, FAQ, Reception, Skim,
+ * Bibliography and the Thread page. The fifteenth is `RerunRow` in Metadata,
  * generic over its offered step. This line has repeatedly lagged the real list;
  * `rg 'useStepJob\\(' src/web` is the inventory, not this paragraph.
  *
@@ -92,10 +92,11 @@ interface StepRun<S extends StepName> {
    * or blanket force. **Every step this hook is used for is in
    * `FORCE_ONLY_WHEN_NAMED`** (src/pipeline.ts), and it is not a coincidence — a
    * step a surface offers a button for is a step that knows whether it is
-   * current. (**One exception since 2026-10-05**: `structure`, from
-   * StructureNotice.tsx. It has no freshness check at all, so naming it is
-   * what makes a one-step job run, and nothing follows it in that job for the
-   * cascade to sweep in.)
+   * current. (**One exception**: `structure`, from StructureNotice.tsx since
+   * 2026-10-05 and Metadata's re-run row since 2026-10-29. It has no freshness
+   * check at all, so naming it is what makes a one-step job run, and nothing
+   * follows it in that job for the cascade to sweep in;
+   * tests/metadata-rerun-steps.test.ts asserts exactly that.)
    *
    * The concrete callers now cover all thirteen members of that set. Metadata's
    * `METADATA_RERUN_STEPS` (src/rerun-steps.ts) is the deliberate subset:
@@ -139,6 +140,13 @@ interface StepRun<S extends StepName> {
    */
   illustrationNote?: string;
   /**
+   * **The added Skim brief to plan a route for** — sent as `skimBrief`, and
+   * only when there is one, so the default's request is the same bytes it has
+   * always been. The server refuses it beside any step but `quotes`, `ideas`
+   * and `skim` (src/routes.ts § `parseSkimBrief`). Plan 261027d.
+   */
+  skimBrief?: string;
+  /**
    * **Steps this one needs run first, in the same job.**
    *
    * One job holding many steps is what the queue is already for: `orderSteps`
@@ -166,7 +174,7 @@ interface StepRun<S extends StepName> {
    *
    * The one hole: `S` is inferred from the `step` argument, so a caller who
    * passes a `StepName`-typed **variable** rather than a literal widens it and
-   * the check quietly becomes no check. The two callers that use `precededBy`
+   * the check quietly becomes no check. The callers that use `precededBy`
    * instantiate the hook with literal steps; Metadata's generic caller does not
    * use this option.
    *
@@ -348,13 +356,14 @@ export interface StepJob<S extends StepName = StepName> {
 export function stepRunRequest<S extends StepName>(
   slug: string,
   step: S,
-  { force = false, useProfile = true, precededBy, illustrationNote }: StepRun<S> = {},
+  { force = false, useProfile = true, precededBy, illustrationNote, skimBrief }: StepRun<S> = {},
 ): {
   slug: string;
   steps: StepName[];
   force?: StepName[];
   useProfile?: false;
   illustrationNote?: string;
+  skimBrief?: string;
 } {
   const note = illustrationNote?.trim();
   return {
@@ -370,12 +379,24 @@ export function stepRunRequest<S extends StepName>(
     ...(force ? { force: [step] } : {}),
     ...(useProfile ? {} : { useProfile: false as const }),
     ...(note ? { illustrationNote: note } : {}),
+    ...(skimBrief ? { skimBrief } : {}),
   };
 }
 
-/** Is this job one that would write the artefact this step writes? */
-function writesStep(job: Job, step: StepName): boolean {
-  return job.steps.some((s) => s.name === step);
+/**
+ * Is this job one that would write the artefact this step writes — **for this
+ * target**? Every step has one artefact per article but Skim, whose `skim`
+ * step can be asked for one added brief's route instead of the default's
+ * (`Job.skimBrief`, plan 261027d). `brief` is that id, or `null` for the
+ * default: a job for another brief, or the default's job seen from a brief, is
+ * not this surface's, or the default's band would show a brief's progress and
+ * Metadata's Skim row would offer to retry it (GPT Sol's C4 on stage 2). A
+ * brief job's Quotes and Ideas are ordinary prerequisites, so only its `skim`
+ * is scoped.
+ */
+export function writesStep(job: Job, step: StepName, brief: string | null = null): boolean {
+  if (!job.steps.some((s) => s.name === step)) return false;
+  return step !== "skim" || (job.skimBrief ?? null) === brief;
 }
 
 /**
@@ -383,7 +404,7 @@ function writesStep(job: Job, step: StepName): boolean {
  * completion half of `useStepJob`, for a surface that shows an artefact it must
  * never make.
  *
- * Marginalia's feed is the reason (plan 261002d): it reads FAQ, Debate and
+ * Marginalia's feed is the reason (plan 261002d): it reads FAQ, Reception and
  * Ideas through their read halves, and with the margin open beside the band
  * that runs one of them, the band's read was refreshed and the margin's was
  * not. The always-mounted reads `OwnedReader` holds for the prose — citations,
@@ -454,6 +475,13 @@ export function useStepJob<S extends StepName>(
   step: S,
   onFinished: () => void,
   cadence: QueueCadence,
+  /**
+   * **Skim's target**: an added brief's id, or `null` (the default, and every
+   * other step). The job list, the completion and the failure are this
+   * target's alone (`writesStep`), and `start` names it on every request, so
+   * a caller cannot press for one route while watching another's job.
+   */
+  brief: string | null = null,
 ): StepJob<S> {
   /**
    * Ids this mount has already announced through `onFinished`.
@@ -467,11 +495,11 @@ export function useStepJob<S extends StepName>(
   const announced = useRef<Set<string>>(new Set());
   const announce = useCallback(
     (job: Job) => {
-      if (job.slug !== slug || !writesStep(job, step)) return;
+      if (job.slug !== slug || !writesStep(job, step, brief)) return;
       announced.current.add(job.id);
       onFinished();
     },
-    [slug, step, onFinished],
+    [slug, step, brief, onFinished],
   );
   const queue = useJobs(cadence, announce);
 
@@ -498,7 +526,7 @@ export function useStepJob<S extends StepName>(
    * every poll to pick one of them is work nobody reads.
    */
   const job = useMemo(() => {
-    const mine = queue.jobs.filter((j) => j.slug === slug && writesStep(j, step));
+    const mine = queue.jobs.filter((j) => j.slug === slug && writesStep(j, step, brief));
     const running = mine.find((j) => j.status === "running");
     if (running) return running;
     let oldest: Job | null = null;
@@ -517,7 +545,7 @@ export function useStepJob<S extends StepName>(
       }
     }
     return oldest;
-  }, [queue.jobs, slug, step]);
+  }, [queue.jobs, slug, step, brief]);
 
   /**
    * What went wrong, in the two quite different ways it can.
@@ -680,7 +708,7 @@ export function useStepJob<S extends StepName>(
          trip rather than from whenever it comes back. */
       setStarting(true);
       /* The body is `stepRunRequest`'s, shared with the command bar. */
-      const started = await queue.run(stepRunRequest(slug, step, run));
+      const started = await queue.run(stepRunRequest(slug, step, brief === null ? run : { ...run, skimBrief: brief }));
       /* **The reason is taken here, and kept.** See `failed` below: the two
          obvious places to read it from are both wrong, and this is the one
          instant at which the right value is available. */
@@ -696,7 +724,7 @@ export function useStepJob<S extends StepName>(
       setStarting(false);
       return null;
     },
-    [queue, slug, step],
+    [queue, slug, step, brief],
   );
 
   /**

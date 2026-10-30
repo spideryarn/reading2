@@ -98,7 +98,9 @@ export function FiguresWalk({
   const view = useFiguresWalk({ figures, blocks, tree, covers, onAway, onJump, onControl, arrival });
   const scroller = useRef<HTMLDivElement>(null);
   const currentId = view.rows.find((row) => row.current)?.figure.blockId ?? null;
-  useFollow(scroller, currentId, [away]);
+  /* `covers`: a rotation across it rewraps every caption without changing
+     the current figure (GPT Sol, review of 261028a). */
+  useFollow(scroller, currentId, [away, covers]);
   return (
     <ModeSurface
       label="Skim"

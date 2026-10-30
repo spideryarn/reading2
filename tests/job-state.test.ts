@@ -212,6 +212,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   faq: 180_000,
   /* Unmeasured: the fallback. */
   relations: 180_000,
+  /* Unmeasured: the fallback. */
+  explanations: 180_000,
   /* Three minutes: past the worst of the sixteen low-effort draws (101s). */
   sketch: 180_000,
   illustrated: 600_000,
@@ -337,7 +339,9 @@ it("a failed automatic-extra job says the article is unchanged; an import or lab
   );
   expect(importing.sentence, "told a reader whose import failed that their article is fine").toBeNull();
 
-  /* Skim's job carries what it reads, and every one of them is a main mode. */
+  /* Skim's old/import-independent job carries what it reads. Ideas leaving
+     today's import list must not change what a queued historical job did to
+     the article: every step here still publishes only on success. */
   const skim = displayJob(
     job("error", {
       failureKind: "retry",

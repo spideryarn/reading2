@@ -59,8 +59,10 @@ the panel draws around them is a disclosure.
 
 ## What the reader sees
 
-Two of Sources' three sub-modes on its segmented control
-(`?sources=reception` or `?sources=claims`; Bibliography is the default):
+Two of Sources' sub-modes (`?sources=reception` or `?sources=claims`). Since 2026-10-25 they are
+not chips for the owner but two of the tools *Where it sits* links to, *Pages about it* and *Check a
+claim*, each with *Where it sits › its name* in its head ([sources.md § The band](sources.md#the-band),
+[261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md)); a visitor still has them as chips:
 
 - **Reception**: what others have written about the piece itself, including work that cites it and
   says something about it. Since 2026-10-20 it opens as an outline
@@ -75,7 +77,7 @@ Two of Sources' three sub-modes on its segmented control
   visitor gets a Google Scholar search for who cites it instead.
 - **Claims**: the list of the claims the article rests on, for the reader to pick from
   ([§ The claims list](#the-claims-list)). The Reception search no longer looks into claims. A
-  debate from before `debate/7` still draws its saved claim sources under the list, exactly as
+  Reception from before `debate/7` still draws its saved claim sources under the list, exactly as
   before, headed *Claims the earlier search chose*: one open disclosure per claim, in article
   order, headed by the article's own words; the relevance bar belongs there.
 
@@ -118,7 +120,7 @@ Since 2026-10-20, top to bottom:
   of an older search's claim rows is left out.
 - **Every page**, open by default. It holds every stored row, so nothing is behind a press
   ([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)),
-  and its count is the chip's.
+  and its count is the chip's (for the owner, the number beside *Pages about it* on *Where it sits*' tools row).
 - **Cited by**, collapsed, with its count (below).
 
 **A row is two lines until its toggle opens it.**
@@ -160,12 +162,14 @@ in its paragraph is dropped and counted. Each listed claim keeps *Check this cla
 a current list the owner can tick claims and check them on the web
 ([§ Checking the claims you pick](#checking-the-claims-you-pick)).
 
-**The press rule.** Pressing the Claims chip, the command bar's *Sources › Claims*, or the
-Sources button when it lands on Claims makes the list when there is none. A link, Back, a reload or
-a last-view restore that lands on Claims only reads, and shows *List its claims*. Sources'
-sub-modes arm different targets (`activationForSources`, `src/web/activation.ts`), and
-each hook spends only its own while its own sub-mode is showing, so a Claims press can never buy
-the Reception search, nor a Reception press the list.
+**The press rule.** Since 2026-10-25 nothing that moves the reader makes the list: Claims shows
+*List its claims* until that is pressed, however it was reached — the tools row's link, the command
+bar's *Sources › Claims*, a link, Back, a reload or a last-view restore. Until then a press on the
+Claims chip, its command-bar row or the Sources button landing on Claims made it; the chip went
+with [261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md) (decision 6), and a link that spends is what the band refuses to be
+([sources.md § What a press buys](sources.md#what-a-press-buys)). The same holds for Reception's
+search, whose first run is *Search the web*. Each hook still spends only its own target while its
+own sub-mode is showing, so no press can buy the other's work.
 
 **Its states**: none (*List its claims* for the owner; a sentence for a visitor), running, an empty
 list (a sentence: a real answer), a failed run (its sentence and *Retry*), and **stale** — the
@@ -326,7 +330,7 @@ changed here:
 - **Only a claim's block is checked against the article.** The route never looks an item's id up.
 - **The mark is one component**, `OriginChatMark` in
   [`OriginChat.tsx`](../../src/web/OriginChat.tsx), with its own stylesheet
-  ([`origin-chat.css`](../../src/web/styles/origin-chat.css)). Debate's sheet sets only where the
+  ([`origin-chat.css`](../../src/web/styles/origin-chat.css)). Reception's sheet sets only where the
   mark sits on a claim's heading.
 
 Not built yet, and in the plan: the same from a Summary paragraph. A claim typed in your own words
@@ -374,7 +378,7 @@ What the reader gets:
   the chat's gist once one is written, two lines then an ellipsis, as every item's mark does (plan
   [261011c](../plans/261011c-bibliography-says-we-have-not-read-the-works-once.md)).
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
-  needs no stored debate.
+  needs no stored Reception.
 - **In Chat's list** the conversation says *Investigate* under its title, beside Sources' icon; the
   icon's card quotes the question.
 - **A visitor has neither.** Sources is outside the
@@ -384,7 +388,7 @@ What the reader gets:
 **Why the angle is a chat and not a steered search.** Telling the stored search to check one named
 claim was tried and worked, at about 20 cents and a minute and a half a run
 ([261003o § Q-claims-picker](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md)).
-But the stored debate is one result per article, shown to visitors when the article is shared and
+But the stored Reception is one result per article, shown to visitors when the article is shared and
 replaced by each run. An angled run would either overwrite the plain one, and show a visitor the owner's
 angle, or need storage per angle, a merge, a spending rule and the angle in the freshness stamp. A
 chat is one answer's cost, can be answered back, and can be pointed in several directions by
@@ -419,7 +423,7 @@ What to know before changing it:
   [`conversation-band-origin.test.tsx`](../../tests/conversation-band-origin.test.tsx).
 
 Tests: [`reception-lens.test.tsx`](../../tests/reception-lens.test.tsx) (the box, the list, no stored
-debate, a visitor), [`reception-lens-in-chat.test.tsx`](../../tests/reception-lens-in-chat.test.tsx) (the
+Reception, a visitor), [`reception-lens-in-chat.test.tsx`](../../tests/reception-lens-in-chat.test.tsx) (the
 whole journey, through the app), [`chat-origin-route.test.ts`](../../tests/chat-origin-route.test.ts)
 (the route and the columns), [`thread-origin-way-back.test.ts`](../../tests/thread-origin-way-back.test.ts)
 (the two shapes, the mapping, the list) and [`chat-handoff.test.ts`](../../tests/chat-handoff.test.ts)
@@ -435,18 +439,28 @@ honestly finds nothing.
 - **A list and a count, and no reading of either.** OpenAlex says which papers cite a DOI; it has no
   citing sentence, and no model is asked. The panel says so under the count. What each citer says,
   for or against, is not built.
-- **Not part of the stored debate.** It is free, has its own route (`GET /api/citers/<slug>`) and
+- **Not part of the stored Reception.** It is free, has its own route (`GET /api/citers/<slug>`) and
   its own cache, so it is on screen whenever the owner has Reception open: before the paid search
-  has run, and on a debate stored before it existed. Nothing in it can start the search, and it
+  has run, and on a Reception stored before it existed. Nothing in it can start the search, and it
   does not change Reception's count, which stays the web search's rows.
 - **The DOI is checked before it is trusted.** OpenAlex's record for the DOI must carry the
   article's whole title and one of its authors, as imported (never a reader's rename). The check
   runs on a fresh answer, on a cache hit and on a stale fallback alike, so a second article carrying
   the same DOI by mistake gets nothing. **One exception, since 2026-10-25**: for an arXiv paper
-  read from its own arxiv.org address, whose DOI that address names, two of its structured authors
-  matched one-to-one stand in for the title. OpenAlex had given *Consciousness in AI*'s record a
+  read from its own arxiv.org address, whose DOI that address names, its author list stands in for
+  the title — at least two matched one to one, and four in five of the longer list since
+  2026-10-27, so the same team's other paper does not pass. OpenAlex had given *Consciousness in AI*'s record a
   merged Zenodo deposit's title, and arXiv papers are retitled between versions
   ([261025a](../investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md)).
+  **And when the article's own facts are stale, arXiv's stand in**, since 2026-10-27
+  ([261027c](../plans/261027c-cited-by-confirms-a-doi-against-arxiv-own-record.md), report
+  spya-ufn2xj): for that same arXiv DOI, once the article's own title and authors fail, the same
+  check is run against arXiv's own record of the paper (DataCite, through `lookupWork`: cached and
+  free). An import from before an extraction fix can carry a wrong title and no authors. With the
+  two fixes below, production went from 21 to 28 of 28 confirmed. The address alone is not enough: OpenAlex files
+  BERT's arXiv DOI under an unrelated paper, which arXiv's record of BERT refuses. A name's
+  footnote marks (`Webb1,*`) and a title's dash (`--` for `—`) are punctuation, and the record's
+  last author is kept within the 20, because a byline often names the senior author.
 - **Every outcome has its own sentence** (`CitersResult` in `src/types.ts`, the words in
   `src/messages.ts`): no DOI to ask with, no record a title search could be sure of, not in
   OpenAlex, could not be confirmed, could not be
@@ -460,6 +474,17 @@ honestly finds nothing.
   built by us from the citing paper's DOI or OpenAlex id, never taken from the answer
   ([security-map.md](security-map.md)). A citer's title is drawn in the app's face, like a source's
   title in the rows above: [fonts.md](fonts.md) leaves third-party text there.
+- **Possible citations, when there is no list** (since 2026-10-26, with the experimental switch on;
+  [261026f](../plans/261026f-cited-by-when-there-is-no-doi-from-the-full-text-and-a-web-search.md)).
+  Under a *no DOI* or *no sure record* answer, `?with=possible` adds the works whose **full text**
+  matched OpenAlex's search for the title (`src/citation-fulltext.ts`): free, no model, asked on
+  open. Only for an article added from a public web address, never an upload's title; only for a
+  title distinctive enough (six words, or fewer with a year); and not for a title whose words were
+  as common in papers from before the piece as after it (*the phrase gate*), which says so instead.
+  The piece's own records are dropped; a recent or undated piece lists newest first, an older one
+  most cited first. Called *Possible citations*, never *Cited by*, never in a count, with *See all
+  at OpenAlex* and a line saying it finds papers only. No cache yet. A paid web search for blog
+  posts that cite the piece, on a press, is designed in the plan's Stage 3 and queued.
 - **What is sent**: the article's DOI, or with none the words of its title (below), and our contact
   address, from the server. No key.
   [privacy.md](privacy.md) has the page's sentence.
@@ -474,10 +499,29 @@ honestly finds nothing.
   Greg's answer to [q-hbg65m](../user-feedback/questions/q-hbg65m.md)). An article with an author
   and a distinctive title is searched for at OpenAlex by the words of its title, and a record is
   taken only when its whole title agrees, **and** two of its authors are ours or one is and its year
-  is within one of ours, **and** no other record passes too (`titleMatchOf`). That is stricter than
+  is within one of ours, **and** no other work passes too (`titleMatchOf`). That is stricter than
   a DOI's check, because a search carries no evidence of its own. The match's OpenAlex id goes
   straight to the list, with no DOI asked (OpenAlex's DOI for a work is its own metadata, and may
-  not be the one the work is known by), and the list is cached under `openalex:w<digits>`. The
+  not be the one the work is known by), and the list is cached under `openalex:w<digits>`.
+  **Twin records are one work**, since 2026-10-25
+  ([261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md),
+  decision 2): OpenAlex holds *The Extended Mind* twice (5,514 and 673 citers), and refusing every
+  second passing record gave a landmark no list at all. Records with the same whole title, each
+  carrying two of the piece's authors (all of them for a sole author) and two of one another's, and
+  years within one, are joined: the citers are asked with OpenAlex's union filter, `cites:W1|W2`,
+  so the count (5,849) and the list are OpenAlex's own rather than a sum, the list is cached under
+  every record's id (`openalex:w393180982|w4239232206`), and `target.alsoHeldAs` names the others.
+  Any other second passing record is still `no-match`: the most cited is not evidence.
+- **A topic view for a much-cited piece**, since 2026-10-25 (decision 10). For a work with more
+  than a thousand citers (`TOPIC_MIN_CITERS`, a heuristic from four pieces) whose OpenAlex record
+  has a keyword, the answer says `topic: { keyword }`, and `GET /api/citers/:slug?about=topic`
+  answers the citers whose title or abstract carry that keyword, in the same shape, with
+  `filteredBy`. That list is fetched only when asked for (GPT Sol's review of the stage, S1-F5),
+  cached in a row of its own (`<key>#topic`), and once cached the plain answer's `topic` carries
+  its `count` too. It is
+  offered beside *Most cited*, never applied in its place: keyword matching misses synonyms and
+  papers with no abstract ([261025a](../investigations/261025a-sources-trial-situate-reception-cited-by-on-six-articles.md)
+  § Failures 5). The keyword is OpenAlex's own, and nothing of the article is sent for it. The
   search itself is made on every open and never stored: a cache keyed on titles and authors would
   be neither anonymous nor safe to share. The panel names and links the matched record, so a wrong
   match can be seen to be one; a search that matched nothing has its own sentence (`no-match`),
@@ -518,7 +562,7 @@ what the evals behind it measured is
 Since 2026-10-04 the owner's Reception ends with **Cited by**, the papers that cite the piece, from
 OpenAlex: 261002i's stage 2, built as
 [261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md). It is
-not part of the stored debate, so it is there before a search has run.
+not part of the stored Reception, so it is there before a search has run.
 
 How the mode was evaluated, and what that found:
 [260906b](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md), with the stage-0
@@ -593,10 +637,10 @@ Tests: `tests/reception*.test.ts(x)` and `tests/sources-claim*.test.ts(x)` — [
 evaluation's scorer is [`reception-eval-score.test.ts`](../../tests/reception-eval-score.test.ts).
 
 Related: [bibliography.md](bibliography.md) shares the bibliographic lookup
-([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;
+([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Reception's residual risk;
 [experimental-features.md](experimental-features.md) is the switch it sat behind until 2026-10-09; and
 [security.md § A third untrusted party](security.md#a-third-untrusted-party-what-the-model-returns)
-has the web-search evidence collector Debate added.
+has the web-search evidence collector Reception added.
 
 ---
 

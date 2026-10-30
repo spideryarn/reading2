@@ -506,6 +506,22 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/articles/w1/cost"],
   },
+  /* The mockups, for /admin/mockups, 261028b Stage 3: the list, one, and one image. */
+  {
+    match: { kind: "literal", path: "/api/admin/mockups" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/mockups"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/mockups\\/([^/]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/mockups/w1"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/mockups\\/([^/]+)\\/images\\/([^/]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/mockups/w1/images/w2"],
+  },
   /* The cost cube, for /admin/costs, 261005a. */
   {
     match: { kind: "literal", path: "/api/admin/costs" },
@@ -725,7 +741,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/sources-claims/w1"],
   },
   {
-    /* Sources › Investigate's dossier, owner only (plan 261024o). */
+    /* Sources › Where it sits' dossier, owner only (plan 261025h). */
     match: { kind: "regex", source: "^\\/api\\/situate\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/situate/w1"],
@@ -753,6 +769,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/relations/w1"],
   },
   {
+    /* Explanations, owner only (plan 261028c). */
+    match: { kind: "regex", source: "^\\/api\\/explanations\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/explanations/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/crossrefs\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/crossrefs/w1"],
@@ -772,6 +794,26 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/skim/w1/profile-notice-dismissal"],
+  },
+  {
+    /* The owner's added Skim briefs — plan 261027d. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/briefs$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/skim/w1/briefs"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET", "PATCH", "DELETE"],
+    witnesses: ["/api/skim/w1/briefs/w2"],
+  },
+  {
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)\\/profile-notice-dismissal$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/skim/w1/briefs/w2/profile-notice-dismissal"],
   },
   {
     /* Get a mode ready without opening it, the guide's prepare step — plan
@@ -1214,8 +1256,10 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    (plan 261019n); 130 with a draft gift's High-powered AI (plan 261021j); 132
    with a draft gift's email preview and the lookup's guidance (plan 261024f);
    133 with Situate's owner read (plan 261024o); 134 with the extension's
-   owner-scoped already-on-the-shelf lookup (plan 261024y). */
-const EXPECTED_MATCHER_COUNT = 134;
+   owner-scoped already-on-the-shelf lookup (plan 261024y); 137 with the
+   added Skim briefs (plan 261027d); 140 with the mockups' list, one and
+   image (plan 261028b); 141 with Explanations' owner read (plan 261028c). */
+const EXPECTED_MATCHER_COUNT = 141;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1240,8 +1284,10 @@ const EXPECTED_MATCHER_COUNT = 134;
    (plan 261021j); 163 with a discarded gift's DELETE, a draft's email preview
    and the guidance's GET and PUT (plan 261024f); 164 with Situate's owner
    read (plan 261024o); 165 with the extension's owner-scoped
-   already-on-the-shelf lookup (plan 261024y). */
-const EXPECTED_GUARD_COUNT = 165;
+   already-on-the-shelf lookup (plan 261024y); 171 with the added Skim
+   briefs' six (plan 261027d); 174 with the mockups' three GETs (plan
+   261028b); 175 with Explanations' owner read (plan 261028c). */
+const EXPECTED_GUARD_COUNT = 175;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2447,6 +2493,10 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/access$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
+        // the mockups for /admin/mockups, 261028b — before the cost cube
+        "GET literal /api/admin/mockups",
+        "GET regex /^\\/api\\/admin\\/mockups\\/([^/]+)$/",
+        "GET regex /^\\/api\\/admin\\/mockups\\/([^/]+)\\/images\\/([^/]+)$/",
         // the cost cube, for /admin/costs, 261005a — beside the article's cost
         "GET literal /api/admin/costs",
         "GET literal /api/library",
@@ -2519,11 +2569,19 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "POST regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/explanations\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         // Skim's profile notice, 261009i
         "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
+        // the added Skim briefs, 261027d
+        "GET regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs$/",
+        "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs$/",
+        "GET regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$/",
+        "PATCH regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/briefs\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
         // the guide's prepare step, 261019p stage 2b
         "POST regex /^\\/api\\/guide-prepare\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/reception\\/([\\w.%-]+)$/",

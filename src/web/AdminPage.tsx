@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChartColumn, FileText, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
+import { ChartColumn, FileText, Gift, LayoutTemplate, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import { parseAsString, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
@@ -41,6 +41,7 @@ import { exactly, timeAgo } from "./relative-time.js";
 import {
   ADMIN_ARTICLES_HREF,
   ADMIN_COSTS_HREF,
+  ADMIN_MOCKUPS_HREF,
   ADMIN_FEEDBACK_HREF,
   ADMIN_HREF,
   ADMIN_USERS_HREF,
@@ -106,7 +107,7 @@ export function Shell({
     <main className="tw:mx-auto tw:max-w-6xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:pb-10 tw:font-sans">
       <header className="tw:mb-8">
         {back && <BackLink href={back.href} label={back.label} />}
-        <h1 className="tw:mt-2 tw:font-prose tw:text-3xl tw:text-foreground">{title}</h1>
+        <h1 className="tw:mt-2 tw:font-sans tw:text-3xl tw:text-foreground">{title}</h1>
       </header>
       {children}
     </main>
@@ -267,6 +268,12 @@ export function AdminHome() {
           icon={<FileText size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
           title="Articles"
           blurb="Every article and whose it is, and moving one to another account"
+        />
+        <Entry
+          href={ADMIN_MOCKUPS_HREF}
+          icon={<LayoutTemplate size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Mockups"
+          blurb="Pictures and ASCII sketches agents made for the questions waiting on you, to compare"
         />
         {/* **Moved off the shelf's masthead on 2026-09-05**, at Greg's request:
             > Move the Design link on the logged-in Homepage into /admin

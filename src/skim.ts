@@ -82,7 +82,9 @@ import {
   type Skim,
   type SkimDepth,
   type SkimDrops,
+  type SkimFound,
   type SkimIntros,
+  type SkimResponse,
   type SkimStop,
   type Tree,
   type TreeNode,
@@ -749,6 +751,70 @@ export function routeProfileIsStale(
  */
 export function profileNoticeKey(routeGeneratedAt: string, profileHashNow: string | null): string {
   return `${routeGeneratedAt} ${profileHashNow ?? "none"}`;
+}
+
+/**
+ * **Is this route still the one we would plan from the article now?** — the
+ * input half of a route's freshness, for the default's route
+ * (`loadSkim`, src/store/pg.ts) and an added brief's
+ * (src/store/pg-skim-briefs.ts) alike, so the two cannot answer differently
+ * about the same Quotes. Plan 261027d (Sol F6): the whole calculation, not
+ * only the hash.
+ *
+ * `blocks` is the revision's complete blocks, with HTML: `skimInput` needs
+ * positions for Idea and section associations, and markup plus captions for
+ * figures. Only read when there are quotes and a tree; `[]` otherwise.
+ */
+export function routeFreshness(
+  skim: Skim,
+  inputs: { quotes: Quotes | null; tree: Tree | null; ideas: Ideas | null; blocks: readonly Block[] },
+): { stale: boolean; outdated: boolean; notOnRoute: number } {
+  const { quotes, tree, ideas, blocks } = inputs;
+  const current = quotes && Array.isArray(quotes.quotes) ? quotes.quotes : [];
+  const onRoute = new Set(skim.stops.map((s) => s.quoteId));
+  const input = tree ? skimInput({ quotes, blocks, tree, ideas }) : null;
+  /* A quote left out because it sits in the abstract is not missing from
+     the route — it was never offered (`inAbstract`). */
+  const leftOut = new Set(input?.abstractQuoteIds ?? []);
+  return {
+    /* No quotes any more counts as stale, the same way round as its
+       neighbours; so does no tree. Otherwise stale when anything the prompt
+       would render has moved — the Quotes, the Ideas (regenerated, or
+       arrived after a route planned without them), or the outline.
+       **Only for a route of this prompt version**: one from before
+       `trajectory/7` holds a quotes-only hash that can never match, and
+       calling it stale would tell the reader their Quotes changed when what
+       changed is us — `outdated` says that. */
+    stale:
+      current.length === 0 ||
+      !input ||
+      (skim.version === PROMPT_VERSION && skim.sourceHash !== skimInputHash(input)),
+    outdated: skim.version !== PROMPT_VERSION,
+    notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
+  };
+}
+
+/**
+ * **The reader's half of a route's freshness**, and the answer the band reads:
+ * a stored route plus the profile it would be planned for now. For the default
+ * that is the reader profile and the article's purpose; for an added brief, the
+ * profile with the brief in the purpose's place. Both routes answer
+ * `SkimResponse` through here. The stored dismissal key is never sent: it
+ * carries the profile's hash.
+ *
+ * **Not `withProfileChanged`**, whose rule does not count a cleared profile:
+ * `routeProfileIsStale`, any difference counts.
+ */
+export function skimResponseFor(found: SkimFound, profileNow: string | null): SkimResponse {
+  const nowHash = profileNow ? hashProfile(profileNow) : null;
+  const { profileNoticeDismissedFor, ...rest } = found;
+  const profileChanged = routeProfileIsStale(found.skim.profileHash, nowHash);
+  return {
+    ...rest,
+    profileChanged,
+    profileNoticeDismissed:
+      profileChanged && profileNoticeDismissedFor === profileNoticeKey(found.skim.generatedAt, nowHash),
+  };
 }
 
 /**

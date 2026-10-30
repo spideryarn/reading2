@@ -27,7 +27,7 @@
  * § The mode (client), docs/project/skim.md.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryStates } from "nuqs";
 import type { Block, BlockId, Quote, Tree, SkimDepth, SkimFigureStop, SkimStop } from "../../../types.js";
 import type {
@@ -38,7 +38,9 @@ import type {
 } from "../../../public-types.js";
 import { blockIndex, sectionNodesOf } from "../../../section-path.js";
 import { titleVoice } from "../../tree.js";
-import { depthParam, type SkimPart, stopParam } from "../../params.js";
+import { briefParam, depthParam, type SkimPart, stopParam } from "../../params.js";
+import { useSkimBriefs } from "../../skim-briefs.js";
+import { type BriefDraftBox, type BriefIntent, type BriefPicking, intends } from "../../SkimBriefPicker.js";
 import { type Figure, figuresOf } from "../../../figures.js";
 import type { Voice } from "../../voice.js";
 import { FiguresWalk } from "./FiguresWalk.js";
@@ -207,8 +209,133 @@ const NO_WHERE: WhereRow[] = [];
 const NO_QUOTES: Quote[] = [];
 const NONE_FOUND: Found[] = [];
 
-export function SkimBand({
+type SkimBandProps = Omit<Parameters<typeof SkimRouteBand>[0], "brief" | "briefSentence" | "picking">;
+
+/**
+ * **Which route the band draws** — the default, or the added brief `?brief=`
+ * names (plan 261027d) — and the band for it, **remounted per route**, so
+ * nothing one route's read, × or press left in state can show over another's
+ * (Sol F4). The hold and the job outlive the remount (rewrite-hold.ts, the
+ * job engine), keyed by the route themselves.
+ *
+ * The briefs' list is read while `?brief=` names one: its sentence is
+ * the line over the route, and it is how an id the owner has no brief for is
+ * told from one still loading. An unknown id falls back to the default at
+ * once, and is cleared with its `?stop=` and `?depth=`, which were a place on
+ * a route that is not there (Sol F7). A list that could not be read keeps the
+ * asked brief, whose own read then says what is wrong.
+ *
+ * **The picker's state lives here, above the remount** (stage 4,
+ * SkimBriefPicker.tsx): whether the list has been asked for, and what the
+ * arriving band does first (`BriefIntent`). The list is read **lazily**:
+ * on the default, only once the ▾ has been opened, so a reader who never
+ * adds a brief pays for no request; on an added brief, from the start, since
+ * its sentence is the line.
+ */
+export function SkimBand(props: SkimBandProps) {
+  useRenderCount("SkimBand");
+  const [{ brief: asked }, setRoute] = useQueryStates({
+    brief: briefParam,
+    stop: stopParam,
+    depth: depthParam,
+  });
+  const [wanted, setWanted] = useState(false);
+  const briefs = useSkimBriefs(props.slug, asked !== null || wanted);
+  const chosen = asked === null ? null : (briefs.briefs.find((b) => b.id === asked) ?? null);
+  const unknown = asked !== null && briefs.status === "ready" && chosen === null;
+  useEffect(() => {
+    if (unknown) void setRoute({ brief: null, stop: null, depth: null });
+  }, [unknown, setRoute]);
+  const brief = unknown ? null : asked;
+  const [intent, setIntent] = useState<BriefIntent | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const pending = useRef(new Set<string>());
+  const [, setPendingVersion] = useState(0);
+  const draftKey = useCallback(
+    (route: string | null, box: BriefDraftBox) => `${props.slug}\n${route ?? ""}\n${box}`,
+    [props.slug],
+  );
+  const draft = useCallback(
+    (route: string | null, box: BriefDraftBox) => drafts[draftKey(route, box)],
+    [drafts, draftKey],
+  );
+  const setDraft = useCallback(
+    (route: string | null, box: BriefDraftBox, value: string | undefined) => {
+      const key = draftKey(route, box);
+      setDrafts((was) => {
+        if (value !== undefined) return was[key] === value ? was : { ...was, [key]: value };
+        if (!(key in was)) return was;
+        const next = { ...was };
+        delete next[key];
+        return next;
+      });
+    },
+    [draftKey],
+  );
+  const busy = useCallback(
+    (route: string | null, box: BriefDraftBox) => pending.current.has(draftKey(route, box)),
+    [draftKey],
+  );
+  const begin = useCallback(
+    (route: string | null, box: BriefDraftBox) => {
+      const key = draftKey(route, box);
+      if (pending.current.has(key)) return false;
+      pending.current.add(key);
+      setPendingVersion((n) => n + 1);
+      return true;
+    },
+    [draftKey],
+  );
+  const end = useCallback(
+    (route: string | null, box: BriefDraftBox) => {
+      if (!pending.current.delete(draftKey(route, box))) return;
+      setPendingVersion((n) => n + 1);
+    },
+    [draftKey],
+  );
+  const wantList = useCallback(() => setWanted(true), []);
+  /* **One address write for the three**, so no frame pairs one route with
+     another's stop (Sol F7). Replace, as `briefParam` is: a change of brief is
+     not a step back through. */
+  const choose = useCallback(
+    (to: string | null, then?: "edit" | "plan") => {
+      setIntent((was) =>
+        then ? { brief: to, box: then } : was?.brief === to && was.box === "plan" ? was : null,
+      );
+      void setRoute({ brief: to, stop: null, depth: null }, { history: "replace" });
+    },
+    [setRoute],
+  );
+  const picking: BriefPicking = {
+    slug: props.slug,
+    current: brief,
+    briefs,
+    wantList,
+    choose,
+    intent,
+    setIntent,
+    draft,
+    setDraft,
+    busy,
+    begin,
+    end,
+  };
+  return (
+    <SkimRouteBand
+      key={brief ?? ""}
+      {...props}
+      brief={brief}
+      briefSentence={chosen?.brief ?? null}
+      picking={picking}
+    />
+  );
+}
+
+function SkimRouteBand({
   slug,
+  brief,
+  briefSentence,
+  picking,
   blocks,
   tree,
   quotes,
@@ -228,6 +355,12 @@ export function SkimBand({
   arrival,
 }: {
   slug: string;
+  /** The added brief whose route this is, or `null` for the default. */
+  brief: string | null;
+  /** That brief's sentence, once the list has been read. */
+  briefSentence: string | null;
+  /** The switcher between briefs, held above this band's remount (`SkimBand`). */
+  picking: BriefPicking;
   blocks: Block[];
   tree: Tree;
   /** The Quotes read `OwnedReader` holds — the stops' words and blocks. */
@@ -265,13 +398,27 @@ export function SkimBand({
   onOpenKey(key: string | null): void;
   onControl(control: SkimControl | null): void;
 }) {
-  useRenderCount("SkimBand");
+  useRenderCount("SkimRouteBand");
   /* **The Ideas read comes first, and the route's hook is handed it** (Sol
      F61): since stage 6 the route's own job finds the Ideas when there are
      none, so its completion has to refresh this read — the one the stop card
      draws from — or a fresh article's card shows no Ideas until a reload. */
   const ideas = useIdeasRead(slug);
-  const owner = useSkim(slug, quotes, ideas);
+  const owner = useSkim(slug, quotes, ideas, brief);
+  /* **A brief just made by *New brief…* asks for its route here**, once its
+     read has said there is none — the empty state's own unforced `ensure`,
+     so it is the request *Plan this route* would have sent. Dropped on any
+     other answer: a route already there needs no press, and a failed read
+     says so itself. */
+  const planAsked = intends(picking, brief, "plan");
+  const ensureAsked = intends(picking, brief, "ensure");
+  const { setIntent } = picking;
+  const { status, ensure } = owner;
+  useEffect(() => {
+    if ((!planAsked && !ensureAsked) || status === "loading") return;
+    setIntent(null);
+    if (ensureAsked || status === "none") void ensure();
+  }, [planAsked, ensureAsked, status, ensure, setIntent]);
   /* **The scrapbook's other sources, read and never written.** The read-only
      hooks carry no job machinery at all, so the card cannot be the reason any
      of these is generated (Sol F22). The glossary is `Reader`'s own read. The
@@ -324,7 +471,7 @@ export function SkimBand({
   }
   return (
     <RouteWalk
-      access={{ kind: "owner", owner }}
+      access={{ kind: "owner", owner, briefSentence, picking }}
       away={away}
       walk={{
         sources,
@@ -367,14 +514,19 @@ export function SkimBand({
  * change between passes stays the route walk's own (`changeDepth`): nothing
  * remounts, so nothing needs the mailbox.
  */
-function useSkimParts(stops: readonly WalkStop[], blocks: readonly Block[], arrival: SkimArrival) {
+function useSkimParts(
+  stops: readonly WalkStop[],
+  blocks: readonly Block[],
+  arrival: SkimArrival,
+  ignorePosition = false,
+) {
   const [asked, setAt] = useQueryStates({
     depth: depthParam,
     stop: stopParam,
   });
   const figures = useMemo(() => figuresOf(blocks), [blocks]);
   const depths = useMemo(() => depthChoices(stops), [stops]);
-  const walk: "figures" | "route" = asked.depth === "figures" && figures.length > 0 ? "figures" : "route";
+  const walk: "figures" | "route" = !ignorePosition && asked.depth === "figures" && figures.length > 0 ? "figures" : "route";
   const switchTo = useCallback(
     (to: SkimPart) => {
       const stop = to === "figures" ? (figures[0]?.blockId ?? null) : firstStopOf(stops, to);
@@ -456,6 +608,25 @@ export function VisitorSkimBand({
   timeline: PublicTimeline | undefined;
 }) {
   useRenderCount("VisitorSkimBand");
+  const [{ brief: privateBrief }, setPosition] = useQueryStates({
+    brief: briefParam,
+    stop: stopParam,
+    depth: depthParam,
+  });
+  /* A shared owner link may carry a place on one of their private routes.
+     The visitor receives only the default route, so mask the whole composite
+     position on the first render, then canonicalise it in one replace. */
+  const ignorePosition = privateBrief !== null;
+  const privatePositionSeen = useRef(false);
+  const emptyArrival = useRef<SkimArrival>({ stop: null, open: false });
+  if (ignorePosition) privatePositionSeen.current = true;
+  useEffect(() => {
+    if (ignorePosition) void setPosition({ brief: null, stop: null, depth: null }, { history: "replace" });
+  }, [ignorePosition, setPosition]);
+  /* Keep the private arrival masked after the URL-clearing render too:
+     `useClaimedArrival` watches object identity, so swapping back to Reader's
+     original mailbox would claim the very stop we just rejected. */
+  const arrival = privatePositionSeen.current ? emptyArrival.current : walk.arrival;
   const sources = useMemo<CardSources>(
     () => ({
       glossary: { value: glossary ?? null, stale: false },
@@ -469,7 +640,7 @@ export function VisitorSkimBand({
   /* Figure stops too, as the owner's walk has them: they cross to a visitor
      since 2026-10-18 (src/public/dto.ts § `publicSkim`, plan 261018m). */
   const stops = useMemo(() => walkOf(route.stops, route.figures), [route.stops, route.figures]);
-  const parts = useSkimParts(stops, rest.blocks, rest.arrival);
+  const parts = useSkimParts(stops, rest.blocks, arrival, ignorePosition);
   if (parts.walk === "figures") {
     return (
       <FiguresWalk
@@ -483,7 +654,7 @@ export function VisitorSkimBand({
         onAway={rest.onAway}
         onJump={rest.onJump}
         onControl={rest.onControl}
-        arrival={rest.arrival}
+        arrival={arrival}
       />
     );
   }
@@ -502,6 +673,8 @@ export function VisitorSkimBand({
         quotes,
         figures: parts.figures,
         onPart: parts.switchTo,
+        arrival,
+        ignorePosition,
       }}
     />
   );
@@ -520,6 +693,13 @@ export interface SkimView {
   rows: SkimRow[];
   /** 1-based position of the current stop on this pass, or 0 for none. */
   position: number;
+  /**
+   * **Every row's words whole, not only the current one's** — where the band
+   * covers the prose (`covers`). There a row press goes to the article, so the
+   * tooltip that holds the rest of a cut quote cannot be reached from Skim.
+   * Greg, an iPhone, 2026-10-28 (spya-r246pf).
+   */
+  wholeWords: boolean;
   /** What sits under the current stop — src/web/stop-card.ts. `null` without a current stop. */
   card: StopCard | null;
   /** *Hide* on a term chip's card, or `null` for a visitor (SkimPanel.tsx § `TermChip`, plan 261006e). */
@@ -556,6 +736,7 @@ function useSkimMode({
   arrival,
   figures,
   onPart,
+  ignorePosition = false,
 }: {
   sources: CardSources;
   termActions: TermActions | null;
@@ -580,6 +761,8 @@ function useSkimMode({
   figures: readonly Figure[];
   /** A switch to the other walk — `useSkimParts`' `switchTo`. */
   onPart(part: SkimPart): void;
+  /** A visitor was linked to an owner-only brief: ignore that route's coordinates. */
+  ignorePosition?: boolean;
 }): SkimView {
   /* **One `useQueryStates`, so a depth change and the stop it lands on are one
      URL update** — the plan's § URL, F9. The per-call history option decides:
@@ -594,10 +777,10 @@ function useSkimMode({
      otherwise in its own — a stop can be in more than one since plan 261003l. */
   /* `figures` is the other walk's; the band draws this one under it only when
      the article has none, and then it is the plain Gist an absent depth is. */
-  const askedDepth = asked.depth === "figures" ? null : asked.depth;
+  const askedDepth = ignorePosition || asked.depth === "figures" ? null : asked.depth;
   const { depth, route, current } = useMemo(
-    () => locate(stops, askedDepth, asked.stop),
-    [stops, askedDepth, asked.stop],
+    () => locate(stops, askedDepth, ignorePosition ? null : asked.stop),
+    [stops, askedDepth, asked.stop, ignorePosition],
   );
 
   const byId = useMemo(() => new Map(quotes.map((q) => [q.id, q])), [quotes]);
@@ -933,6 +1116,7 @@ function useSkimMode({
     depths,
     rows,
     position: current ? route.indexOf(current) + 1 : 0,
+    wholeWords: covers,
     card,
     termActions,
     onAskTerm,

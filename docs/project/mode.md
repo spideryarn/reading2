@@ -261,7 +261,7 @@ Then the residue, which is why this page exists:
   with the doc that owns it. *[`tests/doc-links.test.ts`](../../tests/doc-links.test.ts), for the
   doc; nothing for the line.*
 - **Each voice in its face**: apply the provenance rule in [fonts.md](fonts.md), with a class per
-  element in [`voices.css`](../../src/web/styles/voices.css), or `voiceClass` from
+  element in [`voices.css`](../../src/web/voices.css), or `voiceClass` from
   [`voice.ts`](../../src/web/voice.ts) where the voice depends on the data. *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
   `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
   element you forgot to name.*
@@ -367,7 +367,7 @@ So `description` is the mode in one fragment — it is also what the command bar
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
 the current modes that is almost always one of three things: **it reads something already built**
 (Structure), **its content is a model pass over the article, written once and
-stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Debate, Bibliography, FAQ, Skim and Diagram's Sketch
+stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Reception, Claims, Bibliography, FAQ, Skim and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
 for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
 or **it waits on the reader's own words** (Search, Chat, Referee, Learn). Plain is the remaining

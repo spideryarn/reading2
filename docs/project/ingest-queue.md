@@ -438,8 +438,10 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
 - **Both caps are stated before the file is chosen**, with what a long PDF costs — *… up to 50 MB.
   PDFs up to 250 pages; every 50 pages counts as one article.* — from
   `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), which builds the sentence out of
-  `MAX_UPLOAD_BYTES`, `MAX_PAGES` and `PAGES_PER_SLOT`, so it cannot promise a limit that is not the one enforced. It
-  sits in the slot the chosen-file row takes, so it costs no height once a reader has acted on it.
+  `MAX_UPLOAD_BYTES`, `MAX_PAGES` and `PAGES_PER_SLOT`, so it cannot promise a limit that is not the
+  one enforced. It is in the card of an (i) beside the File button, opened by hover, focus or a tap,
+  and read out with the button by a screen reader (`LimitsInfo`, `UploadPicker.tsx`; plan
+  [261026b](../plans/261026b-upload-limits-behind-an-info-button.md)).
   The **page** cap is the reason this exists: a file manager shows you a size and never a page
   count, so until 2026-09-04 the only way to discover it was to upload a book and be refused at the
   end — Sentry `SPIDERYARN-READING2-V`, *"couldn't upload PDF"*, and
@@ -1252,7 +1254,7 @@ and keeps the two-sided note only when the server cannot say
 ([261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md)). It is
 a prediction from the state the page read, and the page reads again after a run and after the
 purpose box saves; the
-sketch's wait, Debate's **one model call that searches the web plus optional search-free
+sketch's wait, Reception's **one model call that searches the web plus optional search-free
 synthesis**, and Skim's *needs Quotes first* are the same kind of note under those rows' names.
 Each note is also its button's accessible description. A Retry is one press too, and holds
 *Starting…* across its round trip so a double click sends one. The whole-article reset, the first
@@ -1922,7 +1924,7 @@ different things, and the reasoning was the half that was right (GPT Sol). Nothi
 before a window is granted, so an un-checkpointed paid call can be bought once per window; the two
 expensive fan-outs are checkpointed, which is why the number is the protection for most steps. The
 two dear purchases that cannot be checkpointed are marked once per job on the job row instead
-(`jobs.paid_step_begun`), and a later window refuses to buy them again: Debate's web search, at the
+(`jobs.paid_step_begun`), and a later window refuses to buy them again: Reception's web search, at the
 step ([261009l](../plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md)), and
 Illustrated's plates, at the plate phase, after the step's own deliberate hand-back
 ([261009o](../plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md)). The

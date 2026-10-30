@@ -66,14 +66,77 @@ a predictable opaque tile, not a claim that every current iOS appearance forbids
 [Apple-touch-icon takes precedence over manifest icons](https://webkit.org/blog/13878/) on the
 web-app path. Physical iPhone appearance and cached installations still need device verification.
 
+### Dark mode on an iPhone
+
+> I'm in dark mode on my iPhone, and for some reason the new Spideryarn icon still has a white background.
+>
+> — Greg, 2026-10-26 (`spya-shpsvx`)
+
+The likeliest thing he saw is the home-screen tile (`apple-touch-icon.png`), then the only icon
+we shipped with an opaque, ivory background; the favicons and the in-page mark are transparent.
+Asked (`q-q5da5a`), he chose:
+
+> Maybe we can try and offer a switch between light and dark mode, but if in doubt, default to dark
+> mode for the icon
+>
+> — Greg, 2026-10-26 (`spya-e50wvz`)
+
+**So the touch icon follows the phone's mode when it is added, and is dark wherever that cannot be
+known.** `index.html` names the charcoal `/apple-touch-icon.png`, and an inline script right after
+it (`touch-icon-boot`) swaps in the cream `/apple-touch-icon-light.png` when
+`prefers-color-scheme: light` matches, and again if the mode changes while the page is open. The
+switch is the phone's setting, not a Spideryarn one: the home screen is the phone's, and the app's
+Appearance choice says how the page looks, not what the home screen is. Everything that cannot
+follow a mode takes the dark default: the Android manifest icons, a root `/apple-touch-icon.png`
+probe, and the logo in our emails (`src/email-frame.ts` and the Supabase templates name the same
+file, on a `#0a0a0a` header). [261026i](../plans/261026i-home-screen-icon-follows-the-phone-mode-dark-by-default.md)
+is the plan.
+
+**Why a script and not two `media`-qualified links.** WebKit's
+[`LinkIconCollector.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/LinkIconCollector.cpp),
+read 2026-10-26, walks the direct children of `<head>` in the live DOM, takes each link's current
+`href`, sorts by `sizes` with an unstable sort, and does not evaluate `media`; it passes attributes
+on to Safari, whose code is closed. So a script-set `href` is read as set, and a media pair is a
+guess. **What nobody here has checked on a phone**: whether Add to Home Screen uses the snapshot
+taken after parsing (which the inline swap covers) or re-collects the live DOM (which would also
+pick up a mid-visit change of mode), and what iOS 26's tinted and clear treatments do to either
+tile. Greg's re-add is that check.
+
+**There is no documented way to give a web clip a dark, clear or tinted variant.** Native apps
+have had those since iOS 18 (clear since iOS 26), but nothing in `apple-touch-icon` or the
+manifest says which appearance an icon is for. Developers asking on Apple's forums
+([2024](https://developer.apple.com/forums/thread/761615), [June 2025](https://developer.apple.com/forums/thread/787919),
+[September 2025](https://developer.apple.com/forums/thread/801448)) got no answer from Apple, and
+[WebKit's Safari 26 notes](https://webkit.org/blog/16993/news-from-wwdc25-web-technology-coming-this-fall-in-safari-26-beta/)
+add SVG icons but say nothing about appearances. What else is reported, none of it checked on a
+current phone by us:
+
+- **A transparent tile is filled with black**, in reports from iOS 16 (the WebKit bug above) and
+  iOS 18 (the 2024 thread), so it does not follow the appearance either.
+- **iOS's own tinted treatment** reaches web clips on the home screen; its automatic dark one was
+  reported in 2024 to reach notifications and Settings but not the home screen.
+- **Choosing the touch icon in JavaScript** from `prefers-color-scheme` when the page loads is
+  reported to work (the 2024 thread): the clip keeps whichever was current when it was added,
+  and does not switch later.
+- **An SVG icon's own `prefers-color-scheme` rule is ignored** by Safari 26.3
+  ([WebKit bug 309949](https://bugs.webkit.org/show_bug.cgi?id=309949)), and the home-screen
+  image is taken once anyway.
+
+iOS keeps the picture it took when the clip was added, so a changed tile shows only after the clip
+is removed and added again; the `?v=` on the link is a defensive buster for Safari's own icon
+caches (bump it when the pixels change), not for an installed clip. Production serves the icons
+with `max-age=0, must-revalidate`, and no icon path has ever been renamed, so there is no old path
+to clear.
+
 One transparent treatment works in both app themes. Install tiles have opaque backgrounds and
 breathing room for the OS's corner mask. Exact colours, padding, filenames and dimensions have
 one home: the public and extension output tables in
 [generate-brand-assets.ts](../../scripts/generate-brand-assets.ts).
 The [manifest](../../public/site.webmanifest) uses ordinary `any` icons; no separately verified
-maskable safe-zone treatment is supplied. The light/dark 1024px files are available exports;
-the shipped Apple/Android consumers use the cream tile. The app's theme setting does not select
-between those installed-icon exports.
+maskable safe-zone treatment is supplied. The light/dark 1024px files are available exports.
+The install tiles are charcoal, bar the cream touch icon for a light phone (above); the Chrome
+extension's 128px store tile stays cream, being a different surface. The app's theme setting does
+not select between any of them.
 
 ## Updating the artwork
 

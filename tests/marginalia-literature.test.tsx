@@ -11,15 +11,19 @@
  * - **a finding is placed only while its quoted words are in its block**;
  * - **opened**, its sources are links that send no referrer and can't reach
  *   back (`noreferrer noopener`), *From the web* says where it came from, and
- *   *Open in Sources* names the finding, so Investigate can land on it;
- * - **owner only, behind the switch**: with the switch off the owner's feed
- *   asks `/api/situate` nothing and hands the margin no findings, and a stale
- *   dossier is not drawn.
+ *   *Open in Sources* names the finding, so Where it sits can land on it;
+ * - **owner only, whatever the experimental switch says** (since 2026-10-26,
+ *   spya-pkpqch): the owner's feed reads the stored dossier and starts
+ *   nothing, and a stale dossier is not drawn.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, SituateFinding } from "../src/types.js";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -316,7 +320,7 @@ const onFeed = (next: MarginFeed) => {
   feed = next;
 };
 async function openMargin(): Promise<void> {
-  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+  await act(async () => root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, bibliography: { status: "ready", retryRead: async () => {} }, slug: SLUG, shown: true, onFeed })));
   await settle();
 }
 const situateReads = () => trace.filter((l) => l === `GET /api/situate/${SLUG}`).length;
@@ -332,17 +336,10 @@ const dossier = (stale: boolean) => ({
 });
 
 describe("the owner's feed", () => {
-  it("with the switch off, asks /api/situate nothing and hands the margin no findings", async () => {
-    situateBody = dossier(false);
-    await openMargin();
-    expect(situateReads()).toBe(0);
-    expect(feed?.literature ?? null).toBeNull();
-    /* And nothing was started: no job. */
-    expect(trace.filter((l) => l.startsWith("POST "))).toEqual([]);
-  });
-
-  it("with the switch on, reads the dossier and starts nothing", async () => {
-    experimentalOn = true;
+  /* **Not behind the switch since 2026-10-26** (spya-pkpqch): Greg asked for
+     what Where it sits found to show in the margin as he reads, and the
+     dossier itself left the switch on 2026-10-25 (plan 261025h). */
+  it("with the switch off, reads the dossier, hands on its findings and starts nothing", async () => {
     situateBody = dossier(false);
     await openMargin();
     expect(situateReads()).toBe(1);
@@ -351,21 +348,26 @@ describe("the owner's feed", () => {
     expect(trace.filter((l) => l.startsWith("POST "))).toEqual([]);
   });
 
-  it("does not hand on a stale dossier", async () => {
+  it("with the switch on, the same", async () => {
     experimentalOn = true;
+    situateBody = dossier(false);
+    await openMargin();
+    expect(situateReads()).toBe(1);
+    expect(feed?.literature?.findings.map((f) => f.id)).toEqual(["f1"]);
+    expect(trace.filter((l) => l.startsWith("POST "))).toEqual([]);
+  });
+
+  it("does not hand on a stale dossier", async () => {
     situateBody = dossier(true);
     await openMargin();
     expect(situateReads()).toBe(1);
     expect(feed?.literature ?? null).toBeNull();
   });
 
-  it("takes the findings away when the switch goes off", async () => {
-    experimentalOn = true;
-    situateBody = dossier(false);
-    await openMargin();
-    expect(feed?.literature).not.toBeNull();
-    experimentalOn = false;
+  it("hands on nothing when no search has run", async () => {
+    situateBody = null;
     await openMargin();
     expect(feed?.literature ?? null).toBeNull();
+    expect(trace.filter((l) => l.startsWith("POST "))).toEqual([]);
   });
 });

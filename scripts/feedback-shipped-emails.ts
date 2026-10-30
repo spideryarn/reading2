@@ -218,7 +218,11 @@ export function shippedEmail(kind: FeedbackKind | null, createdAt: Date, now: Da
       ? "you told us about a problem"
       : kind === "suggestion"
         ? "you sent us a suggestion"
-        : "you sent us feedback";
+        : /* An admin's kind only, and an admin is never sent this letter —
+             but the type has it, so it gets its own words rather than none. */
+          kind === "discussion"
+          ? "you started a discussion with us"
+          : "you sent us feedback";
   return {
     subject: "A change based on your feedback is now live on Spideryarn",
     text: [

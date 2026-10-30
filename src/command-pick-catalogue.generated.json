@@ -76,6 +76,30 @@
   ]
  },
  {
+  "id": "mode:skim",
+  "label": "Skim",
+  "description": "A route through the piece's quotes, a little deeper each time round",
+  "aliases": [
+   "spiral",
+   "route",
+   "trajectory",
+   "skim read",
+   "speed read",
+   "quick read",
+   "preview",
+   "scan"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "mode:diagram",
   "label": "Diagram",
   "description": "The article's shape as a picture: a model reads the argument and draws it",
@@ -95,30 +119,6 @@
   "generates": true,
   "contexts": [
    "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "mode:skim",
-  "label": "Skim",
-  "description": "A route through the piece's quotes, a little deeper each time round",
-  "aliases": [
-   "spiral",
-   "route",
-   "trajectory",
-   "skim read",
-   "speed read",
-   "quick read",
-   "preview",
-   "scan"
-  ],
-  "kind": "mode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -167,6 +167,28 @@
   "contexts": [
    "owner-article",
    "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:explanations",
+  "label": "Explanations",
+  "description": "The places in this piece you are likely to get stuck, each with what is missing there",
+  "aliases": [
+   "explained",
+   "confusing",
+   "confusing passages",
+   "stuck",
+   "hard parts",
+   "difficult passages",
+   "missing steps"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -596,6 +618,33 @@
   ]
  },
  {
+  "id": "submode:sources:where",
+  "label": "Where it sits",
+  "description": "What others say about this piece, and what it builds on: the papers that came after it, the works it leans on most, and a search of the literature",
+  "aliases": [
+   "Sources",
+   "Where it sits Sources",
+   "Sources Where it sits",
+   "Where it sits mode",
+   "situate",
+   "the literature",
+   "where this piece sits",
+   "literature search",
+   "search the literature",
+   "what came after",
+   "papers citing it"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:sources:bibliography",
   "label": "Bibliography",
   "description": "What this piece cites: the works in its bibliography, each with a link",
@@ -695,7 +744,7 @@
    "replies"
   ],
   "kind": "submode",
-  "generates": true,
+  "generates": false,
   "contexts": [
    "owner-article",
    "owner-article-experimental-off",
@@ -716,7 +765,7 @@
    "debate claims"
   ],
   "kind": "submode",
-  "generates": true,
+  "generates": false,
   "contexts": [
    "owner-article",
    "owner-article-experimental-off",
@@ -1062,6 +1111,31 @@
   ]
  },
  {
+  "id": "action:section-start-again",
+  "label": "Start this article again",
+  "description": "Re-read it with today's pipeline, keeping your comments, notes and chats.",
+  "aliases": [
+   "start again",
+   "start over",
+   "reset",
+   "reset article",
+   "reset this article",
+   "re-import",
+   "reimport",
+   "re import",
+   "reload article",
+   "refresh article"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "action:original",
   "label": "Open the original",
   "description": "The web page or the PDF this article was made from, in a new tab.",
@@ -1222,6 +1296,113 @@
    "owner-article",
    "owner-article-experimental-off",
    "owner-article-archived"
+  ]
+ },
+ {
+  "id": "action:rerun-structure",
+  "label": "Structure › Run again",
+  "description": "Builds the outline again with today's Structure, usually reusing saved answers if nothing has changed. Paragraph labels are rewritten after it and are missing until then",
+  "aliases": [
+   "rerun structure",
+   "re-run structure",
+   "regenerate structure",
+   "redo structure",
+   "refresh structure",
+   "structure again",
+   "run structure again",
+   "rerun columns",
+   "re-run columns",
+   "regenerate columns",
+   "redo columns",
+   "refresh columns",
+   "columns again",
+   "run columns again",
+   "rerun outline",
+   "re-run outline",
+   "regenerate outline",
+   "redo outline",
+   "refresh outline",
+   "outline again",
+   "run outline again",
+   "rerun tree",
+   "re-run tree",
+   "regenerate tree",
+   "redo tree",
+   "refresh tree",
+   "tree again",
+   "run tree again",
+   "rerun map",
+   "re-run map",
+   "regenerate map",
+   "redo map",
+   "refresh map",
+   "map again",
+   "run map again",
+   "rerun hierarchy",
+   "re-run hierarchy",
+   "regenerate hierarchy",
+   "redo hierarchy",
+   "refresh hierarchy",
+   "hierarchy again",
+   "run hierarchy again",
+   "rerun toc",
+   "re-run toc",
+   "regenerate toc",
+   "redo toc",
+   "refresh toc",
+   "toc again",
+   "run toc again",
+   "rerun contents",
+   "re-run contents",
+   "regenerate contents",
+   "redo contents",
+   "refresh contents",
+   "contents again",
+   "run contents again",
+   "rerun table of contents",
+   "re-run table of contents",
+   "regenerate table of contents",
+   "redo table of contents",
+   "refresh table of contents",
+   "table of contents again",
+   "run table of contents again",
+   "rerun headings",
+   "re-run headings",
+   "regenerate headings",
+   "redo headings",
+   "refresh headings",
+   "headings again",
+   "run headings again",
+   "rerun headers",
+   "re-run headers",
+   "regenerate headers",
+   "redo headers",
+   "refresh headers",
+   "headers again",
+   "run headers again",
+   "rerun sections",
+   "re-run sections",
+   "regenerate sections",
+   "redo sections",
+   "refresh sections",
+   "sections again",
+   "run sections again",
+   "rerun chapters",
+   "re-run chapters",
+   "regenerate chapters",
+   "redo chapters",
+   "refresh chapters",
+   "chapters again",
+   "run chapters again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
   ]
  },
  {

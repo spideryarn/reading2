@@ -36,6 +36,11 @@ of it in place.
   back to back (*Title and Abstract* is two); a row that only partly overlaps one is not.
 - **Stubs back to back sit as a compact list**, normal paragraph space only before the first and
   after the last (fold.ts writes the tight sides; prose.css owns the size).
+- **It does not count towards how much you have read.** The masthead's read-so-far pie and the
+  quiz's share leave every folded stretch out, read or not, so an unopened stub never holds a reader
+  back from *finished* (`readSoFarWords` in [`src/web/read-filter.ts`](../../src/web/read-filter.ts);
+  [261025j](../plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md)). The chats' rough
+  phrase still counts it, because the server has no fold rule.
 - **Nothing is taken out of the article.** Search, exports, chat and every model still read every
   block. Leaving the paperwork out of what automatic modes *say* is the prompts' job
   ([`src/paperwork.ts`](../../src/paperwork.ts), plans 261003c and 261003d); taking it out of what

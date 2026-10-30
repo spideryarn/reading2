@@ -827,8 +827,14 @@ describe("the work key", () => {
     url?: string;
     reset?: JobReset;
     illustrationNote?: string;
+    skimBrief?: string;
   }[] = [
     { names: ["fetch"], forced: [] },
+    /* **The Skim brief** — plan 261027d. Two briefs are two pieces of work
+       even under one profile, and a brief is not the default's route. */
+    { names: ["skim"], forced: [], profile: "a physicist" },
+    { names: ["skim"], forced: [], profile: "a physicist", skimBrief: "spya-sba2ca" },
+    { names: ["skim"], forced: [], profile: "a physicist", skimBrief: "spya-sbb2cb" },
     /* **The Illustrated note** — plan 261002j. Two notes are two pieces of
        work, and a note is not the same work as none. */
     { names: ["illustrated"], forced: [] },
@@ -900,11 +906,13 @@ describe("the work key", () => {
     ...(g.url ? { url: g.url } : {}),
     ...(g.reset ? { reset: g.reset } : {}),
     ...(g.illustrationNote ? { illustrationNote: g.illustrationNote } : {}),
+    ...(g.skimBrief ? { skimBrief: g.skimBrief } : {}),
   });
 
   const extrasOf = (g: (typeof GRID)[number]) => ({
     ...(g.reset ? { reset: g.reset } : {}),
     ...(g.illustrationNote ? { illustrationNote: g.illustrationNote } : {}),
+    ...(g.skimBrief ? { skimBrief: g.skimBrief } : {}),
   });
 
   it("agrees with sameWork on every pair, both ways round", () => {
@@ -919,6 +927,7 @@ describe("the work key", () => {
           b.url,
           b.reset,
           b.illustrationNote,
+          b.skimBrief,
         );
         const keysMatch =
           workKeyFor(a.names, new Set(a.forced), a.profile, a.upload, a.url, extrasOf(a)) ===

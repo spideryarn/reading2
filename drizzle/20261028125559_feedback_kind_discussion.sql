@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."feedback" DROP CONSTRAINT "feedback_kind";--> statement-breakpoint
+ALTER TABLE "spideryarn"."feedback" ADD CONSTRAINT "feedback_kind" CHECK ("spideryarn"."feedback"."kind" is null or "spideryarn"."feedback"."kind" in ('problem', 'suggestion', 'discussion'));

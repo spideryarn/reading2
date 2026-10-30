@@ -207,6 +207,46 @@ mark.cmt.term {
   border-bottom-width: 1px;
 }
 
+/* ---- an explained passage ------------------------------------------
+   The seventh `MarkKind` (annotate.ts § `explainedMarks`): the words one of
+   the owner's Explanations is about, standing and in every mode while the
+   experimental switch is on. Greg, 2026-10-29 (spya-njkskc): *"an underline
+   quite similar to the glossary"*.
+
+   **Glossary's shape and weight, its own hue.** The same 2px dotted
+   `border-bottom` as `mark.term`, in `--explained` (a teal, tokens.css), so a
+   reader who has learnt the orange line learns this one for free and can
+   still tell them apart. No fade: there is at most one per block.
+
+   **Where a term shares the words, the term keeps its line** — one `<mark>`
+   carries both classes, and `border-bottom` can be only one colour. A term is
+   a word or two inside a clause, so the clause still reads as underlined,
+   broken by an orange stretch: this clause is explained, and this word in it
+   is a glossary term. The card on those words draws both. A comment or chat
+   keeps its solid line for `mark.cmt.term`'s reason (it is the clickable one).
+   A citation and a cross-reference draw on `text-decoration`, so both show.
+   docs/plans/261029j-explained-passages-underlined-in-the-prose.md § 3. */
+/* `:where()`, so this rule weighs nothing: every other mark's own rule —
+   `mark.term`, `mark.cmt`, `mark.chat`, a quote's fill, a highlight's wash —
+   wins on the words it shares, whatever order the stylesheets load in
+   (dialogs.css, where `mark.chat` lives, loads after this one and
+   annotations.css's `mark.cmt` before it). One rule instead of a pairwise
+   override for each kind, and a new kind is covered without an edit. */
+:where(mark.explained) {
+  background: none;
+  color: inherit;
+  border-bottom: 2px dotted color-mix(in oklab, var(--explained) 70%, transparent);
+  /* `help` for `mark.term`'s reason: a click does nothing; the card is it. */
+  cursor: help;
+  transition: background 0.12s, border-color 0.12s;
+}
+:where(mark.explained:hover),
+/* The words a finger has armed — useHoverCard.ts § TAP_ATTR. */
+:where(mark.explained[data-hover-tap]) {
+  background: color-mix(in oklab, var(--explained) 7%, transparent);
+  border-bottom-color: var(--explained);
+}
+
 /* ---- a work the piece cites -----------------------------------------
    The fifth `MarkKind` (annotate.ts § `citeMarks`), drawn on every phrase the
    article cites a work at, standing and in every mode. Greg, 2026-09-12
@@ -1094,14 +1134,16 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.55rem 0 0.75rem;
   padding-left: 0.7rem;
   border-left: 2px solid var(--highlight);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 0.98rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
 /* "Whole paragraph" is our label, not the author's words, so it is the app's
-   face even inside the quote (docs/project/fonts.md). */
-:root .cmt-quote .passage-whole { font-family: var(--font-ui); }
+   face even inside the quote (docs/project/fonts.md). The quote's voice only
+   reaches it by inheritance, and a face set on the element itself beats an
+   inherited one from any layer, so this needs no weight. */
+.cmt-quote .passage-whole { font-family: var(--font-ui); }
 
 .cmt-loading {
   display: flex;
@@ -1447,10 +1489,16 @@ td.text.has-hit[data-hues="8"] {
    - **44px tall at every pointer**, not only a coarse one: nothing but a finger
      ever draws it, and a hybrid's primary pointer may be the trackpad.
    - **z-index 50**: over the bars (40), the spine (45) and the mode bands
-     (44–46); under every dialog (70) and the bottom bar (96). */
-.touch-select-chip {
+     (44–46); under every dialog (70) and the bottom bar (96).
+   - **One button or two, stacked** (`data-count`), since 2026-10-29: *Add to
+     glossary* joined it (plan 261029d). Side by side the pair is wider than a
+     phone in portrait, so it grows downwards and `--chip-h` is the group's
+     height in every offset below. The group is placed; the buttons are drawn. */
+.touch-select-chips {
   --chip-w: 13rem;
   --chip-clear: 80px;
+  --chip-gap: 0.35rem;
+  --chip-h: var(--control-h-lg);
   position: fixed;
   z-index: 50;
   left: clamp(
@@ -1458,8 +1506,17 @@ td.text.has-hit[data-hues="8"] {
     var(--chip-x, 0px),
     calc(100vw - var(--safe-right) - var(--chip-w) - 0.5rem)
   );
-  box-sizing: border-box;
   inline-size: var(--chip-w);
+  display: flex;
+  flex-direction: column;
+  gap: var(--chip-gap);
+}
+.touch-select-chips[data-count="2"] {
+  --chip-h: calc(2 * var(--control-h-lg) + var(--chip-gap));
+}
+.touch-select-chip {
+  box-sizing: border-box;
+  inline-size: 100%;
   block-size: var(--control-h-lg);
   display: inline-flex;
   align-items: center;
@@ -1488,17 +1545,18 @@ td.text.has-hit[data-hues="8"] {
    (TouchSelectionChip.tsx § placeFor; docs/plans/261019b-…). Px, not rem: the
    system draws that menu, and it does not grow with our root size. A guess
    until seen on an iPad. */
-.touch-select-chip[data-edge="top"] {
+.touch-select-chips[data-edge="top"] {
   top: max(
     calc(var(--bar-bottom) + 0.5rem),
-    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--control-h-lg))
+    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--chip-h))
   );
 }
-.touch-select-chip[data-edge="bottom"] {
+.touch-select-chips[data-edge="bottom"] {
   bottom: max(
     calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-now) + 0.5rem),
-    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--control-h-lg))
+    calc(var(--chip-room, 0px) - var(--chip-clear) - var(--chip-h))
   );
 }
 .touch-select-chip svg { flex: none; color: var(--highlight-text); }
+.touch-select-glossary svg { color: var(--ink-soft); }
 .touch-select-chip:active { background: var(--highlight-wash); }

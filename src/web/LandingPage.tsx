@@ -161,7 +161,7 @@ export function LandingPage() {
             first prose under the picture rather than the second paragraph of a
             section a stranger may never reach. */}
         <section className="site-reveal tw:mx-auto tw:mt-20 tw:max-w-[54ch] tw:text-center">
-          <p className="tw:font-prose tw:text-xl tw:leading-relaxed tw:text-foreground tw:sm:text-2xl">
+          <p className="tw:font-sans tw:text-xl tw:leading-relaxed tw:text-foreground tw:sm:text-2xl">
             It’s like reading a dog-eared copy of a book where a clever friend has highlighted the
             best bits and scribbled in the margins to help with the difficult bits, based on your
             background, interests and needs — rather than reading the Reader’s Digest version.
@@ -205,7 +205,7 @@ export function LandingPage() {
           <h2 className="site-eyebrow tw:mb-3">Who it’s for</h2>
           {/* Greg, 2026-09-03, answer 3. The fields are his call of 2026-09-02:
               "name fields too". */}
-          <p className="tw:max-w-[58ch] tw:font-prose tw:text-lg tw:leading-relaxed tw:text-foreground">
+          <p className="tw:max-w-[58ch] tw:font-sans tw:text-lg tw:leading-relaxed tw:text-foreground">
             People who read difficult material and think professionally: scientists, researchers,
             academics. You open a long, deep, important article — a paper, a philosophy essay, a
             policy report — that you want to understand, digest, internalise, critique and remember.
@@ -348,7 +348,7 @@ export function LandingPage() {
             docs/project/vision.md § Anti-goals. */}
         <section className="site-panel site-reveal tw:mt-20 tw:p-8 tw:sm:p-10">
           <h2 className="site-eyebrow tw:mb-3">And deliberately not</h2>
-          <p className="tw:font-prose tw:text-lg tw:leading-relaxed tw:text-foreground tw:sm:text-xl">
+          <p className="tw:font-sans tw:text-lg tw:leading-relaxed tw:text-foreground tw:sm:text-xl">
             “Read this in 2 minutes.” Streaks, nudges, anything optimising for time in the app.
             Confident generated claims with no path back to the source.
           </p>

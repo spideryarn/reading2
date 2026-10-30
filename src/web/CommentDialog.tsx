@@ -17,6 +17,7 @@
  * are not looking at. Reading order, not ask order — see comment-nav.ts.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRootFlag } from "./root-flags.js";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import { isImeComposing } from "./key-chord.js";
@@ -138,6 +139,14 @@ export interface FreshBox {
    * the highlight off and close. Called only while the row is untouched.
    */
   onCopiedOnly(): void;
+  /**
+   * **Look these words up in the glossary** — the selection chip's second
+   * press, here for a mouse (plan 261029d). Reader decides what happens to the
+   * highlight and closes the box. Absent when the glossary cannot take these
+   * words, and then there is no button. `false`: nothing happened, and the
+   * box stays.
+   */
+  onAddToGlossary?: (() => boolean) | undefined;
 }
 
 interface Props {
@@ -580,6 +589,11 @@ export function CommentDialog({
     };
   }, []);
 
+  /* While this box is drawn the narrow window's bar stays home, since the box
+     is anchored to the bar's resting room (narrow-window.css § the guard).
+     `side-dialog` is counted, so the other two dialogs can hold it too. */
+  useRootFlag("side-dialog", true);
+
   return (
     <aside
       /* How the comment-change effect above asks "is focus already in here?" */
@@ -985,6 +999,29 @@ export function CommentDialog({
                   : ""}
             </span>
           </>
+        )}
+        {isFresh && own && fresh.onAddToGlossary && (
+          <Tooltip
+            content={
+              pristine
+                ? "Looks these words up in the glossary and takes the highlight off again."
+                : "Looks these words up in the glossary. The highlight stays."
+            }
+          >
+            <button
+              type="button"
+              className="linky cmt-glossary"
+              onClick={() => {
+                /* The reader has gone to the Glossary band, which may now cover
+                   the prose: focus is not sent back to a passage behind it
+                   (GPT Sol, plan review F3). If nothing happened, the box is
+                   still open and the next close restores as usual. */
+                if (fresh.onAddToGlossary?.()) closedByPress.current = true;
+              }}
+            >
+              Add to glossary
+            </button>
+          </Tooltip>
         )}
         {own && (
           <button type="button" className="linky cmt-delete" onClick={own.onDelete}>

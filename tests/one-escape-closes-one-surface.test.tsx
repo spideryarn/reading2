@@ -1360,3 +1360,37 @@ describe("a composing key in a dialog's own box changes nothing in it", () => {
     expect(closed).toEqual(["rename"]);
   });
 });
+
+/* ------------------------------------------- the flag the narrow guard reads */
+
+describe("each of the three dialogs says it is drawn, on <html>", () => {
+  /* narrow-window.css § the guard brings the bar home while any of them is
+     open; since 2026-10-29 it reads `data-side-dialog`, which each dialog
+     holds while it is drawn, counted (src/web/root-flags.ts, plan 261029k). */
+  const flag = () => document.documentElement.hasAttribute("data-side-dialog");
+  it.each([
+    ["Annotate", () => annotate()],
+    ["Comment", () => comment()],
+    ["Chat", () => chat()],
+  ] as const)("%s holds it while drawn and lets it go when closed", (_name, dialog) => {
+    expect(flag()).toBe(false);
+    paint(<>{dialog()}</>);
+    expect(flag()).toBe(true);
+    paint(<Prose />);
+    expect(flag()).toBe(false);
+  });
+
+  it("stays while one of two is still open", () => {
+    paint(
+      <>
+        {annotate(false)}
+        {comment()}
+      </>,
+    );
+    expect(flag()).toBe(true);
+    paint(<>{annotate(false)}</>);
+    expect(flag(), "closing the comment took the annotate box's flag too").toBe(true);
+    paint(<Prose />);
+    expect(flag()).toBe(false);
+  });
+});

@@ -105,8 +105,9 @@ const page = (siteName: string, extraCss = "", authors?: Author[]) =>
       article: article(siteName, authors),
       slug: SLUG,
       /* An owner gets author links rather than focusable spans. That is the
-         only owner/visitor difference inside the facts line. */
-      ...(authors ? { onRenamed: () => {} } : {}),
+         only owner/visitor difference inside the facts line before its
+         owner-only read-so-far mark. Include that mark in the wrapping case. */
+      ...(authors ? { onRenamed: () => {}, readBand: "finished" as const } : {}),
     }),
   )}</div>`;
 
@@ -125,11 +126,19 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
           p.evaluate(() => {
             const facts = [...document.querySelectorAll(".facts > span")];
             /* A Range over the text, not the span's own rects: an inline-block
-               is one box however many lines its text takes. */
+               is one box however many lines its text takes. Text nodes only:
+               a Range over the whole span also returns the read-so-far pie's
+               button and svg boxes, whose tops are not the text's, and each
+               would count as a line of its own (plan 261025j). */
             const lines = (el: Element) => {
-              const r = document.createRange();
-              r.selectNodeContents(el);
-              return new Set([...r.getClientRects()].filter((b) => b.width > 0).map((b) => Math.round(b.top))).size;
+              const tops = new Set<number>();
+              const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+              for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+                const r = document.createRange();
+                r.selectNodeContents(n);
+                for (const b of r.getClientRects()) if (b.width > 0) tops.add(Math.round(b.top));
+              }
+              return tops.size;
             };
             return {
               /* Both, because `.reader` clips its sideways overflow since
@@ -146,6 +155,15 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
               lines: facts.map(lines),
               authorLinks: document.querySelectorAll(".facts > span:first-child a.author-name").length,
               moreAuthors: document.querySelector<HTMLButtonElement>(".facts > span:first-child button")?.textContent ?? null,
+              /* The pie's middle inside the minutes' line box: the text-only
+                 count above cannot see it drop to a line of its own. */
+              pieBesideMinutes: (() => {
+                const pie = document.querySelector(".facts .read-so-far svg")?.getBoundingClientRect();
+                const min = document.querySelector(".facts .read-time-trigger")?.getBoundingClientRect();
+                if (pie === undefined || min === undefined) return null;
+                const mid = (pie.top + pie.bottom) / 2;
+                return mid >= min.top && mid <= min.bottom;
+              })(),
             };
           }),
         );
@@ -188,6 +206,7 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
       expect(authored.scrollWidth, "an author list pushes the page sideways").toBeLessThanOrEqual(WIDTH);
       for (const right of authored.rights) expect(right).toBeLessThanOrEqual(WIDTH);
       expect(authored.lines.slice(1), "a fact after the author list split across a line break").toEqual([1, 1, 1, 1]);
+      expect(authored.pieBesideMinutes, "the read-so-far pie wrapped away from the minutes").toBe(true);
     } finally {
       await browser.close().catch(() => {});
     }

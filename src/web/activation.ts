@@ -193,17 +193,21 @@ export type { AutoRunTarget };
  *  - **`none`** — nothing to arm, with the reason written out. The reasons were
  *    prose in this docblock until the type asked for them by name.
  *
- * **`debate` is the dearest press in the app** — a metered call that goes
- * out to the open web, up to ~$0.14 and rising with the length of the article
+ * **Sources has the dearest presses in the app** — metered calls that go
+ * out to the open web. Reception is up to ~$0.14 and rises with the length of the article;
+ * *Where it sits*' literature search is about $0.30.
+ *
+ * Reception was the original case. It is
  * (two such calls until `debate/7`, 2026-10-08, when the claims search left
  * the press). **Delegated since that day**: a press landing on Reception arms
  * the search, one landing on Claims arms the claims list — one call and no
  * search. Since 2026-10-09 it is a Sources sub-mode, out of
- * the experimental switch, and **the mode opens on Bibliography**, so a press
- * on the Sources button buys the search only when the address already
- * names Reception (§ `activationForSources`). No navigation buys it; a
- * deliberate press can, again and again, as every paid step can (plan
- * 261009l § Reception's spend).
+ * the experimental switch. Since 2026-10-25 the mode opens on *Where it
+ * sits*; since 2026-10-26 a deliberate press that lands there buys its
+ * composite target, while Reception starts only from its own button. No
+ * navigation buys either one (§ `activationForSources`). A deliberate press
+ * can buy a paid step again, as every paid step can (plan 261009l §
+ * Reception's spend; plan 261026g § Stage 4).
  *
  * A fourth answer, **`arrival`**, stood here from 2026-09-29 to 2026-10-03 for
  * the one mode whose band starts its own work when it mounts: Tweets. The
@@ -265,9 +269,12 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   sources: {
     kind: "delegated",
     target: (ctx) => activationForSources(ctx.sources),
-    why: "the sub-mode a press lands on is whatever `?sources=` says: Bibliography arms the citations, Reception the search, Claims the claims list, Not cited and Links nothing",
+    why: "the sub-mode a press lands on is whatever `?sources=` says: Where it sits arms its composite, Bibliography its own list, and the rest nothing (plans 261025h and 261026g)",
   },
   faq: { kind: "fixed", target: "faq" },
+  /* Owner only, and behind the experimental switch: a press is the only thing
+     that makes them, never arrival and never import (plan 261028c). */
+  explanations: { kind: "fixed", target: "explanations" },
   /* The target is the route even when the job it starts writes the Quotes
      first (`precededBy`, src/web/useSkim.ts): the press is for this
      mode's artefact, and the token is keyed on it. */
@@ -308,21 +315,28 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      already there by the time the article is on screen. */
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
-  /* Everything else the column shows is read and never made; the relation
-     words are its own, and **the column asks for them when it is shown**, not
-     when it is pressed (src/web/useRelations.ts § `useAutoRunOnArrival`). Greg,
-     2026-10-05: *"generate linking words when Marginalia mode is opened"*. A
-     press could not carry it: a pasted link, a reload or a restored view turns
-     the column on with nobody pressing anything. So the press arms nothing, as a Summary press
-     that lands on the thread arms nothing, and the row is `delegated` rather
-     than `none` so the command bar still says the row may start work. Not
-     `fixed`: that would mint a `relations` token no hook is mounted to claim,
-     and put the step back on the import's list (auto-modes.ts).
-     docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
+  /* The relation words are the column's own, and **the column asks for them
+     when it is shown**, not when it is pressed (src/web/useRelations.ts §
+     `useAutoRunOnArrival`). Greg, 2026-10-05: *"generate linking words when
+     Marginalia mode is opened"*. A press could not carry it: a pasted link, a
+     reload or a restored view turns the column on with nobody pressing
+     anything.
+
+     **The press arms the literature search** (since 2026-10-29; Greg's answer
+     to q-sxfwqq, *"Let's go for A"*): the dearest thing the margin draws, so
+     it is the press that buys it and never the arrival. Dock.tsx §
+     `useActivateMode` arms this row only on the press that turns the column
+     on; `SituateMarginFeed` (MarginaliaColumn.tsx) is the one mount that
+     claims it, and spends it only where no dossier is stored and the notes
+     are on screen. **`delegated`, not `fixed`**: a fixed row's target is a
+     step `modeStep` would put on the import's list, and the search is not to
+     run on import (option C, not chosen). Everything else the column shows is
+     read and never made.
+     docs/plans/261029h-the-margin-button-starts-the-literature-search.md. */
   marginalia: {
     kind: "delegated",
-    target: () => null,
-    why: "the column writes its relation words when it is shown, whatever showed it; a press has nothing left to arm",
+    target: () => "margin-literature",
+    why: "the press that turns the column on asks for the literature search where none has run; the relation words are made when the column is shown, whatever showed it",
   },
   /* Nothing exists to fill until the reader has typed. */
   search: { kind: "none", reason: "stores nothing until the reader types a query" },
@@ -409,7 +423,8 @@ export function modeGenerates(mode: Mode): boolean {
  *
  * `delegated` is `null` because the step is the press's, not the mode's
  * (Diagram's picture comes from `?diagram=`, Summary's view from `?summary=`);
- * the two stream targets are `null` because they have no job row. **So a
+ * the two stream targets, the composite `sources-where` and the margin's
+ * `margin-literature` are `null` because they have no one job row of their own. **So a
  * delegated mode drops out of the add page's list unless that file names its
  * steps itself**, which it does for Summary (auto-modes.ts §
  * `DELEGATED_MODE_STEPS`; GPT Sol, F2 of the 261003l review).
@@ -418,7 +433,12 @@ export function modeGenerates(mode: Mode): boolean {
 export function modeStep(mode: Mode): StepName | null {
   const row = MODE_TARGET[mode];
   if (row.kind !== "fixed") return null;
-  return row.target === "promises" || row.target === "candidates" ? null : row.target;
+  return row.target === "promises" ||
+    row.target === "candidates" ||
+    row.target === "sources-where" ||
+    row.target === "margin-literature"
+    ? null
+    : row.target;
 }
 
 /**
@@ -585,9 +605,9 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 }
 
 /**
- * **What a press that lands on one of Sources' sub-modes arms**: the
- * `bibliography` list for Bibliography, nothing for Not cited or Links, the `reception`
- * search for Reception, and the `sources-claims` list for Claims.
+ * **What a press that lands on one of Sources' sub-modes arms**:
+ * `sources-where` for *Where it sits*, `bibliography` for Bibliography, and
+ * nothing for any other.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows
@@ -596,18 +616,38 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
  * `SourcesViews`). Bibliography's arm was Citations' fixed row until
  * 2026-10-09 (plan 261009l).
  *
- * **Two targets, never one** (2026-10-08). Until `debate/7` both sub-modes
- * armed the one `debate` run, which searched for both; the press now searches
- * for Reception only, so a Claims press arming it would buy Reception for a
+ * **Where it sits has one composite target** since plan 261026g: its
+ * literature search and Bibliography, whichever is missing. Bibliography is
+ * needed for *What it builds on* and by the search itself; when both are missing the
+ * client asks for them in one ordered job (useWhereAutoRun.ts). A stored
+ * dossier, stale or outdated included, consumes the token without another
+ * search. Until then *Where it sits* armed Bibliography alone and the search
+ * was the panel's own button (plan 261025h, decision 8, GPT Sol's F4).
+ *
+ * **Reception and Claims arm nothing since 2026-10-25** (plan 261025h,
+ * decisions 6 and 8, GPT Sol's F5). They stopped being chips and became tools
+ * inside *Where it sits*, reached by plain links that must not buy, and each
+ * panel has its own button for its first run: Reception's *Search the web*
+ * and Claims' *List its claims*. Their
+ * command-bar rows open the tool, as the links do; Reception's Metadata and
+ * command-bar *Run again* stay (rerun-commands.ts). Until then both
+ * sub-modes armed their own work on a press: two targets, never one, because
+ * a Claims press arming the `reception` search would buy Reception for a
  * reader who asked for claims (GPT Sol's F1 on plan
- * docs/plans/261008i-debate-claims-picked-by-the-reader.md). Claims' own work
- * is the list of the article's claims, one call and no search (that plan's
- * § 2), and each hook spends only its own target and only while its sub-mode
- * is showing (useReception.ts, useSourcesClaims.ts), so neither press can buy the
- * other's work.
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md), and each hook
+ * still spends only its own target and only while its sub-mode is showing
+ * (useReception.ts, useSourcesClaims.ts).
  */
 export function activationForSources(view: SourcesView): AutoRunTarget | null {
   switch (view) {
+    /* *Where it sits*: whichever of the works cited (for *What it builds on*, plan
+       261025h F4) and the search of the literature is missing, behind one
+       token — auto-run-targets.ts § `CompositeAutoRunTarget`, plan 261026g
+       § Stage 4. The press is the request: Greg's cost rule puts the ~$0.30
+       search "upon user request", and his spya-mfuz6g asks for it to start
+       when he opens the sub-mode. A link, a reload or Back arms nothing. */
+    case "where":
+      return "sources-where";
     /* Citations' fixed target until 2026-10-09: the list of works cited. */
     case "bibliography":
       return "bibliography";
@@ -623,10 +663,15 @@ export function activationForSources(view: SourcesView): AutoRunTarget | null {
        261020n § Spend). */
     case "investigate":
       return null;
+    /* Tools since plan 261025h: each panel's own button starts its work. */
     case "reception":
-      return "reception";
     case "claims":
-      return "sources-claims";
+      return null;
+    /* The two experiments read the stored dossier and start nothing; with none
+       stored they point at *Search the literature* (plan 261025h, Stage 4). */
+    case "guess-first":
+    case "evidence-first":
+      return null;
     default: {
       const unhandled: never = view;
       throw new Error(`unhandled Sources view: ${String(unhandled)}`);
@@ -733,8 +778,8 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
  *    `SummaryControls`, and `bandTarget` below);
  *  - Sources: `activationForSources` of the sub-mode **the row
- *    names** — `bibliography` for Bibliography, `debate` for Reception,
- *    `debate-claims` for Claims.
+ *    names** — `sources-where` for *Where it sits*, `bibliography` for
+ *    Bibliography, and nothing for the rest (plans 261025h and 261026g).
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is
  * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
@@ -753,8 +798,8 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     /* Nothing to generate in either view: the tree is in the page's payload. */
     case "structure":
       return null;
-    /* **Bibliography's row arms the citations, Reception's the `debate`
-       search, Claims' the claims list** — the mode row's own answer
+    /* **Where it sits' row arms its composite, Bibliography's arms its list,
+       and no other row arms anything** — the mode row's own answer
        (`activationForSources`). The band's own chips arm through here too
        (SourcesMode.tsx § `SourcesViews`). */
     case "sources":

@@ -70,6 +70,14 @@
  * so uses the first open up; a visit signed out writes nobody's key, and uses
  * up nobody's but its own. § The first-open default, below. A bare metadata visit does not claim that first article open.
  *
+ * ## And a browser with no memory asks the server
+ *
+ * Since 2026-10-29 the owner's paragraph is also kept on the server, beside
+ * reading time, and a browser with **no key** for the article waits for the
+ * owner's article read to say where they were on any other device, before
+ * calling it a first open. § The server's place, below. A browser with a key
+ * trusts its own copy, as before.
+ *
  * The reasoning, the deferred pieces and the questions nobody was there to
  * answer are in
  * docs/plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md.
@@ -77,7 +85,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { type ArticleView, liftedLegacySearch, onAddressChange, parseRoute } from "./router.js";
-import type { BlockId } from "../types.js";
+import type { BlockId, SavedPlace } from "../types.js";
 import { type BandMode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { bandCoversProse } from "./layout.js";
 import { storageReader } from "./lib/storage-reader.js";
@@ -114,7 +122,7 @@ export const REMEMBERED = [
   "gate", // glossary threshold
   "rank", // quotes order
   "bar", // quotes threshold
-  "sources", // bibliography, not-cited, links, reception or claims — a restore draws what exists; only a press makes anything
+  "sources", // where (the default, so absent), bibliography, not-cited, links, reception, claims or investigate — a restore draws what exists; only a press makes anything
   "receptionby", // reception's order — `debateby` until 2026-10-09, now in NEVER_REMEMBERED
   "bears", // claims' relevance threshold
   "receptionthread", // which of reception's threads narrows its list — `debatethread` until 2026-10-09
@@ -123,12 +131,15 @@ export const REMEMBERED = [
   "citebar", // citations threshold
   "faqby", // FAQ order
   "faqbar", // FAQ threshold
+  "explby", // Explanations order
+  "explbar", // Explanations threshold
   "term", // selected glossary term
   "idea", // selected idea
   "quote", // selected quote
   "event", // selected timeline event
   "depth", // which part of a Skim — Gist, More, Most, or Figures (plan 261011b)
   "stop", // which Skim stop you were reading — a quote on a pass, a figure's block under Figures
+  "brief", // which Skim route `stop` and `depth` are on — an added brief, absent for the default (plan 261027d, Sol F7)
 ] as const;
 
 /**
@@ -474,9 +485,19 @@ function addressAt(search: string): string | null {
 /** The live `useLastView`'s saver — one at a time, so a note is saved only under the reader, article and view it was made in. */
 let placeSaver: ((place: ReadingPlace) => void) | null = null;
 
+/** Everyone else who hears the spy's notes: reading time's flush, which sends the paragraph to the server (useReadingTime.ts). */
+const placeListeners = new Set<(place: ReadingPlace) => void>();
+
+/** Hear each note from now on; returns the way to stop. */
+export function onReadingPlace(listener: (place: ReadingPlace) => void): () => void {
+  placeListeners.add(listener);
+  return () => placeListeners.delete(listener);
+}
+
 /** The position spy's note (useReadingPosition.ts). Nothing happens when no reading view is remembering. */
 export function noteReadingPlace(place: ReadingPlace): void {
   placeSaver?.(place);
+  for (const listener of placeListeners) listener(place);
 }
 
 /**
@@ -653,9 +674,10 @@ export function writeLastView(
  * functions, one per question, and the effect in `useLastView` that asks them.
  * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
  *
- * **"First open" means this reader's first open in this browser**, because the
- * key is the only memory there is, and it is theirs (§ `lastViewKey`). So an
- * article read on another device gets the default once here; and since the
+ * **"First open" means this reader's first open anywhere**, since 2026-10-29:
+ * no key here, and the server has no place either (§ The server's place). Until
+ * then it meant this browser, and an article half read on another device was
+ * greeted here as new (postmortem 261029a). Since the
  * save in `useLastView` writes the key on every open, a visit on a window too
  * narrow for a band counts as having opened it — the default is not held over
  * for a wider window. **A signed-out visit no longer counts against the reader
@@ -759,6 +781,64 @@ export function firstOpenHref(
 }
 
 /**
+ * ## The server's place
+ *
+ * > I just reloaded this article, and even though I've read it before and I was
+ * > like halfway through it, it hasn't seemed to remember where I was, and it's
+ * > opened it again at the top
+ * >
+ * > — Greg, 2026-10-29 (spya-e23tee)
+ *
+ * His place was in another browser's storage, and this one had no key, so it
+ * took the article for a first open. docs/postmortems/261029a-a-place-kept-per-browser-read-as-the-readers-own.md;
+ * plan docs/plans/261029f-your-place-in-an-article-follows-you-to-another-device.md.
+ *
+ * So an arrival with no key here, signed in, at a bare address, **waits for
+ * the owner's article read**, which carries `readingPlace` (src/types.ts §
+ * `SavedPlace`). `useArticleAccess` hands it over with `settleSavedPlace`
+ * before it draws the answer, so a paragraph is on the address before the
+ * reading view first measures it, as a restore is. Every other answer — a
+ * visitor's read, a failure, an unread paper — settles as `null`, which is
+ * today's first open. Until it settles, the save effect writes nothing, so a
+ * reload in that moment asks again rather than finding a `""` marker.
+ *
+ * **The add page's marked first open does not wait**: an article that page has
+ * just made has no place anywhere, and first-open-purpose.ts is that arrival's
+ * one coordinator.
+ *
+ * **Module state, one article per tab**, for first-open-purpose.ts's reason:
+ * the two halves are either side of the auth branches. The answer is kept,
+ * by slug and reader, because it can come first: an arrival on Metadata that
+ * steps into the reading view has had its read already (GPT Sol's build
+ * review, F1). A new slug drops it.
+ */
+let serverAnswer: { slug: string; readerId: string | null; place: SavedPlace } | null = null;
+let awaiting: { slug: string; readerId: string | null; decide: (place: SavedPlace) => void } | null = null;
+
+/** `useArticleAccess`, once its live answer is known: what the server says, for this slug and reader. */
+export function settleSavedPlace(slug: string, readerId: string | null, place: SavedPlace): void {
+  serverAnswer = { slug, readerId, place };
+  const waiting = awaiting;
+  if (waiting === null || waiting.slug !== slug || waiting.readerId !== readerId) return;
+  awaiting = null;
+  waiting.decide(place);
+}
+
+/**
+ * **The address to arrive at, given the server's place**, or `null` to leave
+ * it — pure, like `restoredHref`. Only a paragraph moves anything; the
+ * address must still be this article's reading view and say nothing, because
+ * the link always wins.
+ */
+export function savedPlaceHref(slug: string, pathname: string, search: string, place: SavedPlace): string | null {
+  if (place === null || place.block === null) return null;
+  if (hasArticleState(search)) return null;
+  const route = parseRoute(pathname);
+  if (route.kind !== "read" || route.slug !== slug || route.view !== "article") return null;
+  return `${pathname}?${[...pairs(search), `at=${place.block}`].join("&")}`;
+}
+
+/**
  * Both halves, wired in `App` above its auth branches. A null slug means
  * no article is on screen: advance the reader identity without reading,
  * claiming or saving an article's view. This also covers client navigation;
@@ -813,12 +893,18 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
   /* The slug and reader whose first open has been claimed and whose default
      is still to be applied — see the second effect. */
   const firstOpenFor = useRef<{ slug: string; readerId: string | null } | null>(null);
+  /* The arrival still waiting for the server's place (§ The server's place):
+     the save effect writes nothing for it until it is decided. */
+  const waitingFor = useRef<{ slug: string; readerId: string | null } | null>(null);
   useLayoutEffect(() => {
     const before = arrivedFor.current;
     if (before?.slug === slug && before.view === view && before.readerId === readerId) return;
     const newReader = before !== null && before.readerId !== readerId;
     const restore = before?.slug !== slug || newReader;
     arrivedFor.current = { slug, view, readerId };
+    awaiting = null;
+    waitingFor.current = null;
+    if (serverAnswer !== null && serverAnswer.slug !== slug) serverAnswer = null;
     if (slug === null) {
       firstOpenFor.current = null;
       holdFirstOpen(null);
@@ -830,11 +916,15 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
     const leftBehind = newReader && before.slug === slug && route.kind === "read" && route.slug === slug;
     const search = leftBehind ? withoutArticleState(location.search) : location.search;
     const stored = readLastView(slug, readerId);
+    /* **No key here: ask the server first** (§ The server's place), unless
+       the add page has just made the article. */
+    const askServer =
+      view === "article" && readerId !== null && stored.kind === "none" && !hasArticleState(search) && !peekAskPurpose(slug);
     /* The same one read answers both questions: something to put back, or a
        first open. They cannot both be yes — one needs a key and the other
        needs there to be none. */
     firstOpenFor.current =
-      view === "article" && claimFirstOpen(slug, readerId, search, stored) ? { slug, readerId } : null;
+      view === "article" && !askServer && claimFirstOpen(slug, readerId, search, stored) ? { slug, readerId } : null;
     /* **The add page's mark holds this arrival's decision**, so it can apply
        the guide immediately and let the purpose read decide only the modal
        (first-open-purpose.ts, plan 261007p). Measured here, at the claim, so
@@ -852,13 +942,44 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
       ? restoredHref(location.pathname, search, stored.kind === "stored" ? stored.search : null)
       : null;
     const href = restored ?? (search === location.search ? null : location.pathname + search);
-    if (href === null) return;
     /* `replaceState`, not `pushState`: the bare address is a spelling the reader
        arrived in rather than a page they visited, so Back belongs to whatever
        they came from. The same call every rewrite in main.tsx makes. Both nuqs
        and router.ts have this patched, so every `useQueryState` below sees the
        new query string without being told. */
-    history.replaceState(history.state, "", href);
+    if (href !== null) history.replaceState(history.state, "", href);
+    if (!askServer) return;
+
+    const arrival = { slug, readerId };
+    waitingFor.current = arrival;
+    const decide = (place: SavedPlace) => {
+      const now = arrivedFor.current;
+      if (waitingFor.current !== arrival || now?.slug !== slug || now.readerId !== readerId || now.view !== "article")
+        return;
+      waitingFor.current = null;
+      /* Navigation writes the address before React can render it. An answer
+         may settle in that gap while `arrivedFor` still names this article;
+         do not save the next route's query under the article being left. */
+      const route = parseRoute(location.pathname);
+      if (route.kind !== "read" || route.slug !== slug || route.view !== "article") return;
+      /* Another tab may have opened it meanwhile; then its key is the answer. */
+      const here = readLastView(slug, readerId);
+      if (here.kind !== "none") return;
+      const placed = savedPlaceHref(slug, location.pathname, location.search, place);
+      if (placed !== null) history.replaceState(history.state, "", placed);
+      /* Opened before, somewhere — or the address has said something since:
+         not a first open. What is on the address now is this reader's view. */
+      if (place !== null || hasArticleState(location.search)) {
+        writeLastView(slug, readerId, rememberableSearch(location.search));
+        return;
+      }
+      /* Never opened anywhere: today's first open, measured now. */
+      if (!claimFirstOpen(slug, readerId, location.search, here)) return;
+      const first = firstOpenHref(slug, location.pathname, location.search, { signedIn: true }, firstOpenSearch(usableWidth()));
+      if (first !== null) history.replaceState(history.state, "", first);
+    };
+    if (serverAnswer?.slug === slug && serverAnswer.readerId === readerId) decide(serverAnswer.place);
+    else awaiting = { slug, readerId, decide };
   }, [slug, view, readerId]);
 
   /* **The first-open default.** Applied as soon as it is claimed, on both
@@ -918,6 +1039,8 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
       /* **And the reader this listener was made for is still the one who
          arrived.** The pathname cannot say that. § A change of reader. */
       if (arrivedFor.current?.readerId !== readerId) return;
+      /* **Nothing until the server has answered** (§ The server's place). */
+      if (waitingFor.current?.slug === slug && waitingFor.current.readerId === readerId) return;
       const remembered = rememberableSearch(location.search);
       /* **The paragraph in place of the section.** A fresh note is saved as it
          stands, ahead of the address, so leaving inside the spy's 300ms

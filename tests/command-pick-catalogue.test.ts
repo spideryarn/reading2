@@ -139,6 +139,7 @@ function rowsIn(context: Context): readonly Command[] {
       queue: { run: async () => null, lastFailure: () => null },
       /* A store address, so the extension row is among every row the bar can draw (plan 261025b). */
       extensionStore: extensionStoreUrl("a".repeat(32)),
+      experimentalOn: context.experimentalOn,
     }),
     ...experimentalRows(experimental),
     /* One state is every state: the mark on the appearance in force is the

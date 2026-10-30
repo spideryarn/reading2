@@ -5,7 +5,7 @@
  *
  * `useChatAnchors` fetched once per article and was then told about changes
  * by whoever made them. Chat's band tells it nothing, so a conversation
- * started there (Debate's *Check this claim in chat*) had no summary until a
+ * started there (Claims's *Check this claim in chat*) had no summary until a
  * reload: no mark on the claim, and nothing for `?thread=` to open beside the
  * mode. Plan 261005i, the plan review's F1. `refresh()` is the fix, and
  * `Reader` calls it when the reader leaves Chat.

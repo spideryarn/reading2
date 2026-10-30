@@ -178,6 +178,7 @@ const SAYS = {
   illustrated: "The rig, painted",
   sketch: "The calibrated rig",
   situate: SAYS_SITUATE,
+  explanations: "The rig was trusted before anyone could say why it worked.",
 } as const;
 
 const NO_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
@@ -187,7 +188,7 @@ const para = (text: string, id = "spya-bbbbbb") => ({ text, ids: [id] });
 
 /** What each artefact's GET answers when it answers. Keyed by the path segment after `/api/`. */
 const BODIES: Record<string, unknown> = {
-  /* Debate's Claims list (plan 261008i stage 2): one listed claim, whose
+  /* Claims's Claims list (plan 261008i stage 2): one listed claim, whose
      AI line is what the band draws. */
   "sources-claims": {
     claimList: {
@@ -197,6 +198,19 @@ const BODIES: Record<string, unknown> = {
     },
     stale: false,
     outdated: false,
+  },
+  explanations: {
+    explanations: {
+      ...STAMP,
+      profileHash: null,
+      explanations: [
+        { id: "expl-1", blockId: AT.blockId, quote: AT.quote, text: SAYS.explanations, sure: true, outside: false },
+      ],
+      dropped: { malformed: 0, unknownIds: 0, unquoted: 0, tooLong: 0, ambiguous: 0, badText: 0, repeated: 0, overCap: 0 },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
   },
   faq: {
     faq: {
@@ -451,9 +465,8 @@ const BODIES: Record<string, unknown> = {
     profileChanged: false,
   },
   arc: { arc: { ...STAMP, entries: [] }, stale: false },
-  /* Sources > Investigate's *Where this piece sits* (plan 261024o): the
-     owner's, behind the experimental switch, which `/api/reader` below has on.
-     One finding, whose note is what the band draws. */
+  /* Sources > Where it sits' dossier (plan 261025h): the owner's for every
+     owner. One finding, whose note is what the band draws. */
   situate: {
     situate: {
       ...STAMP,
@@ -558,9 +571,9 @@ async function reply(url: string, method: string, body: string | null): Promise<
   if (url.startsWith("/api/search/")) return json({ runs: [] });
   /* Reception's *Cited by*, answered as the route answers an article with no
      DOI. A 404 here would be its `unavailable`, which draws a second *Try
-     again* in Debate's band beside the one this file counts (plan 261004h). */
+     again* in Reception's band beside the one this file counts (plan 261004h). */
   if (url.startsWith("/api/citers/")) return json({ kind: "no-doi" });
-  /* Debate's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
+  /* Claims's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
   if (/^\/api\/sources-claims\/[^/]+\/checks$/.test(url)) return json({ checks: [] });
   /* `sources-claims` by name: a general `[a-z-]+` would turn reading-time and the like from `{}` into a 404. */
   const other = /^\/api\/(sources-claims|[a-z]+)\/([^/]+)$/.exec(url);
@@ -595,6 +608,7 @@ const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { useFaqRead } = await import("../src/web/useFaq.js");
+const { useExplanationsRead } = await import("../src/web/useExplanations.js");
 const { useTimelineRead } = await import("../src/web/useTimeline.js");
 const { useReceptionRead } = await import("../src/web/useReception.js");
 const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
@@ -709,6 +723,8 @@ interface Row {
 
 const ROWS: readonly Row[] = [
   { hook: "useFaq.ts", kind: "faq", search: "?mode=faq", where: ".mode-band.faq" },
+  /* Owner only, behind the experimental switch (plan 261028c). */
+  { hook: "useExplanations.ts", kind: "explanations", search: "?mode=explanations", where: ".mode-band.expl" },
   { hook: "useSimple.ts", kind: "simple", search: "?mode=summary", where: ".mode-band.summ" },
   { hook: "useSkim.ts", kind: "skim", search: "?mode=skim", where: ".mode-band.skim", needs: ["quotes"] },
   { hook: "useTweets.ts", kind: "tweets", search: "?mode=summary&summary=thread", where: ".mode-band.summ.tweets" },
@@ -719,7 +735,8 @@ const ROWS: readonly Row[] = [
   /* Claims' own read, on Claims (plan 261008i stage 2). */
   { hook: "useSourcesClaims.ts", kind: "sources-claims", search: "?mode=sources&sources=claims", where: ".mode-band.rcp" },
   { hook: "useGlossary.ts", kind: "glossary", search: "?mode=glossary", where: ".mode-band.gloss" },
-  { hook: "useBibliography.ts", kind: "bibliography", search: "?mode=sources", where: ".mode-band.bibliography" },
+  /* Named: the bare Sources address is Where it sits since plan 261025h. */
+  { hook: "useBibliography.ts", kind: "bibliography", search: "?mode=sources&sources=bibliography", where: ".mode-band.bibliography" },
   {
     hook: "useQuiz.ts",
     kind: "quiz",
@@ -732,9 +749,10 @@ const ROWS: readonly Row[] = [
   },
   { hook: "useIllustrated.ts", kind: "illustrated", search: "?mode=diagram&diagram=illustrated", where: ".mode-band.diag" },
   { hook: "useSketch.ts", kind: "sketch", search: "?mode=diagram", where: ".mode-band.diag" },
-  /* Where this piece sits, at the top of Investigate (plan 261024o): the
-     owner's, with the experimental switch on (`/api/reader` above). */
-  { hook: "useSituate.ts", kind: "situate", search: "?mode=sources&sources=investigate", where: ".mode-band.investigate" },
+  /* The literature search, in Where it sits, the bare Sources address, for
+     every owner since plan 261025h (at the top of Investigate, behind the
+     switch, before). */
+  { hook: "useSituate.ts", kind: "situate", search: "?mode=sources", where: ".mode-band.where" },
 ];
 
 /**
@@ -755,6 +773,8 @@ const NOT_A_ROW: Record<string, string> = {
     "Marginalia's relation words: a failed read stores no message and draws nothing, the notes simply have no connective.",
   "useCrossrefs.ts":
     "an enhancement over the prose with no error state at all: a failed first read draws no links, a failed re-read keeps the ones it had, and neither says anything (tests/crossrefs-revalidate.test.tsx).",
+  "skim-briefs.ts":
+    "the list of a Skim's added briefs, not a mode's artefact read: nothing draws its error yet. The band reads it only to find the chosen brief's sentence and to tell an unknown `?brief=` from a real one; a failed read keeps the asked brief, whose own route read (`useSkim`, a row above) says what is wrong. The picker that will draw the list is plan 261027d's stage 4.",
   "Metadata.tsx":
     "the metadata page's provenance read, not a mode band: no ReadError and no Try again, the sentence heads AI processing and a failed first read asks again on a timer. It goes through `describeFetchFailure` since 2026-10-06, checked in tests/metadata-failed-read-says-a-readers-sentence.test.tsx.",
 };
@@ -1451,6 +1471,7 @@ interface ArtefactReadState {
 /** The same twelve reads, alone: the control and the change of article. */
 const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => ArtefactReadState }[] = [
   { kind: "faq", use: useFaqRead },
+  { kind: "explanations", use: useExplanationsRead },
   { kind: "simple", use: useSimple },
   { kind: "skim", use: (slug) => useSkim(slug, useQuotesRead(slug), useIdeasRead(slug)) },
   { kind: "ideas", use: useIdeasRead },

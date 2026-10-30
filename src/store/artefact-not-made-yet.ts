@@ -24,13 +24,14 @@
  * **This is the one list; the other places that used to carry a copy point
  * here.**
  *
- * **All sixteen routes answer the header**: `loadQuiz`, `loadCrossrefs` and
+ * **All nineteen routes answer the header**: `loadQuiz`, `loadCrossrefs` and
  * `loadBibliography` first (plan 261006g); `loadSimpleSummary`, `loadIdeas`,
  * `loadFaq`, `loadTimeline`, `loadReception`, `loadGlossary` and `loadQuotes`
  * (plan 261006h); and `loadTweets`, `loadRelations`, `loadSkim`, `loadSketch`,
- * `loadIllustrated` and `loadArc` (plan 261007n); and `loadSituate` (plan
- * 261024o), whose route was born with it. Without the header each is still a
- * 404, for a tab opened before the deploy.
+ * `loadIllustrated` and `loadArc` (plan 261007n); `loadSourcesClaims`; and
+ * `loadSituate` (plan 261024o) and `loadExplanations` (plan 261028c), whose
+ * routes were born with them. Without the header each is still a 404, for a
+ * tab opened before the deploy.
  *
  * A new artefact read is two edits **that must land together**: the helper at
  * its route, and its name in `NONE_YET_AS_NULL` (src/web/lib/api.ts), so the

@@ -105,7 +105,7 @@ function articleWith(blocks: Block[], pdfFigures?: PdfFigureEntry[], source?: "p
   return {
     meta: { slug: "a-piece", title: "A piece", ...(source ? { source } : {}) },
     blocks,
-    tree: { version: "hierarchy/4", nodes: [], roots: [] },
+    tree: { version: "toc/4", nodes: [], roots: [] },
     assets,
   } as unknown as Article;
 }
@@ -545,7 +545,7 @@ function articleWithImages(blocks: Block[], entries: AssetEntry[]): Article {
   return {
     meta: { slug: "a-piece", title: "A piece" },
     blocks,
-    tree: { version: "hierarchy/4", nodes: [], roots: [] },
+    tree: { version: "toc/4", nodes: [], roots: [] },
     assets: {
       version: "assets/2",
       sourceHash: "x",
@@ -1244,7 +1244,7 @@ describe("what a load owns", () => {
         figureBlock("spya-bbbb04", REF_ONE, "Figure 1."),
         imageBlock("spya-bbbb05", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`),
       ],
-      tree: { version: "hierarchy/4", nodes: [], roots: [] },
+      tree: { version: "toc/4", nodes: [], roots: [] },
       assets: {
         version: "assets/2",
         sourceHash: "x",

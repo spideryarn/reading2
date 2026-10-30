@@ -14,7 +14,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { readingTime } from "../src/db/schema.js";
@@ -36,6 +36,7 @@ await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
+const { pgReadingTimeStore } = await import("../src/store/pg-reading-time.js");
 
 let article: ScratchArticle | undefined;
 let strangers: ScratchArticle | undefined;
@@ -134,6 +135,19 @@ describe("GET and POST /api/reading-time/:slug", () => {
     expect((await post(SLUG, { seconds: { [first]: 4 } })).status).toBe(204);
 
     expect(await get(SLUG)).toEqual({ status: 200, body: { seconds: { [first]: 6.5, [second]: 1 } } });
+  });
+
+  it("keeps the saved seconds and answers 204 when refreshing the shelf cache fails", async () => {
+    const block = blockOf(article, 4);
+    const before = ((await get(SLUG)).body as { seconds: Record<string, number> }).seconds[block] ?? 0;
+    const refresh = vi.spyOn(pgReadingTimeStore, "refreshShelfWords").mockRejectedValueOnce(new Error("cache unavailable"));
+    try {
+      expect((await post(SLUG, { seconds: { [block]: 7 } })).status).toBe(204);
+    } finally {
+      refresh.mockRestore();
+    }
+    const after = ((await get(SLUG)).body as { seconds: Record<string, number> }).seconds[block];
+    expect(after).toBe(before + 7);
   });
 
   it("treats an empty batch as nothing to do", async () => {

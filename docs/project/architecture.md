@@ -327,7 +327,7 @@ heads exist today and the list grows as stages arrive:
 | function | stages | what its head prints |
 |---|---|---|
 | `articleFingerprint` | `arc`, `glossary`, `quotes` (and a `tweets` thread stored before its prompt sent block ids) | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
-| `articleWithIdsFingerprint` | `tweets`, `ideas`, `sketch`, `quiz`, `faq`, `debate`, `bibliography` | those three **and `URL:`** (`articleWithIds`) |
+| `articleWithIdsFingerprint` | `tweets`, `ideas`, `sketch`, `quiz`, `faq`, `reception`, `bibliography` | those three **and `URL:`** (`articleWithIds`) |
 | `datedArticleFingerprint` | `timeline` | those four **and the publication date**, which is its reference frame |
 
 The last two also hash the synthetic `TITLE: <tree.slug>` their stages fall back to when there is
@@ -488,18 +488,9 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   rather than two. The eight article-reading stages had a folder-reading command line of their own
   until 2026-09-01, and it was a second path to the same place — the queue's is the one that
   exercises the store writes.
-- **An improvement applies going forwards; we don't backfill existing articles by default.** Being
-  able to re-run a stage is not a reason to re-run it across the shelf. Unless Greg says otherwise,
-  a change to a stage, a prompt or a stored field takes effect for new runs only. Ask him first if
-  a backfill seems really important. Greg, 2026-10-11: *"if we improve things, we're not going to go
-  back and rerun everything on all the existing articles because it's too much of a hassle and
-  expense. Instead we're almost always going to be content just to fix them going forwards unless I
-  explicitly say otherwise, or if it's really important it's okay to ask me, but otherwise just
-  default to this."* **Re-importing existing articles is the same backfill**, and needs the same
-  explicit yes. Greg, 2026-10-18 (`spya-r8arjm`): *"assume that we're not going to re-import all of
-  the existing articles unless I explicitly ask you to, because that would be somewhat expensive
-  and probably a bit disruptive. So assume that we're just going to fix or improve things for
-  new."*
+- **Backfill and re-import follow [principles.md § 1](principles.md#1-improve-forwards-backfill-only-when-it-is-cheap-or-simpler)**:
+  forwards by default; backfill when it is cheap, or simpler than keeping compatibility. Being able
+  to re-run a stage is not a reason to re-run it across the shelf.
 - **Anything expensive should be cached on a content hash, and not everything is.** *Which* stages
   do it has been said in prose several ways in this repo, each a count copied out of the code, and
   none stayed right. The answer is in [`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`: a step

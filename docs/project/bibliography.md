@@ -42,6 +42,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ What we have read of the work](#what-we-have-read-of-the-work) — said once in the band's (i), and on a row only when it differs
 - [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
 - [§ Which citation, and whose entry](#which-citation-and-whose-entry) — matching a mention to a bibliography entry; numbered PDF lists
+- [§ Rows from the text](#rows-from-the-text) — a work the body cites author–year that the model left out gets a row from code
 - [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
 - [§ Marked in the prose](#marked-in-the-prose-in-every-mode) — the marks on the article's own text, and the hover card on one
 - [§ Look it up on the web](#look-it-up-on-the-web) — finding a work that has no link (now a step of Dig deeper)
@@ -169,7 +170,7 @@ The plan is
 - **An existing list gets counts when it is made again**, as every other registry fact does. The
   first such run asks Crossref once more about each DOI it had cached before 2026-10-05, because
   those answers were stored without a count. A failed ask leaves the record due again, so a
-  Crossref outage can make a cached record unavailable to import, Debate and *Dig deeper* too until
+  Crossref outage can make a cached record unavailable to import, Reception, Claims and *Dig deeper* too until
   one ask succeeds (`freshSql` in [`pg-bibliographic.ts`](../../src/store/pg-bibliographic.ts) has
   the rule, and the `cited_by_count_read_at` column's comment in
   [`schema.ts`](../../src/db/schema.ts) says why it needs a second timestamp).
@@ -542,7 +543,10 @@ bibliography (`RENDERED` in [`pdf.ts`](../../src/pdf.ts)), so before this the st
 nothing to say what it was, and the model described the cite instead of naming the work (*"Study on
 recall of TV episodes"*). Now the `bibliography` step reads the stored PDF with `pass0`, strips running
 headers, and [`citation-reference-list.ts`](../../src/citation-reference-list.ts) splits the text
-under the bibliography heading **at the list's own numbers**. The model sees the list after the
+under the bibliography heading **at the list's own numbers**. **A numbered run in which fewer than
+half the entries carry a year is not taken for the list** (`mostlyDated`). LeCun's author–year
+list has no numbers, so its appendix's numbered Table 1 was read as the list and sent to the model
+as one (report `spya-ez2vus`). The model sees the list after the
 article, one `[n] entry` a line, and names each work's entry **by number**. Code keeps it only if:
 
 - the list has that number, and the work's verified mentions cite it (`[8]`, `[7,8]`, `[6–9]`) —
@@ -600,6 +604,69 @@ bibliography block's text**, every character of which is already on their page. 
 a PDF's text layer stays owner-only: it can carry a publisher's one-page "Downloaded by …" stamp
 that the furniture filter missed ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
 
+## Rows from the text
+
+Greg, report `spya-ez2vus` (2026-10-26), on LeCun's *A Path Towards Autonomous Machine Intelligence*:
+
+> Why didn't it notice the citation for Levine 2021 in this paragraph? I feel like citations often
+> seem to miss stuff.
+
+The model had returned 23 of the 105 works the body cites, with `capped: false`. It never named
+Levine, and nothing could tell, because the coverage witness counts notes and reference blocks and
+a PDF has neither. Measured across six articles, a list is close to complete up to about 70 works
+and falls to a quarter past 100
+([investigation 261027a](../investigations/261027a-how-often-citations-are-missed.md); plan
+[261027b](../plans/261027b-citations-missed-in-the-text-filled-by-code.md); postmortem
+[261027a](../postmortems/261027a-citations-model-under-returned-with-no-witness.md)).
+
+**So code reads the body's author–year citations itself**
+([`citation-author-year.ts`](../../src/citation-author-year.ts)): `(Craik, 1943)`, `(Bryson and
+Ho, 1969; Levine, 2021)`, `Hafner et al. (2018, 2020)`, and a list whose items a comma separates,
+`(Carruthers & Gennaro 2020, Rosenthal 2005)` — read only onwards from a cite already read, so a
+stray year never starts one (report `spya-d5e2jk`, plan
+[261029b](../plans/261029b-citations-in-a-comma-separated-list-are-all-read.md): 178 of an arXiv
+paper's 243 works found before, 214 after). It reads only body prose, never a heading,
+note or reference entry. **A work no model row stands for gets a row of its own**
+(`rowsFromText` in [`bibliography.ts`](../../src/bibliography.ts)), with `listedBy: "text"`. Its
+title, authors, year and mentions are the article's own characters (`Levine (2021)`, mentioned at
+`Levine, 2021`). It has **no `why` and no scores**, because no model has read it. On screen it
+says *found in the text*, with a card saying the model left it out. In the prose it is marked like
+every other work, which is what the report was about.
+
+What is not obvious:
+
+- **Which model row already stands for a citation** (`covers`): one whose first author's last
+  name and base year are the citation's, using the model's own words if the article guard took the
+  author out (`Yann LeCun` is not in the article); one whose own entry names them; or one whose
+  verified mention overlaps the citation **and holds no other**. A model row for Chua whose mention
+  is the whole of `(Chua et al., 2018; Yu et al., 2020)` does not stand for Yu (GPT Sol's plan
+  review). `2006` against `2006a` counts as one work, which errs towards a missed work rather than
+  a duplicate.
+- **One row per first author and year.** Two works by one surname in one year share a row.
+- **A lone name before a year is weighed against the article.** `Levine (2021)` is a citation;
+  `Voyelles (1871)` is a poem. A lone narrative name counts only where the article also cites
+  author–year at least three times in the stronger forms (`AUTHOR_YEAR_ARTICLE`). A line that is
+  itself a reference entry (`Russo, Lucio (2004). The…`) cites nothing. A surname must have a
+  lowercase letter, so not `IV` and not `OECD`.
+- **Its own ceiling, not the model's.** `MAX_CITATIONS` bounds the model's answer; these rows cost
+  no tokens, so they come after it. They still have a ceiling, `MAX_TEXT_ROWS` (200), first cited
+  first, and the rest are counted (`textOverCap`). `capped` stays the model's word. When a capped
+  list has code's rows too, the band's (i) says how many (`cappedNote`), because *these are the 80*
+  would be false.
+- **After the "nothing anchored" guard.** A model answer none of whose works could be anchored
+  still fails. It never becomes a list code wrote alone.
+- **The id crosses between code's row and the model's** for one work (`authorYearAlias`), when
+  surname and year are unique on both sides. A chat about Levine's row survives the list being made
+  again with the model naming it.
+- **Readers of `why` say so.** Chat's `article_citations` tool and the lookup and investigate
+  contexts write `WHY_NOT_DESCRIBED` rather than a blank. Sources › *Not cited* matches such a row
+  by first author and year, since its title is only a label.
+- **The witness.** The step's log line carries `authorYear` (works the body cites author–year) and
+  `authorYearFilled` (rows code added). A large share filled means the model is under-returning.
+
+Numbered and footnote citations get nothing from this yet. What waits for model calls (a checklist
+prompt, splitting a long article) is in the investigation's last section.
+
 ## The orders, and the bar
 
 Five, under the glossary's order buttons ([glossary.md](glossary.md)):
@@ -634,7 +701,7 @@ deeper* read from the web counts in the threshold's `(2 × relevance + influence
 influence order exactly as the list's own would, and one press can make the influence order
 available on a list that had none.
 
-- **date** — publication year, oldest first, as Debate's date order is; same year in first-cited
+- **date** — publication year, oldest first, as Reception's date order is; same year in first-cited
   order, undated last. The year is the one the row draws (`workByLine`: the article's, the
   registry's only where the article gives none), read as its first four-digit year, so `2017a` is
   2017 and `n.d.` is undated. Offered only when some work has a year, and `?citeby=date` on a list
@@ -905,7 +972,7 @@ What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
 What it says to the reader: the provenance line (§ [What we have read of the
 work](#what-we-have-read-of-the-work)) names the extract, its size and host; the
 verdict is labelled *the AI's reading of that extract*, the quotes *from the search extract*. **The
-residual risk** is Debate's: a hostile page can steer the AI's reading while every quote shown is
+residual risk** is Reception's and Claims': a hostile page can steer the AI's reading while every quote shown is
 genuinely in its extract. That is why the verdict is labelled as a reading and never as a fact.
 
 On a row the article linked, the page found is used only for its extract: the row's `url` and
@@ -1309,6 +1376,7 @@ the cap; a citation count for a row Crossref does not hold (DataCite's `citation
 
 [`src/bibliography.ts`](../../src/bibliography.ts) (the stage) ·
 [`citation-reference-list.ts`](../../src/citation-reference-list.ts) (a PDF's numbered list) ·
+[`citation-author-year.ts`](../../src/citation-author-year.ts) (author–year citations read by code; § Rows from the text) ·
 [`useBibliography.ts`](../../src/web/useBibliography.ts) (`useBibliographyRead` is the half `OwnedReader`
 mounts) ·
 [`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) ·

@@ -1,5 +1,5 @@
 /**
- * **The two routes behind Debate's reader claim checks** —
+ * **The two routes behind Claims's reader claim checks** —
  * `GET`/`POST /api/sources-claims/:slug/checks`, `runSourcesClaimCheck` in
  * src/routes.ts — and the store under them, against real Postgres. Plan
  * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3, stage 3.

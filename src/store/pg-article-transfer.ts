@@ -94,11 +94,13 @@ import {
   jobs,
   linkSummaries,
   quizAttempts,
+  readingPlace,
   readingTime,
   refereePromises,
   refereeCriteria,
   refereeHiddenChecks,
   searchRuns,
+  skimBriefs,
   sourcesClaimChecks,
   staleNoticeDismissals,
 } from "../db/schema.js";
@@ -144,6 +146,8 @@ export const ARTICLE_TABLES = {
   upload_source_guesses: "moves",
   /** Sources › Not cited's last search: OpenAlex's papers close to the article's own words, nothing of the reader's. */
   related_work_searches: "moves",
+  /** The shelf pie's cached denominator: which blocks count, not the reader's seconds. The cleared rename makes it stale (plan 261025l). */
+  read_so_far_words: "moves",
 
   /* ---- reader-state: the old owner's, deleted (src/admin-articles.ts § READER_STATE) ---- */
   /** Before `referee_criteria`: `comments_criterion` references it and does not cascade. */
@@ -153,6 +157,8 @@ export const ARTICLE_TABLES = {
   /** Would cascade from the thread (`chat_messages_thread_fk`); deleted first so it is counted. */
   chat_messages: "reader-state",
   chat_threads: "reader-state",
+  /** The owner's added Skim briefs: their sentences and the routes planned for them (plan 261027d). */
+  skim_briefs: "reader-state",
   quiz_attempts: "reader-state",
   referee_promises: "reader-state",
   referee_hidden_checks: "reader-state",
@@ -166,6 +172,7 @@ export const ARTICLE_TABLES = {
   citation_investigations: "reader-state",
   citation_web_notes: "reader-state",
   reading_time: "reader-state",
+  reading_place: "reader-state",
   stale_notice_dismissals: "reader-state",
   command_suggestion_dismissals: "reader-state",
   link_summaries: "reader-state",
@@ -210,6 +217,7 @@ export const READER_STATE_TABLES = {
   chat_mentions: chatMentions,
   chat_messages: chatMessages,
   chat_threads: chatThreads,
+  skim_briefs: skimBriefs,
   quiz_attempts: quizAttempts,
   referee_promises: refereePromises,
   referee_hidden_checks: refereeHiddenChecks,
@@ -223,6 +231,7 @@ export const READER_STATE_TABLES = {
   citation_investigations: citationInvestigations,
   citation_web_notes: citationWebNotes,
   reading_time: readingTime,
+  reading_place: readingPlace,
   stale_notice_dismissals: staleNoticeDismissals,
   command_suggestion_dismissals: commandSuggestionDismissals,
   link_summaries: linkSummaries,

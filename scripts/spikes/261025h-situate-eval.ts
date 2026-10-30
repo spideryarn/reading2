@@ -313,7 +313,7 @@ async function planOn(model: ModelKey, meta: Meta, evidence: Block[], bibliograp
     2_500,
     planMax,
   );
-  return { plan: S.readPlan(parseJsonAnswer<unknown>(planned.raw, "the plan"), TODAY), usage: planned.message.usage };
+  return { plan: S.readPlan(parseJsonAnswer<unknown>(planned.raw, "the plan"), TODAY, meta), usage: planned.message.usage };
 }
 
 async function planOnly(slug: string, model: ModelKey): Promise<void> {
@@ -478,7 +478,7 @@ async function readArm(slug: string, arm: Arm): Promise<void> {
   const counts = S.emptyCounts();
   /* Checked against ALL the evidence: a writer cannot cite what it was not
      shown, and a shortlist must not make the check looser or stricter. */
-  const findings = S.checkFindings(raw, ev.evidence, ev.sources, counts);
+  const findings = S.checkFindings(raw, ev.evidence, ev.sources, counts, S.pieceFacts(ev.meta, new Date()));
   const out: ArmResult = {
     slug,
     arm,

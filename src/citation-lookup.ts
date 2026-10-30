@@ -67,6 +67,7 @@ import type {
   CitedWork,
   SearchEvidence,
 } from "./types.js";
+import { WHY_NOT_DESCRIBED } from "./types.js";
 
 /**
  * **Bump when the lookup prompt (`LOOKUP_SYSTEM`, src/citation-find.ts), the
@@ -142,7 +143,7 @@ export function lookupContext(
     authors: work.authors ?? null,
     year: work.year ?? null,
     reference: reference ? reference.slice(0, REFERENCE_CAP) : null,
-    why: work.why,
+    why: work.why ?? WHY_NOT_DESCRIBED,
     passage: passage ? passage.slice(0, PASSAGE_CAP) : null,
     anchor: anchorOf(work),
   };

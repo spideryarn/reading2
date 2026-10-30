@@ -25,7 +25,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ArchiveControl } from "../src/web/useArchive.js";
-import { EXPERIMENTAL_OFF } from "./helpers/experimental-fixtures.js";
+import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -120,7 +120,10 @@ function archiveControl(over: Partial<ArchiveControl> = {}): ArchiveControl & { 
   } as ArchiveControl & { set: ReturnType<typeof vi.fn> };
 }
 
-function reading(shelfRow?: { archive: ArchiveControl }): void {
+function reading(
+  shelfRow?: { archive: ArchiveControl },
+  experimental = EXPERIMENTAL_OFF,
+): void {
   act(() => {
     root.render(
       // biome-ignore lint/suspicious/noExplicitAny: as tests/command-bar.test.tsx § reading
@@ -129,7 +132,7 @@ function reading(shelfRow?: { archive: ArchiveControl }): void {
         view: "article",
         mode: "plain",
         onMode: () => {},
-        experimental: EXPERIMENTAL_OFF,
+        experimental,
         shelfRow,
       }),
     );
@@ -239,6 +242,22 @@ describe("a section row", () => {
     expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
     expect(location.search).toBe("?at=spya-k3m9qt&section=ai-processing");
     expect(history.length, "the page did not change, so nothing for Back to retrace").toBe(depth);
+  });
+
+  it("offers Start this article again only with experiments on, and only navigates", () => {
+    reading(undefined, EXPERIMENTAL_OFF);
+    openBar();
+    type("start again");
+    expect(listed()).not.toContain("Start this article again");
+
+    reading(undefined, EXPERIMENTAL_ON);
+    openBar();
+    type("start again");
+    expect(listed()[0]).toBe("Start this article again");
+    press("Enter");
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(location.search).toBe("?at=spya-k3m9qt&section=ai-processing");
+    expect(requests.filter((request) => request.startsWith("POST "))).toEqual([]);
   });
 });
 

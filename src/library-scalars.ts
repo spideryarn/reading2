@@ -248,6 +248,12 @@ export function describeArticle(input: {
    * `sourceReusable`, so a new caller cannot quietly ship a shelf with none.
    */
   tags: readonly string[];
+  /**
+   * How much of it the owner has read, as the masthead's pie says it, or
+   * absent for no pie (src/store/read-so-far-basis.ts). Only the owner's shelf
+   * read passes one. Plan 261025l.
+   */
+  readBand?: LibraryEntry["readBand"] | undefined;
 }): LibraryEntry {
   const { slug, meta, scalars } = input;
   const shelf = input.shelf ?? { opens: 0 };
@@ -305,6 +311,7 @@ export function describeArticle(input: {
     tags: [...input.tags],
     ...(meta.abstract ? { abstract: meta.abstract } : {}),
     ...(meta.doi ? { doi: meta.doi } : {}),
+    ...(input.readBand ? { readBand: input.readBand } : {}),
   };
 }
 

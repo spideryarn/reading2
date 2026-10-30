@@ -68,11 +68,11 @@ const READER = readerSheets().map((s) => s.path);
  * Every stylesheet the client actually loads — tailwind.css imports the rest.
  *
  * **The order here is not the cascade's, and must not be "corrected" to it.**
- * `valueOf` below is last-definition-wins, and three tokens are declared twice:
+ * `valueOf` below is last-definition-wins, and two tokens are declared twice:
  * `--highlight` in the reader sheets and again in `styles/tokens.css`, and
- * `--font-sans` / `--font-mono` in `styles/tokens.css` and again in
- * tailwind.css's `@theme inline`. Putting the reader sheets in the slot
- * `src/web/styles.css` used to hold keeps all three resolving to the value this
+ * `--font-mono` in `styles/tokens.css` and again in tailwind.css's
+ * `@theme inline`. Putting the reader sheets in the slot
+ * `src/web/styles.css` used to hold keeps both resolving to the value this
  * file has always resolved them to. That the answer depends on the order at all
  * is a known latent defect and deliberately out of scope —
  * docs/plans/260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md.

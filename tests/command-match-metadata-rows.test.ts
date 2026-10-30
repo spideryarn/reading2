@@ -17,6 +17,7 @@ import { METADATA_RERUN_STEPS } from "../src/rerun-steps.js";
 import { MODES } from "../src/modes.js";
 import { type Command, commandText, modeCommand, rankCommands } from "../src/web/command-match.js";
 import {
+  RESET_SECTION_ROW,
   SECTION_ROWS,
   archiveCommand,
   exportCommand,
@@ -90,6 +91,46 @@ describe("the section rows", () => {
       expect(first(query), query).toMatch(/› Run again$/);
     }
     expect(first("glossary")).toBe("Glossary");
+  });
+});
+
+/**
+ * **Start this article again** — Greg, 2026-10-29 (`spya-gkmgdd`): *"I was
+ * trying to find a way with [the command bar] to sort of re-import or reload
+ * or reset a page"*. Plan 261029l. The bar adds it only while the experimental
+ * switch is on (CommandBar.tsx § `metadataRows`), so it is ranked here in a
+ * list of its own rather than in `list`.
+ */
+describe("Start this article again", () => {
+  const withReset = (): readonly Command[] => [
+    ...list(false),
+    sectionCommand(RESET_SECTION_ROW, close),
+  ];
+  const firstWithReset = (query: string): string | undefined =>
+    labels(rankCommands(query, withReset()))[0];
+
+  it("lands on AI processing, where the reset is the first row", () => {
+    expect(RESET_SECTION_ROW.section).toBe("ai-processing");
+    expect(SECTION_ROWS).not.toContain(RESET_SECTION_ROW);
+  });
+
+  it("answers the words Greg used, and the usual others", () => {
+    for (const query of ["re-import", "reimport", "reset", "start again", "start over", "reload article"]) {
+      expect(firstWithReset(query), query).toBe("Start this article again");
+    }
+  });
+
+  it("takes none of the bare verbs from the AI processing row, nor a re-run row's phrase", () => {
+    for (const query of ["rerun glossary", "regenerate terms", "rerun structure", "structure again"]) {
+      expect(firstWithReset(query), query).toMatch(/› Run again$/);
+    }
+    expect(firstWithReset("pipeline")).toBe("AI processing");
+  });
+
+  it("spends nothing and only opens", () => {
+    const row = sectionCommand(RESET_SECTION_ROW, close);
+    expect(row.kind === "action" && row.generates).toBe(false);
+    expect(row.kind === "action" && row.opensOnly).toBe(true);
   });
 });
 

@@ -291,6 +291,17 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             Questions about the piece, each answered with the piece’s own passages — rated for how
             difficult and how central, and shown in a prioritised order with a threshold.
           </Tile>
+          {/* Greg, 2026-10-28 (spya-nkq6rj): "if you can tell that a user is
+              going to be confused by a paragraph, then perhaps you could flag
+              it with an explanation", "if Opus is unsure itself, it should say
+              so", and "it should be clear if some of its responses are based
+              on stuff that came from out the article". Behind the experimental
+              switch (plan 261028c). */}
+          <Tile name="Explanations." span="wide" mode="explanations">
+            The places you are likely to get stuck, each with a short explanation of what is missing
+            there, beside the passage rather than instead of it — and saying when the AI is unsure,
+            or is leaning on what it knows from outside the piece.
+          </Tile>
           {/* Greg, 2026-09-05, the debate request: "gathers from the wider web
               about the article, e.g. reviews, critiques, etc (ideally from
               authoritative sources)", with "citation/linking"; and 2026-09-30
@@ -384,7 +395,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         </div>
 
         {/* -------------------------------------------------------- elsewhere --
-            [tissue] heading. Tweets is a mode and out from behind the switch;
+            [tissue] heading. Tweets (now Summary's Thread view) is out from behind the switch;
             cross-references and maths are not modes and are drawn for every
             reader in every mode (src/web/useCrossrefs.ts from
             src/web/article/ArticlePage.tsx unconditionally;

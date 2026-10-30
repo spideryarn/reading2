@@ -63,6 +63,7 @@
  */
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRootFlag } from "./root-flags.js";
 
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
@@ -126,6 +127,10 @@ function VisibleReturnChip({
   const [focused, setFocused] = useState(false);
   const held = hovered || focused;
   const [going, setGoing] = useState(false);
+  /* Room for the chip in the strip above the Dock, as `BandBackChip` asks for
+     its own (dock.css § `--return-chip-h`). Here, in the half that exists
+     exactly while `.return-chip` is drawn. */
+  useRootFlag("return-chip", true);
 
   /* The clock, per journey: keyed on the whole stamp, so a new jump starts it
      again even from the same block, and the cleanup plus the check at the end

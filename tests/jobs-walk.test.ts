@@ -188,7 +188,7 @@ await pgReady({
  * above are queued under `DEV_OWNER_ID`, so without this scope the two disagree
  * on exactly the machines that have a seeded admin user: `store.claim` answers
  * `gone`, every case here reports that no step ran, and nothing in the failure
- * mentions an owner. `tests/claim-session-files.test.ts` already advances this
+ * mentions an owner. `tests/claim-session-postgres.test.ts` already advances this
  * way for the same reason.
  */
 const advanceAsOwner = (id: string, parts: AdvanceParts) =>

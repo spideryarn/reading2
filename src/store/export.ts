@@ -494,6 +494,8 @@ export async function exportArticle(
   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
   if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
+  if (revision.explanations)
+    await put("article_revisions", "explanations.json", revision.explanations);
   /* Missing until 2026-10-09 (qi-mv7wk6ap): the bundle carried a stored debate
      inside content/revision.json all along, and this rollback silently didn't. */
   if (revision.reception) await put("article_revisions", "reception.json", revision.reception);
@@ -906,7 +908,7 @@ export async function exportArticle(
   }
 
   /* sources-claim-checks.json — the reader's checks of the claims they picked
-     in Debate (plan 261008i § 3). No filesystem store ever read this back, so
+     in Claims (plan 261008i § 3). No filesystem store ever read this back, so
      the shape is the rows, columns as they are, as the bundle writes them. */
   if (rows.sourcesClaimChecks.length) {
     await put("sources_claim_checks", "sources-claim-checks.json", {
@@ -974,7 +976,7 @@ export async function exportArticle(
     await put("citation_finds", "citation-finds.json", { finds });
   }
 
-  /* Bibliography's *Investigate*, keyed by entry id for the finds' reason. Column
+  /* Bibliography's *Dig deeper*, keyed by entry id for the finds' reason. Column
      for column, fingerprint included, so the rollback keeps an answer the read
      path would no longer attach. */
   if (rows.citationInvestigations.length) {
@@ -1052,6 +1054,29 @@ export async function exportArticle(
     const seconds: Record<string, number> = {};
     for (const row of rows.readingTime) seconds[row.blockId] = row.seconds;
     await put("reading_time", "reading-time.json", { seconds });
+  }
+  /* Where the owner last was, on any device — plan 261029f. */
+  if (rows.readingPlace.length) {
+    await put("reading_place", "reading-place.json", {
+      places: rows.readingPlace.map((row) => ({ blockId: row.blockId, savedAt: row.savedAt.toISOString() })),
+    });
+  }
+
+  /* The owner's added Skim briefs, oldest first, with each route as stored —
+     plan 261027d. */
+  if (rows.skimBriefs.length) {
+    await put("skim_briefs", "skim-briefs.json", {
+      briefs: rows.skimBriefs.map((row) => ({
+        id: row.id,
+        brief: row.brief,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        plannedAt: row.plannedAt?.toISOString() ?? null,
+        skim: row.skim ?? null,
+        profileNoticeDismissedFor: row.profileNoticeDismissedFor,
+        profileNoticeDismissedAt: row.profileNoticeDismissedAt?.toISOString() ?? null,
+      })),
+    });
   }
 
   /* The glossary entries the owner hid, by id — plan 261002c § 2. */

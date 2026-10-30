@@ -15,7 +15,7 @@
  * *appends* that succeed today — so the only edits refused are those whose
  * discard set has changed underneath them. `expectedTailId` in
  * src/store/contracts.ts and `requireTail` in src/chat.ts are the server's
- * half, and tests/store-chat-tail-guard.test.ts pins those.
+ * half, and tests/store-chat-pg.test.ts pins the store's refusal of a moved tail.
  *
  * **This is the half nothing else can see.** The guard is optional in the
  * contract, because the value can only come from the client — so a client that

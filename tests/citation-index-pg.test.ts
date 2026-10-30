@@ -39,6 +39,7 @@ import {
   openAlexWorkUrl,
   titleQueryOf,
 } from "../src/citation-index.js";
+import { POSSIBLE_PER_PAGE, openAlexFulltextUrl } from "../src/citation-fulltext.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { OwnerId } from "../src/owner.js";
@@ -76,6 +77,38 @@ const SEARCH_ANSWER = {
   ],
 };
 
+/* Plan 261025h: The Extended Mind, held twice by OpenAlex, and its topic view.
+   The answers are real, trimmed (tests/citation-index.test.ts says from where). */
+const EM_TITLE = "The extended mind";
+const EM_SEARCH_URL = openAlexTitleSearchUrl(titleQueryOf(EM_TITLE) ?? "");
+const EM_UNION = "W393180982|W4239232206";
+const EM_CITERS_URL = openAlexCitersUrl(EM_UNION, 100);
+const EM_TOPIC_URL = openAlexCitersUrl(EM_UNION, 100, "extended mind");
+const EM_KEY = "openalex:w393180982|w4239232206";
+
+/* Plan 261026f: the reported piece, no DOI, no author and no year, so its
+   full-text search is the one request, newest first. */
+const WORKSPACE_TITLE = "Verbalizable Representations Form a Global Workspace in Language Models";
+const POSSIBLE_URL = openAlexFulltextUrl(
+  "verbalizable representations form a global workspace in language models",
+  null,
+  { perPage: POSSIBLE_PER_PAGE, order: "newest" },
+);
+const POSSIBLE_ANSWER = {
+  meta: { count: 134 },
+  results: [
+    { id: "https://openalex.org/W1", display_name: `A ${WORKSPACE_TITLE}`, publication_year: 2026, cited_by_count: 0, authorships: [] },
+    {
+      id: "https://openalex.org/W2",
+      display_name: "Reader--Writer Coupling in Transformer MLPs",
+      publication_year: 2026,
+      cited_by_count: 0,
+      authorships: [{ author: { display_name: "A. Researcher" } }],
+      type: "preprint",
+    },
+  ],
+};
+
 /** Every address the fake fetcher was asked for, in order. */
 let asked: string[] = [];
 
@@ -91,6 +124,10 @@ vi.mock("../src/fetch.js", async (importActual) => {
       if (url === CITERS_URL) return fixture("citers-e26060481.json");
       if (url === SEARCH_URL) return SEARCH_ANSWER;
       if (url === TITLE_CITERS_URL) return fixture("citers-e26060481.json");
+      if (url === EM_SEARCH_URL) return fixture("extended-mind-search.json");
+      if (url === EM_CITERS_URL) return fixture("extended-mind-citers.json");
+      if (url === EM_TOPIC_URL) return fixture("extended-mind-topic.json");
+      if (url === POSSIBLE_URL) return POSSIBLE_ANSWER;
       throw new actual.FetchFailure("not-found", url, "HTTP 404", { status: 404 });
     },
   };
@@ -216,10 +253,50 @@ describe("the citation index cache", () => {
     ).toBeUndefined();
   });
 
+  it("round-trips twins under the key that names them both, and the work's keyword (261025h)", async () => {
+    const twins = found([citer(0)], {
+      target: { openalexId: "W393180982", alsoHeldAs: ["W4239232206"], title: "The Extended Mind", authors: ["Andy Clark"], keyword: "extended mind" },
+      count: 5849,
+    });
+    const key = EM_KEY as `openalex:w${string}`;
+    const fetchedAt = await store.write(key, twins);
+    expect(await store.read(key, CITERS_FRESH_MS)).toEqual({ ...twins, fetchedAt, fresh: true });
+    const topic = `${EM_KEY}#topic` as `openalex:w${string}#topic`;
+    const topicAt = await store.write(topic, { ...twins, count: 556 } as FetchedCiters);
+    expect(await store.read(topic, CITERS_FRESH_MS)).toMatchObject({ count: 556, fetchedAt: topicAt, target: twins.kind === "found" ? twins.target : {} });
+    /* A row with no twins and no keyword reads back with neither. */
+    await store.write(ID, found([]));
+    const plain = await store.read(ID, CITERS_FRESH_MS);
+    expect(plain?.kind === "found" ? Object.keys(plain.target).sort() : null).toEqual(["authors", "openalexId", "title"]);
+  });
+
+  it("refuses a keyword on a not-indexed row, and an empty one", async () => {
+    expect(
+      await refusedBy(sql`
+        insert into spideryarn.citation_index_lookups (work_id, state, target_keyword)
+        values ('doi:10.1000/k', 'not-indexed', 'extended mind')`),
+    ).toBe("citation_index_lookups_shape");
+    expect(
+      await refusedBy(sql`
+        insert into spideryarn.citation_index_lookups
+          (work_id, state, openalex_id, cited_by_count, returned, dropped, capped, target_title, target_authors, target_keyword)
+        values ('doi:10.1000/k', 'found', 'W1', 0, 0, 0, false, 'A title', '{}', '')`),
+    ).toBe("citation_index_lookups_shape");
+  });
+
   it("keys a row by a DOI or by OpenAlex's lower-cased id, and by nothing else (261011q)", async () => {
     const key = (workId: string) =>
       refusedBy(sql`
         insert into spideryarn.citation_index_lookups (work_id, state) values (${workId}, 'not-indexed')`);
+    /* Twins, up to four records (261025h), and the topic view's row beside any key. */
+    expect(await key("openalex:w393180982|w4239232206")).toBeUndefined();
+    expect(await key("openalex:w1|w2|w3|w4")).toBeUndefined();
+    expect(await key("openalex:w1|w2|w3|w4|w5")).toBe("citation_index_lookups_work_id");
+    expect(await key("openalex:w1|")).toBe("citation_index_lookups_work_id");
+    expect(await key("openalex:w393180982|w4239232206#topic")).toBeUndefined();
+    expect(await key("doi:10.1000/topic#topic")).toBeUndefined();
+    expect(await key("doi:10.1000/topic#other")).toBe("citation_index_lookups_work_id");
+    expect(await key("openalex:w1#topic#topic")).toBe("citation_index_lookups_work_id");
     expect(await key("openalex:w2626778328")).toBeUndefined();
     expect(await key("openalex:W2626778328")).toBe("citation_index_lookups_work_id");
     expect(await key("openalex:w12ab")).toBe("citation_index_lookups_work_id");
@@ -274,6 +351,10 @@ const NO_DOI = "test-citers-no-doi";
 const WRONG_DOI = "test-citers-wrong-doi";
 const THEIRS = "test-citers-theirs";
 const BY_TITLE = "test-citers-by-title";
+const TWINS = "test-citers-twins";
+/** The reported piece's identity (plan 261026f), from its public address and as an upload. */
+const POSSIBLE = "test-citers-possible";
+const UPLOADED = "test-citers-possible-upload";
 /** A second real reader, so "not yours" is the owner filter rather than a typo. */
 const CAROL = "00000000-0000-4000-8000-00000c17e4c1" as OwnerId;
 
@@ -323,6 +404,23 @@ beforeAll(async () => {
       }),
     }),
   );
+  /* The trial's clark-chalmers-1998: a PDF with no DOI and no year (261025h). */
+  scratch.push(
+    await scratchArticleInPg(TWINS, {
+      ownerId: TEST_OWNER,
+      mutate: withMeta((meta) => {
+        delete meta.doi;
+        delete meta.publishedAt;
+        delete meta.publishedYear;
+        meta.title = EM_TITLE;
+        meta.byline = "ANDY CLARK; DAVID CHALMERS";
+        meta.authors = [
+          { name: "ANDY CLARK", affiliations: [] },
+          { name: "DAVID CHALMERS", affiliations: [] },
+        ];
+      }),
+    }),
+  );
   /* Another paper of the same reader's, with Levin's DOI on it by mistake. */
   scratch.push(
     await scratchArticleInPg(WRONG_DOI, {
@@ -335,6 +433,22 @@ beforeAll(async () => {
     }),
   );
   scratch.push(await scratchArticleInPg(THEIRS, { ownerId: CAROL, mutate: asLevin }));
+  /* The identity columns set on the revision directly, as an import would have
+     left them: the same title, from a public address or off the reader's disk. */
+  for (const [slug, filename] of [
+    [POSSIBLE, null],
+    [UPLOADED, "workspace-draft.pdf"],
+  ] as const) {
+    scratch.push(await scratchArticleInPg(slug, { ownerId: TEST_OWNER }));
+    await getDb().execute(sql`
+      update spideryarn.article_revisions r
+         set title = ${WORKSPACE_TITLE}, doi = null, byline = null, authors = null,
+             published_at = null, published_year = null,
+             final_url = 'https://transformer-circuits.pub/2026/workspace/index.html',
+             raw_filename = ${filename}
+        from spideryarn.articles a
+       where a.current_revision_id = r.id and a.slug = ${slug}`);
+  }
 }, 240_000);
 
 afterAll(async () => {
@@ -416,6 +530,39 @@ describe("GET /api/citers/:slug", () => {
     ).toEqual([{ work_id: "openalex:w2626778328" }]);
   });
 
+  it("joins The Extended Mind's twin records, and answers its topic view on ?about=topic (261025h)", async () => {
+    const all = await citers(TWINS);
+    expect(all.status).toBe(200);
+    expect(all.body).toMatchObject({
+      kind: "found",
+      via: "title",
+      target: { openalexId: "W393180982", alsoHeldAs: ["W4239232206"] },
+      count: 5849,
+      topic: { keyword: "extended mind" },
+    });
+    expect(all.body?.filteredBy).toBeUndefined();
+    /* The topic's list is not fetched until it is asked for. */
+    expect(asked).toEqual([EM_SEARCH_URL, EM_CITERS_URL]);
+
+    const topic = await call("GET", `/api/citers/${TWINS}?about=topic`);
+    expect(topic.status).toBe(200);
+    expect(topic.body).toMatchObject({ kind: "found", filteredBy: "extended mind", count: 556, topic: { count: 556 } });
+    expect(asked).toEqual([EM_SEARCH_URL, EM_CITERS_URL, EM_SEARCH_URL, EM_TOPIC_URL]);
+    expect(
+      await rows(sql`select work_id, target_keyword from spideryarn.citation_index_lookups where work_id like ${`${EM_KEY}%`} order by work_id`),
+    ).toEqual([
+      { work_id: EM_KEY, target_keyword: "extended mind" },
+      { work_id: `${EM_KEY}#topic`, target_keyword: "extended mind" },
+    ]);
+    /* Then the plain list carries the count, off the topic's row. */
+    expect((await citers(TWINS)).body).toMatchObject({ topic: { keyword: "extended mind", count: 556 } });
+  });
+
+  it("refuses an ?about= it does not know", async () => {
+    expect((await call("GET", `/api/citers/${TWINS}?about=anything`)).status).toBe(400);
+    expect(asked).toEqual([]);
+  });
+
   it("checks the imported title, so a renamed paper still gets its citers (F2)", async () => {
     const renamed = await call("PATCH", `/api/library/${MINE}`, { title: "Levin on memory, to read on the train" });
     expect(renamed.status).toBe(200);
@@ -453,6 +600,46 @@ describe("GET /api/citers/:slug", () => {
   it("is a 401 for a signed-out caller, and asks nothing", async () => {
     const { status } = await citers(MINE, {});
     expect(status).toBe(401);
+    expect(asked).toEqual([]);
+  });
+});
+
+describe("GET /api/citers/:slug?with=possible (261026f)", () => {
+  it("adds Possible citations to a no-doi answer for an article from a public address", async () => {
+    expect(await citers(POSSIBLE)).toEqual({ status: 200, body: { kind: "no-doi" } });
+    expect(asked).toEqual([]);
+
+    const { status, body } = await call("GET", `/api/citers/${POSSIBLE}?with=possible`);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      kind: "no-doi",
+      possible: { kind: "found", total: 134, dropped: 1, order: "newest" },
+    });
+    /* The piece's own record (*A Verbalizable…*) is out; the citer is in. */
+    expect((body?.possible as { citers: { openalexId: string }[] }).citers.map((c) => c.openalexId)).toEqual(["W2"]);
+    expect(asked).toEqual([POSSIBLE_URL]);
+  });
+
+  it("never sends an upload's title, and answers it as before", async () => {
+    expect(await call("GET", `/api/citers/${UPLOADED}?with=possible`)).toEqual({ status: 200, body: { kind: "no-doi" } });
+    expect(asked).toEqual([]);
+  });
+
+  it("leaves a found list as it was, and asks nothing more for it", async () => {
+    const plain = (await citers(MINE)).body;
+    asked = [];
+    expect((await call("GET", `/api/citers/${MINE}?with=possible`)).body).toEqual(plain);
+    expect(asked).toEqual([]);
+  });
+
+  it("refuses a with= it does not know, alone or repeated, before asking anything", async () => {
+    expect((await call("GET", `/api/citers/${POSSIBLE}?with=everything`)).status).toBe(400);
+    expect((await call("GET", `/api/citers/${POSSIBLE}?with=possible&with=everything`)).status).toBe(400);
+    expect(asked).toEqual([]);
+  });
+
+  it("is a 404 for another reader's article, with=possible or not", async () => {
+    expect((await call("GET", `/api/citers/${THEIRS}?with=possible`)).status).toBe(404);
     expect(asked).toEqual([]);
   });
 });

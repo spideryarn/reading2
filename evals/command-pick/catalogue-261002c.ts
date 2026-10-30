@@ -85,6 +85,7 @@ export const CATALOGUE: readonly CatalogueCommand[] = [
   mode("mode:citations", "Citations", "The works this piece cites, each with a link — ranked by how much the piece leans on them", ["references", "bibliography", "sources", "works cited"]),
   mode("mode:structure", "Structure", "The document's shape — every part, and its sections", ["columns", "outline", "tree", "map", "hierarchy", "toc", "contents"]),
   mode("mode:faq", "FAQ", "The questions a careful reader would ask this piece, and where it responds", ["faqs", "frequently asked questions"]),
+  /* "trajectory" is Greg's deliberate alias keyword (plan 261001r). */
   mode("mode:skim", "Skim", "A route through the piece's quotes, a little deeper each time round", ["spiral", "route", "trajectory"]),
   mode("mode:tweets", "Tweets", "The article as a numbered thread of short posts", ["thread", "twitter", "x", "social"]),
   mode("mode:marginalia", "Marginalia", "Notes in a column right of the text, each level with the passage it is about", ["annotations", "margin notes", "margin", "sidenotes"]),

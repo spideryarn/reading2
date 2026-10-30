@@ -427,6 +427,54 @@ describe("a centred jump", () => {
     }
   });
 
+  /* Plan 261029d (spya-ga6m76): the reminder bar shows on `data-scrolled-back`,
+     which only a reader's scroll back sets, and which a jump of ours or reading
+     on takes away — so it is never over a passage a jump has just landed on
+     (GPT Sol, plan review F2). */
+  it("marks a reader's scroll back, and a jump of ours or reading on unmarks it", () => {
+    const stopWatching = watchBarVisibility();
+    const root = document.documentElement;
+    try {
+      expect(root.dataset.scrolledBack, "not on arrival").toBeUndefined();
+      Object.defineProperty(window, "scrollY", { value: 2000, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(10);
+      expect(root.dataset.bars).toBe("hidden");
+      expect(root.dataset.scrolledBack).toBeUndefined();
+
+      Object.defineProperty(window, "scrollY", { value: 1990, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(20);
+      expect(root.dataset.scrolledBack, "the reader turned round").toBe("");
+
+      scrollToBlock("spya-far", "smooth");
+      flush(30);
+      expect(root.dataset.scrolledBack, "a jump puts it away with its first frame").toBeUndefined();
+      flush(300);
+      window.dispatchEvent(new Event("scroll"));
+      flush(310);
+      expect(root.dataset.scrolledBack, "and our own scroll events do not bring it back").toBeUndefined();
+
+      expect(root.dataset.bars, "the bars were never hidden by the jump").toBeUndefined();
+      Object.defineProperty(window, "scrollY", { value: 3000, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(320);
+      expect(root.dataset.scrolledBack, "so a look back after a jump has no flip to wait for").toBe("");
+      Object.defineProperty(window, "scrollY", { value: 3100, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(340);
+      expect(root.dataset.scrolledBack, "reading on puts it away").toBeUndefined();
+
+      Object.defineProperty(window, "scrollY", { value: 3000, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(350);
+      stopWatching();
+      expect(root.dataset.scrolledBack, "and so does the teardown").toBeUndefined();
+    } finally {
+      stopWatching();
+    }
+  });
+
   it("gives the anchor up to the next movement of any kind", () => {
     scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
     flush(250);

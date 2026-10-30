@@ -595,7 +595,7 @@ function receptionOwner(stale: boolean): ReceptionOwner {
   };
 }
 
-/** Debate's Claims list, stale, with its own clock — `claimListOf` stamps a fixed one. */
+/** Claims's Claims list, stale, with its own clock — `claimListOf` stamps a fixed one. */
 function staleClaimList(): UseSourcesClaims {
   return claimListOwner({
     status: "ready",
@@ -658,6 +658,7 @@ function skimOwner(): UseSkim {
     ...COMMON,
     status: "ready",
     skim: SKIM,
+    brief: null,
     profileChanged: false,
     profileNoticeDismissed: false,
     dismissFailed: null,
@@ -691,6 +692,7 @@ const SKIM_VIEW: SkimView = {
     },
   ],
   position: 1,
+  wholeWords: false,
   card: null,
   termActions: null,
   onAskTerm: null,

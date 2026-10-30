@@ -46,7 +46,7 @@
  * `owner_id` itself is never selected — only whether it is this reader's.
  *
  * **Unbounded, deliberately, and named**: a `limit` here would silently drop
- * matches. At beta scale it is hundreds of short rows per Citations load; the
+ * matches. At beta scale it is hundreds of short rows per Bibliography load; the
  * plan names the next step (a stored match key) for when it is thousands.
  */
 

@@ -1,7 +1,7 @@
 /**
  * **The owner's Claims list, as a test hands it to `ReceptionAndClaimsPanel`** — a
  * `UseSourcesClaims` with nobody having pressed Claims (`none`), unless a test
- * says otherwise. Shared by every test that paints the owner's Debate panel,
+ * says otherwise. Shared by every test that paints the owner's Claims panel,
  * because the panel's owner arm requires the list's hook since plan 261008i
  * stage 2 (src/web/ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsAccess`).
  */

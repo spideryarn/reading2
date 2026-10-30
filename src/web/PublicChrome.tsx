@@ -213,7 +213,7 @@ export function SharedNotice({
   return (
     /* **`shared-notice` is a hook for one rule and not styling.** In the reading
        view this box sits between the masthead and the controls bar. With a
-       covering band `.reader.band-covers:has(.mode-band) .masthead` is
+       covering band `[data-band-covers] .reader.band-covers .masthead` is
        `display: none` — the band goes full width and the article's identity
        goes with it (narrow-window.css § a band with no room). Without the same rule here
        the notice became the first element on the page, at `y: 0`, underneath
@@ -633,7 +633,7 @@ export function ReauthRequiredPage() {
           session there is no `FeedbackHost` above it. */}
       <FeedbackTrigger variant="corner" />
       <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
-        <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
+        <h1 className="tw:m-0 tw:mb-3 tw:font-sans tw:text-2xl tw:text-foreground">
           {REAUTH_REQUIRED_HEADING}
         </h1>
         <p className="tw:m-0 tw:mb-4 tw:text-sm tw:text-ink-faint">{REAUTH_REQUIRED}</p>
@@ -687,7 +687,7 @@ export function NotSharedPage() {
           so the trigger is always drawn. */}
       <FeedbackTrigger variant="corner" />
       <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
-        <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
+        <h1 className="tw:m-0 tw:mb-3 tw:font-sans tw:text-2xl tw:text-foreground">
           Not shared
         </h1>
         <p className="tw:m-0 tw:text-sm tw:text-ink-faint">{NOT_SHARED}</p>

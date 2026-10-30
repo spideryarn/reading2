@@ -10,8 +10,8 @@
  * Stage 3 of
  * docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md.
  * `Dock.tsx § DockExperimentalSwitch` is the component and carries the design;
- * this file is the table of what it draws, because a switch has six appearances
- * and five of them are states a reader only meets when something has gone wrong.
+ * this file is the table of what it draws, because a switch has seven appearances
+ * and six of them are states a reader only meets when something has gone wrong.
  *
  * ## What this file is really for
  *
@@ -23,9 +23,9 @@
  * check the rule, the drawing, and what a press does, separately, because those
  * are three different ways to get it wrong.
  *
- * **And `aria-pressed`, which is not decoration.** Two of the six states have no
+ * **And `aria-pressed`, which is not decoration.** Three of the seven states have no
  * value to report — we have not read one, or the read failed — and
- * `aria-pressed={false}` in either is the button telling a screen reader the
+ * `aria-pressed={false}` in any of them is the button telling a screen reader the
  * setting is off. That is the silent default in its most direct form, and it is
  * invisible to everybody testing with their eyes.
  */
@@ -38,9 +38,11 @@ import {
   type ExperimentalVariant,
   fitSignature,
   splitForMore,
+  SWITCH_LOOK,
   toggleVariant,
   visibleModes,
 } from "../src/web/Dock.js";
+import { hasValue } from "../src/web/experimental-store.js";
 import { MODES } from "../src/modes.js";
 import {
   EXPERIMENTAL_OFF,
@@ -229,6 +231,16 @@ describe("which appearance each state gets", () => {
     ["a load that failed", { loaded: false, loadError: "no" }, "load-failed"],
     ["a save that failed", { error: "no" }, "save-failed"],
     ["an offline copy", { loaded: false, stale: true }, "stale"],
+    /* A save pressed before the first answer, refused: the store puts back
+       `before`, which was the placeholder, and goes to read again. There is no
+       value to draw or toggle, so it waits for that read rather than offering a
+       press on "off" nobody read (GPT Sol, plan review of 261030a). */
+    [
+      "a save that failed before anything was read",
+      { loaded: false, error: "no" },
+      "save-failed-waiting",
+    ],
+    ["a save that failed over an offline copy", { loaded: false, stale: true, error: "no" }, "save-failed"],
     /* Both at once is reachable — a save started from /profile while this bar's
        load had failed. The write wins, because a press during one is the race
        the store's one-write-at-a-time rule exists to prevent. */
@@ -350,6 +362,22 @@ describe("what it says, and what a press does", () => {
     expect(set).toHaveBeenCalledWith(true);
   });
 
+  it("a failed save before the first answer still says it failed without inventing a value", () => {
+    const set = vi.fn();
+    const reload = vi.fn();
+    reading({
+      experimental: experimental({ loaded: false, error: "network", set, reload }),
+    });
+    expect(theSwitch().getAttribute("aria-invalid")).toBe("true");
+    expect(theSwitch().getAttribute("aria-disabled")).toBe("true");
+    expect(theSwitch().getAttribute("aria-pressed")).toBeNull();
+    expect(described()).toContain("Not saved");
+    expect(described()).toContain("Loading");
+    press();
+    expect(set).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   /**
    * **No state is a dead end.** Every appearance either takes a press that does
    * something or is one the store is about to resolve on its own. `stale` failed
@@ -359,6 +387,7 @@ describe("what it says, and what a press does", () => {
     const cases: [ExperimentalVariant, Partial<Parameters<typeof experimental>[0]>][] = [
       ["ready", {}],
       ["waiting", { loaded: false }],
+      ["save-failed-waiting", { loaded: false, error: "no" }],
       ["saving", { saving: true }],
       ["load-failed", { loaded: false, loadError: "no" }],
       ["save-failed", { error: "no" }],
@@ -370,9 +399,10 @@ describe("what it says, and what a press does", () => {
       reading({ experimental: experimental({ ...over, set, reload }) });
       press();
       const acted = set.mock.calls.length + reload.mock.calls.length > 0;
-      const resolving = variant === "saving" || variant === "waiting";
+      const resolving =
+        variant === "saving" || variant === "waiting" || variant === "save-failed-waiting";
       expect(acted || resolving, `${variant} is a dead end`).toBe(true);
-      /* And the two that take no press say why, so the reader is not left
+      /* And the three that take no press say why, so the reader is not left
          guessing at a button that will not move. */
       if (!acted) expect(described().length, variant).toBeGreaterThan(0);
     }
@@ -393,6 +423,7 @@ describe("what it says, and what a press does", () => {
       { saving: true },
       { loaded: false, loadError: "no" },
       { error: "no" },
+      { loaded: false, error: "no" },
       { loaded: false, stale: true },
     ]) {
       reading({ experimental: experimental(over) });
@@ -403,7 +434,7 @@ describe("what it says, and what a press does", () => {
   /**
    * **Not on hover only.** A failure a sighted reader can only find by hovering
    * is a failure most readers never find — NN/G's rule, and the same one the
-   * `marked` modes are drawn around. So the two broken states draw a second
+   * `marked` modes are drawn around. So the three broken states draw a second
    * icon, and the working ones do not.
    */
   it("only the broken states draw a marker, and it is why the row gets wider", () => {
@@ -413,6 +444,8 @@ describe("what it says, and what a press does", () => {
     reading({ experimental: experimental({ loadError: "no", loaded: false }) });
     expect(icons()).toBe(2);
     reading({ experimental: experimental({ error: "no" }) });
+    expect(icons()).toBe(2);
+    reading({ experimental: experimental({ loaded: false, error: "no" }) });
     expect(icons()).toBe(2);
     reading({ experimental: experimental({ saving: true }) });
     expect(icons()).toBe(1);
@@ -432,13 +465,14 @@ describe("what it says, and what a press does", () => {
       { saving: true },
       { loaded: false, loadError: "no" },
       { error: "no" },
+      { loaded: false, error: "no" },
       { loaded: false, stale: true },
     ]) {
       reading({ experimental: experimental(over) });
       expect(described().length).toBeGreaterThan(0);
       said.add(described());
     }
-    expect(said.size).toBe(6);
+    expect(said.size).toBe(7);
   });
 });
 
@@ -538,6 +572,7 @@ describe("the fit signature", () => {
       "stale",
       "load-failed",
       "save-failed",
+      "save-failed-waiting",
     ];
     expect(new Set(all.map(sig)).size).toBe(all.length);
   });
@@ -594,12 +629,38 @@ describe("the drawn switch", () => {
   });
 
   it("draws neither position where no value has been read", () => {
-    for (const over of [{ loaded: false }, { loaded: false, loadError: "no" }]) {
+    for (const over of [
+      { loaded: false },
+      { loaded: false, loadError: "no" },
+      { loaded: false, error: "no" },
+    ]) {
       /* Both values underneath, so a knob that leaked either would show. */
       reading({ experimental: experimental({ ...over, on: true }) });
       expect(knob()).toBe("is-unknown");
       reading({ experimental: experimental({ ...over, on: false }) });
       expect(knob()).toBe("is-unknown");
+    }
+  });
+
+  /* **The bar and /profile give one answer to "is there a value?"** The bar
+     reached it first (`SWITCH_LOOK`'s `is-unknown`); the checkbox reads
+     `hasValue` from the store, and drew "unchecked" until it did (qi-ydgn7smk,
+     docs/postmortems/261030a-a-check-that-found-a-control-by-its-kind-read-a-different-one.md). Every
+     combination of the five fields, so neither can drift from the other. */
+  it("agrees with the store's hasValue in every state, so /profile's box cannot differ", () => {
+    for (let bits = 0; bits < 32; bits += 1) {
+      const s = experimental({
+        loaded: Boolean(bits & 1),
+        stale: Boolean(bits & 2),
+        saving: Boolean(bits & 4),
+        error: bits & 8 ? "save" : null,
+        loadError: bits & 16 ? "load" : null,
+        on: true,
+      });
+      const variant = toggleVariant(s);
+      if (variant === null) throw new Error("a signed-in reader always gets a switch");
+      const unknown = SWITCH_LOOK[variant](s.on) === "is-unknown";
+      expect(hasValue(s), JSON.stringify(s)).toBe(!unknown);
     }
   });
 

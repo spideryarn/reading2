@@ -115,6 +115,13 @@ export function HighPowerSwitch({
              switch, and for the reason written there. */
           className="tw:[accent-color:var(--highlight-text)]"
           checked={Boolean(since)}
+          /* **Mixed, not unchecked, until the page's read has answered.** An
+             unchecked box is "off" to a screen reader and to a browser agent
+             however disabled it is — the rule and its history are
+             experimental-store.ts § `hasValue`. */
+          ref={(el) => {
+            if (el) el.indeterminate = !loaded;
+          }}
           disabled={!loaded || saving}
           onChange={(e) => set(e.target.checked)}
         />

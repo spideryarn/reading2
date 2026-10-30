@@ -93,6 +93,7 @@ import type {
   SourcesClaimCheckTarget,
   Faq,
   Relations,
+  Explanations,
   SourcesClaimList,
   CitationBlurbSentence,
   Crossrefs,
@@ -1249,6 +1250,17 @@ export const articleRevisions = spideryarn.table(
      * fingerprint. **Owner only**: it is in no public projection.
      */
     relations: jsonb("relations").$type<Relations>(),
+
+    /**
+     * The places a reader would get stuck, each with the missing piece —
+     * `Explanations`, src/types.ts, written by the `explanations` step.
+     * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     *
+     * The WHOLE artefact, like its neighbours; `sourceHash` covers the exact
+     * rendered body, cited head and ceiling, while `profileHash` records the
+     * reader it was written for. **Owner only**: it is in no public projection.
+     */
+    explanations: jsonb("explanations").$type<Explanations>(),
 
     /**
      * Links between the article's own blocks — `Crossrefs`, src/types.ts,
@@ -3091,6 +3103,18 @@ export const jobs = spideryarn.table(
     illustrationNote: text("illustration_note"),
 
     /**
+     * **The added Skim brief this job plans a route for** (`skim_briefs.id`),
+     * or null for every other job, the default route's included.
+     * `Job.skimBrief`, src/types.ts: on the row for `illustration_note`'s
+     * reason — a job resumed elsewhere without it would plan the default
+     * route and write it over the revision's. Part of `work_key` when present.
+     * No foreign key: a brief deleted mid-run is a completion that writes
+     * nothing, not a job that cannot be stored.
+     * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md.
+     */
+    skimBrief: text("skim_brief"),
+
+    /**
      * **This job is a reset**, and what to make again once it publishes — or
      * null, which is every other job.
      *
@@ -3723,7 +3747,7 @@ export const revisionStepRuns = spideryarn.table(
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','matter','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','explanations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','citation-blurbs','situate','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -4684,13 +4708,14 @@ export const chatThreads = spideryarn.table(
      *   (src/thread-origin.ts). The contract migration rewrites those rows and
      *   narrows the CHECKs below.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
-     *   entry, a cited work). Null for a claim, which has none. Never
-     *   dereferenced, and no foreign key: the entry may be regenerated away.
+     *   entry, a cited work, a literature-search finding). Null for a claim,
+     *   which has none. Never dereferenced, and no foreign key: the entry may
+     *   be regenerated away.
      * - `origin_block_id`: the block the item sits in. Points at the identity,
      *   like `anchor_block_id`, so it survives a re-extraction.
      * - `origin_quote`: the item's own words when the chat started: a claim's
-     *   words, or a glossary entry's or a cited work's name. Article prose or
-     *   a model's: never logged.
+     *   words, or a glossary entry's, cited work's or finding's name. Article
+     *   prose or a model's: never logged.
      * - `origin_lens`: the angle the reader typed to look at the debate from
      *   (`LensOrigin`; plan 261005k, A). The reader's words: never logged. A
      *   `reception` origin has this and a `sources-claims` origin a block and a
@@ -4753,7 +4778,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas','quiz','cite-check','situate')`,
     ),
     /* No mode, no origin: the original four shape columns mean nothing
        without it. The two Quiz columns have their own null-safe check below. */
@@ -4781,13 +4806,13 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_sources_claims",
       sql`${t.originMode} is distinct from 'sources-claims' or (${t.originItemId} is null and ${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null)`,
     ),
-    /* A glossary entry, a cited work or an idea is an id and a snapshot of
-       its name, with no block and no lens (plan 261006d, D2; the idea is plan
-       261009k). Spelled null-safe: a row with no mode, or another mode, passes
+    /* A glossary entry, a cited work, an idea or a literature-search finding
+       is an id and a snapshot of its name, with no block and no lens (plan
+       261006d, D2; the idea is plan 261009k, the finding plan 261025h). Spelled null-safe: a row with no mode, or another mode, passes
        without the last arm being read. */
     check(
       "chat_threads_origin_item",
-      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas','situate') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
     ),
     /* A citation's *Does it say that?*: the cited work's id, the citing block,
        and the work's title as a snapshot; no lens (plan 261024m). The item
@@ -4908,6 +4933,72 @@ export const chatThreads = spideryarn.table(
      * 2026-10-07, with no SQL run; see `jobs_queued_idx`.
      */
     index("chat_threads_article_updated_idx").on(t.articleId, t.updatedAt.desc().nullsFirst()),
+  ],
+);
+
+/**
+ * **The owner's added Skim briefs** — one sentence each, *what are you
+ * skimming for?*, and the route planned for it.
+ * docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md
+ * (report `spya-xyje0z`).
+ *
+ * The default brief is not here: it is the reader profile plus the article's
+ * *why you're reading*, and its route stays `article_revisions.skim`. A row
+ * here is planned from the profile with `brief` **in place of** that purpose
+ * (`renderProfile({ profile, purpose: brief })`), by a `skim` job carrying
+ * `Job.skimBrief`, which writes `skim` on this row and nowhere else.
+ *
+ * Modelled on `chat_threads`: keyed `(article_id, id)`, the id minted by the
+ * client in the house format, deleted with the article, and owner-only through
+ * the article (src/store/pg-skim-briefs.ts). **Reader state with the reader's
+ * own words**: a transfer deletes it and an unattended voucher transfer is
+ * refused while one exists (src/admin-articles.ts § `READER_STATE`). At most
+ * `SKIM_BRIEFS_MAX` per article, enforced in the store under the article lock.
+ *
+ * Never log `brief`: it is the reader's own words (docs/project/logging.md).
+ */
+export const skimBriefs = spideryarn.table(
+  "skim_briefs",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    /** The reader's sentence. Also its name in the picker. */
+    brief: text("brief").notNull(),
+    /**
+     * The route planned for it — the `Skim` artefact, stamp inside it
+     * (`sourceHash`, `profileHash`, `version`, `generatedAt`) as on the
+     * revision's column. Null until planned. Not tied to a revision, as the
+     * default's route survives re-extraction (plan review: brief text stays on
+     * the article); freshness compares its stamp against the article now.
+     */
+    skim: jsonb("skim").$type<Skim>(),
+    /**
+     * The profile-changed notice the owner sent away for this route, as
+     * `profileNoticeKey(generatedAt, profileHash)` (src/skim.ts) — the
+     * default's `articles.skim_profile_notice_dismissed_for`, per brief.
+     */
+    profileNoticeDismissedFor: text("profile_notice_dismissed_for"),
+    profileNoticeDismissedAt: timestamp("profile_notice_dismissed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    /** When the sentence was last written: on create, and on every edit. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** When `skim` was last written by a finished job. Null until then. */
+    plannedAt: timestamp("planned_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("skim_briefs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /* 600 is `MAX_PURPOSE_CHARS` (src/types.ts), written out because this file
+       may import nothing but its leaves (tests/public-imports.test.ts);
+       tests/skim-briefs-pg.test.ts holds the two to one number. */
+    check(
+      "skim_briefs_brief_length",
+      sql`length(btrim(${t.brief})) > 0 and length(${t.brief}) <= 600`,
+    ),
+    /* A route and when it was planned arrive together. */
+    check("skim_briefs_planned_both", sql`(${t.skim} is null) = (${t.plannedAt} is null)`),
   ],
 );
 
@@ -6023,6 +6114,72 @@ export const readingTime = spideryarn.table(
 );
 
 /**
+ * **Where the owner last was in each of their articles, on any device** — one
+ * row per article, so a browser that has never seen it can open at the
+ * paragraph the reader reached somewhere else.
+ * docs/plans/261029f-your-place-in-an-article-follows-you-to-another-device.md.
+ *
+ * - **`block_id` null is a place too**: opened, and at the top. A row of any
+ *   kind says the article has been opened, so "first open" means no row
+ *   anywhere (last-view.ts § The first-open default).
+ * - **Keyed to `block_identities` by a composite foreign key**, as
+ *   `reading_time` is, so an id the article never had cannot be stored; a null
+ *   block skips that key (MATCH SIMPLE), so the article has its own.
+ * - **No `owner_id`**, like `reading_time`: only the owner writes, and a
+ *   transfer deletes it (pg-article-transfer.ts).
+ * - **`saved_at`**, *Store when it happened*; docs/project/privacy.md says so.
+ *
+ * Replaced, not added to (src/store/pg-reading-time.ts § `setPlace`).
+ */
+export const readingPlace = spideryarn.table(
+  "reading_place",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    blockId: text("block_id"),
+    savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("reading_place_block_id_format", sql`${t.blockId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    foreignKey({
+      name: "reading_place_block_fk",
+      columns: [t.articleId, t.blockId],
+      foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * **The words a share of the article is measured in, cached for the shelf** —
+ * `readSoFarWords(blocks, foldedOnArrival(article))`, the reading view's
+ * denominator, worked out by the owner's `loadArticle` so the shelf's pie and
+ * the masthead's agree without the shelf reading every block's text.
+ * docs/plans/261025l-shelf-cards-show-the-how-much-read-pie.md.
+ *
+ * - **`basis` says whether it is still true**: a hash of every input and rule
+ *   it came from (src/store/read-so-far-basis.ts § `readSoFarBasis`). The shelf
+ *   uses a row only while its basis equals the current one, so a stale row is
+ *   a missing pie, never a wrong one.
+ * - **Derived, not the reader's activity**: no seconds and no band, only which
+ *   blocks count and their words. Left out of both exports; moves with the
+ *   article in a transfer, where the cleared rename makes it stale by itself.
+ */
+export const readSoFarWords = spideryarn.table(
+  "read_so_far_words",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    basis: text("basis").notNull(),
+    /** Block id to words, exactly `readSoFarWords`' map. */
+    words: jsonb("words").$type<Record<string, number>>().notNull(),
+    computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("read_so_far_words_object", sql`jsonb_typeof(${t.words}) = 'object'`)],
+);
+
+/**
  * **The glossary entries the owner has hidden from their own view of one
  * article** — docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md § 2.
  * Greg, 2026-10-02: *"Let's go with Hide for now"* — hide for me, not delete
@@ -6546,7 +6703,8 @@ export const feedback = spideryarn.table(
      */
     body: text("body").notNull(),
     /**
-     * *A problem* or *a suggestion* — `FEEDBACK_KINDS` in src/types.ts.
+     * *A problem*, *a suggestion* or (an admin only) *a discussion* —
+     * `FEEDBACK_KINDS` in src/types.ts.
      *
      * **Nullable, and starting unset is the design.** Greg, 2026-09-02: *"don't
      * default to Problem. Default to null/unknown."* So null means the reader
@@ -6761,7 +6919,7 @@ export const feedback = spideryarn.table(
      * **Null is a member of the domain and not of the list**: it means the
      * reader did not say, which is what the toggle starts as.
      */
-    check("feedback_kind", sql`${t.kind} is null or ${t.kind} in ('problem', 'suggestion')`),
+    check("feedback_kind", sql`${t.kind} is null or ${t.kind} in ('problem', 'suggestion', 'discussion')`),
     check("feedback_reporter_email", sql`length(btrim(${t.reporterEmail})) > 0`),
     /**
      * **Diagnostics cannot exist without consent.** The tick-box is the whole
@@ -9165,7 +9323,11 @@ export const citationIndexLookups = spideryarn.table(
      * `doi:<lower-cased doi>` — a `WorkId` from src/bibliographic.ts, DOI form
      * only — or, since 2026-10-11, `openalex:w<digits>`: OpenAlex's own id for a
      * work matched by title and authors because the article had no DOI
-     * (`CitersKey` in src/citation-index.ts, plan 261011q).
+     * (`CitersKey` in src/citation-index.ts, plan 261011q). Since 2026-10-25
+     * (plan 261025h) a work OpenAlex holds as up to four twin records is keyed
+     * by all of them, ascending, `openalex:w393180982|w4239232206`, so the key
+     * says which were joined; and either form may end `#topic`, the row of the
+     * citers that mention the work's keyword.
      */
     workId: text("work_id").primaryKey(),
     state: text("state").$type<"found" | "not-indexed">().notNull(),
@@ -9178,6 +9340,12 @@ export const citationIndexLookups = spideryarn.table(
     targetTitle: text("target_title"),
     /** Display names, as OpenAlex gave them, at most 20. */
     targetAuthors: text("target_authors").array(),
+    /**
+     * OpenAlex's top keyword for the work, when it gives one: what labels the
+     * topic view, and, on a `#topic` row, what its list was filtered by. Only
+     * on a found row. Plan 261025h, decision 10.
+     */
+    targetKeyword: text("target_keyword"),
     /** When OpenAlex answered. The row's event time: there is no `created_at`. */
     fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -9185,8 +9353,8 @@ export const citationIndexLookups = spideryarn.table(
     check(
       "citation_index_lookups_work_id",
       sql`length(${t.workId}) <= 600 and ${t.workId} = lower(${t.workId})
-          and (${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'
-               or ${t.workId} ~ '^openalex:w[0-9]{1,15}$')`,
+          and (${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+(#topic)?$'
+               or ${t.workId} ~ '^openalex:w[0-9]{1,15}([|]w[0-9]{1,15}){0,3}(#topic)?$')`,
     ),
     check("citation_index_lookups_state", sql`${t.state} in ('found', 'not-indexed')`),
     check(
@@ -9201,8 +9369,9 @@ export const citationIndexLookups = spideryarn.table(
               and ${t.targetTitle} is not null and length(${t.targetTitle}) between 1 and 10000
               and ${t.targetAuthors} is not null and cardinality(${t.targetAuthors}) <= 20
               and array_position(${t.targetAuthors}, null) is null
+              and (${t.targetKeyword} is null or length(${t.targetKeyword}) between 1 and 200)
             else num_nonnulls(${t.openalexId}, ${t.citedByCount}, ${t.returned}, ${t.dropped},
-                              ${t.capped}, ${t.targetTitle}, ${t.targetAuthors}) = 0
+                              ${t.capped}, ${t.targetTitle}, ${t.targetAuthors}, ${t.targetKeyword}) = 0
           end`,
     ),
   ],

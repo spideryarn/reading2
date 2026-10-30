@@ -650,7 +650,22 @@ export type PdfFigureFailure =
    * later located route now does:
    * docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md.
    */
-  | "uncaptioned";
+  | "uncaptioned"
+  /**
+   * **The page's one picture is a small part of a drawing**, so pairing it would
+   * put an icon under the caption of a whole diagram. Not decided here, since it
+   * needs the page's vector ink: src/collect-pdf-figures.ts turns a pairing
+   * into this refusal after `pairPageFigures`, by `isPartOfDrawing`.
+   * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
+   */
+  | "in-a-drawing"
+  /**
+   * **The page's layout, or the picture's painted box, could not be read**, so
+   * nothing shows the picture is the whole figure rather than part of a
+   * drawing. Refused rather than kept: a missing figure is visible and a wrong
+   * one is not. Decided in src/collect-pdf-figures.ts, as `in-a-drawing` is.
+   */
+  | "unmeasured-picture";
 
 /** What became of one marker. Exactly one of these exists per marker. */
 export type FigureOutcome =

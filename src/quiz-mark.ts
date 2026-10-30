@@ -85,7 +85,7 @@ import {
   underCacheFloor,
 } from "./article-prompt.js";
 import type { Block, Meta, QuizEvidence, QuizVerdict } from "./types.js";
-import { classifyVerdict } from "./quiz-verdict.js";
+import { classifyVerdict, type VerdictDiagnostic } from "./quiz-verdict.js";
 import { plainWords } from "./plain-words.js";
 import { widerWorld } from "./wider-world.js";
 
@@ -353,6 +353,8 @@ export interface QuizMarkRequest {
    */
   power: ModelPower;
   model?: string;
+  /** Eval-only: distinguish an explicit `unclear` from a failed hidden call. */
+  onVerdictDiagnostic?: ((outcome: VerdictDiagnostic) => void) | undefined;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
   timeoutMs?: number;
@@ -563,6 +565,7 @@ export async function* markAnswerStream({
   answer,
   power,
   model = defaultModel(power),
+  onVerdictDiagnostic,
   signal,
   timeoutMs = MARK_TIMEOUT_MS,
   stallMs = MARK_STALL_MS,
@@ -859,7 +862,13 @@ export async function* markAnswerStream({
 
      `req.signal` goes with it, so a reader who navigates away stops paying for
      this too. */
-  const verdict = await classifyVerdict({ question, answer, mark: reply, signal });
+  const verdict = await classifyVerdict({
+    question,
+    answer,
+    mark: reply,
+    signal,
+    ...(onVerdictDiagnostic ? { onDiagnostic: onVerdictDiagnostic } : {}),
+  });
 
   /* Spread rather than `verdict: undefined`, so that an absent verdict is a
      field that is genuinely not there — over SSE the two are different bytes,

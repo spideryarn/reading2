@@ -182,7 +182,7 @@
 
 /* -------------------------------------------------- § the part-switcher --
    **The one row that switches a mode's parts**, drawn the same in every mode:
-   Summary (Brief | Fuller | Thread), Debate, Structure, Referee and the kind
+   Summary (Brief | Fuller | Thread), Sources, Structure, Referee and the kind
    row under its criterion box, Learn, Diagram, Search's matchers and Skim's
    depths. Greg, 2026-10-07: *"controls that do the same job should look the
    same in every mode, though use your judgment."* Plan 261007h § F2.
@@ -850,7 +850,7 @@ svg.band-waiting-ghost { flex: none; }
   /* The band is narrow and the turns are prose, so they get the reading face
      rather than the UI one — an answer set in the interface font reads as a
      system message rather than as something written. */
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   line-height: 1.5;
 }
 
@@ -1550,7 +1550,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 }
 /* ---- text boxes in the bands ----
    **One look for every box a reader types into inside a band**: chat's
-   composer, Search's and Glossary's (and Debate's) one-line boxes, Referee's
+   composer, Search's, Glossary's, Claims' and Investigate's one-line boxes, Referee's
    criterion, poles and Candidates box, Learn's quiz answer, Illustrated's note
    and Skim's purpose. Greg, 2026-10-07: *"controls that do the same job should
    look the same in every mode, though use your judgment."* Before this rule
@@ -1574,6 +1574,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 .crit-text,
 .crit-poles input,
 .quiz-answer,
+.marg-quiz-box,
 .ill-steer-input,
 .skim-purpose-input {
   padding: 0.45rem 0.55rem;
@@ -1589,6 +1590,7 @@ a.chat-also-reading-item:hover { color: var(--highlight-ink); }
 .crit-text:focus-visible,
 .crit-poles input:focus-visible,
 .quiz-answer:focus-visible,
+.marg-quiz-box:focus-visible,
 .ill-steer-input:focus-visible,
 .skim-purpose-input:focus-visible,
 .guide-next-search-box:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }

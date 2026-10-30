@@ -2,7 +2,7 @@
 /**
  * **Marginalia shows what the modes it reads have made — later, and live.**
  *
- * Marginalia keeps no copy of FAQ, Debate or Ideas: `OwnerMarginFeed` reads each
+ * Marginalia keeps no copy of FAQ, Reception or Ideas: `OwnerMarginFeed` reads each
  * through its read half (`useFaqRead` and the rest) when it mounts. Greg's worry
  * on 2026-10-02 was that a mode generated *after* Marginalia first ran would
  * never reach the margin, and his answer to it was to run every missing mode
@@ -11,7 +11,7 @@
  * it opens.
  *
  * The rest are the gap that claim left: with the margin **open** on the right
- * while the reader generates FAQ (or Debate, or Ideas) in the left band, the
+ * while the reader generates FAQ (or Reception, or Ideas) in the left band, the
  * margin heard nothing until it was reopened. It now listens to the same
  * completion feed every band's `useStepJob` does — `useJobs`, quietly — and
  * calls the read's own `refresh`. The real `jobEngine` sits on the mocked
@@ -23,6 +23,10 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "../src/types.js";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -111,7 +115,7 @@ async function settle(): Promise<void> {
 }
 
 async function openMargin(): Promise<void> {
-  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+  await act(async () => root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, bibliography: { status: "ready", retryRead: async () => {} }, slug: SLUG, shown: true, onFeed })));
   await settle();
 }
 
@@ -240,7 +244,7 @@ describe("the open margin, at rest", () => {
       });
       expect(trace.filter((l) => l === "GET /api/jobs").length, "the session's first poll").toBe(1);
 
-      await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+      await act(async () => root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, bibliography: { status: "ready", retryRead: async () => {} }, slug: SLUG, shown: true, onFeed })));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60_000);
       });

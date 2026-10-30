@@ -97,7 +97,7 @@ const SHARED = new Set([
      the reader's, so the two cannot disagree. Imports `types.js` (types only)
      and nothing else. Plan 261012c. */
   "save-closeness.js",
-  /* Which influence a Citations row shows — the web one from a kept *Dig
+  /* Which influence a Bibliography row shows — the web one from a kept *Dig
      deeper* answer, else the list's own — read by the band and by chat's
      `article_citations` tool, so the two cannot disagree. Imports `types.js`
      (types only) and nothing else. Plan 261003m, stage 2. */
@@ -301,7 +301,9 @@ const SHARED = new Set([
      docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
   "feedback-payload.js",
   "feedback-ending-values.js", // a note's three endings and its comment bound, for the Earlier tab; imports nothing
-  "feedback-question-values.js", // a question's statuses, bounds and id rule, for the Earlier tab; imports only ids.js
+  "feedback-question-values.js", // a question's statuses, bounds and id rule, for the Earlier tab; imports ids.js and plain-text-blocks.js
+  "plain-text-blocks.js", // the ``` fence reading a question's and a mockup's body share (plan 261028b); imports nothing
+  "mockups.js", // a mockup's id rule and shapes, for the router and /admin/mockups (plan 261028b); imports the three above and ids.js
   /* What may be said about a failure when it leaves the machine. On the list
      for the same reason `messages.js` is: it imports nothing but that file and
      types, and both halves of monitoring have to agree on the rules exactly —

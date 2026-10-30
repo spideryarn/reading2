@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The top of the Quotes and Citations bands, folded into the order row** —
+ * **The top of the Quotes and Bibliography bands, folded into the order row** —
  * the move tests/glossary-compact-header.test.tsx pins for Glossary, made twice
  * more. Greg, 2026-09-10 (`spya-gcdwps`): *"I can't use the Quotes or Glossary
  * modes very well on landscape iPhone because all the stuff at the top of their
@@ -35,7 +35,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
-const { BibliographyPanel, CAPPED_NOTE, INFLUENCE_NOTE } = await import("../src/web/BibliographyPanel.js");
+const { BibliographyPanel, CAPPED_NOTE, cappedNote, INFLUENCE_NOTE } = await import("../src/web/BibliographyPanel.js");
 
 const noop = () => {};
 const BLOCK = "spya-k3m9qt" as BlockId;
@@ -186,7 +186,7 @@ describe("the Quotes band's top", () => {
   });
 });
 
-/* -------------------------------------------------------------- Citations -- */
+/* -------------------------------------------------------------- Bibliography -- */
 
 function work(id: string, title: string, relevance: number, influence: number): CitedWork {
   return {
@@ -286,7 +286,7 @@ async function citeCard(): Promise<string> {
   return text;
 }
 
-describe("the Citations band's top and foot", () => {
+describe("the Bibliography band's top and foot", () => {
   /* Since 2026-10-09 the head row is Sources' chip row, whatever the
      order row does (plan 261009l); what this held before — no row of its own
      for the count — still holds: the number is on Bibliography's chip and in
@@ -313,7 +313,8 @@ describe("the Citations band's top and foot", () => {
     expect(about, "no (i) in the band's corner").not.toBeNull();
     await act(async () => about?.click());
     expect(tip()).toContain(INFLUENCE_NOTE);
-    expect(tip()).toContain(CAPPED_NOTE);
+    /* A capped list of fewer than 80 says how many it holds (plan 261027b). */
+    expect(tip()).toContain(cappedNote(WORKS.length, 0));
     await act(async () => about?.click());
   });
 
@@ -338,7 +339,7 @@ describe("the Citations band's top and foot", () => {
    GPT Sol's review of the plan, findings 3 and 4: the fold hinges on "is there
    an order row", which a legacy list with several unscored items answers no,
    and on the fragment that keeps the head row while a list loads; and the
-   Citations foot, now only a job's status, must still show it wherever it
+   Bibliography foot, now only a job's status, must still show it wherever it
    showed before — and once. */
 
 describe("the states the fold depends on", () => {
@@ -350,14 +351,14 @@ describe("the states the fold depends on", () => {
     expect(await quotesAbout()).toContain("3 quotes.");
   });
 
-  it("keeps an empty head row while Quotes and Citations load", async () => {
+  it("keeps an empty head row while Quotes and Bibliography load", async () => {
     await mountQuotes({ ...quotesOwner(quotes(THREE)), status: "loading", quotes: null }, "document");
     expect(head()).not.toBeNull();
     await mountBibliography({ ...citeOwner(citations(WORKS)), status: "loading", bibliography: null }, "document");
     expect(head()).not.toBeNull();
   });
 
-  it("keeps Citations' head row, and the count in the band's (i), for several unscored works that offer one order", async () => {
+  it("keeps Bibliography's head row, and the count in the band's (i), for several unscored works that offer one order", async () => {
     const legacy = WORKS.map(({ relevance: _r, influence: _i, ...w }) => w);
     await mountBibliography(citeOwner(citations(legacy)), "document");
     expect(host.querySelector(".gloss-sort")).toBeNull();
@@ -365,7 +366,7 @@ describe("the states the fold depends on", () => {
     expect(await citeCard()).toContain("3 works cited.");
   });
 
-  it("gives a visitor the folded rows: Quotes' count with no badge, Citations' (i)", async () => {
+  it("gives a visitor the folded rows: Quotes' count with no badge, Bibliography's (i)", async () => {
     await act(async () =>
       root.render(
         createElement(QuotesPanel, {
@@ -399,7 +400,7 @@ describe("the states the fold depends on", () => {
               citations: WORKS.map((work) => ({
                 id: work.id,
                 title: work.title,
-                why: work.why,
+                why: work.why!,
                 mentions: work.mentions,
                 citedAt: work.citedAt,
                 firstCited: work.firstCited,

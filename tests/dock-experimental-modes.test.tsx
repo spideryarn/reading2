@@ -85,6 +85,9 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
   /* 2026-09-16: a new mode on an unmeasured prompt —
      docs/project/experimental-features.md. */
   "faq",
+  /* 2026-10-28: a new mode on an unmeasured prompt whose model calls have not
+     been read yet — plan 261028c, docs/project/experimental-features.md. */
+  "explanations",
   /* Skim was here for most of 2026-09-28, a new mode on an unmeasured
      prompt; Greg took it out the same day ("take Trajectory and Quotes modes
      out of Experimental features") — docs/project/experimental-features.md. */
@@ -124,7 +127,7 @@ function expectedWhenOff(current?: Mode): readonly Mode[] {
  * **offered**; this decides where an offered mode stands. Until 2026-10-07 the
  * two were one question, and every assertion here read the bar's buttons.
  */
-const UNDER_MORE: readonly Mode[] = ["quotes", "glossary", "faq", "ideas", "timeline"];
+const UNDER_MORE: readonly Mode[] = ["quotes", "glossary", "explanations", "faq", "ideas", "timeline"];
 
 /**
  * What a bar offering `offered` should show: as buttons (or links), every

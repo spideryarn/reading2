@@ -1,5 +1,5 @@
 /**
- * **Debate's claims list: the step's pure half, and the one request it sends**
+ * **Claims's claims list: the step's pure half, and the one request it sends**
  * — docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
  *
  * A list of eight plausible claims under quotations the article never printed
@@ -320,7 +320,7 @@ describe("the request", () => {
     expect(SOURCES_CLAIMS_SYSTEM).toContain(paperwork("pick"));
   });
 
-  it("has its own prompt version, not Debate's", () => {
+  it("has its own prompt version, not Reception's", () => {
     expect(PROMPT_VERSION).toMatch(/^debate-claims\//);
     expect(PROMPT_VERSION).not.toBe(RECEPTION_PROMPT_VERSION);
   });

@@ -1662,7 +1662,7 @@ export function AddPage({
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-6">
-        <h1 className="tw:font-prose tw:text-2xl tw:text-foreground">Adding an article</h1>
+        <h1 className="tw:font-sans tw:text-2xl tw:text-foreground">Adding an article</h1>
         {/* The URL as text rather than as a link. It is not somewhere we are
             sending the reader, it is what they asked us to read — and a live
             link to an unvisited address on a page they may have arrived at from
@@ -1753,10 +1753,12 @@ export function AddPage({
       )}
 
       {/* **What happened to the text, said on the page where it already has.**
-          The shelf's add box says the present-tense half beside the Add button
-          (`ADDING_SENDS_TEXT_AWAY`, src/web/AddArticle.tsx), because there the
-          reader still has a choice to make. This page has no button and no
-          form — a bookmarklet or a share sheet handed us an address, and the
+          The shelf's add box has the present-tense half in the (i) beside File
+          (`ADDING_SENDS_TEXT_AWAY`, `LimitsInfo` in src/web/UploadPicker.tsx,
+          since 2026-10-26 — plan 261026h), because there the reader still has
+          a choice to make. This page keeps its sentence visible: it has room,
+          and q-p6fvep was about the add box's small print. It has no button and
+          no form — a bookmarklet or a share sheet handed us an address, and the
           effect above queues it before the first paint — so by the time anyone
           reads this the POST has gone. Hence the past tense, and hence no
           checkbox: the two sentences differ on purpose, exactly as Referee

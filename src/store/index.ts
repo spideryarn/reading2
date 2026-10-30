@@ -79,6 +79,7 @@ import type {
   CommentStore,
   ReadingTimeStore,
   GlossaryHiddenStore,
+  SkimBriefStore,
   SkimNoticeStore,
   StaleNoticeStore,
   SuggestionDismissalStore,
@@ -126,6 +127,7 @@ import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
 import { pgSkimNoticeStore } from "./pg-skim-notice.js";
+import { pgSkimBriefStore } from "./pg-skim-briefs.js";
 import { pgStaleNoticeStore } from "./pg-stale-notices.js";
 import { pgSuggestionDismissalStore } from "./pg-suggestion-dismissals.js";
 import { pgRelatedWorkStore } from "./pg-related-work.js";
@@ -263,6 +265,7 @@ export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadFaq = reader.loadFaq.bind(reader);
 export const loadSourcesClaims = reader.loadSourcesClaims.bind(reader);
 export const loadRelations = reader.loadRelations.bind(reader);
+export const loadExplanations = reader.loadExplanations.bind(reader);
 export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
 export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);
 export const loadSkim = reader.loadSkim.bind(reader);
@@ -368,7 +371,7 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-crite
 export const refereePromisesStore: RefereePromisesStore = guarded("referee-promises", pgRefereePromisesStore);
 
 /**
- * Debate's reader-picked claim checks (plan 261008i § 3). Owner-only, and a
+ * Claims' reader-picked claim checks (plan 261008i § 3). Owner-only, and a
  * target may be the reader's own typed words — db-errors.ts is why nothing a
  * failed query says leaves it.
  */
@@ -398,6 +401,8 @@ export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgRead
 export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
 /** The Skim profile-changed notice an owner sent away — plan 261009i. */
 export const skimNoticeStore: SkimNoticeStore = guarded("skim-notice", pgSkimNoticeStore);
+/** The owner's added Skim briefs and their routes — plan 261027d. */
+export const skimBriefStore: SkimBriefStore = guarded("skim-briefs", pgSkimBriefStore);
 /** The "older version of the article" notices an owner sent away, by mode — plan 261010a. */
 export const staleNoticeStore: StaleNoticeStore = guarded("stale-notices", pgStaleNoticeStore);
 /** The command bar's suggestions an owner dismissed, as hashes — plan 261010u. */
@@ -621,7 +626,7 @@ export const lookUpTerm = makeLookUpTerm({
   library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
 });
 
-/** Where *Investigate* keeps an answer — one row per `(article, entry)`. */
+/** Where *Dig deeper* keeps an answer — one row per `(article, entry)`. */
 export const citationInvestigationStore: CitationInvestigationStore = guarded(
   "citation-investigations",
   pgCitationInvestigationStore,
@@ -634,7 +639,7 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
 export const citationWebNoteStore: CitationWebNoteStore = guarded("citation-web-notes", pgCitationWebNoteStore);
 
 /**
- * Bibliography's *Investigate*: one streamed, web-searching answer about one cited
+ * Bibliography's *Dig deeper*: one streamed, web-searching answer about one cited
  * work, kept. Built here out of the parts, as `lookUpTerm` is: the reader seam
  * decides ownership (a stranger's slug is a 404), the allowance bounds the
  * presses, the finds are both written (its first step, *Look it up* —

@@ -1,7 +1,7 @@
 ---
 reports: spya-w95xmq
 ending: shipped
-comment: Shipped behind the experimental switch: "Search the literature" at the top of Sources › Investigate (~$0.33–0.47, under a minute), with notes in Marginalia. An automatic second dive and fewer sub-modes are queued.
+comment: Sources is now three chips. Where it sits opens on free lists; "Search the literature" (~$0.30, Haiku shortlist then Sonnet) starts when you press to open it, and has left the experimental switch. Two experiments behind it.
 ---
 
 # Sources: situate the piece in the literature
@@ -77,3 +77,62 @@ retraction checks through Crossref (`qi-ktggbtqs`). All proposals: yours to auth
 so the shared identity check refused it and no later papers came from OpenAlex on this article (the
 same refusal hides Reception's *Cited by* here). Underlines in the prose were passed over for the
 margin.
+
+## 2026-10-26: three chips, a cost ladder, and two experiments
+
+Greg answered the follow-up question `q-vg2b69` (what Sources should show first, and whether six
+sub-modes should become three):
+
+> I'm not totally sure what's best or that I fully understand the proposal. Here's what I'd suggest:
+> if there's something we can do for free, great, let's do that proactively. If there's something
+> that's going to cost money, only do that when we open the sources mode. If it's going to cost a
+> lot of money, like per citation or something, then maybe we only do that when the user requests
+> something for that citation rather than proactively.
+>
+> I mean ideally a mode would only cost a few cents. Given this is an important mode, you know, if it
+> costs $0.30, okay, but then that should be upon user request. Do an eval to see if we can get away
+> with using Haiku more heavily, with maybe Opus for anything that we think requires intelligence.
+> And you know, yeah, be proactive if you think things can be unified into one submode. Great, let's
+> do that.
+>
+> I think take screenshots, ask sub agents to take on the personas of UI/UX experts or product
+> managers or researchers or naive users to look for things that might be confusing or where we can
+> improve them, if you think that's worth doing. And if in doubt, I think it's cheap to create new
+> experimental submodes that I can play around with, that each showcase left field ideas, some of
+> which might have the seed of something really good. So I'd encourage that proceed autonomously, and
+> I'd rather play than discuss.
+>
+> — Greg, 2026-10-25
+
+Built in [plan 261025h](../plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md):
+
+- **Three chips for the owner**: *Where it sits* (the default), *Bibliography*, *Links*. Reception,
+  Claims, Not cited and Investigate are tools inside Where it sits, at their old addresses, each with
+  a way back. A visitor's chips are unchanged.
+- **The cost ladder.** Opening Sources starts nothing paid. Where it sits shows two free lists:
+  *Papers that cite it* (OpenAlex, with an optional *About "keyword"* view for a much-cited piece)
+  and *What it builds on* (Bibliography's works it leans on most). *Search the literature*, about
+  $0.30, has left the experimental switch. It ran only on its own button until plan 261026g, from
+  Greg's report `spya-mfuz6g` the next morning, made the press that opens *Where it sits* start it
+  (never a link, reload or Back). Per-finding work (*Ask in
+  chat*) stays on a press for that finding.
+- **The eval** ([261025h](../investigations/261025h-situate-eval-haiku-sonnet-opus.md), $8.96):
+  Haiku is poor at writing the notes but good at choosing the evidence. So the search now plans on
+  Sonnet, shortlists on Haiku, and writes on Sonnet, or Opus under high-powered AI (about $0.52,
+  and the most accurate). Opus for everyone is a one-line change if you want it. This closes
+  `qi-9bc5xnwn`.
+- **Fewer false findings**: code now checks that *Since* cites only work dated after the piece, and
+  trims a note that names a paper it has no source for.
+- **Identity fixes**: a paper OpenAlex holds twice is joined when its title, authors and year all
+  match, so *The Extended Mind* now has citers. The piece's own translations and reprints are listed
+  under *Other editions of this piece*, and works by the same authors are listed apart, so neither
+  counts as a paper it did not cite.
+- **A persona review** of 35 screenshots (UI/UX, product, researcher, first-time reader) led to ten
+  fixes: the tools moved to the top with counts, plainer headings, the passage itself as the jump
+  link, the metadata's year only, and others.
+- **Two experiments behind the switch**: *Guess first* (guess what the literature did to each
+  passage, then reveal) and *Evidence first* (read a finding's source, say what you think it does
+  to the passage, then compare). Nothing either one does is stored or sent.
+
+Also closed: folding the sub-modes (`qi-mbh8appj`), and finding a finding's chat by the finding
+rather than its wording (`qi-mmtsxdhg`, done by the chat's new origin).

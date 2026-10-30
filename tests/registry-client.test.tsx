@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
  * **What the panels draw from a registry record** — plan 261001a stages 5 and
- * 6. Citations: the by-line stays as the article gives it, and the registry
+ * 6. Bibliography: the by-line stays as the article gives it, and the registry
  * fills only a field the article leaves empty, marked with its source; a
- * conflict says so and draws nothing of the record. Debate: the record's
+ * conflict says so and draws nothing of the record. Reception: the record's
  * authors and year win over the AI's reading, and the *date* order sorts on
  * its year.
  */
@@ -52,7 +52,7 @@ function work(over: Partial<CitedWork> = {}): CitedWork {
   };
 }
 
-describe("Citations' by-line", () => {
+describe("Bibliography's by-line", () => {
   it("keeps the article's authors and year even when the registry has its own", () => {
     const line = workByLine(work({ authors: "Vaswani et al.", year: "2017", registry: FOUND }));
     expect(line).toEqual({ authors: "Vaswani et al.", year: "2017", filled: null, conflict: null });
@@ -124,7 +124,7 @@ describe("a stored citation count, read back (plan 261005i)", () => {
     ).toEqual({ kind: "conflict", source: "crossref" });
   });
 
-  it("leaves Debate's record without one: only Citations asks about a cited work's count", () => {
+  it("leaves Reception's record without one: only Citations asks about a cited work's count", () => {
     expect(readRegistryWork({ ...FOUND, citedBy: { count: 357, readAt: READ } })).not.toHaveProperty("citedBy");
   });
 });
@@ -204,7 +204,7 @@ async function draw(citations: CitedWork[]) {
   );
 }
 
-describe("a Citations row on screen", () => {
+describe("a Bibliography row on screen", () => {
   it("marks a filled-in by-line with its registry", async () => {
     await draw([work({ registry: FOUND })]);
     const by = host.querySelector(".cite-by");
@@ -223,7 +223,7 @@ describe("a Citations row on screen", () => {
   });
 });
 
-/* ---------------------------------------------------------------- Debate -- */
+/* ---------------------------------------------------------------- Reception -- */
 
 function claim(id: string, over: Partial<ClaimReceptionRow> = {}): ClaimReceptionRow {
   return {
@@ -247,7 +247,7 @@ const RECORD = {
   year: 2010,
 };
 
-describe("Debate's by-line and date order", () => {
+describe("Reception's by-line and date order", () => {
   it("prefers the record's authors and year to the AI's, and says where they came from", () => {
     const w = rowWork(claim("c", { authors: ["Somebody"], publishedYear: 2024, registry: RECORD }));
     expect(w.authors).toEqual(["Erin Wamsley", "Stickgold"]);
@@ -356,7 +356,7 @@ function receptionOwner(row: ClaimReceptionRow): UseReception {
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
 const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
-describe("a Debate row on screen", () => {
+describe("a Reception row on screen", () => {
   it("draws the registry by-line and names the exact fields it supplied", async () => {
     const row = claim("shown", { authors: ["Extracted Author"], publishedYear: 2024, registry: RECORD });
     await act(async () =>

@@ -89,7 +89,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
 import { figuresFingerprint } from "../src/illustrated-figures.js";
 import { mintId } from "../src/ids.js";
-import { CAPABLE_MODEL, HIGH_POWER_MODEL, sameGenerator } from "../src/models.js";
+import { CAPABLE_MODEL, HIGH_POWER_MODEL, sameGenerator, SITUATE_TRIAGE_MODEL } from "../src/models.js";
+import { TRIAGE_PROMPT_VERSION } from "../src/situate.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEP_ORDER, STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
 import { hashProfile } from "../src/profile.js";
@@ -156,6 +157,8 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   quiz: ["inputHash", "promptVersion", "model"],
   faq: ["inputHash", "promptVersion", "model"],
   relations: ["inputHash", "promptVersion", "model"],
+  /* Exact request fingerprint, and the profile as `ideas`' (plan 261028c). */
+  explanations: ["inputHash", "promptVersion", "model"],
   simple: ["inputHash", "promptVersion", "model"],
   sketch: ["inputHash", "promptVersion", "model"],
   illustrated: ["inputHash", "promptVersion", "model"],
@@ -353,6 +356,8 @@ function minimal(step: StepName): Artefact {
       return { ...made, questions: [] };
     case "relations":
       return { ...made, relations: {} };
+    case "explanations":
+      return { ...made, profileHash: null, explanations: [] };
     case "sources-claims":
       return { ...made, claims: [] };
     case "bibliography":
@@ -364,7 +369,9 @@ function minimal(step: StepName): Artefact {
     case "citation-blurbs":
       return { ...made, entries: {}, counts: {} };
     case "situate":
-      return { ...made, profileHash: null, findings: [] };
+      /* `outcome` as every dossier since situate/1 carries it: one without is
+         malformed, and `phasesOutdated` fails it closed (GPT Sol's S3 review). */
+      return { ...made, profileHash: null, outcome: "read", findings: [] };
     case "reception":
       return { ...made, direct: { rows: [] }, claims: { rows: [] } };
     case "sketch":
@@ -857,6 +864,7 @@ describe("when the article itself moves, every step gets the same answer from bo
     "quiz",
     "faq",
     "relations",
+    "explanations",
     "simple",
     "sketch",
     "reception",
@@ -926,10 +934,10 @@ describe("when the article itself moves, every step gets the same answer from bo
         const { stale, disagree } = read(await askAll());
         expect(disagree).toEqual({});
         /* `relations`, `simple`, `debate-claims` and `situate` send the
-           paragraphs without the section titles; `skim` lays its route over
+           paragraphs without the section titles, as does `explanations`; `skim` lays its route over
            them. `labels` and `assets` hash the blocks alone. */
         expect(stale).toEqual(
-          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims", "situate"), "skim"]),
+          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims", "situate", "explanations"), "skim"]),
         );
       },
     );
@@ -998,6 +1006,34 @@ describe("debate, with its model overridden by the environment", () => {
       vi.unstubAllEnvs();
     }
     expect(await ask("reception")).toEqual({ queue: true, page: true });
+  });
+});
+
+/**
+ * **Situate's three calls, of which the stamp names one** (plan 261025h stage
+ * 3). The triage is pinned to its own model, which no stamp field carries, so
+ * both deciders read the dossier's `phases` (src/situate.ts §
+ * `phasesOutdated`). A dossier with none — every one written before the
+ * triage — is current to both, which the seeded fixture already is.
+ */
+describe("situate, with its triage's model recorded as another", () => {
+  it("both call a dossier whose triage another model ran stale, and today's current", async () => {
+    const { artefact } = currentOf("situate");
+    if (!artefact) throw new Error("situate was seeded without an artefact");
+    const phases = (triageModel: string) => ({
+      plan: CAPABLE_MODEL,
+      triage: { model: triageModel, version: TRIAGE_PROMPT_VERSION, candidates: 1, shortlisted: 1, of: 1 },
+      write: CAPABLE_MODEL,
+    });
+    try {
+      await writeArtefact("situate", { ...artefact, phases: phases(SITUATE_TRIAGE_MODEL) });
+      expect(await ask("situate")).toEqual({ queue: true, page: true });
+      await writeArtefact("situate", { ...artefact, phases: phases("anthropic/claude-haiku-4.5") });
+      expect(await ask("situate")).toEqual({ queue: false, page: false });
+    } finally {
+      await restore("situate");
+    }
+    expect(await ask("situate")).toEqual({ queue: true, page: true });
   });
 });
 

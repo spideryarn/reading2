@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "25 October 2026";
+const LAST_UPDATED = "29 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -75,7 +75,7 @@ function Section({
 }) {
   return (
     <section id={id} className="tw:mt-8 tw:scroll-mt-20">
-      <h2 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-lg tw:leading-snug tw:text-foreground">
+      <h2 className="tw:m-0 tw:mb-2 tw:font-sans tw:text-lg tw:leading-snug tw:text-foreground">
         {title}
       </h2>
       <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
@@ -142,7 +142,7 @@ export function PrivacyPage() {
       floor
       className="tw:mx-auto tw:flex tw:max-w-2xl tw:flex-col tw:px-6 tw:font-sans"
     >
-      <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+      <h1 className="tw:m-0 tw:font-sans tw:text-2xl tw:leading-snug tw:text-foreground">
         Privacy
       </h1>
       <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint">
@@ -255,6 +255,17 @@ export function PrivacyPage() {
             about one of your articles, the AI model is told roughly how much of it you have read —
             “about a quarter”, say — and nothing about which parts. It is not shown to anybody
             reading an article you have shared, and it goes when the article does.
+          </li>
+          {/* **Since 2026-10-29**: `reading_place`, one row per article —
+              Greg's answer A to q-mpq9dp (report spya-e23tee). One place and
+              its time, replaced as you move, so it is not a history either.
+              docs/project/privacy.md § Your place in an article; plan 261029f. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">Where you were in each of your articles</strong> —
+            the paragraph you last read, and when, so that another of your devices can open the
+            article there. Only the latest is kept; each update replaces the last. It is not shown to
+            anybody reading an article you have shared, and it goes when the article does, or when
+            the article is given to somebody else.
           </li>
           {/* **Since 2026-10-20**: `article_open_times`, so that Active days on
               /admin/users counts a day spent only reading — Greg's answer to
@@ -436,7 +447,9 @@ export function PrivacyPage() {
             something of the reader's. These are sent the identifier of a
             published work, or since 2026-10-11, for an article with no DOI,
             the words of its title to OpenAlex (Cited by's title search,
-            docs/plans/261011q-…), or, on the owner's press in Sources' Not
+            docs/plans/261011q-…, and, for an article from a public address,
+            its full-text search for Possible citations, docs/plans/261026f-…,
+            src/citation-fulltext.ts), or, on the owner's press in Sources' Not
             cited, the title and the opening of the text (src/related-work.ts,
             docs/plans/261011ac-…, its review's F1), and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
             is the whole list of hosts, and the request is built in
@@ -474,13 +487,15 @@ export function PrivacyPage() {
           >
             OpenAlex
           </a>
-          , when you open Sources' Reception on an article of yours, for the list of papers that cite it. Our
+          , when you open Sources on an article of yours, for the list of papers that cite it. Our
           server sends each one the identifier of a published work — for your article, its DOI —
           and our own contact address. When your article has no DOI, OpenAlex is sent the words of
-          its title instead, to find it by. And when you press Search OpenAlex for related work, in
-          Sources’ Not cited, OpenAlex is sent your article’s title and the opening of its text (its
-          abstract, on a paper), to find papers close to it. When the list of works your article
-          cites is made, each is looked up to write a short note on it from its abstract: Crossref
+          its title instead, to find it by; and, for an article you added from a public web address,
+          to find papers that matched a full-text search for its title. And when you press Search
+          OpenAlex for related work, in Sources’ Not cited, OpenAlex is sent your article’s title and
+          the opening of its text (its abstract, on a paper), to find papers close to it. When the
+          list of works your article cites is made, each is looked up to write a short note on it
+          from its abstract: Crossref
           and DataCite are sent its DOI or arXiv identifier, and OpenAlex its DOI. For an article
           you added from a public web address, a cited work with no DOI may be looked up at Crossref
           by its title and its first author’s surname instead; for a file you uploaded, the works it
@@ -502,14 +517,20 @@ export function PrivacyPage() {
           when it has one, its DOI or arXiv identifier, and never the article’s text. In an article
           from a file you uploaded, a cited work with no identifier is not searched.
           {/* Plan 261024o (src/situate.ts, src/situate-citers.ts): the owner's
-              press on Search the literature, behind the experimental switch.
+              press on Search the literature, in Sources › Where it sits and
+              out of the experimental switch since plan 261025h.
+              Since plan 261026g (spya-mfuz6g) the press that opens Where it
+              sits starts it too, and a pasted link or Back does not
+              (useWhereAutoRun.ts). The citers are asked on opening Sources since plan 261025h,
+              because Where it sits is the owner's default and its Papers that cite it
+              is that list (SourcesMode.tsx § `useCiters`).
               The searches are planned by a model from the fenced title,
               headings and opening, never the profile, and each is one forced
               Exa search through OpenRouter; the citing works are OpenAlex's,
               found by the DOI or the title as Cited by finds them.
               docs/project/privacy.md § Search the literature. */}{" "}
-          When you press Search the literature, in Sources’ Investigate (an experimental feature),
-          your article is searched for in the wider literature. Its title, headings, opening and
+          When you open Sources’ Where it sits with the Sources button or its tab, or press
+          Search the literature there, your article is searched for in the wider literature. Its title, headings, opening and
           details of works it cites go through OpenRouter to an AI that writes a dozen or so short
           searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is
           sent the article’s DOI, or the words of its title, to find papers that cite it. The whole

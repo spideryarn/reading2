@@ -35,6 +35,7 @@
  * flips the switch when a touch reader taps it to read the explanation.
  */
 import { FlaskConical, Info, TriangleAlert } from "lucide-react";
+import { useId } from "react";
 
 import { ControlTip, Tooltip } from "./Tooltip.js";
 /* The two sentences and the name, shared with the bar's own switch. They moved
@@ -49,6 +50,7 @@ import {
   experimentalOffline,
 } from "./experimental-copy.js";
 import { timeAgo } from "./relative-time.js";
+import { hasValue } from "./experimental-store.js";
 import { useExperimental } from "./useExperimental.js";
 
 export function SettingsSection() {
@@ -56,6 +58,7 @@ export function SettingsSection() {
   /* Read once per render rather than per call: two lines derived from one
      timestamp should not be able to straddle a tick of the clock. */
   const since = timeAgo(experimental.since ?? undefined, Date.now());
+  const statusId = useId();
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-1.5">
@@ -72,6 +75,16 @@ export function SettingsSection() {
                `/profile` that is not. */
             className="tw:[accent-color:var(--highlight-text)]"
             checked={experimental.on}
+            /* **Mixed, not unchecked, while there is no value** — before the
+               first answer and after a failed load. `checked={false}` there is
+               "off" to a screen reader and to a browser agent, however disabled
+               the box is (experimental-store.ts § `hasValue`). A DOM property
+               with no React prop, so it is set through the ref. */
+            ref={(el) => {
+              if (el) el.indeterminate = !hasValue(experimental);
+            }}
+            /* The status line says *why* it is disabled or mixed. */
+            aria-describedby={statusId}
             /* **Until the server has answered, there is nothing to toggle.** An
                enabled switch drawn from a default would let the reader send
                "off" over an "on" we had not read yet — a setting silently
@@ -80,7 +93,11 @@ export function SettingsSection() {
                of the one-write-at-a-time rule experimental-store.ts enforces:
                two PATCHes racing can leave the switch showing the opposite of
                what is stored. */
-            disabled={!experimental.loaded || experimental.saving}
+            /* …and never while mixed. A reload that fails after a good load
+               keeps `loaded` true, and a press on a mixed box writes the
+               opposite of a value nobody read (GPT Sol, plan review of
+               261030a). */
+            disabled={!experimental.loaded || experimental.saving || !hasValue(experimental)}
             onChange={(e) => void experimental.set(e.target.checked)}
           />
           <FlaskConical size={13} className="tw:text-ink-faint" />
@@ -105,7 +122,7 @@ export function SettingsSection() {
         </Tooltip>
       </div>
 
-      <p className="tw:m-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
+      <p id={statusId} className="tw:m-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
         {experimental.loadError ? (
           /* **A load that failed, said as a load that failed.** This line used
              to read "Not saved — …" for it, which is a sentence about a save
@@ -119,9 +136,10 @@ export function SettingsSection() {
                 (experimental-store.ts § reload). A button that silently does
                 nothing is worse than one that is visibly unavailable, and the
                 save is about to deliver the answer anyway.
-                Both states at once is reachable: a failed load leaves
-                `loadError` set, and the switch is still pressable by keyboard
-                or label. docs/reusable/silent-success.md. */}
+                Both states at once is reachable through the store even though
+                this checkbox is disabled: `set` is the write-side backstop for
+                tests and any caller that invokes it directly.
+                docs/reusable/silent-success.md. */}
             {/* **Not `className="linky"`, which styled nothing here** — that
                 class is scoped to `.cmt-dialog` / `.chat-dialog` /
                 `.annotate-dialog`

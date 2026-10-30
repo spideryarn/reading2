@@ -21,6 +21,10 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { quizReadStub } from "./helpers/quiz-read-stub.js";
+
+/** The owner's quiz is already made, so showing the column writes none (plan 261029c). */
+const QUIZ_STUB = quizReadStub();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -151,8 +155,8 @@ async function mount(use: (slug: string) => unknown, name: string): Promise<void
 
 const jobRequests = () => asked.filter((r) => r.url.startsWith("/api/jobs"));
 
-/* FAQ and Debate since 2026-10-02: Marginalia reads both and must never
-   spend (plan 261002b, GPT Sol's F1 on it). Debate is the dearest step in the
+/* FAQ and Reception since 2026-10-02: Marginalia reads both and must never
+   spend (plan 261002b, GPT Sol's F1 on it). Reception is the dearest step in the
    app to start by accident. */
 const READS = [
   ["ideas", useIdeasRead],
@@ -162,12 +166,14 @@ const READS = [
 ] as const;
 
 describe("the read hooks start no job", () => {
-  it("the actual owner Marginalia feed performs only its five artefact GETs, and starts no job for the four lists it only reads", async () => {
+  it("the actual owner Marginalia feed performs only its six artefact GETs, and starts no job for the five lists it only reads", async () => {
     /* The relation words are stored, so the one thing the feed may make has
-       nothing to make; the other four lists are absent and stay unasked for. */
+       nothing to make; the other five lists are absent and stay unasked for.
+       The dossier joined them on 2026-10-26, out of the experimental switch
+       (spya-pkpqch). */
     present = new Set(["relations"]);
     await act(async () => {
-      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", shown: true, onFeed: vi.fn() }));
+      root.render(createElement(OwnerMarginFeed, { quiz: QUIZ_STUB, slug: "read-hooks", bibliography: { status: "ready", retryRead: async () => {} }, shown: true, onFeed: vi.fn() }));
     });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
@@ -180,6 +186,7 @@ describe("the read hooks start no job", () => {
          shown with none stored (tests/marginalia-relations-on-open.test.tsx);
          here there is one. */
       "/api/relations/read-hooks",
+      "/api/situate/read-hooks",
       "/api/timeline/read-hooks",
     ]);
     expect(jobRequests()).toEqual([]);

@@ -290,7 +290,7 @@ export function stickyOffset(): number {
  * because there the two boundaries are the same number. GPT Sol F7.
  *
  * **The rect, and deliberately not `data-bars`.** The attribute is not the same
- * question: the two `:has()` guards in shell.css hold the bar down —
+ * question: the two guards in shell.css hold the bar down —
  * `--bar-hide: 0px` — while the attribute is still set, so a reader in a band
  * mode, or tabbing along the pills, would have had every jump land under a bar
  * that is plainly there. Asking the element is what makes those guards free.
@@ -534,6 +534,7 @@ export function watchBarVisibility(): () => void {
     hidden = false;
     stopMoving();
     delete document.documentElement.dataset.bars;
+    delete document.documentElement.dataset.scrolledBack;
   };
 
   const apply = () => {
@@ -552,16 +553,25 @@ export function watchBarVisibility(): () => void {
     /* Any other pixel is the reader taking over. Let the bar answer this
        movement, and forget ours. */
     ourScrollY = null;
+    const back = window.scrollY < from;
     const next = stepBar(hidden, window.scrollY, from);
     from = next.from;
+    /* **`data-scrolled-back`: the reader has turned round**, for the reminder
+       bar (ReminderBar.tsx, plan 261029d). Any upward movement of theirs, not
+       only the hidden → shown flip: after a jump the bars are already shown,
+       and the reader's next look back must still bring it. Reading on, a jump
+       (`moveWindow`) and the teardown (`show`) take it away. */
+    const root = document.documentElement;
+    if (next.hidden) delete root.dataset.scrolledBack;
+    else if (back && root.dataset.scrolledBack === undefined) root.dataset.scrolledBack = "";
     if (next.hidden === hidden) return;
     hidden = next.hidden;
     /* Before `data-bars`: the fisheye panels' `MutationObserver` used to need
        the slide marked before taking its fresh measurement
        (in useColumnContext.ts, until 2026-09-29). */
     startMoving();
-    if (hidden) document.documentElement.dataset.bars = "hidden";
-    else delete document.documentElement.dataset.bars;
+    if (hidden) root.dataset.bars = "hidden";
+    else delete root.dataset.bars;
   };
 
   const onScroll = () => {
@@ -574,7 +584,9 @@ export function watchBarVisibility(): () => void {
    * The rationale below describes the fisheye panels and granularity pills
    * before they went on 2026-09-29; the focus listener is still here.
    *
-   * `:root:has(.controls:focus-within, .mode-band)` in shell.css puts
+   * The guard in shell.css (`:root:has(.controls:focus-within, .mode-band)`
+   * then; `data-bar-focus` and `data-band-covers` on `<html>` since
+   * 2026-10-29, root-flags.ts) puts
    * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still
    * `"hidden"`** — that is the guard that stops the bar sliding out from under
    * a keyboard reader tabbing the granularity pills. So focus alone moves the
@@ -689,8 +701,18 @@ let aiming: number | null = null;
  */
 let ourScrollY: number | null = null;
 
-/** Move the page and remember the browser's clamped/rounded answer. */
+/**
+ * Move the page and remember the browser's clamped/rounded answer.
+ *
+ * **And put the reminder bar away** (`data-scrolled-back`, set by
+ * `watchBarVisibility` when a reader's scroll brings the bars back). It is
+ * fixed over the top of the prose and no destination here measures it, so a
+ * jump that left it up would land its passage underneath it (GPT Sol, plan
+ * review of 261029d, F2). Every jump comes through here, so this is the one
+ * place to say so. ReminderBar.tsx.
+ */
 function moveWindow(top: number): void {
+  delete document.documentElement.dataset.scrolledBack;
   window.scrollTo({ top, behavior: "auto" });
   ourScrollY = window.scrollY;
 }

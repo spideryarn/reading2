@@ -262,6 +262,7 @@ const { useQuiz, useQuizRead } = await import("../src/web/useQuiz.js");
 const { QuizPanel } = await import("../src/web/QuizPanel.js");
 const { SummaryBand } = await import("../src/web/modes/summary/SummaryMode.js");
 const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
+const { ExplanationsBand } = await import("../src/web/modes/explanations/ExplanationsMode.js");
 const { GlossaryBand } = await import("../src/web/modes/glossary/GlossaryMode.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { SketchView } = await import("../src/web/SketchView.js");
@@ -321,7 +322,7 @@ function SourcesOuter({ show }: { show: boolean }) {
         publishedAt: undefined,
         articleTitle: "A piece",
         claimChats: { summaries: [], onCheck: noop, onOpen: noop },
-        investigateChats: { summaries: [], loaded: true, occupied: false, onQuestion: noop, onCheck: noop, onAskWork: noop, onOpen: noop },
+        investigateChats: { summaries: [], loaded: true, occupied: false, onQuestion: noop, onCheck: noop, onAskWork: noop, onFinding: noop, onOverview: noop, onOpen: noop },
         citeFocus: null,
         onCiteFocusTaken: noop,
         claimFocus: null,
@@ -476,6 +477,42 @@ const ROWS: Row[] = [
     forced: ["Find them again"],
     direct: [{ label: "Find them again", stale: true }],
     waiting: "The new ideas haven't loaded yet.",
+    readAgain: "Try again",
+  },
+  /* Glossary's shape since plan 261029e: the badge's Regenerate, and one run
+     row at the top — *Find more* on a current list, *Write a new list* on a
+     stale one, each in the list's own profile setting. */
+  {
+    name: "Explanations",
+    hook: "useExplanations.ts",
+    step: "explanations",
+    path: "/api/explanations/",
+    body: (which, { stale, profiled }) => ({
+      explanations: {
+        ...stamp(which, profiled),
+        explanations: [
+          {
+            id: "expl-1",
+            blockId: "spya-bbbbbb",
+            quote: "The instrument was built",
+            text: `${SAYS[which]}: the missing piece.`,
+            sure: true,
+            outside: false,
+          },
+        ],
+        dropped: { malformed: 0, unknownIds: 0, unquoted: 0, tooLong: 0, ambiguous: 0, badText: 0, repeated: 0, overCap: 0 },
+      },
+      stale,
+      outdated: false,
+      profileChanged: profiled,
+    }),
+    mount: (show) => (show ? createElement(ExplanationsBand, { slug: SLUG, onJump: noop, onAsk: noop }) : null),
+    forced: ["Find more", "Write a new list"],
+    direct: [
+      { label: "Write a new list", stale: true, posts: { useProfile: false } },
+      { label: "Find more", stale: false, posts: { useProfile: false } },
+    ],
+    waiting: "The new explanations haven't loaded yet.",
     readAgain: "Try again",
   },
   {
@@ -695,7 +732,7 @@ const ROWS: Row[] = [
         generator: "test",
         slug: SLUG,
         sourceHash: "hash",
-        /* Debate's only clock, and so its identity. */
+        /* Reception's only clock, and so its identity. */
         searchedAt: AT[which],
         direct: {
           rows: [
@@ -799,6 +836,8 @@ const ROWS: Row[] = [
     hook: "useBibliography.ts",
     step: "bibliography",
     path: "/api/bibliography/",
+    /* Named: the bare address is Where it sits since plan 261025h. */
+    search: "?sources=bibliography",
     body: (which, { stale }) => ({
       bibliography: {
         ...stamp(which, false),
@@ -903,17 +942,16 @@ const ROWS: Row[] = [
     waiting: "The new route hasn't loaded yet.",
     readAgain: "Try again",
   },
-  /* Sources > Investigate's *Where this piece sits* (plan 261024o): the
-     owner's, behind the experimental switch. Its forced verb is *Search
-     again*, on the stale banner or at the dossier's foot; its clock,
-     `generatedAt`, is its identity. */
+  /* Sources > *Where it sits*' literature search (plan 261024o; there, and
+     out of the experimental switch, since plan 261025h). Its forced verb is
+     *Search again*, on the stale banner or at the dossier's foot; its clock,
+     `generatedAt`, is its identity. `?sources=where` names it explicitly. */
   {
-    name: "Where this piece sits",
+    name: "Where it sits",
     hook: "useSituate.ts",
     step: "situate",
     path: "/api/situate/",
-    search: "?sources=investigate",
-    experimental: true,
+    search: "?sources=where",
     body: (which, { stale }) => ({
       situate: {
         ...stamp(which, false),
@@ -1798,6 +1836,7 @@ it("the command bar's Run again refuses while the mode's rewrite is held (C4)", 
     openFeedback: null,
     queue: useJobs("quiet"),
     extensionStore: null,
+    experimentalOn: false,
   }).find((command) => command.kind === "action" && command.id === "rerun-faq");
   expect(again?.kind).toBe("action");
   if (again?.kind !== "action") return;

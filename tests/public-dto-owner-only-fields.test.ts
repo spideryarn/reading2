@@ -196,7 +196,7 @@ function publish(d: Reception, finalUrl: string | null = NONE.finalUrl) {
   return publicArticle({ ...NONE, finalUrl, reception: d });
 }
 
-describe("Debate's relevance judgement (5P)", () => {
+describe("Reception's relevance judgement (5P)", () => {
   it("crosses on every row that has one, and only as one of the three words", () => {
     const odd = claimRow({ id: "spya-cdddd2", url: "https://four.example.org/d", bears: "very" as never });
     const built = publish(reception([ROW_A, ROW_B, ROW_C, odd]));
@@ -205,7 +205,7 @@ describe("Debate's relevance judgement (5P)", () => {
   });
 });
 
-describe("Debate's threads and key sources (6M)", () => {
+describe("Reception's threads and key sources (6M)", () => {
   it("cross, rebuilt, when no row was withheld", () => {
     const why = "It is the replication.";
     const built = publish(

@@ -49,6 +49,7 @@ import {
   tagStore,
   readingTimeStore,
   glossaryHiddenStore,
+  skimBriefStore,
   skimNoticeStore,
   staleNoticeStore,
   suggestionDismissalStore,
@@ -68,6 +69,7 @@ import {
   loadSourcesClaims,
   loadSituate,
   loadRelations,
+  loadExplanations,
   loadCrossrefs,
   loadSimpleSummary,
   loadSkim,
@@ -197,6 +199,15 @@ import { ArtefactNotMadeYet } from "./store/artefact-not-made-yet.js";
    imports the HEAD writer, because this dispatcher answers no HEAD. */
 import { sendBinary } from "./binary-response.js";
 import {
+  isMockupId,
+  type MockupDetail,
+  type MockupFile,
+  type MockupImageType,
+  type MockupSummary,
+  mockupImageType,
+} from "./mockups.js";
+import { mockupsDir, readMockupDirectory, readMockupImage, readOneMockup } from "./mockups-dir.js";
+import {
   adminStore,
   commentStore,
   feedbackStore,
@@ -281,7 +292,8 @@ import { isWebUrl, savedSource } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
-/* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
+/* Who cites the article, for Reception: OpenAlex, no model. src/citation-index.ts. */
+import { possibleCitersOf } from "./citation-fulltext.js";
 import { citersOf } from "./citation-index.js";
 import type { CitersResult } from "./types.js";
 /* Papers close to the article that its Bibliography does not list, for Sources'
@@ -327,8 +339,10 @@ import type {
   NewFeedbackAnswer,
   NewFeedbackDeferral,
   SearchFinish,
+  SkimBriefRow,
   Visibility,
 } from "./store/contracts.js";
+import { checkBrief, checkBriefId } from "./store/pg-skim-briefs.js";
 import {
   ADMIN_FEEDBACK_DEFAULT_LIMIT,
   FEEDBACK_LIST_BYTES,
@@ -463,7 +477,8 @@ import { currentStepName, previousClientStepName } from "./step-order.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
-import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
+import { panelRunKind as explanationsPanelRun } from "./explanations.js";
+import { profileNoticeKey, routeProfileIsStale, skimResponseFor } from "./skim.js";
 import { prepareMode } from "./prepare-mode.js";
 import { MODE_PREPARATION_ALREADY_CLAIMED, preparable } from "./preparable-modes.js";
 import { parseStaleNoticeDismissal, type StaleNoticesResponse } from "./stale-notice.js";
@@ -519,10 +534,13 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  ExplanationsResponse,
   SituateResponse,
   QuizFound,
   QuizResponse,
   QuotesResponse,
+  SkimBriefList,
+  SkimBriefSummary,
   SkimResponse,
   IllustratedResponse,
   SketchResponse,
@@ -566,6 +584,8 @@ import {
   originName,
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
+  SITUATE_FINDING_ID,
+  SITUATE_OVERVIEW_ID,
   currentOriginMode,
   sameAnchor,
   sameOrigin,
@@ -604,7 +624,7 @@ import {
      413 cannot drift apart. */
   MAX_QUIZ_ANSWER_CHARS,
 } from "./types.js";
-/* Debate's reader claim checks — plan 261008i § 3. The two caps the panel's
+/* Claims' reader claim checks — plan 261008i § 3. The two caps the panel's
    button and this route must agree on, and the shapes the route builds. */
 import {
   type SourcesClaimCheckTarget,
@@ -1331,12 +1351,22 @@ function objectBody(body: unknown): Record<string, unknown> {
  * or not at all. An id that is well-formed but not this article's is **not**
  * refused here — the store drops it, so one stale id cannot fail the rest.
  */
-function readingTimeBatch(body: unknown): Record<string, number> {
+/**
+ * The body of `POST /api/reading-time/:slug`: `seconds`, always (empty when
+ * only the place moved), and `place`, the paragraph the owner is on, or `null`
+ * for the top — absent when it has not changed since the last send. Plan
+ * 261029f § As built.
+ */
+function readingTimeBatch(body: unknown): { seconds: Record<string, number>; place: string | null | undefined } {
   const sent = objectBody(body);
   for (const key of Object.keys(sent)) {
-    if (key !== "seconds") {
+    if (key !== "seconds" && key !== "place") {
       throw httpError(400, "That request has a field this endpoint does not take");
     }
+  }
+  const { place } = sent;
+  if (place !== undefined && place !== null && !(typeof place === "string" && isSpideryarnId(place))) {
+    throw httpError(400, "The place must be a block id, or null for the top");
   }
   const { seconds } = sent;
   if (typeof seconds !== "object" || seconds === null || Array.isArray(seconds)) {
@@ -1354,7 +1384,7 @@ function readingTimeBatch(body: unknown): Record<string, number> {
     }
     out[id] = value;
   }
-  return out;
+  return { seconds: out, place };
 }
 
 /**
@@ -1362,6 +1392,36 @@ function readingTimeBatch(body: unknown): Record<string, number> {
  * the route the reader was looking at, and nothing else
  * (`SkimProfileNoticeDismissalRequest`).
  */
+/** `/api/skim/:slug/briefs`, for its GET and POST. Plan 261027d. */
+const SKIM_BRIEFS_PATTERN = /^\/api\/skim\/([\w.%-]+)\/briefs$/;
+
+/** `/api/skim/:slug/briefs/:id`, for its GET, PATCH and DELETE. Plan 261027d. */
+const SKIM_BRIEF_PATTERN = /^\/api\/skim\/([\w.%-]+)\/briefs\/([\w.%-]+)$/;
+
+/** A brief as the list and the writes answer it: never the route, never the dismissal key. */
+function skimBriefSummary(row: SkimBriefRow): SkimBriefSummary {
+  return {
+    id: row.id,
+    brief: row.brief,
+    createdAt: row.createdAt,
+    plannedAt: row.plannedAt,
+    planned: row.skim !== null,
+  };
+}
+
+/**
+ * A brief write's body: an object with these fields and no others, each
+ * still unchecked (`checkBrief`, `checkBriefId` in src/store/pg-skim-briefs.ts).
+ * The message names no text: the sentence is the reader's own.
+ */
+function skimBriefBody(body: unknown, fields: readonly string[]): Record<string, unknown> {
+  const sent = objectBody(body);
+  for (const key of Object.keys(sent)) {
+    if (!fields.includes(key)) throw httpError(400, "That request has a field this endpoint does not take");
+  }
+  return sent;
+}
+
 function skimDismissalGeneratedAt(body: unknown): string {
   const sent = objectBody(body);
   for (const key of Object.keys(sent)) {
@@ -2368,7 +2428,7 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
 /**
  * **Look into one cited work, a few words at a time, and keep the answer** —
  * `POST /api/bibliography/:slug/:id/investigate`, SSE out. Bibliography's
- * *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+ * *Dig deeper*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
  * `streamTermLookup`'s shape: the 404 and the allowance's 429/503 are decided
  * by `investigateCitation` before a header is written. Then, since plan
@@ -2401,7 +2461,7 @@ async function bibliographyForRoute(slug: string, found: BibliographyResponse): 
   /* **Which works are already articles here** — the reader's own or a public
      one, never another reader's private article (the `where` in
      src/store/pg-cited-in-spideryarn.ts). Here and not in `loadBibliography`,
-     which chat, *Look it up* and *Investigate* also call and none of them
+     which chat, *Look it up* and *Dig deeper* also call and none of them
      needs. A failure costs the links, not the list.
      docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
   let candidates: CitedCandidate[] = [];
@@ -2619,7 +2679,7 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  * **The client ticks a question answered only on `done`.** A stream that simply
  * stops — a dropped connection, a killed instance — produces neither frame, and
  * that is the case a mocked complete transcript cannot test:
- * tests/quiz-mark-stream.test.ts emits two deltas and then closes.
+ * tests/quiz-mark-stream.test.tsx emits two deltas and then closes.
  *
  * **Validation happens before a single header is written**, so a bad request is
  * an ordinary JSON 400/404/409 and the thrown `httpError` never reaches a
@@ -5578,6 +5638,8 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
       return parseCiteCheckOrigin(origin as Record<string, unknown>);
     case "quiz":
       return parseQuizOrigin(origin as Record<string, unknown>);
+    case "situate":
+      return parseSituateOrigin(origin as Record<string, unknown>);
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
     default:
       return built satisfies never;
@@ -5608,6 +5670,32 @@ function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Reco
     throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
   }
   return { mode, itemId, quote };
+}
+
+/**
+ * **A literature-search item's origin**: a finding's id, shaped as
+ * src/situate.ts § `findingId` mints it (`SITUATE_FINDING_ID`), or an
+ * overview's dossier-time id (`SITUATE_OVERVIEW_ID`), plus its snapshot.
+ * Shape only: the id is not looked up, so an item a newer search dropped
+ * never refuses its own chat. No part of the snapshot reaches a thrown
+ * message. Plans 261025h (qi-mmtsxdhg) and 261026g.
+ */
+function parseSituateOrigin(body: Record<string, unknown>): ThreadOrigin {
+  const { itemId, quote, blockId, lens } = body;
+  if (blockId !== undefined || lens !== undefined) {
+    throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
+  }
+  /* A finding's id, or its dossier's overview's (plan 261026g § Stage 2). */
+  if (typeof itemId !== "string" || !(SITUATE_FINDING_ID.test(itemId) || SITUATE_OVERVIEW_ID.test(itemId))) {
+    throw httpError(400, "origin.itemId must be a finding id or an overview id");
+  }
+  if (typeof quote !== "string" || quote.trim() === "") {
+    throw httpError(400, "origin.quote must be a non-empty string");
+  }
+  if (quote.length > MAX_ORIGIN_NAME_CHARS) {
+    throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
+  }
+  return { mode: "situate", itemId, quote };
 }
 
 /**
@@ -6427,7 +6515,7 @@ async function runRefereePromises(slug: string, res: ServerResponse): Promise<vo
   }
 }
 
-/* ------------------------------------------ debate's reader claim checks --
+/* ------------------------------------------ Claims' reader claim checks --
    The reader ticks claims in Sources' Claims, or types one, and presses Check:
    one web search over them all, stored as a check. Plan
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
@@ -6618,7 +6706,7 @@ async function finishCheck(
 }
 
 /**
- * **Check the claims a reader picked** — `POST /api/debate-claims/:slug/checks`,
+ * **Check the claims a reader picked** — `POST /api/sources-claims/:slug/checks`,
  * a JSON body in, SSE out. `runRefereePromises`' shape: the refusals before a
  * header, the `pending` row before the call, an attempt-fenced finish, and the
  * stream ends only after the answer is stored.
@@ -6637,7 +6725,7 @@ async function finishCheck(
  *     partial unique index, so two tabs at once get one search;
  *  7. for Dig further, the addresses already found — a read, not a spend,
  *     after the reservation so nothing can finish in between unseen;
- *  8. **the `debate-check` allowance** (429, 503), the check's own bucket
+ *  8. **the `sources-claim-check` allowance** (429, 503), the check's own bucket
  *     (src/reception.ts § `SOURCES_CLAIM_CHECK_RATE_POLICY`) — and a refusal there takes
  *     the reservation back, so nothing is left pending;
  *  9. then the stream and the model.
@@ -7419,6 +7507,25 @@ function parseIllustrationNote(raw: unknown, steps: StepName[] | undefined): str
 }
 
 /**
+ * **The Skim brief on a job request**, checked for shape — or `undefined` for
+ * none, the default route. Only beside steps that are Skim's own and end in
+ * `skim` (`quotes`, `ideas`, `skim`, as the band's *Plan it again* sends them):
+ * the brief's route is written by the runner after the `skim` step as the
+ * job's last, and a job that went on past it, or never reached it, would carry
+ * a field nothing reads. Whether the brief exists on the article is the job
+ * route's question, asked with the owner in scope. Plan 261027d.
+ */
+const SKIM_BRIEF_STEPS: readonly StepName[] = ["quotes", "ideas", "skim"];
+function parseSkimBrief(raw: unknown, steps: StepName[] | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || !isSpideryarnId(raw)) throw httpError(400, "skimBrief must be a spya- id");
+  if (!steps?.includes("skim") || !steps.every((s) => SKIM_BRIEF_STEPS.includes(s))) {
+    throw httpError(400, "skimBrief goes with a job whose steps are quotes, ideas and skim");
+  }
+  return raw;
+}
+
+/**
  * The body of `POST /api/article/:slug/reset`: `{ regenerate: boolean }`, and
  * nothing else. A boolean and not a list on purpose — which extras to make
  * again is the server's to read off the revision, not the client's to name
@@ -7482,6 +7589,12 @@ export function parseJobRequest(body: unknown): {
    */
   illustrationNote?: string;
   /**
+   * **The added Skim brief to plan a route for** — only with `steps` that are
+   * Skim's own (`parseSkimBrief`). The handler checks the brief is on the
+   * article and renders the profile with it in place of the purpose. Plan 261027d.
+   */
+  skimBrief?: string;
+  /**
    * With a plain `url` only: **the reader has chosen their own copy** over the
    * public one somebody else already made of this address, so the add does not
    * offer it again and is the ordinary paid one.
@@ -7489,7 +7602,7 @@ export function parseJobRequest(body: unknown): {
    */
   ownCopy?: true;
 } {
-  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote, ownCopy } = (body ??
+  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote, skimBrief, ownCopy } = (body ??
     {}) as Record<string, unknown>;
   if (ownCopy !== undefined) {
     if (ownCopy !== true) throw httpError(400, "ownCopy must be true, or left out");
@@ -7508,7 +7621,8 @@ export function parseJobRequest(body: unknown): {
       uploadId !== undefined ||
       steps !== undefined ||
       force !== undefined ||
-      illustrationNote !== undefined
+      illustrationNote !== undefined ||
+      skimBrief !== undefined
     ) {
       throw httpError(400, "readThis goes with a slug and nothing else");
     }
@@ -7542,6 +7656,7 @@ export function parseJobRequest(body: unknown): {
   }
   const parsedUseProfile = useProfile;
   const note = parseIllustrationNote(illustrationNote, parsedSteps);
+  const brief = parseSkimBrief(skimBrief, parsedSteps);
 
   /* The three optional fields, spelled once. They were written out at each of
      the three `return`s, which is three chances for one of them to be quietly
@@ -7560,6 +7675,7 @@ export function parseJobRequest(body: unknown): {
     ...(parsedForce ? { force: parsedForce } : {}),
     ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
     ...(note !== undefined ? { illustrationNote: note } : {}),
+    ...(brief !== undefined ? { skimBrief: brief } : {}),
   };
 
   /* Before the URL branch. `checkUploadOrigin` refuses every combination rather
@@ -8206,6 +8322,11 @@ function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNot
   /* The Illustrated note too, for the profile's reason: the reader's own
      words, polled every eight seconds, and nothing on the client reads it off
      a job — the panel reads it off the picture. */
+  /* **The Skim brief's id stays** (plan 261027d, GPT Sol's C4 on stage 2).
+     It is a minted id, not the reader's sentence, and the client needs it:
+     without it a brief's `skim` job looks like the default's, so the default
+     band would show its progress and Metadata's Skim row would offer to retry
+     it (useStepJob.ts § `writesStep`). */
   const {
     profile: _hidden,
     ownerId: _whose,
@@ -8350,6 +8471,25 @@ type ModelReport = {
  */
 async function resolveProfile(slug: string): Promise<string | null> {
   return renderProfile(await resolveProfileParts(slug));
+}
+
+/**
+ * **Who is reading, for one added Skim brief** — the reader's "about you" with
+ * the brief **in place of** the article's *why you're reading*. A brief is the
+ * answer to that question asked again, so mixing the two would lean every
+ * added route back towards the default (plan 261027d § What an added brief is
+ * planned from; one argument to change). `withProfile` false drops "about
+ * you" and keeps the brief, which is the request itself, not a profile.
+ *
+ * Reads the brief owner-scoped: a stranger's article, or a brief not on this
+ * one, is the store's 404. The brief's text never reaches a log.
+ */
+async function skimBriefProfile(slug: string, briefId: string, withProfile = true): Promise<string | null> {
+  const [brief, profile] = await Promise.all([
+    skimBriefStore.get(slug, briefId),
+    withProfile ? readerStore.readProfile() : Promise.resolve(null),
+  ]);
+  return renderProfile({ profile, purpose: brief.brief });
 }
 
 /**
@@ -8939,8 +9079,8 @@ function feedbackBody(sent: Record<string, unknown>): string {
 }
 
 /**
- * *A problem*, *a suggestion*, or **nothing**, which is a third answer rather
- * than a missing one.
+ * *A problem*, *a suggestion*, *a discussion* (an admin only), or **nothing**,
+ * which is an answer rather than a missing one.
  *
  * Greg asked for the toggle to start unset — *"don't default to Problem. Default
  * to null/unknown"* — so an absent field is valid and an unrecognised one is
@@ -8948,11 +9088,20 @@ function feedbackBody(sent: Record<string, unknown>): string {
  * and the cheap failure is now; the CHECK in src/db/schema.ts is the same
  * refusal for every other writer.
  */
-function feedbackKind(value: unknown): FeedbackKind | null {
+function feedbackKind(value: unknown, user: VerifiedUser): FeedbackKind | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string" || !(FEEDBACK_KINDS as readonly string[]).includes(value)) {
     /* The list is ours and the value is not the reader's prose — but it is still
        a string off the wire, so it does not go in the message. `[fb-kind]`. */
+    throw httpError(400, "kind is not one of ours [fb-kind]");
+  }
+  /* **A discussion is an admin's alone.** Only an admin can read a reply, so a
+     kind that promises a conversation is accepted only from somebody one can be
+     held with. The dialog offers the button only to an admin, so anybody else
+     sending it is a client that is not ours, and gets the same plain 400 as any
+     other value we do not take — no new error shape. Greg, 2026-10-28,
+     docs/plans/261028b-feedback-discussions-monospace-mockups-and-admin-mockups-page.md. */
+  if (value === "discussion" && !isAdmin(user.id)) {
     throw httpError(400, "kind is not one of ours [fb-kind]");
   }
   return value as FeedbackKind;
@@ -9167,7 +9316,7 @@ function parseFeedback(
   const where = feedbackWhere(sent);
 
   const body = feedbackBody(sent);
-  const kind = feedbackKind(sent.kind);
+  const kind = feedbackKind(sent.kind, user);
 
   if (
     sent.diagnostics !== undefined &&
@@ -10206,6 +10355,28 @@ export type AuthRoute = ExactAuthRoute | PatternAuthRoute;
 const JOBS_PATH = "/api/jobs";
 /* An article's private link: GET reads it, POST makes one, DELETE turns it off. */
 const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
+/**
+ * **One mockup for `/api/admin/mockups/:id` and its images**: the id checked
+ * before it is joined onto the directory, a missing file and a failing one the
+ * same 404 (the failing one logged). Plan 261028b, Stage 3.
+ */
+async function adminMockup(id: string): Promise<MockupFile> {
+  if (!isMockupId(id)) throw httpError(400, "That is not a mockup id (m-xxxxxx).");
+  const mockup = await readOneMockup(mockupsDir(), id);
+  if (typeof mockup === "string") {
+    log("http").warn({ mockup: id, problem: mockup }, "admin mockups: a file was refused");
+  }
+  if (mockup === null || typeof mockup === "string") throw httpError(404, "There is no such mockup.");
+  return mockup;
+}
+
+/** A checked mockup's image always has an allowed type; this says so to the compiler. */
+function mockupImageTypeOf(file: string): MockupImageType {
+  const type = mockupImageType(file);
+  if (type === null) throw new Error(`mockup image without an allowed type: ${file}`);
+  return type;
+}
+
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 /* Author gifts: GET lists, POST ensures one for an article (261010c). */
@@ -10261,7 +10432,7 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
 const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
 const REFEREE_PROMISES_PATTERN = /^\/api\/referee\/promises\/([\w.%-]+)$/;
-/* Debate's reader claim checks (plan 261008i § 3): GET lists them, POST makes
+/* Claims' reader claim checks (plan 261008i § 3): GET lists them, POST makes
    one. One pattern for both rows, as Promises above. */
 const SOURCES_CLAIM_CHECKS_PATTERN = /^\/api\/sources-claims\/([\w.%-]+)\/checks$/;
 /* The checks' path until 2026-10-09, for one deploy — removed by the contract,
@@ -11437,6 +11608,83 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The mockups, for `/admin/mockups`** — Greg, 2026-10-28 (`spya-zytb0g`):
+     *"a /admin/mockups page with a table that can link out to particular
+     mockups"*. Three reads of `docs/mockups/` from disk, which vercel.json's
+     `includeFiles` ships with the function (src/mockups-dir.ts says why from
+     `process.cwd()`, and why only here, never at import). Under `/api/admin/`,
+     so the namespace gate has refused everybody else before any of them runs
+     (tests/admin-mockups-route.test.ts asks all three). The URL names only a
+     validated mockup id and an image's index; file names come from a mockup
+     that passed `parseMockupFile` (GPT Sol's plan review, F2). Plan 261028b,
+     Stage 3; docs/project/admin.md § `/admin/mockups`.
+
+     **A file that fails is left out, with a log line, not a 500**: one bad
+     mockup should not hide the rest. The test suite runs the same check over
+     the real directory, so one should not reach a deploy. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/mockups",
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      /* Validate the signatures here too. Otherwise a file named `.png` whose
+         bytes are HTML appears as a good row and fails only after it is opened;
+         the list's promise is that a bad mockup is left out, not deferred. */
+      const { mockups, problems } = await readMockupDirectory(mockupsDir(), { checkContent: true });
+      for (const { file, problem } of problems) {
+        log("http").warn({ file, problem }, "admin mockups: a file was left out of the list");
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, {
+        mockups: mockups.map(({ body: _body, images, ...header }): MockupSummary => ({
+          ...header,
+          images: images.length,
+        })),
+      });
+    },
+  },
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/mockups\/([^/]+)$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const mockup = await adminMockup(captures[1] ?? "");
+      res.setHeader("Cache-Control", "private, no-store");
+      const { images, ...rest } = mockup;
+      const detail: MockupDetail = {
+        ...rest,
+        images: images.map((file, index) => ({ index, contentType: mockupImageTypeOf(file) })),
+      };
+      send(res, 200, { mockup: detail });
+    },
+  },
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/admin\/mockups\/([^/]+)\/images\/([^/]+)$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = "", n = ""] = captures;
+      /* An index written one way only: `0`, `1`, … — not `01`, `1.0` or `-1`. */
+      if (!/^(?:0|[1-9]\d{0,3})$/.test(n)) throw httpError(400, "The image index must be a whole number.");
+      const mockup = await adminMockup(id);
+      const image = await readMockupImage(mockupsDir(), mockup, Number(n));
+      if (image === null) throw httpError(404, "That mockup has no such image.");
+      if (typeof image === "string") {
+        log("http").warn({ mockup: mockup.id, problem: image }, "admin mockups: an image was refused");
+        throw httpError(404, "That mockup has no such image.");
+      }
+      /* The repo's own file, but read on an administrator's page: no cache
+         anywhere, as the feedback screenshot. The type is the allowlist's, by
+         extension, checked against the first bytes; `sendBinary` adds
+         `nosniff`. No disposition: shown on the page, not downloaded. */
+      res.setHeader("Cache-Control", "private, no-store");
+      sendBinary(res, image);
+    },
+  },
+
   /* **The cost cube**, for `/admin/costs` — Greg, 2026-10-04 (report
      spya-mykvhz). The ledger over `?since=&until=`, grouped by user, article,
      task, model and day; the page filters, groups and pivots it in the browser
@@ -11521,7 +11769,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          client filters and reads, and naming it here is what makes a
          disagreement about it a compile error instead of a silent no-op.
          docs/postmortems/260903e-offline-shelf-filter-never-ran.md. */
-      const shelf: LibraryResponse = { articles: await listArticles({ archived }) };
+      /* Progress belongs only on the owner's browser shelf. View-as is an
+         administrator, and `reading=0` is the deliberately smaller response
+         used by MCP; both skip the private query as well as the field. */
+      const readBands = viewingAs() === null && query.get("reading") !== "0";
+      const shelf: LibraryResponse = { articles: await listArticles({ archived, readBands }) };
       send(res, 200, shelf);
     },
   },
@@ -11991,7 +12243,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     viewAs: "read",
     handler: async ({ request: { res } }, captures) => {
-      send(res, 200, await loadArticle(slugPart(captures, 1)));
+      const slug = slugPart(captures, 1);
+      /* **And where the owner last was in it, on any device** (plan 261029f):
+         here rather than on reading time's GET, which runs only once the
+         reading view has mounted, too late to choose where it opens. */
+      const [article, readingPlace] = await Promise.all([loadArticle(slug), readingTimeStore.readPlace(slug)]);
+      send(res, 200, { ...article, readingPlace });
     },
   },
 
@@ -12655,7 +12912,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* Sources › Investigate's dossier: where the piece sits in the literature —
+  /* Sources › Where it sits' dossier: where the piece sits in the literature —
      plan 261024o, src/situate.ts. **Owner only**: every store read is
      owner-scoped, so somebody else's article is a 404, and there is no public
      twin (S9). GET only: asking again is POST /api/jobs { slug, steps:
@@ -12776,6 +13033,40 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* Explanations —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     GET only, and no DELETE: asking again is a forced
+     POST /api/jobs { slug, steps: ["explanations"] }, which appends (*Find
+     more*) or rewrites as `existingFor` decides. This route never spends.
+     **Owner-authenticated, with no anonymous twin and nothing in the public
+     article payload**, as `relations` above (plan § The step: owner only).
+     `withProfileChanged` for the third staleness fact, as `ideas`: the
+     profile is in this step's stamp — and for `panelRun`, the run button's
+     label, from the same `existingFor` the step asks (plan 261029e, Sol F1).
+     None yet is `200 null` to a client that asks — `orNullWhenNotMadeYet`,
+     around the read and only the read. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/explanations\/([\w.%-]+)$/,
+    article: "first-capture",
+    viewAs: "read",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<ExplanationsResponse>(
+          at,
+          () => loadExplanations(at),
+          (found) => found.explanations,
+          false,
+          (found, nowHash) => ({ panelRun: explanationsPanelRun(found, nowHash) }),
+        ),
+      );
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
   /* Cross-references —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      GET only, and no DELETE: the step replaces, so asking again is
@@ -12856,18 +13147,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       void profile.catch(() => {});
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadSkim(at));
       if (found === null) return;
-      const now = await profile;
-      const nowHash = now ? hashProfile(now) : null;
-      const { profileNoticeDismissedFor, ...rest } = found;
-      const profileChanged = routeProfileIsStale(found.skim.profileHash, nowHash);
-      const body: SkimResponse = {
-        ...rest,
-        profileChanged,
-        /* The stored key is never sent: it carries the profile's hash. */
-        profileNoticeDismissed:
-          profileChanged &&
-          profileNoticeDismissedFor === profileNoticeKey(found.skim.generatedAt, nowHash),
-      };
+      /* `skimResponseFor` (src/skim.ts), which an added brief's route answers
+         through too (plan 261027d). The stored key is never sent. */
+      const body: SkimResponse = skimResponseFor(found, await profile);
       send(res, 200, body);
     },
   },
@@ -12897,6 +13179,108 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (routeProfileIsStale(found.skim.profileHash, nowHash)) {
         const key = profileNoticeKey(generatedAt, nowHash);
         if (!(await skimNoticeStore.dismissProfileNotice(at, generatedAt, key))) throw replanned();
+      }
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+
+  /* **The owner's added Skim briefs** — plan
+     docs/plans/261027d-several-skim-briefs-per-article-and-a-picker-between-them.md
+     (`spya-xyje0z`). Owner-only through the store (`articleIdForOwned`): a
+     stranger's slug, or a brief not on this article, is a 404. No `viewAs`:
+     a brief is the owner's own steering, and these rows fail closed while the
+     administrator views as a reader. Planning one is not here — it is
+     `POST /api/jobs { slug, steps: [..., "skim"], skimBrief }`. None of these
+     spends, and none logs the sentence. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: SKIM_BRIEFS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const rows = await skimBriefStore.list(slugPart(captures, 1));
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { briefs: rows.map(skimBriefSummary) } satisfies SkimBriefList);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: SKIM_BRIEFS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const { id, brief } = skimBriefBody(await readBody(req), ["id", "brief"]);
+      const row = await skimBriefStore.create(at, checkBriefId(id), checkBrief(brief));
+      send(res, 201, skimBriefSummary(row));
+    },
+  },
+  /* One brief's route, answered exactly as the default's is (`skimResponseFor`):
+     its profile now is "about you" with the brief in the purpose's place.
+     **Unplanned is `200 null` to every caller**, not only to one that sends
+     the none-yet header as the default's route does: the brief is known to
+     exist (a missing one is the store's 404), so null can only mean "not
+     planned yet", and there is no client from before briefs to stay
+     compatible with. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: SKIM_BRIEF_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      res.setHeader("Cache-Control", "private, no-store");
+      const found = await skimBriefStore.loadRoute(at, id);
+      if (!found) {
+        send(res, 200, null);
+        return;
+      }
+      send(res, 200, skimResponseFor(found, await skimBriefProfile(at, id)));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: SKIM_BRIEF_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      const { brief } = skimBriefBody(await readBody(req), ["brief"]);
+      send(res, 200, skimBriefSummary(await skimBriefStore.updateBrief(at, id, checkBrief(brief))));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: SKIM_BRIEF_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      if (!(await skimBriefStore.remove(at, id))) throw httpError(404, "No such Skim brief on this article.");
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+  /* The default's dismissal (above), for one brief's route and the brief's
+     profile now. Same answers: 404, 409 when re-planned, 204. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/skim\/([\w.%-]+)\/briefs\/([\w.%-]+)\/profile-notice-dismissal$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [at, id] = [slugPart(captures, 1), part(captures, 2)];
+      const generatedAt = skimDismissalGeneratedAt(await readBody(req));
+      const found = await skimBriefStore.loadRoute(at, id);
+      if (!found) throw httpError(404, "No route planned for this Skim brief yet.");
+      const now = await skimBriefProfile(at, id);
+      const nowHash = now ? hashProfile(now) : null;
+      const replanned = () => httpError(409, "This route has been planned again since. Read it again.");
+      if (found.skim.generatedAt !== generatedAt) throw replanned();
+      if (routeProfileIsStale(found.skim.profileHash, nowHash)) {
+        const key = profileNoticeKey(generatedAt, nowHash);
+        if (!(await skimBriefStore.dismissProfileNotice(at, id, generatedAt, key))) throw replanned();
       }
       res.statusCode = 204;
       res.end();
@@ -13017,12 +13401,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    * article gets no list in v1: this is not under `/api/public/`, and adding it
    * there is a new field on the public boundary.
    *
-   * **No experimental gate.** Debate had none on the server even while its
+   * **No experimental gate.** Reception had none on the server even while its
    * bar button was behind the switch, and since 2026-10-09 this is Reception
    * inside Sources, which is offered to everyone. GPT Sol's F4.
    *
    * **The identity is the imported one, not the shelf's**: a reader's rename
    * would fail the title check on a correct DOI (F2).
+   *
+   * **`?with=possible` adds *Possible citations*** to a `no-doi` or `no-match`
+   * answer: the works that matched OpenAlex's full-text search for the piece's
+   * title, for an article from a public address — up to two more
+   * free requests, made only when the panel asks (src/citation-fulltext.ts,
+   * plan 261026f). Without it the answer is what it was.
    */
   {
     kind: "pattern",
@@ -13031,9 +13421,23 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     /* No model is called, so there is no spend to attribute; the capture is
        named anyway because the path names an article. */
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { res, query } }, captures) => {
+      /* `?about=topic`: the citers that mention the work's own keyword, in the
+         same shape, when the list has a topic (plan 261025h, decision 10). */
+      const about = query.get("about");
+      if (about !== null && about !== "topic") throw httpError(400, "about must be topic");
+      const withParams = query.getAll("with");
+      if (withParams.some((value) => value !== "possible")) throw httpError(400, "with must be possible");
+      const withPossible = withParams.length > 0;
       const identity = await loadArticleIdentity(slugPart(captures, 1));
-      const citers: CitersResult = await citersOf(identity);
+      const citers: CitersResult = await citersOf(identity, {}, about === "topic" ? { about } : {});
+      if (withPossible && (citers.kind === "no-doi" || citers.kind === "no-match")) {
+        const possible = await possibleCitersOf(identity);
+        if (possible !== null) {
+          send(res, 200, { ...citers, possible } satisfies CitersResult);
+          return;
+        }
+      }
       send(res, 200, citers);
     },
   },
@@ -13136,7 +13540,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   /* **Look into one cited work on the web, and keep the answer** — Bibliography's
-     *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
+     *Dig deeper*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
      SSE, `streamCitationInvestigation` above. Owner-only (the reader seam is
      owner-scoped), rate-limited on its own `citation-investigate` bucket after
      the free refusals (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`).
@@ -13237,7 +13641,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { req, res } }, captures) => {
       const slug = slugPart(captures, 1);
       const batch = readingTimeBatch(await readBody(req, MAX_READING_TIME_BODY_BYTES));
-      await readingTimeStore.add(slug, batch);
+      /* Two statements, not one transaction: a place is replaced, so the
+         client resending it after a half-success costs nothing (plan 261029f). */
+      if (batch.place !== undefined) await readingTimeStore.setPlace(slug, batch.place);
+      await readingTimeStore.add(slug, batch.seconds);
+      /* The shelf's pie reads a cached denominator, kept true here, the one
+         place the owner's reading moves (plan 261025l). Not the shelf's GET,
+         which the unauthenticated health check also calls. A failure costs
+         one card its pie, so it is logged and the seconds still count. */
+      try {
+        await readingTimeStore.refreshShelfWords(slug);
+      } catch (err) {
+        log("store").warn({ ...errorFields(err), slug }, `could not refresh the shelf's read-so-far words for ${slug}`);
+      }
       res.statusCode = 204;
       res.end();
     },
@@ -14496,10 +14912,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           }
         }
       }
+      /* **An added Skim brief's route is planned for the brief, in place of
+         the article's purpose** — `renderProfile({ profile, purpose: brief })`,
+         plan 261027d. Read with the owner in scope, so a brief not on this
+         reader's article is a 404 before anything is queued. */
       const profile =
-        request.url !== undefined || request.useProfile === false
-          ? null
-          : await resolveProfile(request.slug);
+        request.skimBrief !== undefined
+          ? await skimBriefProfile(request.slug, request.skimBrief, request.useProfile !== false)
+          : request.url !== undefined || request.useProfile === false
+            ? null
+            : await resolveProfile(request.slug);
       const { useProfile: _asked, ownCopy: _own, ...work } = request;
       /* `openEarly` on a pasted address only: the article opens on a stand-in
          outline and a second job builds the structure. `enqueue` honours it
@@ -14612,7 +15034,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }, captures) => {
       const advanced = await advanceJob(part(captures, 1));
       if (!advanced) throw httpError(404, "No such job");
-      send(res, 200, advanced);
+      /* The poll and create routes project jobs through `publicJob`; an
+         advance response is the same browser wire, not a trusted back door
+         for the rendered profile or other owner-only job fields. */
+      send(res, 200, { ...advanced, job: publicJob(advanced.job) });
     },
   },
 

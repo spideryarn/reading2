@@ -329,6 +329,25 @@ describe("when the chip is drawn", () => {
     expect(chip()).toBeNull();
   });
 
+  /**
+   * **And `<html>` says so while it is drawn**, for the room the strip above
+   * the Dock keeps for it (dock.css § `--return-chip-h`) — `data-return-chip`,
+   * which was `:root:has(.return-chip)` until 2026-10-29 (root-flags.ts, plan
+   * 261029k). The other chip, `BandBackChip`, holds the same flag:
+   * tests/band-back-chip-flag.test.tsx.
+   */
+  it("holds data-return-chip exactly while it is drawn", () => {
+    const flag = () => document.documentElement.hasAttribute("data-return-chip");
+    expect(chip()).toBeNull();
+    expect(flag()).toBe(false);
+    jumped(at(block(15)), block(25));
+    expect(chip()).not.toBeNull();
+    expect(flag()).toBe(true);
+    act(() => dismissJumpOrigin());
+    expect(chip()).toBeNull();
+    expect(flag(), "the chip went and its room stayed").toBe(false);
+  });
+
   /** Pressing Back is the ordinary way out, and it fires only `popstate`. */
   it("goes away when the reader presses Back", async () => {
     jumped(at(block(15)), block(25));

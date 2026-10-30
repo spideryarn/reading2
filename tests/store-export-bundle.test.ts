@@ -158,7 +158,7 @@ const RELATIONS_FIXTURE: Relations = {
   elapsedMs: 123,
 };
 
-/** Debate's claims list, a third whole artefact, on both paths (plan 261008i stage 2). */
+/** Claims's claims list, a third whole artefact, on both paths (plan 261008i stage 2). */
 const SOURCES_CLAIMS_FIXTURE: SourcesClaimList = {
   version: "debate-claims/export-fixture",
   generator: "fixture-model",
@@ -171,7 +171,7 @@ const SOURCES_CLAIMS_FIXTURE: SourcesClaimList = {
 };
 
 /**
- * A stored Debate, the search's own artefact (qi-mv7wk6ap). The rollback had no
+ * A stored Reception, the search's own artefact (qi-mv7wk6ap). The rollback had no
  * `debate.json` put until 2026-10-09, so an exported article lost its debate;
  * the bundle always carried it, inside content/revision.json's row. A
  * `debate/7`-shaped one: Reception searched, claims not run.
@@ -634,7 +634,7 @@ describe("the bundle is the faithful projection", () => {
     expect(rollback).toEqual(RELATIONS_FIXTURE);
   });
 
-  it("carries Debate's claims list whole through the bundle and rollback exports", async () => {
+  it("carries Claims's claims list whole through the bundle and rollback exports", async () => {
     expect(parsed("augmentations/sources-claims.json")).toEqual(SOURCES_CLAIMS_FIXTURE);
     const rollback = JSON.parse(
       await readFile(path.join(out, SLUG, "sources-claims.json"), "utf8"),
@@ -642,7 +642,7 @@ describe("the bundle is the faithful projection", () => {
     expect(rollback).toEqual(SOURCES_CLAIMS_FIXTURE);
   });
 
-  it("carries a stored Debate through the bundle and rollback exports", async () => {
+  it("carries a stored Reception through the bundle and rollback exports", async () => {
     expect(parsed("content/revision.json").reception).toEqual(RECEPTION_FIXTURE);
     const rollback = JSON.parse(
       await readFile(path.join(out, SLUG, "reception.json"), "utf8"),

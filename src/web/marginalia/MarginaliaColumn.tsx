@@ -21,6 +21,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useId,
@@ -30,16 +31,32 @@ import {
 } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
-import type { BlockId, CitedWork, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
+import { useRootFlag } from "../root-flags.js";
+import type {
+  BlockId,
+  CitedWork,
+  Explanation,
+  Faq,
+  Ideas,
+  MarginNote,
+  QuizQuestionId,
+  TimelineEvent,
+} from "../../types.js";
 import { isContentHidden, subscribeFold } from "../fold.js";
 import { useReceptionRead } from "../useReception.js";
-import { useSituateRead } from "../useSituate.js";
-import { useExperimental } from "../useExperimental.js";
+import { useSituate } from "../useSituate.js";
+import { useMarginLiteratureAutoRun, type WhereRunnable } from "../useWhereAutoRun.js";
+
+/** The Reader's Bibliography read, as much of it as the margin's press needs. */
+export type MarginBibliography = Omit<WhereRunnable, "ensure">;
 import { SITUATE_FINDING_LABEL, sourceHost } from "../situate-dossier.js";
 import { dayOf } from "../relative-time.js";
 import { isWebUrl } from "../../urls.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
+import { useExplanationsRead } from "../useExplanations.js";
+import { ASK_EXPLANATION_IN_CHAT, explanationLabels } from "../explanation-labels.js";
+import { AskInChatButton } from "../OriginChat.js";
 import { byLineOf, CiteBlurb } from "../BibliographyPanel.js";
 import { rowWork } from "../ReceptionAndClaimsPanel.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
@@ -47,6 +64,8 @@ import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
+import { useQuizOnShow, type QuizRead } from "../useQuiz.js";
+import { QuizNote } from "./MarginQuiz.js";
 import { useTimelineRead } from "../useTimeline.js";
 import { datingWords } from "../TimelinePanel.js";
 import {
@@ -97,10 +116,24 @@ export type MarginCiteSenders = {
 };
 export const MarginCiteActions = createContext<MarginCiteSenders | null>(null);
 
+/**
+ * **What an *Explained* line can do** (plan 261028c): ask about it in the
+ * anchored passage chat, as the band's row does (Reader.tsx §
+ * `askExplanationInChat`), or open it in its band. A context for
+ * `MarginCiteActions`' reason: Reader's `marginNotes` memo must not hear about
+ * them. The column draws explanations for the owner only; null draws neither
+ * button.
+ */
+export type MarginExplanationSenders = {
+  onAsk(explanation: Explanation): void;
+  onOpen(explanationId: string): void;
+};
+export const MarginExplanationActions = createContext<MarginExplanationSenders | null>(null);
+
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
 
-/* An idea's provenance and a Debate row's relation (`RELATION_WORD`, below)
+/* An idea's provenance and a Reception row's relation (`RELATION_WORD`, below)
    come off the wire, so these tables are read through `ownLabel`
    (lib/own-label.ts). A value from a newer server is stamped as its own word,
    and the sentence explaining it is left out of the card: this copy cannot
@@ -126,6 +159,7 @@ export function MarginNotesSlot({
   onOpenAsked,
   onJump,
   onOpenFinding,
+  onOpenQuiz,
 }: {
   /** The block these notes sit beside — whose markup a note's quote is drawn from (plan 261009k). */
   blockId: BlockId;
@@ -136,8 +170,10 @@ export function MarginNotesSlot({
   onOpenAsked?: ((id: string) => void) | undefined;
   /** Follow a generated note to the exact checked words in its other passage. */
   onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
-  /** Open Sources › Investigate on one Situate finding (plan 261024o). Owner only. */
+  /** Open Sources › Where it sits on one Situate finding (plan 261024o; Investigate until plan 261025h). Owner only. */
   onOpenFinding?: ((findingId: string) => void) | undefined;
+  /** Open Learn › Quiz at one question — the prose line's press (Reader.tsx § `openQuizAt`). Owner only. */
+  onOpenQuiz?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
 }) {
   return (
     <NoteBoundary>
@@ -148,6 +184,7 @@ export function MarginNotesSlot({
         onOpenAsked={onOpenAsked}
         onJump={onJump}
         onOpenFinding={onOpenFinding}
+        onOpenQuiz={onOpenQuiz}
       />
     </NoteBoundary>
   );
@@ -316,6 +353,7 @@ function MarginNotes({
   onOpenAsked,
   onJump,
   onOpenFinding,
+  onOpenQuiz,
 }: {
   blockId: BlockId;
   notes: readonly MarginaliaNote[];
@@ -323,6 +361,7 @@ function MarginNotes({
   onOpenAsked?: ((id: string) => void) | undefined;
   onJump?: ((id: BlockId, aim?: JumpAim) => void) | undefined;
   onOpenFinding?: ((findingId: string) => void) | undefined;
+  onOpenQuiz?: ((batchId: string, questionId: QuizQuestionId) => void) | undefined;
 }) {
   useRenderCount("MarginNotes");
   return (
@@ -333,6 +372,8 @@ function MarginNotes({
             return <RelationWord key="relation" relation={note.relation} />;
           case "aside":
             return <AsideNote key="aside" note={note.note} onJump={onJump} />;
+          case "explanation":
+            return <ExplanationNote key="explanation" explanation={note.explanation} />;
           case "question":
             return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
           case "idea":
@@ -349,6 +390,8 @@ function MarginNotes({
             return <CitationNote key="citation" blockId={blockId} items={note.items} />;
           case "comment":
             return <CommentNote key="comment" items={note.items} viewer={viewer} onOpenAsked={onOpenAsked} />;
+          case "quiz":
+            return <QuizNote key="quiz" batchId={note.batchId} questions={note.questions} onOpen={onOpenQuiz} />;
           default: {
             const never: never = note;
             return never;
@@ -591,6 +634,45 @@ function FaqNote({
 }
 
 /**
+ * **A place the reader is likely to get stuck, explained** (plan 261028c) —
+ * shut, as every other mode's item is: *Explained* and the start of the
+ * passage's own words. Opened, the explanation in the AI's face, the labels it
+ * set for itself (only those that apply), *Ask in chat* and *Open in
+ * Explanations*. Every word is text, never markup: the explanation is the
+ * model's.
+ */
+function ExplanationNote({ explanation }: { explanation: Explanation }) {
+  const acts = useContext(MarginExplanationActions);
+  const labels = explanationLabels(explanation);
+  return (
+    <ShutNote
+      kind="explanation"
+      stamp="Explained"
+      tip="explanation"
+      line={`“${explanation.quote}”`}
+      lineVoice="author"
+    >
+      <div className="marg-open-item" data-explanation={explanation.id}>
+        <p className="marg-expl-text">{explanation.text}</p>
+        {labels.length > 0 && <p className="marg-expl-labels">{labels.join(" · ")}</p>}
+        {acts && (
+          <p className="marg-expl-foot">
+            <AskInChatButton
+              label={ASK_EXPLANATION_IN_CHAT}
+              className="marg-expl-ask"
+              onAsk={() => acts.onAsk(explanation)}
+            />{" "}
+            <button type="button" className="linky marg-expl-open" onClick={() => acts.onOpen(explanation.id)}>
+              Open in Explanations
+            </button>
+          </p>
+        )}
+      </div>
+    </ShutNote>
+  );
+}
+
+/**
  * **When the piece says these things happened** — Timeline's dated events,
  * beside the passage that first mentions them (plan 261003f). The date always
  * carries its year: the band says a shared year once in its head, and the
@@ -689,7 +771,7 @@ function ReceptionNote({ items }: { items: readonly MarginClaim[] }) {
  * other mode's items: the stamp of the strongest finding (notes.ts §
  * `strongestFirst`) and its note's opening, or a count. Opened, each finding's
  * note in the model's face, its sources as links out, and a quiet *From the
- * web*. *Open in Sources* lands on the finding in Investigate's dossier.
+ * web*. *Open in Sources* lands on the finding in Where it sits' dossier.
  *
  * **Every word here is text, never markup**: the note is the model's, a
  * source's title a stranger page's (SituateDossier.tsx says the same).
@@ -1063,7 +1145,7 @@ export function MarginaliaHead({
  *
  * **Gone is a class, not an unmount**, for two reasons. The stylesheet hides
  * the small-screen banner while this element exists
- * (styles/narrow-window.css § `:has(.mode-band, .marg-narrow)`), and removing
+ * (styles/narrow-window.css § `[data-marg-narrow]`, which this sets), and removing
  * it would drop that banner into the top of the article mid-read. And the
  * sentence is only made invisible, not hidden, when the clock runs out, so a
  * screen reader still finds why there are no notes, as it did before this
@@ -1075,6 +1157,9 @@ function NarrowLine({ beside }: { beside: boolean }) {
   const [gone, setGone] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const reading = useGoesByItself(TOAST_MS, () => setGone(true));
+  /* For the banner rule above: `data-marg-narrow` on `<html>` for as long as
+     this element exists, faded or not (root-flags.ts). */
+  useRootFlag("marg-narrow", true);
   return (
     <aside
       className={`marg-narrow${gone ? " is-gone" : ""}`}
@@ -1172,7 +1257,7 @@ export type MarginFeed = {
   relations: RelationsByBlock;
   /** The notes the relations call wrote (plan 261011o). */
   notes: MarginNotesList;
-  /** Situate's findings, with the experimental switch on (plan 261024o). */
+  /** Situate's findings (plan 261024o): the owner's, whatever the experimental switch says since spya-pkpqch. */
   literature: MarginLiterature | null;
 };
 
@@ -1187,19 +1272,23 @@ export const NO_OWNER_FEED: MarginFeed = {
 };
 
 /**
- * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
- * Marginalia's own relation words and notes, which are made here. A component of
- * its own so the reads happen only while Marginalia is open — the read halves
- * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full hooks, which
- * arm the automatic run and could spend (Debate is the dearest step in the
- * app). A stale list (the article moved under it) is not drawn: its blocks may
- * not be these. Owner only: a visitor's lists are in their payload. Citations
- * and comments are not read here — the Reader holds both in every mode.
+ * **The owner's ideas, FAQ, Timeline, Reception and literature findings, read**
+ * — and Marginalia's own relation words and notes, which are made here, and the
+ * literature search, which the press that turned the column on may start
+ * (`SituateMarginFeed`). A component of its own so the reads happen only while
+ * Marginalia is open — the read halves (`useIdeasRead`, `useFaqRead`,
+ * `useTimelineRead`, `useReceptionRead`), never the full hooks, which arm the
+ * automatic run and could spend (Reception is the dearest step in the app). A
+ * stale list (the article moved under it) is not drawn: its blocks may not be
+ * these. Owner only: a visitor's lists are in their payload. Bibliography and
+ * comments are not read here — the Reader holds both in every mode.
  */
 export function OwnerMarginFeed({
   slug,
   shown,
   awaitingStructure = false,
+  bibliography,
+  quiz,
   onFeed,
 }: {
   slug: string;
@@ -1212,6 +1301,14 @@ export function OwnerMarginFeed({
    * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
    */
   awaitingStructure?: boolean;
+  /**
+   * The Reader's read of the works the piece cites (it holds Bibliography in
+   * every mode), so the search a press starts can list them first when they
+   * are missing — `SituateMarginFeed`.
+   */
+  bibliography: MarginBibliography;
+  /** The owner's quiz read, shared with the prose and the band (`useQuizRead` in `OwnedArticle`). */
+  quiz: QuizRead;
   onFeed(feed: MarginFeed): void;
 }) {
   const ideasRead = useIdeasRead(slug);
@@ -1223,6 +1320,11 @@ export function OwnerMarginFeed({
      article per page load, whatever opened the column, and only while the
      notes are on screen (useRelations.ts). */
   const { relations, notes } = useRelations(slug, shown && !awaitingStructure);
+  /* **And the quiz**, on the same terms (Greg, spya-fytjtf; plan 261029c):
+     an article with none gets one the first time its owner has the notes on
+     screen. Its questions are drawn from the shared read, not handed through
+     the feed (Reader.tsx § `marginNotes`). */
+  useQuizOnShow(slug, quiz, shown && !awaitingStructure);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own
      read when its job finishes; this hears the same completion for the margin's
@@ -1237,34 +1339,102 @@ export function OwnerMarginFeed({
     timelineRead.status === "ready" && !timelineRead.stale ? (timelineRead.timeline?.events ?? null) : null;
   const claims =
     receptionRead.status === "ready" && !receptionRead.stale ? (receptionRead.reception?.claims.rows ?? null) : null;
-  /* **Situate's findings, only with the experimental switch on** (plan
-     261024o): its read is a component of its own, mounted only then, so with
-     the switch off nothing asks `/api/situate`. */
-  const { on: experimental } = useExperimental();
+  /* **Situate's findings, for every owner** (plan 261024o): behind the
+     experimental switch until 2026-10-26, when Greg asked for what Where it
+     sits found to be beside the passage as he reads (spya-pkpqch). The read
+     is a component of its own, so it can hand back none when unmounted. */
   const [literature, setLiterature] = useState<MarginLiterature | null>(null);
+  /* The explanations are not read here: the prose underlines them in every
+     mode, so Reader reads them once for both (`ExplanationsFeed` below; plan
+     261029j § 5). */
   useEffect(() => {
     onFeed({ ideas, faq, timeline, claims, relations, notes, literature });
   }, [ideas, faq, timeline, claims, relations, notes, literature, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
-  return experimental ? <SituateMarginFeed slug={slug} onLiterature={setLiterature} /> : null;
+  return <SituateMarginFeed slug={slug} shown={shown} bibliography={bibliography} onLiterature={setLiterature} />;
 }
 
 /**
- * **Situate's findings, read and never made** — `useSituateRead`, the read
- * half with no job under it, and `useStepFinished` for a search finished while
- * the column is open. A stale dossier (the article moved under it) is not
- * drawn, as no stale list is. Unmounted, it hands back none.
+ * **The owner's explanations, read and never made** — for the margin's notes
+ * and the prose's underline both (plan 261029j § 5), so Reader mounts it in
+ * every mode, for an owner with the experimental switch on, and nowhere else:
+ * with the switch off nothing asks `/api/explanations` (plan 261028c).
+ * `useExplanationsRead`, the read half with no job under it, and
+ * `useStepFinished` for a run finished while the page is open. **A stale list
+ * is not drawn** (the article moved under it); one written by an older prompt
+ * or for an older profile still is, its words checked against each block
+ * before drawing (notes.ts § `explainedBlocks`; annotate.ts §
+ * `explainedMarks`). Unmounted, it hands back none.
+ */
+export function ExplanationsFeed({
+  slug,
+  bandOpen,
+  onExplanations,
+}: {
+  slug: string;
+  /**
+   * Explanations is the mode. While it is open, its own read owns both
+   * revalidation and job completion and publishes the answer back to Reader;
+   * this feed must not issue the same GET independently (code review of
+   * 261029j). Closed, this feed hears completions for the prose and margin.
+   */
+  bandOpen: boolean;
+  onExplanations(explanations: readonly Explanation[] | null): void;
+}) {
+  const read = useExplanationsRead(slug);
+  const { refresh } = read;
+  const refreshWhileBandClosed = useCallback(() => {
+    if (!bandOpen) void refresh();
+  }, [bandOpen, refresh]);
+  useStepFinished(slug, "explanations", refreshWhileBandClosed);
+  const list = read.status === "ready" && !read.stale ? (read.explanations?.explanations ?? null) : null;
+  useEffect(() => {
+    onExplanations(list);
+  }, [list, onExplanations]);
+  useEffect(() => () => onExplanations(null), [onExplanations]);
+  return null;
+}
+
+/**
+ * **Situate's findings, and the one press that may make them.** The dossier's
+ * read (`useSituate`, which spends nothing by mounting) and `useStepFinished`
+ * for a search finished while the column is open. A stale dossier (the article
+ * moved under it) is not drawn, as no stale list is. Unmounted, it hands back
+ * none.
+ *
+ * **The press that turned the column on starts the search, if none has run**
+ * (Greg, 2026-10-28, answering q-sxfwqq: *"Let's go for A"*). This mount is
+ * the one owner of the `margin-literature` token the Dock arms on that press
+ * (activation.ts § Marginalia's row), so a reload, a pasted `?margin=1`, Back
+ * and Forward and a restored view spend nothing: none of them mints a token.
+ * A stored dossier, stale or outdated included, is never re-run here, as on
+ * *Where it sits*; the step's own allowance still applies. **Nothing shown,
+ * nothing spent**: a press on a window too narrow for the notes is dropped
+ * (`enabled`), not kept for a later widening. The works the piece cites are
+ * listed first in the same job when they are missing too, as *Where it sits*'
+ * press does, so the two doors make the same search; the press waits for the
+ * Reader's Bibliography read to answer to know which, and reads it again if
+ * it failed (useWhereAutoRun.ts § `marginLiteratureStatus`). A search already
+ * under way from either door is waited on, not asked for twice.
+ * docs/plans/261029h-the-margin-button-starts-the-literature-search.md.
  */
 function SituateMarginFeed({
   slug,
+  shown,
+  bibliography,
   onLiterature,
 }: {
   slug: string;
+  shown: boolean;
+  bibliography: MarginBibliography;
   onLiterature(literature: MarginLiterature | null): void;
 }) {
-  const read = useSituateRead(slug);
-  useStepFinished(slug, "situate", read.refresh);
-  const made = read.status === "ready" && !read.stale ? read.situate : null;
+  /* `"quiet"`: no idle poll for a margin left open. `useSituate`'s own job
+     watch refreshes the read when any search for this article finishes, so
+     no `useStepFinished` here as well (GPT Sol's MARGIN-3). */
+  const situate = useSituate(slug, "quiet");
+  useMarginLiteratureAutoRun(slug, bibliography, situate, shown);
+  const made = situate.status === "ready" && !situate.stale ? situate.situate : null;
   const findings = made?.findings ?? null;
   const searchedAt = made?.generatedAt ?? null;
   useEffect(() => {

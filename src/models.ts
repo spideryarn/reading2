@@ -556,6 +556,16 @@ export const MATTER_MODEL = "anthropic/claude-haiku-5.5";
 export const CITATION_BLURBS_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What shortlists the evidence for *Search the literature*'s read** — the
+ * `situate-triage` task (src/situate.ts, plan 261025h stage 3), held here by
+ * `PINNED_MODEL`, so it is Haiku at both powers. Chosen by measurement:
+ * docs/investigations/261025h-situate-eval-haiku-sonnet-opus.md, arms C and D.
+ * Its own constant for the reason the Haiku jobs above have theirs. On the
+ * Messages wire, which the Anthropic provider pin serves.
+ */
+export const SITUATE_TRIAGE_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes the one-line gist of a conversation** after each answer, so a
  * later conversation about the same article can see what an earlier one
  * covered (src/chat-gist.ts, plan
@@ -790,7 +800,11 @@ export type Task =
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      Article-reading like `ideas`, answering block ids, so `articleWithIds`. */
   | "relations"
-  /* The article's claims, listed for Debate's Claims to pick from —
+  /* The places a reader would get stuck, each with the missing piece —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+     Article-reading like `faq`, naming block ids and quotes, so `articleWithIds`. */
+  | "explanations"
+  /* The article's claims, listed for Claims to pick from —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. Article-reading
      like `faq`, naming block ids and quotes, so `articleWithIds`. No web search. */
   | "sources-claims"
@@ -799,8 +813,12 @@ export type Task =
      from the fenced title, headings, opening and the works it leans on — not
      the whole article, and never the reader's profile. `situate` reads the
      whole article (fenced as untrusted, so not an `ArticleStage`: its bytes
-     match no other stage's) beside everything the searches found. */
+     match no other stage's) beside everything the searches found.
+     `situate-triage` comes between them (plan 261025h stage 3): Haiku, pinned
+     whatever the article's power, reads the same fenced article and evidence
+     and names the sources worth writing from; `situate` then reads only those. */
   | "situate-plan"
+  | "situate-triage"
   | "situate"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
@@ -932,7 +950,7 @@ export type Task =
    */
   | "reception"
   /**
-   * **A reader's claim check in Debate's Claims** — the ticked claims and the
+   * **A reader's claim check in Claims** — the ticked claims and the
    * typed one, searched on the open web in one call (src/reception.ts §
    * `generateClaimCheck`; plan docs/plans/261008i-debate-claims-picked-by-the-reader.md
    * § 3). `debate`'s wire and model, its own job so the ledger files it as
@@ -981,7 +999,7 @@ export type Task =
    */
   | "upload-source-guess"
   /**
-   * **One cited work, looked into on demand** — Bibliography's *Investigate*,
+   * **One cited work, looked into on demand** — Bibliography's *Dig deeper*,
    * src/citation-investigate.ts. A streamed answer written with a few web
    * searches over the whole article, so explain's shape and explain's model;
    * its own job because one press reads the article about twice and runs its
@@ -991,7 +1009,7 @@ export type Task =
   | "citation-investigate"
   /**
    * **The cited paper's own passages, picked** — one non-streamed JSON call
-   * inside an *Investigate* press, sent the chunks of the paper code read and
+   * inside an *Dig deeper* press, sent the chunks of the paper code read and
    * confirmed (src/citation-paper-passages.ts, plan 261001a stage 3). Its own
    * job so the ledger shows what reading the paper adds to a press; no tools.
    */
@@ -1305,12 +1323,17 @@ export const TASK_TIER: Record<Task, Tier> = {
   quiz: "capable",
   faq: "capable",
   relations: "capable",
+  explanations: "capable",
   "sources-claims": "capable",
   /* Capable, both, as the spike measured them (investigation 261024b): Haiku
      read the same evidence for an eighth of the price and lost 3 of 11 quotes
      and a date. Sonnet is the provisional reader (plan 261024o, S14). */
   "situate-plan": "capable",
   situate: "capable",
+  /* On no tier in fact: `PINNED_MODEL` holds it on Haiku 5.5 at both powers,
+     so this row never picks its model. "capable" because it is on the
+     Messages wire, where a quick task is refused at load. */
+  "situate-triage": "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1424,7 +1447,7 @@ export const TASK_TIER: Record<Task, Tier> = {
  * it is Opus whatever the article's setting.
  *
  * `chat` (plan 261020q): Greg, 2026-10-19, *"Default to Opus 5.5 for Chats"*.
- * Every thread kind that bills as `chat` — chat, Learn, the tutorial, Explore,
+ * Every thread kind that bills as `chat` — chat, Learn, Explore,
  * the guide (`jobFor` in src/converse.ts). Not Candidates, which is its own
  * job. About twice Sonnet's price a turn, on our bill, not the reader's.
  *
@@ -1610,9 +1633,11 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quiz: "messages",
   faq: "messages",
   relations: "messages",
+  explanations: "messages",
   "sources-claims": "messages",
   /* A strict schema back on the Messages wire, as `sources-claims`. */
   "situate-plan": "messages",
+  "situate-triage": "messages",
   situate: "messages",
   crossrefs: "messages",
   simple: "messages",
@@ -1783,9 +1808,11 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quiz: null,
   faq: null,
   relations: null,
+  explanations: null,
   "sources-claims": null,
   /* The Messages-wire stages hand `CAPABLE_MODEL` straight through. */
   "situate-plan": null,
+  "situate-triage": null,
   situate: null,
   crossrefs: null,
   simple: null,
@@ -1846,7 +1873,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
   reception: "SPIDERYARN_RECEPTION_MODEL",
-  /* Shares Debate's override rather than adding a name: a check is pass B's
+  /* Shares Reception's override rather than adding a name: a check is pass B's
      call on the reader's claims, and a comparison run of one should move
      both. */
   "sources-claim-check": "SPIDERYARN_RECEPTION_MODEL",
@@ -1910,6 +1937,14 @@ export type ResolvedModel = {
  */
 const PINNED_MODEL: Partial<Record<Task, string>> = {
   "simple-check": "openai/gpt-5.6-luna",
+  /* **Situate's triage, on Haiku whatever the article's power** (plan 261025h
+     stage 3). Not a model held back but a cheap one chosen for this job, by
+     measurement (docs/investigations/261025h-situate-eval-haiku-sonnet-opus.md):
+     Haiku shortlisting the ~90 sources for the capable writer was no worse
+     than today at standard power (arm C) and close to a full Opus read at high
+     power (arm D), for about a cent. High power keeps Haiku here because arm D
+     is what was measured. `SITUATE_TRIAGE_MODEL` above. */
+  "situate-triage": SITUATE_TRIAGE_MODEL,
 };
 
 export function resolveModel(task: Task, power: ModelPower): ResolvedModel {
@@ -2133,6 +2168,7 @@ export type ArticleStage =
   | "quiz"
   | "faq"
   | "relations"
+  | "explanations"
   | "sources-claims"
   | "crossrefs"
   | "simple";
@@ -2278,6 +2314,14 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      evals/results/effort-vs-quality.md; the plan names the quick tier as the
      next thing to measure. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: "low",
+  /* `high`, `faq`'s: what it is paid for is reading the argument as a
+     particular reader would, closely enough to feel where they would stall and
+     to say what is missing there. Its own schema, so it shares no cached
+     article. **NOT MEASURED**, like every effort choice not yet through
+     evals/results/effort-vs-quality.md; the live comparison the plan queues
+     for 1 November is where it gets measured.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  explanations: "high",
   /* `high`, `faq`'s: what it is paid for is reading the argument closely
      enough to tell the claims it rests on from the ones it merely mentions,
      and which of those an outsider could dispute. Its own schema, so it shares
@@ -2368,6 +2412,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      body only, byte-identical to `ideas` and `faq`. `low` effort and its own
      schema, so no share. */
   relations: "ids",
+  /* Every explanation names a block id and quotes it, so the ids have to be on
+     the page — and it sends the body only, byte-identical to `ideas` and
+     `faq`. Its own schema, so no share. */
+  explanations: "ids",
   /* Every claim names a block id and quotes it, so the ids have to be on the
      page — and it sends the body only, byte-identical to `ideas` and `faq`.
      Its own schema, so no share. */

@@ -47,7 +47,8 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
     case "glossary":
     case "bibliography":
     case "ideas":
-      /* An id and a snapshot of the name; no block, no lens. */
+    case "situate":
+      /* An id and a snapshot of the name (a finding's: its passage); no block, no lens. */
       return { ...NO_ORIGIN, originMode: origin.mode, originItemId: origin.itemId, originQuote: origin.quote };
     case "cite-check":
       /* A citation's check: the work's id, the citing block, the title; no lens. */
@@ -109,7 +110,7 @@ export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin }
   }
   /* Only a quiz mark names a batch or an attempt (`chat_threads_origin_quiz_only`). */
   if (batchId !== null || attemptId !== null) return {};
-  if (mode === "glossary" || mode === "bibliography" || mode === "ideas") {
+  if (mode === "glossary" || mode === "bibliography" || mode === "ideas" || mode === "situate") {
     if (itemId === null || quote === null || blockId !== null || lens !== null) return {};
     return { origin: { mode, itemId, quote } };
   }

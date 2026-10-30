@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The Debate band, and the nine things about it that can be got wrong
+ * **The Reception and Claims band, and the nine things about it that can be got wrong
  * quietly.**
  *
  * This mode's whole design is a set of refusals, and a refusal is invisible on
@@ -284,11 +284,17 @@ function paint(
           citers: { result, retry: () => retried.push("retry") },
           claimChats: extra.claimChats ?? NO_CLAIM_CHATS,
         },
-        /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
+        /* Sources' chip row with Reception and Claims on it, so these tests
+           can read each one's number and press between them. Since plan
+           261025h the owner's row is Where it sits | Bibliography | Links
+           and these two are tools; the visitor's row still draws them, from
+           the same selectors (sources-counts.ts) the owner's tools row reads,
+           so the numbers asserted here are the numbers an owner sees there.
+           What an owner's press arms is tests/sources-chips.test.tsx's. */
         head: sourcesHead({
           view,
           onView: (next) => viewed.push(next),
-          ownerSlug: o.slug,
+          ownerSlug: null,
           reception: o.reception,
           claimList: { kind: "owner", status: claimList.status, claimList: claimList.claimList, checks: checks.checks },
           relevance: extra.relevance ?? null,
@@ -432,8 +438,8 @@ describe("Reception and Claims, each drawing its own search", () => {
     );
     const group = host.querySelector(".rcp-views");
     expect(group?.getAttribute("role")).toBe("radiogroup");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2", "Investigate"]);
-    const [, , , reception, claims] = [...(group?.querySelectorAll("[role='radio']") ?? [])];
+    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims2"]);
+    const [, , reception, claims] = [...(group?.querySelectorAll("[role='radio']") ?? [])];
     expect(reception?.getAttribute("aria-checked")).toBe("true");
     expect(claims?.getAttribute("aria-checked")).toBe("false");
     /* mode.md bans a description line under a control: what each one is goes
@@ -444,27 +450,23 @@ describe("Reception and Claims, each drawing its own search", () => {
 
   it("hands a press back as the sub-mode's word, and nothing for the one already open", () => {
     paint(owner());
-    const [, , , reception, claims] = [...host.querySelectorAll(".rcp-views [role='radio']")];
+    const [, , reception, claims] = [...host.querySelectorAll(".rcp-views [role='radio']")];
     press(reception);
     expect(viewed).toEqual([]);
     press(claims);
     expect(viewed).toEqual(["claims"]);
   });
 
-  it("arms only an owner's Reception segment press", () => {
-    paint(owner(), "reception");
-    press(host.querySelector('[aria-label="Reception, 1 source"]'));
-    expect(pendingActivation("a-piece", "reception")).not.toBeNull();
-
-    resetActivations();
-    paint(owner(), "claims");
-    press(host.querySelector('[aria-label="Reception, 1 source"]'));
-    expect(pendingActivation("a-piece", "reception")).not.toBeNull();
-
-    resetActivations();
-    paint(owner(), "reception");
-    press(host.querySelector('[aria-label="Claims, 1 source"]'));
+  /* Since plan 261025h (decision 6) nothing on the chip row buys Reception's
+     search: the owner's row has no Reception chip, and a press there arms at
+     most the citations. The search is the panel's own *Search the web*. */
+  it("arms no search from the chip row, owner or visitor", () => {
+    act(() =>
+      root.render(sourcesHead({ view: "reception", onView: (next) => viewed.push(next), ownerSlug: "a-piece" })),
+    );
+    for (const chip of [...host.querySelectorAll(".rcp-views [role='radio']")]) press(chip);
     expect(pendingActivation("a-piece", "reception")).toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
 
     paintShared(shared(), "claims");
     press(host.querySelector('[aria-label="Reception, 1 source"]'));
@@ -507,7 +509,7 @@ describe("Reception and Claims, each drawing its own search", () => {
     });
     for (const view of ["reception", "claims"] as const) {
       paint(owner({ reception }), view, "prioritised", new Map(), { relevance: "partly" });
-      expect(segments(), view).toEqual(["Bibliography", "Not cited", "Links0", "Reception2", "Claims2", "Investigate"]);
+      expect(segments(), view).toEqual(["Bibliography", "Links0", "Reception2", "Claims2"]);
       expect(host.querySelectorAll(".rcp-item"), view).toHaveLength(2);
     }
   });
@@ -914,7 +916,7 @@ describe("the empty states are different sentences, in each sub-mode", () => {
       },
     });
     paint(owner({ reception }), "reception", "prioritised", new Map(), { relevance: "directly", thread: "key" });
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0", "Investigate"]);
+    expect(segments()).toEqual(["Bibliography", "Links0", "Reception0", "Claims0"]);
     expect(handoff()?.textContent).toBe("See the 2 sources on what it claims");
     press(handoff());
     expect(relevanced).toEqual([null]);
@@ -1244,7 +1246,7 @@ describe("Cited by, under Reception", () => {
 
   it("does not change Reception's count, which is the web search's rows", () => {
     withCiters(found(39), owner({ reception: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
-    expect(segments()[3]).toBe("Reception0");
+    expect(segments()[2]).toBe("Reception0");
     expect(host.querySelectorAll(".rcp-item")).toHaveLength(0);
     expect(titles()).toHaveLength(10);
   });
@@ -2285,7 +2287,7 @@ describe("Claims, and the relevance bar", () => {
     );
     /* The claim's own count is the rows under it, and so is the segment's. */
     expect(host.querySelector(".rcp-group-count")?.textContent).toBe("2");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2", "Investigate"]);
+    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims2"]);
     expect(card()).toContain("2 excerpts on screen.");
     /* The foot counts pages behind the rows drawn, not the ones hidden. */
     expect(card()).toContain("returned evidence from 4 pages; 2 contribute to the rows shown");
@@ -2627,7 +2629,7 @@ describe("ReceptionAndClaimsPanel — threads", () => {
       expect(titles()).toEqual(["A reply"]);
       expect(host.querySelector(".rcp-thread.on")).toBeNull();
       expect(host.querySelector(".rcp-thread-showing")).toBeNull();
-      expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1", "Investigate"]);
+      expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims1"]);
       /* The positive control: the same address narrows Claims, and says so. */
       paint(owner({ reception: mixed(made) }), "claims", "prioritised", new Map(), { thread: "key" });
       expect(titles()).toEqual(["Three"]);
@@ -2658,7 +2660,7 @@ describe("Claims' list of the article's claims", () => {
 
   it("is reachable before any search is stored: the control is drawn and Claims offers List its claims", () => {
     paint(owner({ status: "none", reception: null }), "claims");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception0", "Claims0", "Investigate"]);
+    expect(segments()).toEqual(["Bibliography", "Links0", "Reception0", "Claims0"]);
     expect(text()).toContain(SOURCES_CLAIMS_LIST_NONE);
     expect(buttonsNamed(SOURCES_CLAIMS_LIST_RUN)).toHaveLength(1);
     /* Reception's pre-search screen is Reception's, not Claims'. */
@@ -2801,9 +2803,9 @@ describe("Claims' list of the article's claims", () => {
   it("counts the listed claims on the segment when there is a list, and an older search's rows when not", () => {
     /* The default debate carries one legacy claim row. */
     paint(owner(), "claims");
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims1", "Investigate"]);
+    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims1"]);
     paint(owner(), "claims", "prioritised", new Map(), { claimList: ready() });
-    expect(segments()).toEqual(["Bibliography", "Not cited", "Links0", "Reception1", "Claims2", "Investigate"]);
+    expect(segments()).toEqual(["Bibliography", "Links0", "Reception1", "Claims2"]);
     expect(host.querySelector(".rcp-views [role='radio'][aria-checked='true']")?.getAttribute("aria-label")).toBe(
       "Claims, 2 claims",
     );
@@ -3023,7 +3025,7 @@ describe("Reception's sections", () => {
   it("no longer filters on ?receptionthread=, and counts every stored row on the chip", () => {
     paint(owner({ reception }), "reception", "prioritised", new Map(), { thread: "spya-thm0a2" });
     expect(titlesIn(every())).toHaveLength(3);
-    expect(segments()[3]).toBe("Reception3");
+    expect(segments()[2]).toBe("Reception3");
     expect(card()).toContain("3 sources found; Every page lists all of them.");
     expect(card()).not.toContain("on screen.");
   });

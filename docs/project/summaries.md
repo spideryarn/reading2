@@ -93,7 +93,7 @@ read *Brief and Fuller* for *the three* wherever it is about what the reader is 
 >
 > — Greg, 2026-10-04 (answering Q-simple-level, relayed by the Overseer)
 
-The `simple` step writes **Brief and Fuller, and nothing else**. From 2026-10-03 to 2026-10-04 it
+The `simple` step (it keeps that name, and `src/simple-summary.ts` with it, on purpose although the view is now Brief: see "The names stayed" below) writes **Brief and Fuller, and nothing else**. From 2026-10-03 to 2026-10-04 it
 still wrote the middle level, Simple, which no reader was shown: every write paid for a model call
 and a fidelity check nobody read, and because the step stores every level or none, a Simple that
 failed took Brief and Fuller with it.

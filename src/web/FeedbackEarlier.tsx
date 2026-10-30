@@ -120,6 +120,7 @@ import { AddendumBox, addendaShown, isAddendum, type ReportAddenda, useReportAdd
 import { FeedbackSendBox } from "./FeedbackSendBox.js";
 import { apiFetch } from "./lib/api.js";
 import { Link } from "./Link.js";
+import { TextWithMockups } from "./MockupsInText.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { parseRoute, readHref } from "./router.js";
 
@@ -1055,6 +1056,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
 const KIND_WORD: Record<FeedbackKind, string> = {
   problem: "Problem",
   suggestion: "Suggestion",
+  discussion: "Discussion",
 };
 
 const SHOW_WORD: Record<EarlierFeedbackShow, string> = {
@@ -1785,11 +1787,19 @@ function ThreadView({
           </span>
         </p>
         <h4 className="fb-question-title">{question.title}</h4>
-        <p className="fb-question-text">{summary}</p>
+        <TextWithMockups
+          text={summary}
+          className="fb-question-text"
+          stateKey={`${question.id}:summary`}
+        />
         {details === null ? null : (
           <details className="fb-question-more">
             <summary>Details</summary>
-            <p className="fb-question-text">{details}</p>
+            <TextWithMockups
+              text={details}
+              className="fb-question-text"
+              stateKey={`${question.id}:details`}
+            />
           </details>
         )}
         {question.report === null || question.report.body === null ? null : (
@@ -1861,7 +1871,7 @@ function ThreadView({
  * sight it is hidden rather than unmounted, so an open thread's reply box
  * keeps its microphone's words through a look at another filter or the Write
  * tab. The question's words are a model's and are drawn as text
- * (styles/voices.css gives them the model's face); the reply is the admin's own.
+ * (voices.css gives them the model's face); the reply is the admin's own.
  */
 export function EarlierThreads({
   questions,
@@ -1940,6 +1950,23 @@ export function ThreadFootPager({
 /** How many threads wait on a decision: the shortcut's number. */
 export function waitingThreads(questions: readonly ThreadQuestion[]): number {
   return questions.filter((question) => question.state === "waiting").length;
+}
+
+/**
+ * **The number beside the Feedback button, before the box is opened**
+ * (Greg, spya-wwyw8y): the dialog's own opening read of *Needs a decision*,
+ * counted by `waitingThreads`, so the trigger and the shortcut inside cannot
+ * disagree. `null` on any failure, or a server without the admin route: then
+ * the trigger shows no number rather than a wrong one. Admin only; the caller
+ * decides that (FeedbackButton.tsx § `FeedbackHost`).
+ */
+export async function readWaitingCount(): Promise<number | null> {
+  try {
+    const answer = await read({ detail: "admin", show: "waiting" });
+    return typeof answer === "object" && answer.detail === "admin" ? waitingThreads(answer.page.questions) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -159,6 +159,7 @@ const PROMISES: Record<string, string> = {
      261020a). Same box as Profile's: ⌘/Ctrl+Enter saves, never plain Enter. */
   "AddPage.tsx › add-about-you": "newline",
   "SkimPurpose.tsx › skim-purpose-input": "newline",
+  "MarginQuiz.tsx › Your answer": "newline",
   "QuizPanel.tsx › Your answer": "newline",
 };
 

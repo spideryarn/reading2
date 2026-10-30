@@ -25,7 +25,7 @@ way: same prompt, same tools.
 > — Greg, 2026-10-04 (spya-hyfqkq), same plan
 
 Both are quoted in full at the top of that plan. Three later answers shape what is built. On
-Glossary and Citations the chat came first as a second button beside Dig deeper: *"let's start with
+Glossary and Bibliography the chat came first as a second button beside Dig deeper: *"let's start with
 adding the "Ask in chat" button"* (Greg, 2026-10-06, [261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md)).
 The press is the Send: *"When I click "ask in Chat" anywhere, automatically submit the input"*
 (Greg, 2026-10-06, [261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). And then Dig
@@ -40,6 +40,7 @@ remains.
 |---|---|---|---|
 | Sources › Claims | each claim's heading (icon only) | [`ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) § `ClaimsList` | [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat) |
 | Sources › Investigate | the question box and each suggested question (a *lens*: the words, no item); its claim and work rows use Claims' and Bibliography's senders | [`InvestigatePanel.tsx`](../../src/web/InvestigatePanel.tsx) § `InvestigatePanel` | [reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle) |
+| Sources › Where it sits | each finding of the literature search, beside its passage (since 2026-10-25, plan 261025h: an id-shaped origin, `situate`, the finding's id and its passage; before then a lens, which such a chat still is); and its overview, beside the overview (since 2026-10-26, plan 261026g: the same origin, with an overview id, `so-` and the dossier's time; its way back lands on the summary box) | [`SituateDossier.tsx`](../../src/web/SituateDossier.tsx) § `Finding`, `OverviewChat` | [sources.md § Where this piece sits](sources.md#where-this-piece-sits) |
 | Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
 | Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work) |
@@ -160,7 +161,7 @@ to go back to: the conversation is what Investigate takes you back to. Arriving 
 otherwise opens the newest one (Greg, spya-nhwy3d;
 [261021b](../plans/261021b-investigate-takes-you-back-to-your-conversation.md)).
 
-**A focus** is the one-shot that Citations had first (`CiteFocus`), now
+**A focus** is the one-shot that Bibliography had first (`CiteFocus`), now
 [`item-focus.ts`](../../src/web/item-focus.ts) § `ItemFocus` and `useLandOnItem`, one piece of
 state per band in `Reader`. Once the row (`data-term-id`, `data-citation-id`, `data-idea-id`,
 `data-claim-key`) is drawn, the band centres it in the list's own scroller — never the page — and
@@ -190,15 +191,15 @@ In the order you would do them:
    what is missing. Miss it and the first press gets a 400 from the route.
 3. **`sameOrigin`**, same file: how the item finds its chat again. **Loud** (`never`).
 4. **The database.** [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`
-   lists the allowed words (today `debate`, `summary`, `glossary`, `bibliography`, `ideas`, and
-   `citations`, Bibliography's word until 2026-10-09, still admitted until plan 261009w's contract
-   migration). **Loud**:
+   lists the allowed words (today `debate`, `reception`, `sources-claims`, `summary`, `glossary`,
+   `bibliography`, `ideas`, `quiz`, `cite-check`, `situate`, and `citations`, Bibliography's word
+   until 2026-10-09, still admitted until plan 261009w's contract migration). **Loud**:
    a word not listed is refused on insert, which the reader sees as a failed first question.
-   `chat_threads_origin_item` names `glossary`, `bibliography` (and `citations`) and `ideas` one by
-   one. **Silent**: a new
+   `chat_threads_origin_item` names `glossary`, `bibliography` (and `citations`), `ideas` and
+   `situate` one by one. **Silent**: a new
    id-shaped mode left out of it may store half a shape, which then reads back as no origin
    (step 5). Both are a migration: [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines);
-   copy `drizzle/20261009085926_chat_thread_origin_ideas.sql`, which is the latest.
+   copy `drizzle/20261025183854_chat_thread_origin_situate.sql`, which is the latest.
 5. **The columns, both ways.** [`src/thread-origin.ts`](../../src/thread-origin.ts).
    `originColumns` is **loud** (`never`). **`originFromColumns` is silent, and this is the one to
    remember**: it reads a string out of the database, reads a retired word as its successor
@@ -235,7 +236,7 @@ In the order you would do them:
     ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) and `OriginChatMark`, one or the
     other, passed through the owner's arm of `access`. The icon rule is [icons.md § A chat is two bubbles](icons.md#a-chat-is-two-bubbles).
 11. **The tests to copy.** `tests/thread-origin-way-back.test.ts` (the `describe.each` over
-    `glossary`, `bibliography` and `ideas`: `sameOrigin`, and **the columns round trip that covers
+    `glossary`, `bibliography`, `ideas` and `situate`: `sameOrigin`, and **the columns round trip that covers
     step 5**); `tests/chat-origin-route.test.ts` (the route, the CHECKs, the export);
     `tests/chat-origin-transaction.test.ts`'s `describe.each` (a renamed snapshot, another item,
     another mode); `tests/chat-handoff.test.ts` (the fence, and a long name cut);
@@ -259,5 +260,5 @@ In the order you would do them:
   (the design, D1 to D5, and Greg's answers to its four questions),
   [261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)
   (the lens), [261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md)
-  (Glossary and Citations), [261006j](../plans/261006j-ask-in-chat-sends-the-question.md) (the
+  (Glossary and Bibliography), [261006j](../plans/261006j-ask-in-chat-sends-the-question.md) (the
   press sends).

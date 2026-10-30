@@ -36,7 +36,7 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 - [§ What you can do to a card](#what-you-can-do-to-a-card) — the buttons, archive and Undo, rename, shelf tags, the tooltip, and why a button is disabled rather than hidden
 - [§ Finding an article](#finding-an-article-and-finding-a-passage-in-one) — the search box, passages, topics, and archived hits
 - [§ Sorting the shelf](#sorting-the-shelf) — sort order, cards versus table, hidden columns, "a first few then ask", TanStack Table
-- [§ What a card says, and why](#what-a-card-says-and-why) — Shared badge, unread papers, where the numbers come from, the title fallback
+- [§ What a card says, and why](#what-a-card-says-and-why) — Shared badge, how much you have read, unread papers, where the numbers come from, the title fallback
 - [§ Adding an article](#adding-an-article-the-box-submits-now) — the add box (the queue itself is ingest-queue.md)
 - [§ The free-allowance box](#the-free-allowance-box) — what a free reader sees under the add box
 - [§ `meta.json`](#metajson-and-the-articles-identity) — the article's title, byline and source, and where they live now
@@ -648,12 +648,17 @@ just above the list of articles."* The order the page renders in is now **add bo
 errors and Undo → search → `ShelfControls` → the "n of m" count → the list**
 ([`Library.tsx`](../../src/web/Library.tsx)).
 
-**The box has the focus when the shelf arrives**, since 2026-09-29 — Greg: *"let's put the focus by
-default on the search box."* Decided once, on mount, and not when the primary pointer is a finger
-(the on-screen keyboard would cover the shelf), when the page arrived with a `?q=`, when something
-else already has the focus, or when the box is not on screen (Back can mount the shelf scrolled).
-`takesFocusOnArrival` in `Library.tsx` has the reasons;
-[260929g](../plans/260929g-shelf-search-focus-and-metadata-chord.md) § Part A has the cost.
+**The add box has the focus when the shelf arrives, not the search box:**
+
+> By default, put the focus in the add box, not the search box.
+>
+> — Greg, 2026-10-26, `spya-nmx5ga`
+
+Decided once, on mount, and not when the primary pointer is a finger (the on-screen keyboard would
+cover the shelf), when the page arrived with a non-empty `?q=` (then nothing is focused), when
+something else already has the focus, or when the box is not on screen (Back can mount the shelf
+scrolled). `takesFocusOnArrival` in `AddArticle.tsx` has the reasons;
+[261027a](../plans/261027a-the-shelf-focuses-the-add-box-on-arrival.md) has the history and cost.
 
 **It must not look like the add box above it**, since 2026-10-11:
 
@@ -664,8 +669,8 @@ else already has the focus, or when the box is not on screen (Back can mount the
 
 So the two are different shapes: the add box is the wider card on the left (`max-w-2xl`), with a
 heading in the foreground colour and a link icon at the start of its field; the search box is
-narrower and on the right, with its magnifier, and keeps a step on the left even on a phone. And
-because the search box has the focus on arrival, a link pasted into it is offered to the add box —
+narrower and on the right, with its magnifier, and keeps a step on the left even on a phone. A link
+pasted into the search box is offered to the add box —
 *That's a link. Add it to your shelf?* — through the same `/add/<url>` as Add, on a press only.
 `linkToAdd` in `Library.tsx` is the rule: what `slugFromUrl` accepts, one token, with a scheme or a
 path, so `nature.com` stays a search.
@@ -1174,6 +1179,51 @@ came out of GPT Sol's review of the built code, 2026-09-04; the argument for eac
 [`src/store/public-library.ts`](../../src/store/public-library.ts) and
 [security-map.md](security-map.md#and-since-2026-09-04-there-is-a-second-ownerless-query-which-enumerates).
 
+### How much of it you have read
+
+Greg, asked whether each card should show the masthead's how-much-read pie
+([q-y78eth](../user-feedback/questions/q-y78eth.md)), 2026-10-25:
+
+> 1A
+
+So **every card shows the same pie as the top of the article**, right after "~N min", and the table
+shows it in the title cell after the minutes: a quarter for started, half, three quarters for most,
+a full disc for finished, nothing under 5%. It is `ReadSoFarMark`, with the masthead's words and
+card, and the bands are `readBand` in [`read-filter.ts`](../../src/web/read-filter.ts); nothing about
+it is restated for the shelf. The masthead's side, and why finished starts at 80%, is
+[reading-time.md](reading-time.md) and plan
+[261025j](../plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md); the shelf's is plan
+[261025l](../plans/261025l-shelf-cards-show-the-how-much-read-pie.md).
+
+**Worked out on the server, in one statement for the page.** `LibraryEntry.readBand`, sent only by
+the owner's browser shelf (the public shelf is another query and another DTO), absent for no pie.
+The public health check, MCP's smaller library response and an administrator viewing as the reader
+all skip the progress statement as well as the field (`ListOptions.readBands`).
+The share's denominator, which blocks count once folded front and back matter is left out, needs
+every block's text to work out, so it is **cached per article** in `read_so_far_words` and the
+shelf reads the cache beside the seconds
+([`src/store/read-so-far-basis.ts`](../../src/store/read-so-far-basis.ts)).
+
+**Three rules keep the shelf's pie the masthead's:**
+
+- **The cache has a basis**, a hash of every input the fold reads (revision, matter, title, byline,
+  authors, rename, slug) and of the rules (`READ_SO_FAR_RECIPE`, the sanitiser, the matter
+  versions a read accepts). A row whose basis is not the current one is ignored, so **a stale cache
+  is a missing pie, never a wrong one**. Changing the fold rules means bumping the recipe;
+  `tests/read-so-far-basis.test.ts` fails until you look.
+- **Only the reading-time flush writes it**, through the owner's own `loadArticle`, and only when
+  the basis moved (`refreshShelfWords` in
+  [`src/store/pg-reading-time.ts`](../../src/store/pg-reading-time.ts)). Never the shelf's GET,
+  which the unauthenticated health check also calls. Articles read before 2026-10-25 get theirs from
+  `scripts/read-so-far-backfill.ts`, or from the next minute of reading.
+- **A kept shelf never draws one.** The copy painted before the server answers, and the only copy
+  offline, has the band stripped when it is saved (`withoutReadBands` in
+  [`cached-shelf.ts`](../../src/web/lib/cached-shelf.ts)); the read boundary strips one from legacy
+  copies saved before that rule existed. A pie from yesterday's answer would lie.
+
+The shelf's pie therefore lags the masthead's by up to a minute of reading, the flush's interval,
+plus a shelf load.
+
 ### A paper not read through yet
 
 > Each paper should be shown on the shelf as normal, but indicate in the UI that it hasn't been
@@ -1386,7 +1436,7 @@ run with two accounts against Postgres:
 article lookup, deletion, public resolution, usage, cheap-import duplicates, share links and AI
 cost attribution were each watched going red when removed
 ([261007f § Progress](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
-The pasted-link refusal is pinned in `tests/own-reading-page.test.ts`; Citations ordering is pinned
+The pasted-link refusal is pinned in `tests/own-reading-page.test.ts`; Bibliography ordering is pinned
 in `tests/cited-in-spideryarn.test.ts`.
 
 ## When this becomes Postgres

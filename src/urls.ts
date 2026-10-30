@@ -91,6 +91,9 @@ export const ADMIN_COSTS_PATH = "/admin/costs";
 /** **Every article, and moving one to another account**: the router's `ADMIN_ARTICLES_HREF`. Plan 261011n § D4. */
 export const ADMIN_ARTICLES_PATH = "/admin/articles";
 
+/** **The mockups agents make for Greg's decisions**: the router's `ADMIN_MOCKUPS_HREF`. Plan 261028b, Stage 3. */
+export const ADMIN_MOCKUPS_PATH = "/admin/mockups";
+
 /**
  * **Where this article lives on Spideryarn** — the link back, from anywhere.
  *
@@ -440,7 +443,7 @@ export function hostOf(url: string): string {
  *
  * Wrong in the over-matching direction is what costs something. In chat it is
  * `read_web_page` telling the model a page is "already open" when it is a
- * different page; in Debate it drops a legitimate annotation from
+ * different page; in Reception it drops a legitimate annotation from
  * `returnedSources` and files its row under `selfSource`.
  *
  * **It lived in src/chat-tools.ts until 2026-09-05**, and moved here unchanged

@@ -82,14 +82,14 @@ export interface FindNote {
   message: string;
 }
 
-/** The part of an *Investigate* answer that has arrived — never on the row. */
+/** The part of a *Dig deeper* answer that has arrived — never on the row. */
 export interface InvestigateDraft {
   id: string;
   text: string;
 }
 
 /**
- * Why the last *Investigate* stopped, on the row it was pressed on, and what
+ * Why the last *Dig deeper* stopped, on the row it was pressed on, and what
  * was stored there when it was pressed. No client surface reads this state
  * since the button went in plan 261009k; it remains with the dormant verb.
  */
@@ -121,16 +121,16 @@ export interface InvestigateFailure {
 export interface CitationDig {
   /** What the last press's lookup said when it found no page — and on which row. */
   findNote: FindNote | null;
-  /** The work whose *Investigate* is running, or null. One at a time. */
+  /** The work whose *Dig deeper* is running, or null. One at a time. */
   investigating: string | null;
   /** Which step that press is on: `finding` the work, then `reading`. Null before the first frame. */
   investigateStage: InvestigateStage | null;
   /** The words so far. **Never on the row**: only `done`, sent after the save, puts one there. */
   investigateDraft: InvestigateDraft | null;
-  /** The last *Investigate* that did not end in a stored answer. */
+  /** The last *Dig deeper* that did not end in a stored answer. */
   investigateFailed: InvestigateFailure | null;
   /**
-   * ***Investigate*** — plan 260930a, and *Look it up* as its first step since
+   * ***Dig deeper*** — plan 260930a, and *Look it up* as its first step since
    * plan 260930d. The lookup's answer is patched onto the row as `/find`'s was
    * (its link fields, only on a searched row, then a re-read attaches the
    * lookup); the streamed answer is kept per row by the server and attached at
@@ -246,12 +246,12 @@ export interface UseBibliography extends CitationDig, CitationWebNoteSearch {
  * Sol review on 2026-09-08. `useStepJob` subscribes through `useJobs`, and a
  * subscriber cannot *wake* the job engine but does hold it to its eight-second
  * idle cadence once anything has started it. And `useAutoRun`'s owner lives for
- * the *hook's* mount, so an owner mounted up here could claim a Citations
+ * the *hook's* mount, so an owner mounted up here could claim a Bibliography
  * press, watch the reader leave the band, and spend the token when the GET
  * finally settled — against `activation.ts`'s rule that a press belongs to the
  * band on screen.
  *
- * **The GET is unconditional.** Until 2026-10-09 Citations was behind the
+ * **The GET is unconditional.** Until 2026-10-09 Citations (now Bibliography) was behind the
  * experimental switch, and the tempting saving was to skip this request for
  * readers who could not see that mode. It did not work: `SourcesBand`
  * has to read the list somehow, so either it keeps a read of its own — two
@@ -341,7 +341,7 @@ export interface BibliographyRead extends CitationDig, CitationWebNoteSearch {
   /** Hide lookup-derived fields while a replacement lookup is in flight. */
   detachDerived(id: string): void;
   /**
-   * **The second narrow write**, for *Investigate*'s `done` (plan 260930a):
+   * **The second narrow write**, for *Dig deeper*'s `done` (plan 260930a):
    * the stored investigation onto the row with that id, and nothing else of
    * it. The caller follows it with `refresh()`, so the server's attach-at-read
    * rule (the context hash) stays the authority, exactly as for *Look it up*;
@@ -502,7 +502,7 @@ export function useBibliographyRead(slug: string): BibliographyRead {
   const [findNote, setFindNote] = useState<FindNote | null>(null);
 
   /**
-   * ***Investigate*** one work — plan 260930a, and the glossary's *Check the
+   * ***Dig deeper*** on one work — plan 260930a, and the glossary's *Check the
    * web* (useGlossary.ts § `look`) nearly line for line, because the server
    * half is `streamTermLookup`'s shape and the promises are the same:
    *

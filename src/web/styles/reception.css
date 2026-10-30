@@ -7,7 +7,7 @@
    `.gloss-quiet` sets, on the same element and at equal specificity, so source
    order settles it and nothing else does. */
 
-/* --------------------------------------------------------- § debate mode ----
+/* --------------------------------------------------------- § Reception and Claims ----
    The fourteenth mode, and the only band whose content is not in the article.
    `.rcp` is `.gloss` with a class beside it, like `.timeline` and `.ideas`, so
    the band shell, the head, the run button, the stale banner, the counts and
@@ -399,16 +399,162 @@
   .investigate-yours-more { min-height: max(40px, 2.5rem); }
 }
 
-/* **Where this piece sits** — Investigate's dossier (SituateDossier.tsx, plan
-   261024o). Group heads and the source quote reuse Reception's `.rcp-group-head`
-   and `.rcp-quote`; what is here is placement, and the few parts with no
-   sibling to borrow from. */
-.situate-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
-.situate-experimental { font-weight: 400; letter-spacing: 0.04em; }
+/* **Sources › Where it sits** (WhereItSitsPanel.tsx, plans 261025h and
+   261026g): a head line, the literature search's dossier, *Go further*, then
+   *Papers that cite it* and *What it builds on*. Each section is spaced as Investigate's
+   are. The two lists stack when the piece's year says which leads
+   (`data-where-order`), and sit side by side with no year, each asking for
+   16rem before it shares its line, so a narrow band stacks them anyway
+   (docs/project/narrow-windows.md). A tool's head carries
+   *Where it sits › the tool's name* after the chip row (`.where-crumb`). */
+.where-section { padding: 0.2rem 0.7rem 0.35rem; }
+.where-head { padding-top: 0.15rem; }
+.where-headline {
+  margin: 0.3rem 0.7rem 0.1rem;
+  color: var(--ink);
+  font-size: var(--type-item);
+  font-weight: 600;
+}
+/* `.gloss-quiet`'s padding and size are for a band's empty sentence; under a
+   heading here it is a caption (plan 261026g: it drew large and indented). */
+.where-section > .where-what { margin: 0 0 0.25rem; padding: 0; font-size: max(var(--text-min), 0.8rem); }
+.where-lists { display: flex; flex-direction: column; }
+.where-lists-side-by-side {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+}
+.where-before-list { margin: 0; padding: 0; list-style: none; }
+.where-before-list > li { display: flex; align-items: baseline; gap: 0.3rem; }
+.where-before-list > li > .where-work { flex: 1; min-width: 0; }
+.where-work-out { flex: none; color: var(--ink-faint); }
+.where-work-out:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .where-work-out:hover { color: var(--highlight-ink); }
+}
+.where-work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.4rem;
+  width: 100%;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.82rem);
+  text-align: left;
+  cursor: pointer;
+}
+/* A row of *What it builds on* opens its row in Bibliography, so its words
+   are drawn as a link, in the dossier's link colour (`.situate-source-link`):
+   the title in the author's face, the by-line quieter beside it. */
+.where-work-title { min-width: 0; overflow-wrap: anywhere; color: var(--highlight-ink); }
+.where-work-by { color: var(--ink-faint); }
+.where-work:focus-visible,
+.where-back:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* **Go further** (plan 261026g § Stage 3): under the dossier, each tool a
+   button in the house's outline style with a line under it saying what it
+   opens and what spends there. */
+.where-tools {
+  margin: 0.2rem 0 0.3rem;
+  padding: 0.2rem 0.7rem 0.4rem;
+  font-size: max(var(--text-min), 0.82rem);
+}
+.where-tools-head { padding-top: 0.15rem; }
+.where-tool-list { display: grid; gap: 0.35rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.where-tool-list > li { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; }
+.where-tool-what { min-width: 0; color: var(--ink-faint); font-size: max(var(--text-min), 0.78rem); }
+.where-experiments-head { color: var(--ink-faint); }
+.where-experiments { margin-top: 0.4rem; }
+.where-experiments .where-tool,
+.where-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--highlight-ink);
+  font: inherit;
+  cursor: pointer;
+}
+/* **The crumb gives way, never the chips** (shot 08 of the same review: at
+   1280 *Where it sits › Ask your own question* clipped *Links 0*). The chips
+   keep their width beside a crumb; the crumb shrinks, its way back stays
+   whole, and the tool's name truncates with an ellipsis, as `.band-head h2`
+   does (mode-band.css). */
+.band-head:has(> .where-crumb) > .rcp-views { flex-shrink: 0; }
+.where-crumb {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+  margin-left: 0.6rem;
+  font-size: max(var(--text-min), 0.8rem);
+  white-space: nowrap;
+}
+.where-back { flex: none; }
+.where-crumb-tool {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-soft);
+}
+.where-crumb-tool::before { content: "›"; margin-right: 0.4rem; color: var(--ink-faint); }
+@media (hover: hover) {
+  .where-work:hover .where-work-title { text-decoration: underline; text-underline-offset: 2px; }
+  .where-experiments .where-tool:hover,
+  .where-back:hover { color: var(--ink); }
+}
+@media (any-pointer: coarse) {
+  .where-work,
+  .where-experiments .where-tool,
+  .where-back { min-height: max(40px, 2.5rem); }
+}
+/* The experiments' links after Go further, with the switch on (plan 261025h,
+   Stage 4; 261026g F6): one group, so it wraps as a unit. */
+.where-experiments { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem; }
+/* *Papers that cite it*'s Most cited | About "keyword": the shared order chips. */
+.where-after .gloss-sort-group { margin: 0.1rem 0 0.25rem; }
+
+/* **Guess first and Evidence first** (SourcesExperiments.tsx, plan 261025h,
+   Stage 4). The rows are the dossier's (`.situate-finding`, `.situate-note`,
+   `.rcp-quote`), the choices the part-switcher (`.summ-views`) and each
+   reveal a shadcn `Button`; what is here is the spacing round them. */
+.experiment-kept,
+.experiment-stale { margin: 0.2rem 0.7rem 0; }
+.experiment-prompt { margin: 0.2rem 0 0.35rem; }
+.experiment-no-dossier { display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; padding: 0.3rem 0.7rem; }
+.experiment-no-dossier > p,
+.experiment-none { margin: 0; padding: 0.3rem 0.7rem; }
+.experiment-side {
+  margin: 0.15rem 0 0;
+  color: var(--ink-faint);
+  font-size: max(var(--text-min), 0.78rem);
+}
+.experiment-source-quotes .rcp-quote { margin: 0.1rem 0 0; }
+/* A passage's choice and its reveal, on one line while they fit. */
+.experiment-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.35rem;
+}
+.experiment-reveal-all { margin-top: 0.5rem; }
+.experiment-reading { margin-top: 0.3rem; }
+.experiment-kind { margin: 0; font-size: max(var(--text-min), 0.82rem); }
+
+/* **The literature search's dossier** (SituateDossier.tsx, plan 261024o), in
+   *Where it sits* since plan 261025h. Group heads and the source quote reuse
+   Reception's `.rcp-group-head` and `.rcp-quote`; what is here is placement,
+   and the few parts with no sibling to borrow from. */
 .situate-before { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; padding: 0.2rem 0 0.4rem; }
 .situate-what,
-.situate-disclosure,
 .situate-working { margin: 0; }
+/* What leaves, under the button: needed, but quieter than what the search does. */
+.situate-disclosure { margin: 0; font-size: max(var(--text-min), 0.76rem); }
 .situate-headline {
   display: flex;
   align-items: center;
@@ -418,17 +564,102 @@
   font-size: var(--type-item);
   font-weight: 600;
 }
-.situate-overview { margin: 0 0 0.35rem; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.5; }
-.situate-group { padding-top: 0.1rem; }
-.situate-group-head { cursor: help; }
+/* **The summary in a box** (plan 261026g § Stage 2): head line, overview
+   and its chat, and the count strip — Reception's AI frame's border, so the
+   shape of the result sits in one place above the groups. */
+.situate-summary {
+  margin: 0.2rem 0 0.45rem;
+  padding: 0.4rem 0.6rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+}
+.situate-summary > .situate-headline { margin-top: 0; }
+.situate-overview { margin: 0; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.5; }
+/* A note and its chat button side by side: the overview's, and each finding's. */
+.situate-note-row { display: flex; align-items: flex-start; gap: 0.45rem; }
+.situate-note-row > p { flex: 1; min-width: 0; }
+.situate-note-row > :not(p) { flex: none; }
+.situate-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+.situate-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.8rem);
+  cursor: pointer;
+}
+.situate-count > .rcp-section-count { margin-left: 0; padding-left: 0; }
+/* A chip whose group is open says so, as a chosen sort chip does
+   (glossary.css § `.gloss-sort-btn.on`): the second persona pass could not
+   tell open from shut. */
+.situate-count[aria-expanded="true"] {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  font-weight: 600;
+}
+.situate-count:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .situate-count:hover { color: var(--highlight-ink); }
+}
+@media (any-pointer: coarse) {
+  .situate-count { min-height: max(40px, 2.5rem); }
+}
+/* The groups are Reception's folding sections (`.rcp-section`); a dotted
+   rule between them, as between its AI sections. Their meaning line is our
+   words, so the app's face, and whole, shut or open: a clamp cut it short on
+   a phone. */
+.situate-group + .situate-group { border-top: 1px dotted var(--rule); }
+.situate-group > .situate-group-head .rcp-section-gist {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+  font-family: var(--font-ui);
+  color: var(--ink-faint);
+}
 .situate-findings,
 .situate-sources,
 .situate-queries { margin: 0; padding: 0; list-style: none; }
-.situate-finding { padding: 0.35rem 0; border-top: 1px solid var(--rule); }
-.situate-finding:first-child { border-top: none; }
+/* **A passage as a card**: a left edge says where one ends and the next
+   begins, which a hairline between equal paragraphs did not. */
+.situate-finding {
+  margin: 0.15rem 0 0.45rem;
+  padding: 0.1rem 0 0.15rem 0.6rem;
+  border-left: 2px solid var(--rule);
+}
+.situate-group[data-situate-kind="challenged"] .situate-finding { border-left-color: var(--highlight-text); }
 .situate-finding-head { display: flex; align-items: baseline; gap: 0.35rem; margin: 0; }
 .situate-finding-head > .situate-quote { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .situate-finding-head > :not(.situate-quote) { flex: none; }
+/* The quote is the way to its passage: a button that reads as the words. */
+button.situate-quote {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Visibly the way to the passage, before a pointer finds it: two persona
+     passes read the quote as a label (plan 261026g § The second look). */
+  text-decoration: underline dotted;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+}
+button.situate-quote:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+@media (hover: hover) {
+  button.situate-quote:hover { text-decoration-style: solid; text-decoration-color: var(--ink-faint); }
+}
+.situate-finding-body + .situate-finding-body { margin-top: 0.35rem; padding-top: 0.3rem; border-top: 1px dotted var(--rule); }
 .situate-chat { margin-left: 0.2rem; }
 .situate-note { margin: 0.2rem 0 0; color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.45; }
 .situate-strength { color: var(--ink-faint); font-family: var(--font-ui); }
@@ -552,6 +783,19 @@ a.rcp-citer-title:hover { text-decoration: underline; text-underline-offset: 2px
 a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 .rcp-citer-title svg { display: inline; margin-left: 0.25rem; vertical-align: -1px; opacity: 0.7; }
 .rcp-citers-all { margin: 0.2rem 0 0; }
+/* **Possible citations** (plan 261026f), under a no-DOI answer with the
+   experimental switch on: Cited by's rows, set off by a left edge so they are
+   not read as Cited by itself. */
+.rcp-possible { margin: 0.2rem 0 0.4rem; padding-left: 0.6rem; border-left: 2px solid var(--rule); }
+.rcp-possible-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.5rem; margin: 0 0 0.1rem; }
+.rcp-possible-label { color: var(--ink); font-weight: 600; }
+.rcp-possible-count,
+.rcp-possible-order { color: var(--ink-faint); font-size: max(var(--text-min), 0.8rem); }
+.rcp-possible-order { margin-left: auto; }
+.rcp-possible-all { display: inline-flex; align-items: baseline; gap: 0.25rem; margin: 0.35rem 0 0.2rem; color: var(--ink-soft); }
+.rcp-possible-all:hover { text-decoration: underline; text-underline-offset: 2px; }
+.rcp-possible-all:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+.rcp-possible-all svg { display: inline; opacity: 0.7; }
 .rcp-citers .rcp-scholar { display: flex; margin-top: 0.6rem; }
 
 /* **Sources › Not cited** — papers close to the piece that its Bibliography
@@ -573,6 +817,20 @@ a.rcp-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outl
   font-size: max(var(--text-min), 0.82rem);
   line-height: 1.45;
 }
+/* *Other editions of this piece* and *By the same authors*, under the list
+   (NotCitedPanel.tsx, plan 261025h decision 3): never hidden, ruled off from
+   the list above, headed as Reception's groups are, with the count quiet. */
+.rcp-related-group { margin-top: 0.6rem; padding-top: 0.4rem; border-top: 1px solid var(--rule); }
+.rcp-related-group-title {
+  margin: 0 0 0.15rem;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: max(var(--text-min), 0.78rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.rcp-related-group-title .rcp-meta { margin-left: 0.3rem; font-weight: 400; letter-spacing: 0; }
 
 .rcp-list { margin: 0; padding: 0; list-style: none; }
 /* **A row is two lines until opened** (ReceptionAndClaimsPanel.tsx § Row, plan

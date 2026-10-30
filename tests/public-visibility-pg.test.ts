@@ -268,7 +268,7 @@ const ARTEFACTS: {
     generatedAt: "2026-02-02T00:00:00.000Z",
     elapsedMs: 1,
   },
-  /* **The stored FAQ and Citations list, since 2026-09-29** (plan 260929c).
+  /* **The stored FAQ and Bibliography list, since 2026-09-29** (plan 260929c).
      Neither stage takes a profile, so neither carries a `profileHash` and the
      `personalised` list below does not move. The one cited work's address
      carries a credential, so a real row proves the boundary drops it. */
@@ -1159,7 +1159,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
-   * **The stored FAQ and Citations list, since 2026-09-29** (plan 260929c
+   * **The stored FAQ and Bibliography list, since 2026-09-29** (plan 260929c
    * stages 2 and 3), off a real row for the reason the skim's case above
    * gives: only a row answers whether the public `select` fetches the column.
    * The cited work crosses with its address taken off — a credential in it —

@@ -12,7 +12,8 @@
  * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md is the
  * argument for each rule here.
  */
-import type { BlockId, QuizQuestion } from "../types.js";
+import { countsTowardReadingTime } from "../block-policy.js";
+import type { Block, BlockId, QuizQuestion } from "../types.js";
 import type { ReadingTimeStatus, ReadLevel } from "./reading-time.js";
 
 /**
@@ -65,16 +66,6 @@ export function questionIsRead(
   );
 }
 
-/**
- * The share of the piece read, by words, 0 to 1. Words rather than blocks, so
- * a read heading does not count for as much as a read page. Zero for a piece
- * with no words, rather than dividing by zero.
- *
- * `words` is the caller's choice of what counts, and the reading view passes
- * **body blocks only** (`isBody`, src/block-policy.ts) — the reading-time
- * clock's rule, and the blocks the quiz is written from — so a skipped
- * bibliography does not hold a reader under 100%. GPT Sol's finding 5.
- */
 /** The last of an ascending list below `at` — `findLast`, which the web target's lib does not have. */
 export function lastBefore(ascending: readonly number[], at: number): number | undefined {
   for (let i = ascending.length - 1; i >= 0; i--) {
@@ -98,6 +89,16 @@ export function readShareLabel(share: number): string {
   return `about ${pct}%`;
 }
 
+/**
+ * The share of the piece read, by words, 0 to 1. Words rather than blocks, so
+ * a read heading does not count for as much as a read page. Zero for a piece
+ * with no words, rather than dividing by zero.
+ *
+ * `words` is the caller's choice of what counts, and the reading view passes
+ * **body blocks only** (`isBody`, src/block-policy.ts) — the reading-time
+ * clock's rule, and the blocks the quiz is written from — so a skipped
+ * bibliography does not hold a reader under 100%. GPT Sol's finding 5.
+ */
 export function shareRead(levels: ReadonlyMap<BlockId, ReadLevel>, words: ReadonlyMap<BlockId, number>): number {
   let total = 0;
   let read = 0;
@@ -107,4 +108,75 @@ export function shareRead(levels: ReadonlyMap<BlockId, ReadLevel>, words: Readon
     if (isRead(levels, id)) read += w;
   }
   return total > 0 ? read / total : 0;
+}
+
+/**
+ * **How much of the piece you have read, as one of five coarse bands** —
+ * Greg, 2026-10-25 (`spya-e5477u`):
+ *
+ * > basically, I don't want to see a whole bunch of indications that I'm 97%
+ * > finished because I read most of the paragraphs but chose to skip some, or
+ * > because I read basically all of it but skipped the final section that's,
+ * > like, not that interesting for some reason. So, yeah, it can be a coarse
+ * > estimate, basically, is what I'm saying.
+ *
+ * **Finished from 80%**, deliberately forgiving up to a fifth of the counted
+ * words. Not "reached the end": that is the case his second example rules out.
+ * The masthead's pie (`ReadSoFarMark` in Masthead.tsx) and the chats' phrase
+ * (src/reading-so-far.ts § `shareWords`) both read these cut points. Their
+ * inputs can still differ because chat includes folded matter. Plan
+ * docs/plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md.
+ */
+export type ReadBand = "none" | "started" | "half" | "most" | "finished";
+
+export function readBand(share: number): ReadBand {
+  if (!(share >= 0.05)) return "none";
+  if (share < 0.375) return "started";
+  if (share < 0.625) return "half";
+  if (share < 0.8) return "most";
+  return "finished";
+}
+
+/** Each band drawn as a whole quarter of the pie, so the picture is as coarse as the words. */
+export const READ_BAND_PIE: Readonly<Record<ReadBand, number>> = {
+  none: 0,
+  started: 0.25,
+  half: 0.5,
+  most: 0.75,
+  finished: 1,
+};
+
+/**
+ * **The band for the masthead, or nothing to say.** Undefined while the
+ * reading time is off, loading or failed, so a page still loading never claims
+ * "not started" — the quiz's `status` rule (§ `ReadSoFar`).
+ */
+export function readBandFor(sofar: ReadSoFar | undefined): ReadBand | undefined {
+  if (sofar === undefined || sofar.status !== "loaded") return undefined;
+  return readBand(shareRead(sofar.levels, sofar.bodyWords));
+}
+
+/**
+ * **The words a share of the piece is measured in, in the reading view**: body
+ * blocks (`countsTowardReadingTime`), less `folded` (matter-view.ts §
+ * `foldedOnArrival`). The quiz and the masthead pie both read it, so the two
+ * say the same share.
+ *
+ * Front and back matter is shut on every arrival, and a front summary can be
+ * 1,500 words, so counting it would hold an unopened stub against a reader
+ * who has read the whole argument. Counting it only when read was the other
+ * option, and would let a read abstract count as starting the piece.
+ *
+ * **The chats' phrase does not leave it out** (src/reading-so-far.ts): the
+ * server has the blocks but not the reading view's fold rule. So the two can
+ * differ: unread folded matter lowers chat's share, while read folded matter
+ * can raise it. Plan 261025j § Deferred.
+ */
+export function readSoFarWords(
+  blocks: readonly Block[],
+  folded: ReadonlySet<BlockId>,
+): ReadonlyMap<BlockId, number> {
+  const out = new Map<BlockId, number>();
+  for (const b of blocks) if (countsTowardReadingTime(b) && !folded.has(b.id)) out.set(b.id, b.words);
+  return out;
 }

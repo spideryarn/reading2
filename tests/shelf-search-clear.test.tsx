@@ -14,7 +14,8 @@
  * the box afterwards, and Escape.
  * docs/plans/261004f-shelf-search-clear-cross-that-can-be-seen.md.
  *
- * The mocks are tests/shelf-search-focus.test.tsx's.
+ * The mocks are tests/shelf-add-box-focus.test.tsx's (once
+ * shelf-search-focus.test.tsx's), with the add box mocked out.
  */
 import { readerCss } from "./helpers/stylesheets.js";
 import { act, createElement } from "react";

@@ -20,6 +20,15 @@ for u in overseer-watchdog box-tidy; do
 done
 df -h --output=target,pcent,avail / /home | sed 's/^/  /'
 echo "== dialog scan (reads-outside-working-directories or any numbered prompt):"
-for s in $(npx tsx scripts/overseer.ts mine list 2>/dev/null); do tmux capture-pane -p -t "=$s:" 2>/dev/null | grep -qE "Allow reads outside|^ ❯ 1\. " && echo "  $s: DIALOG"; done; echo "  (scan done)"
+# A prompt only Greg may answer was the commonest thing said to him in the terminal alone (week to
+# 2026-10-28, plan 261028b), so each DIALOG says whether an open question names the session.
+for s in $(npx tsx scripts/overseer.ts mine list 2>/dev/null); do
+  tmux capture-pane -p -t "=$s:" 2>/dev/null | grep -qE "Allow reads outside|^ ❯ 1\. " || continue
+  if grep -lx "status: open" docs/user-feedback/questions/q-*.md 2>/dev/null | xargs -r grep -lwF -- "$s" | grep -q .; then
+    echo "  $s: DIALOG (an open question names it)"
+  else
+    echo "  $s: DIALOG, and no open question names it: if it is Greg's to answer, publish one (overseer.md § top)"
+  fi
+done; echo "  (scan done)"
 echo "== API-error stalls (pane shows a stopped response and an idle prompt):"
 for s in $(npx tsx scripts/overseer.ts mine list 2>/dev/null); do tmux capture-pane -p -t "=$s:" -S -30 2>/dev/null | grep -q "API Error: The response stopped arriving" && echo "  $s: API-ERROR in last 30 lines"; done; echo "  (scan done)"

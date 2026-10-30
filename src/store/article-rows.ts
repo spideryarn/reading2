@@ -38,6 +38,7 @@ import {
   citationWebNotes,
   comments as commentsTable,
   glossaryLookups,
+  readingPlace,
   readingTime,
   glossaryHiddenEntries,
   articleTags,
@@ -50,6 +51,7 @@ import {
   sourcesClaimChecks,
   revisionBlocks,
   searchRuns,
+  skimBriefs,
 } from "../db/schema.js";
 import { ownedSlug } from "./owned-slug.js";
 import { ACTIVE_REVISION_COLUMNS, type ActiveRevisionRow } from "./revision-columns.js";
@@ -202,6 +204,14 @@ export const ARTICLE_TABLE_COVERAGE = {
     },
     bundle: { exported: true, into: "augmentations/chat.json" },
   },
+  /* The owner's added Skim briefs — their sentences, and the route planned for
+     each. Reader state with the reader's own words, exported for
+     `reading_time`'s reason, planned or not: the sentence is worth having
+     before any model succeeds (plan 261027d, Sol F8). */
+  skim_briefs: {
+    rollback: { exported: true, into: "skim-briefs.json" },
+    bundle: { exported: true, into: "augmentations/skim-briefs.json" },
+  },
   search_runs: {
     rollback: { exported: true, into: "searches.json" },
     bundle: { exported: true, into: "augmentations/searches.json" },
@@ -214,7 +224,7 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: { exported: true, into: "referee-promises.json" },
     bundle: { exported: true, into: "augmentations/referee-promises.json" },
   },
-  /* Debate's checks of the claims the reader picked — reader state: their
+  /* Claims' checks of the claims the reader picked — reader state: their
      presses, the claims they typed in their own words, and what each search
      found. Exported for `reading_time`'s reason, it is the reader's own.
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3. */
@@ -238,7 +248,7 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: { exported: true, into: "citation-finds.json" },
     bundle: { exported: true, into: "augmentations/citation-finds.json" },
   },
-  /* Bibliography's *Investigate* — one kept answer per cited work, reader state
+  /* Bibliography's *Dig deeper* — one kept answer per cited work, reader state
      beside the `bibliography` artefact exactly as `citation_finds` is.
      docs/plans/260930a-citations-investigate-one-work-on-demand.md. */
   citation_investigations: {
@@ -259,6 +269,12 @@ export const ARTICLE_TABLE_COVERAGE = {
   reading_time: {
     rollback: { exported: true, into: "reading-time.json" },
     bundle: { exported: true, into: "augmentations/reading-time.json" },
+  },
+  /* The paragraph the owner last read, on any device — reader state, exported
+     for `reading_time`'s reason. Plan 261029f. */
+  reading_place: {
+    rollback: { exported: true, into: "reading-place.json" },
+    bundle: { exported: true, into: "augmentations/reading-place.json" },
   },
   /* The glossary entries the owner hid — reader state beside the glossary, as
      `reading_time` is beside the blocks, and exported for its reason: it is the
@@ -331,6 +347,23 @@ export const ARTICLE_TABLE_COVERAGE = {
            administrator alone (plan 260930k § 3). */
         "about the person than about the piece. It is quick to make again, and it " +
         "is meaningless outside the card it is drawn on.",
+    },
+  },
+  /* The shelf pie's cached denominator — plan 261025l. */
+  read_so_far_words: {
+    rollback: {
+      exported: false,
+      why:
+        "A cache of which blocks count toward how much of the article has been read, " +
+        "and their words, worked out from the blocks, the matter and the title, all " +
+        "exported. It is written again by the next minute of reading, and it says " +
+        "nothing the blocks do not.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "The same cache. The reading time it is used with is exported " +
+        "(augmentations/reading-time.json); this is only a step towards the shelf's pie.",
     },
   },
   /* An uploaded paper's guessed web address, and the claim that found it —
@@ -839,6 +872,8 @@ export interface ArticleRows {
    */
   readonly chatMentions: readonly (typeof chatMentions.$inferSelect)[];
   readonly searchRuns: readonly (typeof searchRuns.$inferSelect)[];
+  /** The owner's added Skim briefs, oldest first. Plan 261027d. */
+  readonly skimBriefs: readonly (typeof skimBriefs.$inferSelect)[];
   readonly refereeCriteria: readonly (typeof refereeCriteria.$inferSelect)[];
   /**
    * At most one row — `referee_promises.article_id` is its primary key. An array
@@ -856,6 +891,8 @@ export interface ArticleRows {
   /** One per cited work pressed: a web note or a completed *none*. Plan 261018o stage 2. */
   readonly citationWebNotes: readonly (typeof citationWebNotes.$inferSelect)[];
   readonly readingTime: readonly (typeof readingTime.$inferSelect)[];
+  /** At most one: where the owner last was. Plan 261029f. */
+  readonly readingPlace: readonly (typeof readingPlace.$inferSelect)[];
   /** The glossary entries the owner hid, by entry id. Plan 261002c § 2. */
   readonly glossaryHiddenEntries: readonly (typeof glossaryHiddenEntries.$inferSelect)[];
   /** The reader's own tags, by tag. Plan 261003d. */
@@ -1097,6 +1134,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(citationWebNotes)
     .where(eq(citationWebNotes.articleId, article.id))
     .orderBy(asc(citationWebNotes.entryId));
+  const briefs = await tx
+    .select()
+    .from(skimBriefs)
+    .where(eq(skimBriefs.articleId, article.id))
+    .orderBy(asc(skimBriefs.createdAt), asc(skimBriefs.id));
   const hiddenTerms = await tx
     .select()
     .from(glossaryHiddenEntries)
@@ -1107,6 +1149,8 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(readingTime)
     .where(eq(readingTime.articleId, article.id))
     .orderBy(asc(readingTime.blockId));
+  /* At most one row: the primary key is the article. */
+  const place = await tx.select().from(readingPlace).where(eq(readingPlace.articleId, article.id));
   const tags = await tx
     .select()
     .from(articleTags)
@@ -1139,6 +1183,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     chatMessages: messages,
     chatMentions: mentions,
     searchRuns: runs,
+    skimBriefs: briefs,
     refereeCriteria: criteria,
     refereePromises: promises,
     sourcesClaimChecks: checks,
@@ -1148,6 +1193,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     citationInvestigations: investigations,
     citationWebNotes: webNotes,
     readingTime: secondsRead,
+    readingPlace: place,
     glossaryHiddenEntries: hiddenTerms,
     articleTags: tags,
     quizAttempts: quizMarks,

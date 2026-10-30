@@ -409,7 +409,7 @@ export async function generateSourcesClaims(opts: {
   const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
   const sourceHash = inputFingerprint(blocks, tree, realMeta);
 
-  /* The body only, as `ideas`, `faq` and Debate's old pass B sent it — and the
+  /* The body only, as `ideas`, `faq` and Reception's old pass B sent it — and the
      quotes are verified against the same set, so an id from the bibliography
      is an invented one. */
   const evidence = blocks.filter(isBodyEvidence);

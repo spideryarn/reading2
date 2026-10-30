@@ -23,7 +23,7 @@
  * (computed colour and contrast on each site's actual ground) are the evidence
  * that it renders.
  *
- * The order checks also parse the six listed callers: the five OrderGroup
+ * The order checks also parse the seven listed callers: the six OrderGroup
  * rows retain the component and its chip class, and Search retains its own
  * named group and chip class. Each chip retains aria-pressed. Negative
  * controls remove the component/group or one chip's class to prove the guard
@@ -40,6 +40,7 @@ const ORDER_CALLERS = [
   { mode: "Quotes", file: "src/web/QuotesPanel.tsx", label: "Order the quotes by" },
   { mode: "Citations", file: "src/web/BibliographyPanel.tsx", label: "Order the citations by" },
   { mode: "FAQ", file: "src/web/FaqPanel.tsx", label: "Order the questions by" },
+  { mode: "Explanations", file: "src/web/ExplanationsPanel.tsx", label: "Order the explanations by" },
   { mode: "Debate", file: "src/web/ReceptionAndClaimsPanel.tsx", label: "Order the sources by" },
 ] as const;
 
@@ -268,6 +269,14 @@ describe("the order chips are one chip", () => {
   it("share one corner, the house radius", () => {
     expect(decl(base(".gloss-sort-btn"), "border-radius")).toBe("var(--radius)");
     expect(decl(base(".srch-sort-btn"), "border-radius")).toBe("var(--radius)");
+  });
+
+  /* Sources' *About "extended mind"* carries a count, and with no gap it drew
+     `About “extended mind”556` (a persona review, 2026-10-26). */
+  it("space a count from its label as the part-switcher does", () => {
+    const partGap = decl(base(".summ-view-btn"), "gap");
+    expect(partGap).toBeDefined();
+    expect(decl(base(".gloss-sort-btn"), "gap")).toBe(partGap);
   });
 
   it("share one height", () => {

@@ -129,7 +129,7 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
   found?: CitedWork["found"];
   /** The owner's *Look it up* reading (plan 260929g). A public row cannot carry one. */
   lookup?: CitedWork["lookup"];
-  /** The owner's kept *Investigate* answer (plan 260930a). A public row cannot carry one. */
+  /** The owner's kept *Dig deeper* answer (plan 260930a). A public row cannot carry one. */
   investigation?: CitedWork["investigation"];
   /** Already an article here, the reader's or a public one (plan 260930b). A public row cannot carry one. */
   inSpideryarn?: CitedWork["inSpideryarn"];
@@ -435,7 +435,7 @@ export function effectiveOrder(works: readonly ShownWork[], order: CiteOrder): C
  * **The year the date order sorts by: the one the row draws** — `workByLine`'s,
  * the article's own and the registry's only where the article gives none — so
  * the order cannot disagree with the by-line. The first four-digit year in it,
- * 1000–9999 as Debate's `readPublishedYear` (`2017a` is 2017, `2019–2020` is
+ * 1000–9999 as Reception's `readPublishedYear` (`2017a` is 2017, `2019–2020` is
  * 2019); none (`n.d.`, `in press`, a five-digit run) is undated.
  */
 export function publicationYear(work: Pick<ShownWork, "authors" | "year" | "registry">): number | null {
@@ -483,7 +483,7 @@ export function barToReveal(
  * influence order the unknown tail is itself ordered, by relevance descending**
  * (no relevance last): with unknown common since `citations/6`, a tail in
  * first-cited order would be most of the list in no order at all. `date` is
- * oldest first, undated last, as Debate's date order is (reception-order.ts), with
+ * oldest first, undated last, as Reception's date order is (reception-order.ts), with
  * the same tie-break.
  */
 export function orderWorks<W extends ShownWork>(
@@ -620,6 +620,34 @@ export function sourceOf(work: Pick<CitedWork, "url" | "linkFrom">): Source {
  * bibliographies.
  */
 export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; these are the ${MAX_CITATIONS} we judged it leans on most.`;
+
+/**
+ * **The capped note when code also listed works from the text** (plan
+ * 261027b): the list then holds more than the model's 80, so *these are the
+ * 80* would be false. GPT Sol's plan review, 3.
+ */
+export function cappedNote(modelRows: number, fromText: number): string {
+  /* The model can say `capped` over fewer than 80 rows (Synesthesia: 44), and
+     the verification can drop some, so the count is the rows', not the cap's. */
+  if (fromText === 0) {
+    return modelRows >= MAX_CITATIONS
+      ? CAPPED_NOTE
+      : `This piece cites more than ${MAX_CITATIONS} works; these are the ${modelRows} we judged it leans on most.`;
+  }
+  const more = fromText === 1 ? "1 more, found in the article's text, is" : `${fromText} more, found in the article's text, are`;
+  const works = modelRows === 1 ? "1 work" : `${modelRows} works`;
+  return `This piece cites more than ${MAX_CITATIONS} works. The model listed ${works} it judged the piece leans on most; ${more} listed by name only.`;
+}
+
+/**
+ * **A row code listed from the text** (`listedBy: "text"`, plan 261027b,
+ * feedback spya-ez2vus): the model that made the list left it out, so the row
+ * is the article's own words for it and nothing more. The label on the row; the
+ * sentence in its tooltip and in the prose card.
+ */
+export const CITE_FROM_TEXT_LABEL = "found in the text";
+export const CITE_FROM_TEXT =
+  "Found in the article's text by code: the model that made this list left it out, so this row is the article's own words for the work, with no scores and nothing on what the article uses it for.";
 
 /** What the influence bar measures, by where the number came from — the bar's tooltip and its spoken label. */
 const INFLUENCE_LABEL_LIST = "influence in its field (the model's memory)";
@@ -781,7 +809,7 @@ export function citeReadUnreadable(host: string): string {
  * unions, as `sourceOf` is. The band and the hover card both call this.
  */
 export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup" | "investigation">): string | null {
-  /* *Investigate* read the paper itself (plan 261001a stage 3): the strongest
+  /* *Dig deeper* read the paper itself (plan 261001a stage 3): the strongest
      thing we have read, so it is what the row says, dated — a kept answer is a
      snapshot. Any other paper state leaves the line to what it was before. */
   const paper = work.investigation?.paper;
@@ -895,7 +923,7 @@ interface Props {
   access: BibliographyAccess;
   /**
    * **Sources' chip row**, drawn as this band's header (SourcesMode.tsx
-   * § `SourcesViews`) — the same row the Debate panel draws for Reception
+   * § `SourcesViews`) — the same row the Reception panel draws for Reception
    * and Claims, so switching sub-mode does not move it. Since 2026-10-09; the
    * band had no head row while its order row was drawn before then.
    */
@@ -925,7 +953,7 @@ interface Props {
 
 /**
  * `Props.focus`. The shared `ItemFocus` (src/web/item-focus.ts) since plan
- * 261009k, where Glossary, Ideas and Debate took the same shape; the name
+ * 261009k, where Glossary, Ideas and Claims took the same shape; the name
  * stays for this panel's callers.
  */
 export type CiteFocus = ItemFocus;
@@ -1025,7 +1053,10 @@ export function BibliographyPanel({
             visible row relies on it (plan 261011c). */}
         {showListReadNote && <p>{listReadNote}</p>}
         {listWebNote && <p>{CITE_LIST_WEB_NOTES}</p>}
-        {bibliography.capped && <p>{CAPPED_NOTE}</p>}
+        {bibliography.capped && <p>{cappedNote(
+          all.filter((w) => w.listedBy !== "text").length,
+          all.filter((w) => w.listedBy === "text").length,
+        )}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
         <p>{CITED_BY_NOTE}</p>
@@ -1348,7 +1379,7 @@ function WorkRow({
       {owned && !work.blurb && !work.webNote && <WebNoteProgress work={work} webNote={webNote ?? null} />}
       {line.conflict &&<p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       {/* The claim accompanies exactly the verdict or answer drawn below. */}
-      {showsWhy(work, kept !== undefined) && (
+      {work.why !== undefined && showsWhy(work, kept !== undefined) && (
         <p className="cite-why">
           <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
         </p>
@@ -1356,6 +1387,11 @@ function WorkRow({
       {readNote !== null && <p className="cite-read">{readNote}</p>}
       <LookupReading work={work} />
       <p className="cite-meta">
+        {work.listedBy === "text" && (
+          <span className="cite-source cite-from-text" data-tip={CITE_FROM_TEXT}>
+            {CITE_FROM_TEXT_LABEL}
+          </span>
+        )}
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
         {web !== undefined && <WebInfluence influence={web} />}
         {influenceIsUnknown(work) && <UnknownInfluence />}
@@ -1675,7 +1711,7 @@ function CitedBy({ citedBy }: { citedBy: RegistryCitedBy }) {
  * extract's own characters, located by code — src/citation-lookup.ts §
  * `verifyQuote`); and `paperDoes.says`, the AI's sentence, only beside the
  * quote that bears it out. Quotes are `<blockquote>`s drawn as text, with
- * Debate's rule down the left (reception.css § `.rcp-quote`): a slice of a
+ * Reception's rule down the left (reception.css § `.rcp-quote`): a slice of a
  * stranger's page, which may never become markup.
  */
 /**

@@ -61,14 +61,13 @@ interface Props {
   /** The arc, keyed by the row each part starts on. Null until stage 5b has run. */
   arcByRow: Map<number, ArcCell> | null;
   /**
-   * Where the reader is — `LiveContext.focusRow`, **section-granular**.
+   * Where the reader is — `LiveContext.focusRow`, **frontier-granular**.
    *
-   * Worth knowing before you use it for anything finer: both of the page's
-   * answers to "where is the reader" stop at the section. `?at=` stores a
-   * section's first block (position.ts § sectionDepth), and `focusRow` is
-   * `sections[activeSectionIndex(...)].row` (useColumnContext.ts). So no
-   * paragraph is ever marked current here — see `PARAGRAPHS_ARE_NEVER_CURRENT`
-   * in outline.ts for why that is honesty rather than a missing feature.
+   * Structure supplies its frontier, so this is a sub-section's first row where
+   * one exists and the old section-level row elsewhere (position.ts §
+   * `structureFrontier`). It is still never an exact paragraph position, so a
+   * paragraph detail row is never marked current — see
+   * `PARAGRAPHS_ARE_NEVER_CURRENT` in outline.ts.
    */
   focusRow: number;
   /**
@@ -594,6 +593,7 @@ export function OutlinePanel({
          that test file's own preamble. jsdom does no layout, so
          `scrollHeight <= clientHeight` reads `0 <= 0` there and passes on any
          code at all. It needs a browser. docs/project/browser-testing.md. */
+      /* The `data-outline-rung` name is Outline mode's, kept because Structure's list face is that list (see the header). */
       data-outline-rung={expanded ? "expanded" : rung}
       /* And whether the list scrolls: Expanded always, the fisheye when its
          floor did not fit — `fit` above. The stylesheet keys the scroll on
@@ -730,6 +730,9 @@ function rowClass(row: OutlineRow, focused: boolean): string {
   return [
     "outln-row",
     `lvl-${row.level}`,
+    /* A paragraph is a flag, not a depth: a sub-section and a section's
+       paragraph are both level 3 (outline.ts § `OutlineRow.paragraph`). */
+    row.paragraph ? "paragraph" : "",
     `tier-${row.tier}`,
     row.here ? "here" : "",
     row.now ? "now" : "",

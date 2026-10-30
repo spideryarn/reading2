@@ -184,13 +184,14 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   quiz: "step-driven",
   faq: "step-driven",
   relations: "step-driven",
+  explanations: "step-driven",
   crossrefs: "step-driven",
   simple: "step-driven",
   /* Simple's fidelity guard, made inside the `simple` step's collector. */
   "simple-check": "step-driven",
   skim: "step-driven",
   reception: "step-driven",
-  /* Debate's claims list, one Messages call and no search (src/sources-claims.ts). */
+  /* Claims' list, one Messages call and no search (src/sources-claims.ts). */
   "sources-claims": "step-driven",
   /* A reader's claim check: one press, one web search, in request scope —
      `POST /api/sources-claims/:slug/checks` (src/routes.ts). */
@@ -227,9 +228,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
      an administrator for one article; run after the response in a collector
      of its own, attributed to the request's owner and the article. */
   "author-lookup": "interactive request work",
-  /* Bibliography's *Investigate* — src/citation-investigate.ts. A reader presses it. */
+  /* Bibliography's *Dig deeper* — src/citation-investigate.ts. A reader presses it. */
   "citation-investigate": "interactive request work",
-  /* The paper's passages, inside the same *Investigate* press. */
+  /* The paper's passages, inside the same *Dig deeper* press. */
   "citation-paper-passages": "interactive request work",
   /* The work's influence from the search's pages, inside the same press. */
   "citation-influence": "interactive request work",
@@ -239,10 +240,11 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* `search_web` inside a conversation turn — src/web-search-subagent.ts.
      Request scope, the reader's own question. */
   "web-search-subagent": "interactive request work",
-  /* Situate's plan, its searches and its read, all inside the `situate` step
-     (src/situate.ts, plan 261024o). */
+  /* Situate's plan, its searches, its triage and its read, all inside the
+     `situate` step (src/situate.ts, plans 261024o and 261025h). */
   "situate-plan": "step-driven",
   "situate-search": "step-driven",
+  "situate-triage": "step-driven",
   situate: "step-driven",
   /* *Dig deeper*'s answer, on the high-power model — src/explain.ts with a
      `dig`. Request scope, reader-triggered. */

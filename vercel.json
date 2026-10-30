@@ -16,7 +16,7 @@
   "functions": {
     "api/**": {
       "maxDuration": 800,
-      "includeFiles": "certs/**"
+      "includeFiles": "{certs/**,docs/mockups/**}"
     }
   },
 

@@ -81,6 +81,15 @@ what was done.
 > — Greg, 2026-09-07 (`spya-a353as`,
 > [note](../user-feedback/260907_1741-dock-always-visible-in-landscape.md))
 
+**And what comes back with them can remind you what you are reading.**
+
+> I think it might be useful if it also perhaps showed a bunch of stuff about the article at the
+> top, like the title and author and publication date and maybe any other metadata you think would
+> be useful, how much we read. It could just be useful as a reminder.
+>
+> — Greg, 2026-10-28 (`spya-ga6m76`,
+> [note](../user-feedback/261028_2332-a-reminder-bar-at-the-top-while-you-scroll-back.md))
+
 **Where a phone cannot show Structure beside the text, the breadcrumb is how you know where you
 are.**
 
@@ -171,6 +180,11 @@ and close-cross reports
   and stays put while its drawer or its More menu is open.
   `styles/shell.css` § the bar that leaves owns the top bar; `styles/narrow-window.css` § a small
   device owns the bottom bar. [touch.md](touch.md) owns the finger-facing intent.
+- **A reminder bar comes back with them**, since 2026-10-29: the title and the masthead's facts
+  line, fixed over the top of the reading column while the reader scrolls back, here only, once the
+  masthead has gone and with no band open; a jump puts it away. Owner's read-so-far pie included.
+  [`ReminderBar.tsx`](../../src/web/ReminderBar.tsx) says when, `styles/narrow-window.css` § a small
+  device draws it; [261029d](../plans/261029d-a-reminder-bar-at-the-top-and-add-a-selection-to-the-glossary.md).
 - **Short mode bands:** the order controls' press and overflow rules, and Quotes' head-row decision.
   [quotes.md § The orders, and the bar](quotes.md#the-orders-and-the-bar),
   [touch.md § And it did not reach the mode bands](touch.md#and-it-did-not-reach-the-mode-bands).
@@ -220,9 +234,10 @@ existing question already answers it.
 | **iOS**, by `navigator.userAgent` | `install-hint.ts`, `InstallHint.tsx` | the Add to Home Screen hint; other engine checks use different signals (`userAgentData` or `navigator.vendor`) |
 | size for a finger | `@media (pointer: coarse)` in `narrow-window.css` § a coarse pointer, and in `footnotes`, `glossary`, `bibliography`, `quotes`, `referee` | primary pointer only |
 | rules a touchscreen laptop needs too | `@media (any-pointer: coarse)` in `narrow-window.css` (the 16px field, `touch-action` on the prose), `close.css`, `summary.css`, `gutter.css` | |
-| hover-only styling and touch fallbacks | `@media (hover: hover)` / `(hover: none)` in `gutter`, `prose`, `quotes`, `glossary`, `debate`, `chat-actions` | the glossary, Quotes and gutter guards also stop iOS's post-tap `:hover` from looking selected |
-| tap against hover, in JS | `useHoverCard.ts`, `useTapReveal.ts`, `Spine.tsx`, `BlockGutter.tsx` | `pointerType`, with `detail` as the fallback: since iOS 18.2 a finger's click can say `mouse` |
-| a finger's selection | `TouchSelectionChip.tsx` | |
+| hover-only styling and touch fallbacks | `@media (hover: hover)` / `(hover: none)` in `gutter`, `prose`, `quotes`, `glossary`, `skim`, `reception`, `chat-actions` | the glossary, Quotes, Skim chip and gutter guards also stop iOS's post-tap `:hover` from looking selected |
+| tap against hover, in JS | `useHoverCard.ts`, `useTapReveal.ts`, `Spine.tsx`, `BlockGutter.tsx`; `Tooltip.tsx` § `byTouch` (a card a finger opened is not closed by hover) | `pointerType`, with `detail` as the fallback: since iOS 18.2 a finger's click can say `mouse` |
+| a finger's selection | `TouchSelectionChip.tsx` | its second button, *Add to glossary*, since 2026-10-29 |
+| the reminder bar | `ReminderBar.tsx`; `styles/narrow-window.css` § a small device; `data-scrolled-back` from `scroll.ts` | shown where the bottom bar slides |
 | the on-screen keyboard | `useVisualViewport.ts` (`--kb-inset`, `putKeyboardAway`); `index.html` (`interactive-widget`) | [feedback.md](feedback.md) has the `dvh` story |
 | the notch and the clock | `styles/tokens.css` (`--safe-*`), `safe-area.ts`, `index.html` (`viewport-fit=cover`) | |
 | the two size notices | `SmallScreenHint.tsx`, `ShelfPhoneHint.tsx`, `small-screen-hint.ts` | the installation hint is the iOS row above, not one of these two |

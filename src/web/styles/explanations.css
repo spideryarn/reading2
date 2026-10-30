@@ -1,0 +1,83 @@
+/* --------------------------------------------------------- explanations mode --
+   The places a reader is likely to get stuck, each with the missing piece.
+   `.expl` is `.gloss` with a class beside it, like `.faq`, so the band shell,
+   the empty, stale and error states, and the scroller and list (`.tl-scroll`,
+   `.tl-list`, `.tl-item`) come from glossary.css and timeline.css unchanged —
+   and the passage's solid left rule is `.gloss-part-senseHere`, the
+   article-provenance treatment, reused rather than re-declared. So are the
+   run row (`.gloss-more`), the order row (`.gloss-sort`) and the threshold
+   (`.gloss-gate`), since plan 261029e. What is here is only the inside of a
+   row: the passage, its score bars and its jump, the explanation, its labels
+   and its chat button.
+
+   Loaded after faq.css; it sets no property the sheets it borrows from set on
+   the same element. ExplanationsPanel.tsx,
+   docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+
+.expl-item { padding: 0.5rem 0; }
+
+/* No head, as FAQ. **The corner (i)'s clearance is on the top row**: the run
+   row and the order row clear it through glossary.css's `.gloss-more` and
+   `.gloss-sort` rules, and a finished list always has the run row unless it
+   is an empty one (plan 261029e, Sol F7). Otherwise the first visible status
+   or error owns it, below.
+
+   **And not on the list.** `.tl-scroll` keeps the scroller's own `0.7rem`.
+   Until 2026-10-29 it took `--band-about-room` (1.9rem, 3.6rem with the
+   profile badge) all the way down a list that scrolls, for a button that sits
+   over the first row only — Greg, spya-ay3u4w: *"it's not using the full width
+   of the sidebar, so it's wasting a bunch of space on the right-hand side"*.
+   Outline mode made and undid the same mistake (outline-mode.css). */
+.mode-band.expl.has-about > .gloss-quiet,
+.mode-band.expl.has-about > .gloss-empty,
+.mode-band.expl.has-about > .gloss-stale,
+.mode-band.expl.has-about > .read-error {
+  padding-right: calc(0.9rem + var(--band-about-room));
+}
+
+/* The article's words and the jump beside them — FAQ's passage row. */
+.expl-passage {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.gloss-part-text.expl-quote { flex: 1; min-width: 0; color: var(--ink); font-size: var(--type-quote); }
+/* The scores the row was placed by — FAQ's `.faq-scores`: the quote wraps,
+   the bars stay. */
+.expl-scores { flex: none; align-self: center; }
+.expl-jump {
+  flex: none;
+  padding: 0 0.28rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 0.4rem;
+  background: var(--surface-raised);
+  font-size: max(var(--text-min), 0.72rem);
+}
+.expl-jump:hover { border-color: var(--highlight); color: var(--highlight-ink); }
+
+/* The explanation: an explaining sentence, at that role's size. */
+.expl-text {
+  margin: 0.35rem 0 0;
+  color: var(--ink);
+  font-size: var(--type-body);
+  line-height: 1.45;
+}
+
+/* What the model said of its own answer — ours, small and quiet, the margin's
+   *AI memory, unchecked* treatment (marginalia.css § .marg-aside-memory). */
+.expl-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  margin: 0.25rem 0 0;
+}
+.expl-label {
+  font-size: var(--type-meta);
+  color: var(--ink-faint);
+}
+
+.expl-actions { margin-top: 0.3rem; }
+
+/* Only a running job's progress, under an empty list that has no run row to
+   carry it, with a rule above it — faq.css's `.faq-foot`. */
+.expl-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }

@@ -120,6 +120,10 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   order the Metadata page prints them; the word, part and section counts wait behind *Show
   counts*, shut on every load:
   [261015c](../plans/261015c-why-you-are-reading-higher-in-metadata-and-the-publication-date-in-the-masthead.md).
+- **The reminder bar** — the title and that facts line again, in brief, fixed at the top while you
+  scroll back on a small device, gone when you read on: [`ReminderBar.tsx`](../../src/web/ReminderBar.tsx),
+  [phone-and-touch.md](phone-and-touch.md),
+  [261029d](../plans/261029d-a-reminder-bar-at-the-top-and-add-a-selection-to-the-glossary.md).
 
 ### The modes in the band
 
@@ -139,14 +143,17 @@ readers never are.
 
 **Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
 FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands straight
-after Skim, at the end of the Structure–Summary–Skim run, since 2026-10-18 (Greg: *"after Skim but
-still in the same group"*, [261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md);
-it stood after Summary from 2026-10-11, [261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md),
-after Skim from 2026-10-08, and alone after the other modes until
+after Skim since 2026-10-18 (Greg: *"after Skim but still in the same group"*,
+[261018f](../plans/261018f-glossary-new-list-reason-behind-an-info-button-and-more-after-skim.md)).
+With Experimental off it ends the Structure–Summary–Skim run; with Experimental on, Diagram follows
+it, so the switch does not move More. Diagram preceded Skim until 2026-10-26, which made the switch
+move More one place right. More itself stood after Summary from 2026-10-11,
+[261011x](../plans/261011x-more-button-after-summary-in-the-bottom-bar.md), after Skim from
+2026-10-08 to 2026-10-11 and again since 2026-10-18, and alone after the other modes until
 2026-10-08, when Greg asked for it *"as part of that group, rather than out on their own"*, which
 puts a menu button inside the modes' radiogroup —
 [261008d § D2](../plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md)
-says why that was taken). Its menu opens upwards. Comments shares Marginalia's frame, after it. A mode there is as reachable as it
+says why that was taken. Its menu opens upwards. Comments shares Marginalia's frame, after it. A mode there is as reachable as it
 was — an owner's command bar lists it, its address works, and a visitor can pick it from More — and
 while it is the open mode it is drawn in the bar again, checked, so a second press still closes it.
 This is a second, separate reason a mode
@@ -171,6 +178,9 @@ asked for less motion gets the bar at once. Which mount plays it is
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around,
   and for the **Ask in chat** button on an entry (§ Asking about an entry in chat — the pattern for
   any other mode that wants one).
+- **[explanations.md](explanations.md)** — the few places a reader would get stuck, each with a
+  short explanation of the missing piece, for the margin first and a mode under *More* second.
+  Experimental and owner-only; open it for what waits on the first live run and on q-gkrkf5.
 - **[summaries.md](summaries.md)** — the piece in plain words, at two lengths (Brief, Fuller), each
   paragraph linked to its passages and checked against them, or as a thread: one three-way control.
   Its Parts and Sections outline went on 2026-10-01; Structure draws that tree.
@@ -526,7 +536,7 @@ On the owner's reading view, for an article that has a *why you're reading this*
 *Suggest what to do here*, just under *Guide chat*. Pressing it makes one small model call; the bar stays open and then
 draws, under *From why you're reading*, up to three quick searches, up to two modes and one
 question for chat about what the web says, each with a line saying why. **Every one is a row the
-bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Debate's
+bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Sources'
 lens handoff), and nothing runs without its own press, whatever the model returned. The list is
 kept for the visit in state of its own, hidden while the reader types, and dropped when *About you*
 or the reason is saved.

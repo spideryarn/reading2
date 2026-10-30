@@ -78,7 +78,7 @@ npx tsx scripts/spikes/261025h-situate-eval.ts unmask                   # judges
 | **PH** | **Haiku** | all, from the Haiku plan's own searches | Sonnet |
 
 GPT Sol's review of the plan
-(F11, F16, F17, in `docs/plans/261025h-plan-review-sol.md` on the coordinator's branch) changed the
+(F11, F16, F17, in `docs/plans/261025h-sources-plan-review-sol.md` on the coordinator's branch) changed the
 first design: it added E/F, G and PH, and it moved the judging from kept counts to scoring each
 finding. D was meant to run only if C proved useful. It was run beside G because the budget allowed
 both.
@@ -203,8 +203,9 @@ run's searches, not from the reader.
   triage, given 4,000 tokens, used 3,947 reasoning and wrote 53 tokens of answer. Haiku 5.5's
   thinking is adaptive and on by default, and production's `situate` body sends no `thinking` or
   `effort`. So a Haiku arm needs either much more room or a lower effort. The triage was re-run with
-  12,000 tokens of room and worked. This prompt also crosses Haiku's 100k-token price step ($0.50 /
-  $2.50 above it, [261009a](261009a-haiku-5-5-and-an-opus-digest-for-cheaper-models.md)): the
+  12,000 tokens of thinking headroom (15,000 total) and worked. This prompt also crosses Haiku's
+  100k-token price step ($0.50 / $2.50 above it,
+  [261009a](261009a-haiku-5-5-and-an-opus-digest-for-cheaper-models.md)): the
   failed read cost $0.10, ten times Haiku's price on the other articles.
 - **The OpenRouter key hit its monthly limit** at $8.96 of this eval's spend. Arm D on *Mythology*
   then got `403 Key limit exceeded (monthly limit)` twice. D has five articles, not six.

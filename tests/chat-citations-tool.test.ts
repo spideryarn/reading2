@@ -142,6 +142,16 @@ beforeEach(() => {
   store.calls = [];
 });
 
+describe("citationRows — a row code listed from the text (plan 261027b)", () => {
+  it("says no model described it, rather than a blank or a crash", () => {
+    const [searle] = THREE;
+    const { why: _why, relevance: _r, influence: _i, ...rest } = searle!;
+    const fromText = { ...rest, title: "Levine (2021)", listedBy: "text" as const };
+    const [row] = citationRows(list([fromText])).rows;
+    expect(row).toContain("used for: not described: code found this citation in the article's text");
+  });
+});
+
 describe("citationRows — the formatter, as arithmetic", () => {
   it("one row per work, in the artefact's order, with every part a row promises", () => {
     const out = citationRows(list(THREE));

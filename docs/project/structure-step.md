@@ -1502,7 +1502,7 @@ lines longer, plainer words) turned out to be invisible on everything he had alr
 that bump changed what a Socratic question *looks like* — from a bare *"why does X?"* to
 `<topic> — <question>? (<shape hint>)`, which was then the only line a Summary row drew.
 So a reader's older articles keep questions in a shape nothing else in the library still writes, and
-**nothing on screen says so**: unlike quotes, quiz, glossary, ideas, timeline and debate, the tree
+**nothing on screen says so**: unlike quotes, quiz, glossary, ideas, timeline and reception, the tree
 has no `outdated` chip to show them, because it has no staleness mechanism at all.
 [§ The shape it has](#the-shape-it-has-since-toc7) is what changed.
 
@@ -1515,9 +1515,13 @@ perfectly well. The cost is the one that prompted the question: a change you mak
 visible on the articles you know best, so it is hard to judge whether it was an improvement.
 
 The escape is per-article rather than library-wide: **re-run the stage from the article's metadata
-page**. That is built for the other generated modes, but `structure` is deliberately not on it
-([`src/rerun-steps.ts`](../../src/rerun-steps.ts)) — a press would strip every paragraph label — so
-a tree is re-run with `npm run structure -- <slug> --force`. Greg, in the same breath:
+page**. Since 2026-10-29 that includes Structure, under *AI processing* and as *Structure › Run
+again* in the command bar ([`src/rerun-steps.ts`](../../src/rerun-steps.ts) says why it was left
+out until then, and what changed). A press usually replays the checkpoints when nothing is new, and
+buys a new tree when how Structure is made has changed. The paragraph labels are missing until their
+follow-up job lands
+([261029l](../plans/261029l-re-run-structure-from-metadata-and-start-again-from-the-command-bar.md)).
+`npm run structure -- <slug> --force` is the same run from the CLI. Greg, in the same breath:
 
 > there should be a way to re-run any of the generated modes (either within the UI for the mode, or
 > perhaps in the Metadata section)

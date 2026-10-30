@@ -197,15 +197,16 @@ export interface Assets {
 /**
  * Why a figure marker ended up with no picture.
  *
- * The first nine are `PdfFigureFailure` in src/pdf-figures.ts, which decides
- * them on bytes and the page's text; the rest are this step's, and cannot be decided there because
- * that module never encodes, stores, reads a bucket or watches a clock. Three
+ * The first eleven are `PdfFigureFailure` in src/pdf-figures.ts, which decides
+ * them on bytes and the page's text; the rest are this step's, and cannot be
+ * decided there because that module never encodes, stores, reads a bucket or
+ * watches a clock. Three
  * of those — `not-located`, `too-complex`, `render-failed` — belong to the
  * route for a figure that is drawn rather than pictured
  * (docs/plans/260912a-figure-2-vector-figures-from-a-pdf.md).
  *
- * **The six are six because folding them together loses the fix.** Until
- * 2026-09-06 four of them were spelled `out-of-time` — a missing object, a
+ * **The remaining words stay separate because folding them together loses the
+ * fix.** Until 2026-09-06 four of them were spelled `out-of-time` — a missing object, a
  * hash-corrupt object, a PDF that would not open and a runaway guard all
  * reported as *the clock beat us* — so the one thing a reader of the manifest
  * wants (is this us, the bucket, the document, or this article's own size?)
@@ -245,6 +246,21 @@ export type PdfFigureFailure =
    * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md.
    */
   | "uncaptioned"
+  /**
+   * **The one picture on the page is a small part of a drawing, not the
+   * figure** — an icon wired into a diagram of boxes and arrows. Pairing it
+   * stored LeCun's Earth as three different figures (report spya-m40r6t).
+   * The located route is asked about the whole drawing instead.
+   * `isPartOfDrawing`, src/pdf-figure-region.ts;
+   * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
+   */
+  | "in-a-drawing"
+  /**
+   * The page's layout, or the picture's painted box, could not be read, so the
+   * picture could not be shown to be the whole figure; refused rather than
+   * risked. The same plan.
+   */
+  | "unmeasured-picture"
   /**
    * **The page was the narrow case the drawn-figure route exists for, and no
    * drawing on it could be proved to be this caption's.** One figure marker,

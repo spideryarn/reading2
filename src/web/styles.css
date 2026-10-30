@@ -21,6 +21,11 @@
  *     declarations beat every layer. Nothing would error; the utilities would
  *     simply stop working. See docs/project/web-client.md § Tailwind and
  *     shadcn, and the layer statement at the top of tailwind.css.
+ *
+ * Two hand-written sheets are NOT here, because they are not `app`: the
+ * per-voice faces (../voices.css, `layer(voices)`, above `app`) and the
+ * button tones (../button-tone.css, `layer(tone)`, above the utilities). Both
+ * are imported from tailwind.css, and their own comments there say why.
  */
 @import "../../styles/tokens.css";
 
@@ -33,6 +38,7 @@
 @import "./styles/prose.css";
 @import "./styles/spine.css";
 @import "./styles/tooltip.css";
+@import "./styles/share-pie.css";
 @import "./styles/annotations.css";
 @import "./styles/dock.css";
 @import "./styles/design-page.css";
@@ -64,13 +70,13 @@
 @import "./styles/reception.css";
 @import "./styles/bibliography.css";
 @import "./styles/faq.css";
+@import "./styles/explanations.css";
 @import "./styles/skim.css";
 @import "./styles/quiz.css";
 @import "./styles/marginalia.css";
 @import "./styles/feedback.css";
 @import "./styles/site.css";
 @import "./styles/changelog.css";
-@import "./styles/voices.css";
 @import "./styles/logo-animations.css";
 @import "./styles/reading-comfort.css";
 @import "./styles/view-as.css";

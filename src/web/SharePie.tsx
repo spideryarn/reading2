@@ -18,6 +18,8 @@
  * ("under 1%", "over 99%", from `readShareLabel`) are where that edge is told.
  * A 4%/96% clamp was in the plan and GPT Sol struck it: drawing 0.1% unread as
  * 4% is forty times too much, the picture lying in order to look legible.
+ * The one caller that hands it something coarser is ReadSoFarMark.tsx, whose
+ * quantity *is* a band and whose label says the band, not a figure.
  *
  * **The trigger is a button, so a finger and the keyboard reach the card**,
  * where `ScoreBars` is a bare span. Hover opens it for a mouse; a tap opens it
@@ -76,7 +78,6 @@ export function SharePie({
   detail?: ReactNode;
   className?: string;
 }): ReactElement {
-  const slice = pieSlice(share, R);
   const [open, setOpen] = useState(false);
   return (
     <Tooltip
@@ -96,12 +97,25 @@ export function SharePie({
         aria-label={label}
         onClick={() => setOpen(true)}
       >
-        <svg viewBox="-7 -7 14 14" width="14" height="14" aria-hidden="true">
-          <circle className="share-pie-whole" r={R} />
-          {slice.kind === "full" && <circle className="share-pie-part" r={R} />}
-          {slice.kind === "slice" && <path className="share-pie-part" d={slice.d} />}
-        </svg>
+        <PieGlyph share={share} />
       </button>
     </Tooltip>
+  );
+}
+
+/**
+ * **The pie alone: no button, no card.** For a place that only shows it — the
+ * reminder bar, which is `inert` and must hold nothing focusable
+ * (ReminderBar.tsx; GPT Sol, plan review of 261029d, F4). The `share-pie`
+ * class on a wrapper gives it the button's colours.
+ */
+export function PieGlyph({ share }: { share: number }): ReactElement {
+  const slice = pieSlice(share, R);
+  return (
+    <svg viewBox="-7 -7 14 14" width="14" height="14" aria-hidden="true">
+      <circle className="share-pie-whole" r={R} />
+      {slice.kind === "full" && <circle className="share-pie-part" r={R} />}
+      {slice.kind === "slice" && <path className="share-pie-part" d={slice.d} />}
+    </svg>
   );
 }

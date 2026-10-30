@@ -315,7 +315,7 @@ should measure it cold, the way the historical `evals/simple/fanout-spike.ts` pa
 `--cold` (since 2026-10-04 it supports only `report`; the paid arms are at `1698c6448`), or a cache left warm by
 an earlier run fakes the saving.
 
-**An open question, not chased:** Debate shows cache reads in production with no breakpoint of its
+**An open question, not chased:** Reception shows cache reads in production with no breakpoint of its
 own (its three passes open differently, so they cannot be sharing one with each other). Something
 upstream of us is caching part of its web-search loop; nobody has looked at what.
 

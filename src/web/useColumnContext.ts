@@ -1,6 +1,9 @@
 /**
  * **Which section the reader is in**, sampled live at the focus line —
- * Structure's "you are here" (StructureMode.tsx), in both faces.
+ * Structure's "you are here" (StructureMode.tsx), in both faces. "Section" is
+ * whatever list it is handed: Structure hands it its frontier, which goes down
+ * to a sub-section where the article has them (position.ts §
+ * `structureFrontier`, plan 261029a).
  *
  * The name is the gist columns': this was the live half of column context,
  * which also measured where each gist column sat on screen so a fisheye panel
@@ -48,7 +51,7 @@ import { isFoldedAway } from "./fold.js";
 const FOCUS_LINE = 0.4;
 
 export interface LiveContext {
-  /** The row under the focus line — a section's first row, never finer. */
+  /** The first row of the supplied item under the focus line. */
   focusRow: number;
 }
 
@@ -118,13 +121,21 @@ export function useColumnContext({ sections, enabled, layoutKey, holdMs = 0 }: O
          starts on the masthead's echo, hidden with its section on screen,
          and a section starting on a shut stretch's stub or behind it is on
          screen too, at its stub or its first row after (fold.ts). */
-      const focusRow =
-        sections[
-          activeSectionIndex(tops, focusLine, (i) => {
-            const s = sections[i];
-            return s !== undefined && isFoldedAway(s.blockId);
-          })
-        ]?.row ?? 0;
+      const active = activeSectionIndex(tops, focusLine, (i) => {
+        const s = sections[i];
+        return s !== undefined && isFoldedAway(s.blockId);
+      });
+      const first = sections[0];
+      /* A projection may honestly begin after row zero: a malformed stored tree
+         renders visibly short, and Structure's frontier omits the root-only
+         front matter rather than inventing a section for it. `activeSectionIndex`
+         normally clamps above the first entry, which would mark that later part
+         while the reader was still in uncovered matter. Row zero is the honest
+         focus there; no projected part contains it, so both faces stay unmarked.
+         A normal projection starts at zero and keeps the old clamp. */
+      const beforePartialProjection =
+        active === 0 && first !== undefined && first.row > 0 && (tops[0] ?? Number.POSITIVE_INFINITY) > focusLine;
+      const focusRow = beforePartialProjection ? 0 : (sections[active]?.row ?? 0);
       /* A jump starting or ending is somebody pressing something: never held. */
       const jumped = jumpPending;
       jumpPending = false;

@@ -1,30 +1,32 @@
 // @vitest-environment jsdom
 /**
- * **Sources › Investigate's *Where this piece sits*** — the dossier the
- * `situate` step writes, drawn at the top of Investigate for the owner with the
- * experimental switch on. Plan
+ * **The literature search in Sources › *Where it sits*** — the dossier the
+ * `situate` step writes, drawn in *Where it sits* for every owner since plan
+ * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md
+ * (at the top of Investigate, behind the experimental switch, before). Plan
  * docs/plans/261024o-sources-situate-a-paper-in-the-literature-hands-free-with-margin-notes.md
- * § The dossier, at the top of Investigate; § Stages, 2.
+ * § The dossier; § Stages, 2.
  *
  * - The words and the order, without React (situate-dossier.ts): the head
  *   line, the groups in the reader's order with counts, a finding's chat
- *   question, the fold's summary.
- * - The section (SituateDossier.tsx through InvestigatePanel): absent without a
- *   `situate` (a visitor, or the switch off), the press before it has run, the
- *   working state, the findings, the honest nothing-found, the fold, Search
- *   again, the stale banner, and model text never drawn as HTML.
+ *   question and origin, the fold's summary.
+ * - The section (SituateDossier.tsx through WhereItSitsPanel): the press
+ *   before it has run, the working state, the findings, a finding's chat by
+ *   its id, the honest nothing-found, the fold, Search again, the stale
+ *   banner, and model text never drawn as HTML. Investigate keeps only the
+ *   search's questions.
  * - The hook (useSituate.ts): reads, and spends only on a press — unforced for
  *   the first, `force: ["situate"]` for Search again.
  *
- * Mounting from SourcesBand with the switch on and off is
- * tests/reception-lens-in-chat.test.tsx § Where this piece sits.
+ * Mounting from SourcesBand with the switch off is
+ * tests/reception-lens-in-chat.test.tsx § Where it sits.
  */
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sourcesHead } from "./helpers/sources-head.js";
 import type { BlockId, Job, Situate, SituateFinding, ThreadSummary } from "../src/types.js";
-import { MAX_LENS_CHARS } from "../src/types.js";
+import { MAX_LENS_CHARS, SITUATE_FINDING_ID, SITUATE_OVERVIEW_ID } from "../src/types.js";
 import type { UseSituate } from "../src/web/useSituate.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -78,14 +80,21 @@ const {
   SITUATE_QUESTIONS_HEAD,
   SITUATE_STALE,
   ASK_FINDING_IN_CHAT,
+  ASK_OVERVIEW_IN_CHAT,
   OPEN_FINDING_CHAT,
+  OPEN_OVERVIEW_CHAT,
+  SITUATE_FINDING_TIP,
   findingLens,
+  overviewOrigin,
+  overviewQuestion,
+  findingOrigin,
   groupFindings,
   groupHeading,
   searchedLine,
   situateHeadLine,
 } = dossier;
 const { InvestigatePanel, SOURCES_INVESTIGATE_SUGGESTED_HEAD } = await import("../src/web/InvestigatePanel.js");
+const { WhereItSitsPanel } = await import("../src/web/WhereItSitsPanel.js");
 const { useSituate } = await import("../src/web/useSituate.js");
 const { dayOf } = await import("../src/web/relative-time.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
@@ -165,14 +174,25 @@ function situate(over: Partial<Situate> = {}): Situate {
 }
 
 describe("the words and the order", () => {
-  it("heads the dossier with the kind, the year and what it looked for", () => {
-    expect(situateHeadLine({ kind: "review", year: 2023, angle: "since" })).toBe(
-      "A review from 2023: what has happened since",
-    );
-    expect(situateHeadLine({ kind: "empirical", year: 2026, angle: "now" })).toBe("A study from 2026: where it sits now");
-    expect(situateHeadLine({ kind: "theory", year: null, angle: "now" }), "a year it could not tell is left out").toBe(
+  it("heads the dossier with the kind, the piece's year from its metadata, and what it looked for", () => {
+    expect(situateHeadLine({ kind: "review", angle: "since" }, 2023)).toBe("A review from 2023: what has happened since");
+    expect(situateHeadLine({ kind: "empirical", angle: "now" }, 2026)).toBe("A study from 2026: where it sits now");
+    expect(situateHeadLine({ kind: "theory", angle: "now" }, null), "no year in the metadata, none printed").toBe(
       "A theoretical piece: where it sits now",
     );
+  });
+
+  /* A persona review, 2026-10-26: on Clark & Chalmers the head line said
+     "from 1998", the planner model's reading, while Not cited, reading the
+     metadata, said it did not know when the piece was published. */
+  it("never prints the planner's year when the metadata has none", () => {
+    const headline = () => host.querySelector(".situate-headline")?.textContent ?? "";
+    act(() => root.render(panel(owner(), [], null, null)));
+    expect(owner().situate?.year, "the planner did read a year").toBe(2023);
+    expect(headline()).toContain("A review: what has happened since");
+    expect(headline()).not.toMatch(/\d/);
+    act(() => root.render(panel(owner(), [], null, 2023)));
+    expect(headline()).toContain("A review from 2023: what has happened since");
   });
 
   it("groups by kind in the reader's order, strongest first within, with no empty groups", () => {
@@ -207,6 +227,10 @@ describe("the words and the order", () => {
 let host: HTMLDivElement;
 let root: Root;
 const questions: string[] = [];
+/** The findings a press on *Ask in chat* handed to the sender. */
+const askedFindings: string[] = [];
+/** The dossiers whose overview a press on *Ask about this in chat* handed to the sender. */
+const askedOverviews: string[] = [];
 const opened: string[] = [];
 const jumped: string[] = [];
 const pressed: string[] = [];
@@ -238,26 +262,54 @@ function owner(over: Partial<UseSituate> = {}): UseSituate {
   };
 }
 
-function panel(situateOwner: UseSituate | null, summaries: ThreadSummary[] = []): ReactElement {
+/** *Where it sits*, with the dossier, and with its two free lists empty and quiet. */
+function panel(
+  situateOwner: UseSituate,
+  summaries: ThreadSummary[] = [],
+  focus: { findingFocus: { id: string; n: number }; onFindingFocusTaken(f: { id: string }): void } | null = null,
+  articleYear: number | null = 2023,
+): ReactElement {
+  return createElement(WhereItSitsPanel, {
+    head: sourcesHead({ view: "where", onView: () => {}, ownerSlug: "a-piece" }),
+    situate: situateOwner,
+    citers: { result: { kind: "no-doi" }, retry: () => {}, topic: undefined, askTopic: () => {}, retryTopic: () => {} },
+    before: { status: "none", works: null, listing: false },
+    articleYear,
+    chats: {
+      summaries,
+      onFinding: (f: SituateFinding) => askedFindings.push(f.id),
+      onOverview: (s: Situate) => askedOverviews.push(s.generatedAt),
+      onOpen: (id: string) => opened.push(id),
+    },
+    onJump: (id: BlockId) => jumped.push(id),
+    onOpenWork: () => {},
+    onView: () => {},
+    ...(focus ?? {}),
+  });
+}
+
+/** Investigate, which keeps the search's questions and no longer draws its dossier. */
+function investigate(pieceQuestions: readonly string[]): ReactElement {
   return createElement(InvestigatePanel, {
     head: sourcesHead({ view: "investigate", onView: () => {}, ownerSlug: "a-piece" }),
     chats: {
-      summaries,
+      summaries: [],
       loaded: false,
       occupied: false,
       onQuestion: (q: string) => questions.push(q),
       onCheck: () => {},
       onAskWork: () => {},
+      onFinding: () => {},
+      onOverview: () => {},
       onOpen: (id: string) => opened.push(id),
     },
     claims: null,
     works: null,
-    situate: situateOwner,
-    onJump: (id: BlockId) => jumped.push(id),
+    pieceQuestions,
   });
 }
 
-function paint(situateOwner: UseSituate | null, summaries: ThreadSummary[] = []): void {
+function paint(situateOwner: UseSituate, summaries: ThreadSummary[] = []): void {
   act(() => {
     root.render(panel(situateOwner, summaries));
   });
@@ -270,6 +322,8 @@ beforeEach(() => {
   otherSituateReply = null;
   jobEngine.reset();
   questions.length = 0;
+  askedFindings.length = 0;
+  askedOverviews.length = 0;
   opened.length = 0;
   jumped.length = 0;
   pressed.length = 0;
@@ -283,41 +337,23 @@ afterEach(async () => {
   host.remove();
 });
 
-const section = () => host.querySelector<HTMLElement>(".investigate-situate");
+const section = () => host.querySelector<HTMLElement>(".where-situate");
 const text = () => (section()?.textContent ?? "").replace(/\s+/g, " ");
 const buttonCalled = (words: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent ?? "").trim() === words);
-const groupHeads = () => [...host.querySelectorAll<HTMLElement>(".situate-group-head")].map((h) => h.textContent);
+/** Each group's head as *Name · count* — its name and count, without the meaning line under them. */
+const groupHeads = () =>
+  [...host.querySelectorAll<HTMLElement>(".situate-group-head")].map(
+    (h) => `${h.querySelector(".rcp-section-name")?.textContent} · ${h.querySelector(".rcp-section-count")?.textContent}`,
+  );
+/** The groups that are open: their kinds, in order. */
+const openGroups = () =>
+  [...host.querySelectorAll<HTMLDetailsElement>("details.situate-group")].filter((d) => d.open).map((d) => d.dataset.situateKind);
 
-describe("a finding asked for from the margin (plan 261024o § Marginalia)", () => {
-  function paintFocused(
-    id: string,
-    taken: string[],
-    arrival: Pick<Parameters<typeof InvestigatePanel>[0]["chats"], "summaries" | "loaded" | "occupied"> = {
-      summaries: [],
-      loaded: false,
-      occupied: false,
-    },
-  ): void {
+describe("a finding asked for from the margin or its chat's way back (plan 261024o § Marginalia; 261025h)", () => {
+  function paintFocused(id: string, taken: string[], summaries: ThreadSummary[] = []): void {
     act(() => {
-      root.render(
-        createElement(InvestigatePanel, {
-          head: sourcesHead({ view: "investigate", onView: () => {}, ownerSlug: "a-piece" }),
-          chats: {
-            ...arrival,
-            onQuestion: () => {},
-            onCheck: () => {},
-            onAskWork: () => {},
-            onOpen: (threadId: string) => opened.push(threadId),
-          },
-          claims: null,
-          works: null,
-          situate: owner(),
-          onJump: () => {},
-          findingFocus: { id, n: 1 },
-          onFindingFocusTaken: (f) => taken.push(f.id),
-        }),
-      );
+      root.render(panel(owner(), summaries, { findingFocus: { id, n: 1 }, onFindingFocusTaken: (f) => taken.push(f.id) }));
     });
   }
 
@@ -337,7 +373,7 @@ describe("a finding asked for from the margin (plan 261024o § Marginalia)", () 
     expect(taken).toEqual(["replaced-by-a-newer-search"]);
   });
 
-  it("does not reopen the newest Investigate chat over the finding it is landing on", () => {
+  it("opens no conversation over the finding it is landing on", () => {
     const taken: string[] = [];
     const chat: ThreadSummary = {
       id: "newest",
@@ -348,20 +384,180 @@ describe("a finding asked for from the margin (plan 261024o § Marginalia)", () 
       turns: 1,
       origin: { mode: "reception", lens: "What bears on this?" },
     };
-    paintFocused("c2", taken, { summaries: [chat], loaded: true, occupied: false });
+    paintFocused("c2", taken, [chat]);
     expect(taken).toEqual(["c2"]);
     expect(opened).toEqual([]);
   });
 });
 
+describe("the shape at a glance (plan 261026g § Stage 2, spya-c5gvp0)", () => {
+  it("opens only the first group in the reader's order; the rest are shut with their counts and meaning", () => {
+    paint(owner());
+    expect(openGroups()).toEqual(["challenged"]);
+    const shut = host.querySelector<HTMLDetailsElement>('details[data-situate-kind="supported"]');
+    expect(shut?.querySelector(".rcp-section-gist")?.textContent).toBe(SITUATE_FINDING_TIP.supported);
+    /* A shut group draws no rows. */
+    expect(shut?.querySelector(".situate-finding")).toBeNull();
+  });
+
+  it("orders the groups by what most changes how far to trust the piece", () => {
+    paint(
+      owner({
+        situate: situate({
+          findings: [
+            finding({ id: "r1", kind: "reception" }),
+            finding({ id: "t1", kind: "citation" }),
+            finding({ id: "s1", kind: "supported" }),
+            finding({ id: "n1", kind: "since" }),
+          ],
+        }),
+      }),
+    );
+    expect(groupHeads()).toEqual(["Since · 1", "Citation? · 1", "Reception · 1", "Supported · 1"]);
+    /* No challenge: the first group there is, is the open one. */
+    expect(openGroups()).toEqual(["since"]);
+  });
+
+  it("has a count strip whose press opens that group", () => {
+    paint(owner());
+    const strip = [...host.querySelectorAll<HTMLButtonElement>(".situate-count")];
+    expect(strip.map((b) => b.textContent)).toEqual(["Challenged2", "Since1", "Not cited?1", "Supported1"]);
+    expect(strip[3]?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById(strip[3]?.getAttribute("aria-controls") ?? "")?.dataset.situateKind).toBe("supported");
+    act(() => strip[3]?.click());
+    expect(openGroups()).toEqual(["challenged", "supported"]);
+    expect(strip[3]?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector('[data-finding="s1"]')).not.toBeNull();
+  });
+
+  it("resets the folds for a new dossier and opens that dossier's first group", () => {
+    paint(owner());
+    act(() => host.querySelector<HTMLButtonElement>('.situate-count[data-situate-kind="supported"]')?.click());
+    expect(openGroups()).toEqual(["challenged", "supported"]);
+
+    act(() =>
+      root.render(
+        panel(
+          owner({
+            situate: situate({
+              generatedAt: "2026-10-26T09:00:00.000Z",
+              findings: [finding({ id: "n-new", kind: "since" }), finding({ id: "s-new", kind: "supported" })],
+            }),
+          }),
+        ),
+      ),
+    );
+    expect(openGroups()).toEqual(["since"]);
+  });
+
+  it("a finding asked for in a shut group opens the group and lands on it", () => {
+    flashed.length = 0;
+    const taken: string[] = [];
+    act(() => {
+      root.render(panel(owner(), [], { findingFocus: { id: "s1", n: 1 }, onFindingFocusTaken: (f) => taken.push(f.id) }));
+    });
+    expect(openGroups()).toContain("supported");
+    expect(flashed).toEqual(["s1"]);
+    expect(taken).toEqual(["s1"]);
+  });
+
+  it("the way back from the overview's chat lands on the summary box", () => {
+    flashed.length = 0;
+    const taken: string[] = [];
+    const id = overviewOrigin(situate()).itemId;
+    act(() => {
+      root.render(panel(owner(), [], { findingFocus: { id, n: 1 }, onFindingFocusTaken: (f) => taken.push(f.id) }));
+    });
+    expect(section()?.querySelector(".situate-summary")?.getAttribute("data-finding")).toBe(id);
+    expect(flashed).toEqual([id]);
+    expect(taken).toEqual([id]);
+  });
+
+  it("keeps a finding asked for while the read has failed, and lands it once a retry answers", () => {
+    flashed.length = 0;
+    const taken: string[] = [];
+    const focus = { findingFocus: { id: "s1", n: 1 }, onFindingFocusTaken: (f: { id: string }) => taken.push(f.id) };
+    act(() => root.render(panel(owner({ status: "error", situate: null, error: "Could not read" }), [], focus)));
+    expect(taken).toEqual([]);
+    act(() => root.render(panel(owner(), [], focus)));
+    expect(flashed).toEqual(["s1"]);
+    expect(taken).toEqual(["s1"]);
+  });
+
+  it("draws two findings about the same words under one quote", () => {
+    paint(
+      owner({
+        situate: situate({
+          findings: [
+            finding({ id: "n1", kind: "since", note: "First later paper." }),
+            finding({ id: "n2", kind: "since", note: "Second later paper." }),
+            finding({ id: "n3", kind: "since", blockId: B, quote: "broadcast is all or none" }),
+          ],
+        }),
+      }),
+    );
+    const cards = [...host.querySelectorAll<HTMLElement>(".situate-passage")];
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.querySelectorAll(".situate-quote")).toHaveLength(1);
+    expect([...(cards[0]?.querySelectorAll("[data-finding]") ?? [])].map((e) => (e as HTMLElement).dataset.finding)).toEqual([
+      "n1",
+      "n2",
+    ]);
+  });
+
+  it("the quote itself goes to the passage", () => {
+    paint(owner());
+    act(() => host.querySelector<HTMLButtonElement>("button.situate-quote")?.click());
+    expect(jumped).toEqual([A]);
+  });
+
+  it("asks about the overview in chat, and shows the chat's mark once there is one (spya-mfuz6g)", () => {
+    paint(owner());
+    act(() => host.querySelector<HTMLButtonElement>(`button[aria-label="${ASK_OVERVIEW_IN_CHAT}"]`)?.click());
+    expect(askedOverviews).toEqual([situate().generatedAt]);
+    const chat: ThreadSummary = {
+      id: "about-overview",
+      title: "Where it sits: The report became a reference point.",
+      createdAt: "2026-10-24T10:00:00.000Z",
+      updatedAt: "2026-10-24T10:00:00.000Z",
+      kind: "chat",
+      turns: 1,
+      origin: overviewOrigin(situate()),
+    };
+    act(() => root.render(panel(owner(), [chat])));
+    expect(host.querySelector(`button[aria-label="${ASK_OVERVIEW_IN_CHAT}"]`)).toBeNull();
+    expect(host.querySelector(`[aria-label="${OPEN_OVERVIEW_CHAT}"]`)).not.toBeNull();
+    /* A new search's overview is a new item: the old chat is not its mark. */
+    act(() => root.render(panel(owner({ situate: situate({ generatedAt: "2026-10-26T09:00:00.000Z" }) }), [chat])));
+    expect(host.querySelector(`button[aria-label="${ASK_OVERVIEW_IN_CHAT}"]`)).not.toBeNull();
+  });
+
+  it("the overview's origin is a situate item the route accepts, and its question carries the overview whole", () => {
+    const origin = overviewOrigin(situate());
+    expect(origin.mode).toBe("situate");
+    expect(origin.itemId).toMatch(SITUATE_OVERVIEW_ID);
+    expect(origin.itemId).not.toMatch(SITUATE_FINDING_ID);
+    const long = "word ".repeat(400).trim();
+    expect(overviewQuestion(long)).toContain(long);
+    expect(overviewQuestion(long).endsWith("how far should I trust it?")).toBe(true);
+  });
+});
+
 describe("the section", () => {
-  it("is not drawn without a dossier owner: a visitor, or the switch off", () => {
-    paint(null);
+  it("is not in Investigate any more, which keeps only the search's questions (plan 261025h)", () => {
+    act(() => root.render(investigate(situate().questions)));
     expect(section()).toBeNull();
     expect(host.textContent).not.toContain(SITUATE_HEAD);
-    expect(host.textContent).not.toContain(SITUATE_QUESTIONS_HEAD);
+    expect(host.textContent).not.toContain(SITUATE_RUN);
+    expect(host.textContent).toContain(SITUATE_QUESTIONS_HEAD);
     /* Investigate itself is all there. */
     expect(host.textContent).toContain(SOURCES_INVESTIGATE_SUGGESTED_HEAD);
+  });
+
+  it("carries no Experimental badge: it is out of the switch (plan 261025h, decision 5)", () => {
+    paint(owner({ status: "none", situate: null }));
+    expect(section()?.textContent).not.toMatch(/experimental/i);
+    expect(host.querySelector(".situate-experimental")).toBeNull();
   });
 
   it("before it has run: the heading, what it does, the button and what it sends; a press starts it once", () => {
@@ -376,10 +572,10 @@ describe("the section", () => {
     expect(host.textContent).not.toContain(SITUATE_QUESTIONS_HEAD);
   });
 
-  it("sits above the rest of Investigate", () => {
+  it("sits above Papers that cite it and What it builds on once it has run (plan 261025h, decision 1)", () => {
     paint(owner());
-    const suggested = [...host.querySelectorAll("h3")].find((h) => h.textContent === SOURCES_INVESTIGATE_SUGGESTED_HEAD);
-    expect(section()?.compareDocumentPosition(suggested as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const after = host.querySelector(".where-after");
+    expect(section()?.compareDocumentPosition(after as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("says it is working while the job starts", () => {
@@ -449,14 +645,35 @@ describe("the section", () => {
     expect(source?.textContent).toContain("<img src=x onerror=alert(1)> is still only quoted text");
   });
 
-  it("asks about a finding in chat as a lens question, and shows its chat's mark once it has one", () => {
+  it("asks about a finding in chat through its sender, and shows its chat's mark, found by the finding's id", () => {
     paint(owner());
     const ask = () => section()?.querySelector<HTMLButtonElement>(`.situate-finding button[aria-label="${ASK_FINDING_IN_CHAT}"]`);
     act(() => ask()?.click());
-    expect(questions).toEqual([findingLens(FINDINGS[1] as SituateFinding)]);
+    expect(askedFindings).toEqual(["c1"]);
 
     const chat: ThreadSummary = {
       id: "t1",
+      title: "A chat",
+      createdAt: "2026-10-24T10:00:00.000Z",
+      updatedAt: "2026-10-24T10:00:00.000Z",
+      kind: "chat",
+      turns: 1,
+      origin: findingOrigin(FINDINGS[1] as SituateFinding),
+    };
+    /* A Search again that rewords the note keeps the same id, and the mark
+       with it (queue item qi-mmtsxdhg): it was found by the note's words. */
+    const reworded = FINDINGS.map((f) => (f.id === "c1" ? { ...f, note: "Reworded by a newer search." } : f));
+    paint(owner({ situate: situate({ findings: reworded }) }), [chat]);
+    const first = section()?.querySelector(".situate-finding") as HTMLElement;
+    expect(first.querySelector(`button[aria-label="${ASK_FINDING_IN_CHAT}"]`)).toBeNull();
+    const mark = first.querySelector<HTMLButtonElement>(`button[aria-label="${OPEN_FINDING_CHAT}"]`);
+    act(() => mark?.click());
+    expect(opened).toEqual(["t1"]);
+  });
+
+  it("still finds a finding's chat started before it had an origin of its own, by the lens it stored", () => {
+    const chat: ThreadSummary = {
+      id: "old",
       title: "A chat",
       createdAt: "2026-10-24T10:00:00.000Z",
       updatedAt: "2026-10-24T10:00:00.000Z",
@@ -466,14 +683,11 @@ describe("the section", () => {
     };
     paint(owner(), [chat]);
     const first = section()?.querySelector(".situate-finding") as HTMLElement;
-    expect(first.querySelector(`button[aria-label="${ASK_FINDING_IN_CHAT}"]`)).toBeNull();
-    const mark = first.querySelector<HTMLButtonElement>(`button[aria-label="${OPEN_FINDING_CHAT}"]`);
-    act(() => mark?.click());
-    expect(opened).toEqual(["t1"]);
+    expect(first.querySelector(`button[aria-label="${OPEN_FINDING_CHAT}"]`)).not.toBeNull();
   });
 
   it("puts the model's questions above Investigate's own, each a press", () => {
-    paint(owner());
+    act(() => root.render(investigate(situate().questions)));
     const heads = [...host.querySelectorAll("h3")].map((h) => h.textContent);
     expect(heads.indexOf(SITUATE_QUESTIONS_HEAD)).toBeGreaterThan(-1);
     expect(heads.indexOf(SITUATE_QUESTIONS_HEAD)).toBeLessThan(heads.indexOf(SOURCES_INVESTIGATE_SUGGESTED_HEAD));
@@ -487,6 +701,7 @@ describe("the section", () => {
     paint(owner({ situate: situate({ outcome: "nothing-found", overview: "", findings: [], questions: [] }) }));
     expect(text()).toContain(SITUATE_NOTHING_FOUND);
     expect(groupHeads()).toEqual([]);
+    act(() => root.render(investigate([])));
     expect(host.textContent).not.toContain(SITUATE_QUESTIONS_HEAD);
   });
 

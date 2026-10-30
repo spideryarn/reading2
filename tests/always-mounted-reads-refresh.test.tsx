@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **An always-mounted read hears its own step finish** — Citations, Glossary,
+ * **An always-mounted read hears its own step finish** — Bibliography, Glossary,
  * Quotes and Quiz, whose reads `OwnedReader` holds in every mode because the
  * prose marks them (and Marginalia shows the citations).
  *
@@ -164,12 +164,16 @@ describe("a run that finishes after the reader left the band", () => {
       expect(artefactReads()).toHaveLength(unmounted);
     });
 
-    it(`${step}: an open band adds a trailing GET when no read is outstanding`, async () => {
+    it(`${step}: an open band refreshes when no read is outstanding`, async () => {
       await act(async () => root.render(createElement(WithBand, { step, use })));
       await settle();
       const before = artefactReads().length;
       await runs([job("both", step, "running")], [job("both", step, "done")]);
-      expect(artefactReads()).toHaveLength(before + 2);
+      /* Quiz's margin-on-show path needs the job hook's first-list
+         reconciliation as well as the always-mounted listener. Its read
+         coalesces those two callbacks in one effect turn; the older reads
+         retain their established trailing GET. Plan 261029c code review. */
+      expect(artefactReads()).toHaveLength(before + (step === "quiz" ? 1 : 2));
     });
 
     it(`${step}: both completion listeners coalesce behind an outstanding read`, async () => {

@@ -534,6 +534,25 @@ const SHARED_WITH_READER = [
      only React, which the reader already has, so the shared edge costs nothing. */
   "src/web/appearance.ts",
   "src/feedback-payload.ts",
+  /* Arrived 2026-10-28 with `/admin/mockups` (plan 261028b, Stage 3). The
+     router (eager) checks a mockup's id with `isMockupId` from src/mockups.ts,
+     the one rule the server and the script use, rather than a second regex;
+     the page draws a mockup's text with the component a question's body uses.
+     src/mockups.ts is new to the reader's startup: a few hundred bytes of
+     rules and types whose imports, the question rules, the fence reader and
+     ids.ts, the Feedback dialog's Earlier tab already brings. The other three
+     were already the reader's. */
+  "src/feedback-question-values.ts",
+  "src/mockups.ts",
+  "src/plain-text-blocks.ts",
+  "src/web/PlainTextBlocks.tsx",
+  /* Arrived 2026-10-29 with mockups opened inside the Feedback dialog (plan
+     261029g). The dialog's question text (MockupsInText.tsx, reader side) and
+     `/admin/mockups/m-…` draw one mockup with the same renderer. It is a few
+     hundred lines of JSX whose imports, `apiFetch`, the failure wording and
+     PlainTextBlocks, the reader already has, and it fetches nothing until an
+     admin taps a mockup's id. */
+  "src/web/MockupView.tsx",
   "src/html.ts",
   "src/ids.ts",
   "src/ingest.ts",
@@ -551,6 +570,14 @@ const SHARED_WITH_READER = [
   "src/quote-match.ts",
   "src/read-address.ts",
   "src/referee-criteria.ts",
+  /* All three arrived 2026-10-26 with the shelf's how-much-read pie (plan
+     261025l, spya-e5477u). They cost the reader nothing new: the shelf and the
+     reader are eager and drew them first; what is new is only that a lazy route
+     reaches them too. Small leaves: a mark, an SVG pie, and the filter that says
+     which words have been read. */
+  "src/web/ReadSoFarMark.tsx",
+  "src/web/SharePie.tsx",
+  "src/web/read-filter.ts",
   "src/title-text.ts",
   "src/types.ts",
   "src/uploads.ts",
@@ -611,6 +638,12 @@ const SHARED_WITH_READER = [
      and `LogoGlyphs`, which the reader already has. */
   "src/web/LogoLoader.tsx",
   "src/web/ModeSurface.tsx",
+  /* Arrived 2026-10-29 with ModeSurface's flags on <html> (plan 261029k):
+     `ModeSurface` holds them, and `/design` draws a real `ModeSurface`, so
+     both routes reach them. Two small hook modules the reader needs anyway;
+     outside a reader the context is null and they set nothing. */
+  "src/web/band-root-flags.ts",
+  "src/web/root-flags.ts",
   "src/web/SettingsSection.tsx",
   "src/web/ShelfEntry.tsx",
   /* Arrived 2026-10-20 with /admin/users' Columns menu (plan 261020c), by the
@@ -817,6 +850,7 @@ const ROUTE_PRIVATE = [
   "src/web/AdminPage.tsx",
   "src/web/AdminArticlesPage.tsx",
   "src/web/AdminCostsPage.tsx",
+  "src/web/AdminMockupsPage.tsx",
   "src/web/AdminVouchersPage.tsx",
   "src/web/DesignPage.tsx",
   "src/web/admin-articles-columns.tsx",

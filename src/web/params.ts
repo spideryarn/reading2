@@ -39,6 +39,8 @@ import { searchWithout } from "./router.js";
 /* Type-only: a value import would put faq-order.ts on the reader's startup
    path (tests/eager-client-graph.test.ts). faq-order.ts § FaqOrder. */
 import type { FaqOrder } from "./faq-order.js";
+/* The same, for Explanations' orders: a type-only import, erased. */
+import type { ExplanationOrder } from "./explanations-order.js";
 /* Type-only, for the same reason: reception-order.ts § ReceptionOrder. */
 import type { ReceptionOrder } from "./reception-order.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
@@ -525,6 +527,23 @@ export type SkimPart = SkimDepth | "figures";
 export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
+ * **Which Skim route is drawn** — an added brief's id, absent for the default
+ * (the reader profile with the article's *why you're reading*). Minted by
+ * `mintId` on the client (src/web/skim-briefs.ts), so it validates as a block
+ * id the way `?thread=` does. Plan 261027d.
+ *
+ * `replace`, like `?thread=`: choosing a route narrows what one mode shows.
+ * `?stop=` and `?depth=` mean a place **on this route**, so the three are one
+ * position: written together when the route changes, and remembered together
+ * (last-view.ts), so one route's stop is never applied to another (GPT Sol's
+ * F7). Like them it outlives a mode switch, so leaving Skim and coming back
+ * reopens the brief you left. An id the owner has no brief for falls back to
+ * the default and is cleared (SkimMode.tsx § `SkimBand`). A visitor's Skim
+ * reads only the default and ignores it.
+ */
+export const briefParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
  * How the quote list is ordered.
  *
  * **`document` is the default, and that is Greg's own instruction rather than
@@ -628,7 +647,7 @@ export const barParam = createParser<number>({
  * offer the control. So an old glossary with no scores behaves exactly as it
  * did before, and the default never labels an order that isn't one.
  *
- * `push`, like `cols` and `text` and unlike `term`: changing the order of a
+ * `push`, like `text` (and the retired `?cols=`) and unlike `term`: changing the order of a
  * list is a deliberate act on the view, and Back should undo it.
  *
  * An unknown value parses to the default, so a link written by a version with
@@ -764,6 +783,47 @@ export const faqBarParam = createParser<number>({
   serialize: (v) => v.toFixed(2),
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
+/**
+ * **How Explanations is ordered** — `?explby=`, since 2026-10-29, the FAQ's
+ * pattern. `prioritised` is the default: what survives the bar, in reading
+ * order; `document` is reading order; `difficulty` (*hardest*) and
+ * `centrality` (*most central*) are each score, highest first.
+ * src/web/explanations-order.ts; plan 261029e § 2b. `push`, and an unknown
+ * value falls back to the default.
+ */
+export const EXPLANATION_ORDERS = [
+  "prioritised",
+  "document",
+  "difficulty",
+  "centrality",
+] as const satisfies readonly ExplanationOrder[];
+/* And the other way: every `ExplanationOrder` is in the list, or this stops compiling. */
+const _everyExplanationOrderListed: Exclude<ExplanationOrder, (typeof EXPLANATION_ORDERS)[number]> extends never
+  ? true
+  : never = true;
+void _everyExplanationOrderListed;
+
+export const explanationOrderParam = createParser<ExplanationOrder>({
+  parse: (v) => (EXPLANATION_ORDERS.includes(v as ExplanationOrder) ? (v as ExplanationOrder) : null),
+  serialize: (v) => v,
+})
+  .withDefault("prioritised")
+  .withOptions({ history: "push" });
+
+/**
+ * How high an explanation has to score to stay on screen in the prioritised
+ * order — `?explbar=`, `difficulty × centrality` on 0–1. No default, for
+ * `gateParam`'s reason: absent is *nobody has touched it*, which the panel
+ * resolves to `EXPLANATIONS_BAR_DEFAULT`. `replace` and debounced.
+ */
+export const explanationBarParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+  },
+  serialize: (v) => v.toFixed(2),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
 
 /* ------------------------------------------------------------- search mode --
    Six parameters, because one mode holds a literal matcher and a saved
@@ -800,7 +860,7 @@ export const faqBarParam = createParser<number>({
  * out loud (Library.tsx). Nothing else produces a bare `?find=`: reaching words
  * mode by hand pushes `match=words` on the way.
  *
- * `push`, like `cols` and `text`: switching matcher changes what the article
+ * `push`, like `text` (and the retired `?cols=`): switching matcher changes what the article
  * looks like, and Back should undo it.
  *
  * **`meaning` asks the quick search first, and swaps in the thorough one**
@@ -932,12 +992,12 @@ export const runParam = parseAsBlockId.withOptions({ history: "replace" });
  * as `resolveMatcher`: a rule about what an *absent* parameter means, written
  * once, rather than a default that would erase the distinction.
  *
- * Comma-separated and spelled out, exactly like `?cols=`, and for the reason
+ * Comma-separated and spelled out, exactly like the retired `?cols=` was, and for the reason
  * given there — these URLs get pasted to people, and a reader should be able to
  * see what a link is going to show them. Ids are already URL-safe by
  * construction (docs/project/block-ids.md), so nothing needs encoding.
  *
- * **Order is preserved rather than sorted.** `?cols=` sorts because a set of
+ * **Order is preserved rather than sorted.** the retired `?cols=` sorted because a set of
  * depths has a natural order and two spellings of one view should be one
  * string; a set of ids does not. Sorting them would order the reader's searches
  * by a random six characters, which is not an order — so the order kept is the
@@ -971,8 +1031,8 @@ export const parseAsIdList = createParser<string[]>({
   parse(value) {
     if (value === NO_RUNS) return [];
     const parts = value.split(",").filter((p) => p !== "");
-    /* Every id validated, and a single bad one drops **only itself**. `?cols=`
-       takes the opposite view and rejects the whole value, which is right there
+    /* Every id validated, and a single bad one drops **only itself**. The retired `?cols=`
+       took the opposite view and rejected the whole value, which is right there
        because a depth list is short and hand-written; a run list is machine-
        written and long-lived, and the id most likely to be wrong in one is a
        search the reader deleted on another machine. Throwing away the other
@@ -1142,7 +1202,7 @@ export const confParam = createParser<number>({
  * model call landed — which was the right rule while it was the picture
  * everybody saw.
  *
- * `push`, like `?cols=`. Switching picture is a deliberate act on
+ * `push`, like the retired `?cols=`. Switching picture is a deliberate act on
  * the view and Back should undo it — and unlike stepping between glossary terms,
  * you do not do it twice in ten seconds.
  *
@@ -1454,13 +1514,17 @@ export function learnInSearch(search: string): LearnView {
 /* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Sources' six sub-modes the band draws** — `?sources=`,
+ * **Which of Sources' nine sub-mode addresses the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
  * `liftLegacySources`; docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md).
  *
- * `bibliography` is what the piece cites (the Citations mode until that day);
+ * `where` is *Where it sits*, the owner's default since 2026-10-25 (plan
+ * docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md,
+ * decision 7): the papers that came after the piece, the works it leans on,
+ * and the literature search;
+ * `bibliography` is what the piece cites (the Citations mode until 2026-10-09);
  * `not-cited` is papers close to it that its bibliography does not list, from
  * OpenAlex, for the owner only (since 2026-10-11, plan 261011ac);
  * `links` is the web addresses in the article's own markup;
@@ -1474,38 +1538,119 @@ export function learnInSearch(search: string): LearnView {
  * before anything reads it (router.ts § `liftLegacySources`). *Which thing, within this
  * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
  * changes the whole band, and pushed, because switching is a deliberate act
- * Back should undo. **`bibliography` is the default** (Greg: "this should be
- * the first submode") and is omitted from the address; an unknown value reads
- * as Bibliography.
+ * Back should undo.
+ *
+ * **These are the addresses, not the chips.** Since plan 261025h the owner's
+ * chip row is three (`SOURCES_CHIPS`), and Reception, Claims, Not cited and
+ * Investigate are tools reached from inside *Where it sits*, at the addresses
+ * they always had; `chipOf` says which chip each address lights.
+ *
+ * **`where` is the default** and is omitted from the address; an unknown
+ * value reads as it. It was `bibliography` until 2026-10-25 (Greg: "this
+ * should be the first submode", 2026-10-09), so an old address that meant
+ * Bibliography is lifted to an explicit `sources=bibliography` (router.ts §
+ * `liftLegacySources`), while a bare `?mode=sources` gets the new default on
+ * purpose. A visitor has no *Where it sits* and reads `where` as Bibliography
+ * (`visitorSourcesView`), so a visitor's default is unchanged.
  *
  * **Writing it never spends.** Each sub-mode's work starts on its owner's
  * press and only then — the mode's button, the sub-mode's command-bar row or
- * its chip: a press landing on Bibliography arms the `bibliography` list, on
- * Reception the `reception` search, on Claims the `sources-claims` list
- * (activation.ts § `activationForSources`). Links, the article's own
+ * its chip: a press landing on *Where it sits* or Bibliography arms the
+ * `bibliography` list, and nothing else does (activation.ts §
+ * `activationForSources`). Reception's search and Claims' list are their
+ * panels' own buttons since plan 261025h. Links, the article's own
  * hyperlinks (since 2026-10-11, plan 261011d), has no work to arm: it is read
  * off the blocks in the browser. Not cited arms nothing either: its search is
  * the panel's own button, because it sends the piece's words to OpenAlex. Investigate
  * arms nothing: each of its rows is one press that sends one chat question.
  * Back, a pasted link and a last-view restore arrive here and buy nothing.
+ *
+ * **`guess-first` and `evidence-first` are the two experiments** (plan
+ * 261025h, Stage 4; `SOURCES_EXPERIMENTS`): reached from *Where it sits*'
+ * tools row with the experimental switch on, free, reading the stored dossier
+ * and arming nothing.
  */
-export const SOURCES_VIEWS = ["bibliography", "not-cited", "links", "reception", "claims", "investigate"] as const;
+export const SOURCES_VIEWS = [
+  "where",
+  "bibliography",
+  "not-cited",
+  "links",
+  "reception",
+  "claims",
+  "investigate",
+  "guess-first",
+  "evidence-first",
+] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
- * **The sub-modes a visitor's band draws**: all but Not cited and Investigate, which
- * are the owner's. Not cited's route is owner-only, and a visitor's search
- * would spend our OpenAlex allowance (plan 261011ac § Who sees it); Investigate's
- * every row hands a question to Chat, and a visitor has no chat (plan
- * 261020n § Visitors).
+ * **Sources' two experiments** (plan 261025h, Stage 4, GPT Sol's F12 and
+ * F13): *Guess first* and *Evidence first*, each a way of meeting the
+ * literature search's findings before reading the model's verdict. Behind the
+ * experimental switch, and offered only on *Where it sits*' tools row: no
+ * chip, and no command-bar row (sub-modes.ts § `subModesOf`). Hidden from the
+ * controls, not unreachable: a pasted address draws the experiment whatever
+ * the switch says, and its crumb leads back to *Where it sits*
+ * (docs/project/experimental-features.md § The four rules).
+ */
+export const SOURCES_EXPERIMENTS = ["guess-first", "evidence-first"] as const satisfies readonly SourcesView[];
+export type SourcesExperiment = (typeof SOURCES_EXPERIMENTS)[number];
+export function isSourcesExperiment(view: SourcesView): view is SourcesExperiment {
+  return (SOURCES_EXPERIMENTS as readonly SourcesView[]).includes(view);
+}
+/**
+ * **The owner's chip row** (plan 261025h, decision 7 and GPT Sol's F2): three
+ * chips, *Where it sits* first because it is the default. The other four
+ * addresses are tools inside *Where it sits* (`chipOf`).
+ */
+export const SOURCES_CHIPS = ["where", "bibliography", "links"] as const satisfies readonly SourcesView[];
+export type SourcesChip = (typeof SOURCES_CHIPS)[number];
+/**
+ * **Which chip an address lights** — one exhaustive answer for the chip row's
+ * `aria-checked`, its `.on` and `useRevealChosen`, so exactly one radio is
+ * checked for every legal `?sources=` (GPT Sol's F2 on plan 261025h). The four
+ * tools are reached from *Where it sits* and carry its link back, so they
+ * light it. The owner's row only: a visitor's chips are their views.
+ */
+export function chipOf(view: SourcesView): SourcesChip {
+  switch (view) {
+    case "where":
+    case "reception":
+    case "claims":
+    case "not-cited":
+    case "investigate":
+    /* The experiments are reached from *Where it sits* and carry its crumb back. */
+    case "guess-first":
+    case "evidence-first":
+      return "where";
+    case "bibliography":
+      return "bibliography";
+    case "links":
+      return "links";
+    default: {
+      const unhandled: never = view;
+      throw new Error(`unhandled Sources view: ${String(unhandled)}`);
+    }
+  }
+}
+/**
+ * **The sub-modes a visitor's band draws**: all but *Where it sits*, Not cited and
+ * Investigate, which are the owner's. *Where it sits* reads the owner's citer
+ * list, which has no public projection yet (plan 261025h, GPT Sol's F3); Not
+ * cited's route is owner-only, and a visitor's search would spend our OpenAlex
+ * allowance (plan 261011ac § Who sees it); Investigate's every row hands a
+ * question to Chat, and a visitor has no chat (plan 261020n § Visitors). A
+ * visitor's chip row is these four, unchanged by plan 261025h. The two
+ * experiments read the owner's dossier, which has no public projection either.
  */
 export const VISITOR_SOURCES_VIEWS: readonly SourcesView[] = SOURCES_VIEWS.filter(
-  (v) => v !== "not-cited" && v !== "investigate",
+  (v) => v !== "where" && v !== "not-cited" && v !== "investigate" && !isSourcesExperiment(v),
 );
 /**
  * **What a visitor's band draws for `?sources=`**: the view it names, or
- * Bibliography for one the visitor does not have, so a shared
- * `?sources=not-cited` or `?sources=investigate` link opens the default list rather
- * than an empty band.
+ * Bibliography for one the visitor does not have, so a bare Sources address
+ * (the owner's *Where it sits*) or a shared `?sources=not-cited` or
+ * `?sources=investigate` link opens the visitor's default list rather than an
+ * empty band.
  */
 export function visitorSourcesView(view: SourcesView): SourcesView {
   return VISITOR_SOURCES_VIEWS.includes(view) ? view : "bibliography";
@@ -1523,7 +1668,7 @@ export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),
   serialize: (v) => v,
 })
-  .withDefault("bibliography")
+  .withDefault("where")
   .withOptions({ history: "push" });
 
 /**

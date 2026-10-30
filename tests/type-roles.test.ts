@@ -40,7 +40,7 @@
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { readerSheets, stripComments } from "./helpers/stylesheets.js";
+import { cssForJsdom, readerSheets, stripComments } from "./helpers/stylesheets.js";
 
 const ROLES = {
   item: "max(var(--text-min), 0.92rem)",
@@ -90,6 +90,9 @@ const WITNESSES: Record<string, string> = {
   ".ideas-reason": ".ideas-occurrences li.open button .ideas-reason",
   ".ideas-group > h3": "section.ideas-group > h3",
   ".ideas-group > h3 > .gloss-count": "section.ideas-group > h3 > .gloss-count",
+  ".gloss-part-text.expl-quote": ".expl-item .expl-passage .gloss-part-text.expl-quote",
+  ".expl-text": ".expl-item p.expl-text",
+  ".expl-label": ".expl-item .expl-labels .expl-label",
   ".quotes-text": ".quotes-row.on button.quotes-quote blockquote.quotes-text",
   ".quotes-prov": ".quotes-why-card .quotes-prov",
   ".cite-title": ".cite-item p.cite-title",
@@ -149,10 +152,14 @@ const REGISTRY: Row[] = [
   { file: "ideas.css", selector: ".ideas-reason", role: "body" },
   { file: "ideas.css", selector: ".ideas-group > h3", role: "label" },
   { file: "ideas.css", selector: ".ideas-group > h3 > .gloss-count", role: "count" },
+  // Explanations
+  { file: "explanations.css", selector: ".gloss-part-text.expl-quote", role: "quote" },
+  { file: "explanations.css", selector: ".expl-text", role: "body" },
+  { file: "explanations.css", selector: ".expl-label", role: "meta" },
   // Quotes — the quote IS the row here, so it is an item, not a quote.
   { file: "quotes.css", selector: ".quotes-text", role: "item" },
   { file: "quotes.css", selector: ".quotes-prov", role: "meta" },
-  // Citations
+  // Bibliography
   { file: "bibliography.css", selector: ".cite-title", role: "item" },
   { file: "bibliography.css", selector: ".cite-quote blockquote", role: "quote" },
   { file: "bibliography.css", selector: ".cite-why", role: "body" },
@@ -362,12 +369,13 @@ const SHEETS = readerSheets();
 
 /* The ordinary, active cascade for the representative elements below. The
    exact-selector walk remains the check for declarations hidden in media or
-   supports blocks that jsdom does not activate. */
+   supports blocks that jsdom does not activate. jsdom has no cascade layers
+   either, so `cssForJsdom` stands the `voices` layer in (its comment says how). */
 for (const s of SHEETS) {
   if (sourceBlocks(s.css) === 0) continue;
   const style = window.document.createElement("style");
   style.dataset.sheet = s.path;
-  style.textContent = s.css;
+  style.textContent = cssForJsdom(s);
   window.document.head.appendChild(style);
 }
 

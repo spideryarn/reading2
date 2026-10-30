@@ -1,0 +1,848 @@
+diff --git a/docs/project/ai-gateway.md b/docs/project/ai-gateway.md
+index d32f0371f..95f9fc4af 100644
+--- a/docs/project/ai-gateway.md
++++ b/docs/project/ai-gateway.md
+@@ -943,7 +943,7 @@ Five callers pass it:
+ | `pdf` (`src/pdf-read.ts`) | Its own loop retries through a width gate the gateway cannot see. That loop asks `worthAskingAgain` about a refusal, so it retries an unpriced 5xx and never a priced one. For any other thrown error it is older and wider than the rule above: it asks again after any non-abort throw, including a `200` whose body broke. |
+ | `embeddings` (`embedBatch`) | Its own loop gives five goes and honours `Retry-After`. It asks `worthAskingAgain` about a thrown error, so a dropped connection is retried and a broken `200` is not, and it does not retry a priced 5xx. |
+ | `shelf-topics` (every call in `src/shelf-terms/model-topics.ts`) | Naming a level and the filing pass are each already run once more on any failure. |
+-| `pdf-figure-locate` | `MAX_LOCATE_CALLS` and `MAX_UNCAPTIONED_LOCATE_CALLS` promise at most eight model calls an article for captioned figures and forty for uncaptioned ones, and count asks. A hidden retry would triple that. |
++| `pdf-figure-locate` | `MAX_LOCATE_CALLS` and `MAX_UNCAPTIONED_LOCATE_CALLS` promise at most sixteen model calls an article for captioned figures (eight until 2026-10-27) and forty for uncaptioned ones, and count asks. A hidden retry would triple that. |
+ | `command-pick`, `command-pick-words` | The two calls share one five-second deadline, and a failure already falls back to the bar's own list. |
+ 
+ Two trade-offs, both taken on purpose:
+diff --git a/docs/project/article-images.md b/docs/project/article-images.md
+index 4a57d5c74..89fc99716 100644
+--- a/docs/project/article-images.md
++++ b/docs/project/article-images.md
+@@ -328,6 +328,25 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
+   [the measurement](../investigations/261019a-uncaptioned-pdf-figures-located-on-rovelli.md).
+   An uncaptioned picture's `alt` is *"Figure without a caption"*, since there is no visible
+   caption beside it to make empty alt right.
++- **Since 2026-10-27 a picture is not the figure merely because it is the one picture on the
++  page.** LeCun's diagrams wire small icons (a photo of the Earth, a "Z", an "S") into boxes and
++  arrows, and the same icons recur across figures. The bitmap route stored the Earth as three
++  different figures, and the located route then dropped four right answers because their regions
++  "shared a picture" (report spya-m40r6t,
++  [261027b](../postmortems/261027b-a-part-of-a-figure-was-taken-for-the-whole-figure.md)). Three
++  rules now hold this. First, a paired picture whose touching vector drawing is at least
++  `IN_A_DRAWING_RATIO` (3) times its area is refused `in-a-drawing` (`isPartOfDrawing`,
++  [`src/pdf-figure-region.ts`](../../src/pdf-figure-region.ts)). If the page cannot be measured it
++  is refused `unmeasured-picture`, which fails closed. Second, either refusal can be recovered
++  only as a rendered region, and not as one that is mostly a single picture, so a model that
++  boxes the icon cannot put it back. Third, located regions conflict over pictures only by the
++  **summed** share of the region those shared pictures cover (`REGION_PICTURE_SHARE`, 0.25): a
++  repeated photo grid still conflicts, and a reused 3 % icon does not. Measured over every
++  single-picture page in production's PDFs and the eval PDFs: real picture figures score 1.00–1.29
++  and LeCun's icons 17–31. The rule only follows ink that **touches** the picture, so a bitmap
++  panel beside disconnected vector panels is not caught; that case is named, not built.
++  `MAX_LOCATE_CALLS` went from 8 to 16 at the same time, because this paper needs nine calls —
++  [261027e](../plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md).
+ - **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
+   is all there is; keeping the first meant the same picture appeared under two different captions —
+   a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now
+diff --git a/src/assets.ts b/src/assets.ts
+index 1755f8435..afabeab6b 100644
+--- a/src/assets.ts
++++ b/src/assets.ts
+@@ -245,6 +245,21 @@ export type PdfFigureFailure =
+    * docs/plans/261019e-uncaptioned-pdf-figures-are-kept.md.
+    */
+   | "uncaptioned"
++  /**
++   * **The one picture on the page is a small part of a drawing, not the
++   * figure** — an icon wired into a diagram of boxes and arrows. Pairing it
++   * stored LeCun's Earth as three different figures (report spya-m40r6t).
++   * The located route is asked about the whole drawing instead.
++   * `isPartOfDrawing`, src/pdf-figure-region.ts;
++   * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
++   */
++  | "in-a-drawing"
++  /**
++   * The page's layout, or the picture's painted box, could not be read, so the
++   * picture could not be shown to be the whole figure; refused rather than
++   * risked. The same plan.
++   */
++  | "unmeasured-picture"
+   /**
+    * **The page was the narrow case the drawn-figure route exists for, and no
+    * drawing on it could be proved to be this caption's.** One figure marker,
+diff --git a/src/collect-assets.ts b/src/collect-assets.ts
+index f1e1b32ce..0d5b36bdd 100644
+--- a/src/collect-assets.ts
++++ b/src/collect-assets.ts
+@@ -538,10 +538,15 @@ export function pdfFigureNeighboursIn(blocks: readonly Block[]): Map<string, Fig
+  * prose either side of them (`pdfFigureNeighboursIn`;
+  * docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md):
+  * the same uncaptioned marker can now go from refused to stored. A change to
+- * the neighbour prompt is a bump too. Nothing re-runs on its own;
++ * the neighbour prompt is a bump too. **`8` is a picture inside a drawing
++ * refused as the figure** (`in-a-drawing`) and a picture counted as a located
++ * region's identity only by the share of the region it covers
++ * (docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md): an
++ * article stored under `7` may hold an icon under a diagram's caption, and must
++ * read stale (GPT Sol, plan review of 261027e). Nothing re-runs on its own;
+  * tests/collect-assets.test.ts pins both stamps.
+  */
+-export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/7";
++export const PDF_FIGURE_RECOVERY_POLICY = "pdf-figures/8";
+ 
+ /**
+  * The cheap look before the parse — built once, from the registered name rather
+diff --git a/src/collect-pdf-figures.ts b/src/collect-pdf-figures.ts
+index 32594296d..81acfde87 100644
+--- a/src/collect-pdf-figures.ts
++++ b/src/collect-pdf-figures.ts
+@@ -102,6 +102,7 @@ import { type FigurePage, type FigurePages, openFigurePages } from "./pdf-figure
+ import {
+   anchorBox,
+   type DrawnFigureVerdict,
++  isPartOfDrawing,
+   judgeLocatedRegion,
+   locateDrawnFigure,
+   type PageBox,
+@@ -113,6 +114,7 @@ import {
+   type DecodedRaster,
+   downscaleRaster,
+   encodeFigurePng,
++  type FigureOutcome,
+   MAX_FIGURE_PIXELS,
+   pairPageFigures,
+   type PdfFigureFailure as PairingFailure,
+@@ -243,11 +245,37 @@ export const PDF_FIGURES_BUDGET_MS = 180_000;
+ 
+ /**
+  * **At most this many model calls per article** on the located route — about
+- * $0.002 and two seconds each, measured (the plan's test-run table). Eight
+- * covers every essay and paper seen so far; a document with more refused
+- * figures than that keeps the rest caption-only, the state they were in.
++ * $0.002 and two seconds each, measured (the plan's test-run table), so at
++ * most about three cents. It was eight until 2026-10-27, which covered every
++ * essay and paper seen until LeCun's, whose diagrams need nine
++ * (docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md). A
++ * document with more refused figures than this keeps the rest caption-only,
++ * the state they were in.
+  */
+-export const MAX_LOCATE_CALLS = 8;
++export const MAX_LOCATE_CALLS = 16;
++
++/**
++ * **Pictures make a located region "the same" as another figure only when,
++ * together, they cover at least this share of it.** Two regions on different
++ * pages that share a whole grid of photos are one figure under two captions
++ * and both are refused (GPT Sol, 261001q P1); two diagrams that share a 3 %
++ * icon are two figures (LeCun's 10 and 12). The same share decides whether a
++ * region is mostly one picture. Summed over the shared pictures, never judged
++ * one at a time, or a repeated six-photo grid would slip through (GPT Sol,
++ * plan review of 261027e, 3).
++ * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
++ */
++const REGION_PICTURE_SHARE = 0.25;
++
++/**
++ * The refusals that mean **the page's one picture is not the figure**: the
++ * located route may recover such a figure only as a rendered region, and not
++ * as a region that is mostly one picture.
++ */
++const WHOLE_DRAWING_ONLY: ReadonlySet<PdfFigureFailure> = new Set<PdfFigureFailure>([
++  "in-a-drawing",
++  "unmeasured-picture",
++]);
+ 
+ /**
+  * **At most this many windows read** on the located route, asked about or not
+@@ -282,6 +310,8 @@ const LOCATABLE: ReadonlySet<PdfFigureFailure> = new Set<PdfFigureFailure>([
+   "no-raster",
+   "not-located",
+   "uncaptioned",
++  "in-a-drawing",
++  "unmeasured-picture",
+ ]);
+ 
+ /**
+@@ -501,7 +531,7 @@ export async function collectPdfFigures(
+        there is nothing to check its page against. The drawn route is not tried
+        for it; the locator is, by the prose either side.
+        docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md. */
+-    const { outcomes } = pairPageFigures({
++    const { outcomes: paired } = pairPageFigures({
+       markers: looked,
+       candidates: read.candidates,
+       captions: options.captions,
+@@ -509,7 +539,7 @@ export async function collectPdfFigures(
+     });
+     /* The drawn route's candidates: refused `no-raster` by the bitmap route,
+        and captioned by the article. Everything else is decided above. */
+-    const candidates = outcomes.flatMap((outcome) =>
++    const candidates = paired.flatMap((outcome) =>
+       outcome.status === "refused" && outcome.reason === "no-raster" && options.captions.has(outcome.marker.ref)
+         ? [outcome.marker]
+         : [],
+@@ -518,16 +548,31 @@ export async function collectPdfFigures(
+     /* Preserve the bitmap route's outputs: everything it already decided is
+        stored or recorded before the new layout/render work starts. Otherwise a
+        slow drawn page can spend the clock and turn an unrelated decoded bitmap
+-       into `out-of-time`. Final assembly below restores marker order. */
+-    for (const outcome of outcomes) {
++       into `out-of-time`. Final assembly below restores marker order.
++
++       **A pairing is not decided until its page has been asked whether the
++       picture is only part of a drawing** (`settleDrawingPart`), one page at a
++       time and each stored before the next is read, so a slow page cannot undo
++       the ones before it. The settled outcomes, not the pairing's, are what
++       `taken` is worked out from below: a refused icon is nobody's picture. */
++    const outcomes: FigureOutcome[] = [];
++    for (const outcome of paired) {
+       if (outcome.status === "refused") {
++        outcomes.push(outcome);
+         if (!candidates.includes(outcome.marker)) refuse(outcome.marker, pdfFigureFailure(outcome.reason));
+         continue;
+       }
+       /* Stop rather than record: every marker left is finalised below, which is
+          the one place that decides what an unfinished run says. */
+       if (signal.aborted) return;
+-      await storeOne(outcome.marker, outcome.raster, limits, signal, book, record, at);
++      const settled = await settleDrawingPart(outcome, read, options, signal);
++      if (signal.aborted) return;
++      outcomes.push(settled);
++      if (settled.status === "refused") {
++        refuse(settled.marker, pdfFigureFailure(settled.reason));
++        continue;
++      }
++      await storeOne(settled.marker, settled.raster, limits, signal, book, record, at);
+     }
+ 
+     const drawnRan = await drawnPhase();
+@@ -876,7 +921,7 @@ async function locatedRoute(
+     marker: PdfFigureMarker;
+     raster: DecodedRaster;
+     identity: string;
+-    pictureIdentities: readonly string[];
++    pictures: readonly RegionPicture[];
+     page: number;
+     box: PageBox;
+   }[] = [];
+@@ -983,7 +1028,12 @@ async function locatedRoute(
+          markers pointing at one picture must both be seen doing it, below. */
+       taken,
+     });
+-    if (verdict.status === "chosen") {
++    /* A figure whose page picture was refused as part of a drawing (or could
++       not be measured) is recovered as a rendered region or not at all: the
++       one-picture verdict would put the icon back under its caption, which is
++       the very thing it was refused for. GPT Sol, plan review of 261027e, 1. */
++    const wholeDrawing = WHOLE_DRAWING_ONLY.has(book.held.get(marker.ref) ?? "no-raster");
++    if (verdict.status === "chosen" && !wholeDrawing) {
+       const picture = usable.find((u) => u.page === verdict.page && u.key === verdict.key);
+       const paint = read.paints.find((p) => p.page === verdict.page && p.key === verdict.key);
+       if (picture) {
+@@ -998,8 +1048,9 @@ async function locatedRoute(
+     }
+     /* The composite route binds a box to the caption it finds printed on the
+        page, and an uncaptioned figure has none to find. */
+-    if (subject.kind !== "caption" || !COMPOSITE_REFUSALS.has(verdict.reason)) continue;
+-    const composite = await compositeRegion(marker, answer.answer, sent, read, usable, taken, cuts, options, signal);
++    if (subject.kind !== "caption") continue;
++    if (!wholeDrawing && (verdict.status === "chosen" || !COMPOSITE_REFUSALS.has(verdict.reason))) continue;
++    const composite = await compositeRegion(marker, answer.answer, sent, read, usable, taken, cuts, options, signal, wholeDrawing);
+     if (composite) regions.push({ marker, ...composite });
+   }
+ 
+@@ -1008,12 +1059,18 @@ async function locatedRoute(
+      nothing here can say which, so neither is kept. */
+   const overlaps = (a: { page: number; box: PageBox }, b: { page: number; box: PageBox | null }) =>
+     a.page === b.page && b.box !== null && overlapArea(a.box, b.box) > 0;
+-  const sharesPicture = (a: { pictureIdentities: readonly string[] }, identity: string) =>
+-    a.pictureIdentities.includes(identity);
++  /* A region "is" a picture another figure chose when that picture is a large
++     part of it (`REGION_PICTURE_SHARE`), and two regions are one figure when the
++     pictures they share are a large part of both. An icon in two diagrams is
++     neither. docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md. */
++  const identitiesOf = (r: (typeof regions)[number]) => r.pictures.map((p) => p.identity);
++  const sharesPicture = (a: (typeof regions)[number], identity: string) =>
++    sharedShare(a.pictures, [identity]) >= REGION_PICTURE_SHARE;
+   const regionsConflict = (a: (typeof regions)[number], b: (typeof regions)[number]) =>
+     overlaps(a, b) ||
+     a.identity === b.identity ||
+-    a.pictureIdentities.some((identity) => b.pictureIdentities.includes(identity));
++    (sharedShare(a.pictures, identitiesOf(b)) >= REGION_PICTURE_SHARE &&
++      sharedShare(b.pictures, identitiesOf(a)) >= REGION_PICTURE_SHARE);
+   /* A run of uncaptioned figures that share their neighbours is told apart by
+      order alone, so the pictures chosen for it must come down the pages in the
+      run's order, or none of the run is kept. GPT Sol, plan review of 261019j. */
+@@ -1093,10 +1150,12 @@ async function compositeRegion(
+   cuts: FigurePages,
+   options: CollectPdfFiguresOptions,
+   signal: AbortSignal,
++  /** A figure whose own page picture was refused as part of a drawing: the region may not be mostly one picture. */
++  wholeDrawing: boolean,
+ ): Promise<{
+   raster: DecodedRaster;
+   identity: string;
+-  pictureIdentities: readonly string[];
++  pictures: readonly RegionPicture[];
+   page: number;
+   box: PageBox;
+ } | null> {
+@@ -1123,21 +1182,29 @@ async function compositeRegion(
+   });
+   if (!verdict.ok) return null;
+   const crop = verdict.containment[0]?.box ?? verdict.region;
+-  /* Which decoded pictures this region mostly holds. The identities travel
+-     with the choice so a repeat on another page cannot be stored under a
+-     second caption merely because its page-space boxes do not overlap. */
+-  const pictureIdentities = new Set<string>();
++  /* Which decoded pictures this region mostly holds, and how much of it each
++     covers. They travel with the choice so a repeat on another page cannot be
++     stored under a second caption merely because its page-space boxes do not
++     overlap. **What counts is the share of the region they cover**
++     (`sharedShare`): an icon reused inside several diagrams is no evidence
++     that two diagrams are one figure, and counting it dropped LeCun's Figures
++     10, 12, 16 and 17; a grid of photos repeated whole still is. */
++  const pictures: RegionPicture[] = [];
++  const cropArea = overlapArea(crop, crop);
+   for (const picture of usable) {
+     if (picture.page !== answered.page) continue;
+-    const visible = paints
++    const covered = paints
+       .filter((p) => p.key === picture.key)
+       .map((p) => visiblePaintBox(p, viewFromLayout(layout)))
+-      .filter((box): box is PageBox => box !== null);
+-    if (visible.some((box) => overlapArea(box, crop) >= 0.5 * overlapArea(box, box))) {
+-      pictureIdentities.add(picture.identity);
+-    }
++      .filter((box): box is PageBox => box !== null && overlapArea(box, crop) >= 0.5 * overlapArea(box, box))
++      .reduce((sum, box) => sum + overlapArea(box, crop), 0);
++    if (covered > 0 && cropArea > 0) pictures.push({ identity: picture.identity, share: Math.min(1, covered / cropArea) });
+   }
+-  if ([...pictureIdentities].some((identity) => taken.includes(identity))) return null;
++  if (sharedShare(pictures, taken) >= REGION_PICTURE_SHARE) return null;
++  /* The model may box the very icon the bitmap route refused: a region that is
++     mostly one picture is that picture again, not the drawing. GPT Sol, plan
++     review of 261027e, 1. */
++  if (wholeDrawing && pictures.some((p) => p.share >= REGION_PICTURE_SHARE)) return null;
+   const [vx0, vy0, vx1, vy1] = layout.view;
+   try {
+     if (signal.aborted) return null;
+@@ -1153,7 +1220,7 @@ async function compositeRegion(
+       ? {
+           raster: rendered.raster,
+           identity: pictureIdentity(rendered.raster),
+-          pictureIdentities: [...pictureIdentities],
++          pictures,
+           page: answered.page,
+           box: crop,
+         }
+@@ -1163,6 +1230,64 @@ async function compositeRegion(
+   }
+ }
+ 
++/**
++ * **A pairing, kept, or refused because its picture is a small part of a
++ * drawing** (`in-a-drawing`) — `isPartOfDrawing`, src/pdf-figure-region.ts, on
++ * the page's layout from the drawn route's reader.
++ *
++ * **Fails closed**: a page whose layout, or whose picture's painted box, cannot
++ * be read is refused `unmeasured-picture`, since nothing then shows the picture
++ * is the whole figure, and a wrong picture under a caption is the outcome the
++ * product bar does not accept where a missing one is (GPT Sol, plan review of
++ * 261027e, 4). On every single-picture page in production's PDFs and the eval
++ * PDFs, 2026-10-27, both were readable, so this costs no figure we have seen.
++ * An abort claims nothing: the caller sees the signal and stops.
++ * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
++ */
++async function settleDrawingPart(
++  outcome: Extract<FigureOutcome, { status: "paired" }>,
++  read: PdfRasterRead,
++  options: CollectPdfFiguresOptions,
++  signal: AbortSignal,
++): Promise<FigureOutcome> {
++  const { page } = outcome.marker;
++  const refused = (reason: "in-a-drawing" | "unmeasured-picture"): FigureOutcome => ({
++    status: "refused",
++    marker: outcome.marker,
++    reason,
++  });
++  let layout: PageLayout | null | undefined;
++  try {
++    layout = (await (options.readLayouts ?? readPdfPageLayouts)({ data: options.pdf, pages: [page], signal })).get(page);
++  } catch {
++    return refused("unmeasured-picture");
++  }
++  const view = read.views.get(page);
++  const boxes = read.paints
++    .filter((p) => p.page === page && p.key === outcome.key)
++    .map((p) => (view ? visiblePaintBox(p, view) : null));
++  if (!layout || boxes.length === 0 || boxes.some((box) => box === null)) return refused("unmeasured-picture");
++  return boxes.some((box) => box !== null && isPartOfDrawing(box, layout)) ? refused("in-a-drawing") : outcome;
++}
++
++/** A picture a located region holds, and the share of the region's crop it covers. */
++interface RegionPicture {
++  identity: string;
++  share: number;
++}
++
++/**
++ * **How much of a region is made of these pictures** — the summed shares of
++ * those it holds, capped at the whole. Summed rather than unioned, which can
++ * only count more, so it errs towards a conflict.
++ */
++function sharedShare(pictures: readonly RegionPicture[], identities: readonly string[]): number {
++  return Math.min(
++    1,
++    pictures.filter((p) => identities.includes(p.identity)).reduce((sum, p) => sum + p.share, 0),
++  );
++}
++
+ /** The area two boxes share. */
+ function overlapArea(a: PageBox, b: PageBox): number {
+   return Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+@@ -1379,6 +1504,10 @@ function pdfFigureFailure(reason: PairingFailure): PdfFigureFailure {
+       return "caption-not-in-page-text";
+     case "uncaptioned":
+       return "uncaptioned";
++    case "in-a-drawing":
++      return "in-a-drawing";
++    case "unmeasured-picture":
++      return "unmeasured-picture";
+     case "unsupported-kind":
+       return "unsupported-kind";
+     case "grayscale-1bpp":
+diff --git a/src/pdf-figure-region.ts b/src/pdf-figure-region.ts
+index 078cdbcca..33861a1b8 100644
+--- a/src/pdf-figure-region.ts
++++ b/src/pdf-figure-region.ts
+@@ -624,6 +624,55 @@ export function inkComponents(band: BandContents, gap: number = TOUCH_GAP_PT): I
+   });
+ }
+ 
++/* ------------------------------------------------------------------ *
++ * A picture that is part of a drawing
++ * ------------------------------------------------------------------ */
++
++/**
++ * **A picture whose drawing is at least this many times its own area is a part
++ * of that drawing, not the figure.** LeCun's diagrams wire a 60 pt photo of
++ * the Earth into boxes and arrows, and the bitmap route stored the Earth as
++ * three different figures (report spya-m40r6t). Measured 2026-10-27 over every
++ * single-picture page in production's 13 PDF articles and the 14 eval PDFs:
++ * real picture figures 1.00–1.29 (a raster chart with drawn marks round it),
++ * the Earth 17–31. docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
++ */
++export const IN_A_DRAWING_RATIO = 3;
++
++/**
++ * **The box of the drawing a picture is wired into**: the picture's own box,
++ * grown by every painted path chained to it by touching (`TOUCH_GAP_PT`, the
++ * same chaining as `inkComponents`). Page furniture, white artboards and paths
++ * the size of a page region are left out, since a frame round the whole page
++ * touches everything. Pure.
++ */
++export function drawingAround(picture: PageBox, layout: PageLayout): PageBox {
++  const [vx0, vy0, vx1, vy1] = layout.view;
++  const page: Page = { width: vx1 - vx0, height: vy1 - vy0, top: vy1, bottom: vy0 };
++  const ink = withoutFurniture(layout.ink, page).filter(
++    (b) => !b.white && area(b) <= MAX_REGION_AREA_FRACTION * page.width * page.height,
++  );
++  const joined = ink.map(() => false);
++  const queue: PageBox[] = [picture];
++  let box = picture;
++  while (queue.length > 0) {
++    const from = queue.pop() as PageBox;
++    for (const [i, other] of ink.entries()) {
++      if (joined[i] || !touches(from, other)) continue;
++      joined[i] = true;
++      queue.push(other);
++      box = union(box, other);
++    }
++  }
++  return box;
++}
++
++/** Whether this picture is a small part of a drawing — `IN_A_DRAWING_RATIO`. Pure. */
++export function isPartOfDrawing(picture: PageBox, layout: PageLayout): boolean {
++  const own = area(picture);
++  return own > 0 && area(drawingAround(picture, layout)) >= IN_A_DRAWING_RATIO * own;
++}
++
+ /**
+  * One closed rectangle — painted once, or filled and stroked as two paths over
+  * the same corners — with a line of text inside its conservative page box.
+diff --git a/src/pdf-figures.ts b/src/pdf-figures.ts
+index 8db1286f8..061296fe5 100644
+--- a/src/pdf-figures.ts
++++ b/src/pdf-figures.ts
+@@ -650,7 +650,22 @@ export type PdfFigureFailure =
+    * later located route now does:
+    * docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md.
+    */
+-  | "uncaptioned";
++  | "uncaptioned"
++  /**
++   * **The page's one picture is a small part of a drawing**, so pairing it would
++   * put an icon under the caption of a whole diagram. Not decided here, since it
++   * needs the page's vector ink: src/collect-pdf-figures.ts turns a pairing
++   * into this refusal after `pairPageFigures`, by `isPartOfDrawing`.
++   * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
++   */
++  | "in-a-drawing"
++  /**
++   * **The page's layout, or the picture's painted box, could not be read**, so
++   * nothing shows the picture is the whole figure rather than part of a
++   * drawing. Refused rather than kept: a missing figure is visible and a wrong
++   * one is not. Decided in src/collect-pdf-figures.ts, as `in-a-drawing` is.
++   */
++  | "unmeasured-picture";
+ 
+ /** What became of one marker. Exactly one of these exists per marker. */
+ export type FigureOutcome =
+diff --git a/tests/collect-assets.test.ts b/tests/collect-assets.test.ts
+index 22d691c31..49cbda703 100644
+--- a/tests/collect-assets.test.ts
++++ b/tests/collect-assets.test.ts
+@@ -1346,15 +1346,15 @@ describe("assetsInputHash", () => {
+    * without the second it would pass against a hash of a constant.
+    */
+   it("stales a PDF article, and only a PDF article, when the figure policy changes", () => {
+-    /* `pdf-figures/7` is the located route asked about uncaptioned figures
+-       (docs/plans/261019j-uncaptioned-pdf-figures-located-by-their-neighbours.md):
+-       an article stored under `/6` has uncaptioned figures that route can now
+-       recover, and must read stale rather than current. A web article's stamp
++    /* `pdf-figures/8` refuses a picture inside a drawing as the figure
++       (docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md):
++       an article stored under `/7` may hold an icon under a diagram's caption,
++       and must read stale rather than current. A web article's stamp
+        must not move with it. Both values pinned, so the next bump is a decision
+        somebody makes here rather than a side effect. GPT Sol, 260924e stage 2
+        plan review, 9. */
+-    expect(PDF_FIGURE_RECOVERY_POLICY).toBe("pdf-figures/7");
+-    expect(assetsInputHash([figure(3)])).toBe("fa892bc5109378d8");
++    expect(PDF_FIGURE_RECOVERY_POLICY).toBe("pdf-figures/8");
++    expect(assetsInputHash([figure(3)])).toBe("b63423c144924fe4");
+     expect(assetsInputHash([img("https://cdn.test/a.png")])).toBe("440878edf3cb0169");
+   });
+ 
+diff --git a/tests/collect-pdf-composite-figures.test.ts b/tests/collect-pdf-composite-figures.test.ts
+index c0b301027..5f16adc0f 100644
+--- a/tests/collect-pdf-composite-figures.test.ts
++++ b/tests/collect-pdf-composite-figures.test.ts
+@@ -232,3 +232,189 @@ describe("a composite figure the model boxed", () => {
+     expect(run.locateCalls).toBe(MAX_LOCATE_CALLS);
+   }, 120_000);
+ });
++
++/* ------------------------------------------------------------------ *
++ * A small picture inside a drawing — report spya-m40r6t,
++ * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md.
++ * ------------------------------------------------------------------ */
++
++/**
++ * One page of a diagram in the shape of LeCun's: boxes joined by lines, and
++ * small embedded icons (the paper's Earth, its "Z" and "S") wired into it.
++ * The same icons are reused on every page, as the paper reuses them.
++ */
++async function iconDiagramsPdf(captions: readonly string[], icons: number): Promise<Uint8Array> {
++  const doc = await PDFDocument.create();
++  const font = await doc.embedFont(StandardFonts.Helvetica);
++  const images = [await doc.embedPng(await photo(7)), await doc.embedPng(await photo(8))];
++  const black = rgb(0, 0, 0);
++  for (const [n, caption] of captions.entries()) {
++    const page = doc.addPage([595, 842]);
++    for (const y of [780, 766, 752, 380, 366, 352]) page.drawText(PROSE, { x: 60, y, size: 10, font });
++    /* Different labels on each page: two identical renders under two captions
++       are refused by a rule of their own, which is not what is tested here. */
++    for (const [x, label] of [[200, "Enc"], [300, "Pred"], [400, "Cost"]] as const) {
++      page.drawRectangle({ x, y: 580, width: 60, height: 30, borderColor: black, borderWidth: 1 });
++      page.drawText(`${label}${n + 1}`, { x: x + 8, y: 590, size: 9, font });
++    }
++    page.drawLine({ start: { x: 260, y: 595 }, end: { x: 300, y: 595 }, thickness: 1, color: black });
++    page.drawLine({ start: { x: 360, y: 595 }, end: { x: 400, y: 595 }, thickness: 1, color: black });
++    page.drawLine({ start: { x: 230, y: 580 }, end: { x: 230, y: 525 }, thickness: 1, color: black });
++    for (let i = 0; i < icons; i++) {
++      const image = images[i];
++      if (!image) throw new Error("two icons at most");
++      page.drawImage(image, { x: 110 + i * 300, y: 510, width: 40, height: 30 });
++      /* Wired in: a line from the icon's edge into the drawing. */
++      if (i === 0) page.drawLine({ start: { x: 150, y: 525 }, end: { x: 230, y: 525 }, thickness: 1, color: black });
++      else page.drawLine({ start: { x: 430, y: 540 }, end: { x: 430, y: 580 }, thickness: 1, color: black });
++    }
++    page.drawText(caption, { x: 60, y: 470, size: 9, font });
++  }
++  return doc.save();
++}
++
++/** Each figure's whole drawing, as a model that answered correctly would box it. */
++const DIAGRAM_BOX = box2d(105, 505, 465, 615);
++
++describe("a small picture inside a drawing is not the figure", () => {
++  const captions = [
++    "Fig 3. A perception-action episode with the world in it.",
++    "Fig 4. The same agent planning several steps ahead.",
++  ];
++  const markers = [marker(1), marker(2)];
++  const captionsByRef = new Map(markers.map((m, i) => [m.ref, captions[i] ?? ""]));
++  /* Answers each figure's own page with its whole drawing. */
++  const answering = (asked: string[] = []): FigureLocator => async (request) => {
++    const caption = request.subject.kind === "caption" ? request.subject.caption : "";
++    asked.push(caption);
++    return { ok: true, answer: { page: caption.startsWith("Fig 3") ? 1 : 2, box_2d: DIAGRAM_BOX } };
++  };
++
++  it("refuses the icon rather than storing it as the figure", async () => {
++    const run = await collectPdfFigures({
++      neighbours: new Map(),
++      locate: null,
++      captions: captionsByRef,
++      markers,
++      pdf: await iconDiagramsPdf(captions, 1),
++      blobs: fakeBlobs(),
++    });
++    /* Until 261027e the one picture on each page was paired with its caption:
++       the same icon stored twice, as two different figures. */
++    expect(run.entries).toMatchObject([
++      { status: "failed", reason: "in-a-drawing" },
++      { status: "failed", reason: "in-a-drawing" },
++    ]);
++  }, 120_000);
++
++  it("asks the locator instead, and stores each whole drawing", async () => {
++    const asked: string[] = [];
++    const run = await collectPdfFigures({
++      neighbours: new Map(),
++      locate: answering(asked),
++      captions: captionsByRef,
++      markers,
++      pdf: await iconDiagramsPdf(captions, 1),
++      blobs: fakeBlobs(),
++    });
++    expect(asked).toHaveLength(2);
++    expect(run.located).toBe(2);
++    for (const entry of run.entries) {
++      expect(entry.status).toBe("stored");
++      /* The drawing, not the 4:3 icon. */
++      if (entry.status === "stored") expect(entry.width / entry.height).toBeGreaterThan(2.5);
++    }
++  }, 120_000);
++
++  it("keeps two drawings that share their small icons", async () => {
++    /* LeCun's Figures 10 and 12: two icons on each page, so the bitmap route
++       says `ambiguous`; the composite route accepted the right box for each,
++       and then both were dropped because they "shared a picture". */
++    const pdf = await iconDiagramsPdf(captions, 2);
++    const before = await collectPdfFigures({ neighbours: new Map(), locate: null, captions: captionsByRef, markers, pdf, blobs: fakeBlobs() });
++    expect(before.entries.map((e) => (e.status === "failed" ? e.reason : e.status))).toEqual(["ambiguous", "ambiguous"]);
++
++    const run = await collectPdfFigures({ neighbours: new Map(), locate: answering(), captions: captionsByRef, markers, pdf, blobs: fakeBlobs() });
++    expect(run.entries.map((e) => e.status)).toEqual(["stored", "stored"]);
++    expect(run.located).toBe(2);
++  }, 120_000);
++
++  it("never stores the icon when the model boxes only the icon", async () => {
++    /* GPT Sol, plan review of 261027e, 1: the locator's one-picture verdict
++       would otherwise put back exactly what the bitmap route refused. One
++       figure only: with two, both choosing the same icon are refused by the
++       older rule against one picture under two captions, which would hide
++       whether this one holds. */
++    const only = marker(1);
++    const iconOnly: FigureLocator = async () => ({ ok: true, answer: { page: 1, box_2d: box2d(111, 511, 149, 539) } });
++    const run = await collectPdfFigures({
++      neighbours: new Map(),
++      locate: iconOnly,
++      captions: new Map([[only.ref, captions[0] ?? ""]]),
++      markers: [only],
++      pdf: await iconDiagramsPdf(captions.slice(0, 1), 1),
++      blobs: fakeBlobs(),
++    });
++    expect(run.locateCalls).toBe(1);
++    expect(run.entries).toMatchObject([{ status: "failed", reason: "in-a-drawing" }]);
++  }, 120_000);
++
++  it("refuses rather than risks a picture whose page layout cannot be read", async () => {
++    const run = await collectPdfFigures({
++      neighbours: new Map(),
++      locate: null,
++      captions: captionsByRef,
++      markers,
++      pdf: await iconDiagramsPdf(captions, 1),
++      blobs: fakeBlobs(),
++      readLayouts: async () => {
++        throw new Error("pdf.js could not lay this page out");
++      },
++    });
++    expect(run.entries).toMatchObject([
++      { status: "failed", reason: "unmeasured-picture" },
++      { status: "failed", reason: "unmeasured-picture" },
++    ]);
++  }, 120_000);
++});
++
++describe("a repeated grid of photos is still one figure under two captions", () => {
++  it("refuses both, even when the two boxes differ so the renders do", async () => {
++    /* GPT Sol, plan review of 261027e, 3: in a grid of six no one photo covers
++       a quarter of the region, so the pictures two regions share are summed
++       rather than judged one at a time. */
++    const doc = await PDFDocument.create();
++    const font = await doc.embedFont(StandardFonts.Helvetica);
++    const images = await Promise.all([1, 2, 3, 4, 5, 6].map(async (seed) => doc.embedPng(await photo(seed))));
++    const twoCaptions = ["Fig 1. Six panels of one experiment.", "Fig 2. The same six panels, said again."];
++    for (const caption of twoCaptions) {
++      const page = doc.addPage([595, 842]);
++      for (const y of [780, 766, 752, 380, 366, 352]) page.drawText(PROSE, { x: 60, y, size: 10, font });
++      for (const [i, image] of images.entries()) {
++        page.drawImage(image, { x: 100 + (i % 3) * 88, y: 500 + Math.floor(i / 3) * 64, width: 80, height: 60 });
++      }
++      page.drawText(caption, { x: 60, y: 470, size: 9, font });
++    }
++    const pdf = await doc.save();
++    const both = [marker(1), marker(2)];
++    const locate: FigureLocator = async (request) => {
++      const first = request.subject.kind === "caption" && request.subject.caption.startsWith("Fig 1");
++      return {
++        ok: true,
++        answer: first
++          ? { page: 1, box_2d: box2d(95, 495, 365, 630) }
++          : { page: 2, box_2d: box2d(90, 490, 372, 632) },
++      };
++    };
++    const run = await collectPdfFigures({
++      neighbours: new Map(),
++      locate,
++      captions: new Map(both.map((m, i) => [m.ref, twoCaptions[i] ?? ""])),
++      markers: both,
++      pdf,
++      blobs: fakeBlobs(),
++    });
++    expect(run.entries.map((e) => e.status)).toEqual(["failed", "failed"]);
++    expect(run.located).toBe(0);
++  }, 120_000);
++});
+diff --git a/tests/collect-pdf-figures.test.ts b/tests/collect-pdf-figures.test.ts
+index 34fd55b64..93c6028fd 100644
+--- a/tests/collect-pdf-figures.test.ts
++++ b/tests/collect-pdf-figures.test.ts
+@@ -39,6 +39,7 @@ import { nullCheckpointStore } from "../src/store/checkpoints.js";
+ import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
+ import type { FigureLocator, FigureNeighbours, LocateSubject } from "../src/pdf-figure-locate.js";
+ import type { PdfRasterRead } from "../src/pdf-figure-read.js";
++import { readPdfPageLayouts } from "../src/pdf-figure-layout.js";
+ 
+ const HARDER = "evals/pdf/harder/source.pdf";
+ 
+@@ -360,7 +361,11 @@ describe("the step's own deadline", () => {
+       blobs: fakeBlobs(),
+       captions: new Map([...HARDER_CAPTIONS, [drawn.ref, "Figure 1. A caption that turns the drawn route on."]]),
+       signal: stop.signal,
+-      readLayouts: async () => {
++      /* Slow for the drawn route's page only. The bitmap's own page is read
++         too, since 261027e, to ask whether its picture is part of a drawing;
++         that read is part of deciding the bitmap, not drawn-page work. */
++      readLayouts: async (options) => {
++        if (!options.pages.includes(drawn.page)) return readPdfPageLayouts(options);
+         stop.abort();
+         throw new Error("layout work stopped");
+       },
+@@ -369,6 +374,31 @@ describe("the step's own deadline", () => {
+     expect(run.entries[1]).toMatchObject({ ref: bitmap.ref, status: "stored" });
+   }, 60_000);
+ 
++  it("keeps a bitmap already checked and stored when a later page's check runs out of time", async () => {
++    /* Each paired page is asked whether its picture is part of a drawing, and
++       stored, before the next page is read (261027e). A batch read of every
++       page first let one slow page turn them all `out-of-time`. GPT Sol, plan
++       review of 261027e, 6. */
++    const stop = new AbortController();
++    const first = marker(3);
++    const second = marker(6);
++    const run = await collectPdfFigures({ neighbours: new Map(),
++      locate: null,
++      markers: [first, second],
++      pdf: await bytes(HARDER),
++      blobs: fakeBlobs(),
++      captions: HARDER_CAPTIONS,
++      signal: stop.signal,
++      readLayouts: async (options) => {
++        if (!options.pages.includes(second.page)) return readPdfPageLayouts(options);
++        stop.abort();
++        throw new Error("layout work stopped");
++      },
++    });
++    expect(run.entries[0]).toMatchObject({ ref: first.ref, status: "stored" });
++    expect(run.entries[1]).toMatchObject({ ref: second.ref, status: "failed", reason: "out-of-time" });
++  }, 60_000);
++
+   /**
+    * **The test the two abort tests above could not be.**
+    *
+diff --git a/tests/pdf-figure-region.test.ts b/tests/pdf-figure-region.test.ts
+index 753cf32b2..70c9f3793 100644
+--- a/tests/pdf-figure-region.test.ts
++++ b/tests/pdf-figure-region.test.ts
+@@ -19,7 +19,10 @@ import { describe, expect, it } from "vitest";
+ import {
+   ADMIT_DISCONNECTED_DRAWINGS,
+   type DrawnFigureInput,
++  drawingAround,
++  IN_A_DRAWING_RATIO,
+   type InkBox,
++  isPartOfDrawing,
+   locateDrawnFigure,
+   MAX_INK_COMPONENTS,
+   MAX_PAGE_OPERATORS,
+@@ -473,3 +476,56 @@ describe("a figure made of drawings that do not touch", () => {
+     });
+   });
+ });
++
++/* ------------------------------------------------------------------ *
++ * A picture that is part of a drawing — report spya-m40r6t,
++ * docs/plans/261027e-a-picture-inside-a-drawing-is-not-the-figure.md
++ * ------------------------------------------------------------------ */
++
++describe("isPartOfDrawing", () => {
++  /** A 60 × 60 pt picture, the size of LeCun's Earth. */
++  const picture = { x0: 100, y0: 500, x1: 160, y1: 560 };
++
++  it("calls a picture wired into boxes and arrows a part of that drawing", () => {
++    const page = layout({
++      ink: [
++        ink(160, 528, 240, 532), // an arrow out of the picture
++        ink(240, 510, 320, 550, true), // the box it points at
++        ink(320, 528, 400, 532), // and on
++        ink(400, 510, 480, 550, true),
++      ],
++    });
++    expect(drawingAround(picture, page)).toEqual({ x0: 100, y0: 500, x1: 480, y1: 560 });
++    expect(isPartOfDrawing(picture, page)).toBe(true);
++  });
++
++  it("does not for a picture alone, or in a thin frame", () => {
++    expect(isPartOfDrawing(picture, layout())).toBe(false);
++    expect(isPartOfDrawing(picture, layout({ ink: [ink(98, 498, 162, 562, true)] }))).toBe(false);
++  });
++
++  it("does not for a raster chart with drawn axes and ticks along two edges", () => {
++    const ticks = Array.from({ length: 6 }, (_, i) => ink(100 + i * 12, 494, 100.5 + i * 12, 500));
++    const page = layout({ ink: [ink(99, 500, 100, 560), ink(100, 499, 160, 500), ...ticks] });
++    expect(isPartOfDrawing(picture, page)).toBe(false);
++  });
++
++  it("does not chain ink that does not touch the picture", () => {
++    /* More than TOUCH_GAP_PT away: beside the picture, not wired to it. */
++    const page = layout({ ink: [ink(180, 500, 480, 560, true)] });
++    expect(drawingAround(picture, page)).toEqual(picture);
++  });
++
++  it("leaves out a frame round the whole page, which touches everything", () => {
++    expect(isPartOfDrawing(picture, layout({ ink: [ink(20, 20, 575, 822, true)] }))).toBe(false);
++  });
++
++  it("draws the line at IN_A_DRAWING_RATIO times the picture's area", () => {
++    /* A bar out of the picture's right edge, as tall as the picture, so the
++       drawing's box is the picture widened by the bar's length. */
++    const atRatio = 60 * (IN_A_DRAWING_RATIO - 1);
++    const bar = (length: number) => layout({ ink: [ink(160, 500, 160 + length, 560)] });
++    expect(isPartOfDrawing(picture, bar(atRatio - 1))).toBe(false);
++    expect(isPartOfDrawing(picture, bar(atRatio))).toBe(true);
++  });
++});

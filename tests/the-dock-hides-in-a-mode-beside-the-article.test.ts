@@ -42,6 +42,17 @@
  *
  * The pattern is tests/shared-notice-hides-with-the-masthead.test.tsx, which
  * holds two halves of a fix together for the same reason.
+ *
+ * ## Since 2026-10-29 the condition is a flag on `<html>`
+ *
+ * The rules asked `:root:has(:where(.reader.band-covers) .mode-band)`, which
+ * walked the whole article after almost every change to the page (plan
+ * 261029k). They read `[data-band-covers]` now, which the band's own renderer
+ * holds only while `.reader` carries `band-covers` (src/web/band-root-flags.ts,
+ * held to that by tests/band-root-flags.test.tsx). There is no "a band is
+ * open" flag for a rule here to reach for — `RootFlag` is a closed union — so
+ * the proxy can come back only as a bare `.mode-band`, which is still refused
+ * below, or as a new flag, which would have to be added to that union.
  */
 import { describe, expect, it } from "vitest";
 import { readerSheets, stripComments } from "./helpers/stylesheets.js";
@@ -88,6 +99,8 @@ function dockQuery(): string {
  * different selector. The narrow-window.css comment has the measurement.
  */
 const QUALIFIER = ":where(.reader.band-covers) ";
+/** The flag that says the same thing from `<html>` (band-root-flags.ts). */
+const COVERS = "[data-band-covers]";
 
 /**
  * **Per occurrence of `.mode-band`, not per rule** — and that distinction is
@@ -136,12 +149,17 @@ function ruleAround(block: string, needle: string): string {
 describe("the dock, in a mode, in the query where it leaves the screen", () => {
   it("never asks merely whether a mode is open", () => {
     const block = dockQuery();
-    /* The block must actually mention the band, or an empty result would read
-       as "nothing unqualified" — the vacuous pass this whole file is against. */
+    /* The block must actually ask about the band, or an empty result would read
+       as "nothing unqualified" — the vacuous pass this whole file is against.
+       Asked by the flag since 2026-10-29; any `.mode-band` left must still be
+       qualified. */
     expect(
-      [...block.matchAll(/\.mode-band/g)].length,
-      "no rule in § a small device mentions the band at all",
+      [...block.matchAll(/\[data-band-covers\]/g)].length,
+      "no rule in § a small device asks about the band at all",
     ).toBeGreaterThan(0);
+    expect(block, "a rule here asks for some other band flag than the covering one").not.toMatch(
+      /\[data-band-(?!covers\])/,
+    );
     expect(
       unqualifiedBands(block),
       "a rule here holds the dock down for any open mode, including one with the article beside it",
@@ -155,8 +173,8 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
        selector, which is the thing under test. */
     const at = block.indexOf("--dock-bottom: var(--dock-space)");
     expect(at, "nothing in § a small device brings the dock back any more").toBeGreaterThan(-1);
-    const guard = block.slice(0, at).lastIndexOf(":root:has(");
-    expect(guard, "the guard is not a `:root:has()` any more").toBeGreaterThan(-1);
+    const guard = block.slice(0, at).lastIndexOf(":root:root:is(");
+    expect(guard, "the guard is not a `:root:root:is()` any more").toBeGreaterThan(-1);
     const selector = block.slice(guard, at);
     /* **The exact spelling, `:where()` and all.** Both halves are load-bearing
        and for different reasons, so a looser `toContain(".band-covers")` would
@@ -175,11 +193,15 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
        `:has()` rather than several selectors". GPT Sol pointed out on
        2026-09-08 that it proves nothing about specificity **and rejects the
        correct fix**, `:where()` being a second paren. A test that fails the
-       right answer is worse than no test. */
+       right answer is worse than no test.
+
+       **Since 2026-10-29** the argument is `[data-band-covers]` and the
+       (0,3,0) is carried by the doubled `:root` (narrow-window.css says why);
+       the spelling asserted is the flag and the doubled root together. */
     expect(
       selector,
       "the covering band no longer pins the dock — a phone in portrait is stranded",
-    ).toContain(":where(.reader.band-covers) .mode-band");
+    ).toContain(COVERS);
   });
 
   /**
@@ -191,7 +213,7 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
    * under its own menu. The trigger carries `data-state="open"` for as long as
    * the list is up, and the guard names it.
    *
-   * **As an argument of the same `:root:has()`**, not a rule of its own: the
+   * **As an argument of the same guard**, not a rule of its own: the
    * guard restores three coupled variables (the case below), and a second
    * rule is a second place to restore only one of them. The spelling is
    * `MORE_OPEN` in Dock.tsx, which tests/dock-more.test.tsx holds to this one.
@@ -199,19 +221,19 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
   it("holds the dock down while its More menu is open", () => {
     const block = dockQuery();
     const at = block.indexOf("--dock-bottom: var(--dock-space)");
-    const guard = block.slice(0, at).lastIndexOf(":root:has(");
+    const guard = block.slice(0, at).lastIndexOf(":root:root:is(");
     expect(guard).toBeGreaterThan(-1);
     const args = block
-      .slice(guard + ":root:has(".length, block.indexOf("{", guard))
+      .slice(guard + ":root:root:is(".length, block.indexOf("{", guard))
       .split(",")
       .map((arg) => arg.trim().replace(/\)$/, "").trim());
     /* The splitter is read back first, so a list it failed to parse cannot
-       pass for a list with the argument missing — or present. */
-    expect(args).toContain(".dock:focus-within");
-    expect(args).toContain(".dock-drawer");
-    expect(args, "an open More menu no longer pins the dock on a phone").toContain(
-      '.dock-more-trigger[data-state="open"]',
-    );
+       pass for a list with the argument missing — or present. The flags are
+       `Dock`'s and `DockMore`'s (root-flags.ts); tests/dock-more.test.tsx
+       holds `DockMore`'s to its `open` state. */
+    expect(args).toContain("[data-dock-focus]");
+    expect(args).toContain("[data-dock-drawer]");
+    expect(args, "an open More menu no longer pins the dock on a phone").toContain("[data-dock-more-open]");
   });
 
   it("still keeps the dock's slide for the case where the reader can scroll it back", () => {
@@ -224,7 +246,7 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
       m[0].trim(),
     );
     expect(rules.length, "expected exactly one rule to kill the dock's transition").toBe(1);
-    expect(rules[0]).toContain(`${QUALIFIER}.mode-band`);
+    expect(rules[0]).toContain(COVERS);
   });
 
   it("moves the bar, the hint and the hint's room as one state", () => {

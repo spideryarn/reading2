@@ -1,15 +1,22 @@
 /**
  * **Sources mode's controller** — what this piece cites, and what others
- * say about it. One band, six sub-modes (`?sources=`):
+ * say about it. One band, nine sub-mode addresses (`?sources=`), three of them chips
+ * for the owner since plan 261025h:
  *
  * ```
- *  ┌ Bibliography 42 │ Not cited 18 │ Links 61 │ Reception 3 │ Claims 8 │ Investigate ┐  (i)
- *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (default)
- *  │ NotCitedPanel, OpenAlex's search on the owner's press  ← Not cited (owner only)
+ *  ┌ Where it sits │ Bibliography 42 │ Links 61 ┐                           (i)
+ *  │ WhereItSitsPanel: dossier, Go further, Papers that cite it, What it builds on ← Where it sits (owner default)
+ *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (a visitor's default)
  *  │ LinksPanel, read from the article's markup                    ← Links
- *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims
- *  │ InvestigatePanel, questions handed to Chat                     ← Investigate (owner only)
+ *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims (tools)
+ *  │ NotCitedPanel, OpenAlex's search on the owner's press  ← Not cited (a tool)
+ *  │ InvestigatePanel, questions handed to Chat                     ← Investigate (a tool)
+ *  │ SourcesExperimentPanel, the dossier met first   ← Guess first, Evidence first (switch on)
  * ```
+ *
+ * A tool's head is the chip row with *Where it sits* lit (params.ts §
+ * `chipOf`) and *Where it sits › the tool's name* beside it (WhereItSitsPanel.tsx §
+ * `ToolBack`). docs/plans/261025h-sources-becomes-three-chips-a-cost-ladder-and-experiments.md.
  *
  * Citations and Debate were two modes, both behind the experimental switch,
  * until 2026-10-09. Greg (spya-vcvxu5): *"let's move this out of
@@ -28,19 +35,23 @@
  * numbers come from sources-counts.ts, the same selectors the panels draw
  * their lists with (GPT Sol's F4).
  *
- * **Every read stays mounted in all six sub-modes**, so each chip can show
- * its count, and **each auto-run is gated on its own sub-mode**: a press that
- * lands on Reception arms the paid search and nothing else, and a press armed
- * for one sub-mode that finds another on screen is retired unspent
- * (useAutoRun.ts § `enabled`). The reads are free GETs. Not cited's read, like
- * *Cited by*'s, is not asked until its chip is first shown, and its search is
- * only ever the panel's button (plan 261011ac, F1).
+ * **Every shared read stays mounted in every sub-mode**, so each chip and tool
+ * can show its count, and **each auto-run is gated on its own sub-mode**: a
+ * press that lands on *Where it sits* arms its composite (Bibliography plus
+ * the literature search, whichever is missing); Bibliography arms only its
+ * own list. A press armed for one sub-mode that finds another on screen is
+ * retired unspent (useAutoRun.ts § `enabled`). The reads are free GETs. Not
+ * cited's read, like *Cited by*'s, is not asked until its view is first shown,
+ * and its search is only ever the panel's button (plan 261011ac, F1); the
+ * literature search's read is asked by *Where it sits* and Investigate alone.
  *
- * The visitor twin, `VisitorSourcesBand`, draws the same chips and panels
- * off the public payload and mounts none of those hooks, so it can neither
- * read the owner's lists nor start anything. It has no Not cited or Investigate chip,
- * and reads `?sources=not-cited` and `?sources=investigate` as Bibliography (params.ts
- * § `visitorSourcesView`). Any one of the three artefacts
+ * The visitor twin, `VisitorSourcesBand`, draws its own four chips and the
+ * panels off the public payload and mounts none of those hooks, so it can
+ * neither read the owner's lists nor start anything. It has no *Where it
+ * sits*, Not cited or Investigate, and reads `?sources=where` (the bare
+ * address), `?sources=not-cited` and `?sources=investigate` as Bibliography
+ * (params.ts § `visitorSourcesView`): unchanged by plan 261025h (GPT Sol's
+ * F3). Any one of the three artefacts
  * opens the mode for a visitor (visitor.ts § POLICY); a sub-mode with nothing
  * stored says so inside the band.
  *
@@ -54,7 +65,7 @@
  */
 
 import { useQueryState } from "nuqs";
-import { type ComponentProps, useEffect, useMemo, useRef } from "react";
+import { type ComponentProps, useMemo, useRef } from "react";
 import type { BlockId } from "../../../types.js";
 import type { PublicBibliography, PublicReception, PublicSourcesClaimList } from "../../../public-types.js";
 import {
@@ -63,7 +74,9 @@ import {
   citeOrderParam,
   receptionOrderParam,
   receptionThreadParam,
-  SOURCES_VIEWS,
+  SOURCES_CHIPS,
+  chipOf,
+  type SourcesExperiment,
   type SourcesView,
   sourcesParam,
   VISITOR_SOURCES_VIEWS,
@@ -75,6 +88,7 @@ import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
 import { useRenderCount } from "../../perf.js";
 import { useBibliography, type BibliographyRead } from "../../useBibliography.js";
+import { useWhereAutoRun, type WhereRunnable } from "../../useWhereAutoRun.js";
 import { useReception } from "../../useReception.js";
 import { useSourcesClaims } from "../../useSourcesClaims.js";
 import { useSourcesClaimChecks } from "../../useSourcesClaimChecks.js";
@@ -85,14 +99,23 @@ import type { CitedWorkChats } from "../../OriginChat.js";
 import type { ItemFocus } from "../../item-focus.js";
 import { yearOf } from "../../reception-order.js";
 import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js";
-import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from "../../sources-counts.js";
+import {
+  checkedSources,
+  listedClaims,
+  type SourcesCounts,
+  sourcesCounts,
+  whereToolCounts,
+} from "../../sources-counts.js";
+import { publishedYearOf } from "../../../types.js";
 import { type LinkableWork, type LinkedBlock, type OutboundLink, outboundLinks } from "../../outbound-links.js";
 import { LinksPanel } from "../../LinksPanel.js";
 import { useRelatedWork } from "../../useRelatedWork.js";
 import { NotCitedPanel } from "../../NotCitedPanel.js";
 import { InvestigatePanel, type SourcesInvestigateChats } from "../../InvestigatePanel.js";
+import { useSituate, useSituateRead } from "../../useSituate.js";
+import { ToolBack, type WhereBefore, type WhereChild, WhereItSitsPanel } from "../../WhereItSitsPanel.js";
+import { SourcesExperimentPanel } from "../../SourcesExperiments.js";
 import { useExperimental } from "../../useExperimental.js";
-import { useSituate } from "../../useSituate.js";
 
 /** The article's own hyperlinks, worked out once per blocks array for the Links chip and its panel. */
 function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | null): OutboundLink[] {
@@ -102,7 +125,7 @@ function useOutboundLinks(blocks: readonly LinkedBlock[], sourceUrl: string | nu
 const NO_WORKS: readonly LinkableWork[] = [];
 
 /**
- * **The owner's band.** Every read the six sub-modes need, the chip row, and
+ * **The owner's band.** Every read the nine sub-mode addresses need, the chip row, and
  * the panel the sub-mode names.
  *
  * A component of its own for the reason every artefact band is: the hooks
@@ -121,6 +144,7 @@ export function SourcesBand({
   onJump,
   blockOrder,
   publishedAt,
+  publishedYear,
   articleTitle,
   workChats,
   claimChats,
@@ -148,6 +172,11 @@ export function SourcesBand({
   blockOrder: ReadonlyMap<BlockId, number>;
   /** The article's `Meta.publishedAt`, unread — Reception's *date* marker takes its year. */
   publishedAt: unknown;
+  /**
+   * The article's `Meta.publishedYear`, unread: the year alone, set only when
+   * there is no `publishedAt` (`pieceYear`).
+   */
+  publishedYear?: unknown;
   /** The article's title, for Reception's *Who cites it* search (ReceptionAndClaimsPanel § Props). */
   articleTitle: string | null;
   /** A chat about one cited work (BibliographyPanel § `BibliographyAccess`). */
@@ -162,7 +191,7 @@ export function SourcesBand({
   /** One claim to bring into view in Claims, once (ReceptionAndClaimsPanel § `Props.focus`). */
   claimFocus: ItemFocus | null;
   onClaimFocusTaken(focus: ItemFocus): void;
-  /** One Situate finding to bring into view in Investigate's dossier, once (plan 261024o; SituateDossier § `focus`). */
+  /** One Situate finding or overview to bring into view in *Where it sits*' dossier, once (plans 261024o and 261026g; SituateDossier § `focus`). */
   findingFocus?: ItemFocus | null;
   onFindingFocusTaken?: (focus: ItemFocus) => void;
   /** Open Bibliography on one work — Claims' *Cited in this paragraph* (Reader.tsx § `openBibliographyWork`). */
@@ -170,7 +199,15 @@ export function SourcesBand({
 }) {
   useRenderCount("SourcesBand");
   const [view, setView] = useQueryState("sources", sourcesParam);
-  const bibliography = useBibliography(slug, bibliographyRead, view === "bibliography");
+  /* The switch decides only whether the tools row offers the two experiments;
+     an experiment's address draws it either way (plan 261025h, Stage 4). */
+  const experimental = useExperimental();
+  /* *Where it sits* arms the citations as Bibliography does, because *Before
+     it* is drawn from them (plan 261025h, decision 8, GPT Sol's F4). */
+  const bibliography = useBibliography(slug, bibliographyRead, view === "bibliography" || view === "where");
+  /* Gated on Reception as before, but no press arms its search since plan
+     261025h: the panel's own button is the only way in (activation.ts §
+     `activationForSources`). */
   const reception = useReception(slug, view === "reception");
   /* Claims' own list and its own press (activation.ts § `activationForSources`). */
   const claimList = useSourcesClaims(slug, view === "claims");
@@ -178,13 +215,17 @@ export function SourcesBand({
      by a press on Check or Dig further. Read in every sub-mode, because the
      Claims chip's count is drawn from them. */
   const checks = useSourcesClaimChecks(slug);
-  /* Who cites the piece, Reception's *Cited by*: a second read with no job
-     under it, so it can never start the search. Plan 261004h. */
-  const citers = useCiters(slug, view === "reception");
-  /* Not cited's stored answer, read when its chip is first shown and when
-     Bibliography changes, then kept for its count; its search is the panel's
-     button alone. Plan 261011ac. */
-  const related = useRelatedWork(slug, view === "not-cited", bibliography.bibliography);
+  /* Who cites the piece, Reception's *Cited by* and *Where it sits*' *After
+     it*: a second read with no job under it, so it can never start the
+     search. Plan 261004h; asked on *Where it sits* since plan 261025h, so on
+     opening Sources (privacy.md § OpenAlex). */
+  const citers = useCiters(slug, view === "reception" || view === "where");
+  /* Not cited's stored answer, read when it or *Where it sits* is first shown
+     and when Bibliography changes, then kept for its count; its search is the
+     panel's button alone. Plan 261011ac. Read on *Where it sits* since
+     2026-10-26 for the tools row's number: the GET reads our own table and
+     never asks OpenAlex (routes.ts § related-work). */
+  const related = useRelatedWork(slug, view === "not-cited" || view === "where", bibliography.bibliography);
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
   const links = useOutboundLinks(blocks, sourceUrl);
@@ -199,9 +240,64 @@ export function SourcesBand({
     relevance: receptionAndClaimsControls.relevance,
     thread: receptionAndClaimsControls.thread,
   });
-  const head = <SourcesViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
+  const chips = <SourcesViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
+  /* A tool's head says which tool it is and the way back (plan 261025h); an experiment's too. */
+  const toolHead = (tool: WhereChild) => (
+    <>
+      {chips}
+      <ToolBack tool={tool} onBack={() => void setView("where")} />
+    </>
+  );
+  const head = chips;
+  const works = bibliography.bibliography?.citations ?? null;
+  const articleYear = pieceYear(publishedAt, publishedYear);
 
   switch (view) {
+    case "where":
+      return (
+        <WhereBand
+          slug={slug}
+          bibliography={bibliography}
+          head={head}
+          citers={citers}
+          before={{
+            status: bibliography.status,
+            works,
+            listing: bibliography.job !== null || bibliography.starting,
+          }}
+          articleYear={articleYear}
+          chats={{
+            summaries: investigateChats.summaries,
+            onFinding: investigateChats.onFinding,
+            onOverview: investigateChats.onOverview,
+            onOpen: investigateChats.onOpen,
+          }}
+          onJump={onJump}
+          onOpenWork={onOpenWork}
+          onView={(next) => void setView(next)}
+          toolCounts={whereToolCounts(counts, {
+            reception: reception.reception !== null,
+            /* Claims falls back to the claims section of an older Reception
+               search when it has no list of its own. A read empty section is
+               still a stored result, and therefore earns an honest 0. */
+            claims: claimList.status === "ready" || reception.reception !== null,
+          })}
+          findingFocus={findingFocus}
+          onFindingFocusTaken={onFindingFocusTaken}
+          experiments={experimental.on}
+        />
+      );
+    case "guess-first":
+    case "evidence-first":
+      return (
+        <ExperimentBand
+          slug={slug}
+          experiment={view}
+          head={toolHead(view)}
+          onJump={onJump}
+          onView={(next) => void setView(next)}
+        />
+      );
     case "bibliography":
       return (
         <BibliographyPanel
@@ -214,7 +310,7 @@ export function SourcesBand({
         />
       );
     case "not-cited":
-      return <NotCitedPanel related={related} head={head} />;
+      return <NotCitedPanel related={related} head={toolHead("not-cited")} />;
     case "links":
       return (
         <LinksPanel
@@ -233,17 +329,14 @@ export function SourcesBand({
       return (
         <InvestigateBand
           slug={slug}
-          onJump={onJump}
-          head={head}
+          head={toolHead("investigate")}
           chats={investigateChats}
           claims={
             claimList.stale
               ? null
               : listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList })
           }
-          works={bibliography.bibliography?.citations ?? null}
-          findingFocus={findingFocus}
-          onFindingFocusTaken={onFindingFocusTaken}
+          works={works}
         />
       );
     case "reception":
@@ -251,13 +344,13 @@ export function SourcesBand({
       return (
         <ReceptionAndClaimsPanel
           access={{ kind: "owner", owner: reception, claimList, checks, citers, claimChats }}
-          head={head}
+          head={toolHead(view)}
           onJump={onJump}
           view={view}
           onView={setView}
           {...receptionAndClaimsControls}
           blockOrder={blockOrder}
-          articleYear={yearOf(publishedAt)}
+          articleYear={articleYear}
           articleTitle={articleTitle}
           focus={claimFocus}
           onFocusTaken={onClaimFocusTaken}
@@ -271,43 +364,67 @@ export function SourcesBand({
   }
 }
 
-type InvestigateProps = Omit<ComponentProps<typeof InvestigatePanel>, "situate" | "findingFocus" | "onFindingFocusTaken"> & {
-  /** Only with the switch on is there a dossier to land in; off, it is handed back unserved. */
-  findingFocus: ItemFocus | null;
-  onFindingFocusTaken: ((focus: ItemFocus) => void) | undefined;
-};
-
 /**
- * **Investigate, with *Where this piece sits* when the experimental switch is
- * on** (plan 261024o; docs/project/experimental-features.md). Only the owner's
- * band reaches here, and only with the switch on is `useSituate` mounted, so
- * an owner with it off, like a visitor, never asks for the dossier or polls
- * for its job. Flipping the switch while on Investigate remounts the panel;
- * the arrival's reopening of the newest chat then runs once more, which
- * opens a stored conversation and sends nothing.
+ * **The piece's year from its metadata**: the year of `publishedAt`, else
+ * `publishedYear` (an article holds one or the other, never both) — the rule
+ * Not cited's search limits by (src/related-work.ts § `relatedWorkYearOf`),
+ * so *Where it sits* and Not cited cannot disagree about whether the year is
+ * known. Never a model's reading of the text (WhereItSitsPanel.tsx header).
  */
-function InvestigateBand({ slug, findingFocus, onFindingFocusTaken, ...props }: InvestigateProps & { slug: string }) {
-  const { on } = useExperimental();
-  /* With the switch off there is no dossier, so a finding's focus has nowhere
-     to land: hand it back, so it cannot wait for the switch. */
-  useEffect(() => {
-    if (!on && findingFocus) onFindingFocusTaken?.(findingFocus);
-  }, [on, findingFocus, onFindingFocusTaken]);
-  return on ? (
-    <InvestigateWithSituate
-      slug={slug}
-      {...props}
-      findingFocus={findingFocus}
-      onFindingFocusTaken={onFindingFocusTaken}
-    />
-  ) : (
-    <InvestigatePanel {...props} situate={null} />
-  );
+export function pieceYear(publishedAt: unknown, publishedYear: unknown): number | null {
+  return yearOf(publishedAt) ?? publishedYearOf(publishedYear) ?? null;
 }
 
-function InvestigateWithSituate({ slug, ...props }: InvestigateProps & { slug: string }) {
+/**
+ * ***Where it sits*, with the literature search's read mounted** — for every
+ * owner since plan 261025h moved the dossier out of the experimental switch
+ * (decision 5). A component of its own so `useSituate`'s read and job watch
+ * live only while this or Investigate is on screen.
+ *
+ * **And the owner of a press that lands here** (useWhereAutoRun.ts, plan
+ * 261026g § Stage 4): it asks for whichever of the works cited and the search
+ * of the literature is missing. Mounting with no press spends nothing.
+ */
+function WhereBand({
+  slug,
+  bibliography,
+  ...props
+}: Omit<ComponentProps<typeof WhereItSitsPanel>, "situate"> & {
+  slug: string;
+  before: WhereBefore;
+  bibliography: WhereRunnable;
+}) {
   const situate = useSituate(slug);
-  return <InvestigatePanel {...props} situate={situate} />;
+  useWhereAutoRun(slug, bibliography, situate);
+  return <WhereItSitsPanel situate={situate} {...props} />;
+}
+
+/**
+ * **One of the two experiments, with the dossier's read alone mounted**
+ * (plan 261025h, Stage 4): `useSituateRead` has no press and no job watch, so
+ * nothing here can start the search. A component of its own so the read lives
+ * only while the experiment is on screen.
+ */
+function ExperimentBand({
+  slug,
+  ...props
+}: Omit<ComponentProps<typeof SourcesExperimentPanel>, "read"> & { slug: string; experiment: SourcesExperiment }) {
+  const read = useSituateRead(slug);
+  return <SourcesExperimentPanel read={read} {...props} />;
+}
+
+/**
+ * **Investigate, with the literature search's questions** — *Suggested for
+ * this piece*, read from the stored dossier (plan 261024o). The dossier itself
+ * is *Where it sits*' since plan 261025h; the read is free and starts nothing.
+ */
+function InvestigateBand({
+  slug,
+  ...props
+}: Omit<ComponentProps<typeof InvestigatePanel>, "pieceQuestions"> & { slug: string }) {
+  const situate = useSituate(slug);
+  const pieceQuestions = situate.status === "ready" ? (situate.situate?.questions ?? []) : [];
+  return <InvestigatePanel {...props} pieceQuestions={pieceQuestions} />;
 }
 
 /**
@@ -366,9 +483,10 @@ export function VisitorSourcesBand({
 }) {
   useRenderCount("VisitorSourcesBand");
   const [named, setView] = useQueryState("sources", sourcesParam);
-  /* Not cited and Investigate are the owner's: a shared `?sources=not-cited` or
-     `?sources=investigate` draws Bibliography, and the address is left as it is (plan
-     261011ac, F6; plan 261020n § Visitors). */
+  /* *Where it sits*, Not cited and Investigate are the owner's: the bare
+     address (`where`), a shared `?sources=not-cited` or `?sources=investigate`
+     draws Bibliography, and the address is left as it is (plan 261011ac, F6;
+     plan 261020n § Visitors; plan 261025h, F3). */
   const view = visitorSourcesView(named);
   const citeControls = useCitationControls();
   const receptionAndClaimsControls = useReceptionAndClaimsControls();
@@ -384,12 +502,15 @@ export function VisitorSourcesBand({
   });
   const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
   switch (view) {
-    /* `not-cited` and `investigate` never reach here (`visitorSourcesView`); named so
+    /* `where`, `not-cited`, `investigate` and the experiments never reach here (`visitorSourcesView`); named so
        the switch is exhaustive and a new sub-mode has to say what a visitor
        gets. */
+    case "where":
     case "bibliography":
     case "not-cited":
     case "investigate":
+    case "guess-first":
+    case "evidence-first":
       return (
         <BibliographyPanel
           access={{ kind: "visitor", bibliography }}
@@ -466,22 +587,27 @@ function useReceptionAndClaimsControls() {
 }
 
 /**
- * **Bibliography | Not cited | Links | Reception | Claims | Investigate** — Sources'
- * six sub-modes, the band's header row; four for a visitor, who has no Not
- * cited and no Investigate (`VISITOR_SOURCES_VIEWS`). It was Debate's two-way control
- * (`DebateViews`, 2026-10-03, plan 261003o) until 2026-10-09, widened to
- * three, then four and five on 2026-10-11, and six on 2026-10-20 (plan
- * 261020n), and is built the way
+ * **Where it sits | Bibliography | Links** — the owner's chip row since
+ * 2026-10-25 (plan 261025h, decision 7), and **Bibliography | Links |
+ * Reception | Claims** for a visitor, unchanged (`VISITOR_SOURCES_VIEWS`). It
+ * was Debate's two-way control (`DebateViews`, 2026-10-03, plan 261003o) until
+ * 2026-10-09, widened to three, then four and five on 2026-10-11, and six on
+ * 2026-10-20 (plan 261020n), and is built the way
  * Summary's Brief | Fuller | Thread is: a radiogroup of buttons, each its own
  * tab stop, drawn joined so they read as one choice (mode-band.css § the
  * part-switcher).
+ *
+ * **Exactly one radio is checked for every address** (GPT Sol's F2 on plan
+ * 261025h): the owner's four tools light *Where it sits*, through one
+ * exhaustive `chipOf` (params.ts), which `aria-checked`, `.on` and
+ * `useRevealChosen` all read. A visitor's chips are their views.
  *
  * **Each chip carries the count of what its list draws** (sources-counts.ts),
  * so a reader on Bibliography can see there are three replies a press away —
  * Greg read one claim's two sources as the whole debate because nothing told
  * him there were others. Bibliography has no number while there is no list,
- * Not cited none until a stored search has been read, and Investigate never one:
- * there is nothing to count before a press.
+ * and *Where it sits* never one: it is several lists. The owner's tools carry
+ * their numbers on *Where it sits*' tools row instead.
  *
  * **What each one is goes in its card, never in a sentence under the row**:
  * docs/project/mode.md bans a description line there (GPT Sol's F8 on
@@ -490,9 +616,9 @@ function useReceptionAndClaimsControls() {
  * what others say.
  *
  * The owner's press arms the chip's own work, the same contract as its
- * command-bar row (activation.ts § `activationForSources`): Bibliography the
- * citations, Not cited, Links and Investigate nothing, Reception the paid search, Claims the claims list. A stored list
- * consumes its token without running. A visitor can never arm owner work.
+ * command-bar row (activation.ts § `activationForSources`): *Where it sits*'
+ * composite, Bibliography's list, and nothing for Links. Stored artefacts
+ * consume the token without running. A visitor can never arm owner work.
  */
 export function SourcesViews({
   view,
@@ -506,11 +632,13 @@ export function SourcesViews({
   onView(view: SourcesView): void;
 }) {
   const group = useRef<HTMLDivElement>(null);
-  useRevealChosen(group, view);
+  /* The owner's chip for this address, or a visitor's view itself. */
+  const chosen: SourcesView = ownerSlug === null ? view : chipOf(view);
+  useRevealChosen(group, chosen);
   return (
     <div ref={group} className="summ-views rcp-views" role="radiogroup" aria-label="Sources view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {(ownerSlug === null ? VISITOR_SOURCES_VIEWS : SOURCES_VIEWS).map((v) => {
+        {(ownerSlug === null ? VISITOR_SOURCES_VIEWS : SOURCES_CHIPS).map((v) => {
           const words = SOURCES_SUB_MODES[v];
           const count = countOf(counts, v);
           return (
@@ -525,12 +653,12 @@ export function SourcesViews({
               <button
                 type="button"
                 role="radio"
-                aria-checked={v === view}
+                aria-checked={v === chosen}
                 /* The label and the count are two text nodes with no space
                    between them, which a screen reader may run together. */
                 aria-label={count === null ? words.label : `${words.label}, ${count.n} ${count.noun}`}
                 tabIndex={0}
-                className={`summ-view-btn${v === view ? " on" : ""}`}
+                className={`summ-view-btn${v === chosen ? " on" : ""}`}
                 onClick={() => {
                   if (ownerSlug !== null) armActivationForSubMode(ownerSlug, { mode: "sources", view: v });
                   if (v !== view) onView(v);
@@ -551,6 +679,8 @@ export function SourcesViews({
 function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: string } | null {
   const plural = (n: number, one: string) => (n === 1 ? one : `${one}s`);
   switch (view) {
+    case "where":
+      return null;
     case "bibliography":
       return counts.bibliography === null
         ? null
@@ -564,6 +694,8 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
     case "claims":
       return { n: counts.claims.n, noun: plural(counts.claims.n, counts.claims.unit) };
     case "investigate":
+    case "guess-first":
+    case "evidence-first":
       return null;
     default: {
       const unhandled: never = view;
@@ -574,6 +706,13 @@ function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: s
 
 /** The second paragraph of each chip's card: how its rows were got, and what was checked. */
 const VIEW_HOW: Record<SourcesView, string> = {
+  /* Checked against WhereItSitsPanel.tsx: Papers that cite it is `useCiters`' OpenAlex
+     read, What it builds on Bibliography's `relevance`, and the dossier is the
+     literature search (`SituateDossier.tsx`). Gesture-specific spending copy
+     stays in the band's (i), because this card is also shown on plain links
+     and to visitors (docs/project/tooltips.md). */
+  where:
+    "The papers that cite it come from OpenAlex and the works it leans on from Bibliography, with no AI. Search the literature pays for an AI to search the web and read what it finds; every quote it shows is checked against its source by the app.",
   bibliography:
     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
   /* Checked against src/related-work.ts: `openAlexRelatedUrl` (semantic search
@@ -592,6 +731,9 @@ const VIEW_HOW: Record<SourcesView, string> = {
   /* Checked against InvestigatePanel.tsx: the fixed questions are ours, the claims
      are Claims' stored list, the works Bibliography's `relevance`, and every
      row and the box go through Reader's `handToChat` with `send`. */
+  /* Never a chip: an experiment lights Where it sits (params.ts § `chipOf`). Here for the `Record`. */
+  "guess-first": "Uses the stored search of the literature, and starts nothing; nothing you do is kept.",
+  "evidence-first": "Uses the stored search of the literature, and starts nothing; nothing you choose is kept.",
   investigate:
     "Nothing runs until you press a question. Then Chat opens and asks it with a web search. The suggested questions are fixed; the claims and works are taken from Claims and Bibliography once they exist.",
 };

@@ -240,6 +240,18 @@ describe("a Run again row", () => {
     expect(requests.filter((r) => r.startsWith("POST"))).toEqual(["POST /api/jobs"]);
   });
 
+  it("posts Structure as the same one-step named force", async () => {
+    reading();
+    openBar();
+    type("rerun structure");
+    expect(listed()[0]).toBe("Structure › Run again");
+    press("Enter");
+    await settle();
+    expect(posts).toEqual([{ slug: SLUG, steps: ["structure"], force: ["structure"] }]);
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(location.search).toBe("?at=spya-k3m9qt&section=ai-processing");
+  });
+
   it("posts once however soon the second Enter comes, and says it is working meanwhile", async () => {
     holdPost = true;
     reading();

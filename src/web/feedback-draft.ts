@@ -28,7 +28,7 @@
  * Every call is wrapped: storage that is full, blocked or missing costs the
  * copy, never the dialog.
  */
-import type { FeedbackKind } from "../types.js";
+import { FEEDBACK_KINDS, type FeedbackKind } from "../types.js";
 import { storageReader } from "./lib/storage-reader.js";
 
 export interface FeedbackDraft {
@@ -52,6 +52,13 @@ interface Saved extends FeedbackDraft {
 export const FEEDBACK_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const keyFor = (readerId: string): string => `spya.feedbackDraft.${storageReader(readerId)}`;
+
+/* Every kind the server knows, `discussion` included: a draft is the reader's
+   words, and a closed list here that lagged `FEEDBACK_KINDS` threw the whole
+   draft away. Whether this reader may *send* that kind is the dialog's call. */
+function isFeedbackKind(value: unknown): value is FeedbackKind {
+  return FEEDBACK_KINDS.some((kind) => kind === value);
+}
 
 function read(readerId: string): Saved | null {
   let raw: string | null;
@@ -78,7 +85,7 @@ function read(readerId: string): Saved | null {
     typeof v.body !== "string" ||
     typeof v.id !== "string" ||
     typeof v.at !== "number" ||
-    !(v.kind === null || v.kind === "problem" || v.kind === "suggestion")
+    !(v.kind === null || isFeedbackKind(v.kind))
   ) {
     try {
       localStorage.removeItem(keyFor(readerId));

@@ -1,5 +1,5 @@
 /**
- * **The capture journal for Debate mode: two events per attempted pass, appended
+ * **The capture journal for the Reception sub-mode: two events per attempted pass, appended
  * as they happen, and never one record written afterwards.**
  *
  * Stage A of
@@ -22,7 +22,7 @@
  *   carry a classification that is only decided later.
  *
  * So: `attempt-started` goes down **before dispatch**, `provider-response` goes
- * down **at the gateway boundary before any debate validation**, and a terminal
+ * down **at the gateway boundary before any reception validation**, and a terminal
  * `attempt-finished` goes down in a `finally`.
  *
  * ## The two rules that are the whole point
@@ -148,7 +148,7 @@ export interface ReceptionAttemptStarted {
 }
 
 /**
- * **What came back, before the debate layer judged any of it** — before the
+ * **What came back, before the reception layer judged any of it** — before the
  * `finish_reason` allowlist, before the search-count check, before
  * `collectSearchEvidence` and before the self-source filter.
  *

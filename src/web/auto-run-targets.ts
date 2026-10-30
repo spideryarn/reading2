@@ -63,6 +63,9 @@ type StepAutoRunTarget = StepTarget<
   /* The questions a careful reader would put to the piece —
      docs/plans/260916d-faq-mode.md. */
   | "faq"
+  /* The places a reader is likely to get stuck, each explained —
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  | "explanations"
   /* The route through the Quotes, which asks for the Quotes first when there
      are none — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
   | "skim"
@@ -88,5 +91,28 @@ type StepAutoRunTarget = StepTarget<
 /** The two that are streams, with no job row and no place in `STEP_ORDER`. */
 type StreamAutoRunTarget = "promises" | "candidates";
 
+/**
+ * **Sources › Where it sits: two steps behind one press.** A press that lands
+ * there asks for the works the piece cites (Bibliography, for *What it builds on*)
+ * and the search of the literature (`situate`), each only if it is missing —
+ * one token, one owner (`WhereBand`), one automatic try, as GPT Sol asked
+ * rather than two arms for one press (F1 on plan
+ * docs/plans/261026g-where-it-sits-made-clear-runs-itself-and-reaches-the-margin.md,
+ * § Stage 4). Greg, 2026-10-26 (spya-mfuz6g): *"when I open that submode, I
+ * want it to automatically start running"*.
+ */
+type CompositeAutoRunTarget = "sources-where";
+
+/**
+ * **The press that turns the margin on: the same search, from the margin.**
+ * The literature search (`situate`), with the works cited listed first in the
+ * same job when they are missing too, as *Where it sits*' press does — but a
+ * token of its own, because a token has one owner: `WhereBand` owns
+ * `sources-where`, and the margin's feed (`SituateMarginFeed`) owns this.
+ * Greg, 2026-10-28, answering q-sxfwqq: *"Let's go for A"*.
+ * docs/plans/261029h-the-margin-button-starts-the-literature-search.md.
+ */
+type MarginAutoRunTarget = "margin-literature";
+
 /** Every target that may receive one automatic attempt in this tab session. */
-export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget;
+export type AutoRunTarget = StepAutoRunTarget | StreamAutoRunTarget | CompositeAutoRunTarget | MarginAutoRunTarget;

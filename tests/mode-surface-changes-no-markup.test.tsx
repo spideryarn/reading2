@@ -53,7 +53,7 @@
  * ## Stage 2's step 0: the other eleven bands, captured before they move
  *
  * The stage-2 block records `VisitorBand`, Summary, Glossary, Ideas, Quotes,
- * Timeline, Quiz, Debate, Diagram, Outline and Referee — the eleven the plan's
+ * Timeline, Quiz, Reception, Diagram, Outline and Referee — the eleven the plan's
  * § Stage 2 migrates — in twenty shapes. The order matters more than the
  * count: a literal read off a panel *after* it has been migrated is the
  * implementation agreeing with itself, which is the failure the section above
@@ -69,7 +69,7 @@
  * absent, null or boolean `head`, so the migration that reads most naturally —
  * `head={glossary && <span/>}` — hands it `null` and **deletes a row the reader
  * has today**. The shape those five need is a fragment that is always present
- * with the conditionals inside it. Debate and Referee are the controls: their
+ * with the conditionals inside it. Reception and Referee are the controls: their
  * headers carry something unconditional and cannot empty out.
  *
  * ## Two harnesses, and why the cheap one is not used for everything
@@ -1747,9 +1747,16 @@ const SUMMARY: BandShape = {
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "div.summ-scroll.simple-scroll"],
 };
 
+/* **Edited on purpose, 2026-10-29**: the Glossary band takes `tabindex="-1"`,
+   so focus has somewhere to land when "Add to glossary" closes the selection's
+   box and the term has no row yet (plan 261029d, GPT Sol's code review). It
+   is never in the tab order. */
+const GLOSSARY_BAND_ATTRS = ["aria-label", "class", "tabindex"];
+
 const GLOSSARY_SHAPE: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
+  attrs: GLOSSARY_BAND_ATTRS,
   head: true,
   /* The run row is the first thing in the column, not the foot, since
      2026-10-03 (plan 261003c). */
@@ -1783,6 +1790,7 @@ const GLOSSARY_SHAPE: BandShape = {
 const GLOSSARY_LOADING: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
+  attrs: GLOSSARY_BAND_ATTRS,
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
@@ -1796,6 +1804,7 @@ const GLOSSARY_LOADING: BandShape = {
 const GLOSSARY_VISITOR: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
+  attrs: GLOSSARY_BAND_ATTRS,
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-list"],
   headChildren: [],
@@ -2126,7 +2135,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(TIMELINE_LOADING);
   });
 
-  it("draws Debate's band, whose header cannot come out empty", async () => {
+  it("draws Reception's band, whose header cannot come out empty", async () => {
     await paint(mountReception(RECEPTION));
     expectShape(RECEPTION_SHAPE);
   });
@@ -2272,7 +2281,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(DIAGRAM_VISITOR);
   });
 
-  it("draws Outline's band, carrying data-outline-rung on the aside itself", async () => {
+  it("draws Structure's list face, carrying data-outline-rung on the aside itself", async () => {
     await paint(mountOutline());
     expectShape(OUTLINE);
   });

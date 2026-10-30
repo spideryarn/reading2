@@ -383,6 +383,24 @@
 }
 .skim-purpose-ask .gloss-error { margin: 0; }
 
+/* **The switcher between briefs** (SkimBriefPicker.tsx, plan 261027d stage 4):
+   the ▾ is a `.chat-icon` (mode-band.css), centred on the line's text rather
+   than on its baseline; its list is portalled, on `MENU_SURFACE` (menu.ts),
+   so these rules are not scoped to the band. */
+.skim-brief-trigger { flex: none; align-self: center; }
+.skim-briefs-list { list-style: none; margin: 0; padding: 0; }
+.skim-brief-row { display: flex; align-items: center; gap: 0.15rem; min-width: 0; }
+.skim-brief-mark { flex: none; display: inline-flex; width: 14px; color: var(--highlight-text); }
+.skim-brief-words { min-width: 0; overflow-wrap: anywhere; }
+.skim-brief-tag {
+  margin-left: 0.4rem;
+  font-size: max(var(--text-min), 0.72rem);
+  color: var(--ink-faint);
+}
+.skim-brief-fallback { color: var(--ink-soft); }
+.skim-briefs-note { margin: 0.25rem 0.5rem; font-size: max(var(--text-min), 0.78rem); color: var(--ink-soft); }
+.skim-briefs .gloss-error { margin: 0.25rem 0.5rem; font-size: max(var(--text-min), 0.78rem); }
+
 /* ------------------------------------------------------ the door in the prose --
    After the current stop's block, outside `.prose` (TableView.tsx §
    `afterBlock`). Right-aligned, where the eye lands at the end of a paragraph,
@@ -401,7 +419,7 @@
   gap: 0.25rem;
   max-width: clamp(45ch, 90vw, var(--reading-measure));
   margin: 0.5rem auto 0.2rem;
-  /* `.prose`'s own face, not `--font-reading`: that is Geist here, whose `ch`
+  /* `.prose`'s own face, not `--font-ui`: that is Geist, whose `ch`
      is wider, and the door came out 160px wider than the text (browser check,
      plan 261009j). The gutter learned the same (prose.css § the gutter). */
   font-family: var(--font-author);
@@ -498,8 +516,12 @@
   text-align: left;
   cursor: pointer;
 }
-.skim-chip:hover,
 .skim-chip.on { border-color: var(--highlight); color: var(--ink); }
+/* Behind `(hover: hover)`, as glossary.css's are: iOS keeps `:hover` on a
+   tapped chip, which then looked pressed after its card had closed. */
+@media (hover: hover) {
+  .skim-chip:hover { border-color: var(--highlight); color: var(--ink); }
+}
 /* **A term chip's card** — the glossary's own (`TermCard`, styled by
    prose-hover-card.css), inside the shared tooltip (SkimPanel.tsx § TermChip).
    Only its height is ours. An entry with a web answer is long, and the row of

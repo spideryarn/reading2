@@ -10,7 +10,7 @@
  * sub-modes' senders.
  *
  * The whole app, for the reason tests/sources-claim-check-in-chat.test.tsx
- * gives: the angle crosses the panel, Debate's band, `Reader`, the
+ * gives: the angle crosses the panel, Reception's band, `Reader`, the
  * conversation band and the draft store on the way out, and comes back
  * through the thread summaries `Reader` holds. This is that file's harness.
  *
@@ -365,17 +365,37 @@ function answerTurn(body: { threadId: string; question: string; origin?: ThreadO
   return new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
-/** The reader's experimental switch: off unless a test turns it on (§ Where this piece sits). */
+/** The reader's experimental switch: off unless a test turns it on. Off for § Where it sits, which no longer asks it. */
 let experimentalSince: string | null = null;
+/** The stored literature search, or `null` for none yet (§ Where it sits). */
+let storedSituate: unknown = null;
+/** Reception and Claims' stored answers; mutable for the tools-row empty-result case. */
+let storedReception: Reception | null = RECEPTION;
+let storedClaimList: SourcesClaimList | null = CLAIM_LIST;
+
+const RELATED = {
+  kind: "found",
+  works: [{ openalexId: "W77", title: "A close paper", authors: ["C. Author"], authorCount: 1, year: 2010 }],
+  excluded: 0,
+  bibliographyStale: false,
+  bibliographyCapped: false,
+  yearLimited: null,
+  queryChanged: false,
+  searchedAt: "2026-10-20T10:00:00.000Z",
+};
 
 function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince });
   /* Nobody has searched the literature for this one (`200 null`, the none-yet answer). */
-  if (url === `/api/situate/${SLUG}`) return json(null);
-  if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
-  if (url === `/api/sources-claims/${SLUG}`) return json({ claimList: CLAIM_LIST, stale: false, outdated: false });
+  if (url === `/api/situate/${SLUG}`) return json(storedSituate);
+  if (url === `/api/reception/${SLUG}`)
+    return json(storedReception === null ? null : { reception: storedReception, stale: false, outdated: false });
+  if (url === `/api/sources-claims/${SLUG}`)
+    return json(storedClaimList === null ? null : { claimList: storedClaimList, stale: false, outdated: false });
+  /* Not cited's stored answer: one paper. The GET reads our table; only a POST asks OpenAlex. */
+  if (url === `/api/related-work/${SLUG}` && method === "GET") return json(RELATED);
   if (url === `/api/bibliography/${SLUG}`) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
   if (url === `/api/chat/${SLUG}` && method === "POST") {
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
@@ -399,7 +419,7 @@ function reply(url: string, method: string, body: unknown): Response {
 
 const { App } = await import("../src/web/App.js");
 const { SOURCES_INVESTIGATE_SUGGESTED } = await import("../src/web/InvestigatePanel.js");
-const { SITUATE_RUN } = await import("../src/web/situate-dossier.js");
+const { SITUATE_RUN, overviewOrigin, overviewQuestion } = await import("../src/web/situate-dossier.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 const activation = await import("../src/web/activation.js");
 
@@ -418,6 +438,9 @@ beforeEach(() => {
   minted = 0;
   summaryGate = null;
   experimentalSince = null;
+  storedSituate = null;
+  storedReception = RECEPTION;
+  storedClaimList = CLAIM_LIST;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -506,6 +529,9 @@ function prosePoint(within: HTMLElement, offset: number): [Node, number] {
   }
   throw new Error(`offset ${offset} is past the end of the prose`);
 }
+/** One of *Where it sits*' tools (WhereItSitsPanel.tsx), by its address. */
+const tool = (view: string): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(`.mode-band .where-tools button.where-tool[data-tool="${view}"]`);
 /** One of Sources' chips, by its label (SourcesMode.tsx § `SourcesViews`). */
 const chip = (label: string): HTMLButtonElement | undefined =>
   [...host.querySelectorAll<HTMLButtonElement>('.mode-band [role="radiogroup"][aria-label="Sources view"] button.summ-view-btn')].find(
@@ -563,7 +589,7 @@ describe("asking a question in Sources › Investigate", () => {
     }
   });
 
-  /* One press is one action. Until 2026-10-06 Enter in Debate's box moved the
+  /* One press is one action. Until 2026-10-06 Enter in Reception's box moved the
      caret into Chat's box, already holding the question, and the same key,
      still held, must not then send it (found by GPT Sol's review;
      docs/postmortems/261005o). Enter now sends the question itself and the
@@ -828,7 +854,10 @@ describe("asking a question in Sources › Investigate", () => {
         setter?.call(box, "Not sent yet");
         box.dispatchEvent(new Event("input", { bubbles: true }));
       });
-      await act(async () => chip("Investigate")?.click());
+      /* A tool since plan 261025h: back to Where it sits, whose tools row has it. */
+      await act(async () => chip("Where it sits")?.click());
+      await until(() => tool("investigate") !== null, "Where it sits' tools");
+      await act(async () => tool("investigate")?.click());
       await until(() => lensBox() !== null, "Investigate");
       await act(async () => releaseSummaries());
       await until(() => angles().length === 1, "Your questions after the held summary list arrives");
@@ -887,10 +916,13 @@ describe("asking a question in Sources › Investigate", () => {
       await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());
       await until(() => param("thread") === null && dialog() === null, "the dialog to close");
       await act(async () => chip("Bibliography")?.click());
-      await until(() => param("sources") === null || param("sources") === "bibliography", "Bibliography");
+      await until(() => param("sources") === "bibliography", "Bibliography");
       await settle(4);
       expect(param("thread"), "not opened outside Investigate").toBeNull();
-      await act(async () => chip("Investigate")?.click());
+      /* Investigate is a tool inside Where it sits since plan 261025h. */
+      await act(async () => chip("Where it sits")?.click());
+      await until(() => tool("investigate") !== null, "Where it sits' tools");
+      await act(async () => tool("investigate")?.click());
       await until(() => param("thread") === OLDER.id && dialog() !== null, "the conversation again");
     });
 
@@ -967,29 +999,301 @@ describe("asking a question in Sources › Investigate", () => {
   });
 });
 
-/* Plan 261024o § Stages, 2: *Where this piece sits* is the owner's, behind the
-   experimental switch. With it off, Investigate never asks for the dossier;
-   with it on, it asks, draws the press, and still buys nothing on arrival. */
-describe("Where this piece sits, at the top of Investigate", () => {
+/* Plan 261025h: *Where it sits* is Sources' default for the owner, and the
+   literature search's dossier is in it for every owner, out of the
+   experimental switch (decision 5, GPT Sol's F7). An arrival reads, offers the
+   press and buys nothing. A finding's chat stores the finding's own origin;
+   plan 261026g gives the overview another item id under the same origin. Each
+   way back lands on its item in *Where it sits*. */
+describe("Where it sits", () => {
   const situateReads = () => trace.filter((r) => r.url === `/api/situate/${SLUG}`);
-  const dossier = () => host.querySelector<HTMLElement>(".mode-band .investigate-situate");
+  const dossier = () => host.querySelector<HTMLElement>(".mode-band .where-situate");
+  const FINDING_ID = "si-0123456789ab";
+  const FINDING = {
+    id: FINDING_ID,
+    kind: "challenged",
+    blockId: LAST_BLOCK,
+    quote: CLAIM_QUOTE,
+    note: "A 2020 study found the memories do not survive.",
+    strength: "strong",
+    sources: [{ origin: "web", url: "https://example.org/moths", title: "Moths forget", quote: "the memories did not survive" }],
+  };
+  const DOSSIER = {
+    situate: {
+      version: "situate/1",
+      generator: "a-model",
+      slug: SLUG,
+      sourceHash: "hash",
+      profileHash: null,
+      generatedAt: "2026-10-24T10:00:00.000Z",
+      elapsedMs: 1,
+      kind: "empirical",
+      year: 2008,
+      angle: "since",
+      outcome: "read",
+      overview: "It is still argued over.",
+      findings: [FINDING],
+      questions: [],
+      searched: { queries: [], pages: 0, citers: 0, cited: 0 },
+      counts: {
+        written: 1, kept: 1, malformed: 0, unknownBlock: 0, unquoted: 0, unknownSource: 0, sourceUnquoted: 0,
+        noSource: 0, citationRule: 0, perBlock: 0, overCap: 0, duplicate: 0, queriesRefused: 0,
+      },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  };
+  const findingRow = () => host.querySelector<HTMLElement>(`.mode-band .where-situate [data-finding="${FINDING_ID}"]`);
+  const overviewRow = () => host.querySelector<HTMLElement>(".mode-band .where-situate .situate-summary");
 
-  it("is neither asked for nor drawn with the experimental switch off", async () => {
+  it("is the owner's bare Sources address, and with the switch off offers Search the literature and buys nothing", async () => {
     who.set(OWNER);
-    await open("?mode=sources&sources=investigate");
-    await until(() => investigateRows("").length > 0, "Investigate's questions");
-    await settle(4);
-    expect(dossier()).toBeNull();
-    expect(situateReads()).toEqual([]);
-  });
-
-  it("with it on, reads the dossier, offers the press, and starts nothing on arrival", async () => {
-    experimentalSince = "2026-10-01T00:00:00.000Z";
-    who.set(OWNER);
-    await open("?mode=sources&sources=investigate");
+    await open("?mode=sources");
     await until(() => dossier()?.querySelector("button") != null, "the dossier's press");
+    expect(experimentalSince, "the switch is off").toBeNull();
     expect(situateReads().length).toBeGreaterThan(0);
     expect(dossier()?.textContent).toContain(SITUATE_RUN);
+    expect(dossier()?.textContent).not.toMatch(/experimental/i);
+    expect(chip("Where it sits")?.getAttribute("aria-checked")).toBe("true");
     expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"), "no job on arrival").toEqual([]);
+    expect(chatPosts()).toEqual([]);
+  });
+
+  /* A persona review, 2026-10-26 (shot 05): a stored Reception search that
+     confirmed no page showed no number, the same as no search; and Not
+     cited's stored answer was never read on Where it sits. */
+  it("numbers each tool whose stored result it has read, 0 included, asking OpenAlex nothing", async () => {
+    who.set(OWNER);
+    await open("?mode=sources");
+    const count = (view: string) => tool(view)?.querySelector(".rcp-view-count")?.textContent ?? null;
+    await until(() => count("not-cited") !== null && count("reception") !== null, "the tools' numbers");
+    expect(count("reception"), "a stored search with no page about it").toBe("0");
+    expect(count("not-cited")).toBe("1");
+    expect(count("claims")).not.toBeNull();
+    expect(count("investigate")).toBeNull();
+    expect(trace.filter((r) => r.url === `/api/related-work/${SLUG}` && r.method !== "GET"), "no search").toEqual([]);
+  });
+
+  it("numbers an empty legacy Claims result once Reception has been read", async () => {
+    storedReception = structuredClone(RECEPTION);
+    storedReception.claims.rows = [];
+    storedClaimList = null;
+    who.set(OWNER);
+    await open("?mode=sources");
+    const count = (view: string) => tool(view)?.querySelector(".rcp-view-count")?.textContent ?? null;
+    await until(() => count("reception") !== null, "Reception's stored answer");
+    expect(count("claims"), "the read, empty legacy Claims result").toBe("0");
+  });
+
+  it("goes to a tool and back, and Back and Forward keep one chip checked, buying nothing", async () => {
+    who.set(OWNER);
+    await open("?mode=sources");
+    await until(() => tool("reception") !== null, "Where it sits' tools");
+    const checked = () =>
+      [...host.querySelectorAll('.mode-band [role="radiogroup"][aria-label="Sources view"] [aria-checked="true"]')].map(
+        (b) => (b.getAttribute("aria-label") ?? "").split(",")[0],
+      );
+    await act(async () => tool("reception")?.click());
+    await until(() => param("sources") === "reception", "Reception");
+    expect(checked()).toEqual(["Where it sits"]);
+    await act(async () => chip("Bibliography")?.click());
+    await until(() => param("sources") === "bibliography", "Bibliography");
+    expect(checked()).toEqual(["Bibliography"]);
+    await act(async () => history.back());
+    await until(() => param("sources") === "reception", "Back to Reception");
+    expect(checked()).toEqual(["Where it sits"]);
+    await act(async () => history.back());
+    await until(() => param("sources") === null && dossier() !== null, "Back to Where it sits");
+    expect(checked()).toEqual(["Where it sits"]);
+    await act(async () => history.forward());
+    await until(() => param("sources") === "reception", "Forward to Reception");
+    /* The tool's way back is a plain move too. */
+    const back = host.querySelector<HTMLButtonElement>(".mode-band .where-back");
+    await act(async () => back?.click());
+    await until(() => param("sources") === null, "← Where it sits");
+    expect(posts().filter((r) => r.url === "/api/jobs"), "no job: Bibliography was already made").toEqual([]);
+  });
+
+  it("asks about a finding with the finding's own origin", async () => {
+    storedSituate = DOSSIER;
+    who.set(OWNER);
+    await open("?mode=sources");
+    await until(() => findingRow() !== null, "the finding");
+    const ask = findingRow()?.querySelector<HTMLButtonElement>("button.situate-ask");
+    await act(async () => ask?.click());
+    /* `AskInChatButton` reveals, then sends on the second press. */
+    if (chatPosts().length === 0) await act(async () => findingRow()?.querySelector<HTMLButtonElement>("button.situate-ask")?.click());
+    await until(() => chatPosts().length === 1, "the finding's chat");
+    const sent = chatPosts()[0]?.body as { origin: ThreadOrigin };
+    expect(sent.origin).toEqual({ mode: "situate", itemId: FINDING_ID, quote: CLAIM_QUOTE });
+  });
+
+  it("asks about the overview with its own origin and reopens that chat from its mark", async () => {
+    storedSituate = DOSSIER;
+    who.set(OWNER);
+    await open("?mode=sources");
+    await until(() => overviewRow() !== null, "the overview");
+    const ask = () => overviewRow()?.querySelector<HTMLButtonElement>('button[aria-label="Ask about this in chat"]');
+    await act(async () => ask()?.click());
+    if (chatPosts().length === 0) await act(async () => ask()?.click());
+    await until(() => chatPosts().length === 1, "the overview's chat");
+    const sent = chatPosts()[0]?.body as { threadId: string; question: string; origin: ThreadOrigin };
+    expect(sent.question).toBe(askInSources(overviewQuestion(DOSSIER.situate.overview)));
+    expect(sent.origin).toEqual(overviewOrigin(DOSSIER.situate));
+
+    await act(async () => history.back());
+    await until(() => param("mode") === "sources" && overviewRow() !== null, "Where it sits again");
+    await until(
+      () => overviewRow()?.querySelector('button[aria-label="Open the chat about this overview"]') !== null,
+      "the overview's chat mark",
+    );
+    const before = chatPosts().length;
+    await act(async () =>
+      overviewRow()?.querySelector<HTMLButtonElement>('button[aria-label="Open the chat about this overview"]')?.click(),
+    );
+    await until(() => param("thread") === sent.threadId, "the existing overview chat");
+    expect(chatPosts()).toHaveLength(before);
+  });
+
+  it("the way back from a finding's chat opens Where it sits on that finding", async () => {
+    storedSituate = DOSSIER;
+    const chat: ChatThread = {
+      ...structuredClone(STORED),
+      id: "spya-fndcht",
+      title: "Finding: memories",
+      origin: { mode: "situate", itemId: FINDING_ID, quote: CLAIM_QUOTE },
+    };
+    server = [structuredClone(STORED), chat];
+    who.set(OWNER);
+    await open(`?mode=chat&thread=${chat.id}`);
+    const back = () => host.querySelector<HTMLButtonElement>(".mode-band .chat-origin-back");
+    await until(() => back() !== null, "Chat's way back");
+    expect(back()?.textContent).toContain("Where it sits");
+    await act(async () => back()?.click());
+    await until(() => param("mode") === "sources" && findingRow() !== null, "Where it sits, with the finding");
+    expect(param("sources"), "the default, left off").toBeNull();
+    expect(param("thread"), "the chat does not cover the row").toBeNull();
+    expect(chatPosts()).toEqual([]);
+  });
+
+  it("the way back from an overview chat opens Where it sits on the summary", async () => {
+    storedSituate = DOSSIER;
+    const origin = overviewOrigin(DOSSIER.situate);
+    const chat: ChatThread = {
+      ...structuredClone(STORED),
+      id: "spya-smmcht",
+      title: "Where it sits: argued over",
+      origin,
+    };
+    server = [structuredClone(STORED), chat];
+    who.set(OWNER);
+    await open(`?mode=chat&thread=${chat.id}`);
+    const back = () => host.querySelector<HTMLButtonElement>(".mode-band .chat-origin-back");
+    await until(() => back() !== null, "Chat's way back");
+    expect(back()?.textContent).toContain("Where it sits");
+    await act(async () => back()?.click());
+    await until(
+      () => param("mode") === "sources" && overviewRow()?.getAttribute("data-finding") === origin.itemId,
+      "Where it sits, with the overview",
+    );
+    expect(param("sources")).toBeNull();
+    expect(param("thread")).toBeNull();
+    expect(chatPosts()).toEqual([]);
+  });
+
+  /* Plan 261025h, Stage 4: Guess first and Evidence first, reached from the
+     tools row with the switch on, reading the stored dossier and posting
+     nothing; with the switch off, the row does not offer them, and a pasted
+     address still draws the experiment (hidden, not unreachable). */
+  describe("the experiments", () => {
+    const experimentBand = () => host.querySelector<HTMLElement>(".mode-band.sources.experiment");
+    /* Every POST but the two any visit makes: the shelf's record that the
+       article was opened, and reading time's, which carries your place in it. */
+    const sent = () =>
+      posts().filter((r) => !/^\/api\/library\/[^/]+\/open$/.test(r.url) && !r.url.startsWith("/api/reading-time/"));
+    const checked = () =>
+      [...host.querySelectorAll('.mode-band [role="radiogroup"][aria-label="Sources view"] [aria-checked="true"]')].map(
+        (b) => (b.getAttribute("aria-label") ?? "").split(",")[0],
+      );
+
+    it("with the switch on, opens Guess first from the tools row, lights Where it sits, reveals, and posts nothing", async () => {
+      experimentalSince = "2026-01-01T00:00:00.000Z";
+      storedSituate = DOSSIER;
+      who.set(OWNER);
+      await open("?mode=sources");
+      await until(() => tool("guess-first") !== null, "the experiments' links");
+      await act(async () => tool("guess-first")?.click());
+      await until(() => param("sources") === "guess-first" && experimentBand() !== null, "Guess first");
+      expect(checked()).toEqual(["Where it sits"]);
+      expect(experimentBand()?.textContent).toContain("Guess first");
+      expect(experimentBand()?.textContent).not.toContain(FINDING.note);
+      const reveal = [...(experimentBand()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) =>
+        b.textContent?.includes("Reveal"),
+      );
+      await act(async () => reveal?.click());
+      expect(experimentBand()?.textContent).toContain(FINDING.note);
+      expect(sent(), "nothing posted").toEqual([]);
+      /* The crumb goes back. */
+      await act(async () => host.querySelector<HTMLButtonElement>(".mode-band .where-back")?.click());
+      await until(() => param("sources") === null && dossier() !== null, "back to Where it sits");
+    });
+
+    it("with the switch off, pasted, Back/Forward and remounted experiment addresses draw without starting work", async () => {
+      storedSituate = DOSSIER;
+      who.set(OWNER);
+      await open("?mode=sources&sources=evidence-first");
+      await until(() => experimentBand() !== null, "Evidence first, with the switch off");
+      await settle();
+      expect(experimentalSince, "the switch is off").toBeNull();
+      expect(experimentBand()?.textContent).toContain("Evidence first");
+      expect(experimentBand()?.textContent).not.toContain(FINDING.note);
+      expect(checked()).toEqual(["Where it sits"]);
+      expect(host.querySelector(".mode-band .where-back"), "the crumb back").not.toBeNull();
+      expect(sent()).toEqual([]);
+      const outsideReads = () => trace.filter((r) => r.url.startsWith(`/api/citers/${SLUG}`));
+      expect(outsideReads(), "an experiment does not ask OpenAlex, including the topic view").toEqual([]);
+
+      /* The history changes the experiment, but does not make either address a
+         press that starts work. */
+      history.pushState(null, "", `/read/${SLUG}?mode=sources&sources=guess-first`);
+      await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+      await until(() => param("sources") === "guess-first" && experimentBand() !== null, "Guess first from history");
+      await act(async () => history.back());
+      await until(() => param("sources") === "evidence-first", "Back to Evidence first");
+      await act(async () => history.forward());
+      await until(() => param("sources") === "guess-first", "Forward to Guess first");
+      expect(outsideReads(), "Back and Forward start no OpenAlex read").toEqual([]);
+      expect(sent(), "Back and Forward start no job").toEqual([]);
+
+      /* A real unmount/remount, beyond StrictMode's effect replay. */
+      await act(async () => root.unmount());
+      root = createRoot(host);
+      await open("?mode=sources&sources=evidence-first");
+      await until(() => experimentBand() !== null, "Evidence first after a remount");
+      expect(outsideReads(), "a remount starts no OpenAlex read").toEqual([]);
+      expect(sent(), "a remount starts no job").toEqual([]);
+
+      /* The ordinary switch-off rule is the other direction: Where it sits
+         still hides both doors. Opening it may make its documented plain
+         citer read, so this check deliberately follows the no-start trace. */
+      await open("?mode=sources");
+      await until(() => tool("reception") !== null, "Where it sits' tools");
+      expect(tool("guess-first")).toBeNull();
+      expect(tool("evidence-first")).toBeNull();
+    });
+
+    it("with no dossier, says so, points at Search the literature, and starts nothing", async () => {
+      experimentalSince = "2026-01-01T00:00:00.000Z";
+      who.set(OWNER);
+      await open("?mode=sources&sources=evidence-first");
+      await until(() => experimentBand()?.textContent?.includes("nobody has run one") === true, "the no-dossier line");
+      const go = [...(experimentBand()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) =>
+        b.textContent?.startsWith("Go to"),
+      );
+      await act(async () => go?.click());
+      await until(() => param("sources") === null && dossier() !== null, "Where it sits");
+      expect(sent(), "no job, nothing sent").toEqual([]);
+    });
   });
 });

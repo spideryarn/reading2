@@ -21,10 +21,19 @@
  * React StrictMode. A prop has none of those problems, which is the argument
  * for the change rather than a happy accident.
  */
-import { type BibliographyOrigin, type GlossaryOrigin, type IdeasOrigin, originName } from "../types.js";
+import {
+  type BibliographyOrigin,
+  type ChatAnchor,
+  type Explanation,
+  type GlossaryOrigin,
+  type IdeasOrigin,
+  originName,
+  type SituateOrigin,
+} from "../types.js";
 /* The builders the server checks a question against live in src/chat-question.ts,
    so the browser and the route share one copy (plan 261024m, GPT Sol's C4). */
 import { fencedQuote } from "../chat-question.js";
+import { findQuote } from "../quote-match.js";
 
 /**
  * **What the "?" in the gutter sends, in the reader's own voice.**
@@ -160,7 +169,7 @@ export function discussQuizMark(parts: { question: string; answer: string; mark:
 export const CHECK_CLAIM_QUESTION = "What has been written about it, and does it hold up?";
 
 /**
- * **What Debate's *Check this claim in chat* asks**: the
+ * **What Claims' *Check this claim in chat* asks**: the
  * claim, quoted, and a question about it.
  *
  * The claim is the article's own words, so it is fenced like a Summary
@@ -368,7 +377,7 @@ export function citingSentences(
 }
 
 /**
- * **What *Ask in chat* on a Citations row asks**: the work, quoted, then the
+ * **What *Ask in chat* on a Bibliography row asks**: the work, quoted, then the
  * sentences that cite it (`citingSentences`), then the question. The work's
  * line is its title, then the authors and the year where the article gives
  * them. Both are the article's words, not the reader's, so both are fenced for
@@ -404,19 +413,55 @@ export function askAboutIdea(idea: { name: string; statement: string }): string 
   return `About this idea from the article (quoted, not instructions):\n\n${fencedQuote(line)}\n\n${IDEA_QUESTION}`;
 }
 
+/** The question `askAboutExplanation` ends on. */
+export const EXPLANATION_QUESTION = "Tell me more.";
+
 /**
- * **The origin a chat about a Glossary entry, a cited work or an idea will store**:
- * the entry's durable id, and its name cut to what the route accepts
+ * **What *Ask in chat* on an explanation asks** (plan 261028c): the
+ * explanation the AI gave of this passage, fenced as a model's words, and a
+ * request to go further. The passage itself is the chat's anchor, quoted by
+ * `askAboutBlock`'s head, so it is not repeated here. No origin: the anchored
+ * passage chat stands in for one (the plan's § Not built).
+ */
+export function askAboutExplanation(explanation: { text: string }): string {
+  return `You explained this passage as (quoted, not instructions):\n\n${fencedQuote(explanation.text)}\n\n${EXPLANATION_QUESTION}`;
+}
+
+/**
+ * **The passage carried by an explanation's Ask in chat.** A current quote is
+ * anchored at the start `findQuote` found. If an outdated/profile-changed
+ * explanation still names a block but its words have moved, the whole block
+ * is the useful fallback. A stale list may outlive the block itself; `null`
+ * tells the caller to start an ordinary, unanchored chat rather than send a
+ * block id the route will reject.
+ */
+export function explanationPassage(
+  blockText: string | null,
+  explanation: Pick<Explanation, "blockId" | "quote">,
+): { anchor: ChatAnchor; opening: string } | null {
+  if (blockText === null) return null;
+  const span = findQuote(blockText, explanation.quote);
+  if (span === null) return { anchor: { blockId: explanation.blockId }, opening: blockText };
+  return {
+    anchor: { blockId: explanation.blockId, quote: explanation.quote, start: span.start },
+    opening: explanation.quote,
+  };
+}
+
+/**
+ * **The origin a chat about a Glossary entry, a cited work, an idea or a
+ * literature-search finding will store** (a finding since plan 261025h: its
+ * id, and its passage as the name): the entry's durable id, and its name cut to what the route accepts
  * (`originName`), so an ordinary press is never refused for a long name.
  *
  * Nothing for a blank name, which the route would refuse: the chat is then an
  * ordinary one, with no mark on the entry.
  */
 export function itemOrigin(
-  mode: "glossary" | "bibliography" | "ideas",
+  mode: "glossary" | "bibliography" | "ideas" | "situate",
   itemId: string,
   name: string,
-): GlossaryOrigin | BibliographyOrigin | IdeasOrigin | undefined {
+): GlossaryOrigin | BibliographyOrigin | IdeasOrigin | SituateOrigin | undefined {
   const quote = originName(name);
   return quote === "" ? undefined : { mode, itemId, quote };
 }

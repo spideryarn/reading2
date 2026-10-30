@@ -1,5 +1,5 @@
 /* glossary.css — the Glossary panel (GlossaryPanel.tsx), and with it the
-   `.gloss-*` base classes that Ideas, Timeline, Debate, Quiz and Referee reuse
+   `.gloss-*` base classes that Ideas, Timeline, Reception, Quiz and Referee reuse
    by putting a second class beside `.gloss`.
 
    **Its position ahead of those files is load-bearing, not incidental.**
@@ -11,7 +11,7 @@
    later and both go wrong with nothing to show for it.
 
    Two of those base classes are whole controls that other bands draw as they
-   are: the order row (`.gloss-sort*`, in Glossary, Quotes, Citations, FAQ and
+   are: the order row (`.gloss-sort*`, in Glossary, Quotes, Bibliography, FAQ and
    Debate) and the threshold slider (`.gloss-gate*`, in those five and Search).
    Each is written once, here. The glossary's own tail (the foot, its buttons
    and the *Look up a term* box) is at the end of footnotes.css. */
@@ -39,7 +39,7 @@
 
    **Every band's order row but Search's.** Quotes had a copy of these rules
    under `.quotes-rank*` until 2026-10-07 (plan 261007a § K5); its row carries
-   these classes now, as Bibliography's, FAQ's and Debate's always did. Search's
+   these classes now, as Bibliography's, FAQ's and Reception's always did. Search's
    row keeps its own look and class (search.css § `.srch-sort`). */
 .gloss-sort {
   display: flex;
@@ -72,11 +72,15 @@
 }
 /* **One chip with Search's** (`.srch-sort-btn`, search.css): the same corner,
    height and "on" — plan 261007h § F4. 28px, the height the shelf's own sort
-   chips are (docs/project/controls.md § The numbers); it was 23px here. */
+   chips are (docs/project/controls.md § The numbers); it was 23px here.
+   The gap is the part-switcher's (mode-band.css), so a chip carrying a count
+   (Sources' *About "keyword"* 556) spaces it as Sources' chips do; it had
+   none, and drew *About "extended mind"556* (2026-10-26). */
 .gloss-sort-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.25rem;
   min-height: 1.75rem;
   padding: 0.1rem 0.4rem;
   border: 1px solid transparent;
@@ -150,9 +154,9 @@
 /* The threshold slider — the one control in this panel that sets a number
    rather than picking from a list. Shown only in `prioritised` order.
 
-   **One set of rules for every band's slider.** Glossary, Citations and FAQ
+   **One set of rules for every band's slider.** Glossary, Bibliography and FAQ
    draw it through ThresholdSlider.tsx; Search's `ConfSlider`, Quotes'
-   `BarSlider` and Debate's `StopBar` are components of their own that emit the
+   `BarSlider` and Claims' `StopBar` are components of their own that emit the
    same classes. Until 2026-10-07 the last three each had a copy of these ten
    rules under their own names (`.srch-gate*`, `.quotes-bar*`, `.rcp-bar*`),
    kept in step by hand; plan 261007a § K5 measured the four alike and left
@@ -187,7 +191,7 @@
   font-size: max(var(--text-min), 0.79rem);
   white-space: nowrap;
 }
-/* **Debate's value is words, not a number**, so it is not mono: a proportional
+/* **Claims' value is words, not a number**, so it is not mono: a proportional
    face is what stops *"bears partly · 2 of 3"* reading as a reading off an
    instrument (reception.css § the relevance bar). `inherit` is what the span had
    when it set no face of its own. */
@@ -239,7 +243,7 @@
    glossary that never had them — or a search that found nothing, or a debate
    nobody answered. Until 2026-09-03 this said when the bar had *divided*
    nothing; the bar hides rather than groups now, so what it reports is the
-   count — `hiddenNote` in threshold.ts owns the wording. Search and Debate
+   count — `hiddenNote` in threshold.ts owns the wording. Search and Claims
    print it only when something is hidden; the others always. */
 .gloss-gate-note {
   margin: 0.3rem 0 0;
@@ -542,7 +546,7 @@ div > p.notice-failed { display: block; color: var(--danger); font-size: 0.85rem
 .gloss-look { margin: 0.55rem 0 0; }
 /* *Ask in chat* (OriginChat.tsx), where Dig deeper was until plan 261009k;
    it sat beside it with a left margin, which went with it. The house control
-   height for a finger, as Citations gives its own (bibliography.css §
+   height for a finger, as Bibliography gives its own (bibliography.css §
    `pointer: coarse`), so it is one height in both modes on a touch screen
    too (plan 261007m S2, GPT Sol's M2). */
 @media (pointer: coarse) {

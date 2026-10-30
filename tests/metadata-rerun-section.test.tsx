@@ -22,7 +22,7 @@
  *    current, which reads exactly like a run that worked and changed nothing.
  *  - **A double press posts once.** With no confirm, `starting` is the only
  *    thing between a double click and two paid runs.
- *  - **The Sketch and Debate rows say their price before the press**, which
+ *  - **The Sketch and Reception rows say their price before the press**, which
  *    the confirm used to be the only place to say.
  *  - **The glossary's note says it may add or rewrite**, because which one a
  *    forced run does is `existingFor`'s decision (src/glossary.ts), not the
@@ -69,8 +69,8 @@ vi.mock("../src/web/lib/supabase.js", () => ({
  *
  * Mocked so the rows' rule about the switch is asserted rather than inherited
  * from however an unanswered `GET /api/reader` happens to settle. **The rule is
- * that there is no rule**: a mode behind the switch (Timeline, Quiz, Debate,
- * FAQ, Citations) keeps its row here with the switch off, because hiding is
+ * that there is no rule**: a mode behind the switch (Timeline, Quiz, Reception,
+ * FAQ, Bibliography) keeps its row here with the switch off, because hiding is
  * about the bar's clutter and never about reaching a thing already made —
  * docs/project/experimental-features.md § The four rules.
  */
@@ -361,7 +361,6 @@ describe("the AI processing section", () => {
       "blocks",
       "assets",
       "labels",
-      "structure",
       "illustrated",
     ]) {
       expect(row(step), `${step} should have no control here`).toBeNull();
@@ -369,10 +368,10 @@ describe("the AI processing section", () => {
   });
 
   /**
-   * **FAQ and Citations joined on 2026-09-29**, when their out-of-date banner —
+   * **FAQ and Bibliography joined on 2026-09-29**, when their out-of-date banner —
    * their only redo — went (docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md).
    * Both are behind the experimental switch, and so are Timeline, Quiz and
-   * Debate, whose rows have always been drawn whatever the switch says: the
+   * Reception, whose rows have always been drawn whatever the switch says: the
    * same rule, asserted for all five with it off and on.
    */
   it.each([false, true])(
@@ -565,14 +564,14 @@ describe("the AI processing section", () => {
   });
 
   /**
-   * **Debate is one metered web search plus optional search-free synthesis**,
+   * **Reception is one metered web search plus optional search-free synthesis**,
    * and the dearest press on this page.
    *
    * **That range is no longer shown.** It was, until 2026-09-30: what AI
    * processing costs us is for the administrator alone (plan 260930k § 3). The
    * row still says what the reader is waiting on.
    */
-  it("names Debate's web-searching call and optional synthesis call, and no price", async () => {
+  it("names Reception's web-searching call and optional synthesis call, and no price", async () => {
     await open();
 
     const text = row("reception")?.textContent ?? "";
@@ -588,9 +587,11 @@ describe("the AI processing section", () => {
     );
   });
 
-  it("puts a note on the glossary, sketch, debate and skim rows and on no other", async () => {
+  /* Structure's note joined on 2026-10-29: its press rewrites the paragraph
+     labels after it (plan 261029l). */
+  it("puts a note on the structure, glossary, sketch, debate and skim rows and on no other", async () => {
     await open();
-    const noted = new Set(["glossary", "sketch", "reception", "skim"]);
+    const noted = new Set(["structure", "glossary", "sketch", "reception", "skim"]);
     for (const step of METADATA_RERUN_STEPS) {
       expect(
         host.querySelector(`#rerun-note-${step}`) !== null,

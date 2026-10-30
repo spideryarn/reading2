@@ -78,6 +78,12 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
     name: "Marginalia notes",
     what: "What Marginalia writes itself: the small words beside a paragraph where the argument turns (so, but, vs), and a few short notes where one would help",
   },
+  /* Not a mode yet: stage 2 of plan 261028c makes it one, and this row then
+     becomes `{ mode: "explanations" }`. */
+  explanations: {
+    name: "Explanations",
+    what: "The places a reader might get stuck, each with a short explanation of what is missing there",
+  },
   sketch: { sub: { mode: "diagram", view: "sketch" } },
   illustrated: { sub: { mode: "diagram", view: "illustrated" } },
   reception: { sub: { mode: "sources", view: "reception" } },
@@ -89,9 +95,9 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
     name: "Notes on cited works",
     what: "A short note on each cited work, written from its abstract",
   },
-  /* Drawn at the top of Sources › Investigate (plan 261024o), so it sends the
-     reader to that view. */
-  situate: { sub: { mode: "sources", view: "investigate" } },
+  /* Drawn in Sources › Where it sits (plan 261025h; at the top of
+     Investigate before, plan 261024o), so it sends the reader to that view. */
+  situate: { sub: { mode: "sources", view: "where" } },
   crossrefs: {
     name: "Cross-references",
     what: "Links in the prose from a claim to the passage it rests on",

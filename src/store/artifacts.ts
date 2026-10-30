@@ -53,6 +53,7 @@ import type {
   Reception,
   Faq,
   Relations,
+  Explanations,
   SourcesClaimList,
   Skim,
   Glossary,
@@ -109,6 +110,7 @@ export type ArtifactKind =
   | "quiz"
   | "faq"
   | "relations"
+  | "explanations"
   | "sources-claims"
   | "skim"
   | "sketch"
@@ -206,6 +208,12 @@ export interface ArtifactMap {
    * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
    */
   relations: Relations;
+  /**
+   * The places a reader would get stuck, each with the missing piece —
+   * `Explanations`, src/types.ts, written by the `explanations` step, for the
+   * owner only. docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+   */
+  explanations: Explanations;
   /**
    * The article's claims, listed for Sources' Claims to pick from —
    * `SourcesClaimList`, src/types.ts, written by the `sources-claims` step.
@@ -462,6 +470,11 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      throws before anything is written when fewer than half the paragraphs
      were answered. */
   relations: { field: "relations", ok: (v) => typeof v === "object" && v !== null && !isArray(v) },
+  /* An `explanations` array, and **an EMPTY one is usable**, as `faq`'s: the
+     model may find nothing worth explaining in a clear piece, and says so.
+     `buildExplanations` (src/explanations.ts) throws only when validation
+     empties a non-empty answer, so an empty list here is the model's own. */
+  explanations: { field: "explanations", ok: isArray },
   /* A `claims` array, and **an EMPTY one IS usable**, as `faq`'s: the prompt
      says none is a fine answer — a piece that makes no claim an outsider could
      argue with — and the panel has a sentence for it. `buildSourcesClaimList`
@@ -681,6 +694,16 @@ export const BASELINE: Partial<Record<ArtifactKind, BaselineRule>> = {
      than recomputing one from whatever version of src/bibliography.ts wrote the
      artefact. src/bibliography.ts § `keysOf`. */
   bibliography: { hashField: "sourceHash", itemsField: "citations", idField: "id", keyField: "key" },
+  /* Not for id inheritance — an explanation's id is a hash of its block and
+     quote — but for *Find more*, which extends this list and must not mistake
+     an unreadable one for none (src/explanations.ts § `previousExplanationsFrom`,
+     plan 261029e). `keyField: "quote"`, the words the id is a hash of. */
+  explanations: {
+    hashField: "sourceHash",
+    itemsField: "explanations",
+    idField: "id",
+    keyField: "quote",
+  },
 };
 
 /** A hash we could compare — see `BaselineRule` for why the test is this weak. */
@@ -1067,6 +1090,11 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   /* **And deliberately NO `BASELINE` row**, like `faq`: a relation is keyed by
      the block id it describes and has no id of its own to inherit. */
   relations: "relations",
+  /* An item's id is a hash of its block and words, so no id is inherited —
+     but **it has a `BASELINE` row** since plan 261029e: *Find more* extends
+     the previous list, read through `readBaseline` (src/explanations.ts §
+     `previousExplanationsFrom`). */
+  explanations: "explanations",
   /* **And deliberately NO `BASELINE` row**, like `faq`: ids are minted per
      run. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "sources-claims": "sources-claims",

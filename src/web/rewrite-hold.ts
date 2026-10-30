@@ -16,7 +16,8 @@
  *
  * ## Where it lives, and why not in a band or a read
  *
- * In this module, keyed by `(slug, step)`. A band unmounts while the paid job
+ * In this module, keyed by `(slug, step)` — and for Skim by the route too,
+ * default or added brief (§ `keyOf`). A band unmounts while the paid job
  * runs on (docs/postmortems/261002f-a-band-local-hold-cannot-protect-a-job-that-outlives-the-band.md),
  * and a read instance is no better: Ideas' band makes its own reader and
  * Marginalia a second, and Simple, Thread and Sketch read wholly inside the
@@ -107,7 +108,12 @@ const listeners = new Set<() => void>();
    counter. `begun()` still records only this reader's most recent start. */
 let readClock = 0;
 
-const keyOf = (slug: string, step: StepName) => `${slug}\n${step}`;
+/* `brief` is Skim's target (useStepJob.ts § `writesStep`): one hold per route,
+   so switching briefs neither releases nor inherits another route's hold
+   (GPT Sol's F4 on plan 261027d). `null` — every other step, and the
+   default route — is the key it always was. */
+const keyOf = (slug: string, step: StepName, brief: string | null = null) =>
+  brief === null ? `${slug}\n${step}` : `${slug}\n${step}\n${brief}`;
 
 function emit(): void {
   for (const listener of listeners) listener();
@@ -196,6 +202,7 @@ export interface RewriteHold {
 export function useRewriteHold({
   slug,
   step,
+  brief = null,
   identity,
   queue,
   fresh,
@@ -203,6 +210,8 @@ export function useRewriteHold({
 }: {
   slug: string;
   step: StepName;
+  /** Skim's target: an added brief's id, or `null` for the default and every other step. */
+  brief?: string | null;
   /** What identifies the artefact on screen — `generatedAt`, Quiz's `batchId` — or null with none. */
   identity: string | null;
   queue: Pick<StepJob<StepName>, "job" | "loaded" | "starting" | "failed" | "ended" | "registerRetryHold">;
@@ -211,7 +220,7 @@ export function useRewriteHold({
   /** The read's `refresh`. Called once, when the job is first seen ended. Never spends. */
   refresh(): Promise<void>;
 }): RewriteHold {
-  const key = keyOf(slug, step);
+  const key = keyOf(slug, step, brief);
   const hold = useSyncExternalStore(
     subscribe,
     useCallback(() => holdAt(key), [key]),

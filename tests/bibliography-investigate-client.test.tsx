@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **Citations' *Investigate*, the hook half** — src/web/useBibliography.ts §
+ * **Bibliography's *Dig deeper*, the hook half** — src/web/useBibliography.ts §
  * `investigate`, plan 260930a stage 2.
  *
  * The promises it makes are the glossary lookup's, and each is pinned here

@@ -78,6 +78,14 @@
  * button that opened it, top-layer painting that joins no z-index budget, and
  * Escape.
  *
+ * **The inert background is not free, and on a long article it is the whole
+ * cost.** Both engines compute inertness as style, so `showModal()` and
+ * `close()` each restyle every element in the page: 13–19 s and 13–15 s on an
+ * 87k-node book at 6× CPU throttle, against 0.8 s and 0 ms for a non-modal
+ * `show()` (spya-bewb4q, spya-k3g78t; docs/investigations/261029a-…). Whether
+ * Feedback should be modal at all — Greg: "it's not really a proper dialogue.
+ * It's like a panel" — is question q-f7xm4h; postmortem 261029d names the class.
+ *
  * **AnnotateDialog would have been the wrong precedent for a second reason**, and
  * it is the one that would have hurt: its first Escape *clears the box*. Here
  * there is a populated box to lose, and a reader who has just typed out what
@@ -96,6 +104,7 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -103,7 +112,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Bug, Copy, Lightbulb, LoaderCircle, Mail, X } from "lucide-react";
+import { Bug, Copy, Lightbulb, LoaderCircle, Mail, MessagesSquare, X } from "lucide-react";
 
 import { mintId } from "../ids.js";
 import { FEEDBACK_NOT_AVAILABLE, FEEDBACK_SEND_FAILED } from "../messages.js";
@@ -209,6 +218,13 @@ interface Props {
    * the dialog on it, so a change of reader is a fresh dialog. Absent: no copy.
    */
   readerId?: string;
+  /**
+   * Told the admin's live count of threads waiting on a decision, or `null`
+   * once the read has settled without an admin list, so the trigger's number
+   * (FeedbackButton.tsx) follows replies, deferrals, failures and the old-server
+   * fallback rather than keeping an older arrival count (spya-wwyw8y).
+   */
+  onWaitingCount?(count: number | null): void;
 }
 
 /** How long after the last keystroke the draft is saved to the browser. */
@@ -266,9 +282,10 @@ type View = "write" | "earlier";
  * So these are shown in a `Toast` (Toast.tsx), outside the dialog, rather than
  * in a panel inside it — see `send`.
  */
-const THANKS: Record<"problem" | "suggestion" | "none", string> = {
+const THANKS: Record<FeedbackKind | "none", string> = {
   problem: "Sorry to hear you have been having a problem — thank you for telling us. We will look into it.",
   suggestion: "Thank you for the suggestion — we really appreciate it.",
+  discussion: "Thank you — we will come back with thoughts and proposals to discuss.",
   none: "Thank you for the feedback — we really appreciate it.",
 };
 
@@ -309,6 +326,7 @@ const SEND_TIMEOUT_MS = 60_000;
 const KIND_LABEL: Record<FeedbackKind, string> = {
   problem: "A problem",
   suggestion: "A suggestion",
+  discussion: "A discussion",
 };
 
 /**
@@ -361,6 +379,16 @@ function KindHint({ kind }: { kind: FeedbackKind | null }) {
     return (
       <span className="fb-hint">
         What you'd like, and what it would let you do. A rough sketch is plenty.
+      </span>
+    );
+  }
+  /* An admin's only (Greg, 2026-10-28, plan 261028b): a report that asks for a
+     conversation, not a build. */
+  if (kind === "discussion") {
+    return (
+      <span className="fb-hint">
+        Think out loud. The reply comes back under Needs a decision as thoughts and
+        proposals to discuss, and nothing is built until you say so.
       </span>
     );
   }
@@ -418,7 +446,25 @@ function useDraftHeld(...held: boolean[]): void {
   }, [any]);
 }
 
-export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false, readerId }: Props) {
+/**
+ * **The Earlier tab is not drawn again while nobody can see it.** It is hidden,
+ * not unmounted, on Write (so a half-written reply survives), and every render
+ * of this dialog used to render it too: for an admin, every question thread and
+ * waiting report, on every keystroke in the Write box and on the press of Send —
+ * about 126ms a key at 6× throttle (spya-bewb4q, plan 261029k). Its props are
+ * rebuilt each render, so a plain `memo` would never hold; this skips a render
+ * only when it was hidden and still is. The render that hides it, and the one
+ * that shows it, both go through with the current props. State inside it, and
+ * the hooks that feed it, update as before.
+ */
+const StillWhileHidden = memo(
+  function StillWhileHidden({ children }: { hidden: boolean; children: ReactNode }) {
+    return <>{children}</>;
+  },
+  (before, after) => before.hidden && after.hidden,
+);
+
+export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false, readerId, onWaitingCount }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -434,7 +480,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
      below, which then adds to it as it would to any draft. Plan 261010f. */
   const [restored] = useState(() => (readerId === undefined ? null : readFeedbackDraft(readerId)));
   const [body, setBody] = useState(restored?.body ?? "");
-  const [kind, setKind] = useState<FeedbackKind | null>(restored?.kind ?? null);
+  /* A discussion is an admin's alone, and the server refuses it from anyone
+     else — so a draft saved under that kind (an admin's, on a shared browser,
+     or from before a role changed) comes back unset rather than as a kind this
+     reader has no button for. `admin` is a function of `readerId`, which keys
+     this dialog, so it cannot change after this runs. */
+  const [kind, setKind] = useState<FeedbackKind | null>(
+    restored?.kind === "discussion" && !admin ? null : (restored?.kind ?? null),
+  );
   const [consented, setConsented] = useState(false);
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
@@ -888,6 +941,13 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   }, [open]);
   const { earlier, choice, setShow, retry, questions, liveQuestions, waitingQuestionCount, questionsLoading, replies, addenda } =
     useEarlierFeedback(open, view === "earlier", admin);
+  useEffect(() => {
+    /* A settled failure and the old-server 404 fallback have no admin
+       shortcut, so they clear a number learned by the host's earlier read.
+       Do not clear it during loading: that would make the badge blink between
+       the host's answer and this fresher one. */
+    if (open && admin && !questionsLoading) onWaitingCount?.(waitingQuestionCount);
+  }, [open, admin, waitingQuestionCount, questionsLoading, onWaitingCount]);
   const questionsSlow = useSlow(questionsLoading);
   /* One thread on its own, in Needs a decision: nothing else in the panel. */
   const threadOpen = choice.show === "waiting" && threadShowing(questions, replies);
@@ -1362,6 +1422,18 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
               onChoose={setKind}
               icon={<Lightbulb size={14} aria-hidden="true" />}
             />
+            {/* **A third, for an admin only** (Greg, 2026-10-28, spya-zytb0g):
+                somewhere to think out loud and get proposals back. Only an
+                admin can read a reply, so only an admin is offered it; the
+                server refuses it from anyone else. Plan 261028b. */}
+            {admin ? (
+              <KindButton
+                kind="discussion"
+                chosen={kind}
+                onChoose={setKind}
+                icon={<MessagesSquare size={14} aria-hidden="true" />}
+              />
+            ) : null}
           </fieldset>
 
           <label className="fb-field">
@@ -1528,6 +1600,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
           tabIndex={0}
           hidden={view !== "earlier"}
         >
+          <StillWhileHidden hidden={view !== "earlier"}>
           {/* The pills go while one thread shows: on a phone with the keyboard
               up they cost three lines (plan 261008i, decision 4). */}
           {threadOpen ? null : (
@@ -1554,6 +1627,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
             addenda={addenda}
             active={open && view === "earlier"}
           />
+          </StillWhileHidden>
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

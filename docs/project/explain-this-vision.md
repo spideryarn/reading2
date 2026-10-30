@@ -51,7 +51,7 @@ pointed at gets wider as you go down the list:
   a term the author bends            what it means HERE                     Glossary (senseHere)
   a term, name or work, borrowed     what it ordinarily is                  Glossary (background)
     e.g. "Torricelli"
-  a cited work                       what it says, and why it is cited      Citations card (blurb)
+  a cited work                       what it says, and why it is cited      Bibliography card (blurb)
   a claim, an idea                   what the piece takes for granted       Ideas, Marginalia
   a hard sentence or passage         help me unpack it                      select → Ask AI
                                                                             ("Explain this passage.")
@@ -144,3 +144,12 @@ None of these is built, and each is queued rather than promised.
    [vision.md](vision.md#where-this-goes-after-granularity-zoom) calls the most valuable input we
    have. If it is ever built, it should sit **beside** the author's sentence, never replace it, and it
    could offer *what do you think it means?* first (the self-explanation evidence).
+
+   **Greg asked for it on 2026-10-28** (spya-nkq6rj: *"what I'd love is if it did it proactively, in
+   much the same way that the glossary is proactive"*), and the first part is built as
+   [explanations.md](explanations.md): the few places a reader would get stuck, each explained
+   beside the author's words, in the margin and a mode under *More*, experimental and owner-only.
+   It answers this step's caution by a cap (one per six paragraphs, at most fifteen), *Not sure* and
+   *Draws on AI memory, unchecked* labels, and explanations of the missing piece rather than
+   paraphrases. The underline in the prose and the *what do you think it means?* prompt are not
+   built.

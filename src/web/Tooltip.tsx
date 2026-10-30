@@ -256,8 +256,17 @@ export function Tooltip({
   const changeOpen = (next: boolean, _event?: Event, reason?: OpenChangeReason) => {
     /* A controlled card a finger opened is not closed by hover: see
        `byTouch` above. Escape, a press elsewhere and the parent still close
-       it. */
-    if (controlledOpen !== undefined && !next && reason === "hover" && byTouch.current) return;
+       it. Both of hover's reasons: an interactive card's leave goes through
+       `safePolygon`, which closes as "safe-polygon", and that let a
+       compatibility mouseleave and a move away take down a Skim term card a
+       finger had pinned (spya-r246pf). */
+    if (
+      controlledOpen !== undefined &&
+      !next &&
+      (reason === "hover" || reason === "safe-polygon") &&
+      byTouch.current
+    )
+      return;
     if (interactive && !next) {
       // Read the committed DOM refs, including a trigger replaced in this
       // commit before Floating UI's element state has rerendered.

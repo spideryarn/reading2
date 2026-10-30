@@ -70,6 +70,8 @@ import {
   privateLinkOpeners,
   privateLinkSignedOutOpens,
   quizAttempts,
+  readSoFarWords,
+  readingPlace,
   staleNoticeDismissals,
   commandSuggestionDismissals,
   relatedWorkSearches,
@@ -79,6 +81,7 @@ import {
   refereeCriteria,
   revisionBlocks,
   searchRuns,
+  skimBriefs,
   uploadSourceGuesses,
 } from "../src/db/schema.js";
 import { mintId } from "../src/ids.js";
@@ -1263,6 +1266,11 @@ describe("destroying an article", () => {
         db.insert(privateLinkOpeners).values({ articleId: GONE_ARTICLE, readerId: owner }),
       private_link_signed_out_opens: () =>
         db.insert(privateLinkSignedOutOpens).values({ articleId: GONE_ARTICLE }),
+      /* The shelf pie's cached denominator — plan 261025l. Goes with the article. */
+      read_so_far_words: () =>
+        db.insert(readSoFarWords).values({ articleId: GONE_ARTICLE, basis: "b", words: { [GONE_BLOCK]: 12 } }),
+      /* Your place in it (plan 261029f): goes with the article, by both keys. */
+      reading_place: () => db.insert(readingPlace).values({ articleId: GONE_ARTICLE, blockId: GONE_BLOCK }),
       realtime_sessions: () =>
         db.insert(realtimeSessions).values({
           id: GONE_SESSION,
@@ -1295,6 +1303,7 @@ describe("destroying an article", () => {
           criterion: "is it any good",
           status: "pending",
         }),
+      skim_briefs: () => db.insert(skimBriefs).values({ articleId: GONE_ARTICLE, id: mintId(), brief: "A brief" }),
       search_runs: () =>
         db.insert(searchRuns).values({
           articleId: GONE_ARTICLE,

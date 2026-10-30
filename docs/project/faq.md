@@ -82,7 +82,7 @@ reading order exactly as it was. **Those stay as they are**: the new order is fo
 an owner who wants it re-runs the FAQ from the Metadata page. Greg, 2026-10-01, asked whether to
 rebuild existing FAQs across production: *"new articles only"*. The rule and its arithmetic are
 [`src/web/faq-order.ts`](../../src/web/faq-order.ts), on the threshold machinery the Glossary and
-Citations share ([`src/web/threshold.ts`](../../src/web/threshold.ts)).
+Bibliography share ([`src/web/threshold.ts`](../../src/web/threshold.ts)).
 
 **There is no written answer**, and that is the design rather than a gap. The passages are the
 answer; a paragraph from the model under each question would be a summary wearing question marks.

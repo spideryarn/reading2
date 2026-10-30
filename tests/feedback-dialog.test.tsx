@@ -192,7 +192,7 @@ beforeEach(() => {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { FeedbackDialog } = await import("../src/web/FeedbackDialog.js");
-const { FeedbackHost, useFeedbackOpen } = await import("../src/web/FeedbackButton.js");
+const { FeedbackHost, FeedbackTrigger, useFeedbackOpen } = await import("../src/web/FeedbackButton.js");
 const { reloadVeto } = await import("../src/web/safe-to-reload.js");
 const { navigate } = await import("../src/web/router.js");
 const { EarlierFilter } = await import("../src/web/FeedbackEarlier.js");
@@ -465,6 +465,29 @@ describe("the feedback dialog", () => {
     expect(shown).toMatch(/what it would let you do/i);
     expect(shown).not.toMatch(/steps to reproduce/i);
     expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+  });
+
+  /* **A third kind, for an admin only** (Greg, 2026-10-28, plan 261028b): only
+     an admin can read a reply, so only an admin is offered a kind that promises
+     a conversation. A reader's dialog keeps exactly its two buttons. */
+  it("offers A discussion to an admin only, and sends it as its kind", async () => {
+    const labels = () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].map((b) => b.textContent ?? "");
+    mount();
+    expect(labels()).toEqual(["A problem", "A suggestion"]);
+    act(() => root.unmount());
+    host.remove();
+
+    asAdmin = true;
+    mount();
+    expect(labels()).toEqual(["A problem", "A suggestion", "A discussion"]);
+    pick("A discussion");
+    expect(host.textContent ?? "").toMatch(/nothing is built until you say so/i);
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+    type("Thinking out loud.");
+    send();
+    await act(async () => {});
+    expect(body().kind).toBe("discussion");
   });
 
   /* Un-picking puts the general sentence back, which is the same code path as a
@@ -1339,6 +1362,44 @@ describe("the draft kept for a reload", () => {
     expect(suggestion?.getAttribute("aria-pressed")).toBe("true");
   });
 
+  /* A discussion is an admin's kind (plan 261028b). A saved draft under it keeps
+     its words either way; it keeps the kind only for a reader who has the
+     button, and comes back unset for anybody else rather than as a kind the
+     server would refuse. */
+  it.each([
+    [true, "true"],
+    [false, null],
+  ])("restores a discussion draft for an admin (%s) with the kind, otherwise unset", (admin, pressed) => {
+    asAdmin = admin;
+    kept.set(KEY, JSON.stringify({ body: "Half a thought", kind: "discussion", id: "spya-k3m9qt", at: Date.now() }));
+    mount();
+    expect(firstBox().value).toBe("Half a thought");
+    const discussion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A discussion"),
+    );
+    expect(discussion?.getAttribute("aria-pressed") ?? null).toBe(pressed);
+    expect(
+      [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].filter(
+        (button) => button.getAttribute("aria-pressed") === "true",
+      ),
+    ).toHaveLength(admin ? 1 : 0);
+  });
+
+  it("keeps an admin's discussion draft, kind and all, across a reload", async () => {
+    asAdmin = true;
+    mount();
+    type("Half a thought");
+    pick("A discussion");
+    await later(1000);
+    expect(saved()).toMatchObject({ body: "Half a thought", kind: "discussion" });
+    reload();
+    expect(firstBox().value).toBe("Half a thought");
+    const discussion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A discussion"),
+    );
+    expect(discussion?.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("brings them back after a reload, as a new report", async () => {
     mount();
     type("Half a report");
@@ -1570,6 +1631,14 @@ describe("the thank-you, and getting out of it", () => {
     mount();
     await fileOne("A suggestion");
     expect(thanks().toLowerCase()).toContain("suggestion");
+    expect(thanks().toLowerCase()).not.toContain("sorry");
+  });
+
+  it("answers an admin's discussion with proposals to come", async () => {
+    asAdmin = true;
+    mount();
+    await fileOne("A discussion");
+    expect(thanks().toLowerCase()).toContain("proposals");
     expect(thanks().toLowerCase()).not.toContain("sorry");
   });
 
@@ -2075,7 +2144,8 @@ describe("the Earlier tab", () => {
       click(tab("Earlier"));
       await settle();
 
-      expect(lists).toEqual([WAITING_URL, ALL_URL]);
+      /* The first is the host's own, for the trigger's number (spya-wwyw8y). */
+      expect(lists).toEqual([WAITING_URL, WAITING_URL, ALL_URL]);
       /* Needs a decision counts the threads waiting, none here; the others count reports (261011ad). */
       expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 0", "Set aside 2", "Shipped 1"]);
     });
@@ -2730,6 +2800,172 @@ describe("the Earlier tab", () => {
         replyMicDone = undefined;
       });
 
+      /* spya-wwyw8y: Greg asked for "a little number (perhaps in a subtle red)
+         next to the Feedback button … if "Needs a decision" > 0 … only for
+         Admins". The host reads it before the box is opened, from the same
+         read and the same count as the shortcut inside, and the dialog's own
+         count replaces it once it has one. */
+      describe("the number on the trigger", () => {
+        const trigger = () => host.querySelector<HTMLButtonElement>("button.fb-button");
+        const number = () => trigger()?.querySelector(".fb-waiting-count")?.textContent ?? null;
+        type TriggerVariant = "corner" | "dock" | "masthead" | "nav";
+        function OpenFeedback() {
+          const open = useFeedbackOpen();
+          return <button type="button" onClick={() => open?.()}>Open feedback</button>;
+        }
+        function TriggerHarness({ readerId, variants }: { readerId: string; variants: TriggerVariant[] }) {
+          return (
+            <FeedbackHost readerId={readerId}>
+              {variants.map((variant) => <FeedbackTrigger key={variant} variant={variant} />)}
+              <OpenFeedback />
+            </FeedbackHost>
+          );
+        }
+        function renderTrigger(readerId: string, variants: TriggerVariant[] = ["corner"]) {
+          act(() => root.render(<TriggerHarness readerId={readerId} variants={variants} />));
+        }
+        function mountTrigger(readerId: string, variants: TriggerVariant[] = ["corner"]) {
+          host = document.createElement("div");
+          document.body.append(host);
+          root = createRoot(host);
+          renderTrigger(readerId, variants);
+        }
+
+        it("shows an admin how many threads wait, before the box is opened", async () => {
+          listAnswer = answerBy({ waiting: WAITING });
+          mountTrigger(ADMIN_USER_ID_LOCAL);
+          await settle();
+          expect(lists).toEqual([WAITING_URL]);
+          expect(number()).toBe("2");
+          expect(trigger()?.getAttribute("aria-label")).toBe("Feedback, 2 threads need a decision");
+        });
+
+        it("takes the dialog's count once the box has read again", async () => {
+          listAnswer = answerBy({ waiting: WAITING });
+          mountTrigger(ADMIN_USER_ID_LOCAL);
+          await settle();
+          listAnswer = answerBy({ waiting: { ...WAITING, questions: [Q1, Q4] } });
+          click([...host.querySelectorAll("button")].find((button) => button.textContent === "Open feedback"));
+          await settle();
+          expect(lists).toEqual([WAITING_URL, WAITING_URL]);
+          expect(number()).toBe("1");
+          expect(trigger()?.getAttribute("aria-label")).toBe("Feedback, 1 thread needs a decision");
+        });
+
+        it("keeps the dialog's fresher count when the arrival read lands later", async () => {
+          let releaseArrival: (() => void) | undefined;
+          let readNumber = 0;
+          listAnswer = () => {
+            readNumber += 1;
+            if (readNumber === 1) {
+              return new Promise((resolve) => {
+                releaseArrival = () => resolve(new Response(JSON.stringify(WAITING), { status: 200 }));
+              });
+            }
+            return page({ ...WAITING, questions: [Q1, Q4] })();
+          };
+          mountTrigger(ADMIN_USER_ID_LOCAL);
+          click([...host.querySelectorAll("button")].find((button) => button.textContent === "Open feedback"));
+          await settle();
+          expect(number()).toBe("1");
+
+          await act(async () => releaseArrival?.());
+          await settle();
+          expect(number()).toBe("1");
+        });
+
+        it.each([404, 500])("clears the arrival count when the dialog's admin read settles with %s", async (status) => {
+          listAnswer = answerBy({ waiting: WAITING });
+          mountTrigger(ADMIN_USER_ID_LOCAL);
+          await settle();
+          expect(number()).toBe("2");
+
+          listAnswer = page({ error: "no" }, status);
+          click([...host.querySelectorAll("button")].find((button) => button.textContent === "Open feedback"));
+          await settle();
+          expect(number()).toBeNull();
+          expect(shortcut()).toBeNull();
+        });
+
+        it("drops an old reader's arrival read after the host changes reader", async () => {
+          let releaseArrival: (() => void) | undefined;
+          listAnswer = () =>
+            new Promise((resolve) => {
+              releaseArrival = () => resolve(new Response(JSON.stringify(WAITING), { status: 200 }));
+            });
+          mountTrigger(ADMIN_USER_ID_LOCAL);
+          renderTrigger("reader-a");
+          await act(async () => releaseArrival?.());
+          await settle();
+          expect(lists).toEqual([WAITING_URL]);
+          expect(number()).toBeNull();
+          expect(trigger()?.getAttribute("aria-label")).toBe("Feedback");
+        });
+
+        it("keeps the trigger equal to local replies and deferrals", async () => {
+          listAnswer = answerBy({ waiting: WAITING });
+          mountTrigger(ADMIN_USER_ID_LOCAL);
+          await settle();
+          click([...host.querySelectorAll("button")].find((button) => button.textContent === "Open feedback"));
+          click(tab("Earlier"));
+          await settle();
+
+          click(row("q-aaaaaa"));
+          typeReply("One switch.");
+          answer = stored(201);
+          click(button(thread(), "Send reply"));
+          await settle();
+          expect(number()).toBe("1");
+          expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+
+          click(button(thread(), "Next ›"));
+          answer = deferral();
+          click(button(thread(), "Defer for now"));
+          await settle();
+          expect(number()).toBeNull();
+          expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 0");
+        });
+
+        it("draws and names the same exact count in all four trigger shapes without changing the Dock's measured width", async () => {
+          listAnswer = answerBy({ waiting: WAITING });
+          mountTrigger(ADMIN_USER_ID_LOCAL, ["corner", "dock", "masthead", "nav"]);
+          await settle();
+          const triggers = [...host.querySelectorAll<HTMLButtonElement>(".fb-button, .dock-feedback, .fb-masthead, .fb-nav")];
+          expect(triggers).toHaveLength(4);
+          expect(triggers.map((one) => one.querySelector(".fb-waiting-count")?.textContent)).toEqual(["2", "2", "2", "2"]);
+          expect(triggers.map((one) => one.getAttribute("aria-label"))).toEqual([
+            "Feedback, 2 threads need a decision",
+            "Feedback, 2 threads need a decision",
+            "Feedback, 2 threads need a decision",
+            "Feedback, 2 threads need a decision",
+          ]);
+
+          const css = readerCssNoComments();
+          expect(css).toMatch(/\.fb-button\.fb-has-waiting-count\s*\{[^}]*width:\s*auto/);
+          expect(css).toMatch(/\.dock-feedback\s*\{[^}]*position:\s*relative/);
+          expect(css).toMatch(/\.dock-feedback \.fb-waiting-count\s*\{[^}]*position:\s*absolute/);
+        });
+
+        it("shows nothing when no thread waits", async () => {
+          listAnswer = answerBy({ waiting: { ...WAITING, questions: [Q3, Q4] } });
+          mountTrigger(ADMIN_USER_ID_LOCAL);
+          await settle();
+          expect(lists).toEqual([WAITING_URL]);
+          expect(trigger()).not.toBeNull();
+          expect(number()).toBeNull();
+          expect(trigger()?.getAttribute("aria-label")).toBe("Feedback");
+        });
+
+        it("makes no request for a reader who is not an admin, and shows no number", async () => {
+          listAnswer = answerBy({ waiting: WAITING });
+          mountTrigger("reader-a");
+          await settle();
+          expect(lists).toEqual([]);
+          expect(trigger()).not.toBeNull();
+          expect(number()).toBeNull();
+        });
+      });
+
       /* Decision 9 (spya-bzwzfw): Earlier opens on Needs a decision when a
          thread is waiting, and the opening's read is that filter's. */
       it("opens Earlier on Needs a decision when a thread waits, from the read made on opening", async () => {
@@ -3176,9 +3412,12 @@ describe("the Earlier tab", () => {
           const hiddenFoot = host.querySelector<HTMLElement>('.fb-actions[hidden] .fb-foot-pager');
           if (!hiddenFoot) throw new Error("no hidden footer pager");
           click(button(hiddenFoot, "Next ›"));
-          expect(showing()).toBe("q-bbbbbb");
+          /* Not `showing()` here: the hidden tab is not drawn again until it is
+             shown (FeedbackDialog.tsx § StillWhileHidden, plan 261029k), so the
+             hidden copy still holds the old thread. It is the new one once shown. */
           expect(top).toBe(400);
           click(tab("Earlier"));
+          expect(showing()).toBe("q-bbbbbb");
           expect(top).toBe(0);
 
           /* F1 was declined deliberately: hiding or reopening the same thread
@@ -3257,6 +3496,26 @@ describe("the Earlier tab", () => {
         expect(
           [...thread().querySelectorAll("details.fb-question-more summary")].map((s) => s.textContent),
         ).not.toContain("Details");
+      });
+
+      /* Plan 261028b, Stage 2: an ASCII mockup between two ``` lines is drawn
+         monospaced, line for line, and its own Details line is not the split. */
+      it("draws a fenced block as a <pre>, its lines kept, and does not split on a Details inside it", async () => {
+        const box = "+---------+\n| Details |\nDetails\n   indented";
+        const fenced = { ...Q1, body: `Which layout?\n\n\`\`\`\n${box}\n\`\`\`\n\nRecommended: A.\nDetails\nWhy, at length.` };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [fenced, Q2] }, { ...WAITING, questions: [fenced, Q2] });
+        const article = thread().querySelector(".fb-question");
+        const pre = article?.querySelector("pre.fb-mono");
+        expect(pre?.textContent).toBe(box);
+        expect([...(article?.querySelectorAll(":scope > .fb-question-text") ?? [])].map((p) => p.textContent)).toEqual([
+          "Which layout?",
+          "Recommended: A.",
+        ]);
+        expect(article?.textContent).not.toContain("```");
+        const more = [...thread().querySelectorAll<HTMLDetailsElement>("details.fb-question-more")].find(
+          (d) => d.querySelector("summary")?.textContent === "Details",
+        );
+        expect(more?.textContent).toContain("Why, at length.");
       });
 
       /* Decision 2: every reply no agent has acted on, oldest first, and how

@@ -70,7 +70,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/bring-in.ts`](../../src/web/bring-in.ts) + [`BringIntoChat.tsx`](../../src/web/BringIntoChat.tsx) | *Bring into this chat*: a web link under a Chat answer, or an address in the draft, imported through `useJobs().add` (`ownCopy`) and handed to the composer's "Bringing in" row with `useMentionPicker().add`. [261017e](../plans/261017e-bring-a-web-page-into-chat.md) |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
-| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). `styles.css` is an entry point of nothing but `@import`s; every rule is in one of the files under [`src/web/styles/`](../../src/web/styles/). Both now load *inside* `@layer app`, via `tailwind.css` — the map of the stylesheets is [design-css-overview.md](design-css-overview.md) |
+| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). `styles.css` is an entry point of nothing but `@import`s; every rule is in one of the files under [`src/web/styles/`](../../src/web/styles/), bar two sheets beside `tailwind.css` that each have a layer of their own, `voices.css` and `button-tone.css`. Both now load *inside* `@layer app`, via `tailwind.css` — the map of the stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
 | [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
@@ -143,6 +143,12 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   ([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
   The lower-level `readEvents` is what most older hooks loop over by hand —
   [comments.md § streaming](comments.md#streaming).
+- **`src/web/root-flags.ts` § `useRootFlag`, `useFocusWithinFlag`, `acquireRootFlag`** — a fact the
+  stylesheet needs to ask from `:root` ("the bar is drawn", "a side dialog is open"), said as a
+  counted `data-*` attribute on `<html>` by the component that draws the thing. Never a
+  `:root:has(…)`, which walks the whole article on every change —
+  [performance.md § Style recalculation scales with the article](performance.md#style-recalculation-scales-with-the-article-2026-10-29).
+  A band's two flags are `src/web/band-root-flags.ts`.
 - **`src/web/useOrderedRead.ts`, `useStepJob.ts`, `useAutoRun.ts`; `JobProgress.tsx`** — a mode's
   artefact read, its job, running on arrival, and the progress card. The state glue around them is
   still copied hook to hook — [mode.md](mode.md).
@@ -204,13 +210,13 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   Metadata and `/profile` use both ([reader-profile.md § The page's six sections](reader-profile.md#the-pages-six-sections)).
 - **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
   on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
-  (glossary.css § a touch screen). Quotes, Citations, Glossary, Debate and FAQ use it.
+  (glossary.css § a touch screen). Quotes, Bibliography, Glossary, Reception and FAQ use it.
 - **`src/web/ThresholdSlider.tsx` § `ThresholdSlider`, with `src/web/threshold.ts` §
   `applyThreshold`** — "show the items above this score". The FAQ, the Glossary and
-  Citations use the component; Quotes, Search and Debate draw the same row for themselves, and
+  Bibliography use the component; Quotes, Search and Reception draw the same row for themselves, and
   share only `applyThreshold`.
 - **`src/web/StopRange.tsx` § `StopRange`, with `src/web/threshold.ts` § `thresholdStops`** — the
-  range input inside every numeric threshold slider (the five above bar Debate's word levels): it
+  range input inside every numeric threshold slider (the five above bar Reception's word levels): it
   moves only to the values that change the list and ticks each one under the track. A new
   threshold slider uses it rather than a bare `<input type="range">`
   ([261017f](../plans/261017f-threshold-sliders-jump-between-the-values-that-change-the-count.md)).

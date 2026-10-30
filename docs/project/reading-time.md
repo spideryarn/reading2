@@ -49,6 +49,12 @@ experimental features off" pins it through the real `App`.
   visible pixels, so a screen earns one second per second. Crediting every visible block in full made
   a screen of eight paragraphs look read after reading one of them.
   [`reading-time.ts`](../../src/web/reading-time.ts) § `shareVisible`.
+- **The same flush carries the paragraph you are on** (since 2026-10-29), which the server keeps as
+  your place for your other devices
+  ([url-state.md § A browser that has never seen it asks the server](url-state.md#a-browser-that-has-never-seen-it-asks-the-server)).
+  Unlike the seconds it is replaced, not added, so it is retried until a send of it lands, and sent
+  only when it moved. [`useReadingTime.ts`](../../src/web/useReadingTime.ts) § And the paragraph you
+  are on.
 - **It counts only while somebody could be reading**: the page visible, some activity (arriving
   counts) in the last five minutes, and the prose on screen. `Reader` decides the last of those,
   because `.band-covers` is also set when no band is open.
@@ -175,6 +181,32 @@ experimental features off" pins it through the real `App`.
   stored block summed, as "about 14 min" — owner only, nothing under view-as, and it waits for the
   reader's last write before reading. `useReadingTime.ts` § `useTimeSpentReading`; Greg's report
   `spya-db7w6f`; plan [261024t](../plans/261024t-metadata-shows-time-spent-reading.md).
+
+- **The masthead**, since 2026-10-25: a small pie right after the read time, in five coarse bands
+  (nothing drawn, started, about half, most, finished), each drawn as a whole quarter so the picture
+  is as coarse as the words. Finished is 80% of the counted words, so not every passage has to be
+  read; the card never prints a percentage. The words are the
+  quiz's, less what is folded on arrival, and the quiz now leaves that out too. Owner only, and
+  nothing until the opening read has answered. The chats' phrase reads the same cut points
+  (`readBand`), on the server's word count, which still includes folded matter.
+
+  > basically, I don't want to see a whole bunch of indications that I'm 97% finished because I read
+  > most of the paragraphs but chose to skip some, or because I read basically all of it but skipped
+  > the final section that's, like, not that interesting for some reason. So, yeah, it can be a
+  > coarse estimate, basically, is what I'm saying.
+  >
+  > — Greg, 2026-10-25 (`spya-e5477u`)
+
+  `readBand`, `readSoFarWords` in [`read-filter.ts`](../../src/web/read-filter.ts),
+  [`ReadSoFarMark.tsx`](../../src/web/ReadSoFarMark.tsx); plan
+  [261025j](../plans/261025j-how-much-of-the-article-you-have-read-at-the-top.md).
+
+- **Each shelf card**, since 2026-10-25: the same pie, worked out on the server from the totals and
+  a cached denominator that the flush keeps current — Greg's *"1A"* to
+  [q-y78eth](../user-feedback/questions/q-y78eth.md).
+  It is only on the owner's browser shelf, not the public shelf, MCP, administrator view-as or a
+  kept browser copy.
+  [library.md § How much of it you have read](library.md#how-much-of-it-you-have-read).
 
 ## Not built
 

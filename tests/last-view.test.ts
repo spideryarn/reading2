@@ -101,6 +101,12 @@ describe("rememberableSearch", () => {
     expect(restoredHref("/read/x", "?deep=2", "?mode=quotes")).toBe(null);
   });
 
+  it("keeps Explanations' order and bar, as the FAQ's are (plan 261029e, Sol F3)", () => {
+    /* How the list is arranged is a place you were; nothing here can spend. */
+    expect(rememberableSearch("?explby=difficulty&explbar=0.25")).toBe("?explby=difficulty&explbar=0.25");
+    expect(hasArticleState("?explby=centrality")).toBe(true);
+  });
+
   it("keeps Summary's sub-mode, which only a press can spend on", () => {
     /* `?summary=simple` restored mounts Simple's read and nothing else: the run
        is armed by a press — the bar's Summary, or the slider (SummaryMode.tsx) —
@@ -137,6 +143,15 @@ describe("rememberableSearch", () => {
     expect(rememberableSearch("?mode=sources&sources=not-cited")).toBe("?mode=sources&sources=not-cited");
     expect(restoredHref("/read/x", "", "?mode=sources&sources=not-cited")).toBe("/read/x?mode=sources&sources=not-cited");
     expect(hasArticleState("?sources=not-cited")).toBe(true);
+  });
+
+  /* Plan 261025h: Where it sits is the bare address, so a remembered Sources
+     view with no `sources=` restores to it, and Bibliography is remembered by
+     name; an old Citations view restores to Bibliography explicitly. */
+  it("restores Where it sits from a bare Sources view, and Bibliography by name", () => {
+    expect(restoredHref("/read/x", "", "?mode=sources")).toBe("/read/x?mode=sources");
+    expect(restoredHref("/read/x", "", "?mode=sources&sources=bibliography")).toBe("/read/x?mode=sources&sources=bibliography");
+    expect(restoredHref("/read/x", "", "?mode=citations")).toBe("/read/x?mode=sources&sources=bibliography");
   });
 
   it("keeps Sources' Links view without arming or generating anything", () => {
@@ -220,7 +235,18 @@ describe("rememberableSearch", () => {
   });
 
   it("keeps every other mode as it stands", () => {
-    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
+    for (const mode of [
+      "plain",
+      "glossary",
+      "search",
+      "referee",
+      "summary",
+      "ideas",
+      "structure",
+      "quotes",
+      "timeline",
+      "explanations",
+    ]) {
       expect(rememberableSearch(`?mode=${mode}`), mode).toBe(`?mode=${mode}`);
     }
     expect(rememberableSearch("?mode=glossary&term=spya-h4r2wd")).toBe(

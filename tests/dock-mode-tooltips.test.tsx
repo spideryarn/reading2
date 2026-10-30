@@ -327,7 +327,7 @@ describe("the catalog's two sentences per mode", () => {
  * *not* open is its item in the menu, which carries the card's first
  * paragraph: tests/dock-more.test.tsx § what an item under More says.
  */
-const UNDER_MORE: readonly Mode[] = ["quotes", "glossary", "faq", "ideas", "timeline"];
+const UNDER_MORE: readonly Mode[] = ["quotes", "glossary", "explanations", "faq", "ideas", "timeline"];
 const openFor = (mode: Mode): Mode => (UNDER_MORE.includes(mode) ? mode : "plain");
 
 describe("the mode segment on the reading view", () => {

@@ -7,9 +7,9 @@
  * Since 2026-09-29 an outside title is made plain where it is written
  * (`plainTitle` in src/html.ts, and the seams in
  * docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md). Rows
- * written before then still hold what the web gave us — a Debate source reading
+ * written before then still hold what the web gave us — a Reception source reading
  * `Physics - <i>Landmarks</i>—Millikan…`, drawn with its tags showing. Nothing
- * re-writes a stored Debate or a stored chat answer on its own, so without this
+ * re-writes a stored Reception or a stored chat answer on its own, so without this
  * those rows stay wrong for good.
  *
  * ## What it touches
@@ -28,7 +28,7 @@
  * GPT Sol's plan review, F4.
  *
  * **Compare-and-swap.** Each write is conditional on the column still holding
- * exactly what was read, so a Debate or a chat answer written between the read
+ * exactly what was read, so a Reception or a chat answer written between the read
  * and the write is left alone and counted as a conflict rather than overwritten
  * with a stale copy. Run it again to pick those up. GPT Sol, F2.
  *

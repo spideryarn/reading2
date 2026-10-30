@@ -1,5 +1,5 @@
 /**
- * **How often does the Citations list give a work an influence number, and is
+ * **How often does the Bibliography list give a work an influence number, and is
  * the number the same twice?** Plan 261003m: influence becomes a number only
  * when the model is confident it knows the work, otherwise unknown.
  *
@@ -46,7 +46,7 @@ export interface ResultWork {
   relevance: number | null;
   /** null: the row has no influence number (unknown, left out, or out of range). */
   influence: number | null;
-  why: string;
+  why: string | null;
 }
 
 export interface Result {
@@ -68,7 +68,7 @@ export function toResultWork(w: CitedWork): ResultWork {
     year: w.year ?? null,
     relevance: w.relevance ?? null,
     influence: w.influence ?? null,
-    why: w.why,
+    why: w.why ?? null,
   };
 }
 

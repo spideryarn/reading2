@@ -26,7 +26,7 @@
  *
  * See docs/project/ingest-queue.md.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, BookPlus, Check, ChevronRight, Circle, Copy, LoaderCircle, Link as LinkIcon, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
@@ -39,7 +39,6 @@ import {
   KEEP_A_TAB_OPEN,
 } from "../job-state.js";
 import {
-  ADDING_SENDS_TEXT_AWAY,
   IMPORT_LINK_COPY_FAILED,
   IMPORT_LINK_COPY_TIP,
 } from "../messages.js";
@@ -47,10 +46,12 @@ import { mintId } from "../ids.js";
 import { isWebUrl } from "../urls.js";
 import { useFeedbackOpen } from "./FeedbackButton.js";
 import { importProblemReport } from "./import-report.js";
+import { media } from "./media.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { addHref, navigate, readHref } from "./router.js";
 import { isMinimalJob } from "./read-this.js";
+import { layoutViewportWidth } from "./reader/measure.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
 import { useCopy } from "./useCopy.js";
@@ -139,8 +140,60 @@ export function earlier(job: Job, before: number): boolean {
   return Number.isFinite(at) && at < before;
 }
 
-export function AddArticle({ queue }: { queue: UseJobs }) {
+/**
+ * **Does the add box take the focus as the shelf arrives?**
+ *
+ * > By default, put the focus in the add box, not the search box.
+ * >
+ * > — Greg, 2026-10-26, spya-nmx5ga
+ *
+ * Yes, unless one of three readers would be worse off for it — the fourth, a
+ * page that arrived with a non-empty `?q=`, is the caller's to decide
+ * (`Library`):
+ *
+ *  - **a finger is the primary pointer** — the on-screen keyboard would cover
+ *    half the shelf they came to look at. `pointer`, not `any-pointer`, so a
+ *    touchscreen laptop with a trackpad still gets it; and `media()` answers
+ *    `false` where it cannot tell, so an unknown pointer gets it too;
+ *  - **something else already has the focus** — the shelf takes it from nobody;
+ *  - **the box is not wholly on screen** — scroll restoration is manual
+ *    (main.tsx), so Back from far down an article can mount the shelf scrolled,
+ *    and typing into a box you cannot see is worse than no focus. Scrolling to
+ *    it would yank the page instead.
+ *
+ * docs/plans/261027a-the-shelf-focuses-the-add-box-on-arrival.md.
+ */
+function takesFocusOnArrival(input: HTMLInputElement): boolean {
+  if (media("(pointer: coarse)")) return false;
+  const active = document.activeElement;
+  if (active !== null && active !== document.body) return false;
+  const box = input.getBoundingClientRect();
+  return (
+    box.top >= 0 &&
+    box.right <= layoutViewportWidth() &&
+    box.bottom <= window.innerHeight &&
+    box.left >= 0
+  );
+}
+
+export function AddArticle({
+  queue,
+  focusOnArrival = false,
+}: {
+  queue: UseJobs;
+  /** Whether to try for the focus on mount — the shelf's call, from its `?q=`. */
+  focusOnArrival?: boolean;
+}) {
   const [url, setUrl] = useState("");
+  /* **Decided once, on mount**: the shelf's data landing must not re-grab the
+     focus. Back from an article remounts the shelf, so it asks again — that
+     is arriving too. `preventScroll`, so arriving never moves the page. */
+  const urlInput = useRef<HTMLInputElement>(null);
+  const focusAtMount = useRef(focusOnArrival);
+  useEffect(() => {
+    const el = urlInput.current;
+    if (el && focusAtMount.current && takesFocusOnArrival(el)) el.focus({ preventScroll: true });
+  }, []);
   const slug = useMemo(() => slugFromUrl(url), [url]);
   /**
    * Which of the two ways in Add will take, when both are available.
@@ -311,6 +364,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                     className="tw:pointer-events-none tw:absolute tw:left-3 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground"
                   />
                   <input
+                    ref={urlInput}
                     id="add-url"
                     type="text"
                     inputMode="url"
@@ -331,21 +385,31 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                     className="voice-reader tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-background tw:py-2 tw:pr-3 tw:pl-9 tw:text-[13px] tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
                   />
                 </div>
-                {/* One box, so the two actions wrap together rather than the
-                    row breaking between them, and `ml-auto` keeps them on the
-                    right of the line they land on. */}
+                {/* One box, so the File-and-(i) pair and Add wrap together
+                    rather than the row breaking between them, and `ml-auto`
+                    keeps them on the right of the line they land on. */}
                 <div className="tw:ml-auto tw:flex tw:gap-2">
-                  {/* The PDF control, drawn by UploadPicker so that the file,
-                      the transfer and the refusals all stay in the one component
-                      that runs them. It is only placed here. */}
+                  {/* The File control and its limits/provider (i), drawn by
+                      UploadPicker so that the file, the transfer and the
+                      refusals all stay in the one component that runs them.
+                      They are only placed here. */}
                   <span
-                    /* The picker owns the input and the button; this only
-                       notices that the reader reached for them. `onClickCapture`
-                       rather than `onClick`, so it runs whether or not the inner
-                       button stops the event, and a `change` handler as well
-                       because opening the dialog and cancelling it is not a
-                       choice — only a file is. */
-                    onClickCapture={() => setLastTouched("file")}
+                    /* The picker owns the input and its controls; this only
+                       notices that the reader reached for the File button.
+                       The neighbouring (i) is deliberately excluded: reading
+                       the limits must not change whether Add sends an already
+                       chosen file or a URL typed afterwards. `onClickCapture`
+                       rather than `onClick`, so it runs whether or not the File
+                       button stops the event. A `change` handler also catches a
+                       file chosen through the native dialog. */
+                    onClickCapture={(event) => {
+                      if (
+                        event.target instanceof Element &&
+                        event.target.closest("[data-upload-file-button]")
+                      ) {
+                        setLastTouched("file");
+                      }
+                    }}
                     onChangeCapture={() => setLastTouched("file")}
                     className="tw:contents"
                   >
@@ -396,28 +460,16 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                 rather than under everything below. */}
             {slots.uploadStatus}
 
-          {/* **What happens to the text, said once, at the point of deciding.**
-              One sentence, no gate and no checkbox: the reader is told, and then
-              they decide. It sits under both controls because it is true of both —
-              a pasted URL and an uploaded PDF go the same way — and because it is
-              about what happens *after* Add, not about the box above it.
-
-              It matters most to somebody who has been sent a manuscript to
-              peer-review, and Referee mode says the past-tense half of it
-              (`REFEREE_TEXT_ALREADY_SENT`, src/web/App.tsx § RefereeBand). This is
-              the half that arrives while the choice is still open, which is the
-              only reason that one can be honest.
-              docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
-
-              **It must not be gated on typing.** Compacting this box on 2026-09-03
-              nearly did exactly that — show it once a URL is in the field — and it
-              would have been a real regression, because dropping a PDF *is* the
-              commit gesture (UploadPicker.tsx) and a reader can send a manuscript
-              without ever having typed a character. Visible at rest while either
-              way in is available, or the promise is not made. */}
-          <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-            {ADDING_SENDS_TEXT_AWAY}
-          </p>
+          {/* **Where the text goes is said in the (i) beside File**, with the
+              upload limits (`LimitsInfo`, UploadPicker.tsx), and no longer as a
+              visible line here. From 2026-08-31 it was a line under both
+              controls, kept visible as the promise made before adding that
+              Referee mode's past-tense notice follows
+              (docs/plans/260831an-referee-mode-for-peer-reviewers.md
+              § Confidentiality). Greg, 2026-10-26 (reply `spya-dqhrvy` to
+              q-p6fvep): *"B I think it's pretty obvious that we're sending stuff
+              to AI. I mean, the whole thing is AI powered, and it's all in the
+              privacy policy."* Plan 261026h. */}
 
           {/* **The reason, and something to press.** A quota refusal gets a link to
               `/pricing` beside it — the sentence has been naming somewhere to

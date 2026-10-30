@@ -85,7 +85,7 @@ type Exec = Pick<ReturnType<typeof getDb>, "execute">;
  * own duplicate.
  *
  * (a) is served by `article_revisions_raw_sha256` (the hash leads, then the
- * article to join on) — tests/minimal-paper-duplicates.test.ts asks the planner
+ * article to join on) — tests/minimal-paper.test.ts asks the planner
  * for it with `EXPLAIN`. (b) by `uploads_owner_claimed_sha256`.
  */
 export async function findDuplicate(

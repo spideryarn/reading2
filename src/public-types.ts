@@ -671,7 +671,7 @@ export interface PublicFaq {
 }
 
 /**
- * **Debate's claims list, as a visitor gets it** — from the day it was built
+ * **Claims' list, as a visitor gets it** — from the day it was built
  * (2026-10-08, docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2).
  * Generated output about the article, so readable by a visitor by default
  * (docs/project/mode.md § The artefact); only making it spends.
@@ -729,7 +729,7 @@ export interface PublicSimpleSummary {
  * - **`url` is optional here, and required on `CitedWork`.** Every address is
  *   re-judged by `publicCitationUrl` (src/urls.ts) at the boundary, and a
  *   refused one takes the *link* off the row, not the row: a citation is still
- *   a citation without an address, unlike a Debate row, which is its source.
+ *   a citation without an address, unlike a Reception row, which is its source.
  *
  * `reference` and `mentions` carry the article's own characters, sliced out of
  * blocks the payload already carries whole, so they add nothing a visitor
@@ -740,7 +740,10 @@ export interface PublicCitedWork {
   title: string;
   authors?: string;
   year?: string;
-  why: string;
+  /** Absent on a row code listed from the text — `CitedWork.why`. */
+  why?: string;
+  /** `CitedWork.listedBy`: the article's own words, so it crosses. */
+  listedBy?: "text";
   relevance?: number;
   influence?: number;
   reference?: CitationPlace;
@@ -818,13 +821,13 @@ export type PublicIdentificationSignal =
   | Extract<IdentificationSignal, { kind: "named" }>;
 
 /**
- * What both of a visitor's Debate rows carry — the owner's row, minus nothing
+ * What both of a visitor's Reception rows carry — the owner's row, minus nothing
  * but provenance it never had, and with `lean` always present: a row stored
  * before 2026-09-08 carries `valence` instead, and the boundary reads it
  * through `readStoredLean` so a visitor never meets the old vocabulary.
  *
  * **`url` is required**, and that is the contract 260905f § Security set: a
- * Debate row *is* its source, so a row whose address `publicCitationUrl`
+ * Reception row *is* its source, so a row whose address `publicCitationUrl`
  * refuses does not cross at all — it is counted instead.
  */
 interface PublicReceptionRowBase {
@@ -861,7 +864,7 @@ export interface PublicClaimReceptionRow extends PublicReceptionRowBase {
 }
 
 /**
- * One Debate group, as a visitor gets it: its rows, and **how many
+ * One Reception group, as a visitor gets it: its rows, and **how many
  * rows the public boundary withheld** — computed there, never read off the
  * artefact (260905f § What is counted, Sol's F17). The stored `counts` do not
  * cross: `returnedSources`, `reportedRows`, `keptRows`, `omittedOverCap`, the
@@ -887,7 +890,7 @@ export type PublicReceptionClaims =
   | ReceptionClaimsNotRun;
 
 /**
- * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
+ * **Reception, as a visitor gets it** — since 2026-09-29, the fourth mode plan
  * 260929c moved off `owners-only` (SPIDERYARN-READING2-56), by the contract its
  * own plan set (260905f § Security, § Stage 4). Showing a stored search costs
  * nothing; only running Reception spends its metered web-search call.

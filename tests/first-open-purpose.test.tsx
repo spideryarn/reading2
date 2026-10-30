@@ -10,7 +10,7 @@
  * address the reader would arrive at. PurposePrompt's own half (the modal, the
  * mark) is tests/purpose-prompt.test.tsx.
  */
-import { act, StrictMode, useEffect } from "react";
+import { act, StrictMode, useEffect, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,7 +19,7 @@ vi.mock("../src/web/useExperimental.js", () => ({
   useExperimental: () => ({ ...setting }),
 }));
 
-const { useLastView } = await import("../src/web/last-view.js");
+const { settleSavedPlace, useLastView } = await import("../src/web/last-view.js");
 const { firstOpenWithPurpose, settleFirstOpen, holdFirstOpen, releaseWhenDecided } = await import("../src/web/first-open-purpose.js");
 const { parseRoute } = await import("../src/web/router.js");
 
@@ -57,6 +57,9 @@ function Prompt({ outcome }: { outcome: "stored" | "none" | "unknown" | null }) 
 function Page({ outcome }: { outcome: "stored" | "none" | "unknown" | null }) {
   const route = parseRoute(location.pathname);
   useLastView("x", route.kind === "read" ? route.view : "article", A);
+  /* The owner's article read answering "never opened anywhere", as ArticlePage's
+     does before it draws (last-view.ts § The server's place, plan 261029f). */
+  useLayoutEffect(() => settleSavedPlace("x", A, null), []);
   return <Prompt outcome={outcome} />;
 }
 

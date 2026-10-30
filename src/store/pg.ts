@@ -62,7 +62,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
-import { isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
+import { fitsTree, isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
 import { glossaryRunKind, isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
   isOutdated as quotesAreOutdated,
@@ -99,6 +99,7 @@ import {
   inputFingerprint as situateFingerprint,
   isOutdated as situateIsOutdated,
   isStale as situateIsStale,
+  phasesOutdated as situatePhasesOutdated,
   PROMPT_VERSION as SITUATE_PROMPT_VERSION,
 } from "../situate.js";
 import {
@@ -108,6 +109,13 @@ import {
   PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
   type RelationFingerprintBlock,
 } from "../relations.js";
+import {
+  inputFingerprint as explanationsFingerprint,
+  isOutdated as explanationsAreOutdated,
+  isStale as explanationsIsStale,
+  PROMPT_VERSION as EXPLANATIONS_PROMPT_VERSION,
+  type ExplanationFingerprintBlock,
+} from "../explanations.js";
 import {
   inputFingerprint as crossrefsFingerprint,
   isStale as crossrefsIsStale,
@@ -121,6 +129,7 @@ import {
 } from "../simple-summary.js";
 import {
   PROMPT_VERSION as SKIM_PROMPT_VERSION,
+  routeFreshness,
   skimInput,
   skimInputHash,
 } from "../skim.js";
@@ -185,6 +194,7 @@ import {
 import { attachWebNotes } from "../citation-web-note-shown.js";
 import { optionalSources } from "../registry-keys.js";
 import { MATTER_PROMPT_VERSION, matterForReader, matterInputHash } from "../matter-current.js";
+import { shelfReadBands, type ShelfReadBand } from "./read-so-far-basis.js";
 import { isMatterDocument } from "../matter-shape.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
@@ -225,6 +235,8 @@ import type {
   Situate,
   SituateFound,
   Relations,
+  Explanations,
+  ExplanationsFound,
   RelationsResponse,
   Crossrefs,
   CrossrefsFound,
@@ -582,6 +594,8 @@ type RevisionReader =
   | "bibliography"
   | "faq"
   | "relations"
+  /** The Explanations, owner only (src/explanations.ts, plan 261028c). */
+  | "explanations"
   | "sourcesClaims"
   /** Situate's dossier, owner only (src/situate.ts, plan 261024o). */
   | "situate"
@@ -635,6 +649,7 @@ const REVISION_READ_POLICY: Record<
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
     illustrated: "value", reception: "value", assets: "value", bibliography: "value", faq: "value",
     relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
+    explanations: "value",
     sourcesClaims: "value",
     situate: "value",
   },
@@ -684,7 +699,9 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -712,7 +729,9 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -740,7 +759,9 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -820,7 +841,9 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* Debate Claims' rendered article head carries this field. */
+    /* `faq`'s bytes and `faq`'s fingerprint again (plan 261028c). */
+    explanations: "value",
+    /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
@@ -882,7 +905,9 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* FAQ's fingerprint exactly, so the outline too. */
     relations: "value",
-    /* Only for Debate Claims' fallback head when metadata has no title. */
+    /* Exact rendered body and head; tree only for the fallback title (plan 261028c). */
+    explanations: "value",
+    /* Only for Claims' fallback head when metadata has no title. */
     sourcesClaims: "value",
     situate: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
@@ -1038,6 +1063,12 @@ const REVISION_READ_POLICY: Record<
      read**: src/store/public-reader.ts does not select it (Sol P1-4,
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
   relations: { metadata: "value", relations: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `relations` makes. `isCurrent` needs the column for its arm, and
+     `personalisedSteps` because it carries a `profileHash`. **And no public
+     read**: src/store/public-reader.ts does not select it — owner only (plan
+     261028c § The step). */
+  explanations: { metadata: "value", explanations: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. And the public
      read, in src/store/public-reader.ts: generated output is readable by a
@@ -1402,6 +1433,8 @@ export const REVISION_PROJECTIONS = {
     faq: articleRevisions.faq,
     /* For `isCurrent`'s arm, as `debate` above. */
     relations: articleRevisions.relations,
+    /* For `isCurrent`'s arm, and an artefact that carries a `profileHash`. */
+    explanations: articleRevisions.explanations,
     /* For `isCurrent`'s arm, as `debate` above. */
     sourcesClaims: articleRevisions.sourcesClaims,
     /* For `isCurrent`'s arm, as `debate` above. Owner only, and never
@@ -1505,10 +1538,16 @@ export const REVISION_PROJECTIONS = {
     faq: articleRevisions.faq,
     ...CITED_FINGERPRINT_COLUMNS,
   },
-  /* The cited set, as `faq`: the same bytes and the same fingerprint. */
+  /* The cited head, body and tree fallback used by its exact-request fingerprint. */
   relations: {
     id: articleRevisions.id,
     relations: articleRevisions.relations,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited set, as `faq`: the same bytes and the same fingerprint. */
+  explanations: {
+    id: articleRevisions.id,
+    explanations: articleRevisions.explanations,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree fallback its exact-request fingerprint needs. */
@@ -1671,6 +1710,42 @@ export function currentRevisionQuery<K extends RevisionReader>(
     .limit(1);
 }
 
+/**
+ * **A Skim route judged against the revision it would be planned from now** —
+ * `routeFreshness` (src/skim.ts) over the revision's Quotes, Ideas, tree and
+ * blocks. `loadSkim` asks it of the default's route, and an added brief's
+ * read (src/store/pg-skim-briefs.ts) of the brief's, through
+ * `currentSkimFreshness` below. Plan 261027d (Sol F6).
+ */
+async function skimFreshnessOf(
+  revision: RevisionRowFor<"skim">,
+  skim: Skim,
+): Promise<{ stale: boolean; outdated: boolean; notOnRoute: number }> {
+  const quotes = revision.quotes as Quotes | null;
+  const tree = revision.tree as Tree | null;
+  const ideas = revision.ideas as Ideas | null;
+  const hasQuotes = quotes !== null && Array.isArray(quotes.quotes) && quotes.quotes.length > 0;
+  /* The complete blocks, including HTML: `skimInput` needs positions for
+     Idea and section associations, and markup plus captions for figures. */
+  const blocks = hasQuotes && tree ? await blocksFor(revision.id) : [];
+  return routeFreshness(skim, { quotes, tree, ideas, blocks });
+}
+
+/**
+ * The same, for a route stored somewhere other than the revision — an added
+ * Skim brief's row. Owner-scoped like every read here: a stranger's slug is
+ * not-found.
+ */
+export async function currentSkimFreshness(
+  slug: string,
+  skim: Skim,
+): Promise<{ stale: boolean; outdated: boolean; notOnRoute: number }> {
+  requireSlug(slug);
+  const found = await currentRevision(slug, "skim");
+  if (!found) throw notFound(slug);
+  return skimFreshnessOf(found.revision, skim);
+}
+
 /** One article's current published revision, or undefined. */
 async function currentRevision<K extends RevisionReader>(slug: string, read: K) {
   const rows = await currentRevisionQuery(getDb(), slug, read);
@@ -1809,6 +1884,19 @@ async function relationsFingerprintInputs(
     text: row.text,
     kind: row.kind,
     words: row.words,
+    ...(row.treatment === null ? {} : { treatment: row.treatment }),
+  }));
+}
+
+/** The narrow block read for Explanations' article rendering and paragraph ceiling. */
+async function explanationsFingerprintInputs(
+  revisionId: string,
+): Promise<ExplanationFingerprintBlock[]> {
+  const rows = await relationsFingerprintQuery(getDb(), revisionId);
+  return rows.map((row) => ({
+    id: row.id as Block["id"],
+    text: row.text,
+    kind: row.kind,
     ...(row.treatment === null ? {} : { treatment: row.treatment }),
   }));
 }
@@ -2151,6 +2239,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   situate: ["article_revisions.situate"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
+  explanations: ["article_revisions.explanations"],
   skim: ["article_revisions.skim"],
   crossrefs: ["article_revisions.crossrefs"],
   matter: ["article_revisions.matter"],
@@ -2479,9 +2568,10 @@ export function listArticlesQuery(
       /**
        * **The reader's own tags, in the same statement** (plan 261003d). A
        * correlated `array(...)` rather than a second query, because
-       * tests/store-shelf-reads.test.ts holds the shelf at two statements
-       * whatever its size, and a third for tags was the first thing the full
-       * suite caught. Sorted again in TypeScript (`compareTags`), so the order
+       * tests/store-shelf-reads.test.ts holds the shelf at a fixed number of
+       * statements whatever its size (two then, three since the read-so-far
+       * bands of plan 261025l), and a third for tags was the first thing the
+       * full suite caught. Sorted again in TypeScript (`compareTags`), so the order
        * does not depend on the database's collation.
        */
       tags: sql<string[]>`array(
@@ -2794,10 +2884,12 @@ export type ProfileCarrying = Exclude<
  * "your quiz was written for your profile" before they share would describe
  * something no visitor receives. Situate is the second, for the same reason:
  * owner only, read for the owner's profile, and never in the public payload
- * (plan 261024o, S9). Named exceptions rather than a hand list, so every
- * *other* artefact gaining the field still fails the compiler here.
+ * (plan 261024o, S9). Explanations is the third: owner only, written for the
+ * owner's profile, never in the public payload (plan 261028c). Named
+ * exceptions rather than a hand list, so every *other* artefact gaining the
+ * field still fails the compiler here.
  */
-type NeverShared = "quiz" | "situate";
+type NeverShared = "quiz" | "situate" | "explanations";
 
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
@@ -2897,7 +2989,7 @@ export function shareableArtefacts(revision: {
         ? revision.simpleSummary
         : null,
     bibliography: revision.bibliography,
-    /* **Debate is on a shared link when either of its artefacts is**: a claims
+    /* **Sources is on a shared link when either of its artefacts is**: a claims
        list made with no Reception search stored is still the visitor's to read
        (src/public/dto.ts § `publicSourcesClaimList`, the same `claims` test). */
     reception:
@@ -3079,7 +3171,14 @@ const rawPgArticleReader: ArticleReader = {
     // src/api.ts set by requiring both blocks.json and tree.json.
     if (!tree || !blocks.length) throw notFound(slug);
 
-    const arc = found.revision.arc;
+    /* **Only an arc that still fits this tree.** An embedded arc is one
+       `useArc` trusts without asking `/api/arc`, so after a Structure re-run
+       re-cut the parts, the stored one stayed on screen with its unmatched
+       sentences dropped, for good. Left out, the owner's `useArc` reads the
+       route, finds it stale and makes it again (src/arc.ts § `fitsTree`, plan
+       261029l). */
+    const storedArc = found.revision.arc as Arc | null;
+    const arc = storedArc && fitsTree(storedArc, tree as Tree) ? storedArc : null;
     /* **Named, and never spread in from the row.** The key is required on
        `Article` precisely so that leaving this line out is a type error rather
        than an article that quietly hot-links every image (src/types.ts). `??
@@ -3155,7 +3254,17 @@ const rawPgArticleReader: ArticleReader = {
     /* One grouped query for the whole page, and it used to be one per article
        — which was not a count at all: it selected every comment row's id and
        took `rs.length`. */
-    const counts = await commentCounts(db, rows.map((row) => row.article.id));
+    const ids = rows.map((row) => row.article.id);
+    /* **And how much of each the owner has read**, as the masthead's pie says
+       it (plan 261025l): one statement for the page, reading cached
+       denominators and never writing them. Health, MCP and administrator
+       view-as explicitly skip it. Concurrent with the counts, as neither
+       needs the other. */
+    const readBandsPromise =
+      opts.readBands === false
+        ? Promise.resolve(new Map<string, ShelfReadBand>())
+        : shelfReadBands(ids, db);
+    const [counts, readBands] = await Promise.all([commentCounts(db, ids), readBandsPromise]);
 
     /* The five numbers per row, off the columns — and one query and one log
        line for however many rows turn out not to have them.
@@ -3238,6 +3347,7 @@ const rawPgArticleReader: ArticleReader = {
           sourceReusable: row.revision.hasRawSource && row.fetchDone,
           processing: minimal ? "minimal" : "full",
           tags: [...row.tags].sort(compareTags),
+          readBand: readBands.get(row.article.id),
         }),
       );
     }
@@ -3684,6 +3794,32 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* `faq`'s stamp, and the profile as `ideasAreCurrent` takes it: the
+           artefact's own value on both sides, because this read cannot see the
+           profile a job would stamp with today. A changed profile is reported
+           by `GET /api/explanations/:slug`, and re-run by the step's stamp. */
+        case "explanations": {
+          const explanations = revision.explanations as Explanations | null;
+          if (!explanations || !Array.isArray(explanations.explanations) || !tree || blocks.length === 0) {
+            return false;
+          }
+          const profile =
+            explanations.profileHash !== undefined ? { profileHash: explanations.profileHash } : {};
+          return sameStamp(
+            {
+              inputHash: explanations.sourceHash,
+              promptVersion: explanations.version,
+              model: explanations.generator,
+              ...profile,
+            },
+            {
+              inputHash: explanationsFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: EXPLANATIONS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+              ...profile,
+            },
+          );
+        }
         /* Its exact rendered body and cited head, with the tree as title fallback. */
         case "sources-claims": {
           const list = revision.sourcesClaims as SourcesClaimList | null;
@@ -3709,6 +3845,9 @@ const rawPgArticleReader: ArticleReader = {
         case "situate": {
           const situate = revision.situate as Situate | null;
           if (!situate || !Array.isArray(situate.findings) || !tree || blocks.length === 0) return false;
+          /* Each call's model, the triage's among them, as the step's own
+             `stamp` asks it first (src/pipeline.ts § `situateStep`). */
+          if (situatePhasesOutdated(situate)) return false;
           return sameStamp(
             {
               inputHash: situate.sourceHash,
@@ -4232,7 +4371,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * Debate's claims list on its own — the Postgres half of `loadSourcesClaims`.
+   * Claims' list on its own — the Postgres half of `loadSourcesClaims`.
    *
    * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
    * FAQ's. **A 404 is the ordinary case** (the step runs only on a press on
@@ -4334,6 +4473,41 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
+   * The Explanations on their own — the Postgres half of `loadExplanations`.
+   *
+   * The cited head and body make the exact rendered request; the tree is read
+   * only for the absent-metadata title fallback. **A 404 is the ordinary case**
+   * (the step runs only on the owner's press); an EMPTY list is a 200 — nothing
+   * worth explaining — as
+   * `SHAPE.explanations` decides at the store boundary. The profile half is the
+   * route's (`withProfileChanged`), because a store adapter does not read the
+   * profile. **Owner only**: there is no public twin of this read.
+   * docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+   */
+  async loadExplanations(slug: string): Promise<ExplanationsFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "explanations");
+    if (!found) throw notFound(slug);
+    const explanations = found.revision.explanations as Explanations | null;
+    if (!explanations || !Array.isArray(explanations.explanations)) {
+      throw new ArtefactNotMadeYet(
+        `No explanations for "${slug}" yet. Write them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["explanations"] }.`,
+      );
+    }
+    const blocks = await explanationsFingerprintInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      explanations,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale:
+        !tree ||
+        explanationsIsStale(explanations, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: explanationsAreOutdated(explanations),
+    };
+  },
+
+  /**
    * The cross-references on their own — the Postgres half of `loadCrossrefs`.
    *
    * The cited head and the tree used by its exact-request fingerprint.
@@ -4424,35 +4598,9 @@ const rawPgArticleReader: ArticleReader = {
           `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
       );
     }
-    const quotes = found.revision.quotes as Quotes | null;
-    const current = quotes && Array.isArray(quotes.quotes) ? quotes.quotes : [];
-    const onRoute = new Set(skim.stops.map((s) => s.quoteId));
-    const tree = found.revision.tree as Tree | null;
-    const ideas = found.revision.ideas as Ideas | null;
-    /* The complete blocks, including HTML: `skimInput` needs positions for
-       Idea and section associations, and markup plus captions for figures. */
-    const blocks = current.length > 0 && tree ? await blocksFor(found.revision.id) : [];
-    const input = tree ? skimInput({ quotes, blocks, tree, ideas }) : null;
-    /* A quote left out because it sits in the abstract is not missing from
-       the route — it was never offered (`inAbstract` in src/skim.ts). */
-    const leftOut = new Set(input?.abstractQuoteIds ?? []);
     return {
       skim,
-      /* No quotes any more counts as stale, the same way round as its
-         neighbours; so does no tree. Otherwise stale when anything the prompt
-         would render has moved — the Quotes, the Ideas (regenerated, or
-         arrived after a route planned without them), or the outline.
-         **Only for a route of this prompt version**: one from before
-         `trajectory/7` holds a quotes-only hash that can never match, and
-         calling it stale would tell the reader their Quotes changed when what
-         changed is us — `outdated` says that. */
-      stale:
-        current.length === 0 ||
-        !input ||
-        (skim.version === SKIM_PROMPT_VERSION &&
-          skim.sourceHash !== skimInputHash(input)),
-      outdated: skim.version !== SKIM_PROMPT_VERSION,
-      notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
+      ...(await skimFreshnessOf(found.revision, skim)),
       profileNoticeDismissedFor: found.article.skimProfileNoticeDismissedFor,
     };
   },
@@ -4481,7 +4629,9 @@ const rawPgArticleReader: ArticleReader = {
    * columns, with `titleFor` deliberately not applied (the contract says why).
    * The heading query runs only for a revision with no stored title.
    */
-  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear">> {
+  async loadArticleIdentity(
+    slug: string,
+  ): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url" | "publishedAt" | "publishedYear" | "filename">> {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
     if (!found) throw notFound(slug);
@@ -4500,6 +4650,9 @@ const rawPgArticleReader: ArticleReader = {
          through, as `metaFrom` passes them. */
       ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
       ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
+      /* An upload's title is never sent to OpenAlex's full-text search
+         (src/citation-fulltext.ts § fulltextQuestionOf, plan 261026f). */
+      ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
     };
   },
 
@@ -4582,7 +4735,7 @@ const rawPgArticleReader: ArticleReader = {
       ];
     });
     const withFinds = attachFinds(withLookups, finds);
-    /* **Investigate's answers, the same way and after `attachFinds`** — the
+    /* **Dig deeper's answers, the same way and after `attachFinds`** — the
        row the call was made from is the upgraded one, so that is the row the
        fingerprint is recomputed over, with the reader's profile as it is now
        (the call's `resolveProfile`: the global box and this article's
@@ -4773,6 +4926,13 @@ const rawPgArticleReader: ArticleReader = {
     const tree = found.revision.tree as Tree | null;
     return {
       arc,
+      /* **Not `fitsTree` here**, though `loadArticle` asks it. Staleness is the
+         stamp's question, and the queue's (tests/freshness-deciders-agree.test.ts):
+         a re-cut tree changes the arc's input hash, so it is already stale on
+         this route. Only a hand-damaged arc with a current stamp is left out of
+         the payload and still served here as ready. A route saying stale while
+         the runner says current would have `useArc` post jobs that skip
+         (plan 261029l, code review). */
       stale: !tree || arcIsStale(arc, blocks, tree, metaFingerprintOf(found.revision)),
       outdated: arc.version !== ARC_PROMPT_VERSION,
     };

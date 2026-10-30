@@ -17,6 +17,17 @@
  *   The band passes in both reads, and the job's end refreshes both, so Ideas
  *   the route's job found reach the stop card without a reload (Sol F61).
  *
+ * **One route, the default or an added brief's** (plan 261027d). `brief` is
+ * the brief's id, or `null` for the default. Everything here is that route's:
+ * the read (`GET /api/skim/:slug/briefs/:id`, answered with the default's
+ * freshness fields), the dismissal, the job and its rewrite hold
+ * (useStepJob.ts § `writesStep`, rewrite-hold.ts § `keyOf`), and the refs
+ * that settle a read against a write, which are keyed by the route rather
+ * than the slug (GPT Sol's F4 on the plan). **Only the default starts
+ * itself**: an added brief's route is planned on a press, so an unplanned
+ * brief never spends the band's automatic run, which was pressed for the
+ * default (`useAutoRun`'s `enabled`).
+ *
  * Mounted by `SkimBand` alone, never hoisted, for `useFaq`'s reason:
  * `useAutoRun`'s owner must die with the band so a press cannot be spent after
  * the reader has left it.
@@ -70,6 +81,8 @@ export interface UseSkim {
   /** How many of the current Quotes are on no pass of this route. */
   notOnRoute: number;
   slug: string;
+  /** The added brief this is the route of, or `null` for the default. */
+  brief: string | null;
   error: string | null;
   job: Job | null;
   failed: StepFailure | null;
@@ -113,15 +126,26 @@ export interface UseSkim {
   cancel(id: string): void;
 }
 
-export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): UseSkim {
+/** Where one route is read and dismissed: the default's, or an added brief's. */
+export function skimRoutePath(slug: string, brief: string | null): string {
+  const base = `/api/skim/${encodeURIComponent(slug)}`;
+  return brief === null ? base : `${base}/briefs/${encodeURIComponent(brief)}`;
+}
+
+export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead, brief: string | null = null): UseSkim {
+  /* **The route this mount is about**, for every ref below that used to be
+     keyed by the slug alone: a write or a failure belongs to the route it was
+     pressed on, and two briefs on one article are two routes. */
+  const where = brief === null ? slug : `${slug}\n${brief}`;
+  const path = skimRoutePath(slug, brief);
   const [status, setStatus] = useState<SkimStatus>("loading");
   const [skim, setSkim] = useState<Skim | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [profileNoticeDismissed, setProfileNoticeDismissed] = useState(false);
-  /* Keyed by slug: the ×'s failure belongs to the article it was pressed on. */
-  const [dismissFailed, setDismissFailed] = useState<{ slug: string; why: string } | null>(null);
+  /* Keyed by route: the ×'s failure belongs to the route it was pressed on. */
+  const [dismissFailed, setDismissFailed] = useState<{ where: string; why: string } | null>(null);
   /**
    * **The ×'s write, from the press until its own trailing read has landed.**
    * A read already out when the × was pressed saw the database before the
@@ -129,18 +153,18 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
    * route it names — unless the write failed, when the server's answer is the
    * only one there is. A ref, because the read checks it after its `await`s.
    */
-  const dismissal = useRef<{ slug: string; generatedAt: string; failed: string | null } | null>(null);
+  const dismissal = useRef<{ where: string; generatedAt: string; failed: string | null } | null>(null);
   /** Every read that answered, counted, and its answer — so the × can tell whether one landed after its write. */
-  const answered = useRef<{ n: number; slug: string; generatedAt: string | null; dismissed: boolean }>({
+  const answered = useRef<{ n: number; where: string; generatedAt: string | null; dismissed: boolean }>({
     n: 0,
-    slug,
+    where,
     generatedAt: null,
     dismissed: false,
   });
-  /* For a write that finishes after the reader has moved to another article:
-     its render's `refresh` reads the old one (GPT Sol's code review). */
-  const slugNow = useRef(slug);
-  slugNow.current = slug;
+  /* For a write that finishes after the reader has moved to another article
+     or route: its render's `refresh` reads the old one (GPT Sol's code review). */
+  const whereNow = useRef(where);
+  whereNow.current = where;
   const [notOnRoute, setNotOnRoute] = useState(0);
   const [error, setError] = useState<string | null>(null);
   /* A manual press made while a prerequisite read is unresolved. Keep the
@@ -153,7 +177,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
    * The article the server has said "none yet" for. A failed read after that
    * answer — a failed *Try again* included — ends at `none`, not `error`,
    * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
-   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * § The artefact, if the mode shows one). Keyed by route, so one route's
    * answer cannot stand in for another's.
    */
   const saidNoneFor = useRef<string | null>(null);
@@ -165,7 +189,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
       try {
         /* The header asks for "none yet" as `200 null` rather than a 404, which
            a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). */
-        const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}`, {
+        const res = await apiFetch(path, {
           headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
         });
         if (!current()) return;
@@ -173,7 +197,11 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
            WCO4): `readJson` checks no shape, and an empty 200 is `{}`.
            "None yet" is exactly `null` — never a falsy body — or a 404, from a
            server that has not heard of the header (the minutes of a deploy). */
-        const loaded = res.status === 404 ? null : await readJson<SkimResponse | null>(res);
+        /* An added brief's unplanned route is always `200 null`; its 404 is
+           a brief that is not there (deleted in another tab), which is a
+           failure to say, not an empty state with a button that would plan
+           nothing. */
+        const loaded = res.status === 404 && brief === null ? null : await readJson<SkimResponse | null>(res);
         if (!current()) return;
         if (loaded === null) {
           /* The ordinary case: nobody has asked for a route yet. */
@@ -182,11 +210,11 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
           setOutdated(false);
           setProfileChanged(false);
           setProfileNoticeDismissed(false);
-          answered.current = { n: answered.current.n + 1, slug, generatedAt: null, dismissed: false };
+          answered.current = { n: answered.current.n + 1, where, generatedAt: null, dismissed: false };
           setNotOnRoute(0);
           landed(started, res, null);
           setError(null);
-          saidNoneFor.current = slug;
+          saidNoneFor.current = where;
           setStatus("none");
           return;
         }
@@ -209,9 +237,9 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
         const dismissed = loaded.profileNoticeDismissed === true;
         const writing = dismissal.current;
         const held =
-          writing !== null && writing.slug === slug && writing.generatedAt === route.generatedAt && writing.failed === null;
+          writing !== null && writing.where === where && writing.generatedAt === route.generatedAt && writing.failed === null;
         setProfileNoticeDismissed(dismissed || held);
-        answered.current = { n: answered.current.n + 1, slug, generatedAt: route.generatedAt, dismissed };
+        answered.current = { n: answered.current.n + 1, where, generatedAt: route.generatedAt, dismissed };
         setNotOnRoute(loaded.notOnRoute);
         setError(null);
         saidNoneFor.current = null;
@@ -220,10 +248,10 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
         if (!current()) return;
         setError(describeFetchFailure(err as Error));
         /* A failed revalidation must not take the route away — useFaq.ts. */
-        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === where ? "none" : "error"));
       }
     },
-    [slug, begin, landed],
+    [path, where, brief, begin, landed],
   );
 
   const { reload, refresh } = useOrderedRead(load);
@@ -231,14 +259,14 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
   const dismissProfileNotice = useCallback(async () => {
     if (skim === null) return;
     /* Two presses in one tick: the button is gone on the next render, not this one. */
-    if (dismissal.current?.slug === slug && dismissal.current.generatedAt === skim.generatedAt) return;
-    const mine = { slug, generatedAt: skim.generatedAt, failed: null as string | null };
+    if (dismissal.current?.where === where && dismissal.current.generatedAt === skim.generatedAt) return;
+    const mine = { where, generatedAt: skim.generatedAt, failed: null as string | null };
     dismissal.current = mine;
     setProfileNoticeDismissed(true);
     setDismissFailed(null);
     try {
       const body: SkimProfileNoticeDismissalRequest = { generatedAt: skim.generatedAt };
-      const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}/profile-notice-dismissal`, {
+      const res = await apiFetch(`${path}/profile-notice-dismissal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -248,7 +276,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     } catch (err) {
       mine.failed = describeFetchFailure(err as Error);
     }
-    if (slugNow.current !== slug) {
+    if (whereNow.current !== where) {
       if (dismissal.current === mine) dismissal.current = null;
       return;
     }
@@ -257,18 +285,18 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     const before = answered.current.n;
     await refresh();
     if (dismissal.current === mine) dismissal.current = null;
-    if (mine.failed === null || slugNow.current !== slug) return;
+    if (mine.failed === null || whereNow.current !== where) return;
     const after = answered.current;
     if (after.n === before) {
       /* No read answered: nothing confirms the write, so the banner is back. */
       setProfileNoticeDismissed(false);
-      setDismissFailed({ slug, why: mine.failed });
-    } else if (after.slug === slug && after.generatedAt === mine.generatedAt && !after.dismissed) {
+      setDismissFailed({ where, why: mine.failed });
+    } else if (after.where === where && after.generatedAt === mine.generatedAt && !after.dismissed) {
       /* The read put the banner back; say why. Not for a replacement route
          (the 409), whose notice, if any, this press never saw. */
-      setDismissFailed({ slug, why: mine.failed });
+      setDismissFailed({ where, why: mine.failed });
     }
-  }, [skim, slug, refresh]);
+  }, [skim, where, path, refresh]);
 
   const retryRead = useCallback(async () => {
     setError(null);
@@ -302,7 +330,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     void refreshQuotes();
     void refreshIdeas();
   }, [refresh, refreshQuotes, refreshIdeas]);
-  const queue = useStepJob(slug, "skim", onFinished, "watches-queue");
+  const queue = useStepJob(slug, "skim", onFinished, "watches-queue", brief);
 
   /* **The Quotes go first when there are none, or when they are stale** — the
      article changed under them, so a route planned on them could stop at a
@@ -335,7 +363,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
      of the stage re-stamps it (src/skim.ts).
 
      **The hold is about this step's forced run and nothing before it.** It is
-     keyed by `(slug, "skim")`, and it follows the one job the press made,
+     keyed by `(slug, "skim", brief)`, and it follows the one job the press made,
      prerequisites and all: a run that chose the Quotes first is held for the
      whole job. Failure or cancellation in a prerequisite ends it too. It
      holds neither the Quotes' nor the Ideas' own forced controls, which have
@@ -344,6 +372,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
   const hold = useRewriteHold({
     slug,
     step: "skim",
+    brief,
     identity: skim?.generatedAt ?? null,
     queue,
     fresh,
@@ -399,7 +428,9 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     status === "none" && (quotes.status === "loading" || ideas.status === "loading")
       ? "loading"
       : status;
-  const auto = useAutoRun(slug, "skim", gate, ensure, reload);
+  /* The press that opened Skim asked for the default's route. An added brief
+     drops it rather than spend it on a route nobody pressed for. */
+  const auto = useAutoRun(slug, "skim", gate, ensure, reload, brief === null);
 
   return {
     status,
@@ -408,10 +439,11 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     outdated,
     profileChanged,
     profileNoticeDismissed,
-    dismissFailed: dismissFailed?.slug === slug ? dismissFailed.why : null,
+    dismissFailed: dismissFailed?.where === where ? dismissFailed.why : null,
     dismissProfileNotice,
     notOnRoute,
     slug,
+    brief,
     error,
     job: queue.job,
     failed: hold.rewriting ? null : queue.failed,

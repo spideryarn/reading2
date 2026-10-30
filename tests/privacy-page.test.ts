@@ -208,17 +208,20 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "25 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "29 October 2026"');
   });
 
   it("says what Search the literature sends, and to whom", () => {
-    /* Plan 261024o, GPT Sol's S4: Investigate's *Where this piece sits* names
-       separately what the planner and final reader see through OpenRouter,
-       the model-written searches Exa sees through OpenRouter, and the DOI or
-       title OpenAlex sees. The profile reaches only the final read. */
+    /* Plan 261024o, GPT Sol's S4: the literature search names separately what
+       the planner and final reader see through OpenRouter, the model-written
+       searches Exa sees through OpenRouter, and the DOI or title OpenAlex
+       sees. The profile reaches only the final read. Plan 261025h moved it to
+       *Where it sits* and out of the experimental switch (F7), so the page
+       no longer calls it experimental. */
     const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).not.toContain("Investigate (an experimental feature)");
     expect(prose).toContain(
-      "When you press Search the literature, in Sources’ Investigate (an experimental feature), your article is searched for in the wider literature. Its title, headings, opening and details of works it cites go through OpenRouter to an AI that writes a dozen or so short searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is sent the article’s DOI, or the words of its title, to find papers that cite it. The whole article, the search results, public abstracts, and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.",
+      "When you open Sources’ Where it sits with the Sources button or its tab, or press Search the literature there, your article is searched for in the wider literature. Its title, headings, opening and details of works it cites go through OpenRouter to an AI that writes a dozen or so short searches. Those searches go through OpenRouter to Exa, a web search engine. OpenAlex is sent the article’s DOI, or the words of its title, to find papers that cite it. The whole article, the search results, public abstracts, and what you wrote about yourself or why you are reading then go through OpenRouter to the AI that writes the dossier.",
     );
   });
 
@@ -346,10 +349,18 @@ describe("the privacy page", () => {
     }
     expect(prose).toContain("its DOI");
     expect(prose).toContain("when you look up the works it cites");
-    expect(prose).toContain("when you open Sources' Reception");
+    /* Since plan 261025h the citers are asked when Sources opens, on *Where
+       it sits*, the owner's default (F7), not only on Reception. */
+    expect(prose).toContain("when you open Sources on an article of yours, for the list of papers that cite it");
+    expect(prose).not.toContain("when you open Sources' Reception");
     expect(prose).toContain("Never the rest of the article’s text, and nothing about who you are");
     /* Plan 261011q: with no DOI, Cited by searches OpenAlex by title. */
     expect(prose).toContain("When your article has no DOI, OpenAlex is sent the words of its title instead");
+    /* Plan 261026f: and, for an article from a public address, its full-text
+       search for Possible citations, which an upload never makes. */
+    expect(prose).toContain(
+      "for an article you added from a public web address, to find papers that matched a full-text search for its title",
+    );
     /* Plan 261011ac, F1: Not cited's search sends the title and the opening,
        and only on the owner's press. */
     expect(prose).toContain(

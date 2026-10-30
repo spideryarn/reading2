@@ -127,6 +127,13 @@ import {
   PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
 } from "./relations.js";
 import {
+  EXPLANATIONS_OUTPUT_SCHEMA,
+  generateExplanations,
+  inputFingerprint as explanationsFingerprint,
+  PROMPT_VERSION as EXPLANATIONS_PROMPT_VERSION,
+  previousExplanationsFrom,
+} from "./explanations.js";
+import {
   CROSSREFS_OUTPUT_SCHEMA,
   generateCrossrefs,
   inputFingerprint as crossrefsFingerprint,
@@ -167,6 +174,7 @@ import { openRouterJson } from "./ai-call.js";
 import {
   generateSituate,
   inputFingerprint as situateFingerprint,
+  phasesOutdated as situatePhasesOutdated,
   PROMPT_VERSION as SITUATE_PROMPT_VERSION,
   SITUATE_RATE_POLICY,
   SituateRefused,
@@ -256,6 +264,7 @@ import {
   CITATION_BLURBS_NO_BIBLIOGRAPHY,
   SITUATE_BUSY,
   SITUATE_CLAIMS_NOT_FOUND,
+  SITUATE_SHORTLIST_EMPTY,
   SITUATE_LIMITED,
   SITUATE_RESTING,
   SITUATE_SEARCHES_FAILED,
@@ -450,6 +459,7 @@ export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputF
   quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
   faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
   relations: jsonSchemaFormat(RELATIONS_OUTPUT_SCHEMA),
+  explanations: jsonSchemaFormat(EXPLANATIONS_OUTPUT_SCHEMA),
   "sources-claims": jsonSchemaFormat(SOURCES_CLAIMS_OUTPUT_SCHEMA),
   crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
   simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
@@ -682,6 +692,12 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      nothing in the pipeline reads what it writes, and it replaces rather than
      appends. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
+  /* `faq`'s two reasons: it reads the blocks, the tree and the metadata, and
+     nothing in the pipeline reads what it writes (plan 261028c). And a forced
+     run is *Find more* when the list is current (it appends, as the glossary
+     and quotes do — plan 261029e) and a rewrite otherwise; either way it is a
+     paid call the reader asked for by name, never one a cascade should buy. */
+  "explanations",
   /* The same two reasons: it reads the blocks and tree, and nothing except the
      separately requested `illustrated` stage reads what it writes, so a
      positional cascade would buy a model call the reader did not ask for. At
@@ -5325,6 +5341,91 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
   },
+  /* Stage 5s — Explanations: the places a reader would get stuck, each with
+     the missing piece. Off DEFAULT_INGEST_STEPS and AUTO_MODE_STEPS, and in
+     FORCE_ONLY_WHEN_NAMED.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md.
+
+     **It reads its previous list**, as `quotes` does, since plan 261029e: a
+     forced run on a current list for the same profile is *Find more*, and
+     appends (src/explanations.ts § `existingFor`). Ids need no inheriting —
+     an item's id is a hash of its block and words. */
+  explanations: {
+    name: "explanations",
+    label: "Finding the places a reader might get stuck",
+    produces: ["explanations"],
+    /**
+     * The exact rendered article and ceiling the request sends — the tree is
+     * only the absent-metadata title fallback — **and the profile**, as
+     * `ideas`: who is reading decides what is confusing, so an artefact
+     * written for a different profile answers a different question.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: explanationsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: EXPLANATIONS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx, store) {
+      /* **The store, not a path.** The previous list is what *Find more*
+         extends; `previousExplanationsFrom` refuses one it cannot read rather
+         than treating it as none, and is null quietly when there is none. */
+      const previous = await previousExplanationsFrom(store, ctx.slug);
+      const run = await generateExplanations({
+        article: await readArticle(ctx.slug, store),
+        previous,
+        profile: ctx.profile ?? null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        power: ctx.power,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const total = run.explanations.explanations.length;
+      const added = run.explanations.lastAdded ?? total;
+      const passes = run.explanations.passes ?? 1;
+      const appended = passes > 1;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "explanations",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          paragraphs: run.paragraphs,
+          explanations: total,
+          added,
+          passes,
+          profiled: run.explanations.profileHash !== null,
+          /* **This pass's counts**, not the list's: the artefact's `dropped`
+             is cumulative (Sol F6), and a prompt that has drifted shows in
+             the pass that did it. Counts only — never a word of the article
+             or of an explanation. `ambiguous` and `unquoted` are the ones to
+             watch: the model pointing at words it cannot quote once. */
+          ...run.dropped,
+          /* Fields, not explanations — src/score-fields.ts. Both scores are
+             required, so any `*Absent` is the model disobeying. */
+          ...run.scores,
+        },
+        appended
+          ? `explanations ${ctx.slug}: ${added} more, ${total} in all`
+          : `explanations ${ctx.slug}: ${total}`,
+      );
+      return {
+        parts: { explanations: run.explanations },
+        detail: appended
+          ? `${added} more, ${total} in all`
+          : `${total} ${total === 1 ? "explanation" : "explanations"}`,
+      };
+    },
+  },
   /* Stage 5r — Simple: a plain-words orientation, a sub-mode of Summary. Off
      DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED; run by a press on the
      plain-words controls, or on Metadata.
@@ -6200,6 +6301,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           notesReached: run.coverage.notesReached,
           references: run.coverage.references,
           referencesReached: run.coverage.referencesReached,
+          /* The author–year witness (plan 261027b): what the body cites, and
+             how many of those rows code had to add because the model did not
+             list them. A high share filled is the model under-returning. */
+          authorYear: run.coverage.authorYear,
+          authorYearFilled: run.coverage.authorYearFilled,
           /* **The reference-list witness** (plan 260930i): a PDF whose list
              was not found (`referenceList: "no-list"`) or whose entries
              were found and none kept (`entries: 0` over a long list) is the
@@ -6316,6 +6422,7 @@ const SITUATE_REFUSALS: Record<SituateRefused["why"], ReaderFacingFailure> = {
   "no-claim-queries": SITUATE_TOO_FEW_SEARCHES,
   "searches-failed": SITUATE_SEARCHES_FAILED,
   "claims-not-found": SITUATE_CLAIMS_NOT_FOUND,
+  "shortlist-empty": SITUATE_SHORTLIST_EMPTY,
 };
 
 /** And for each way the allowance refuses. */
@@ -6327,9 +6434,9 @@ const SITUATE_ALLOWANCE_REFUSALS: Record<Exclude<AllowanceTaken["kind"], "allowe
 
 /**
  * **The `situate` step** — where the piece sits in the literature: a planned
- * set of web searches, the later works that cite it, and one read of all of it
- * beside the whole article, every claim checked in code (src/situate.ts, plan
- * 261024o). A factory so a test can hand it a fake allowance, fake searches and
+ * set of web searches, the later works that cite it, a Haiku triage of all of
+ * it, and one read of the shortlist beside the whole article, every claim
+ * checked in code (src/situate.ts, plans 261024o and 261025h). A factory so a test can hand it a fake allowance, fake searches and
  * fake citers and still run the step the pipeline runs.
  *
  * **The allowance is taken here, inside the step, before any paid call** (GPT
@@ -6372,6 +6479,14 @@ export function situateStep(deps?: () => Promise<SituateStepDeps>): PipelineStep
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;
+      /* **The one stamp names one model, and the dossier has three calls.**
+         `model` below is the capable model the plan and the read run on; the
+         triage is pinned to another (plan 261025h stage 3), which no stamp
+         field can carry. So a stored dossier whose calls `phasesOutdated`
+         calls old is not done, whatever the stamp says — the metadata page's
+         `isCurrent` arm asks the same (src/store/pg.ts). */
+      const stored = await store.read(ctx.slug, "situate", "situate");
+      if (stored && situatePhasesOutdated(stored)) return null;
       return {
         /* The real, nullable meta, as `generateSituate` hashes it. */
         inputHash: situateFingerprint(article.blocks, article.tree, article.meta),
@@ -6443,8 +6558,12 @@ export function situateStep(deps?: () => Promise<SituateStepDeps>): PipelineStep
           findings: situate.findings.length,
           questions: situate.questions.length,
           ...situate.counts,
+          triageModel: situate.phases?.triage?.model ?? null,
+          triageCandidates: situate.phases?.triage?.candidates ?? null,
+          shortlisted: situate.phases?.triage?.shortlisted ?? null,
           planMs: run.planMs,
           searchMs: run.searchMs,
+          triageMs: run.triageMs,
           readMs: run.readMs,
           ms: situate.elapsedMs,
           inputTokens: run.inputTokens,

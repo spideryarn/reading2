@@ -21,7 +21,9 @@ import { NARROW_WINDOW_MAX } from "../src/web/layout.js";
 
 /** § a narrow window's query, from the constants spine-width.test.ts pins it to. */
 const NARROW = `@media (max-width: ${NARROW_WINDOW_MAX}px)`;
-const HOLDS_CRUMBS = ":root:has(:where(.reader) > .controls > .crumbs)";
+/* `data-bar-crumbs` is set by `HeadingsCrumbs` (root-flags.ts); doubled to
+   keep the (0,3,0) the `:has()` form had (crumbs.css). Plan 261029k. */
+const HOLDS_CRUMBS = ":root[data-bar-crumbs][data-bar-crumbs]";
 
 const sheet = readerSheets().find((s) => s.path.endsWith("/crumbs.css"));
 const crumbs = stripComments(sheet?.css ?? "");

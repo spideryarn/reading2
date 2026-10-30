@@ -17,6 +17,7 @@
  * review, 2026-09-29. docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
  */
 import { useEffect, useRef } from "react";
+import { useRootFlag } from "./root-flags.js";
 
 export function BandBackChip({
   label,
@@ -34,6 +35,9 @@ export function BandBackChip({
   onBack(): void;
 }) {
   const button = useRef<HTMLButtonElement>(null);
+  /* The strip above the Dock makes room for a `.return-chip`, whichever of the
+     two draws it (dock.css § `--return-chip-h`). */
+  useRootFlag("return-chip", true);
   // biome-ignore lint/correctness/useExhaustiveDependencies: on mount only — the pill appears when the band goes.
   useEffect(() => {
     if (takeFocus) button.current?.focus({ preventScroll: true });

@@ -78,7 +78,7 @@
  * to plant every kind but `meta`, so all three fixtures look metadata-less:
  * **2 red** — *arc ignores the metadata* and *the artefact's own sourceHash
  * ignores the publication date*, which are precisely the two properties that
- * exist to stop the metadata quietly leaving the hash. The eighteen per-stage
+ * exist to stop the metadata quietly leaving the hash. The per-stage
  * agreement cases stay green under arm 2, correctly: both sides then hash the
  * same absent metadata, and that is the near-miss this file's own header warns
  * about at length.
@@ -102,6 +102,7 @@ import { SIMPLE_LEVELS, type SimpleSummary } from "../src/types.js";
 import { SIMPLE_PROMPT_VERSION, inputFingerprint as simpleFingerprint } from "../src/simple-summary.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
+import { hashProfile } from "../src/profile.js";
 import { type MemoryArtifactStore, memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 
@@ -258,7 +259,7 @@ function ctxFor(): StepContext {
  * The stages this file covers, and the artefact key each returns in `parts`.
  *
  * Every one of them carries a `sourceHash`; the whole point of the list is that
- * one shape of test covers all eight rather than eight near-copies.
+ * one shape of test covers every listed stage rather than near-copies.
  *
  * **The list is hand-written, and that is how `timeline` went uncovered from
  * the day it shipped (2026-08-31) until it was noticed.** Nothing derives this
@@ -281,6 +282,9 @@ const STAGES = [
   /* Added the day the stage was registered, 2026-09-16, for `quiz`'s reason.
      docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* Added with the stage, including its separately stamped reader profile.
+     docs/plans/261028c-explanations-of-confusing-passages-and-sources-feeding-the-margin.md. */
+  "explanations",
   /* Added the day the stage was registered, 2026-09-30, for `quiz`'s reason.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   "crossrefs",
@@ -407,6 +411,23 @@ function scriptFor(stage: Stage, article: Article): string[] {
           ],
         }),
       ];
+    case "explanations":
+      /* One real, unique quote so the candidate survives the once-only and
+         body-block checks rather than letting an empty artefact prove hash
+         agreement vacuously. */
+      return [
+        JSON.stringify({
+          explanations: [
+            {
+              blockId: block.id,
+              quote: block.text.slice(0, 60),
+              text: "This supplies the background step the passage assumes.",
+              sure: true,
+              outside: false,
+            },
+          ],
+        }),
+      ];
     case "crossrefs": {
       /* One link that survives `toLinks`: a phrase copied from the quotable
          block, to a body block at least two away. `buildCrossrefs` accepts an
@@ -507,8 +528,8 @@ async function bothHashes(stage: Stage, fixture: Fixture) {
 
 /**
  * **No mutation of its own** — the file's only block, and the header's two arms
- * are its evidence: 2 of its 20 cases red when a stage's `sourceHash` drops the
- * metadata, and 2 when the store stops holding any.
+ * are its evidence: affected cases go red when a stage's `sourceHash` drops
+ * the metadata, and when the store stops holding any.
  */
 describe("the hash a stage writes is the hash its stamp expects", () => {
   for (const stage of STAGES) {
@@ -534,13 +555,51 @@ describe("the hash a stage writes is the hash its stamp expects", () => {
     }, 30_000);
   }
 
+  it("explanations writes and expects the same non-null reader profile", async () => {
+    const profile = "A physicist reading outside her field.";
+    const ctx = { ...ctxFor(), profile };
+    answers.length = 0;
+    answers.push(...scriptFor("explanations", withMeta.article));
+    const result = await STEPS.explanations.run(ctx, withMeta.store, nullCheckpointStore());
+    expect(answers).toEqual([]);
+    const artefact = result.parts?.explanations;
+    const stamp = await STEPS.explanations.stamp?.(ctx, withMeta.store);
+    expect(artefact?.profileHash).toBe(hashProfile(profile));
+    expect(stamp?.profileHash).toBe(hashProfile(profile));
+    expect(artefact?.sourceHash).toBe(stamp?.inputHash);
+  }, 30_000);
+
+  it("the explanations stage reads its stored list before a forced second pass", async () => {
+    const store = await memoryArtefactsFrom(path.join(root, "with-meta"), SLUG);
+    answers.length = 0;
+    answers.push(...scriptFor("explanations", withMeta.article));
+    const first = await STEPS.explanations.run(ctxFor(), store, nullCheckpointStore());
+    expect(answers).toEqual([]);
+    const baseline = first.parts?.explanations;
+    if (!baseline) throw new Error("the first explanations run returned no artefact");
+    store.plant(SLUG, "explanations", "explanations", baseline);
+
+    /* The same candidate is deliberately repeated. Reading the baseline makes
+       this a valid zero-add append: pass two, old row untouched. If the
+       pipeline stops passing the stored artefact to the generator, this
+       quietly becomes a new one-pass list and the assertions go red. */
+    answers.push(...scriptFor("explanations", withMeta.article));
+    const second = await STEPS.explanations.run(ctxFor(), store, nullCheckpointStore());
+    expect(answers).toEqual([]);
+    expect(second.parts?.explanations).toMatchObject({
+      passes: 2,
+      lastAdded: 0,
+      explanations: baseline.explanations,
+    });
+  }, 30_000);
+
   /**
-   * **The negative control, and without it the fourteen above prove much less.**
+   * **The negative control, without which the agreement cases prove much less.**
    *
    * They would all pass if every stage hashed a constant, or if the metadata
    * were quietly dropped from both sides at once — agreement is cheap when
    * neither side is looking at anything. This asserts the other half: for the
-   * six stages whose prompt has a head, removing the metadata *changes* the
+   * stages whose prompt has a head, removing the metadata *changes* the
    * hash, so the fingerprints really do read it.
    *
    * `assets` is the exception and it is named rather than skipped: its question
@@ -570,7 +629,7 @@ describe("the hash a stage writes is the hash its stamp expects", () => {
   /**
    * **And the publication date is in `timeline`'s hash — on both sides.**
    *
-   * The fourteen rows above cannot ask this. `example/meta.json` has no
+   * The rows above cannot ask this. `example/meta.json` has no
    * `publishedAt`, so both metadata states are undated and `timeline`'s hash
    * differs from `ideas`' only by a domain string. Deleting the date from the
    * head of `datedArticleFingerprint` (src/source-hash.ts) leaves every one of

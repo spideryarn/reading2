@@ -113,6 +113,7 @@ import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
 import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../reception-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
 import { shownBlurb, storedBlurbEntries, storedBlurbEntry } from "../citation-blurbs-identity.js";
+import { fitsTree } from "../tree-parts.js";
 import type {
   PublicArticle,
   PublicBlock,
@@ -624,7 +625,7 @@ function publicFaq(faq: Faq): PublicFaq {
 }
 
 /**
- * **Debate's claims list, rebuilt claim by claim** — since 2026-10-08 (plan
+ * **Claims' list, rebuilt claim by claim** — since 2026-10-08 (plan
  * 261008i § 2). The article's quote and its place, the model's statement and
  * the claim's id, and nothing else: `dropped` is our checking's tally and the
  * rest is pipeline provenance. src/public-types.ts § `PublicSourcesClaimList`
@@ -696,8 +697,8 @@ function publicPlace(place: CitationPlace): CitationPlace {
  * `citation_finds` — so this is the second of two, for the day something
  * writes one back or hands this projection an attached owner read.
  *
- * `key` and `found` are not named, so they do not cross. src/public-types.ts §
- * `PublicCitedWork` has why for each.
+ * `key` and `found` are not named, so they do not cross. `why` is omitted on a
+ * text-filled row and `listedBy` crosses so the public reader can say why.
  *
  * **The note on the work comes from `blurbEntries`, never from `work.blurb`**
  * (plan 261017h stage 3c, G5): `shownBlurb` keeps only a `blurb` entry whose
@@ -721,7 +722,8 @@ function publicCitedWork(
     title: work.title,
     ...opt(work, "authors"),
     ...opt(work, "year"),
-    why: work.why,
+    ...opt(work, "why"),
+    ...opt(work, "listedBy"),
     ...opt(work, "relevance"),
     ...opt(work, "influence"),
     ...(work.reference === undefined ? {} : { reference: publicPlace(work.reference) }),
@@ -804,7 +806,7 @@ function publicBibliographyList(
 }
 
 /**
- * **The Debate, rebuilt group by group, row by row and signal by signal** —
+ * **Reception, rebuilt group by group, row by row and signal by signal** —
  * since 2026-09-29 (SPIDERYARN-READING2-56, plan 260929c stage 4), by the
  * contract its own plan set: 260905f § Security and § Stage 4.
  *
@@ -813,7 +815,7 @@ function publicBibliographyList(
  *
  * - **The row's `url`** is a stranger's page the search returned — a citation,
  *   so `publicCitationUrl`, as a comment's citations are judged. **A refusal
- *   drops the whole row**, not the link: a Debate row is its source, and there
+ *   drops the whole row**, not the link: a Reception row is its source, and there
  *   is no public row type without one (260905f § Security).
  * - **A `linked` signal's `url`** is *the article's own address* as the page
  *   spelled it (src/reception.ts § `linkTo`, matched against `meta.url`, which is
@@ -1073,7 +1075,7 @@ function publicReceptionRowBase(
   };
 }
 
-/** A Debate row's registry record, rebuilt field by field (plan 261001a stage 6). */
+/** A Reception row's registry record, rebuilt field by field (plan 261001a stage 6). */
 function publicRegistryWork(registry: unknown): { registry?: RegistryWork } {
   const read = readRegistryWork(registry);
   return read === null ? {} : { registry: read };
@@ -1376,7 +1378,7 @@ export function publicArticle(row: {
    */
   citationBlurbs: CitationBlurbs | null;
   reception: Reception | null;
-  /** Debate's claims list, or `null` for none made. */
+  /** Claims' list, or `null` for none made. */
   sourcesClaims: SourcesClaimList | null;
   /** The stored cross-references, or `null` for none built. */
   crossrefs: Crossrefs | null;
@@ -1414,13 +1416,20 @@ export function publicArticle(row: {
     row.crossrefs === null
       ? undefined
       : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, blocksById);
+  /* **The public twin of the owner's `loadArticle` check.** A visitor cannot
+     repair an arc — `useArc` is mounted only in `OwnedReader`, because it may
+     POST a paid job — so the honest public answer is to omit an arc that no
+     longer has exactly one sentence per part. This starts no request and gives
+     public-shelf and private-link readers the same structural bar as the owner.
+     Plan 261029l code review. */
+  const arc = row.arc && fitsTree(row.arc, row.tree) ? row.arc : null;
   return {
     /* One of two words, and nothing about the key that was or was not sent. */
     sharedBy: row.sharedBy,
     meta: publicMeta(row),
     blocks,
     tree: publicTree(row.tree),
-    ...(row.arc ? { arc: publicArc(row.arc) } : {}),
+    ...(arc ? { arc: publicArc(arc) } : {}),
     /* **Named, not spread**, and passed through whole rather than rebuilt field
        by field like the tree and the arc beside it. Nothing in an `Assets` is
        about a person: the URLs are the publisher's own and are already in the

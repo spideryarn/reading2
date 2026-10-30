@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   AlignLeft, BadgeQuestionMark, BookA, BookText, Brain, ClipboardCheck, Clock,
   Columns2, Layers, Lightbulb, MessagesSquare, Network, PanelRight,
-  Quote, Route, Search,
+  Puzzle, Quote, Route, Search,
 } from "lucide-react";
 
 import { MODES } from "../src/modes.js";
@@ -27,6 +27,8 @@ describe("the icon each mode wears", () => {
     expect(MODE_ICON).toEqual({
       plain: AlignLeft, structure: Columns2, summary: Layers, diagram: Network,
       skim: Route, quotes: Quote, glossary: BookA, faq: BadgeQuestionMark,
+      /* The missing piece (plan 261028c). */
+      explanations: Puzzle,
       /* Citations' book, Sources' since 2026-10-09 (plan 261009l); Debate's
          globe stays on Reception's search button. */
       ideas: Lightbulb, timeline: Clock, sources: BookText, referee: ClipboardCheck,

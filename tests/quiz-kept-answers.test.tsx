@@ -139,7 +139,7 @@ const server = {
   mark: "saves" as "saves" | "cannot-save" | "fails",
   verdict: undefined as "right" | "wrong" | undefined,
   quizReads: 0,
-  clock: Date.parse("2026-10-05T12:00:00.000Z"),
+  clock: Date.now(),
 };
 
 const json = (body: unknown) =>
@@ -263,7 +263,15 @@ async function reload(): Promise<void> {
 const box = () => host.querySelector("textarea");
 const mark = () => host.querySelector(".quiz-reply")?.textContent ?? null;
 const heading = () => host.querySelector(".gloss-count")?.textContent ?? "";
-const asked = () => host.querySelector(".quiz-question")?.textContent ?? null;
+const asked = () => {
+  const question = host.querySelector(".quiz-question");
+  if (!question) return null;
+  const visible = question.cloneNode(true) as Element;
+  visible.querySelectorAll(".sr-only").forEach((node) => {
+    node.remove();
+  });
+  return visible.textContent;
+};
 const premise = () => host.querySelector(".quiz-premise")?.textContent ?? null;
 
 function button(label: string): HTMLButtonElement {
@@ -307,7 +315,11 @@ beforeEach(() => {
     mark: "saves",
     verdict: undefined,
     quizReads: 0,
-    clock: Date.parse("2026-10-05T12:00:00.000Z"),
+    /* A saved answer in this suite is fresh unless a case says otherwise.
+       Fixed October timestamps all became deliberately due once plan 261029m
+       added the three-day recall rule, changing what these restoration cases
+       were testing. */
+    clock: Date.now(),
   });
   showBand = true;
   strict = false;
@@ -325,7 +337,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const kept = (questionId: string, text: string, answeredAt = "2026-10-04T09:00:00.000Z"): QuizKeptAnswer => ({
+const kept = (
+  questionId: string,
+  text: string,
+  answeredAt = new Date(Date.now() - 60_000).toISOString(),
+): QuizKeptAnswer => ({
   questionId,
   attemptId: `00000000-0000-4000-8000-${questionId.replace(/\W/g, "").slice(-12).padStart(12, "0")}`,
   answer: text,
@@ -517,7 +533,10 @@ describe("what a restored answer must not do", () => {
 
     await press("Next question");
     type("A draft I am half way through.");
-    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "A later answer to two.", "2026-10-04T10:00:00.000Z")];
+    server.attempts = [
+      kept(Q1, "What I said to one."),
+      kept(Q2, "A later answer to two.", new Date(Date.now() - 30_000).toISOString()),
+    ];
     await act(async () => owner.refresh());
     await settle();
     expect(box()?.value).toBe("A draft I am half way through.");

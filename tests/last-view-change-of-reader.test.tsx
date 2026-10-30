@@ -20,7 +20,7 @@
  * src/web/last-view.ts § A change of reader, with the article still on screen;
  * docs/plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md.
  */
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,7 +31,7 @@ vi.mock("../src/web/useExperimental.js", () => ({
   useExperimental: () => ({ ...setting }),
 }));
 
-const { lastViewKey, useLastView } = await import("../src/web/last-view.js");
+const { lastViewKey, settleSavedPlace, useLastView } = await import("../src/web/last-view.js");
 const { navigate, parseRoute, watchHistoryWrites } = await import("../src/web/router.js");
 
 /* As the app does (src/web/main.tsx): every write to the address is heard,
@@ -54,6 +54,9 @@ const FIRST_OPEN_SAVED = "";
 function Page({ readerId }: { readerId: string | null }) {
   const route = parseRoute(location.pathname);
   useLastView("x", route.kind === "read" ? route.view : "article", readerId);
+  /* The owner's article read answering "never opened anywhere", as ArticlePage's
+     does before it draws (last-view.ts § The server's place, plan 261029f). */
+  useLayoutEffect(() => settleSavedPlace("x", readerId, null), [readerId]);
   return null;
 }
 

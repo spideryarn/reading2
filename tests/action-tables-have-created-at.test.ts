@@ -54,8 +54,12 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
   private_link_openers: { column: "first_opened_at" },
   private_link_signed_out_opens: { column: "first_opened_at" },
   queue_state: { column: "updated_at" },
+  /* Plan 261025l: a cache of derived words per article, recomputed in place. */
+  read_so_far_words: { column: "computed_at" },
   rate_limit_events: { column: "started_at" },
   reader_arrivals: { column: "first_seen_at" },
+  /* Plan 261029f: one row per article, replaced as the owner moves. */
+  reading_place: { column: "saved_at" },
   reading_time: {
     exempt:
       "the privacy page promises 'the totals, not a history' (docs/project/privacy.md § Reading time); " +

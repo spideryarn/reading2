@@ -21,7 +21,7 @@
  * ## Which modes
  *
  * Every mode not behind the experimental switch
- * (`MODE_CATALOG[mode].experimental`), mapped to the step it makes (`modeStep`,
+ * (`MODE_CATALOG[mode].experimental`), bar Ideas (`NOT_ON_IMPORT`), mapped to the step it makes (`modeStep`,
  * src/web/activation.ts). Structure and Plain make nothing — one reads the tree
  * the import already built, the other is the article — while Chat and Search
  * wait on the reader. Summary is in since 2026-10-02, when its press began
@@ -84,13 +84,26 @@ const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
 };
 
 /**
+ * **Main modes that make something and are still not prepared on import**,
+ * each a decision of Greg's rather than a default.
+ *
+ * Ideas, since 2026-10-29 (`spya-shwpw5`): "I don't think the ideas mode is
+ * that helpful, and from memory, I think it's quite expensive … if it is, I'd
+ * be inclined to say that we shouldn't run it by default." It was the dearest
+ * step on the list after Summary, a median $0.19 an article. Opening it writes
+ * it, and Skim plans without it on import (src/auto-mode-steps.ts §
+ * `autoModeRequests`). docs/plans/261029c-ideas-off-by-default-and-quiz-in-the-margin.md.
+ */
+const NOT_ON_IMPORT: ReadonlySet<Mode> = new Set<Mode>(["ideas"]);
+
+/**
  * The main modes that make something, each with its step, in `STEP_ORDER` —
  * one entry per step.
  */
 function autoModes(): { mode: Mode; step: StepName }[] {
   const found: { mode: Mode; step: StepName }[] = [];
   for (const mode of MODES) {
-    if (MODE_CATALOG[mode].experimental) continue;
+    if (MODE_CATALOG[mode].experimental || NOT_ON_IMPORT.has(mode)) continue;
     const step = modeStep(mode);
     if (step) found.push({ mode, step });
     for (const delegated of DELEGATED_MODE_STEPS[mode] ?? []) found.push({ mode, step: delegated });
@@ -143,5 +156,5 @@ export function autoModesDetail(): string {
   ];
   const list =
     names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");
-  return `${list} are prepared in the background, with Skim after Quotes and Ideas, and so are the links from one passage of the article to another. This uses paid model calls.`;
+  return `${list} are prepared in the background, with Skim after Quotes, and so are the links from one passage of the article to another. This uses paid model calls.`;
 }

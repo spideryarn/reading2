@@ -110,6 +110,11 @@ const EXTERNAL = new Set([
      Plan 261020w. */
   "your-words.md",
   "-your-words.md",
+  /* Not links either: a mockup file's name pattern, and the bare suffix the
+     code matches it by (src/mockups.ts, src/mockups-dir.ts; plan 261028b). */
+  "m-xxxxxx.md",
+  "docs/mockups/m-xxxxxx.md",
+  ".md",
 ]);
 
 /**

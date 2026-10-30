@@ -271,7 +271,7 @@ that the gutter's button showed did not read. What tells a control that reopens 
 from one that starts a new one is what sits beside the glyph: a count, the answer's first words, or
 a label. [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)
 has the narrower option that was passed over. Two places still cross the families and were left:
-Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Debate row wears
+Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Reception and Claims rows wear
 `MessagesSquare` while Sources' mode icon is `BookText` (it was Debate's `Globe` until 2026-10-09).
 
 ## Where they're used

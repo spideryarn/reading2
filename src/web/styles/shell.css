@@ -223,7 +223,7 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 1rem;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -315,7 +315,7 @@ body {
 
 h1 {
   margin: 0;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: 1.45rem;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -668,7 +668,10 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    > **The two guards below have to keep their specificity, and if they lose it
    > nothing will say so.** They win over `:root[data-bars="hidden"]` by being
    > (0,3,0) against (0,2,0) — `:has()` takes its *most specific* argument — and
-   > NOT by source order. That mattered less while both lived in the same block
+   > NOT by source order. (The bar's guard is (0,4,0) and the dock's twin in
+   > narrow-window.css (0,3,0); both are spelled with attributes on `<html>`
+   > since 2026-10-29, and each carries its old number deliberately — see the
+   > guard.) That mattered less while both lived in the same block
    > near the end of the import order; this file is imported **second**, so a
    > guard degraded to a tie would now lose rather than win. The symptom is a
    > bar that slides out from under a keyboard reader mid-tab, which no test we
@@ -681,20 +684,29 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 
    | state                        | `--bar-bottom` | selector                                                    |
    |------------------------------|----------------|-------------------------------------------------------------|
-   | bar, and a guard holds it    | resting        | `:root:has(BAR):has(BAR:focus-within, .mode-band)` (0,4,0)    |
-   | no bar at all                | `--safe-top`   | `:root:not(:has(BAR))` (0,2,0)                                |
+   | bar, and a guard holds it    | resting        | `:root[BAR][BAR]:is([data-bar-focus], …)` (0,4,0)             |
+   | no bar at all                | `--safe-top`   | `:root:not([BAR])` (0,2,0)                                    |
    | bar, hidden by scroll        | `--safe-top`   | `:root[data-bars="hidden"]` (0,2,0)                           |
    | bar, at rest                 | resting        | `:root` in tokens.css (0,1,0)                                 |
 
    The two (0,2,0) rows tie and it does not matter: they compute the same value,
    and they cannot both be about the same bar anyway. The guard gained its
-   `:has(BAR)` on the same day, which is what keeps it above the no-bar rule —
+   `BAR` condition on the same day, which is what keeps it above the no-bar rule —
    and is the right shape regardless, since a guard that exists to stop *the
    bar* sliding out from under a reader has nothing to say when there is no bar
    to slide.
 
-   **`BAR` above is `:where(.reader) > .controls`, and the scope is load-bearing
-   now that the bar is conditional.** An author's prose may contain
+   **`BAR` above is `data-bar-drawn`, set on `<html>` by `Reader` from `showBar`
+   — the same value that draws `.controls` (root-flags.ts).** It was
+   `:has(:where(.reader) > .controls)` until 2026-10-29, which answered the
+   same question by walking the whole article after almost every change to the
+   page — a second a keystroke on a book at 6× (plan 261029k, postmortem
+   261029c). **A flag from React state cannot be forged by an article's
+   markup**, so the defence the next three paragraphs describe is no longer
+   needed by these rules; it is kept because it says why `scroll.ts` scopes
+   its own lookup the way it does.
+
+   The history: the scope was load-bearing once the bar was conditional. An author's prose may contain
    `<p class="controls">` — `src/sanitize-policy.ts` reserves six class names and
    `controls` is not one of them, verified by running the sanitiser over a forged
    chain rather than by reading the allowlist. Unscoped, such a paragraph makes
@@ -709,12 +721,15 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    own article, and nothing else. The place where getting this wrong *costs*
    something is `scroll.ts`, which would measure that paragraph as the chrome
    every deep link has to clear — see `controlsBar()` there, which is scoped
-   more tightly than a selector can be. `.mode-band` in the guard below is
-   deliberately left unscoped: a forgery there can only hold the bar *down*,
+   more tightly than a selector can be. `.mode-band` in the guard below was
+   deliberately left unscoped: a forgery there could only hold the bar *down*,
    which is what happened before this change anyway, and scoping it wrongly
    would silently stop the guard firing — the failure GPT Sol caught twice in
-   this file. */
-:root:not(:has(:where(.reader) > .controls)) {
+   this file. (Now `data-band-covers`, from the band's own renderer.)
+
+   (0,2,0) both ways: `:not()` takes its argument's weight, and the attribute
+   weighs what the `:has()`'s `.controls` did. */
+:root:not([data-bar-drawn]) {
   /* **No bar, so nothing pinned under one** — the band starts at the top of the
      screen, and the sticky table head with it.
 
@@ -759,7 +774,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 .mode-band,
 .marg-head, /* Marginalia's fixed head follows the same bar-bottom edge. */
 .mode-herald-slot, /* the band's own box, so it has to travel with it — mode-band.css § the herald */
-.reader:has(table.zoom.overflowing)::after {
+.reader:has(> table.zoom.overflowing)::after {
   transition: top 0.18s ease;
 }
 
@@ -771,7 +786,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    since 2026-09-29, and the headings breadcrumb's buttons since 2026-10-02,
    and the rule still holds for whatever is focusable in it.)
 
-   `:root:has(…)` rather than the obvious `.controls:focus-within`, and the
+   On `:root` rather than the obvious `.controls:focus-within`, and the
    difference is the whole rule: `--bar-bottom` is an inherited property that
    only `:root` ever sets, and the table head reads it too. Declared on the bar
    itself it would bring the bar back down on top of a header still parked at
@@ -804,20 +819,32 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    the scroll watcher may hide it; Hierarchy went on 2026-09-29.
 
    **In the guard rather than as a `:not()` on the rule above.**
-   `:root[data-bars="hidden"]:not(:has(.mode-band))` would be (0,3,0), a tie with
-   this, decided by source order — the exact fragility GPT Sol caught on
-   2026-08-28. Adding an argument to a `:has()` changes nothing, because `:has()`
-   takes its most specific argument and `.controls:focus-within` is still it.
-   docs/plans/plain-mode-and-the-way-out.md § 1.
+   `:root[data-bars="hidden"]:not([data-band-covers])` would be (0,3,0), a tie
+   with this, decided by source order — the exact fragility GPT Sol caught on
+   2026-08-28 (it was spelled `:not(:has(.mode-band))` then). Adding an
+   argument changes nothing, because `:has()` and `:is()` both take their most
+   specific argument. docs/plans/plain-mode-and-the-way-out.md § 1.
 
-   **The leading `:has(:where(.reader) > .controls)` is not padding.** It does two things at once:
+   **The leading `[data-bar-drawn]` is not padding.** It does two things at once:
    it stops this guard reserving its height for a bar that is not rendered — which is
    the whole of the bug a reader reported on 2026-09-07, when an owner's bar
    was empty in a band mode — and it takes the selector to (0,4,0), above
-   the `:root:not(:has(.controls))` rule that then has to win in every other
+   the `:root:not([data-bar-drawn])` rule that then has to win in every other
    band mode. One selector rather than two, for the reason two paragraphs up:
    split, the no-bar case would be a tie decided by source order.
    docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
+
+   **And it is written twice, which is not a typo.** Until 2026-10-29 this was
+   `:root:has(:where(.reader) > .controls):has(<four arguments>)`: (0,1,0) for
+   `:root`, (0,1,0) for the first `:has()`'s `.controls`, and (0,2,0) for the
+   second's most specific argument (`.controls:focus-within`, `.controls >
+   .crumbs`, `.mode-band:is(…)`) — (0,4,0). Spelled as attributes on `<html>`
+   (root-flags.ts; plan 261029k), the `:is()` of four single attributes weighs
+   (0,1,0), one class short. The second `[data-bar-drawn]` is that class, put
+   back on purpose, so the number in the ladder above is still true. Each flag
+   is set by the component that draws what the old argument looked for:
+   `bar-focus` by `Reader` on `.controls`, `bar-crumbs` by `HeadingsCrumbs`,
+   `band-covers` and `band-fitted` by the band itself (band-root-flags.ts).
 
    **`.mode-band` became `:where(.reader.band-covers) .mode-band` on 2026-09-08,
    and the reader it was wrong for is the visitor.** This is the twin of the
@@ -830,7 +857,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    It looked safe here, and for an **owner** it is: since 260908a the bar is not
    drawn at all in a band mode (bar the headings breadcrumb's, since 2026-10-02,
    which is never drawn where a band covers the prose — Reader.tsx §
-   `showCrumbs`), so the leading `:has(:where(.reader) > .controls)`
+   `showCrumbs`), so the leading `[data-bar-drawn]`
    never matches and the rest never runs. That is not true of a **visitor**:
    `showBar` in Reader.tsx stays true for their read-only chip, so a signed-out
    reader on a public article has a `.controls`, and this guard
@@ -839,10 +866,11 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    and on the other bar. Nobody reported it because the reader who hits it is
    the reader least likely to write in.
 
-   Specificity is unchanged: `:where()` contributes nothing, so the second
-   `:has()`'s most specific argument is still
-   `:where(.reader) > .controls:focus-within` and the whole selector is the
-   (0,4,0) the paragraph above computes. */
+   Specificity was unchanged by that: `:where()` contributes nothing, so the
+   second `:has()`'s most specific argument was still
+   `:where(.reader) > .controls:focus-within` and the whole selector the
+   (0,4,0) computed above. (`data-band-covers` since 2026-10-29: a `.mode-band`
+   inside a `.reader.band-covers`, from the band's renderer.) */
 /* **And the headings breadcrumb, since 2026-10-02**: a bar holding it stays,
    because a position you can see only when scrolling back is not at a glance —
    Greg asked for it *"always present"* (crumbs.css). An argument of the same
@@ -853,7 +881,8 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 
    **The bar it pins is taller on a narrow window**, since 2026-10-03: the same
    `> .controls > .crumbs` raises `--bar-h` there (crumbs.css § a narrow
-   window), and both declarations below read it.
+   window), and both declarations below read it. (`data-bar-crumbs`, from
+   `HeadingsCrumbs`, since 2026-10-29: an argument of the same `:is()`.)
 
    **And Structure's band, since 2026-10-25**, which is fitted to its own
    height: the band's top is `--bar-bottom`, so a bar sliding away grew it and
@@ -862,12 +891,13 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    instead (mode-band.css § `--band-bar-travel`); this half is held, because
    `top` animates and a padding cannot follow an animation. It reaches only a
    reader with a bar in a band mode — a visitor's chip — and the selector's
-   specificity is unchanged: `.mode-band:is(.outln, .struct)` is (0,2,0). */
-:root:has(:where(.reader) > .controls):has(
-    :where(.reader) > .controls:focus-within,
-    :where(.reader) > .controls > .crumbs,
-    :where(.reader.band-covers) .mode-band,
-    :where(.reader) .mode-band:is(.outln, .struct)
+   specificity is unchanged: `.mode-band:is(.outln, .struct)` was (0,2,0), and
+   is now `data-band-fitted`, one more argument of the `:is()`. */
+:root[data-bar-drawn][data-bar-drawn]:is(
+    [data-bar-focus],
+    [data-bar-crumbs],
+    [data-band-covers],
+    [data-band-fitted]
   ) {
   --bar-bottom: calc(var(--bar-h) + var(--safe-top));
   /* Both, or the bar a keyboard reader is standing in stays off the top of the
@@ -897,11 +927,10 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    the opening frame.
 
    Specificity goes from (0,3,0) to (0,3,0) — `:where()` zeroes the two added
-   classes, so the `:has()` argument stays `.mode-band` at (0,1,0). */
-:root:has(
-    :where(.reader.band-covers) .mode-band,
-    :where(.reader) .mode-band:where(.outln, .struct)
-  ) .controls {
+   classes, so the `:has()` argument stays `.mode-band` at (0,1,0). And again
+   on 2026-10-29, as attributes on `<html>` (root-flags.ts): `:root`, one
+   attribute for the `:is()` and `.controls` are (0,3,0) still. */
+:root:is([data-band-covers], [data-band-fitted]) .controls {
   transition: none;
 }
 

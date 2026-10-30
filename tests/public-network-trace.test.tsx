@@ -172,7 +172,7 @@ const PUBLIC_QUESTION = "Where does the argument come from?";
 /** The first paragraph of a stored Simple, in plain words. */
 const PUBLIC_SIMPLE = "This piece is about where an argument comes from.";
 const PUBLIC_WORK = "An information integration theory of consciousness";
-/** A stored Debate row's quotation from a stranger's page, since plan 260929c stage 4. */
+/** A stored Reception row's quotation from a stranger's page, since plan 260929c stage 4. */
 const PUBLIC_RECEPTION_QUOTE = "The integration measure cannot be computed for any real brain.";
 
 /**
@@ -958,7 +958,7 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      The drawn route is "draws a stored skim from the payload" below.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
   skim: { where: VISITOR_BAND, says: "Nobody has built a skim route for this one yet" },
-  /* And the FAQ and the Citations list, the same day and the same way: out of
+  /* And the FAQ and the Bibliography list, the same day and the same way: out of
      the owners-only group below once the payload grew a flag for each. The
      drawn ones are "draws a stored faq" and "draws a stored citations list"
      below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
@@ -999,6 +999,9 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   search: { where: ".mode-band.srch", says: PUBLIC_CRITERION },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   learn: { where: VISITOR_BAND, says: "Learn is for whoever added this article" },
+  /* Owner only, as a decision (plan 261028c): no public projection, so the
+     boundary names the mode and says whose it is. */
+  explanations: { where: VISITOR_BAND, says: "Explanations is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -1432,7 +1435,7 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A stored Citations list is shown to a visitor, and nothing is spent** —
+   * **A stored Bibliography list is shown to a visitor, and nothing is spent** —
    * plan 260929c stage 3. The work's title and its reason are drawn, the
    * article's own link is a link, and a row the boundary took the link off is
    * still a row. No *Find it* (a paid web search, and the owner's finds stay
@@ -1517,7 +1520,7 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A stored Debate is shown to a visitor, and nothing is spent** — plan
+   * **A stored Reception is shown to a visitor, and nothing is spent** — plan
    * 260929c stage 4. A search is the dearest press in the bar (two metered web
    * searches, ~$0.27 a run), so this asserts both halves: the stored rows are
    * drawn — a reply's quotation and a claim row's quotation — the boundary's
@@ -2312,6 +2315,9 @@ describe("a signed-out browser on a shared document", () => {
       "timeline",
       "skim",
       "faq",
+      /* Owner only: a visitor gets the boundary, and nothing reads
+         `/api/explanations` (plan 261028c). */
+      "explanations",
       /* Sources in each of its sub-modes, and the two old words. Links
          (plan 261011d) is read off the blocks and must ask nothing at all;
          Not cited (plan 261011ac) is the owner's, and a visitor's band reads
@@ -3224,7 +3230,14 @@ describe("a signed-in reader who does not own it", () => {
     /* **Five of those presses went through More**: with the switch on, every
        gathered mode is offered there and nowhere else until it is open. */
     expect([...viaMore].sort()).toEqual(
-      [MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.faq, MODE_LABEL.ideas, MODE_LABEL.timeline].sort(),
+      [
+        MODE_LABEL.quotes,
+        MODE_LABEL.glossary,
+        MODE_LABEL.explanations,
+        MODE_LABEL.faq,
+        MODE_LABEL.ideas,
+        MODE_LABEL.timeline,
+      ].sort(),
     );
 
     /* **And Marginalia's toggle after the radios** (261001i): the notes on and
@@ -3422,6 +3435,28 @@ describe("when the reader's own session cannot be confirmed", () => {
 });
 
 describe("the same address, as the owner", () => {
+  it("reads but does not start Explanations when an enabled owner merely arrives", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    experimentalSince = "2026-10-28T00:00:00.000Z";
+    notBuilt = "/api/explanations/";
+    await open("?mode=explanations");
+
+    expect(trace.some((r) => r.url.startsWith("/api/explanations/")), "the empty-state GET settled").toBe(true);
+    expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs")).toEqual([]);
+  });
+
+  it("only reads the margin's Explanations feed while the switch is on", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open("?margin=1");
+    expect(trace.some((r) => r.url.startsWith("/api/explanations/")), "off").toBe(false);
+
+    await remount();
+    resetExperimental();
+    experimentalSince = "2026-10-28T00:00:00.000Z";
+    await open("?margin=1");
+    expect(trace.some((r) => r.url.startsWith("/api/explanations/")), "on").toBe(true);
+  });
+
   /**
    * **The control the acceptance criterion was written around**, and **the one
    * assertion in this file that changed on purpose on 2026-09-01.**

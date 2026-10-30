@@ -370,6 +370,9 @@ const SUGGESTION_READ_FROM_SENTINEL = "3f9c1e00eead4f50";
 function sentinel(table: string): string {
   if (table === "block_identities") return DEPARTED_BLOCK_ID;
   if (table === "reading_time") return READING_TIME_SENTINEL;
+  /* Its only string is a block id the article has had, and it has its own
+     file, so the departed block's id cannot have come from anywhere else. */
+  if (table === "reading_place") return DEPARTED_BLOCK_ID;
   if (table === "glossary_hidden_entries") return HIDDEN_ENTRY_SENTINEL;
   if (table === "command_suggestion_dismissals") return SUGGESTION_DISMISSAL_SENTINEL;
   return `sentinel-3f9c1e-${table}`;
@@ -499,6 +502,15 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         position: 0,
         mentionedArticleId: ARTICLE_ID,
         title: sentinel("chat_mentions"),
+      });
+    },
+    /* Unplanned on purpose: the sentence must be exported before any route
+       exists (plan 261027d, Sol F8). */
+    skim_briefs: async () => {
+      await db.insert(schema.skimBriefs).values({
+        articleId: ARTICLE_ID,
+        id: "spya-cvb234",
+        brief: sentinel("skim_briefs"),
       });
     },
     search_runs: async () => {
@@ -634,7 +646,7 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         lookupEvidenceHash: "fedcba9876543210",
       });
     },
-    /* Citations' *Investigate* (plan 260930a): the sentinel is the answer. */
+    /* Bibliography's *Dig deeper* (plan 260930a): the sentinel is the answer. */
     citation_investigations: async () => {
       await db.insert(schema.citationInvestigations).values({
         articleId: ARTICLE_ID,
@@ -705,6 +717,10 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         blockId: BLOCK_ID,
         seconds: Number(sentinel("reading_time")),
       });
+    },
+    /* On the departed block, which has an identity row. Plan 261029f. */
+    reading_place: async () => {
+      await db.insert(schema.readingPlace).values({ articleId: ARTICLE_ID, blockId: sentinel("reading_place") });
     },
     /* Straight into the table: the store's `hide` would refuse an id the
        glossary does not have, and this file is about the export. */
@@ -857,6 +873,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     quiz: "Written whole as augmentations/quiz.json.",
     faq: "Written whole as augmentations/faq.json.",
     relations: "Written whole as augmentations/relations.json.",
+    explanations: "Written whole as augmentations/explanations.json.",
     sourcesClaims: "Written whole as augmentations/sources-claims.json.",
     skim: "Written whole as augmentations/skim.json.",
     crossrefs: "Written whole as augmentations/crossrefs.json.",
@@ -877,6 +894,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     messageId: "Each mention is nested inside the question that made it, in chat.json.",
   },
   search_runs: {},
+  skim_briefs: {},
   referee_criteria: {},
   referee_promises: {},
   sources_claim_checks: {},
@@ -886,6 +904,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   citation_investigations: {},
   citation_web_notes: {},
   reading_time: {},
+  reading_place: {},
   glossary_hidden_entries: {},
   article_tags: {},
   quiz_attempts: {},
@@ -927,6 +946,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
       .flatMap((thread) => listAt(thread, "messages"))
       .flatMap((message) => listAt(message, "mentions")),
   search_runs: (parsed) => listAt(parsed, "runs"),
+  skim_briefs: (parsed) => listAt(parsed, "briefs"),
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
   referee_promises: (parsed) => [at(parsed, "run")],
   sources_claim_checks: (parsed) => listAt(parsed, "checks"),
@@ -936,6 +956,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   citation_investigations: (parsed) => listAt(parsed, "investigations"),
   citation_web_notes: (parsed) => listAt(parsed, "notes"),
   reading_time: (parsed) => listAt(parsed, "blocks"),
+  reading_place: (parsed) => listAt(parsed, "places"),
   glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
   article_tags: (parsed) => listAt(parsed, "tags"),
   quiz_attempts: (parsed) => listAt(parsed, "attempts"),
@@ -984,12 +1005,14 @@ await pgReady({
     "spideryarn.citation_investigations",
     "spideryarn.citation_web_notes",
     "spideryarn.reading_time",
+    "spideryarn.reading_place",
     "spideryarn.glossary_hidden_entries",
     "spideryarn.article_tags",
     "spideryarn.quiz_attempts",
     "spideryarn.stale_notice_dismissals",
     "spideryarn.command_suggestion_dismissals",
     "spideryarn.article_revision_parts",
+    "spideryarn.skim_briefs",
   ],
 });
 

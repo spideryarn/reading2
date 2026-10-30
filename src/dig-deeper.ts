@@ -1,7 +1,7 @@
 /**
  * ***Dig deeper*** — the one action behind every "tell me more about this one
  * thing" button: the glossary's (was *Check the web*) and a comment's (was
- * *Search the web*), and Bibliography's *Investigate* next
+ * *Search the web*), and Bibliography's *Dig deeper* next
  * (docs/plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md).
  *
  * > if it says "Check the Web", then it always should … always use a bigger
@@ -123,15 +123,15 @@ const MAX_QUERY_CHARS = 200;
  * first press on an article, which writes Opus's copy of the cached prefix, and
  * $0.047 for a press that reads it. The cold press scales with the article, so
  * a 100k-token paper is about $0.60. The fuse is 100 of those, about $60 a day
- * at the very worst, and $5–25 for presses that are mostly warm. Investigate's
+ * at the very worst, and $5–25 for presses that are mostly warm. Bibliography's Dig deeper's
  * fuse is $50 a day (since 2026-10-02); this one is looser because one button
  * here replaces two that had no limit at all, and the ceiling is Greg's to move.
  *
- * Two at once rather than Investigate's one, because a reader may reasonably
+ * Two at once rather than Bibliography's Dig deeper's one, because a reader may reasonably
  * dig into a term and a comment side by side, and each button already allows
  * only one of its own at a time.
  *
- * The lease is every deadline in a press plus Investigate's margin, so a
+ * The lease is every deadline in a press plus Bibliography's Dig deeper margin, so a
  * process that dies mid-press frees its slot soon after.
  */
 export const DIG_DEEPER_RATE_POLICY: RatePolicy = {

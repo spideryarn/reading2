@@ -48,7 +48,7 @@
  * the horizontal axis, so it stays put when the table scrolls sideways). What
  * stays with you as you read is the spine and the arc column, not this.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Archive, ExternalLink, FileQuestion, Globe, Link2, Lock, Undo2, Upload } from "lucide-react";
 import {
   SHARING_BADGE,
@@ -80,8 +80,10 @@ import { Link } from "./Link.js";
 import { cameOffADisk, journalBesideSite, savedFromSource, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, readHref } from "./router.js";
 import { ReadTimeCard } from "./ReadTimeCard.js";
+import { ReadSoFarMark } from "./ReadSoFarMark.js";
+import type { ReadBand } from "./read-filter.js";
 import { articleStats } from "./stats.js";
-import { AuthorNames } from "./AuthorNames.js";
+import { AuthorNames, collapsedAuthorNamesText } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { FoldAllButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
@@ -123,9 +125,45 @@ interface Props {
   onRenamed?: OnRenamed | undefined;
   /** The owner's one archive controller, kept above the article/metadata view switch. */
   archive?: ArchiveControl | undefined;
+  /**
+   * How much of the piece the owner has read, as a coarse band — drawn as a
+   * pie beside the read time (ReadSoFarMark.tsx). Absent for a visitor, and
+   * until the owner's reading time has answered.
+   */
+  readBand?: ReadBand | undefined;
 }
 
-export function Masthead({ article, slug, onRenamed, archive }: Props) {
+/**
+ * **The masthead's facts as plain words, in their displayed order.** The
+ * masthead replaces the author string and read-time string with interactive
+ * renderers, but their visible words come from this same list. ReminderBar
+ * draws it directly, so changing a fact or its order cannot leave the reminder
+ * saying something else (plan 261029d).
+ */
+export function mastheadFactsAsWords(meta: Article["meta"], minutes: number): {
+  byline: string | undefined;
+  journal: string | undefined;
+  site: string | undefined;
+  published: string | undefined;
+  readTime: string;
+  ordered: readonly string[];
+} {
+  const byline = meta.authors ? collapsedAuthorNamesText(meta.authors) : meta.byline;
+  const journal = journalBesideSite(meta.journal, meta.siteName);
+  const site = meta.siteName;
+  const published = publishedLabel(meta);
+  const readTime = `~${minutes} min`;
+  return {
+    byline,
+    journal,
+    site,
+    published,
+    readTime,
+    ordered: [byline, journal, site, published, readTime].filter(Boolean) as string[],
+  };
+}
+
+export function Masthead({ article, slug, onRenamed, archive, readBand }: Props) {
   const { meta, tree } = article;
   /* The same rename the shelf offers, from the page you are actually reading —
      Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
@@ -222,10 +260,11 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
   // filtered list beats a chain of `&&`s that can leave a stranded separator.
   /* **The authors one at a time when we know who they are**, and the byline
      string exactly as before when we do not — AuthorNames.tsx. Plan 260929d § 4. */
+  const factWords = mastheadFactsAsWords(meta, stats.minutes);
   const byline: ReactNode = meta.authors ? (
     <AuthorNames authors={meta.authors} linkToShelf={onRenamed !== undefined} />
   ) : (
-    meta.byline
+    factWords.byline
   );
   /* **Where and when it was published**, in the order both Metadata pages
      print the facts — Greg, 2026-10-15 (`spya-u7yfns`): *"Please
@@ -235,31 +274,34 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
      face: a fact about the piece is nobody's sentence (fonts.md). Plan 261015c. */
   const facts = [
     byline,
-    journalBesideSite(meta.journal, meta.siteName),
-    meta.siteName,
-    publishedLabel(meta),
+    factWords.journal,
+    factWords.site,
+    factWords.published,
     /* **The one fact here with a card**, because it is the one that is an
        estimate — ReadTimeCard.tsx. Focusable so a keyboard and a finger reach
        what a pointer does; it is not a button because pressing it does
-       nothing. */
-    <Tooltip
-      key="read-time"
-      placement="bottom"
-      keepSide
-      className="tip-soon"
-      content={
-        <ReadTimeCard
-          words={stats.words}
-          supplementWords={stats.supplementWords}
-          difficulty={stats.difficulty}
-        />
-      }
-    >
-      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the only way to the explanation, and focus is how a keyboard opens it */}
-      <span className="read-time-trigger" tabIndex={0}>
-        {`~${stats.minutes} min`}
-      </span>
-    </Tooltip>,
+       nothing. And how much of it you have read, in the same fact so no dot
+       comes between how long it takes and how far you are (plan 261025j). */
+    <Fragment key="read-time">
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="tip-soon"
+        content={
+          <ReadTimeCard
+            words={stats.words}
+            supplementWords={stats.supplementWords}
+            difficulty={stats.difficulty}
+          />
+        }
+      >
+        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the only way to the explanation, and focus is how a keyboard opens it */}
+        <span className="read-time-trigger" tabIndex={0}>
+          {factWords.readTime}
+        </span>
+      </Tooltip>
+      <ReadSoFarMark band={readBand} />
+    </Fragment>,
     /* **The counts, shut until asked for** — the same report: *"maybe hide
        some of the less-likely-to-be-useful metadata behind a
        default-collapsed section"*. Nobody decides whether to read a piece

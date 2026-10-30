@@ -135,6 +135,15 @@
   padding-left: calc(var(--outln-indent) * 2);
   font-weight: 400;
 }
+/* **Level 4: a sub-section's paragraphs**, where an article divides a section
+   (plan 261029a). Level 3 is a sub-section *or* a section's paragraph — which
+   one is `.paragraph`, a flag rather than a depth — and both are drawn alike
+   at this indent; a sub-section reads as a section by what it carries, its
+   number and its gist when current. */
+.outln-row.lvl-4 {
+  padding-left: calc(var(--outln-indent) * 3);
+  font-weight: 400;
+}
 
 /* **Every row wears its number, at every level.** Greg, 2026-08-30, after
    seeing the first pass: "perhaps always show the numbers (because they give a
@@ -186,6 +195,7 @@
 .outln-row.lvl-1 .outln-num { min-width: 1.5em; }
 .outln-row.lvl-2 .outln-num { min-width: 2.9em; }
 .outln-row.lvl-3 .outln-num { min-width: 4.3em; }
+.outln-row.lvl-4 .outln-num { min-width: 5.7em; }
 
 /* ── Levels and siblings ─────────────────────────────────────────────────────
    Indent says how deep a row is; it does not say which rows it belongs with.
@@ -199,10 +209,15 @@
    A level-3 row needs BOTH rails: its own, and its parent section's continuing
    *through* it. A section rail that stopped where its own paragraphs begin
    would say the paragraphs are outside the section. Hence `::before` for the
-   inherited rail and `::after` for the row's own. */
+   inherited rail and `::after` for the row's own.
+
+   A level-4 row — a sub-section's paragraph (plan 261029a) — needs three, and
+   there are two pseudo-elements, so its `::before` is one indent wide and
+   draws the two inherited rails as its own two edges. */
 .outln-row.lvl-2::before,
 .outln-row.lvl-3::before,
-.outln-row.lvl-3::after {
+.outln-row.lvl-3::after,
+.outln-row.lvl-4::after {
   content: "";
   position: absolute;
   top: 0;
@@ -213,6 +228,18 @@
 .outln-row.lvl-2::before,
 .outln-row.lvl-3::before { left: var(--outln-rail); }
 .outln-row.lvl-3::after { left: calc(var(--outln-rail) + var(--outln-indent)); }
+.outln-row.lvl-4::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--outln-rail);
+  width: calc(var(--outln-indent) + 1px);
+  border-left: 1px solid var(--rule-strong);
+  border-right: 1px solid var(--rule-strong);
+  box-sizing: border-box;
+}
+.outln-row.lvl-4::after { left: calc(var(--outln-rail) + var(--outln-indent) * 2); }
 
 /* **A title wraps; it is never cut.** Until 2026-09-10 every row was clamped to
    one line (`-webkit-line-clamp: 1`), and in a 300px band with a nested number
@@ -280,7 +307,8 @@
 /* **Where the reader is, marked on the sibling rail as well as in the row.**
    The rail is the thing the eye runs down when it is asking "which of these am
    I in", so the answer belongs on it — a thumb on a track. */
-.outln-row.now.lvl-2::before {
+.outln-row.now.lvl-2::before,
+.outln-row.now.lvl-3::after {
   width: 2px;
   background: var(--highlight);
 }
@@ -333,7 +361,7 @@
      reads as belonging to it. */
   grid-column: 2;
   margin: 0.2rem 0 0.1rem;
-  font-family: var(--font-reading);
+  font-family: var(--font-ui);
   font-size: var(--structure-tier-mid);
   font-weight: 400;
   line-height: 1.4;
@@ -364,7 +392,7 @@
 .outln-card { max-width: 22rem; }
 .outln-card-crumb { font-size: 0.85rem; color: var(--ink-faint); }
 .outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
-.outln-card-gist { margin: 0; font-family: var(--font-reading); }
+.outln-card-gist { margin: 0; font-family: var(--font-ui); }
 
 /* The L0 column's "arc still being written" tint went with the column on
    2026-09-05. Structure's list face simply omits the rung until the sentence

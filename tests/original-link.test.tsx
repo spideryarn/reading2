@@ -28,7 +28,7 @@ function article(blocks: Block[], meta: Record<string, unknown> = { url: URL }):
   return {
     meta: { slug: "a-piece", title: "A piece", ...meta },
     blocks,
-    tree: { version: "hierarchy/4", nodes: [], roots: [] },
+    tree: { version: "toc/4", nodes: [], roots: [] },
   } as unknown as Article;
 }
 

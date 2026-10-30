@@ -1,6 +1,6 @@
 /**
  * **Every class the per-voice faces name still exists, and every page and mode
- * has said whose words it shows.** src/web/styles/voices.css; docs/project/fonts.md.
+ * has said whose words it shows.** src/web/voices.css; docs/project/fonts.md.
  *
  * The faces were behind the Experimental switch until 2026-10-02, when Greg
  * said "Yes they should now be used throughout and always going forwards"
@@ -28,9 +28,9 @@ import type { ArticleView } from "../src/read-address.js";
 import { gistVoiceOf } from "../src/library-scalars.js";
 import type { Route } from "../src/web/router.js";
 import { type Voice, voiceClass } from "../src/web/voice.js";
-import { readerSheets } from "./helpers/stylesheets.js";
+import { cssForJsdom, readerSheets, VOICES_SHEET } from "./helpers/stylesheets.js";
 
-const CSS = readFileSync("src/web/styles/voices.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readFileSync(VOICES_SHEET, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Every rule's selector text, one string per rule. */
 const selectors = [...CSS.matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => m[1]!.trim());
@@ -210,6 +210,9 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
   faq: [".faq-question"],
+  /* The explanation itself; the quoted passage is the author's (`.expl-quote`,
+     left out of the shared part-text rule) and the labels are ours. */
+  explanations: [".expl-text"],
   skim: [".skim-cue", ".skim-intro", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
   marginalia: [
     ".marg-question",
@@ -285,10 +288,10 @@ function selectorBranches(selector: string): string[] {
   return branches;
 }
 
-/** The branches inside a rule's `:root :is(…)`, each as written. */
+/** The branches inside a rule's `:where(…)`, each as written. */
 function innerBranches(selector: string): string[] {
-  const m = /^:root\s+:is\(([\s\S]*)\)(?:::placeholder)?$/.exec(selector);
-  if (!m) throw new Error(`not a guarded :is() rule: ${selector.slice(0, 60)}`);
+  const m = /^:where\(([\s\S]*)\)(?:::placeholder)?$/.exec(selector);
+  if (!m) throw new Error(`not a weightless :where() rule: ${selector.slice(0, 60)}`);
   return selectorBranches(m[1]!).map((b) => b.replace(/\s+/g, " "));
 }
 
@@ -299,10 +302,31 @@ describe("voices.css", () => {
     expect(classes.length).toBeGreaterThan(40);
   });
 
-  /* `:root` is part of each rule's specificity, not a switch: without it some
-     rules would only tie with the ones they override (voices.css § header). */
-  it("writes every rule as :root :is(…), for everyone", () => {
+  /* Weightless, so the order in the file decides between voices, and the
+     `voices` layer decides against the component sheets (voices.css § header). */
+  it("writes every rule as :where(…), for everyone", () => {
     for (const selector of selectors) innerBranches(selector);
+  });
+
+  /* **The guard for the shape this replaced.** Until 2026-10-25 every rule was
+     `:root :is(…)` inside `@layer app`, so a voice beat a component rule only
+     by weighing more, and how much it weighed was whatever its heaviest entry
+     happened to be (plan 261025k § 2). Both halves of the fix are held here:
+     each rule weighs nothing, and the file is in a layer of its own after
+     `app` and before the utilities. Undo either and this goes red. */
+  it("is weightless and in its own layer, after app and before the utilities", () => {
+    for (const selector of selectors) {
+      expect(selector.startsWith(":where("), selector.slice(0, 60)).toBe(true);
+    }
+    const tailwind = readFileSync("src/web/tailwind.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(tailwind).toMatch(/^@import "\.\/voices\.css" layer\(voices\);$/m);
+    const order = /^@layer ([^{;]+);/m.exec(tailwind)?.[1]?.split(",").map((l) => l.trim()) ?? [];
+    expect(order.indexOf("app"), order.join(", ")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("voices"), order.join(", ")).toBeGreaterThan(order.indexOf("app"));
+    expect(order.indexOf("voices"), order.join(", ")).toBeLessThan(order.indexOf("utilities"));
+    expect(readFileSync("src/web/styles.css", "utf8"), "voices.css imported into app too").not.toMatch(
+      /@import\s[^;]*voices\.css/,
+    );
   });
 
   it("leaves no trace of the Experimental switch that used to gate the faces", () => {
@@ -324,7 +348,7 @@ describe("voices.css", () => {
   it("keeps the UI-face corrections that live beside their inherited rules", () => {
     for (const file of ["src/web/styles/annotations.css", "src/web/styles/dock.css"]) {
       expect(selectorsUsingIn(file, "--font-ui", ".passage-whole"), file).toEqual([
-        `:root .${file.includes("annotations") ? "cmt-quote" : "dock-question-quote"} .passage-whole`,
+        `.${file.includes("annotations") ? "cmt-quote" : "dock-question-quote"} .passage-whole`,
       ]);
     }
   });
@@ -338,7 +362,7 @@ describe("voices.css", () => {
     expect(innerBranches(selectorUsing("--font-author"))).toContain(".voice-author");
     expect(innerBranches(selectorUsing("--font-ai"))).toContain(".voice-ai");
     expect(innerBranches(selectorUsing("--font-reader"))).toContain(".voice-reader");
-    const ui = selectors.find((sel) => /^:root\s+:is\(\s*\.voice-ui\s*\)$/.test(sel));
+    const ui = selectors.find((sel) => /^:where\(\s*\.voice-ui\s*\)$/.test(sel));
     expect(ui, "a rule for .voice-ui alone").toBeDefined();
   });
 
@@ -400,9 +424,15 @@ describe("voices.css", () => {
     for (const t of used) expect(tokens, t).toMatch(new RegExp(`${t}:`));
   });
 
+  /* jsdom has no cascade layers, so `cssForJsdom` stands the `voices` layer in
+     (its comment says how, and it throws where the stand-in would not be
+     faithful). The heading is the case that needs it: mode-band.css
+     sets `.chat-turn.model .fmt-h` the UI face at (0,3,0), and only the layer
+     puts the model's back — fed the sheets bare, jsdom says UI. */
   it("keeps code in Chat and Candidates on the one monospace through the full cascade", () => {
     const { window } = new JSDOM(`<!doctype html><body>
       <div class="chat-turn model">
+        <h3 class="fmt-h" id="chat-heading">heading</h3>
         <p><code class="fmt-code" id="chat-inline">inline</code></p>
         <pre class="fmt-pre"><code id="chat-block">block</code></pre>
       </div>
@@ -414,7 +444,7 @@ describe("voices.css", () => {
     </body>`);
     for (const sheet of readerSheets()) {
       const style = window.document.createElement("style");
-      style.textContent = sheet.css;
+      style.textContent = cssForJsdom(sheet);
       window.document.head.appendChild(style);
     }
     const family = (id: string) =>
@@ -423,6 +453,7 @@ describe("voices.css", () => {
     for (const id of ["chat-inline", "chat-block", "candidate-inline", "candidate-block"]) {
       expect(family(id), id).toBe("var(--font-mono)");
     }
+    expect(family("chat-heading"), "a heading in a model's answer").toBe("var(--font-ai)");
     expect(family("other-inline"), "code outside a model answer").toBe("var(--font-mono)");
   });
 

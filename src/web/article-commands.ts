@@ -146,6 +146,43 @@ export const SECTION_ROWS: readonly SectionRow[] = [
   },
 ];
 
+/**
+ * **Start this article again** — the way to Metadata's whole-article reset
+ * (ResetArticle.tsx), the first row of *AI processing*. Greg, 2026-10-29
+ * (`spya-gkmgdd`): *"I was trying to find a way with [the command bar] to sort
+ * of re-import or reload or reset a page, but I couldn't figure out how."*
+ * Plan 261029l.
+ *
+ * **Not in `SECTION_ROWS`**, because the row it leads to is drawn only while
+ * the experimental switch is on, and a row that opens a section with no reset
+ * in it is a dead end. The caller adds it under the same condition
+ * (CommandBar.tsx § `metadataRows`).
+ *
+ * **A place, not the press.** The reset keeps its confirm, which says what it
+ * can do to comments on changed paragraphs, and the bar is not where that
+ * gets skipped. Its words stay off the bare verbs the Metadata row owns
+ * (*regenerate*, *rerun*, *reprocess*, *redo*, see above) and off every
+ * `<verb> <name>` a *Run again* row answers.
+ */
+export const RESET_SECTION_ROW: SectionRow = {
+  id: "start-again",
+  section: "ai-processing",
+  label: "Start this article again",
+  description: "Re-read it with today's pipeline, keeping your comments, notes and chats.",
+  aliases: [
+    "start again",
+    "start over",
+    "reset",
+    "reset article",
+    "reset this article",
+    "re-import",
+    "reimport",
+    "re import",
+    "reload article",
+    "refresh article",
+  ],
+};
+
 /** A section row, with the caller's way of getting there. */
 export function sectionCommand(row: SectionRow, run: Run): Command {
   return {

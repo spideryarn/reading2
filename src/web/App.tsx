@@ -73,6 +73,11 @@ const loadAdminVouchers = () =>
   import("./AdminVouchersPage.js").then((m) => ({ default: m.AdminVouchersPage }));
 const loadAdminArticles = () =>
   import("./AdminArticlesPage.js").then((m) => ({ default: m.AdminArticlesPage }));
+const loadAdminMockups = () =>
+  import("./AdminMockupsPage.js").then((m) => ({ default: m.AdminMockupsPage }));
+/* One mockup: it reads its id from `useRoute`, since a loaded page takes no props. */
+const loadAdminMockup = () =>
+  import("./AdminMockupsPage.js").then((m) => ({ default: m.AdminMockupPage }));
 /* One loader per admin page, keyed by the union, so a page added to
    `AdminPage` without a loader is a compile error rather than a fall-through
    to the index — the same reason page-title.ts keys its titles this way. */
@@ -83,6 +88,8 @@ const ADMIN_LOADERS: Record<AdminPage, PageLoader> = {
   vouchers: loadAdminVouchers,
   costs: loadAdminCosts,
   articles: loadAdminArticles,
+  mockups: loadAdminMockups,
+  mockup: loadAdminMockup,
 };
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 /* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is

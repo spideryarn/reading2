@@ -39,7 +39,12 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { readerCssNoComments } from "./helpers/stylesheets.js";
+import {
+  allSheets,
+  readerCssNoComments,
+  stripComments,
+  VOICES_SHEET,
+} from "./helpers/stylesheets.js";
 
 /* The reading-view sheets as a set — one file until 2026-09-06 and thirty-eight
    since, and asking for the set is what makes a rule that has *moved* go on
@@ -86,10 +91,46 @@ describe("the reading column is centred in its cell", () => {
     expect(r).toContain("font-weight: var(--reading-weight)");
   });
 
+  it("every rule that measures the prose's measure says which face its `ch` is in", () => {
+    /* The list in the next test is only as good as its coverage: the skim door
+       (261009j) and the matter stub (261025b) were each added after it and
+       each measured `--reading-measure` in Geist zeroes. So this asks the
+       other way round: a rule whose declarations use `--reading-measure` sets
+       the author's face itself, or is the prose (voiced in voices.css), or is
+       named below with the reason its face does not matter. */
+    const allowed = new Map<string, string>([
+      ["td.text.note .blk-gutter", "the same element as `.blk-gutter`, whose own rule sets the author's face"],
+    ]);
+    const measured: string[] = [];
+    const offenders: string[] = [];
+    for (const sheet of allSheets()) {
+      for (const m of stripComments(sheet.css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selector = (m[1] ?? "").replace(/\s+/g, " ").trim();
+        const body = m[2] ?? "";
+        if (!/var\(--reading-measure\)/.test(body)) continue;
+        const named = `${sheet.path}: ${selector}`;
+        measured.push(named);
+        if (/font-family:\s*var\(--font-author\)/.test(body)) continue;
+        if (selector.split(",").every((s) => /\.prose(?![\w-])/.test(s))) continue;
+        if (allowed.has(selector)) continue;
+        offenders.push(named);
+      }
+    }
+    /* Calibration in both directions: the shared root sheet is in scope, and
+       `clamp()` / `calc()` users are candidates even when the measure is not
+       the declaration's whole value. Without these, an empty or narrowed scan
+       reports perfect coverage. */
+    expect(measured).toContain("styles/tokens.css: .reading-column");
+    expect(measured).toContain("src/web/styles/prose.css: .prose");
+    expect(measured).toContain("src/web/styles/prose.css: .prose blockquote");
+    expect(measured.length).toBeGreaterThan(10);
+    expect(offenders).toEqual([]);
+  });
+
   it("geometry beside the prose measures `ch` in the prose's own face", () => {
     /* A `ch` is the zero glyph of the font it is used on — family as well as
        size and weight. When the author's face became every reader's on
-       2026-10-02 (styles/voices.css), `.prose` started measuring the then-65
+       2026-10-02 (voices.css), `.prose` started measuring the then-65
        serif zeroes while these geometry boxes went on measuring 65 Geist ones, and
        at 1440 the icons stood 88px off the text — on the left, and then on the
        right when the column moved there (261003c, measured in the browser). The in-prose
@@ -98,9 +139,9 @@ describe("the reading column is centred in its cell", () => {
        asserted against whatever voices.css gives `.prose`, not against a name:
        if the prose's face changes again, this goes red. */
     // Lazy, because a selector list holds `:not(…)`s; only `) {` ends one.
-    const voice = /:root :is\(([\s\S]*?)\)\s*\{\s*font-family:\s*([^;]+);/g;
+    const voice = /:where\(([\s\S]*?)\)\s*\{\s*font-family:\s*([^;]+);/g;
     let proseFace: string | undefined;
-    for (const m of css.matchAll(voice)) {
+    for (const m of stripComments(readFileSync(VOICES_SHEET, "utf8")).matchAll(voice)) {
       const selectors = (m[1] ?? "").split(",").map((x) => x.trim());
       if (selectors.includes(".prose")) proseFace = m[2]?.trim();
     }
@@ -108,11 +149,16 @@ describe("the reading column is centred in its cell", () => {
     expect(rule(".blk-gutter")).toContain(`font-family: ${proseFace}`);
     expect(rule(".fold-toggle")).toContain(`font-family: ${proseFace}`);
     expect(rule("td.text .quiz-in-prose")).toContain(`font-family: ${proseFace}`);
+    /* A shut stretch of front or back matter sits on the prose's measure so its
+       first letter lines up with the article's; its buttons set the UI face. It
+       took `--font-reading` for the prose's face, which had been Geist since
+       2026-10-02 (found while collapsing that token, 261025k § 4). */
+    expect(rule(".matter-stub")).toContain(`font-family: ${proseFace}`);
     /* And both mastheads, which centre a measure-wide box on the prose's axis: in
        Geist they put the title ~80px off the first line of the article at 1440
        (261003c code review). Every visible child names its own face. */
     expect(rule(".reader.text-alone .masthead-inner")).toContain(`font-family: ${proseFace}`);
-    expect(rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner")).toContain(
+    expect(rule(".reader:has(> table.only-prose):not(.text-alone) .masthead-inner")).toContain(
       `font-family: ${proseFace}`,
     );
   });
@@ -175,7 +221,7 @@ describe("the reading column is centred in its cell", () => {
   });
 
   it("the masthead follows the prose wherever the two share a box", () => {
-    const r = rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner");
+    const r = rule(".reader:has(> table.only-prose):not(.text-alone) .masthead-inner");
     expect(r).toContain("max-width: var(--reading-measure)");
     /* Stated rather than `auto`, and it still has to be: auto margins would
        centre this box in the bar, while the prose is half the reading cell's
@@ -218,7 +264,7 @@ describe("the reading column is centred in its cell", () => {
        accident — the masthead's left padding was derived from `--logo-w` and
        landed within about two pixels of the prose's inset — so taking the
        reservation away is what exposed it. GPT Sol, T1. */
-    const r = rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner");
+    const r = rule(".reader:has(> table.only-prose):not(.text-alone) .masthead-inner");
     expect(r).toContain("max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l)))");
   });
 

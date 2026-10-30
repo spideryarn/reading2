@@ -12,7 +12,7 @@
  * through each panel's own composite, rather than a share of some fixture list:
  * a share would be a fact about the fixture.
  *
- * The four callers of `applyThreshold` that have a prioritised order. Debate's
+ * The four callers of `applyThreshold` that have a prioritised order. Claims'
  * categorical bar is the fifth caller and is deliberately not here — see the
  * plan's § Which modes these are.
  */

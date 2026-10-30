@@ -40,7 +40,7 @@ import {
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON, EXPERIMENTAL_SIGNED_OUT } from "./helpers/experimental-fixtures.js";
 
 /** The five, by name and in the bar's order: an independent copy of D2. */
-const GATHERED: readonly Mode[] = ["quotes", "glossary", "faq", "ideas", "timeline"];
+const GATHERED: readonly Mode[] = ["quotes", "glossary", "explanations", "faq", "ideas", "timeline"];
 
 const names = (rows: readonly { mode: Mode }[]) => rows.map((m) => m.mode);
 
@@ -67,8 +67,8 @@ describe("splitForMore: what the bar draws and what the menu holds", () => {
       "plain",
       "structure",
       "summary",
-      "diagram",
       "skim",
+      "diagram",
       "sources",
       "referee",
       "search",
@@ -306,7 +306,7 @@ describe("the More button on the reading view", () => {
       (host.querySelector(".dock-modes-radios") as HTMLElement).style.getPropertyValue("--dock-radio-count"),
     ).toBe("9");
     const frame = (moreTrigger(host) as HTMLElement).closest(".dock-frame") as HTMLElement;
-    /* Structure, Summary, More, Skim, Sources, Search, Chat, Learn. */
+    /* Structure, Summary, Skim, More, Sources, Search, Chat, Learn. */
     expect(frame.style.getPropertyValue("--dock-frame-count")).toBe("8");
   });
 });
@@ -491,6 +491,8 @@ describe("More over an open Comments drawer", () => {
       );
     });
     expect(host.querySelector(".dock-drawer"), "the drawer opens").not.toBeNull();
+    /* Under StrictMode's doubled effects, one count: the flag goes with the drawer below. */
+    expect(document.documentElement.hasAttribute("data-dock-drawer")).toBe(true);
     const menu = openMore(host);
     expect(menu.contains(document.activeElement), "focus moved into the menu").toBe(true);
 
@@ -506,6 +508,7 @@ describe("More over an open Comments drawer", () => {
 
     pressEscape();
     expect(host.querySelector(".dock-drawer"), "the second Escape closes the drawer").toBeNull();
+    expect(document.documentElement.hasAttribute("data-dock-drawer"), "and its flag with it").toBe(false);
   });
 });
 
@@ -626,19 +629,50 @@ describe("More's tooltip card", () => {
 /* ------------------------------------------------- PR-4: the phone's guard -- */
 
 describe("an open More menu holds the bar home on a phone", () => {
-  it("the trigger carries the state the stylesheet's guard reads", () => {
+  const flag = () => document.documentElement.hasAttribute("data-dock-more-open");
+  it("the trigger carries the state the drawer's Escape reads, and `<html>` the one the guard reads", () => {
     reading();
     expect(moreTrigger(host)?.getAttribute("data-state")).toBe("closed");
     expect(document.querySelector(MORE_OPEN)).toBeNull();
+    expect(flag()).toBe(false);
     openMore(host);
     expect(moreTrigger(host)?.getAttribute("data-state")).toBe("open");
     expect(document.querySelector(MORE_OPEN)).toBe(moreTrigger(host));
-    /* **One spelling in three places**: the constant the drawer's Escape
-       handler asks, this literal, and the guard in narrow-window.css — where
-       tests/the-dock-hides-in-a-mode-beside-the-article.test.ts checks it is
-       an argument of the right rule rather than merely present in the file. */
+    /* **The same `open` state, in two places**: the trigger's attribute, which
+       the drawer's Escape handler asks through `MORE_OPEN`, and the flag on
+       `<html>` that narrow-window.css's guard reads since 2026-10-29 (it asked
+       `:root:has(MORE_OPEN)` before, a walk of the article — plan 261029k).
+       tests/the-dock-hides-in-a-mode-beside-the-article.test.ts checks the
+       flag is an argument of the right rule rather than merely in the file. */
+    expect(flag(), "an open menu no longer says so on <html>").toBe(true);
     expect(MORE_OPEN).toBe('.dock-more-trigger[data-state="open"]');
     const css = readFileSync("src/web/styles/narrow-window.css", "utf8");
-    expect(css).toContain(`    ${MORE_OPEN},\n`);
+    expect(css).toContain("    [data-dock-more-open],\n");
+    closeMore();
+    expect(moreTrigger(host)?.getAttribute("data-state")).toBe("closed");
+    expect(flag(), "a closed menu left the flag behind").toBe(false);
+  });
+
+  it("lets the flag go when the Dock unmounts with the menu open", () => {
+    reading();
+    openMore(host);
+    expect(flag()).toBe(true);
+    act(() => root.render(null));
+    expect(flag()).toBe(false);
+  });
+});
+
+/* -------------------------------------- the bar's other two guards' flags -- */
+
+describe("the Dock says on <html> when its bar must stay home", () => {
+  const has = (f: string) => document.documentElement.hasAttribute(`data-${f}`);
+  it("`dock-focus` while focus is in the bar, and not after", async () => {
+    reading();
+    expect(has("dock-focus")).toBe(false);
+    act(() => moreTrigger(host)!.focus());
+    expect(has("dock-focus")).toBe(true);
+    act(() => moreTrigger(host)!.blur());
+    await act(async () => {});
+    expect(has("dock-focus")).toBe(false);
   });
 });
