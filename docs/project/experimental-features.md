@@ -161,11 +161,27 @@ orange *selected* look, which means *you are here* — Greg, 2026-10-01: *"when 
 too visible/emphasised somehow … Please de-emphasise."*
 [261001l](../plans/261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback.md).
 
+**"Not known yet" is never drawn as "off", by either control.** Before the first answer, and after
+a load that failed, the store's `on` is a placeholder `false`. The bar draws that as a centred knob
+with no `aria-pressed`; the checkbox draws it as `indeterminate` (exposed as "mixed"), disabled,
+with its status line wired in by `aria-describedby`. The checkbox asks
+[`hasValue`](../../src/web/experimental-store.ts); the bar decides it independently in
+`toggleVariant`, and `tests/dock-experimental-switch.test.tsx` holds the two to the same answer in
+all 32 states. A save that fails before the first answer has no value either: it put back the
+placeholder. The bar gives that its own marked, inert appearance: the knob stays centred and the
+description says the save failed while the recovery read runs. The checkbox drew a plain unchecked
+box until 2026-10-30. `disabled` alone does not fix that, because the box is still exposed as
+unchecked to a screen reader and to a test.
+It was found while chasing a report that the checkbox read off while Experimental was on; the
+report itself had read a different checkbox
+([261030a](../postmortems/261030a-a-check-that-found-a-control-by-its-kind-read-a-different-one.md)).
+
 **The failure states are drawn, not swallowed.** A dead or lying switch is worse than no switch, so
 `toggleVariant` ([`Dock.tsx`](../../src/web/Dock.tsx)) turns the store's fields into exactly one of
-six appearances — working, waiting, saving, showing an offline copy, a load that failed, a save that
-failed. The two broken ones draw a warning triangle beside the flask, because a failure visible only
-on hover is a failure most readers never see. The table is
+seven appearances — working, waiting, saving, showing an offline copy, a load that failed, a save
+that failed over a known value, and a save that failed before any value was read. The three broken
+ones draw a warning triangle beside the flask, because a failure visible only on hover is a failure
+most readers never see. The table is
 `tests/dock-experimental-switch.test.tsx`.
 
 **No state is a dead end**, and one was. `stale` — the offline copy — used to be inert on both

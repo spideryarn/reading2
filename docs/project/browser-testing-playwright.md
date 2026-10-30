@@ -256,6 +256,19 @@ these is a section of `browser-testing.md` that does not apply here.
   quietly replaced. With no `filename` it writes `.playwright-mcp/page-<timestamp>.png` under the cwd
   and returns the image inline; stray PNGs beside `package.json` (2026-09-03) are one careless add
   away from a commit. `file://` is refused too, so a local page needs serving over loopback.
+- **Find a control by its name, never by its kind.** `page.locator('input[type=checkbox]').first()`
+  on `/profile` is not the Experimental box: Settings starts shut and a shut `Section` unmounts its
+  contents, so the first checkbox on the page is the Feedback dialog's hidden consent box. One
+  agent read that, clicked it, and reported that `/profile`'s switch "reads false even when
+  Experimental is on" (qi-ydgn7smk,
+  [261030a](../postmortems/261030a-a-check-that-found-a-control-by-its-kind-read-a-different-one.md)).
+  Open the section, then `page.getByRole('checkbox', { name: 'Experimental features' })`. A
+  locator that resolves to a *hidden* element is the tell. After a click meant to change a setting,
+  read it back through the control or the request the app itself reads; a click that landed on a
+  neighbour must not count as success.
+- **A setting read before it has loaded is not an answer.** That box is disabled and *mixed* until
+  `GET /api/reader` answers, and `isChecked()` ignores `indeterminate`: it returns `false` for a box
+  that means "not known yet". Wait for `await expect(box).toBeEnabled()` before reading it.
 - **There is no microphone.** `getUserMedia({audio: true})` fails with `NotFoundError` in headless
   Chrome here, and the `--use-fake-device-for-media-capture` flags (with or without a wav file) do not
   create one — measured 2026-09-07. A `MediaStream` from a Web Audio graph feeds a real

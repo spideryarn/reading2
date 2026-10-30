@@ -281,6 +281,25 @@ describe("the High-powered AI switch", () => {
     expect(status()).toBeTruthy();
   });
 
+  it("is mixed, not unchecked, before the metadata has answered", async () => {
+    /* `since === undefined` is "not read yet", and an unchecked box says "off"
+       to a screen reader and to a browser agent's `isChecked()` however
+       disabled it is — found while investigating qi-ydgn7smk,
+       docs/postmortems/261030a-a-check-that-found-a-control-by-its-kind-read-a-different-one.md. */
+    session.user = { id: ADMIN_USER_ID_LOCAL };
+    serverSince = SINCE;
+    holdMetadata = true;
+    await open();
+    expect(box()?.disabled).toBe(true);
+    expect(box()?.indeterminate, "not read yet must not read as off").toBe(true);
+    await act(async () => {
+      for (const go of heldMetadata) go();
+    });
+    await settle();
+    expect(box()?.indeterminate).toBe(false);
+    expect(box()?.checked).toBe(true);
+  });
+
   it("reads as on, with its date, when the column is already set", async () => {
     session.user = { id: ADMIN_USER_ID_LOCAL };
     serverSince = SINCE;

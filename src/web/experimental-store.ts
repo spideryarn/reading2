@@ -187,6 +187,41 @@ export type ExperimentalSaveOutcome =
   | { readonly kind: "not-sent"; readonly why: "signed-out" | "busy" }
   | { readonly kind: "abandoned" };
 
+/**
+ * **Is there a value to draw at all**, or only the placeholder `on: false`?
+ *
+ * `on` is `false` before the first answer and after a load that failed, and
+ * in both it means *we do not know*, not *off*. A control that draws `on`
+ * without asking this draws "off" for a value nobody read — and `disabled`
+ * does not undo that for anything that reads the control rather than looks at
+ * it: it is exposed as unchecked, and a browser agent's `isChecked()` says
+ * `false`. /profile's checkbox did exactly that until 2026-10-30, when the
+ * investigation of a report that it read off while Experimental was on found
+ * it — the report itself had read a different checkbox (qi-ydgn7smk,
+ * docs/postmortems/261030a-a-check-that-found-a-control-by-its-kind-read-a-different-one.md).
+ *
+ * **The bar's switch reached the same rule first**, as `SWITCH_LOOK` in Dock.tsx
+ * (a centred knob, no `aria-pressed`), and decides it independently through
+ * `toggleVariant`; tests/dock-experimental-switch.test.tsx holds the two to the
+ * same answer for every combination of fields.
+ *
+ *  - **A save in flight** holds the value just asked for.
+ *  - **A failed load** outranks everything else: whatever `on` says, it is not
+ *    the server's.
+ *  - **Otherwise `loaded`, or an offline copy.** A failed save needs no branch
+ *    of its own here: `set` puts back the value from before the press, which is known
+ *    exactly when it was known then — and before the first answer it was the
+ *    placeholder, with a read already on its way. GPT Sol, plan review of
+ *    261030a.
+ */
+export function hasValue(
+  s: Pick<ExperimentalSetting, "loaded" | "stale" | "saving" | "loadError">,
+): boolean {
+  if (s.saving) return true;
+  if (s.loadError !== null) return false;
+  return s.loaded || s.stale;
+}
+
 /** Who the store believes is reading, and whether the session has resolved. */
 let userId: string | null = null;
 let sessionKnown = false;

@@ -1347,7 +1347,7 @@ function modeInSearch(search: string): BandMode | undefined {
  * **The one appearance the bar's own switch wears**, or `null` when it is not
  * drawn at all.
  *
- * Six of them, and they are exclusive on purpose: one state, one look, so
+ * Seven of them, and they are exclusive on purpose: one state, one look, so
  * `fitSignature` can carry *which* button is drawn rather than merely that there
  * is one. GPT Sol, reviewing stage 2: keying the fit on presence alone leaves
  * the bar mis-measured when the warning marker appears, because the marker is a
@@ -1376,6 +1376,8 @@ export type ExperimentalVariant =
   | "load-failed"
   /** The save failed. The value has already sprung back; the button says so. */
   | "save-failed"
+  /** The save failed before any value was read. Marked, but still no toggle value. */
+  | "save-failed-waiting"
   /** What we last knew, from the offline cache. Disabled, and it says why. */
   | "stale"
   /** No answer yet. Disabled — a switch drawn from a default is a value nobody chose. */
@@ -1406,6 +1408,7 @@ export type ExperimentalVariant =
 const PRESS = {
   saving: "nothing",
   waiting: "nothing",
+  "save-failed-waiting": "nothing",
   "load-failed": "retry",
   stale: "retry",
   "save-failed": "toggle",
@@ -1438,7 +1441,13 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
   if (!e.signedIn) return null;
   if (e.saving) return "saving";
   if (e.loadError !== null) return "load-failed";
-  if (e.error !== null) return "save-failed";
+  /* A failed save holds a value only if there was one before the press: the
+     store puts back what it had, and before the first answer that is the
+     placeholder `off`, with a read already on its way (experimental-store.ts §
+     `set`). Toggling it would write the opposite of a value nobody read. It is
+     still a failure, though: calling it plain `waiting` hid the failed save
+     behind "Loading…" for as long as that recovery read took. */
+  if (e.error !== null) return e.loaded || e.stale ? "save-failed" : "save-failed-waiting";
   if (e.stale) return "stale";
   if (!e.loaded) return "waiting";
   return "ready";
@@ -1451,7 +1460,7 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * The five things that vary: the modes are buttons on the reading view and
  * links in the same frames elsewhere; Comments is a drawer trigger here and a
  * link elsewhere; its count grows a digit; the bar's own experimental switch is
- * absent, or drawn in one of six appearances; and the Feedback trigger at the
+ * absent, or drawn in one of seven appearances; and the Feedback trigger at the
  * end of the row is there for a signed-in reader and not for a stranger.
  *
  * **Feedback is its own term even though it moves with the switch's**, and that
@@ -1464,7 +1473,7 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * has a term that follows it.
  *
  * **The switch goes in by variant, not by presence.** `null` for a signed-out
- * reader and one word otherwise, because the six do not draw the same width: a
+ * reader and one word otherwise, because the seven do not draw the same width: a
  * failed load and a failed save each add a warning triangle beside the flask.
  * A signature that only said *there is a toggle* would leave the row overflowing
  * for as long as the marker was up. GPT Sol, reviewing stage 2.
@@ -4515,9 +4524,10 @@ function DockExperimentalSwitch({
   variant: ExperimentalVariant;
 }) {
   const press = PRESS[variant];
-  /* The two states with something wrong to show. Kept as one name because two
+  /* The three states with something wrong to show. Kept as one name because two
      things key on it: the warning marker and `aria-invalid`. */
-  const broken = variant === "load-failed" || variant === "save-failed";
+  const broken =
+    variant === "load-failed" || variant === "save-failed" || variant === "save-failed-waiting";
   const state = SWITCH_STATE[variant](setting.on);
   /* Saving cannot accept another press, but it is still a toggle whose current
      value is known. `aria-disabled` reports the temporary unavailability;
@@ -4570,7 +4580,7 @@ function DockExperimentalSwitch({
            tooling reads it; the thing that actually carries the failure is the
            description below, plus the triangle a sighted reader can see. If it
            were the only carrier this would be the silent-success shape. */
-        aria-invalid={variant === "save-failed" ? true : undefined}
+        aria-invalid={variant === "save-failed" || variant === "save-failed-waiting" ? true : undefined}
         aria-disabled={press === "nothing" || undefined}
         /* **The name is fixed and the state is a description, never both in the
            name.** The APG allows a moving accessible name *or* a fixed one with
@@ -4638,17 +4648,16 @@ function DockExperimentalSwitch({
  * **Where the drawn switch's knob sits**, per appearance — the class on
  * `.dock-switch` (dock.css § the experimental switch).
  *
- * Not `broken`. That covers a failed load *and* a failed save, and only the
- * first has no value to draw: after a failed save the store has already put the value back (experimental-store.ts §
- * `set`), so the position is known and `aria-pressed` reports it — a knob
- * forced left there would contradict the button's own state. And where there
- * is no answer at all, a knob on the left is the silent-default mistake in its
- * most visible form: it draws "off" for a value nobody has read. GPT Sol, plan
- * review, 2026-09-29.
+ * Not `broken`. A failed save over a known value has already put that value
+ * back (experimental-store.ts § `set`), so `save-failed` keeps its position and
+ * `aria-pressed`; a failed save before the first answer has no value, so
+ * `save-failed-waiting` is centred like `waiting` and `load-failed`. Forcing
+ * either kind left would contradict the known value or draw "off" for a value
+ * nobody read. GPT Sol, plan review, 2026-09-29; code review of 261030a.
  *
  *  - known — `ready`, `saving`, `save-failed`: the value.
  *  - `stale`: the cached value, muted, because it is what we last knew.
- *  - no answer — `waiting`, `load-failed`: `is-unknown`, the knob centred.
+ *  - no answer — `waiting`, `load-failed`, `save-failed-waiting`: `is-unknown`, the knob centred.
  *
  * Exported for tests/dock-experimental-switch.test.tsx.
  */
@@ -4659,6 +4668,7 @@ export const SWITCH_LOOK: Record<ExperimentalVariant, (on: boolean) => string> =
   stale: (on) => (on ? "is-on is-stale" : "is-off is-stale"),
   waiting: () => "is-unknown",
   "load-failed": () => "is-unknown",
+  "save-failed-waiting": () => "is-unknown",
 };
 
 /**
@@ -4670,8 +4680,8 @@ export const SWITCH_LOOK: Record<ExperimentalVariant, (on: boolean) => string> =
  * must say the same thing to both. A state carried only by the dimming would
  * be a state half the readers cannot perceive.
  *
- * `on` is a parameter because two of the six sentences need it: what an offline
- * copy says, and what a working switch says. The other four do not read it.
+ * `on` is a parameter because two of the seven sentences need it: what an offline
+ * copy says, and what a working switch says. The other five do not read it.
  */
 const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
   saving: () => "Saving…",
@@ -4682,6 +4692,10 @@ const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
      lying about its position; what it must not do is let that pass quietly.
      experimental-store.ts § set. */
   "save-failed": () => "Not saved. Press to try again.",
+  /* The failed save cancelled the opening read, so the store is already asking
+     again. There is no value or useful press yet, but the failure must not be
+     relabelled as ordinary loading while that recovery is in flight. */
+  "save-failed-waiting": () => "Not saved. Loading this setting again…",
   /* **A copy, and a way out of it.** The value itself is not one to move —
      another device may have changed it since — but the reader has to be able to
      ask again, because nothing else will: `offline.ts` listens for going offline
