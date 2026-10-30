@@ -57,6 +57,24 @@ vi.mock("../src/web/router.js", async (importOriginal) => ({
   navigate: vi.fn(),
 }));
 
+/** The bundle's build time, which vitest has none of: `null` unless a test says otherwise. */
+let builtAt: string | null = null;
+vi.mock("../src/web/build-stamp.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/web/build-stamp.js")>(),
+  buildTime: () => builtAt,
+}));
+
+/** The different build the deploy watcher has seen live, as `<commit> <builtAt>`, or `null`. */
+let liveBuild: string | null = null;
+vi.mock("../src/web/stale-shell.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/web/stale-shell.js")>(),
+  differentBuildLive: () => liveBuild,
+  onDeployNoticed: (listener: (build: string | null) => void) => {
+    listener(liveBuild);
+    return () => {};
+  },
+}));
+
 /**
  * **The microphone, as two booleans and a spy.**
  *
@@ -392,6 +410,8 @@ beforeEach(() => {
   lists.length = 0;
   listAnswer = page({ reports: [], more: false, counts: NONE });
   asAdmin = false;
+  builtAt = null;
+  liveBuild = null;
   readerForMount = undefined;
   carried = null;
   finishShot = null;
@@ -465,6 +485,81 @@ describe("the feedback dialog", () => {
     expect(shown).toMatch(/what it would let you do/i);
     expect(shown).not.toMatch(/steps to reproduce/i);
     expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+  });
+
+  /* **The release's age and the changelog, for an admin only** (Greg,
+     2026-10-30, spya-hgpctx, plan 261030d). Under the head, so the close
+     button is still the first thing in it; and off a build, the link alone. */
+  it("shows an admin how old this release is and links the changelog, and a reader neither", () => {
+    builtAt = new Date(Date.now() - 3 * 3_600_000).toISOString();
+    mount();
+    expect(host.querySelector(".fb-release")).toBeNull();
+    act(() => root.unmount());
+    host.remove();
+
+    asAdmin = true;
+    mount();
+    const line = host.querySelector(".fb-release");
+    const link = line?.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("/changelog");
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(line?.querySelector(".fb-release-age")?.textContent).toBe("Released 3 hours ago · ");
+    expect(link?.textContent).toBe("Changelog");
+    expect(line?.previousElementSibling?.classList.contains("fb-head")).toBe(true);
+    expect(host.querySelector("dialog button, dialog a")?.getAttribute("aria-label")).toBe("Close");
+    act(() => root.unmount());
+    host.remove();
+
+    /* A newer build is live than this tab's: that one is the release dated. */
+    liveBuild = `${"a".repeat(40)} ${new Date(Date.now() - 20 * 60_000).toISOString()}`;
+    mount();
+    const newer = host.querySelector(".fb-release");
+    expect(newer?.querySelector(".fb-release-age")?.textContent).toBe(
+      "Released 20 minutes ago (this tab is older — reload for it) · ",
+    );
+    expect(newer?.getAttribute("data-tip")).toMatch(/^Released .+ · commit a{40}$/);
+    expect(newer?.querySelector(".sr-only")?.textContent).toMatch(/^ · Released .+ · commit a{40}$/);
+    act(() => root.unmount());
+    host.remove();
+
+    /* `different` is not necessarily newer: a rollback makes an older build
+       live. Its date is still the one shown, without calling this tab older. */
+    liveBuild = `${"b".repeat(40)} ${new Date(Date.now() - 6 * 3_600_000).toISOString()}`;
+    mount();
+    expect(host.querySelector(".fb-release-age")?.textContent).toBe(
+      "Released 6 hours ago (an older release is live — rollback) · ",
+    );
+    act(() => root.unmount());
+    host.remove();
+
+    /* A malformed watcher value cannot suppress the tab's valid stamp or
+       produce a stale-tab claim. */
+    liveBuild = `${"c".repeat(40)} not-a-time`;
+    mount();
+    expect(host.querySelector(".fb-release")?.textContent ?? "").toMatch(
+      /^Released 3 hours ago · Changelog/,
+    );
+    act(() => root.unmount());
+    host.remove();
+
+    /* `buildIdentity` accepts parseable timestamps with spaces. The separator
+       is after the fixed-width sha, not every space in the timestamp. */
+    liveBuild = `${"d".repeat(40)} ${new Date(Date.now() - 2 * 3_600_000).toUTCString()}`;
+    mount();
+    expect(host.querySelector(".fb-release-age")?.textContent).toBe(
+      "Released 2 hours ago (this tab is older — reload for it) · ",
+    );
+    act(() => root.unmount());
+    host.remove();
+
+    liveBuild = null;
+    builtAt = null;
+    mount();
+    expect(host.querySelector(".fb-release")?.textContent).toBe("Changelog");
+
+    /* Not while shut: the dialog stays mounted, and its clock need not tick. */
+    show(false);
+    expect(host.querySelector(".fb-release")).toBeNull();
   });
 
   /* **A third kind, for an admin only** (Greg, 2026-10-28, plan 261028b): only
