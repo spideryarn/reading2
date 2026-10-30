@@ -225,6 +225,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   "citation-blurbs": 180_000,
   /* Unmeasured here: the fallback. The spike's whole run was 63 s. */
   situate: 180_000,
+  /* Unmeasured: the fallback (plan 261030b). */
+  "sources-digest": 180_000,
   crossrefs: 180_000,
   simple: 180_000,
 };

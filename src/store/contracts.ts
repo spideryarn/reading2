@@ -107,6 +107,7 @@ import type {
   FaqFound,
   SourcesClaimListFound,
   SituateFound,
+  SourcesDigestFound,
   SourcesClaimCheckCounts,
   SourcesClaimCheckResult,
   SourcesClaimCheckTarget,
@@ -364,6 +365,12 @@ export interface ArticleReader {
    * has run. The profile verdict is the route's.
    */
   loadSituate(slug: string): Promise<SituateFound>;
+  /**
+   * The sources digest (plan 261030b) — **owner only**, with no public twin.
+   * Throws `ArtefactNotMadeYet` until the `sources-digest` step has run. The
+   * profile verdict is the route's.
+   */
+  loadSourcesDigest(slug: string): Promise<SourcesDigestFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still
@@ -3561,7 +3568,13 @@ export type RateBucket =
      a press — one Opus chat turn the reader did not click for, so bounded
      (src/cite-check.ts § `CITE_CHECK_RATE_POLICY`, plan 261024m). A press of
      the button takes nothing from it. */
-  | "cite-check";
+  | "cite-check"
+  /* Sources' *Digest* — the `sources-digest` step's planner, up to 33
+     searches, a Haiku reader per lead and an Opus writer, about $0.85 a run
+     and $1.80 at worst (estimated), taken inside the step so every way of
+     starting it passes it (src/sources-digest.ts §
+     `SOURCES_DIGEST_RATE_POLICY`, plan 261030b). */
+  | "sources-digest";
 
 /**
  * **A bucket's old spellings, still counted against it.** Plan

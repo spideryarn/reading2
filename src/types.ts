@@ -3886,7 +3886,14 @@ export type StepName =
      beside the whole article, checked in code (src/situate.ts). Owner only, on
      a press. Not an `ArticleStage`: its article block is fenced as untrusted,
      so its bytes match no other stage's. */
-  | "situate";
+  | "situate"
+  /* **The sources digest** — plan 261030b. A planner's leads, the web
+     searches they asked for, one Haiku reader per lead, and one Opus writer
+     over the readers' checked reports: a prose digest of what the piece cites,
+     who cites it, what it may have missed and which citations to check
+     (src/sources-digest.ts). Owner only, on a press. Not an `ArticleStage`:
+     its article block is fenced as untrusted. */
+  | "sources-digest";
 
 /**
  * **What a job's once-per-job marker can name** (`jobs.paid_step_begun`,
@@ -8952,6 +8959,223 @@ export interface SituateResponse {
 
 /** What the store answers, before the route adds the profile verdict. */
 export type SituateFound = Omit<SituateResponse, "profileChanged">;
+
+/* --------------------------------------------------------- sources digest --
+   A prose digest of what the piece cites, who cites it, what it may have
+   missed and which of its citations to check — the `sources_digest` column on
+   `article_revisions`, written by the `sources-digest` step
+   (src/sources-digest.ts). Owner only: no public projection, no visitor read.
+   Plan docs/plans/261030b-sources-digest-a-prose-digest-of-what-it-cites-and-who-cites-it.md.
+
+   Here rather than in src/sources-digest.ts for every artefact's reason: the
+   panel reads them, and a client module may not import a stage. */
+
+/**
+ * **What a lead asks about.** `cites`: what a work the piece builds on says;
+ * `cited-by`: who has taken the piece up since; `missed`: relevant work it does
+ * not cite; `check`: whether a citation says what the passage uses it for.
+ */
+export type SourcesDigestAngle = "cites" | "cited-by" | "missed" | "check";
+export const SOURCES_DIGEST_ANGLES = ["cites", "cited-by", "missed", "check"] as const satisfies readonly SourcesDigestAngle[];
+
+/**
+ * **A reader's answer to its lead, in plain words.** A closed set per angle
+ * (`SOURCES_DIGEST_VERDICTS_FOR`): a `check` lead is `says-it`, `partly`,
+ * `does-not` or `could-not-tell` (the research: partial support is its own
+ * answer, never folded into "says it"); every other angle is `found`,
+ * `nothing-found` or `could-not-tell`. A verdict off its angle's list is
+ * stored as `could-not-tell` and counted (`offVerdict`).
+ */
+export type SourcesDigestVerdict = "says-it" | "partly" | "does-not" | "could-not-tell" | "found" | "nothing-found";
+export const SOURCES_DIGEST_VERDICTS = [
+  "says-it",
+  "partly",
+  "does-not",
+  "could-not-tell",
+  "found",
+  "nothing-found",
+] as const satisfies readonly SourcesDigestVerdict[];
+export const SOURCES_DIGEST_VERDICTS_FOR: Readonly<Record<SourcesDigestAngle, readonly SourcesDigestVerdict[]>> = {
+  check: ["says-it", "partly", "does-not", "could-not-tell"],
+  cites: ["found", "nothing-found", "could-not-tell"],
+  "cited-by": ["found", "nothing-found", "could-not-tell"],
+  missed: ["found", "nothing-found", "could-not-tell"],
+};
+
+/** One search a lead asked for, as it was sent and what came of it. */
+export interface SourcesDigestSearch {
+  /** The query as it was sent, after the code's checks (src/situate.ts § `validateQueries`). */
+  q: string;
+  outcome: SituateQueryOutcome;
+  /** Pages this search contributed that no earlier search had. */
+  pages: number;
+}
+
+/** One question the planner asked, with the searches it was given. */
+export interface SourcesDigestLead {
+  /** `L1`, `L2`… in the planner's order, after the code's checks. */
+  id: string;
+  angle: SourcesDigestAngle;
+  question: string;
+  /** 1–3 of the article's body blocks, each checked against the article. */
+  blockIds: BlockId[];
+  searches: SourcesDigestSearch[];
+}
+
+/** A quote a reader took from a source, found in code in that source's own text. */
+export interface SourcesDigestQuote {
+  /** The evidence it is from (`S3`: a web page; `C1`: a later work citing the piece). */
+  evidenceId: string;
+  /** The source's own characters, never the model's retyping. */
+  words: string;
+}
+
+/** What one reader (one Haiku call, one lead) reported. */
+export interface SourcesDigestReport {
+  leadId: string;
+  verdict: SourcesDigestVerdict;
+  /** Two to four sentences, the reader's words. */
+  summary: string;
+  /** Only the quotes the code found in their source; the rest are counted and dropped. */
+  quotes: SourcesDigestQuote[];
+  /** What a reader would still want to know, in words; null when nothing. Never searched. */
+  digFurther: string | null;
+}
+
+/**
+ * **A source the digest quotes**: the search's URL and title (or OpenAlex's),
+ * never the model's, and only the spans a checked quote took from it — not
+ * the page's whole extract, so the row stays modest.
+ */
+export interface SourcesDigestEvidence {
+  id: string;
+  /** `web`: a search's page. `citer`: a later work citing the piece, from OpenAlex. */
+  origin: "web" | "citer";
+  url: string;
+  title: string;
+  year?: number;
+  /** The checked quotes' words, each once. */
+  quoted: string[];
+}
+
+/** One sentence of the digest, tied to a passage when it can be. */
+export interface SourcesDigestSentence {
+  text: string;
+  /** One of its paragraph's `ids` (the overview's: any body block), or null. */
+  id: BlockId | null;
+}
+
+/** One short paragraph of a section, with the detail and sources under *More*. */
+export interface SourcesDigestParagraph {
+  /** The kept sentences' texts joined with one space: derived, never the model's. */
+  text: string;
+  sentences: SourcesDigestSentence[];
+  /** 1–3 body blocks the paragraph is about, checked against the article. */
+  ids: BlockId[];
+  /** The detail a press on *More* shows. */
+  more: string;
+  /** Evidence ids, each one some checked quote's source. */
+  sources: string[];
+  /** The leads it draws on, each one this run planned. */
+  leadIds: string[];
+}
+
+/** The four sections, in the order the panel draws them. */
+export interface SourcesDigestSections {
+  cites: SourcesDigestParagraph[];
+  citedBy: SourcesDigestParagraph[];
+  missed: SourcesDigestParagraph[];
+  check: SourcesDigestParagraph[];
+}
+
+/** Which model ran each phase, so `isOutdated` can compare each with what a run today would send. */
+export interface SourcesDigestPhases {
+  plan: string;
+  /** The pinned reader model; null when nothing was read (`nothing-found`). */
+  read: string | null;
+  /** The writer; null when nothing was written (`nothing-found`). */
+  write: string | null;
+}
+
+/** What each phase did, and what the checks threw away. Counts only. */
+export interface SourcesDigestCounts {
+  /** Leads the planner wrote, before the checks and caps. */
+  leadsWritten: number;
+  /** Leads dropped: unreadable, no valid passage, no usable search, or past the cap. */
+  leadsDropped: number;
+  /** Queries the code refused (an address, a repeat, past a cap…). */
+  queriesRefused: number;
+  /** Searches sent, the piece query included. */
+  searches: number;
+  /** Readers called, and how many failed (a timeout, a refusal, an unreadable answer). */
+  readers: number;
+  readersFailed: number;
+  /** A verdict off its angle's list, stored as `could-not-tell`. */
+  offVerdict: number;
+  /** Quotes the readers wrote, and those dropped: an unknown source, or words not found in it. */
+  quotesWritten: number;
+  quotesUnknownSource: number;
+  quotesUnchecked: number;
+  /** The writer's drops, by src/simple-summary.ts § `toParagraphs`'s rules. */
+  unknownIds: number;
+  sentenceIds: number;
+  unanchored: number;
+  emptyParagraphs: number;
+  unknownSources: number;
+  unknownLeads: number;
+  overCap: number;
+}
+
+/** The artefact. The `sources_digest` column on `article_revisions`. */
+export interface SourcesDigest {
+  /** `sources-digest/N` — src/sources-digest.ts § `PROMPT_VERSION`. */
+  version: string;
+  /** The capable model at the power the run had: the planner's. The one stamp the queue compares. */
+  generator: string;
+  phases: SourcesDigestPhases;
+  slug: string;
+  /** The article as the calls were sent it (src/sources-digest.ts § `inputFingerprint`). */
+  sourceHash: string;
+  /** The profile the writer was given, or null for none (src/profile.ts). */
+  profileHash: string | null;
+  generatedAt: string;
+  elapsedMs: number;
+  /** The piece's year, from its imported metadata (never a model's guess); null when it has none. */
+  year: number | null;
+  /**
+   * `written`: the searches found something and the writer wrote what
+   * follows. `nothing-found`: no search found anything, so nothing was read or
+   * written — said as that, never as "all clear"; the leads keep their searches.
+   */
+  outcome: "written" | "nothing-found";
+  /** Two to four sentences: the shape of it. Empty when `nothing-found`. */
+  overview: SourcesDigestSentence[];
+  sections: SourcesDigestSections;
+  leads: SourcesDigestLead[];
+  /** The code-written search for the piece by name, when one was sent. */
+  pieceSearch: SourcesDigestSearch | null;
+  /** Later works citing the piece read from OpenAlex. */
+  citers: number;
+  /** Why there are none, when there are none. */
+  citersSkipped?: SituateCitersSkipped;
+  reports: SourcesDigestReport[];
+  evidence: SourcesDigestEvidence[];
+  counts: SourcesDigestCounts;
+}
+
+/** `GET /api/sources-digest/:slug` — owner only. The three staleness facts of a profile carrier. */
+export interface SourcesDigestResponse {
+  sourcesDigest: SourcesDigest;
+  /** The article moved underneath this. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+  /** Written for a profile other than the reader's current one. */
+  profileChanged: boolean;
+}
+
+/** What the store answers, before the route adds the profile verdict. */
+export type SourcesDigestFound = Omit<SourcesDigestResponse, "profileChanged">;
 
 /* ----------------------------------------------------- Sources claim checks --
    One reader press: the ticked claims and the typed one, searched on the open

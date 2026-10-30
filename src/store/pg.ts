@@ -103,6 +103,13 @@ import {
   PROMPT_VERSION as SITUATE_PROMPT_VERSION,
 } from "../situate.js";
 import {
+  inputFingerprint as sourcesDigestFingerprint,
+  isOutdated as sourcesDigestIsOutdated,
+  isStale as sourcesDigestIsStale,
+  phasesOutdated as sourcesDigestPhasesOutdated,
+  PROMPT_VERSION as SOURCES_DIGEST_PROMPT_VERSION,
+} from "../sources-digest.js";
+import {
   inputFingerprint as relationsFingerprint,
   isOutdated as relationsAreOutdated,
   isStale as relationsIsStale,
@@ -234,6 +241,8 @@ import type {
   SourcesClaimListFound,
   Situate,
   SituateFound,
+  SourcesDigest,
+  SourcesDigestFound,
   Relations,
   Explanations,
   ExplanationsFound,
@@ -599,6 +608,8 @@ type RevisionReader =
   | "sourcesClaims"
   /** Situate's dossier, owner only (src/situate.ts, plan 261024o). */
   | "situate"
+  /** The sources digest, owner only (src/sources-digest.ts, plan 261030b). */
+  | "sourcesDigest"
   | "skim"
   | "crossrefs"
   | "simpleSummary"
@@ -652,6 +663,7 @@ const REVISION_READ_POLICY: Record<
     explanations: "value",
     sourcesClaims: "value",
     situate: "value",
+    sourcesDigest: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -704,6 +716,8 @@ const REVISION_READ_POLICY: Record<
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
+    /* Situate's rendered head, so the same cited columns (plan 261030b). */
+    sourcesDigest: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -734,6 +748,8 @@ const REVISION_READ_POLICY: Record<
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
+    /* Situate's rendered head, so the same cited columns (plan 261030b). */
+    sourcesDigest: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -764,6 +780,8 @@ const REVISION_READ_POLICY: Record<
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
+    /* Situate's rendered head, so the same cited columns (plan 261030b). */
+    sourcesDigest: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -846,6 +864,8 @@ const REVISION_READ_POLICY: Record<
     /* Claims' rendered article head carries this field. */
     sourcesClaims: "value",
     situate: "value",
+    /* Situate's rendered head, so the same cited columns (plan 261030b). */
+    sourcesDigest: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -910,6 +930,7 @@ const REVISION_READ_POLICY: Record<
     /* Only for Claims' fallback head when metadata has no title. */
     sourcesClaims: "value",
     situate: "value",
+    sourcesDigest: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
     /* Not for a skeleton — its user message is a constant — but for the
@@ -1080,6 +1101,10 @@ const REVISION_READ_POLICY: Record<
      carries a `profileHash`. **And no public read**: src/store/public-reader.ts
      does not select it — owner only (plan 261024o, S9). */
   situate: { metadata: "value", situate: "value" },
+  /* Situate's grants for Situate's reasons: its own reader and the metadata
+     page; `isCurrent` and `personalisedSteps` need the column. **No public
+     read** — owner only (plan 261030b). */
+  sourcesDigest: { metadata: "value", sourcesDigest: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
@@ -1440,6 +1465,8 @@ export const REVISION_PROJECTIONS = {
     /* For `isCurrent`'s arm, as `debate` above. Owner only, and never
        personalised in the publish dialog's sense (`NeverShared`). */
     situate: articleRevisions.situate,
+    /* As `situate` just above (plan 261030b). */
+    sourcesDigest: articleRevisions.sourcesDigest,
     /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, as `debate` above. */
@@ -1561,6 +1588,12 @@ export const REVISION_PROJECTIONS = {
   situate: {
     id: articleRevisions.id,
     situate: articleRevisions.situate,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* As `situate`: the cited head and tree its fingerprint needs (plan 261030b). */
+  sourcesDigest: {
+    id: articleRevisions.id,
+    sourcesDigest: articleRevisions.sourcesDigest,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree its own exact-request fingerprint needs. */
@@ -2237,6 +2270,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   bibliography: ["article_revisions.bibliography"],
   "citation-blurbs": ["article_revisions.citation_blurbs"],
   situate: ["article_revisions.situate"],
+  "sources-digest": ["article_revisions.sources_digest"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
   explanations: ["article_revisions.explanations"],
@@ -2885,11 +2919,12 @@ export type ProfileCarrying = Exclude<
  * something no visitor receives. Situate is the second, for the same reason:
  * owner only, read for the owner's profile, and never in the public payload
  * (plan 261024o, S9). Explanations is the third: owner only, written for the
- * owner's profile, never in the public payload (plan 261028c). Named
+ * owner's profile, never in the public payload (plan 261028c). The sources
+ * digest is the fourth, for Situate's reasons (plan 261030b). Named
  * exceptions rather than a hand list, so every *other* artefact gaining the
  * field still fails the compiler here.
  */
-type NeverShared = "quiz" | "situate" | "explanations";
+type NeverShared = "quiz" | "situate" | "explanations" | "sources-digest";
 
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
@@ -3861,6 +3896,25 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* Situate's arm, for the digest: its exact rendered body and cited
+           head, each call's model first (plan 261030b). */
+        case "sources-digest": {
+          const digest = revision.sourcesDigest as SourcesDigest | null;
+          if (!digest || !Array.isArray(digest.leads) || !tree || blocks.length === 0) return false;
+          if (sourcesDigestPhasesOutdated(digest)) return false;
+          return sameStamp(
+            {
+              inputHash: digest.sourceHash,
+              promptVersion: digest.version,
+              model: digest.generator,
+            },
+            {
+              inputHash: sourcesDigestFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: SOURCES_DIGEST_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         case "crossrefs": {
           const crossrefs = revision.crossrefs as Crossrefs | null;
           if (!crossrefs || !tree || blocks.length === 0) return false;
@@ -4431,6 +4485,34 @@ const rawPgArticleReader: ArticleReader = {
       // Unknown counts as stale, the same way round as its neighbours.
       stale: !tree || situateIsStale(situate, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: situateIsOutdated(situate),
+    };
+  },
+
+  /**
+   * The sources digest — the Postgres half of `loadSourcesDigest`. **Owner
+   * only**, as `loadSituate`: no public twin, and src/store/public-reader.ts
+   * never selects the column (plan 261030b). A 404 is the ordinary case; a run
+   * that found nothing is a 200 with `outcome: "nothing-found"`. The profile
+   * half is the route's.
+   */
+  async loadSourcesDigest(slug: string): Promise<SourcesDigestFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "sourcesDigest");
+    if (!found) throw notFound(slug);
+    const sourcesDigest = found.revision.sourcesDigest as SourcesDigest | null;
+    if (!sourcesDigest || !Array.isArray(sourcesDigest.leads)) {
+      throw new ArtefactNotMadeYet(
+        `No sources digest for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["sources-digest"] }.`,
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      sourcesDigest,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale: !tree || sourcesDigestIsStale(sourcesDigest, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: sourcesDigestIsOutdated(sourcesDigest),
     };
   },
 

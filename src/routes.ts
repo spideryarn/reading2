@@ -68,6 +68,7 @@ import {
   loadFaq,
   loadSourcesClaims,
   loadSituate,
+  loadSourcesDigest,
   loadRelations,
   loadExplanations,
   loadCrossrefs,
@@ -536,6 +537,7 @@ import type {
   IdeasResponse,
   ExplanationsResponse,
   SituateResponse,
+  SourcesDigestResponse,
   QuizFound,
   QuizResponse,
   QuotesResponse,
@@ -12929,6 +12931,29 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const at = slugPart(captures, 1);
       const found = await orNullWhenNotMadeYet({ req, res }, () =>
         withProfileChanged<SituateResponse>(at, () => loadSituate(at), (found) => found.situate),
+      );
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /* The sources digest — plan 261030b, src/sources-digest.ts. Situate's
+     route exactly: **owner only** (every store read is owner-scoped, so
+     somebody else's article is a 404, and there is no public twin); GET only,
+     because asking again is POST /api/jobs { slug, steps: ["sources-digest"],
+     force: ["sources-digest"] }, whose step takes the allowance itself, so
+     this route never spends. The three staleness facts of a profile carrier;
+     none yet is `200 null` — `orNullWhenNotMadeYet`. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/sources-digest\/([\w.%-]+)$/,
+    article: "first-capture",
+    viewAs: "read",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<SourcesDigestResponse>(at, () => loadSourcesDigest(at), (found) => found.sourcesDigest),
       );
       if (!found) return;
       send(res, 200, found);

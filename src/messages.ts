@@ -533,6 +533,17 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-situate-busy": "retry",
   "jb-situate-limited": "blocked",
   "jb-situate-resting": "blocked",
+  /* The sources digest (the `sources-digest` step, plan 261030b). The ways a
+     run stops before its writer — too few usable leads planned, too few
+     searches that ran, every reader failing — are `retry`: another go plans,
+     searches and reads afresh. The allowance's three refusals as Situate's.
+     See `SOURCES_DIGEST_*` below. */
+  "jb-digest-plan": "retry",
+  "jb-digest-searches": "retry",
+  "jb-digest-readers": "retry",
+  "jb-digest-busy": "retry",
+  "jb-digest-limited": "blocked",
+  "jb-digest-resting": "blocked",
   /* A step that reads the structure, on an article still showing the stand-in
      outline it opened with. See `STRUCTURE_NOT_BUILT`. */
   "jb-no-structure": "blocked",
@@ -1790,6 +1801,64 @@ export const SITUATE_RESTING: ReaderFacingFailure = {
   message:
     "Searching the literature is resting for today, because a lot of it has been done, so trying " +
     "again now will not help. It will be back tomorrow. [jb-situate-resting]",
+};
+
+/**
+ * **The sources digest stopped before it searched** (the `sources-digest`
+ * step, plan 261030b): the plan came back with too few usable questions.
+ * Nothing was searched, so nothing was paid for beyond the plan.
+ */
+export const SOURCES_DIGEST_TOO_FEW_LEADS: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The plan for the digest did not come back with enough usable questions to search, so none " +
+    "was sent. Try again: another go plans afresh. [jb-digest-plan]",
+};
+
+/**
+ * **Fewer than half the digest's searches ran.** Said as a failure rather than
+ * stored as "nothing found": a run that read nothing must not look like a run
+ * that found nothing.
+ */
+export const SOURCES_DIGEST_SEARCHES_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Most of the web searches for the digest did not go through this time, so nothing was read " +
+    "and nothing was kept. Try again in a little while. [jb-digest-searches]",
+};
+
+/**
+ * **Every reader failed**: the searches found pages, but not one of the calls
+ * that reads them came back usable, so nothing was written. Said as a failure,
+ * never as an empty digest.
+ */
+export const SOURCES_DIGEST_READERS_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The searches found pages, but reading them did not work this time, so no digest was " +
+    "written. Try again: another go searches and reads afresh. [jb-digest-readers]",
+};
+
+/** The allowance (`SOURCES_DIGEST_RATE_POLICY`): one at a time for each reader. */
+export const SOURCES_DIGEST_BUSY: ReaderFacingFailure = {
+  kind: "retry",
+  message: "A digest is already being written for you. When it has finished, try again. [jb-digest-busy]",
+};
+
+/** The allowance: this reader's hour or day is spent. */
+export const SOURCES_DIGEST_LIMITED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "You have used this hour's or this day's digests, so trying again now will not help. It can " +
+    "run again later. [jb-digest-limited]",
+};
+
+/** The allowance's fuse: everybody's day is spent. */
+export const SOURCES_DIGEST_RESTING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Writing digests is resting for today, because a lot of them have been written, so trying " +
+    "again now will not help. It will be back tomorrow. [jb-digest-resting]",
 };
 
 /**

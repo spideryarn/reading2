@@ -94,6 +94,8 @@ const NONE_YET_READS = [
   "sources-claims",
   /* Situate's dossier, owner only (plan 261024o). */
   "situate",
+  /* The sources digest, owner only (plan 261030b). */
+  "sources-digest",
   "glossary",
   "quotes",
   "tweets",

@@ -566,6 +566,17 @@ export const CITATION_BLURBS_MODEL = "anthropic/claude-haiku-5.5";
 export const SITUATE_TRIAGE_MODEL = "anthropic/claude-haiku-5.5";
 
 /**
+ * **What reads one lead's pages for the sources digest** — the `digest-read`
+ * task (src/sources-digest.ts, plan 261030b), held here by `PINNED_MODEL`, so
+ * it is Haiku at both powers: up to sixteen calls a run, each one lead's
+ * passages and pages, which is the shortlisting work Haiku was measured doing
+ * well for Situate (investigation 261025h). Not measured on this job yet; the
+ * plan's § Deferred has the measurement. Its own constant for the reason the
+ * Haiku jobs above have theirs.
+ */
+export const DIGEST_READ_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes the one-line gist of a conversation** after each answer, so a
  * later conversation about the same article can see what an earlier one
  * covered (src/chat-gist.ts, plan
@@ -820,6 +831,17 @@ export type Task =
   | "situate-plan"
   | "situate-triage"
   | "situate"
+  /* **The sources digest** — plan 261030b, src/sources-digest.ts. Three
+     Messages calls. `digest-plan` reads the fenced article with ids and writes
+     the leads and their searches, never the reader's profile. `digest-read` is
+     one Haiku call per lead (pinned, as `situate-triage` is), no tools, over
+     that lead's passages and pages. `sources-digest` writes the digest from
+     the fenced article and the readers' checked reports, on Opus for every
+     article (`ALWAYS_HIGH_POWER`). None is an `ArticleStage`: the article is
+     fenced as untrusted, so its bytes match no other stage's. */
+  | "digest-plan"
+  | "digest-read"
+  | "sources-digest"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
@@ -1047,6 +1069,13 @@ export type Task =
    * searches cost beside its read, and apart from a conversation's.
    */
   | "situate-search"
+  /**
+   * **The sources digest's searches** (src/sources-digest.ts, plan 261030b):
+   * Situate's request exactly (src/situate.ts § `searchRequest`), one per
+   * query a lead asked for, up to thirty-three a run. Its own job so the
+   * ledger shows the digest's searches apart from Situate's.
+   */
+  | "digest-search"
   /**
    * **Who wrote an article, and how to reach them** — the author gift's one
    * lookup (src/author-lookup.ts, plan 261010c D4). Admin-only, pressed by an
@@ -1334,6 +1363,13 @@ export const TASK_TIER: Record<Task, Tier> = {
      so this row never picks its model. "capable" because it is on the
      Messages wire, where a quick task is refused at load. */
   "situate-triage": "capable",
+  /* Capable, as Situate's planner is: the leads decide everything after. */
+  "digest-plan": "capable",
+  /* On no tier in fact: `PINNED_MODEL` holds it on Haiku 5.5 at both powers,
+     as `situate-triage`. "capable" because it is on the Messages wire. */
+  "digest-read": "capable",
+  /* Capable, and on Opus for every article: `ALWAYS_HIGH_POWER` below. */
+  "sources-digest": "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1352,6 +1388,8 @@ export const TASK_TIER: Record<Task, Tier> = {
   /* `search_web`'s request and model, by measurement there (investigation
      261012b): the search is what is bought, and the read is Sonnet's. */
   "situate-search": "quick",
+  /* Situate's searches' tier, for their reason. */
+  "digest-search": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, and on Opus for every article: `ALWAYS_HIGH_POWER` below. */
@@ -1446,6 +1484,11 @@ export const TASK_TIER: Record<Task, Tier> = {
  * `referee-hidden-check` (plan 261007l): the feature is "hand it to Opus", so
  * it is Opus whatever the article's setting.
  *
+ * `sources-digest` (plan 261030b): the digest's writer, which synthesises every
+ * reader's checked report into the text the reader reads, as Summary does.
+ * Only the writer: its planner follows the article's power, and its readers
+ * are pinned to Haiku.
+ *
  * `chat` (plan 261020q): Greg, 2026-10-19, *"Default to Opus 5.5 for Chats"*.
  * Every thread kind that bills as `chat` — chat, Learn, Explore,
  * the guide (`jobFor` in src/converse.ts). Not Candidates, which is its own
@@ -1461,7 +1504,7 @@ export const TASK_TIER: Record<Task, Tier> = {
  * stays fresh either way, because `generationKey` treats the two models as one
  * generation.
  */
-export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple", "referee-hidden-check", "chat"]);
+export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple", "referee-hidden-check", "chat", "sources-digest"]);
 
 /** The power `task` runs at on an article whose own setting is `articlePower`. */
 export function powerFor(task: Task, articlePower: ModelPower): ModelPower {
@@ -1639,6 +1682,10 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "situate-plan": "messages",
   "situate-triage": "messages",
   situate: "messages",
+  /* A strict schema back on the Messages wire, as Situate's three. */
+  "digest-plan": "messages",
+  "digest-read": "messages",
+  "sources-digest": "messages",
   crossrefs: "messages",
   simple: "messages",
   skim: "messages",
@@ -1684,6 +1731,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "web-search-subagent": "chat",
   /* `search_web`'s wire, for its reason: the web-search server tool is there. */
   "situate-search": "chat",
+  /* Situate's searches' wire, for their reason. */
+  "digest-search": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1814,6 +1863,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   "situate-plan": null,
   "situate-triage": null,
   situate: null,
+  /* As Situate's: the Messages-wire stages hand their model straight through. */
+  "digest-plan": null,
+  "digest-read": null,
+  "sources-digest": null,
   crossrefs: null,
   simple: null,
   skim: null,
@@ -1857,6 +1910,9 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   /* Every chat-wire task has one (tests/models.test.ts); for a comparison run
      of another search model under Situate's queries. */
   "situate-search": "SPIDERYARN_SITUATE_SEARCH_MODEL",
+  /* Every chat-wire task has one (tests/models.test.ts). The same variable as
+     Situate's searches, on purpose: one request, so one model under both. */
+  "digest-search": "SPIDERYARN_SITUATE_SEARCH_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
@@ -1945,6 +2001,10 @@ const PINNED_MODEL: Partial<Record<Task, string>> = {
      power (arm D), for about a cent. High power keeps Haiku here because arm D
      is what was measured. `SITUATE_TRIAGE_MODEL` above. */
   "situate-triage": SITUATE_TRIAGE_MODEL,
+  /* **The digest's readers, on Haiku whatever the article's power** (plan
+     261030b), for the triage's reason: many cheap reads of a few pages each.
+     `DIGEST_READ_MODEL` above. */
+  "digest-read": DIGEST_READ_MODEL,
 };
 
 export function resolveModel(task: Task, power: ModelPower): ResolvedModel {

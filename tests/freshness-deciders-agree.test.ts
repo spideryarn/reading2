@@ -89,7 +89,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
 import { figuresFingerprint } from "../src/illustrated-figures.js";
 import { mintId } from "../src/ids.js";
-import { CAPABLE_MODEL, HIGH_POWER_MODEL, sameGenerator, SITUATE_TRIAGE_MODEL } from "../src/models.js";
+import { CAPABLE_MODEL, HIGH_POWER_MODEL, modelFor, sameGenerator, SITUATE_TRIAGE_MODEL } from "../src/models.js";
 import { TRIAGE_PROMPT_VERSION } from "../src/situate.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEP_ORDER, STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
@@ -171,6 +171,8 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   "citation-blurbs": ["inputHash", "promptVersion", "model"],
   /* The article the read was sent, as `sources-claims` (plan 261024o). */
   situate: ["inputHash", "promptVersion", "model"],
+  /* The article the plan and the write were sent, as `situate` (plan 261030b). */
+  "sources-digest": ["inputHash", "promptVersion", "model"],
   crossrefs: ["inputHash", "promptVersion", "model"],
 };
 
@@ -372,6 +374,20 @@ function minimal(step: StepName): Artefact {
       /* `outcome` as every dossier since situate/1 carries it: one without is
          malformed, and `phasesOutdated` fails it closed (GPT Sol's S3 review). */
       return { ...made, profileHash: null, outcome: "read", findings: [] };
+    case "sources-digest":
+      /* Every digest records each phase's model; one without is malformed,
+         and `phasesOutdated` fails it closed. */
+      return {
+        ...made,
+        profileHash: null,
+        outcome: "written",
+        leads: [],
+        phases: {
+          plan: modelFor("digest-plan", "standard"),
+          read: modelFor("digest-read", "standard"),
+          write: modelFor("sources-digest", "high"),
+        },
+      };
     case "reception":
       return { ...made, direct: { rows: [] }, claims: { rows: [] } };
     case "sketch":
@@ -871,6 +887,7 @@ describe("when the article itself moves, every step gets the same answer from bo
     "sources-claims",
     "bibliography",
     "situate",
+    "sources-digest",
     "crossrefs",
   ];
   const without = (steps: readonly StepName[], ...drop: StepName[]) =>
@@ -937,7 +954,10 @@ describe("when the article itself moves, every step gets the same answer from bo
            paragraphs without the section titles, as does `explanations`; `skim` lays its route over
            them. `labels` and `assets` hash the blocks alone. */
         expect(stale).toEqual(
-          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims", "situate", "explanations"), "skim"]),
+          inOrder([
+            ...without(READS_THE_HEAD, "relations", "simple", "sources-claims", "situate", "sources-digest", "explanations"),
+            "skim",
+          ]),
         );
       },
     );

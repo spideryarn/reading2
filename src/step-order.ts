@@ -214,6 +214,12 @@ export const STEP_ORDER = [
      `FORCE_ONLY_WHEN_NAMED` — the dearest press in Sources, owner only. It
      never makes the Bibliography or the notes; it reads what is there. */
   "situate",
+  /* **After `situate`, beside it rather than from it** (plan 261030b): the
+     sources digest, a planner's leads, their searches, a reader per lead and
+     one writer. It reads the Bibliography when it is there and never makes it;
+     nothing reads what it writes. Off `DEFAULT_INGEST_STEPS` and in
+     `FORCE_ONLY_WHEN_NAMED` — the dearest press in Sources, owner only. */
+  "sources-digest",
   /* **Last**: it sends Ideas' bytes and thinks at `medium`, which no other
      `ids` stage does. Off `DEFAULT_INGEST_STEPS` — Greg asked for import to
      be as fast as possible — and in `FORCE_ONLY_WHEN_NAMED`: a model call over

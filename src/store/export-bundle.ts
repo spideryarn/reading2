@@ -433,6 +433,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "bibliography",
   "citationBlurbs",
   "situate",
+  "sourcesDigest",
   "quiz",
   "faq",
   "relations",
@@ -517,6 +518,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("bibliography.json", revision.bibliography);
   at("citation-blurbs.json", revision.citationBlurbs);
   at("situate.json", revision.situate);
+  at("sources-digest.json", revision.sourcesDigest);
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("relations.json", revision.relations);
@@ -704,6 +706,9 @@ one thing that will make the rest of these files make sense.
       situate.json         Where the article sits in the literature: the web searches made, what
                            they found, and notes an AI wrote beside passages, each with the words
                            of the sources it rests on.
+      sources-digest.json  A digest an AI wrote of what the article cites and who cites it: the
+                           questions it asked, the web searches made, what each reader reported,
+                           and the words of the sources it quotes.
       sketch.json          The diagram.
       illustrated.json     The same argument painted, and where each plate's bytes are.
       quiz.json            Questions generated from the article.
@@ -917,6 +922,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
     "A short note an AI wrote on each cited work from its abstract, and what it rests on.",
   "augmentations/situate.json":
     "Where the article sits in the literature: the web searches made, what they found, and notes an AI wrote beside passages, each with the words of the sources it rests on.",
+  "augmentations/sources-digest.json":
+    "A digest an AI wrote of what the article cites and who cites it: the questions it asked, the web searches made, what each reader reported, and the words of the sources it quotes.",
   "augmentations/quiz.json": "Questions generated from the article.",
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",
@@ -1046,6 +1053,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "explanations", n: countOf(revision.explanations, "explanations") },
     { label: "Claims' listed claims", n: countOf(revision.sourcesClaims, "claims") },
     { label: "findings from the literature", n: countOf(revision.situate, "findings") },
+    { label: "sources digest reports", n: countOf(revision.sourcesDigest, "reports") },
     { label: "Skim stops", n: countOf(revision.skim, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
     /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)

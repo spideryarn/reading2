@@ -352,7 +352,8 @@ function oneOf<T extends string>(value: unknown, members: readonly T[]): T | nul
   return typeof value === "string" && (members as readonly string[]).includes(value) ? (value as T) : null;
 }
 
-function cutAtWord(value: string, max: number): string {
+/** Cut at the last word boundary that fits. Shared with src/sources-digest.ts. */
+export function cutAtWord(value: string, max: number): string {
   if (value.length <= max) return value;
   const cut = value.slice(0, max + 1);
   const space = cut.lastIndexOf(" ");
@@ -430,7 +431,7 @@ function withoutAddresses(value: string): string {
  * letting the free text name another one would put an unchecked reference on
  * screen beside them.
  */
-function modelProse(value: unknown): string {
+export function modelProse(value: unknown): string {
   if (typeof value !== "string") return "";
   return text(withoutAddresses(value).replace(BLOCK_ID_LIKE, " ").replace(EVIDENCE_LABEL, " "));
 }
@@ -687,12 +688,24 @@ export interface Searched {
   pages: SearchedPage[];
 }
 
+/**
+ * **The jobs a planned search is billed under**: Situate's, and the sources
+ * digest's (src/sources-digest.ts, plan 261030b), which sends the same request
+ * under its own name so the ledger keeps the two apart.
+ */
+export type SearchJob = "situate-search" | "digest-search";
+
 /** The gateway seam: `openRouterJson` in production, a stub in a test. */
-export type SearchCall = (job: "situate-search", body: AiRequestBody, options: { signal: AbortSignal }) => Promise<JsonCall>;
+export type SearchCall = (job: SearchJob, body: AiRequestBody, options: { signal: AbortSignal }) => Promise<JsonCall>;
 
 /** `search_web`'s request — the same forced Exa search — under this stage's job and model (the ledger's row). */
 export function situateSearchRequest(query: string, power: ModelPower): AiRequestBody {
-  return { ...searchWebRequest(query, power), model: modelFor("situate-search", power) };
+  return searchRequest("situate-search", query, power);
+}
+
+/** The same request under any planned-search job, with that job's model. */
+export function searchRequest(job: SearchJob, query: string, power: ModelPower): AiRequestBody {
+  return { ...searchWebRequest(query, power), model: modelFor(job, power) };
 }
 
 interface SearchAnswer {
@@ -700,7 +713,8 @@ interface SearchAnswer {
   usage?: Usage;
 }
 
-async function pool<T, R>(items: readonly T[], n: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+/** Run `fn` over `items`, at most `n` at a time, answers in the items' order. Shared with src/sources-digest.ts. */
+export async function pool<T, R>(items: readonly T[], n: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(
@@ -714,18 +728,23 @@ async function pool<T, R>(items: readonly T[], n: number, fn: (item: T, i: numbe
   return out;
 }
 
-/** One search's outcome and what it found, before the pages are pooled. Never throws for the search. */
-async function searchOne(
-  query: PlannedQuery,
+/**
+ * One search's outcome and what it found, before the pages are pooled. Never
+ * throws for the search. `job` is the ledger's name for it: Situate's by
+ * default, the sources digest's when src/sources-digest.ts sends it.
+ */
+export async function searchOne(
+  query: Pick<PlannedQuery, "q">,
   call: SearchCall,
   power: ModelPower,
   signal: AbortSignal | undefined,
+  job: SearchJob = "situate-search",
 ): Promise<{ outcome: SituateQuery["outcome"]; found: Map<string, { url: string; title?: string; excerpt?: string }> }> {
   const found = new Map<string, { url: string; title?: string; excerpt?: string }>();
   const deadline = AbortSignal.timeout(SEARCH_TIMEOUT_MS);
   let json: unknown;
   try {
-    json = (await call("situate-search", situateSearchRequest(query.q, power), {
+    json = (await call(job, searchRequest(job, query.q, power), {
       signal: signal ? AbortSignal.any([deadline, signal]) : deadline,
     })).json;
   } catch {
@@ -1444,13 +1463,8 @@ function restedOn(raw: readonly unknown[], bySource: ReadonlyMap<string, Evidenc
        source. Silently coalesce it the same way the evidence pool coalesces a
        page returned by two searches. */
     if (used.has(source.id)) continue;
-    const quote = text(s?.quote);
-    const matched = words(quote) >= SOURCE_QUOTE_MIN_WORDS && !SOURCE_BOILERPLATE.test(quote)
-      ? (source.quoteTexts ?? [source.text])
-          .map((passage) => ({ passage, at: findQuote(passage, quote, undefined, "spaced") }))
-          .find(({ at }) => at !== null)
-      : undefined;
-    if (!matched?.at || matched.at.end - matched.at.start > SOURCE_QUOTE_MAX_CHARS) {
+    const quote = quotedIn(source.quoteTexts ?? [source.text], s?.quote);
+    if (quote === null) {
       counts.sourceUnquoted++;
       continue;
     }
@@ -1460,7 +1474,7 @@ function restedOn(raw: readonly unknown[], bySource: ReadonlyMap<string, Evidenc
       origin: source.origin,
       url: source.url,
       title: source.title,
-      quote: matched.passage.slice(matched.at.start, matched.at.end),
+      quote,
       ...(source.year !== undefined ? { year: source.year } : {}),
       ...(source.citedWorkId !== undefined ? { citedWorkId: source.citedWorkId } : {}),
       ...(source.citedAt !== undefined ? { citedAt: source.citedAt } : {}),
@@ -1468,6 +1482,25 @@ function restedOn(raw: readonly unknown[], bySource: ReadonlyMap<string, Evidenc
     });
   }
   return rested;
+}
+
+/**
+ * **A source quote, found in code, as the source's own characters** — or null.
+ * At least `SOURCE_QUOTE_MIN_WORDS` words, at most `SOURCE_QUOTE_MAX_CHARS`
+ * long, not recognisable boilerplate, and wholly inside ONE of the source's
+ * separate passages (joining two would invent an adjacency the source does not
+ * have), by the house matcher, `"spaced"`. Shared with src/sources-digest.ts,
+ * whose readers' quotes are held to exactly this.
+ */
+export function quotedIn(passages: readonly string[], typed: unknown): string | null {
+  const quote = text(typed);
+  if (words(quote) < SOURCE_QUOTE_MIN_WORDS || SOURCE_BOILERPLATE.test(quote)) return null;
+  for (const passage of passages) {
+    const at = findQuote(passage, quote, undefined, "spaced");
+    if (at === null) continue;
+    return at.end - at.start > SOURCE_QUOTE_MAX_CHARS ? null : passage.slice(at.start, at.end);
+  }
+  return null;
 }
 
 /** Boilerplate can be six words and occur verbatim on thousands of unrelated

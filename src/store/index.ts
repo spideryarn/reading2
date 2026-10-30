@@ -270,6 +270,7 @@ export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
 export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);
 export const loadSkim = reader.loadSkim.bind(reader);
 export const loadSituate = reader.loadSituate.bind(reader);
+export const loadSourcesDigest = reader.loadSourcesDigest.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);
 export const loadReception = reader.loadReception.bind(reader);

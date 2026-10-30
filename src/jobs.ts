@@ -1097,6 +1097,26 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      half minutes. 360 s holds all of it; the allowance's lease is sized from
      this number. Replace with a measurement once it has run on real articles. */
   situate: 360_000,
+  /* **NOT MEASURED — derived pessimistically from the step's own clocks**
+     (src/sources-digest.ts, plan 261030b F5), each phase at its ceiling and
+     the phases in sequence:
+
+       plan      one call, aborted at PLAN_TIMEOUT_MS                   90 s
+       search    up to 33 queries, 8 in flight = 5 waves, each search
+                 aborted at SEARCH_TIMEOUT_MS (40 s); OpenAlex's citers
+                 run beside them under their own 40 s clock             200 s
+       read      up to 16 readers, 6 in flight = 3 waves, each aborted
+                 at READ_TIMEOUT_MS (75 s)                              225 s
+       write     one Opus call, aborted at WRITE_TIMEOUT_MS             180 s
+                                                                       ------
+                                                                        695 s
+
+     700 s, under the claim's 740 s (`LEASE_MS - DEADLINE_MARGIN_MS`), so a
+     run that hits every ceiling still finishes inside one claim; the
+     allowance's `leaseMs` covers it (tests/sources-digest.test.ts holds both).
+     `DIGEST_STEP_BUDGET_MS` in src/sources-digest.ts is the same sum, computed;
+     replace with a measurement once it has run on real articles. */
+  "sources-digest": 700_000,
 };
 
 /**

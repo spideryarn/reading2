@@ -29,8 +29,9 @@
  * `loadFaq`, `loadTimeline`, `loadReception`, `loadGlossary` and `loadQuotes`
  * (plan 261006h); and `loadTweets`, `loadRelations`, `loadSkim`, `loadSketch`,
  * `loadIllustrated` and `loadArc` (plan 261007n); `loadSourcesClaims`; and
- * `loadSituate` (plan 261024o) and `loadExplanations` (plan 261028c), whose
- * routes were born with them. Without the header each is still a 404, for a
+ * `loadSituate` (plan 261024o), `loadExplanations` (plan 261028c) and
+ * `loadSourcesDigest` (plan 261030b), whose routes were born with them.
+ * Without the header each is still a 404, for a
  * tab opened before the deploy.
  *
  * A new artefact read is two edits **that must land together**: the helper at

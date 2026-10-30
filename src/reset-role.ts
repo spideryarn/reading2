@@ -101,6 +101,9 @@ export const RESET_ROLE = {
      DEFAULT_INGEST_STEPS, a whole column: the modes' shape. A reset drops it
      with the article it was read beside. Plan 261024o. */
   situate: "extra",
+  /* Made by the owner's press in Sources › Digest, off DEFAULT_INGEST_STEPS, a
+     whole column: the modes' shape, as `situate`. Plan 261030b. */
+  "sources-digest": "extra",
   /* Made after import by the add page's box or a press on Metadata, off
      DEFAULT_INGEST_STEPS, a whole column: exactly the modes' shape, though it
      is not a mode. */

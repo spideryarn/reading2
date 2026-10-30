@@ -475,6 +475,10 @@ export const REVISION_CARRY_POLICY: Record<
      stale against the new article, so it is not passed off as current. Plan
      261024o (GPT Sol's S9). */
   situate: "carry",
+  /* **Carries, as `situate` does**: a re-extraction keeps the dearest press
+     in Sources (about $0.85 a run), and its `sourceHash` marks it stale
+     against the new article, so it is not passed off as current. Plan 261030b. */
+  sourcesDigest: "carry",
 
   /* ---- MIRROR: never copied; a trigger fills it -------------------------- */
 
