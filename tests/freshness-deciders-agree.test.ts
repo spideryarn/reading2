@@ -927,13 +927,24 @@ describe("when the article itself moves, every step gets the same answer from bo
     );
   });
 
-  it("a new publication date: only the timeline", async () => {
+  it("a new publication date: the timeline and the digest that names its year", async () => {
     await withRevision(
       () => ({ publishedAt: "1999-01-01" }),
       async () => {
         const { stale, disagree } = read(await askAll());
         expect(disagree).toEqual({});
-        expect(stale).toEqual(["timeline"]);
+        expect(stale).toEqual(inOrder(["timeline", "sources-digest"]));
+      },
+    );
+  });
+
+  it("a new publication year: only the digest that names it", async () => {
+    await withRevision(
+      () => ({ publishedYear: 1999 }),
+      async () => {
+        const { stale, disagree } = read(await askAll());
+        expect(disagree).toEqual({});
+        expect(stale).toEqual(["sources-digest"]);
       },
     );
   });

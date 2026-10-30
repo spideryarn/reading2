@@ -304,6 +304,10 @@ to play with it."* Several small questions, each with an ASCII sketch, not one b
 - **Readers that search again or fetch a page themselves**, waiting on Greg's answer to question 7
   and a security design reviewed on its own (F1).
 - **Brief and Fuller levels**, if Greg's answer to question 5 says so.
+- **An abort signal through the OpenAlex citer lookup** (GPT Sol's SD1-04): the digest stops
+  waiting at 40 s or on cancellation, but the lookup itself runs on in the background (free, each
+  request under its own 8 s fetch deadline). Threading a signal through `situateCiters`, the
+  citation index and the limiter's sleep is shared code, so it is its own small job.
 
 ## Risks
 
@@ -323,3 +327,13 @@ to play with it."* Several small questions, each with an ASCII sketch, not one b
   code, step budget and lease, the cost table), F7 (the switch threaded into the chip row). Its
   check of my doubts: a summary has one `generatedAt` for both levels, so `level + generatedAt`
   names a level's chat; and a chip press that starts the run breaks no rule. Next: Stage 1.
+- 2026-10-30: Stage 1 built (48b535ec8): the step, migration `20261030144943_sources_digest`
+  (additive; not yet applied to the shared local database, whose ledger holds another worktree's
+  unlanded migration), 18 tests. Brief claims that proved false: situate's reader did not use
+  `PROFILE_RULES`, its model calls had no clock of their own, and the piece has no stored "kind".
+  GPT Sol's code review ([261030b-stage1-code-review-sol.md](261030b-stage1-code-review-sol.md)),
+  verdict *revise*, four findings: SD1-01 (a trusted instruction after the last fence at both the
+  planner and the writer; prompt version 2), SD1-02 (the publication year in the freshness hash)
+  and SD1-03 (two validators split under the complexity limit) fixed by Sol; SD1-04 (the citer
+  lookup is not aborted) fixed here for cancellation, the rest deferred above. 23 digest tests,
+  288 across digest, situate and the database-backed freshness deciders.

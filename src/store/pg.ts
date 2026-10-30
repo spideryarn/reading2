@@ -108,6 +108,7 @@ import {
   isStale as sourcesDigestIsStale,
   phasesOutdated as sourcesDigestPhasesOutdated,
   PROMPT_VERSION as SOURCES_DIGEST_PROMPT_VERSION,
+  type SourcesDigestMetaFingerprint,
 } from "../sources-digest.js";
 import {
   inputFingerprint as relationsFingerprint,
@@ -804,12 +805,13 @@ const REVISION_READ_POLICY: Record<
      no prompt reads it: the title a model is shown is `title` (plan 261005g). */
   titleOriginal: { article: "value" },
   /* A `Meta` field, so `article`; and the shelf sorts and prints it beside
-     `publishedAt`, so `library`. **Not `timeline` or `metadata`**, which
-     `publishedAt` is on: no fingerprint reads the year, because a year is too
-     coarse a frame to resolve "last March" against (plan 261004h). */
-  publishedYear: { article: "value", library: "value" },
-  /* **`timeline` and `metadata`, and it is on no other artefact's read** — this
-     is the one stage whose freshness fingerprint carries the publication date
+     `publishedAt`, so `library`. Sources Digest names the code-owned year in
+     its planner and writer prompts, so its own read and `metadata` need it to
+     decide freshness. Still not `timeline`: a year is too coarse a frame to
+     resolve "last March" against (plan 261004h). */
+  publishedYear: { article: "value", library: "value", metadata: "value", sourcesDigest: "value" },
+  /* **`timeline` and `metadata`**, plus Sources Digest's read — Timeline's
+     freshness fingerprint carries the publication date
      (src/source-hash.ts § `datedArticleFingerprint`), because it is the frame a
      year-less "on July 7" is read against. `article` and `library` take it
      because it is a `Meta` field and both rebuild a `Meta` through `metaFrom`;
@@ -822,6 +824,7 @@ const REVISION_READ_POLICY: Record<
      would spend a paid model call every time a publisher re-dated a post. */
   publishedAt: {
     article: "value", library: "value", metadata: "value", timeline: "value",
+    sourcesDigest: "value",
   },
   /* `ideas`, `sketch` and `metadata` since 2026-08-31: those two stages send
      `articleWithIds`, whose head prints a `URL:` line, so their freshness
@@ -1344,6 +1347,18 @@ const DATED_FINGERPRINT_COLUMNS = {
 } as const;
 
 /**
+ * The cited set plus both date shapes, for Sources Digest alone. Its prompts
+ * name the year from `published_at` or `published_year`; omitting either here
+ * would let the queue and Metadata call a digest current after its reference
+ * year changed.
+ */
+const SOURCES_DIGEST_FINGERPRINT_COLUMNS = {
+  ...CITED_FINGERPRINT_COLUMNS,
+  publishedAt: articleRevisions.publishedAt,
+  publishedYear: articleRevisions.publishedYear,
+} as const;
+
+/**
  * The projections themselves — **written out, not built from the policy**.
  *
  * A projection derived from the map at runtime is opaque to Drizzle, which then
@@ -1436,6 +1451,9 @@ export const REVISION_PROJECTIONS = {
        write this again today", so it needs whatever the widest of them is
        judged on, and `timeline` is judged on the publication date. */
     publishedAt: articleRevisions.publishedAt,
+    /* Sources Digest names a year from either date shape. `publishedAt` is
+       already above for Timeline; this is the other mutually exclusive form. */
+    publishedYear: articleRevisions.publishedYear,
     /* The fifth artefact that can carry a `profileHash`, and it is here for
        that alone: `personalisedSteps` must be exhaustive or the confirmation
        dialog tells an owner nothing was personalised while a picture drawn for
@@ -1590,11 +1608,11 @@ export const REVISION_PROJECTIONS = {
     situate: articleRevisions.situate,
     ...CITED_FINGERPRINT_COLUMNS,
   },
-  /* As `situate`: the cited head and tree its fingerprint needs (plan 261030b). */
+  /* The cited head, tree and code-owned year its prompts use (plan 261030b). */
   sourcesDigest: {
     id: articleRevisions.id,
     sourcesDigest: articleRevisions.sourcesDigest,
-    ...CITED_FINGERPRINT_COLUMNS,
+    ...SOURCES_DIGEST_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree its own exact-request fingerprint needs. */
   crossrefs: {
@@ -2345,6 +2363,24 @@ export function datedMetaFingerprintOf(revision: {
   return {
     ...base,
     ...(revision.publishedAt == null ? {} : { publishedAt: revision.publishedAt }),
+  };
+}
+
+/** The cited prompt head plus the two mutually exclusive year fields Sources Digest reads. */
+function sourcesDigestMetaFingerprintOf(revision: {
+  title: string | null;
+  byline: string | null;
+  siteName: string | null;
+  finalUrl: string | null;
+  publishedAt: string | null;
+  publishedYear: number | null;
+}): SourcesDigestMetaFingerprint | null {
+  const base = citedMetaFingerprintOf(revision);
+  if (base === null) return null;
+  return {
+    ...base,
+    ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
+    ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
   };
 }
 
@@ -3515,6 +3551,8 @@ const rawPgArticleReader: ArticleReader = {
     /* The cited head plus the publication date, for `timeline` alone — the only
        stage judged on it. src/source-hash.ts § `MetaFingerprintDated`. */
     const datedFingerprint = datedMetaFingerprintOf(revision);
+    /* The cited head plus the code-owned year, for Sources Digest alone. */
+    const sourcesDigestFingerprintMeta = sourcesDigestMetaFingerprintOf(revision);
     /* The fingerprint every article-reading stage stamps, computed once beside
        `blocksHash` for the same reason: several arms below want it, and `null`
        is "we cannot tell", which answers not-current for all of them. */
@@ -3909,7 +3947,7 @@ const rawPgArticleReader: ArticleReader = {
               model: digest.generator,
             },
             {
-              inputHash: sourcesDigestFingerprint(blocks, tree, citedFingerprint),
+              inputHash: sourcesDigestFingerprint(blocks, tree, sourcesDigestFingerprintMeta),
               promptVersion: SOURCES_DIGEST_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
@@ -4511,7 +4549,9 @@ const rawPgArticleReader: ArticleReader = {
     return {
       sourcesDigest,
       // Unknown counts as stale, the same way round as its neighbours.
-      stale: !tree || sourcesDigestIsStale(sourcesDigest, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      stale:
+        !tree ||
+        sourcesDigestIsStale(sourcesDigest, blocks, tree, sourcesDigestMetaFingerprintOf(found.revision)),
       outdated: sourcesDigestIsOutdated(sourcesDigest),
     };
   },
