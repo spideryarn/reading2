@@ -111,6 +111,8 @@ const server = {
   batchId: "spya-batch1",
   attempts: [] as QuizKeptAnswer[],
   verdict: undefined as "right" | "wrong" | undefined,
+  /** Override only the `done` frame's schedule; old/malformed-server cases. */
+  doneSchedule: "computed" as unknown,
   marks: [] as { batchId: string; questionId: string; answer: string }[],
   /** Hold every mark's stream open until released, to have two in flight at once. */
   hold: false,
@@ -135,13 +137,19 @@ function markResponse(body: { batchId: string; questionId: string; answer: strin
   const attemptId = `00000000-0000-4000-8000-${String(server.clock).padStart(12, "0")}`;
   /* The server's schedule for a first try, as src/quiz-spacing.ts gives it. */
   const recallAfterDays = server.verdict === "wrong" ? 1 : server.verdict === "right" ? 7 : 3;
+  const sentSchedule =
+    server.doneSchedule === "computed"
+      ? { recallAfterDays }
+      : server.doneSchedule === "missing"
+        ? {}
+        : { recallAfterDays: server.doneSchedule };
   const judged = server.verdict ? { verdict: server.verdict } : {};
   server.attempts = [
     ...server.attempts.filter((a) => a.questionId !== body.questionId),
     { questionId: body.questionId, attemptId, answer: body.answer, reply, answeredAt, ...judged, recallAfterDays },
   ];
   const finish = (c: ReadableStreamDefaultController<Uint8Array>) => {
-    c.enqueue(frame("done", { reply, model: "m", answeredAt, attemptId, ...judged, recallAfterDays }));
+    c.enqueue(frame("done", { reply, model: "m", answeredAt, attemptId, ...judged, ...sentSchedule }));
     c.close();
   };
   return new Response(
@@ -254,7 +262,7 @@ function visibleText(scope: Element): string {
 }
 
 beforeEach(() => {
-  Object.assign(server, { batchId: "spya-batch1", attempts: [], verdict: undefined, marks: [], hold: false, release: [], clock: Date.now() });
+  Object.assign(server, { batchId: "spya-batch1", attempts: [], verdict: undefined, doneSchedule: "computed", marks: [], hold: false, release: [], clock: Date.now() });
   opened.length = 0;
   withBand = false;
   dictationBusy = false;
@@ -528,6 +536,23 @@ describe("right, and time to recall it again", () => {
     try {
       await click(line(2));
       expect(item(1).classList.contains("quiz-due")).toBe(true);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it.each(["missing", "nonsense"])("falls back to three days for a %s done-frame schedule", async (schedule) => {
+    server.doneSchedule = schedule;
+    await paint();
+    await click(line(1));
+    type(box()!, "An answer from this visit.");
+    await click(answerButton(margin()));
+
+    const realNow = Date.now;
+    vi.spyOn(Date, "now").mockImplementation(() => realNow() + 2 * DAY);
+    try {
+      await click(line(2));
+      expect(item(1).classList.contains("quiz-due"), "the malformed value skipped the three-day fallback").toBe(false);
     } finally {
       vi.restoreAllMocks();
     }

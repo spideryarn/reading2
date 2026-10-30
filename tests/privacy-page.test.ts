@@ -387,7 +387,7 @@ describe("the privacy page", () => {
        the column, so the claim goes if the column does. */
     const prose = PAGE.replace(/\s+/g, " ");
     expect(prose).toContain(
-      "When an automatic check can decide, we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use it to colour the question and to decide when to ask it again.",
+      "When an automatic check can decide, we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use it to colour the question, to decide when to ask it again, and to adapt the help around it.",
     );
     const schema = readFileSync(path.join(ROOT, "src/db/schema.ts"), "utf8");
     expect(schema).toContain('verdict: text("verdict")');

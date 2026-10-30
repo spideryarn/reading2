@@ -1061,6 +1061,41 @@ describe("the walk is the path, and the premise is the help that adapts", () => 
     }
   });
 
+  it("stops using a stored right once it crosses due on an unrelated render", () => {
+    const day = 24 * 60 * 60 * 1000;
+    let now = Date.parse("2026-10-30T12:00:00.000Z");
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const kept: UseQuiz["kept"] = new Map([
+        [
+          first.id,
+          {
+            answer: "what they wrote",
+            reply: "That tracks the piece.",
+            answeredAt: new Date(now - 7 * day + 1).toISOString(),
+            saved: true,
+            attemptId: null,
+            verdict: "right",
+            recallAfterDays: 7,
+          },
+        ],
+      ]);
+      const o = owner({ quiz: PATH, kept, answered: new Set([first.id]) });
+      paint(o);
+      press("Previous question");
+      press("Next question");
+      expect(premiseShown()).toBeNull();
+
+      /* The kept map is the same object. A render for any other reason must
+         still read the clock again and stop letting the old right steer help. */
+      now += 2;
+      paint(o);
+      expect(premiseShown()).toBe(P2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it("hands the reader the thread after a wrong answer, above the question and apart from it", () => {
     startJudged(judged(first.id, "wrong"));
     press("Next question");

@@ -491,14 +491,16 @@ export function QuizPanel({
    * counts as unjudged until it is answered again. The deeper green is drawn
    * from `kept` directly (`quizLook`), not from here.
    */
-  const verdicts = useMemo(() => {
-    const out = new Map<QuizQuestionId, QuizVerdict>();
-    const now = Date.now();
-    for (const [id, one] of owner.kept) {
-      if (one.verdict && quizLook(one, now) !== "due") out.set(id, one.verdict);
-    }
-    return out;
-  }, [owner.kept]);
+  /* Deliberately not memoised only on `kept`: the clock is an input too. A
+     render after a right crosses its due boundary must stop letting that old
+     verdict hide a premise or a weak section, even though the kept map has not
+     changed. There is still no boundary timer (plan 261030c, F9); any render
+     reads the clock again, as the plan promises. */
+  const verdicts = new Map<QuizQuestionId, QuizVerdict>();
+  const verdictsNow = Date.now();
+  for (const [id, one] of owner.kept) {
+    if (one.verdict && quizLook(one, verdictsNow) !== "due") verdicts.set(id, one.verdict);
+  }
   const [typed, setTyped] = useState("");
   /** The whole ordered batch, open. Closes again as soon as one is picked. */
   const [listing, setListing] = useState(false);

@@ -175,6 +175,34 @@ agreed that no `judged_at` column is needed.
 | F9 | No timer at the due boundary | **Not done.** Any render reads the clock again; a tab left open across the exact threshold sees it on the next interaction. As in 261029m. Device clock skew accepted, future times clamped. |
 | F10 | Transfer described wrongly | Corrected; no code needed |
 
+## The code review
+
+GPT Sol, fixing as it went, [261030c-code-review-sol.md](261030c-code-review-sol.md). Five findings;
+read and checked before commit.
+
+| # | Finding | What we did |
+|---|---|---|
+| C1 | The browser's merge of this visit's answer and the server's breaks a same-millisecond tie the wrong way; use the id | **Reverted.** Postgres orders same-millisecond rows by the microsecond, not by id, so an id tie-break in the browser would be a guess too, for two tabs saving in one millisecond. The comment at the merge says so. |
+| C2 | The due filter on the scaffolding was memoised on `kept` alone, so it went stale when an answer came due | Kept: the map is rebuilt each render, which reads the clock; tested |
+| C3 | The screen reader's "the check thought it looked right" breaks the no-verdict-words rule | **Reverted.** The rule is *no visible words*; the spoken, qualified suffix is how a screen-reader user gets what the deeper green tells everyone else (261029m, its Sol F6). The review prompt overstated the rule. |
+| C4 | The privacy page left out a use: the verdict also adapts the premise and *Where to look again* | Kept: the page now ends "…to decide when to ask it again, and to adapt the help around it."; privacy.md likewise |
+| C5 | Export covered only right and `null`; the `done` frame's fallback untested | Kept: right, wrong and `null` in both exports; a missing and a nonsense `done` schedule fall back to three days |
+
+## Browser check
+
+A Sonnet subagent, Playwright on the box, this worktree's dev server and the local database,
+2026-10-30, on `fowler-phrenology`. Three rows inserted and removed afterwards: *right* three days
+old, *wrong* 25 hours old, unjudged two days old. After a reload, in the margin and the band, light
+and dark: deeper green with the ringed tick, the faded clock, and plain green, as expected; *right*
+survived the reload; the due box opened empty; no visible "right" or "wrong"; no console errors.
+Screenshots: [margin, light](261030c-shot-1-margin-light.png),
+[margin, dark](261030c-shot-2-margin-dark.png), [band, light](261030c-shot-3-band-light.png),
+[band, dark](261030c-shot-4-band-dark.png). **One defect, fixed**: the due line read "You answered
+this 1 days ago", unreachable under the old three-day rule and ordinary now that a wrong comes back
+in a day (`agoWords(1)` is "a day ago", tested red first). **Noted, not changed**: on an article
+with older answers, every answer from before this change that is three days old shows as due at
+once, as it already did under 261029m.
+
 ## Simpler options passed over
 
 - **Store the verdict, keep the flat three days.** Half of B: the green lasts, but the spacing

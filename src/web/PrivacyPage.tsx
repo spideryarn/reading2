@@ -220,15 +220,18 @@ export function PrivacyPage() {
               wrong** (Greg's option B on q-m9zkx3, plan 261030c): until then
               this comment said that was the one thing not kept. The sentence
               says "when … can decide" because a failed check stores nothing,
-              and "can be mistaken" because the check is a cheap model (GPT
-              Sol's plan review, F6). docs/project/privacy.md § Quiz answers. */}
+              and "can be mistaken" because the check is a cheap model. The
+              third use names the premise and Where-to-look-again adaptation
+              that stored verdicts also drive (plan 261030c, Sol F5/F6).
+              docs/project/privacy.md § Quiz answers. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What you write</strong> — notes, comments,
             highlights, chat and voice conversations, saved searches, your answers to quiz
             questions, with what the AI wrote back about each, and the “about you” profile you can
             fill in, which is there to be given to the model. When an automatic check can decide,
             we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use
-            it to colour the question and to decide when to ask it again.
+            it to colour the question, to decide when to ask it again, and to adapt the help around
+            it.
           </li>
           {/* **Reading time, and three words in it that were chosen against
               the obvious ones.** "Passage", not "paragraph": headings, figures

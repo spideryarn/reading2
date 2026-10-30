@@ -737,7 +737,7 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         tag: sentinel("article_tags"),
       });
     },
-    /* Two finished quiz marks, **in two batches**: the read the panel uses is
+    /* Three finished quiz marks, **in two batches**: the read the panel uses is
        scoped to the current batch, and the exports must not be — a row for a
        batch *Write them again* has replaced is still the reader's (plan
        261005b, GPT Sol's plan review finding 6). This article has no quiz at
@@ -751,7 +751,8 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
           question: "What does the piece say?",
           answer: sentinel("quiz_attempts"),
           reply: QUIZ_REPLY_SENTINEL,
-          /* One judged, one not: the verdict column (plan 261030c). */
+          /* Right, wrong and unjudged: every stored shape of the verdict column
+             (plan 261030c). */
           verdict: "right",
         },
         {
@@ -761,6 +762,15 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
           question: REPLACED_QUESTION_SENTINEL,
           answer: REPLACED_ANSWER_SENTINEL,
           reply: "A mark given under the batch that was replaced.",
+          verdict: "wrong",
+        },
+        {
+          articleId: ARTICLE_ID,
+          batchId: "spya-qzbold",
+          questionId: "spya-qzqtwo",
+          question: "What else does the piece say?",
+          answer: "An answer the check could not judge.",
+          reply: "Another mark under the batch that was replaced.",
         },
       ]);
     },
@@ -1189,11 +1199,11 @@ describe("what the record calls exported, both exports were watched writing", ()
       expect(text).toContain("spya-qzbold");
       /* When each happened: the row's own time, in both. */
       expect(text).toMatch(/"createdAt": ?"20\d\d-/);
-      /* The hidden check's word, and `null` for the row it could not judge —
-         never "wrong" (plan 261030c, GPT Sol's plan review F7). */
+      /* Both hidden-check words, and `null` for the row it could not judge
+         (plan 261030c, GPT Sol's plan review F7). */
       expect(text).toMatch(/"verdict": ?"right"/);
+      expect(text).toMatch(/"verdict": ?"wrong"/);
       expect(text).toMatch(/"verdict": ?null/);
-      expect(text).not.toMatch(/"verdict": ?"wrong"/);
     }
   });
 

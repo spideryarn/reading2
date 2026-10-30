@@ -92,6 +92,10 @@ export function quizLookSpoken(look: QuizLook, days: number): string {
     case "answered":
       return " (answered)";
     case "right":
+      /* Qualified, because the check is fallible: what the deeper green says
+         to a sighted reader, said to a screen reader. Not visible words (plan
+         261029m, its Sol F6; kept in 261030c, where the code review's C3 to
+         drop it was declined). */
       return " (answered; the check thought it looked right)";
     case "due":
       return ` (answered ${agoWords(days)}: worth trying again from memory)`;
@@ -106,5 +110,6 @@ export function quizLookSpoken(look: QuizLook, days: number): string {
 export function agoWords(days: number): string {
   if (days >= 14) return `${Math.floor(days / 7)} weeks ago`;
   if (days >= 7) return "a week ago";
+  if (days === 1) return "a day ago";
   return `${days} days ago`;
 }

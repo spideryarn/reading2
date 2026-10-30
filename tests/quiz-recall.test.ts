@@ -47,6 +47,10 @@ describe("the words and classes", () => {
     expect(daysSince(ago(5 * DAY + 3600_000), NOW)).toBe(5);
     expect(daysSince("not a date", NOW)).toBe(0);
     expect(agoWords(4)).toBe("4 days ago");
+    /* Reachable since 261030c, when a wrong answer comes due after one day:
+       the screenshot check read "You answered this 1 days ago". */
+    expect(agoWords(1)).toBe("a day ago");
+    expect(quizLookSpoken("due", 1)).toBe(" (answered a day ago: worth trying again from memory)");
     expect(agoWords(9)).toBe("a week ago");
     expect(agoWords(22)).toBe("3 weeks ago");
     expect(quizLookSpoken("due", 4)).toBe(" (answered 4 days ago: worth trying again from memory)");

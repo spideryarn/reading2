@@ -630,7 +630,10 @@ export function useQuizRead(slug: string): QuizRead {
   }, [quiz, reload]);
 
   /* **Per question, whichever answer is later.** This visit's wins a tie: it
-     is the same row the server will describe on its next read. */
+     is the same row the server will describe on its next read. (Two tabs
+     saving in one millisecond could differ; an id tie-break was offered in
+     261030c's code review, C1, and declined — Postgres orders such rows by the
+     microsecond, not the id, so it would be a guess too.) */
   const batchKey = quiz ? keptKey(slug, quiz.batchId) : null;
   const kept = useMemo(() => {
     const out = new Map<QuizQuestionId, KeptAnswer>();

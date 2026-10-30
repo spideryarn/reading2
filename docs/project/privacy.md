@@ -985,8 +985,8 @@ judgement about the reader, and a check that is sometimes wrong — Greg chose t
 
 So `quiz_attempts.verdict` holds `right`, `wrong`, or `NULL`, and the *What you write* bullet now
 ends: *"When an automatic check can decide, we also keep whether it judged a quiz answer right or
-wrong. It can be mistaken; we use it to colour the question and to decide when to ask it again."*
-`LAST_UPDATED` moved to 30 October 2026. The plan is
+wrong. It can be mistaken; we use it to colour the question, to decide when to ask it again, and to
+adapt the help around it."* `LAST_UPDATED` moved to 30 October 2026. The plan is
 [261030c](../plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md).
 
 What the code has to keep true for the page to stay honest:
@@ -994,11 +994,11 @@ What the code has to keep true for the page to stay honest:
 - **A check that failed or declined is stored as `NULL`, never as wrong**, and the schedule treats
   it as no evidence either way ([`src/quiz-spacing.ts`](../../src/quiz-spacing.ts)). That is what
   "when … can decide" on the page means.
-- **The verdict is used for the two things the page names and nothing else**: the deeper green on
-  the question, and when it comes back. In Quiz it is never shown as a word, a count, a score or
-  red; a screen reader hears "the check thought it looked right", qualified. The reader's own
-  Markdown export does say it in words, under the mark, with "it can be mistaken" — it is their
-  data. Answering again is a new row, judged again.
+- **The verdict is used for the things the page names and nothing else**: the deeper green on the
+  question, when it comes back, and the hidden adaptation of the next premise and *Where to look
+  again* (a due verdict is left out of those last two). In Quiz it is never shown as a word, a
+  count, a score or red. The reader's own Markdown export does say it in words, under the mark,
+  with "it can be mistaken" — it is their data. Answering again is a new row, judged again.
 - **Not logged**, from the route, the store or the classifier.
 - **Neither the answer nor the reply is logged** — the route reports a failed save with the slug
   and nothing else, and the store is guarded so a failed query's parameters do not reach an error.
