@@ -191,6 +191,9 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   before the work is called done. [investigations.md](docs/project/investigations.md)
 - **`docs/user-feedback/`** — one note per reader report: their words, what we did, and which of the
   three endings it got — [feedback-reports.md](docs/project/feedback-reports.md).
+- **`user-conversations-private/`** (top of the repo, gitignored because this repo is public) —
+  transcripts of Greg's conversations with readers, one file each, named `yyMMdd<letter>-…`. On Greg's
+  Mac only.
 - **[`docs/reusable/`](docs/reusable/README.md)** — notes that aren't about this project and are
   meant to be carried elsewhere, several copied in from Greg's
   [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions) library of "how to

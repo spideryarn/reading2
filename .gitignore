@@ -79,3 +79,7 @@ evals/results/thinking-effort-*/**/*.png
 # Marketing outreach lists: named people to contact, with frank notes. Kept out of the public
 # repo on purpose (Greg, 2026-10-09). docs/project/marketing-overview.md says what is in here.
 /outreach-private/
+
+# Transcripts of Greg's conversations with readers: named people, in their own words, with stories
+# about others. Kept out of the public repo, like outreach-private above.
+/user-conversations-private/
