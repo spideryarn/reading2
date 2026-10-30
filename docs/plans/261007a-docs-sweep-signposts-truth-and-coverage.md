@@ -401,6 +401,19 @@ line to `push-doc-hint.log` in the shared `.git` directory, giving the time, the
 docs named, so the review can check each line against later commits. Queue item `qi-hxg5w49c` asks
 the Overseer to do that review.
 
+**Judged 2026-10-30: keep it, unchanged**
+([investigation](../investigations/261030a-push-doc-hint-judged.md)). Three weeks of the log gave
+433 hints. The agents' own transcripts show what each agent did next. In 32 of 364 hinted push
+episodes (8.8%), the agent checked the docs straight after the push and fixed a sentence its change
+had made false or incomplete. Before the hook, about 4% of pushes were followed by any edit to
+`docs/project/`. After a hinted push, it was 13%. Git history agrees: a doc the hint named was
+edited within six hours twice as often as one it did not (5.2% against 2.4%). The list itself is
+noisy: a typical hint names about 51 docs, mostly through `routes.ts`, `types.ts` and doc-to-doc
+links. Only 15 of the 32 fixes were to a doc in its first ten. So it works as a prompt to look, not
+as an accurate list, and narrowing it was ruled out: nothing shows a shorter list would bring more
+fixes. GPT Sol re-ran the numbers, corrected two detector bugs (the figures here are the corrected
+ones), and agreed: keep.
+
 ### Three questions that are not wording
 
 **Answered 2026-10-07.** 1: the live endpoint is subscribed — `npm run stripe:check -- --prod` checks every event in `HANDLED_EVENTS`, this one included, and passed (so "stripe:check does not look" below was wrong). 2: Greg, *"yes it does"*; auth.md's section marked history. 3: Greg, *"yes"*; splitting is a second job.
@@ -623,6 +636,8 @@ And `admission-journal.ts` at the repo root, which `vitest.config.ts` imports.
   corrected too (`vitest.config.ts`, `tests/store-migration-registry.ts`,
   `tests/billing-tiers.test.ts`, `tests/helpers/pg-ready.ts`). Left for the Overseer: that
   production read, and `attention-classify.ts` routing case-dropping to a retired model.
+- 2026-10-30 — the push hint judged (`qi-hxg5w49c`): keep it, unchanged (§ 6,
+  [investigation](../investigations/261030a-push-doc-hint-judged.md)). GPT Sol checked the numbers.
 
 **Where it stands: done enough to stop here.** The signposts were measured and mended, the tree was
 read for what is false, and the two areas with code and no hub have one. What remains is real and

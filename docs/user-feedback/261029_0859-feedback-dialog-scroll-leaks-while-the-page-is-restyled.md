@@ -1,7 +1,7 @@
 ---
 reports: spya-k3g78t
 ending: awaiting
-comment: Probably the iPad still busy restyling the page as the dialog opens. Our own dialog that leaves the page alone would fix it, but that is a trade, so it is your call: question q-f7xm4h.
+comment: Probably the iPad still busy restyling the page as the dialog opens. Making Feedback non-modal, so the page is never frozen, removes that; whether the article behind stays usable is your call: question q-f7xm4h.
 ---
 # Scrolling inside the Feedback dialog sometimes scrolled the article
 

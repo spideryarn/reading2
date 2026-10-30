@@ -149,6 +149,51 @@ background activation, and VoiceOver's virtual cursor, not only pointer and touc
 - **Showing *Sending* by direct DOM before React renders.** Paint waits for the restyle either way;
   the restyle is what is slow.
 
+## Greg's reply to stage 2, and what replaced it (2026-10-30)
+
+> I'm not totally convinced by your diagnosis. It's not that slow to open, and it's not really a
+> proper dialogue. It's like a panel, it's a UI. So I just feel like you're overcomplicating the
+> system, or you're misdiagnosing it. Is there something in shadcn or Tanstack or whatever library
+> were using or anything like that that would help?
+>
+> — Greg, 2026-10-29 (`spya-es54ka`, reply to `q-f7xm4h`)
+
+He is right on both counts. The 13–19 s figures were Chrome at 6× on an 87k-element book, not his
+iPad on the 88-page paper, and the question had taken "modal" as given and asked only how to make a
+cheaper modal. Stage 2 as written above (our own `aria-modal` surface) is **dropped**. In its place,
+asked again as `q-f7xm4h`: keep the native `<dialog>` but open it with `show()`, which inerts nothing
+(≈0.8 s / below resolution in the same harness) — either **looking exactly as now** (the full-screen
+transparent dialog still catches taps and swipes, its own background standing in for `::backdrop`),
+or as **a true panel** with the article usable behind it, like Comment and Chat.
+
+Libraries, checked: Radix Dialog `modal={false}` works but needs its defaults undone (outside tap
+dismisses, `FocusScope` `loop: true`, a capture-phase Escape that does not stop propagation); its
+modal mode (shadcn's Dialog and Sheet) does page-wide work too (`hideOthers`, `RemoveScroll`,
+`body` `pointer-events: none`), not measured. Floating UI (`FloatingFocusManager` non-modal,
+`useDismiss`) is the credible helper if the panel form needs focus work. vaul is not installed and
+is a drag drawer; the only TanStack package installed is Table.
+
+What `show()` needs that `showModal()` gave free, from GPT Sol's review of the proposal (no P0;
+P1s taken into the question):
+
+- **Every `dialog[open]` query assumes a modal.** A shown dialog matches it too, so
+  `useEscapeToClose` would defer Escape to Feedback *from Feedback itself*, and the command bar,
+  plain-key shortcuts, Metadata and folding refuse to act while it is open (Dock.tsx, key-chord.ts,
+  fold.ts). For the "as now" form most of that yielding is what happens today and is wanted; Escape
+  for Feedback itself is not.
+- **Focus in and back by hand.** WebKit fixed `show()` not moving focus, and `close()` restoring it
+  unconditionally, only in Safari Technology Preview 252; an old iPad has neither fix.
+- **Not in the top layer**: a z-index in the budget (design-css-overview.md), below Lightbox and
+  CommandBar, which stay true modals.
+- **reading-comfort.css dims every `dialog[open]`** on the assumption it is top-layer; a shown one
+  would be dimmed twice.
+- **The panel form only**: `where` is read from the current route at send time
+  (FeedbackButton.tsx), so a link followed mid-report would file it against the new page unless
+  `where` is frozen per opening; and Tab and the screen-reader cursor can leave the panel.
+- **The scroll leak is a hypothesis either way.** `overscroll-behavior` arrived in Safari 16, and it
+  sits on the outer dialog, not on `.fb-scroll`. Test on the iPad: a swipe right after opening, both
+  ends of the scroller, the textarea, the keyboard up.
+
 ## Reviews
 
 - GPT Sol on the plan, 2026-10-29: [review](261029k-feedback-dialog-slow-send-and-scroll-leak-on-a-long-article-review-sol.md).
@@ -161,4 +206,4 @@ background activation, and VoiceOver's virtual cursor, not only pointer and touc
 - [x] Stage 1.1, StillWhileHidden, with its test.
 - [x] Stage 1.2–1.4, root flags and the class test; GPT Sol code review [here](261029k-feedback-dialog-slow-send-and-scroll-leak-on-a-long-article-code-review-sol.md), its P1 and two P2s fixed.
 - [x] Stage 1.5, measured: keystroke 1.0–1.4 s → ≈0.47 s, press → *Sending* ≈1.4 s → ≈0.7 s; open and close unchanged ([investigation § After the fix](../investigations/261029a-feedback-dialog-cost-on-a-long-article-measured-at-six-times-throttle.md#after-the-fix-stage-15-2026-10-29)).
-- [x] Stage 2: asked Greg as `q-f7xm4h`; not built.
+- [x] Stage 2: asked Greg as `q-f7xm4h`; not built. Replaced on 2026-10-30 by the non-modal `show()` question above, after his reply.

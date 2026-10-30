@@ -3,29 +3,51 @@ id: q-f7xm4h
 report: spya-k3g78t
 status: open
 asked: 2026-10-29
-title: Should the Feedback dialog stop making the whole article inert, so it opens and closes at once on a long article?
-refs: SPIDERYARN-READING2-Q6 · qi-qs3q794t · docs/plans/261029k-feedback-dialog-slow-send-and-scroll-leak-on-a-long-article.md · docs/investigations/261029a-feedback-dialog-cost-on-a-long-article-measured-at-six-times-throttle.md · docs/user-feedback/261029_0859-feedback-dialog-scroll-leaks-while-the-page-is-restyled.md · docs/user-feedback/261029_0901-feedback-send-slow-on-an-ipad-was-the-page-not-the-button.md
+acted: spya-es54ka
+title: Feedback without freezing the article: keep it looking as now, or make it a panel with the article usable behind it?
+refs: SPIDERYARN-READING2-Q6 · SPIDERYARN-READING2-Q7 · qi-fgzhsspd · qi-qs3q794t · docs/plans/261029k-feedback-dialog-slow-send-and-scroll-leak-on-a-long-article.md · docs/investigations/261029a-feedback-dialog-cost-on-a-long-article-measured-at-six-times-throttle.md · docs/user-feedback/261029_0859-feedback-dialog-scroll-leaks-while-the-page-is-restyled.md · docs/user-feedback/261029_0901-feedback-send-slow-on-an-ipad-was-the-page-not-the-button.md
 ---
-On a long article, the Feedback dialog takes seconds to open and to close on an old iPad, because opening it makes the whole article "inert" (unclickable), and browsers do that by recalculating the style of every element on the page. Should we replace it with a dialog of our own that does not do that?
+You're right that I treated "modal" as a requirement when it isn't one, and I've dropped the 200-line custom dialog. The browser's dialog has a lighter, non-modal form that doesn't freeze the article, and switching to it is a small change, not a library. What's left is a product choice: while Feedback is open, should the article behind it be usable?
 
-A. Yes, our own small dialog, Feedback first (recommended). Opening and closing then cost only the dialog, not the article: in the test, closing went from about 14 seconds to nothing on a book at old-iPad speed. It also lets us stop a swipe from ever reaching the article behind, which is the likeliest fix for the scroll leak. Cost: about 200 lines of our own code doing what the browser does for free today (keeping the keyboard inside the dialog, Escape to close), and screen readers are told "this is a dialog, ignore the rest" by a label rather than by the page actually being made inert, which older screen readers respect less well. If it works on your iPad, the six other dialogs that open the same way (the picture viewer, the command bar, and others) move to it after.
+```
+ A. looks as now                  B. a true panel
++----------------------------+    +----------------------------+
+|// article, dimmed /////////|    | article, normal            |
+|// a tap closes Feedback ///|    | scroll it, select text,    |
+|// a swipe does nothing ////|    | follow links, open panels  |
+|//+----------------+////////|    |  +----------------+        |
+|//| Feedback       |////////|    |  | Feedback       |        |
+|//| [text box]     |////////|    |  | [text box]     |        |
+|//|       [Send]   |////////|    |  |       [Send]   |        |
+|//+----------------+////////|    |  +----------------+        |
++----------------------------+    +----------------------------+
+```
 
-B. Not now. Keep the browser's dialog. The other fixes stay: typing and pressing Send take about half as long as before (measured: Send to "Sending" from about 1.4 s to 0.7 s at old-iPad speed), but opening and closing stay slow on a long article, 10 to 16 seconds each in the same test.
+A. Looks and behaves exactly as now: dimmed article, a tap outside closes Feedback and keeps what you typed. Only the inside changes: the browser no longer freezes every element of the article on open and close (recommended, as a first step). Smallest change, fewest side effects. Cost: you still can't read the article while writing.
 
-I recommend A. The slowness grows with the article, and long papers are exactly what Spideryarn is for.
+B. A true panel, like Comment and Chat: the article stays bright and usable behind it. Nicer if you want to scroll back to quote something while writing. Cost: more to get right. Following a link mid-report must not re-file the report against the new page, Feedback has to be stacked against the dock and other panels, and Tab and screen readers can wander into the article.
+
+C. Leave it. Typing and Send already got about twice as fast in the fix that went to production on 29 October.
+
+I recommend A now; if you then want to read while writing, B is a follow-up on top of it. Either way I'd test on your iPad before calling the scroll leak fixed.
 
 Details
 
-On 29 October you sent two reports from your iPad, a minute apart, while reading the 88-page arXiv paper 2308.08708. One: scrolling inside the Feedback dialog sometimes scrolled the article behind it instead, and waiting and trying again usually worked. You asked whether we were using the right abstraction or library for dialogs. Two: after pressing Send, a couple of seconds with no sign anything was happening, then Sending, then the dialog closed, slowly.
+Your two reports (29 October, iPad, the arXiv paper 2308.08708): scrolling in Feedback sometimes scrolled the article instead, and after Send there was a pause of a couple of seconds, then a slow close. You asked if we were using the right abstraction or library. I proposed our own modal dialog, about 200 lines. You said opening isn't that slow, it's really a panel, and asked whether a library would help.
 
-What we did. We measured it in Chrome slowed down six times, to stand in for an old iPad, on long articles. The server answers in a fifth of a second; all the time is the browser working on the page, and the bigger the article, the longer it takes. Three causes:
+My diagnosis was too confident. The seconds I quoted came from Chrome slowed six times on a 250-page book with about 87,000 elements, not your iPad on that paper. That test does show a modal dialog doing work across the whole article on every open and close: on a modal, the browser "freezes" the page behind it by restyling every element. In that same test the non-modal form took about 0.8 s to open and too little to measure to close, against 10 to 16 s each for the modal one. Those are Chrome numbers, not your iPad's. The slow close after Send is plausibly this; it is not proven.
 
-1. Some style rules asked "is there such-and-such anywhere on the page?", and the browser answered by searching the whole article again after every keystroke. Fixed: those facts are now set by the code directly. On dev now.
-2. For you as an admin, the hidden Earlier tab (all 108 questions) was redrawn on every keystroke. Fixed: it is not redrawn while hidden. On dev now.
-3. Opening and closing the dialog makes every other element on the page inert, and the browser recalculates every element's style to do it. That is this question.
+The scroll leak never happened in Chrome. My guess is that on the iPad a swipe landed while the page was busy freezing or unfreezing. A or B removes that suspect, but doesn't prove a swipe can't still pass through, so I'd test: a swipe right after opening, at the top and bottom of the box, in the text box, and with the keyboard up.
 
-Your question about the abstraction, answered plainly: the browser's own dialog is the standard, recommended tool, and it is not wrong. Its one weakness is exactly this cost, which is nothing on a short page and seconds on a book on an old iPad. A library would not have saved us: the usual one (Radix, which our other components come from) avoids "inert" but does something similar to the whole page instead, and fights a setting we use to stop the layout jumping. So the sturdier way is a small dialog of our own that leaves the page alone.
+Libraries we have, briefly:
+- shadcn / Radix (installed): its Dialog has a non-modal mode, which would work, but its defaults need undoing for us (tap outside closes, Tab loops inside, its own Escape handling to fit with ours). Its modal mode, which shadcn's Dialog and Sheet use, also does page-wide work (locks scrolling, changes the whole body's style); not measured here.
+- Floating UI (installed, used by Search): helpers for focus and dismissing; a reasonable aid if B needs them.
+- Drawer (vaul): not installed; a drag-up drawer, a different interaction.
+- TanStack: only its table library is installed; nothing for dialogs.
+None of them is needed for A: the browser's own non-modal dialog does it.
 
-The scroll leak did not happen in Chrome in any test. On an iPad, scrolling is handled separately from the page's code, using the last version of the page that was ready, and while the page is still busy being restyled that version may not have the dialog in it yet. That would explain "wait and try again and it works". So the likeliest fix for it is A as well. That part is a hypothesis we could not test without your iPad.
+What A involves, so the size is honest: the open call changes, plus a handful of places that assume any open dialog is a modal one (Escape for Feedback itself, which currently defers to "the open dialog", i.e. to itself; the dim-screen setting, which would dim Feedback twice), and putting focus in and back by hand, because older iPad Safari is unreliable at it for non-modal dialogs.
 
-What would decide it: whether seconds of waiting on long articles is worth 200 lines of our own code and a weaker screen-reader guarantee. If you rarely read long pieces on the iPad, B is fine for now.
+Your reply, 2026-10-29 (to the earlier version of this question, which offered our own 200-line modal dialog or nothing):
+
+"I'm not totally convinced by your diagnosis. It's not that slow to open, and it's not really a proper dialogue. It's like a panel, it's a UI. So I just feel like you're overcomplicating the system, or you're misdiagnosing it. Is there something in shadcn or Tanstack or whatever library were using or anything like that that would help?"
