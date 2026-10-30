@@ -224,6 +224,22 @@ describe("yourWordsMarkdown", () => {
     );
     expect(md).toContain("## Your quiz answers\n\n### What is survival value?");
     expect(md).toContain("**Your answer:**\n\nFitness.\n\n**Spideryarn's mark:**\n\nClose.");
+    /* No verdict on the row (older, or the check could not decide): no line. */
+    expect(md).not.toContain("automatic check");
+  });
+
+  it("says what the check judged a quiz answer, only where it judged one (plan 261030c)", () => {
+    const md = yourWordsMarkdown(
+      rows({
+        quizAttempts: [
+          { question: "Q one?", answer: "A.", reply: "M.", verdict: "wrong", createdAt: T("11:00") },
+          { question: "Q two?", answer: "B.", reply: "N.", verdict: null, createdAt: T("11:05") },
+        ],
+      }),
+      EXPORTED,
+    );
+    expect(md).toContain("**Spideryarn's mark:**\n\nM.\n\n_A quick automatic check judged this wrong; it can be mistaken._");
+    expect(md.match(/automatic check/g)).toHaveLength(1);
   });
 
   it("writes every conversation but Referee's candidate threads, its turns in ordinal order", () => {

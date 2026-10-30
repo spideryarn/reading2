@@ -471,8 +471,9 @@ export function QuizPanel({
    */
   const [arrivedByNext, setArrivedByNext] = useState(false);
   /**
-   * **How each answered question was judged, this visit** — by question id, the
-   * latest finished mark's verdict, read from the shared `kept`.
+   * **How each answered question was judged** — by question id, the latest
+   * finished mark's verdict, read from the shared `kept`, which since plan
+   * 261030c includes verdicts stored on earlier visits.
    *
    * Since plan 261029m this is derived, not state of its own. It was a map this
    * panel filled from its own attempts, which meant an answer given in the
@@ -482,13 +483,20 @@ export function QuizPanel({
    * wins, a mark with no verdict leaves none, a restored answer is not a new
    * mark (it changes nothing in `kept`), and a new batch is a new `kept`.
    *
-   * **Never stored or logged.** It selects scaffolding — whether a premise is
-   * shown, which sections "Where to look again" names — and, since 261029m, a
-   * deeper green on the question; never words, a count or a score.
+   * **Never logged, and never shown as words, a count or a score.** It selects
+   * scaffolding — whether a premise is shown, which sections "Where to look
+   * again" names. **A due answer's verdict is left out** (GPT Sol's plan
+   * review of 261030c, F5): a *right* from a week ago would hide the next
+   * premise before the reader has recalled the answer again, so a due question
+   * counts as unjudged until it is answered again. The deeper green is drawn
+   * from `kept` directly (`quizLook`), not from here.
    */
   const verdicts = useMemo(() => {
     const out = new Map<QuizQuestionId, QuizVerdict>();
-    for (const [id, one] of owner.kept) if (one.verdict) out.set(id, one.verdict);
+    const now = Date.now();
+    for (const [id, one] of owner.kept) {
+      if (one.verdict && quizLook(one, now) !== "due") out.set(id, one.verdict);
+    }
     return out;
   }, [owner.kept]);
   const [typed, setTyped] = useState("");

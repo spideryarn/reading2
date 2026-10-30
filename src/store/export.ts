@@ -1106,6 +1106,9 @@ export async function exportArticle(
         question: row.question,
         answer: row.answer,
         reply: row.reply,
+        /* The hidden check's word, since plan 261030c: `null` when it failed
+           or declined, and on every row from before — never "wrong". */
+        verdict: row.verdict,
         createdAt: row.createdAt.toISOString(),
       })),
     });

@@ -58,6 +58,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
+import { parseRecallAfterDays, RECALL_AFTER_DAYS } from "../quiz-spacing.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useAutoRun, useAutoRunOnArrival } from "./useAutoRun.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
@@ -141,8 +142,7 @@ export interface Attempt {
    * It looks like any other finished mark, and that is the point. The flag is
    * for the one place the distinction matters on screen: after a due answer is
    * revealed beside a new draft, quote the earlier words that the restored
-   * mark is about. Verdicts live on `kept`, not restored attempts, and are not
-   * stored.
+   * mark is about. Verdicts live on `kept`, not restored attempts.
    */
   restored?: true;
   /**
@@ -180,13 +180,20 @@ export interface KeptAnswer {
   /** The row's id, `Attempt.attemptId`; `null` when there is no row to name. */
   attemptId: string | null;
   /**
-   * **The hidden check's word, for a mark given this visit only** — never from
-   * the server, which does not store it (privacy.md § Quiz answers). Here so
-   * the band and the margin draw the same deeper green for *right* from one
-   * place (plan 261029m; 261029i's F1). Absent for a kept answer from an
-   * earlier visit, and whenever the check failed or declined.
+   * **The hidden check's word on this answer** — from the server, which has
+   * stored it since plan 261030c (privacy.md § Quiz answers), or from a mark
+   * given this visit. Here so the band and the margin draw the same deeper
+   * green for *right* from one place (plan 261029m; 261029i's F1). Absent
+   * whenever the check failed or declined, and on answers from before
+   * 2026-10-30: never read as wrong.
    */
   verdict?: QuizVerdict;
+  /**
+   * **Days after `answeredAt` that this question is due again** — the
+   * server's schedule over the question's history (src/quiz-spacing.ts), or
+   * the neutral three days for an answer it could not schedule.
+   */
+  recallAfterDays: number;
 }
 
 export interface UseQuiz {
@@ -336,7 +343,15 @@ export interface QuizRead {
   noteMark(
     batchId: string,
     questionId: QuizQuestionId,
-    mark: { answer: string; reply: string; answeredAt: string | null; attemptId: string | null; verdict?: QuizVerdict },
+    mark: {
+      answer: string;
+      reply: string;
+      answeredAt: string | null;
+      attemptId: string | null;
+      verdict?: QuizVerdict;
+      /** Already through `parseRecallAfterDays`: the server's, or the neutral three days. */
+      recallAfterDays: number;
+    },
   ): void;
   /**
    * **Claim the right to mark one question**, or `null` when a mark of it is
@@ -374,7 +389,10 @@ function keptFromServer(attempts: unknown): Map<QuizQuestionId, KeptAnswer> | nu
   if (!Array.isArray(attempts)) return null;
   const out = new Map<QuizQuestionId, KeptAnswer>();
   for (const one of attempts as unknown[]) {
-    const { questionId, attemptId, answer, reply, answeredAt } = (one ?? {}) as Record<string, unknown>;
+    const { questionId, attemptId, answer, reply, answeredAt, verdict, recallAfterDays } = (one ?? {}) as Record<
+      string,
+      unknown
+    >;
     if (
       typeof questionId !== "string" ||
       typeof answer !== "string" ||
@@ -392,6 +410,11 @@ function keptFromServer(attempts: unknown): Map<QuizQuestionId, KeptAnswer> | nu
       answeredAt,
       saved: true,
       attemptId: typeof attemptId === "string" && attemptId !== "" ? attemptId : null,
+      /* Stored since plan 261030c. Anything else — absent on an older server
+         or an offline copy, or nonsense — is no verdict, which is the
+         ordinary answered green, never a wrong. */
+      ...(verdict === "right" || verdict === "wrong" ? { verdict } : {}),
+      recallAfterDays: parseRecallAfterDays(recallAfterDays),
     });
   }
   return out;
@@ -467,6 +490,7 @@ export function useQuizRead(slug: string): QuizRead {
           saved: mark.answeredAt !== null,
           attemptId: mark.answeredAt !== null ? mark.attemptId : null,
           ...(mark.verdict ? { verdict: mark.verdict } : {}),
+          recallAfterDays: mark.recallAfterDays,
         });
         return { key, byQuestion, known: true };
       });
@@ -826,7 +850,7 @@ export function useQuizMark(slug: string, read: QuizMarkSource): QuizMark {
         /* **The reply is what `readAnswerStream` returns**, and it returns only
            on a `done` frame. There is no other road to the two lines below,
            which is the whole of the terminal contract as the client keeps it. */
-        const { reply, verdict, answeredAt, attemptId } = await readAnswerStream(
+        const { reply, verdict, answeredAt, attemptId, recallAfterDays } = await readAnswerStream(
           res.body,
           {
             delta: (text) => {
@@ -840,6 +864,7 @@ export function useQuizMark(slug: string, read: QuizMarkSource): QuizMark {
                 answeredAt?: unknown;
                 attemptId?: unknown;
                 kept?: unknown;
+                recallAfterDays?: unknown;
               } | null;
               /* **Stored only if the server gave the row's time and did not
                  say otherwise.** `kept: false` is the save having failed; a
@@ -872,6 +897,11 @@ export function useQuizMark(slug: string, read: QuizMarkSource): QuizMark {
                 verdict,
                 answeredAt,
                 attemptId,
+                /* Through the same parser as the read's (Sol's F4): a `done`
+                   from a server before 261030c has none, and `undefined`
+                   would make the question never due. A mark not stored has
+                   no history, so the neutral three days. */
+                recallAfterDays: answeredAt !== null ? parseRecallAfterDays(sent?.recallAfterDays) : RECALL_AFTER_DAYS,
               };
             },
           },
@@ -889,7 +919,14 @@ export function useQuizMark(slug: string, read: QuizMarkSource): QuizMark {
         });
         /* **The tick, and what Next → Previous puts back** — stored or not: a
            mark the reader watched finish is theirs for this visit either way. */
-        noteMark(batchId, questionId, { answer, reply, answeredAt, attemptId, ...(verdict ? { verdict } : {}) });
+        noteMark(batchId, questionId, {
+          answer,
+          reply,
+          answeredAt,
+          attemptId,
+          recallAfterDays,
+          ...(verdict ? { verdict } : {}),
+        });
         if (answeredAt !== null) {
           /* **Read the quiz again, behind the screen, because the offline copy
              of it is now out of date.** `apiFetch` deliberately does not throw

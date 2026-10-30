@@ -751,6 +751,8 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
           question: "What does the piece say?",
           answer: sentinel("quiz_attempts"),
           reply: QUIZ_REPLY_SENTINEL,
+          /* One judged, one not: the verdict column (plan 261030c). */
+          verdict: "right",
         },
         {
           articleId: ARTICLE_ID,
@@ -1187,6 +1189,11 @@ describe("what the record calls exported, both exports were watched writing", ()
       expect(text).toContain("spya-qzbold");
       /* When each happened: the row's own time, in both. */
       expect(text).toMatch(/"createdAt": ?"20\d\d-/);
+      /* The hidden check's word, and `null` for the row it could not judge —
+         never "wrong" (plan 261030c, GPT Sol's plan review F7). */
+      expect(text).toMatch(/"verdict": ?"right"/);
+      expect(text).toMatch(/"verdict": ?null/);
+      expect(text).not.toMatch(/"verdict": ?"wrong"/);
     }
   });
 

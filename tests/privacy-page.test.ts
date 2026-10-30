@@ -208,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "29 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "30 October 2026"');
   });
 
   it("says what Search the literature sends, and to whom", () => {
@@ -379,6 +379,18 @@ describe("the privacy page", () => {
     expect(prose).toContain("your answers to quiz questions, with what the AI wrote back about each");
     const schema = readFileSync(path.join(ROOT, "src/db/schema.ts"), "utf8");
     expect(schema).toContain('"quiz_attempts"');
+  });
+
+  it("says the quiz check's right or wrong is kept, that it can be mistaken, and what it is for", () => {
+    /* Plan 261030c (Greg's option B on q-m9zkx3): `quiz_attempts.verdict`.
+       Until then the page listed it nowhere because it was not kept. Held to
+       the column, so the claim goes if the column does. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When an automatic check can decide, we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use it to colour the question and to decide when to ask it again.",
+    );
+    const schema = readFileSync(path.join(ROOT, "src/db/schema.ts"), "utf8");
+    expect(schema).toContain('verdict: text("verdict")');
   });
 
   it("says the command bar's suggestions are made from the profile, and where a pressed one goes", () => {

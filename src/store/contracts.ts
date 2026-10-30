@@ -104,6 +104,7 @@ import type {
   QuizFound,
   QuizKeptAnswer,
   QuizQuestionId,
+  QuizVerdict,
   FaqFound,
   SourcesClaimListFound,
   SituateFound,
@@ -2020,8 +2021,10 @@ export interface ReadingTimeStore {
 export interface QuizAttemptStore {
   /**
    * **Append one finished mark**, and return when the database says it
-   * happened (the row's `created_at`, ISO). Never an upsert: answering again
-   * is a second row.
+   * happened (the row's `created_at`, ISO), and when the question is due again
+   * as of this mark — from the history up to and including it, never a row
+   * that landed after it (GPT Sol's plan review of 261030c, F1). Never an
+   * upsert: answering again is a second row.
    */
   record(
     slug: string,
@@ -2032,9 +2035,15 @@ export interface QuizAttemptStore {
       question: string;
       answer: string;
       reply: string;
+      /** The hidden check's word; absent is stored as `NULL`, never as wrong. */
+      verdict?: QuizVerdict;
     },
-  ): Promise<{ id: string; answeredAt: string }>;
-  /** The latest kept answer to each question of one batch; other batches' rows are not returned. */
+  ): Promise<{ id: string; answeredAt: string; recallAfterDays: number }>;
+  /**
+   * The latest kept answer to each question of one batch, with its schedule,
+   * both from one snapshot of the batch's rows; other batches' rows are not
+   * returned.
+   */
   latestForBatch(slug: string, batchId: string): Promise<QuizKeptAnswer[]>;
   /**
    * **The question one kept mark was about**, as the row copied it in, or

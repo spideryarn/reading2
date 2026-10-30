@@ -11,22 +11,18 @@
  * > — Greg, 2026-10-29 (spya-v2aehw)
  *
  * Pure, so both surfaces (the margin's line, the band's question) draw the
- * same look from the same kept answer. Nothing here is stored: `answeredAt` is
- * the kept row's own time, and `verdict` is the hidden check's word from a mark
- * given this visit, held in memory only (privacy.md § Quiz answers).
+ * same look from the same kept answer: `answeredAt` is the kept row's own
+ * time, `verdict` the hidden check's word, and `recallAfterDays` the
+ * schedule the server worked out from the question's history — all three
+ * stored since plan 261030c (Greg's option B on q-m9zkx3; privacy.md § Quiz
+ * answers). This file only compares them with the clock.
  */
 import type { KeptAnswer } from "./useQuiz.js";
 
-/**
- * **Due once the last answer is this many days old** — 72 hours, compared as
- * instants, so no time zone or calendar day comes into it. A product
- * heuristic, not a number the research picks: retrieval beat re-reading at two
- * days and a week in the studies our evidence note cites, and three days is
- * short enough that a reader who takes a week over an article meets it. Fixed,
- * not expanding: an expanding schedule needs each try's history and how well
- * it went, and the verdict is not stored (plan 261029m § The spacing rule).
- */
-export const RECALL_AFTER_DAYS = 3;
+/* **Due once the last answer is `recallAfterDays` old**, compared as instants
+   (whole 24-hour days), so no time zone or calendar day comes into it. Until
+   plan 261030c it was a flat three days for every answer; the schedule is now
+   src/quiz-spacing.ts, on the server. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type QuizLook = "none" | "answered" | "right" | "due";
@@ -39,12 +35,16 @@ export function daysSince(answeredAt: string, now: number): number {
 }
 
 /**
- * Due over right over answered. A due answer is days old, so it never carries
- * this visit's verdict anyway; the order only says which wins if it somehow did.
+ * Due over right over answered. A *right* answer that has come due is shown
+ * due: it is time to try it from memory, and the green it earned a week ago
+ * is not the point any more.
  */
-export function quizLook(kept: Pick<KeptAnswer, "answeredAt" | "verdict"> | undefined, now: number): QuizLook {
+export function quizLook(
+  kept: Pick<KeptAnswer, "answeredAt" | "verdict" | "recallAfterDays"> | undefined,
+  now: number,
+): QuizLook {
   if (!kept) return "none";
-  if (daysSince(kept.answeredAt, now) >= RECALL_AFTER_DAYS) return "due";
+  if (daysSince(kept.answeredAt, now) >= kept.recallAfterDays) return "due";
   if (kept.verdict === "right") return "right";
   return "answered";
 }
@@ -56,7 +56,7 @@ export function quizLook(kept: Pick<KeptAnswer, "answeredAt" | "verdict"> | unde
  * steps down to plain answered. GPT Sol's plan review of 261029m, F4.
  */
 export function quizLookFor(
-  kept: Pick<KeptAnswer, "answer" | "answeredAt" | "verdict"> | undefined,
+  kept: Pick<KeptAnswer, "answer" | "answeredAt" | "verdict" | "recallAfterDays"> | undefined,
   now: number,
   draft: string,
 ): QuizLook {

@@ -198,7 +198,12 @@ function commentMarkdown(
   return parts.join("\n\n");
 }
 
-/** Every answer the reader gave a quiz question, oldest first, with the mark it got. */
+/**
+ * Every answer the reader gave a quiz question, oldest first, with the mark it
+ * got — and, since plan 261030c, what the hidden check judged it, which is
+ * stored and so is the reader's to see in their own export. Nothing when the
+ * check could not decide (GPT Sol's plan review, F6).
+ */
 function quizSection(rows: ArticleRows): string | null {
   if (rows.quizAttempts.length === 0) return null;
   const sorted = [...rows.quizAttempts].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -208,6 +213,7 @@ function quizSection(rows: ArticleRows): string | null {
       `_Answered ${markdownTime(a.createdAt.toISOString())}._`,
       `**Your answer:**\n\n${a.answer.trim()}`,
       `**Spideryarn's mark:**\n\n${a.reply.trim()}`,
+      ...(a.verdict ? [`_A quick automatic check judged this ${a.verdict}; it can be mistaken._`] : []),
     ].join("\n\n"),
   );
   return `## Your quiz answers\n\n${items.join("\n\n")}`;

@@ -971,14 +971,35 @@ is gone; `LAST_UPDATED` moved to 5 October 2026. The plan is
 [261005b](../plans/261005b-quiz-answers-are-kept-and-restored.md); how it behaves is
 [quiz.md § Answers are kept](quiz.md#answers-are-kept).
 
+**Whether the check judged an answer right or wrong is stored too, since 2026-10-30**, the second
+reversal here. Until then it was deliberately kept only in the page's memory for one visit, and a
+*right* drawn as a deeper green (plan 261029m) was gone after a reload. Asked as
+[q-m9zkx3](../user-feedback/questions/q-m9zkx3.md), with the costs named — a stored machine
+judgement about the reader, and a check that is sometimes wrong — Greg chose to keep it:
+
+> B
+>
+> — Greg, 2026-10-30 (`spya-dxhyu2`), choosing *"Save right/wrong with each answer. The deeper
+> green stays. Spacing adapts: got it wrong, back in a day; got it right, back in a week, then
+> longer each time you get it right again."*
+
+So `quiz_attempts.verdict` holds `right`, `wrong`, or `NULL`, and the *What you write* bullet now
+ends: *"When an automatic check can decide, we also keep whether it judged a quiz answer right or
+wrong. It can be mistaken; we use it to colour the question and to decide when to ask it again."*
+`LAST_UPDATED` moved to 30 October 2026. The plan is
+[261030c](../plans/261030c-quiz-keeps-right-or-wrong-and-spacing-adapts.md).
+
 What the code has to keep true for the page to stay honest:
 
-- **Whether an answer was judged right or wrong is still not stored**, and not logged. The table has
-  no column for it; the hidden verdict lives in the page's memory, on the kept answer it was judged
-  with, for the length of a visit. Since 2026-10-29 a *right* is drawn as a deeper green on the
-  question (plan 261029m), which needs no storage and is gone after a reload
-  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)). Storing it would
-  need the public page to say so: that is asked of Greg in q-m9zkx3.
+- **A check that failed or declined is stored as `NULL`, never as wrong**, and the schedule treats
+  it as no evidence either way ([`src/quiz-spacing.ts`](../../src/quiz-spacing.ts)). That is what
+  "when … can decide" on the page means.
+- **The verdict is used for the two things the page names and nothing else**: the deeper green on
+  the question, and when it comes back. In Quiz it is never shown as a word, a count, a score or
+  red; a screen reader hears "the check thought it looked right", qualified. The reader's own
+  Markdown export does say it in words, under the mark, with "it can be mistaken" — it is their
+  data. Answering again is a new row, judged again.
+- **Not logged**, from the route, the store or the classifier.
 - **Neither the answer nor the reply is logged** — the route reports a failed save with the slug
   and nothing else, and the store is guarded so a failed query's parameters do not reach an error.
 - **Owner-only.** The owner's read returns them; the public page has no quiz and its queries never
@@ -988,7 +1009,7 @@ What the code has to keep true for the page to stay honest:
   longer shows.
 
 `tests/privacy-page.test.ts` holds the page to it: the old sentence must be gone and the new clause
-there.
+there, and since 2026-10-30 the verdict's sentence too, held to the column.
 
 ## The Chrome extension
 

@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "29 October 2026";
+const LAST_UPDATED = "30 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -215,14 +215,20 @@ export function PrivacyPage() {
               model to be marked and are not stored" — true at the time. Greg
               asked for the answers to be kept so they are still there when a
               reader comes back (report spya-e8ujxn), and `quiz_attempts` now
-              holds each answer and the reply it was given. What is still not
-              kept is whether an answer was judged right or wrong.
-              docs/project/privacy.md § Quiz answers. */}
+              holds each answer and the reply it was given. **Since 2026-10-30
+              it also holds whether the hidden check judged the answer right or
+              wrong** (Greg's option B on q-m9zkx3, plan 261030c): until then
+              this comment said that was the one thing not kept. The sentence
+              says "when … can decide" because a failed check stores nothing,
+              and "can be mistaken" because the check is a cheap model (GPT
+              Sol's plan review, F6). docs/project/privacy.md § Quiz answers. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What you write</strong> — notes, comments,
             highlights, chat and voice conversations, saved searches, your answers to quiz
             questions, with what the AI wrote back about each, and the “about you” profile you can
-            fill in, which is there to be given to the model.
+            fill in, which is there to be given to the model. When an automatic check can decide,
+            we also keep whether it judged a quiz answer right or wrong. It can be mistaken; we use
+            it to colour the question and to decide when to ask it again.
           </li>
           {/* **Reading time, and three words in it that were chosen against
               the obvious ones.** "Passage", not "paragraph": headings, figures

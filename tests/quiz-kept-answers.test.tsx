@@ -170,16 +170,17 @@ function markResponse(body: { questionId: string; answer: string }): Response {
     const answeredAt = new Date(server.clock).toISOString();
     /* The row's id, as `quiz_attempts` mints one (plan 261024i, stage 2). */
     const attemptId = `00000000-0000-4000-8000-${String(server.clock).padStart(12, "0")}`;
+    /* The server's schedule for a first try, as src/quiz-spacing.ts gives it. */
+    const recallAfterDays = server.verdict === "wrong" ? 1 : server.verdict === "right" ? 7 : 3;
+    const judged = server.verdict ? { verdict: server.verdict } : {};
     /* Kept, as the route keeps it: before the `done` frame goes. */
     if (server.attempts) {
       server.attempts = [
         ...server.attempts.filter((a) => a.questionId !== body.questionId),
-        { questionId: body.questionId, attemptId, answer: body.answer, reply, answeredAt },
+        { questionId: body.questionId, attemptId, answer: body.answer, reply, answeredAt, ...judged, recallAfterDays },
       ];
     }
-    frames.push(
-      frame("done", { reply, model: "m", answeredAt, attemptId, ...(server.verdict ? { verdict: server.verdict } : {}) }),
-    );
+    frames.push(frame("done", { reply, model: "m", answeredAt, attemptId, ...judged, recallAfterDays }));
   }
   return new Response(
     new ReadableStream<Uint8Array>({
@@ -347,6 +348,7 @@ const kept = (
   answer: text,
   reply: `A mark of “${text}”.`,
   answeredAt,
+  recallAfterDays: 3,
 });
 
 describe("an answer is still there when you come back", () => {

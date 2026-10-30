@@ -1611,6 +1611,13 @@
       "when": 1793266680123,
       "tag": "20261029093800_reading_place",
       "breakpoints": true
+    },
+    {
+      "idx": 230,
+      "version": "7",
+      "when": 1793370590936,
+      "tag": "20261030142950_quiz_attempts_verdict",
+      "breakpoints": true
     }
   ]
 }

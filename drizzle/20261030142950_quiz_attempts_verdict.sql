@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."quiz_attempts" ADD COLUMN "verdict" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."quiz_attempts" ADD CONSTRAINT "quiz_attempts_verdict" CHECK ("spideryarn"."quiz_attempts"."verdict" in ('right', 'wrong'));
