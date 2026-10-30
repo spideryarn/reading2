@@ -28,6 +28,7 @@
  * `useReceptionRead`. The margin's notes used it until plan 261029h.
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCompletionLanding } from "./useCompletionLanding.js";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Situate, SituateResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -222,17 +223,10 @@ export function useSituate(slug: string, cadence: QueueCadence = "watches-queue"
   /* `refresh`, not `reload`: a finished job has just written a new dossier.
      Between the job leaving the queue and that read landing, the section is
      still working: without `landing` it drew the before-run press for a beat
-     (stage 4's browser run). Cleared however the read ends. */
-  /* Key the wait to both this read generation and this completion. The hook
-     instance survives an in-place slug change, including A -> B -> A, and an
-     old read may settle after a new one's; neither fact belongs to the visit
-     now on screen. `refresh` changes identity when the read re-keys. */
-  const [landing, setLanding] = useState<{ read: SituateRead["refresh"] } | null>(null);
-  const finished = useCallback(() => {
-    const mine = { read: refresh };
-    setLanding(mine);
-    void refresh().finally(() => setLanding((current) => (current === mine ? null : current)));
-  }, [refresh]);
+     (stage 4's browser run), and an automatic press could buy a second search
+     (GPT Sol's SD2-02 on plan 261030b). useCompletionLanding.ts, shared with
+     useSourcesDigest.ts. */
+  const { finished, landing, isLanding } = useCompletionLanding(refresh);
   const queue = useStepJob(slug, "situate", finished, cadence);
 
   const readSharedStart = useCallback(() => situateStarts.has(slug), [slug]);
@@ -240,11 +234,14 @@ export function useSituate(slug: string, cadence: QueueCadence = "watches-queue"
 
   const ensure = useCallback(
     async (options: { withBibliography?: boolean } = {}) => {
+      /* A completion announced earlier in this effect pass: *Where it sits*'
+         and the margin's auto-run still hold the render's old `none`. */
+      if (isLanding()) return;
       await startSituateOnce(slug, () =>
         queue.start(options.withBibliography ? { precededBy: ["bibliography"] } : {}),
       );
     },
-    [queue, slug],
+    [queue, slug, isLanding],
   );
   /* The forced verb holds the dossier it was pressed on (rewrite-hold.ts); its
      clock, `generatedAt`, is its identity. */
@@ -272,7 +269,7 @@ export function useSituate(slug: string, cadence: QueueCadence = "watches-queue"
     job: queue.job,
     failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
-    starting: queue.starting || sharedStarting || landing?.read === refresh,
+    starting: queue.starting || sharedStarting || landing,
     rewriting: hold.rewriting,
     refresh,
     retryRead: read.retryRead,

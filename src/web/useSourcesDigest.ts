@@ -29,6 +29,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, SourcesDigest, SourcesDigestResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useCompletionLanding } from "./useCompletionLanding.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
@@ -155,21 +156,8 @@ export function useSourcesDigest(slug: string): UseSourcesDigest {
 
   /* `refresh`, not `reload`: a finished job has just written a new digest.
      Between the job leaving the queue and that read landing, the panel is
-     still working — useSituate.ts § `landing`, for the same beat. */
-  const [landing, setLanding] = useState<{ read: SourcesDigestRead["refresh"] } | null>(null);
-  /* State holds the progress row across renders; this ref closes the smaller
-     interval inside one passive-effect pass, where the queue announces a
-     completion and `useAutoRun` still has the preceding render's `none`. */
-  const landingNow = useRef<{ read: SourcesDigestRead["refresh"] } | null>(null);
-  const finished = useCallback(() => {
-    const mine = { read: refresh };
-    landingNow.current = mine;
-    setLanding(mine);
-    void refresh().finally(() => {
-      if (landingNow.current === mine) landingNow.current = null;
-      setLanding((current) => (current === mine ? null : current));
-    });
-  }, [refresh]);
+     still working — useCompletionLanding.ts, shared with useSituate.ts. */
+  const { finished, landing, isLanding } = useCompletionLanding(refresh);
   const queue = useStepJob(slug, "sources-digest", finished, "watches-queue");
 
   /* The automatic run and the panel's own button make the identical unforced
@@ -178,9 +166,9 @@ export function useSourcesDigest(slug: string): UseSourcesDigest {
     /* The completion effect can start `refresh` earlier in the same effect
        pass, before React rerenders `useAutoRun` away from its old `none`.
        Refuse at the action boundary too; state-only gating is one commit late. */
-    if (landingNow.current?.read === refresh) return;
+    if (isLanding()) return;
     await queue.start({});
-  }, [queue, refresh]);
+  }, [queue, isLanding]);
   /* The forced verb holds the digest it was pressed on (rewrite-hold.ts); its
      clock, `generatedAt`, is its identity. */
   const hold = useRewriteHold({
@@ -203,7 +191,7 @@ export function useSourcesDigest(slug: string): UseSourcesDigest {
   /* A completion removes the job before its refresh can replace an earlier
      `none`. Keep a waiting press behind that read too, or another tab's
      completed run can be followed by a second paid request in the gap. */
-  const working = queue.job !== null || queue.starting || landing?.read === refresh;
+  const working = queue.job !== null || queue.starting || landing;
   const auto = useAutoRun(
     slug,
     "sources-digest",
@@ -223,7 +211,7 @@ export function useSourcesDigest(slug: string): UseSourcesDigest {
     job: queue.job,
     failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
-    starting: queue.starting || landing?.read === refresh,
+    starting: queue.starting || landing,
     automatic: auto && working,
     rewriting: hold.rewriting,
     refresh,

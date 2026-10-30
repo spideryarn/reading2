@@ -75,7 +75,16 @@ instance without changing shared queue behavior.
 
 The long-term design is a shared completion-landing primitive used by Digest, Situate and the next
 artefact with this shape. It should own the state/ref pair and expose an action guard, so a caller
-cannot copy only the visible half again. Situate remains wider work from this review.
+cannot copy only the visible half again.
+
+**SD2-02, Situate's instance, is fixed (2026-10-30)** with that primitive:
+[`useCompletionLanding.ts`](../../src/web/useCompletionLanding.ts) owns the state/ref pair and an
+`isLanding()` action guard, and both `useSituate` and `useSourcesDigest` use it; `useSituate`'s
+`ensure` refuses while it is set. The regression,
+`tests/situate-dossier.test.tsx` › *does not buy a second search while another tab's completed one
+is landing*, drives an other-tab job from running to done through the real `jobEngine` with the
+Situate GET held and *Where it sits*' auto-run armed; before the guard it received one
+`{slug: "a-piece", steps: ["situate"]}` POST where it expected none.
 
 ## The thing I would tell myself
 
